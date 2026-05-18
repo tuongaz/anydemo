@@ -1,4 +1,4 @@
-import { FolderOpen, PencilLine } from 'lucide-react';
+import { FolderOpen, PencilLine, X } from 'lucide-react';
 import {
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
@@ -21,7 +21,9 @@ import {
 import { StatusBadge } from '../nodes/status-badge.tsx';
 import type { Connector, DemoNode, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
+import { Icon } from '../ui/icon.tsx';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
+import { IconPickerPopover } from './icon-picker-popover.tsx';
 
 export interface DetailPanelProps {
   demoId: string | null;
@@ -43,6 +45,13 @@ export interface DetailPanelProps {
   onDescriptionChange?: (nodeId: string, value: string) => void;
   onDetailChange?: (nodeId: string, value: string) => void;
   /**
+   * US-008: persist a new icon name (or clear it via `null`) from the
+   * DetailPanel's Icon row. The row only renders for playNode / stateNode /
+   * htmlNode selections; when this callback is undefined the row is hidden
+   * (mirroring the read-only gate used by onNameChange / onDescriptionChange).
+   */
+  onIconChange?: (nodeId: string, icon: string | null) => void;
+  /**
    * US-007: latest StatusReport for the selected node, when one exists in the
    * hook's `statusByNode` map. Renders the Status section above the editable
    * fields. Undefined → section is hidden so a node with no statusAction looks
@@ -60,6 +69,7 @@ export function DetailPanel({
   onNameChange,
   onDescriptionChange,
   onDetailChange,
+  onIconChange,
   statusReport,
   onClose,
 }: DetailPanelProps) {
@@ -82,6 +92,20 @@ export function DetailPanel({
   const description = inspectableNode?.data.description ?? '';
   const detail = inspectableNode?.data.detail ?? '';
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
+  // US-008: Icon row is opt-in (via onIconChange) and only meaningful for the
+  // three node types whose data schema carries an optional `icon` field:
+  // playNode, stateNode, htmlNode. Other node types (shape, image, icon, …)
+  // either have no icon concept or own a required `icon` already.
+  const supportsIconField =
+    inspectableNode !== null &&
+    (inspectableNode.type === 'playNode' ||
+      inspectableNode.type === 'stateNode' ||
+      inspectableNode.type === 'htmlNode');
+  const showIconField = supportsIconField && typeof onIconChange === 'function';
+  const currentIcon =
+    showIconField && 'icon' in inspectableNode.data
+      ? ((inspectableNode.data as { icon?: string }).icon ?? null)
+      : null;
 
   // Panel width is user-resizable above the sm breakpoint via a left-edge
   // handle; persisted across sessions in localStorage. The CSS variable feeds
@@ -188,6 +212,9 @@ export function DetailPanel({
 
             <div className="mt-0 flex flex-col gap-3">
               {statusReport ? <StatusSection report={statusReport} /> : null}
+              {showIconField && onIconChange ? (
+                <IconRow nodeId={inspectableNode.id} icon={currentIcon} onChange={onIconChange} />
+              ) : null}
               <EditableField
                 nodeId={inspectableNode.id}
                 value={description}
@@ -415,6 +442,73 @@ export function EditableField({
           {isEmpty ? placeholder : markdown ? <MarkdownContent value={value} /> : value}
         </button>
       )}
+    </div>
+  );
+}
+
+// US-008: Icon row for the DetailPanel — a labeled row with a popover trigger
+// that opens the existing IconPickerPopover, plus a Clear button to emit null
+// when the user wants to drop the field. Render gating happens at the parent
+// (DetailPanel) — this component assumes it's only mounted for nodes that
+// support an `icon` field and when an `onChange` is wired.
+export function IconRow({
+  nodeId,
+  icon,
+  onChange,
+}: {
+  nodeId: string;
+  icon: string | null;
+  onChange: (nodeId: string, icon: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div data-testid="detail-panel-icon" className="flex items-center gap-2 px-2">
+      <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground w-16 shrink-0">
+        Icon
+      </span>
+      <IconPickerPopover
+        open={open}
+        onOpenChange={setOpen}
+        onPick={(name) => {
+          onChange(nodeId, name);
+          setOpen(false);
+        }}
+        anchor={
+          <button
+            type="button"
+            data-testid="detail-panel-icon-trigger"
+            aria-label="Choose icon"
+            aria-pressed={open}
+            className={cn(
+              'inline-flex h-8 min-w-8 items-center gap-2 rounded-md border border-input bg-background px-2 text-sm transition-colors',
+              'hover:bg-muted',
+            )}
+          >
+            {icon ? (
+              <>
+                <Icon name={icon} size={16} aria-hidden />
+                <span className="font-mono text-xs">{icon}</span>
+              </>
+            ) : (
+              <span className="text-muted-foreground italic">None</span>
+            )}
+          </button>
+        }
+      />
+      {icon ? (
+        <Button
+          type="button"
+          size="sm"
+          variant="ghost"
+          data-testid="detail-panel-icon-clear"
+          aria-label="Clear icon"
+          className="h-8 gap-1 px-2 text-xs"
+          onClick={() => onChange(nodeId, null)}
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+        </Button>
+      ) : null}
     </div>
   );
 }

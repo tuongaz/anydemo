@@ -23,7 +23,7 @@ const mockWindow = {
 };
 (globalThis as unknown as { window: typeof mockWindow }).window = mockWindow;
 
-const { DetailPanel, EditableField, StatusSection, formatRelativeTime } = await import(
+const { DetailPanel, EditableField, IconRow, StatusSection, formatRelativeTime } = await import(
   './detail-panel.tsx'
 );
 
@@ -393,6 +393,148 @@ describe('formatRelativeTime', () => {
 
   it('clamps negative diffs (future ts) to 0', () => {
     expect(formatRelativeTime(2_000, 1_000)).toBe('just now');
+  });
+});
+
+describe('DetailPanel icon row (US-008)', () => {
+  it('icon row is hidden when onIconChange is undefined', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: makePlayNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+        // onIconChange omitted → row hidden.
+      }),
+    );
+    // IconRow is a function-component reference in the tree; absent when the
+    // callback isn't wired.
+    expect(findAll(tree, (el) => el.type === IconRow).length).toBe(0);
+  });
+
+  it('icon row is hidden for unsupported node types even with onIconChange', () => {
+    const shapeNode = {
+      id: 's1',
+      type: 'shapeNode',
+      position: { x: 0, y: 0 },
+      data: { shape: 'rect', name: 'rect' },
+    } as unknown as DemoNode;
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: shapeNode,
+        connector: null,
+        onClose: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    expect(findAll(tree, (el) => el.type === IconRow).length).toBe(0);
+  });
+
+  it('icon row is visible for a playNode when onIconChange is provided', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
+        connector: null,
+        onClose: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    const rows = findAll(tree, (el) => el.type === IconRow);
+    expect(rows.length).toBe(1);
+    // Current icon flows through as the row's `icon` prop so the trigger can
+    // render the current selection.
+    expect((rows[0]?.props as { icon?: string | null }).icon).toBe('database');
+  });
+
+  it('icon row is also visible for stateNode and htmlNode', () => {
+    const stateNode = {
+      id: 's1',
+      type: 'stateNode',
+      position: { x: 0, y: 0 },
+      data: { name: 's', kind: 'service', status: 'idle' },
+    } as unknown as DemoNode;
+    const htmlNode = {
+      id: 'h1',
+      type: 'htmlNode',
+      position: { x: 0, y: 0 },
+      data: { name: 'h', htmlPath: 'blocks/a.html' },
+    } as unknown as DemoNode;
+    for (const node of [stateNode, htmlNode]) {
+      const tree = renderWithHooks(() =>
+        DetailPanel({
+          demoId: 'd1',
+          node,
+          connector: null,
+          onClose: () => {},
+          onIconChange: () => {},
+        }),
+      );
+      expect(findAll(tree, (el) => el.type === IconRow).length).toBe(1);
+    }
+  });
+
+  it('IconRow with a non-null icon renders a Clear button that emits null', () => {
+    const calls: Array<[string, string | null]> = [];
+    const tree = renderWithHooks(() =>
+      IconRow({
+        nodeId: 'n1',
+        icon: 'database',
+        onChange: (id, icon) => calls.push([id, icon]),
+      }),
+    );
+    // Root wrapper has the row-level testid.
+    expect(findByTestId(tree, 'detail-panel-icon')).not.toBeNull();
+    // Clear button is a direct child of the row when icon is set.
+    const clear = findByTestId(tree, 'detail-panel-icon-clear');
+    expect(clear).not.toBeNull();
+    const onClick = (clear?.props as { onClick?: () => void }).onClick;
+    onClick?.();
+    expect(calls).toEqual([['n1', null]]);
+  });
+
+  it('IconRow with no icon hides the Clear button', () => {
+    const tree = renderWithHooks(() =>
+      IconRow({
+        nodeId: 'n1',
+        icon: null,
+        onChange: () => {},
+      }),
+    );
+    expect(findByTestId(tree, 'detail-panel-icon')).not.toBeNull();
+    expect(findByTestId(tree, 'detail-panel-icon-clear')).toBeNull();
+  });
+
+  it('IconRow forwards a picked name to onChange via the IconPickerPopover onPick handler', () => {
+    const calls: Array<[string, string | null]> = [];
+    const tree = renderWithHooks(() =>
+      IconRow({
+        nodeId: 'n1',
+        icon: null,
+        onChange: (id, icon) => calls.push([id, icon]),
+      }),
+    );
+    // The IconRow renders an IconPickerPopover element with onPick + anchor.
+    // The trigger button is in the `anchor` prop (not children), so we route
+    // through the popover's onPick to assert the picked-name pathway.
+    const popovers = findAll(tree, (el) => typeof el.type === 'function');
+    const picker = popovers.find(
+      (el) => typeof (el.props as { onPick?: unknown }).onPick === 'function',
+    );
+    expect(picker).not.toBeUndefined();
+    const onPick = (picker?.props as { onPick: (name: string) => void }).onPick;
+    onPick('server');
+    expect(calls).toEqual([['n1', 'server']]);
+    // The anchor prop is a single React element with the trigger testid.
+    const anchor = (picker?.props as { anchor?: ReactElementLike }).anchor;
+    expect(isElement(anchor)).toBe(true);
+    if (isElement(anchor)) {
+      expect(anchor.props['data-testid']).toBe('detail-panel-icon-trigger');
+    }
   });
 });
 
