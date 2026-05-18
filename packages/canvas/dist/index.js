@@ -3574,12 +3574,34 @@ import * as React3 from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import * as React2 from "react";
-import { jsx as jsx21, jsxs as jsxs15 } from "react/jsx-runtime";
+
+// src/components/canvas-portal-container.tsx
+import { createContext as createContext2, useContext as useContext2 } from "react";
+import { jsx as jsx21 } from "react/jsx-runtime";
+var PortalContainerContext = createContext2(null);
+function CanvasPortalContainerProvider({
+  containerRef,
+  children
+}) {
+  return /* @__PURE__ */ jsx21(PortalContainerContext.Provider, { value: containerRef.current, children });
+}
+function useCanvasPortalContainer() {
+  return useContext2(PortalContainerContext) ?? void 0;
+}
+
+// src/ui/dialog.tsx
+import { jsx as jsx22, jsxs as jsxs15 } from "react/jsx-runtime";
 var Dialog = DialogPrimitive.Root;
 var DialogTrigger = DialogPrimitive.Trigger;
-var DialogPortal = DialogPrimitive.Portal;
+var DialogPortal = ({
+  children,
+  ...props
+}) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx22(DialogPrimitive.Portal, { container: portalContainer, ...props, children });
+};
 var DialogClose = DialogPrimitive.Close;
-var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx21(
+var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
   DialogPrimitive.Overlay,
   {
     ref,
@@ -3592,7 +3614,7 @@ var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PU
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 var DialogContent = React2.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxs15(DialogPortal, { children: [
-  /* @__PURE__ */ jsx21(DialogOverlay, {}),
+  /* @__PURE__ */ jsx22(DialogOverlay, {}),
   /* @__PURE__ */ jsxs15(
     DialogPrimitive.Content,
     {
@@ -3605,17 +3627,17 @@ var DialogContent = React2.forwardRef(({ className, children, ...props }, ref) =
       children: [
         children,
         /* @__PURE__ */ jsxs15(DialogPrimitive.Close, { className: "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none", children: [
-          /* @__PURE__ */ jsx21(X, { className: "h-4 w-4" }),
-          /* @__PURE__ */ jsx21("span", { className: "sr-only", children: "Close" })
+          /* @__PURE__ */ jsx22(X, { className: "h-4 w-4" }),
+          /* @__PURE__ */ jsx22("span", { className: "sr-only", children: "Close" })
         ] })
       ]
     }
   )
 ] }));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
-var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx21("div", { className: cn("flex flex-col space-y-1.5 text-center sm:text-left", className), ...props });
+var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx22("div", { className: cn("flex flex-col space-y-1.5 text-center sm:text-left", className), ...props });
 DialogHeader.displayName = "DialogHeader";
-var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx21(
+var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx22(
   "div",
   {
     className: cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className),
@@ -3623,7 +3645,7 @@ var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx21(
   }
 );
 DialogFooter.displayName = "DialogFooter";
-var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx21(
+var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
   DialogPrimitive.Title,
   {
     ref,
@@ -3632,7 +3654,7 @@ var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE
   }
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
-var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx21(
+var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
   DialogPrimitive.Description,
   {
     ref,
@@ -3643,8 +3665,8 @@ var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 // src/ui/command.tsx
-import { jsx as jsx22, jsxs as jsxs16 } from "react/jsx-runtime";
-var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+import { jsx as jsx23, jsxs as jsxs16 } from "react/jsx-runtime";
+var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive,
   {
     ref,
@@ -3657,11 +3679,11 @@ var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ *
 ));
 Command.displayName = CommandPrimitive.displayName;
 var CommandDialog = ({ children, ...props }) => {
-  return /* @__PURE__ */ jsx22(Dialog, { ...props, children: /* @__PURE__ */ jsx22(DialogContent, { className: "overflow-hidden p-0 shadow-lg", children: /* @__PURE__ */ jsx22(Command, { className: "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5", children }) }) });
+  return /* @__PURE__ */ jsx23(Dialog, { ...props, children: /* @__PURE__ */ jsx23(DialogContent, { className: "overflow-hidden p-0 shadow-lg", children: /* @__PURE__ */ jsx23(Command, { className: "[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-group]]:px-2 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3 [&_[cmdk-item]_svg]:h-5 [&_[cmdk-item]_svg]:w-5", children }) }) });
 };
 var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs16("div", { className: "flex items-center border-b px-3", "cmdk-input-wrapper": "", children: [
-  /* @__PURE__ */ jsx22(Search, { className: "mr-2 h-4 w-4 shrink-0 opacity-50" }),
-  /* @__PURE__ */ jsx22(
+  /* @__PURE__ */ jsx23(Search, { className: "mr-2 h-4 w-4 shrink-0 opacity-50" }),
+  /* @__PURE__ */ jsx23(
     CommandPrimitive.Input,
     {
       ref,
@@ -3674,7 +3696,7 @@ var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PUR
   )
 ] }));
 CommandInput.displayName = CommandPrimitive.Input.displayName;
-var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive.List,
   {
     ref,
@@ -3683,9 +3705,9 @@ var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
   }
 ));
 CommandList.displayName = CommandPrimitive.List.displayName;
-var CommandEmpty = React3.forwardRef((props, ref) => /* @__PURE__ */ jsx22(CommandPrimitive.Empty, { ref, className: "py-6 text-center text-sm", ...props }));
+var CommandEmpty = React3.forwardRef((props, ref) => /* @__PURE__ */ jsx23(CommandPrimitive.Empty, { ref, className: "py-6 text-center text-sm", ...props }));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
-var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive.Group,
   {
     ref,
@@ -3697,7 +3719,7 @@ var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PUR
   }
 ));
 CommandGroup.displayName = CommandPrimitive.Group.displayName;
-var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive.Separator,
   {
     ref,
@@ -3706,7 +3728,7 @@ var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @_
   }
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
-var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive.Item,
   {
     ref,
@@ -3719,7 +3741,7 @@ var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
 ));
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 var CommandShortcut = ({ className, ...props }) => {
-  return /* @__PURE__ */ jsx22(
+  return /* @__PURE__ */ jsx23(
     "span",
     {
       className: cn("ml-auto text-xs tracking-widest text-muted-foreground", className),
@@ -3732,22 +3754,25 @@ CommandShortcut.displayName = "CommandShortcut";
 // src/ui/context-menu.tsx
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
 import * as React4 from "react";
-import { jsx as jsx23 } from "react/jsx-runtime";
+import { jsx as jsx24 } from "react/jsx-runtime";
 var ContextMenu = ContextMenuPrimitive.Root;
 var ContextMenuTrigger = ContextMenuPrimitive.Trigger;
-var ContextMenuContent = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(ContextMenuPrimitive.Portal, { children: /* @__PURE__ */ jsx23(
-  ContextMenuPrimitive.Content,
-  {
-    ref,
-    className: cn(
-      "z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
-      className
-    ),
-    ...props
-  }
-) }));
+var ContextMenuContent = React4.forwardRef(({ className, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx24(ContextMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx24(
+    ContextMenuPrimitive.Content,
+    {
+      ref,
+      className: cn(
+        "z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95",
+        className
+      ),
+      ...props
+    }
+  ) });
+});
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName;
-var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
   ContextMenuPrimitive.Item,
   {
     ref,
@@ -3759,7 +3784,7 @@ var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__
   }
 ));
 ContextMenuItem.displayName = ContextMenuPrimitive.Item.displayName;
-var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
   ContextMenuPrimitive.Separator,
   {
     ref,
@@ -3768,7 +3793,7 @@ var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /
   }
 ));
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
-var ContextMenuShortcut = ({ className, ...props }) => /* @__PURE__ */ jsx23(
+var ContextMenuShortcut = ({ className, ...props }) => /* @__PURE__ */ jsx24(
   "span",
   {
     className: cn("ml-auto pl-4 text-xs tracking-widest text-muted-foreground", className),
@@ -3780,23 +3805,26 @@ ContextMenuShortcut.displayName = "ContextMenuShortcut";
 // src/ui/dropdown-menu.tsx
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
 import * as React5 from "react";
-import { jsx as jsx24 } from "react/jsx-runtime";
+import { jsx as jsx25 } from "react/jsx-runtime";
 var DropdownMenu = DropdownMenuPrimitive.Root;
 var DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
-var DropdownMenuContent = React5.forwardRef(({ className, sideOffset = 4, ...props }, ref) => /* @__PURE__ */ jsx24(DropdownMenuPrimitive.Portal, { children: /* @__PURE__ */ jsx24(
-  DropdownMenuPrimitive.Content,
-  {
-    ref,
-    sideOffset,
-    className: cn(
-      "z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-      className
-    ),
-    ...props
-  }
-) }));
+var DropdownMenuContent = React5.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx25(DropdownMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx25(
+    DropdownMenuPrimitive.Content,
+    {
+      ref,
+      sideOffset,
+      className: cn(
+        "z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      ),
+      ...props
+    }
+  ) });
+});
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
-var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
+var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   DropdownMenuPrimitive.Item,
   {
     ref,
@@ -3808,7 +3836,7 @@ var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @_
   }
 ));
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
-var DropdownMenuSeparator = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
+var DropdownMenuSeparator = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   DropdownMenuPrimitive.Separator,
   {
     ref,
@@ -3824,26 +3852,29 @@ import { Fragment as Fragment4 } from "react";
 // src/ui/tooltip.tsx
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
 import * as React6 from "react";
-import { jsx as jsx25 } from "react/jsx-runtime";
+import { jsx as jsx26 } from "react/jsx-runtime";
 var TooltipProvider = TooltipPrimitive.Provider;
 var Tooltip = TooltipPrimitive.Root;
 var TooltipTrigger = TooltipPrimitive.Trigger;
-var TooltipContent = React6.forwardRef(({ className, sideOffset = 4, ...props }, ref) => /* @__PURE__ */ jsx25(TooltipPrimitive.Portal, { children: /* @__PURE__ */ jsx25(
-  TooltipPrimitive.Content,
-  {
-    ref,
-    sideOffset,
-    className: cn(
-      "z-50 overflow-hidden rounded-md bg-foreground px-3 py-1.5 text-sm text-background shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-      className
-    ),
-    ...props
-  }
-) }));
+var TooltipContent = React6.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx26(TooltipPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx26(
+    TooltipPrimitive.Content,
+    {
+      ref,
+      sideOffset,
+      className: cn(
+        "z-50 overflow-hidden rounded-md bg-foreground px-3 py-1.5 text-sm text-background shadow-md animate-in fade-in-0 zoom-in-95 data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      ),
+      ...props
+    }
+  ) });
+});
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
 // src/ui/icon-toggle-group.tsx
-import { jsx as jsx26, jsxs as jsxs17 } from "react/jsx-runtime";
+import { jsx as jsx27, jsxs as jsxs17 } from "react/jsx-runtime";
 function IconToggleGroup({
   value,
   onChange,
@@ -3851,7 +3882,7 @@ function IconToggleGroup({
   ariaLabel,
   className
 }) {
-  return /* @__PURE__ */ jsx26(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsx26(
+  return /* @__PURE__ */ jsx27(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsx27(
     "div",
     {
       "aria-label": ariaLabel,
@@ -3863,9 +3894,9 @@ function IconToggleGroup({
         const isActive = value === opt.value;
         const Icon2 = opt.icon;
         return /* @__PURE__ */ jsxs17(Fragment4, { children: [
-          idx > 0 ? /* @__PURE__ */ jsx26("div", { "aria-hidden": true, className: "mx-0.5 w-px self-stretch bg-border/70" }) : null,
+          idx > 0 ? /* @__PURE__ */ jsx27("div", { "aria-hidden": true, className: "mx-0.5 w-px self-stretch bg-border/70" }) : null,
           /* @__PURE__ */ jsxs17(Tooltip, { children: [
-            /* @__PURE__ */ jsx26(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx26(
+            /* @__PURE__ */ jsx27(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx27(
               "button",
               {
                 type: "button",
@@ -3878,10 +3909,10 @@ function IconToggleGroup({
                   "flex flex-1 items-center justify-center rounded px-2 transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring",
                   isActive ? "bg-secondary text-secondary-foreground shadow-sm" : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
                 ),
-                children: /* @__PURE__ */ jsx26(Icon2, { className: "h-4 w-4" })
+                children: /* @__PURE__ */ jsx27(Icon2, { className: "h-4 w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx26(TooltipContent, { side: "top", className: "px-2 py-1 text-xs", children: opt.label })
+            /* @__PURE__ */ jsx27(TooltipContent, { side: "top", className: "px-2 py-1 text-xs", children: opt.label })
           ] })
         ] }, opt.value);
       })
@@ -3890,7 +3921,7 @@ function IconToggleGroup({
 }
 
 // src/ui/line-style-icons.tsx
-import { jsx as jsx27 } from "react/jsx-runtime";
+import { jsx as jsx28 } from "react/jsx-runtime";
 var baseProps = (props) => ({
   width: 16,
   height: 16,
@@ -3901,32 +3932,35 @@ var baseProps = (props) => ({
   strokeWidth: 1.75,
   ...props
 });
-var LineSolidIcon = (props) => /* @__PURE__ */ jsx27("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx27("line", { x1: "2", y1: "8", x2: "14", y2: "8" }) });
-var LineDashedIcon = (props) => /* @__PURE__ */ jsx27("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx27("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "3 2.5" }) });
-var LineDottedIcon = (props) => /* @__PURE__ */ jsx27("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx27("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "0.1 2.6" }) });
-var PathCurveIcon = (props) => /* @__PURE__ */ jsx27("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx27("path", { d: "M2 12 C 5 12, 5 4, 8 4 S 11 12, 14 12" }) });
-var PathStepIcon = (props) => /* @__PURE__ */ jsx27("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx27("path", { d: "M2 12 H 6 V 4 H 14" }) });
+var LineSolidIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8" }) });
+var LineDashedIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "3 2.5" }) });
+var LineDottedIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "0.1 2.6" }) });
+var PathCurveIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("path", { d: "M2 12 C 5 12, 5 4, 8 4 S 11 12, 14 12" }) });
+var PathStepIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("path", { d: "M2 12 H 6 V 4 H 14" }) });
 
 // src/ui/popover.tsx
 import * as PopoverPrimitive from "@radix-ui/react-popover";
 import * as React7 from "react";
-import { jsx as jsx28 } from "react/jsx-runtime";
+import { jsx as jsx29 } from "react/jsx-runtime";
 var Popover = PopoverPrimitive.Root;
 var PopoverTrigger = PopoverPrimitive.Trigger;
 var PopoverAnchor = PopoverPrimitive.Anchor;
-var PopoverContent = React7.forwardRef(({ className, align = "center", sideOffset = 4, ...props }, ref) => /* @__PURE__ */ jsx28(PopoverPrimitive.Portal, { children: /* @__PURE__ */ jsx28(
-  PopoverPrimitive.Content,
-  {
-    ref,
-    align,
-    sideOffset,
-    className: cn(
-      "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
-      className
-    ),
-    ...props
-  }
-) }));
+var PopoverContent = React7.forwardRef(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx29(PopoverPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx29(
+    PopoverPrimitive.Content,
+    {
+      ref,
+      align,
+      sideOffset,
+      className: cn(
+        "z-50 w-72 rounded-md border bg-popover p-4 text-popover-foreground shadow-md outline-none data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2",
+        className
+      ),
+      ...props
+    }
+  ) });
+});
 PopoverContent.displayName = PopoverPrimitive.Content.displayName;
 
 // src/ui/sheet.tsx
@@ -3934,12 +3968,18 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva as cva2 } from "class-variance-authority";
 import { X as X2 } from "lucide-react";
 import * as React8 from "react";
-import { jsx as jsx29, jsxs as jsxs18 } from "react/jsx-runtime";
+import { jsx as jsx30, jsxs as jsxs18 } from "react/jsx-runtime";
 var Sheet = SheetPrimitive.Root;
 var SheetTrigger = SheetPrimitive.Trigger;
 var SheetClose = SheetPrimitive.Close;
-var SheetPortal = SheetPrimitive.Portal;
-var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx29(
+var SheetPortal = ({
+  children,
+  ...props
+}) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx30(SheetPrimitive.Portal, { container: portalContainer, ...props, children });
+};
+var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
   SheetPrimitive.Overlay,
   {
     className: cn(
@@ -3968,19 +4008,19 @@ var sheetVariants = cva2(
   }
 );
 var SheetContent = React8.forwardRef(({ side = "right", className, children, ...props }, ref) => /* @__PURE__ */ jsxs18(SheetPortal, { children: [
-  /* @__PURE__ */ jsx29(SheetOverlay, {}),
+  /* @__PURE__ */ jsx30(SheetOverlay, {}),
   /* @__PURE__ */ jsxs18(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
     children,
     /* @__PURE__ */ jsxs18(SheetPrimitive.Close, { className: "absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none", children: [
-      /* @__PURE__ */ jsx29(X2, { className: "h-4 w-4" }),
-      /* @__PURE__ */ jsx29("span", { className: "sr-only", children: "Close" })
+      /* @__PURE__ */ jsx30(X2, { className: "h-4 w-4" }),
+      /* @__PURE__ */ jsx30("span", { className: "sr-only", children: "Close" })
     ] })
   ] })
 ] }));
 SheetContent.displayName = SheetPrimitive.Content.displayName;
-var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx29("div", { className: cn("flex flex-col space-y-2 text-center sm:text-left", className), ...props });
+var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx30("div", { className: cn("flex flex-col space-y-2 text-center sm:text-left", className), ...props });
 SheetHeader.displayName = "SheetHeader";
-var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx29(
+var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx30(
   "div",
   {
     className: cn("flex flex-col-reverse sm:flex-row sm:justify-end sm:space-x-2", className),
@@ -3988,7 +4028,7 @@ var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx29(
   }
 );
 SheetFooter.displayName = "SheetFooter";
-var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx29(
+var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
   SheetPrimitive.Title,
   {
     ref,
@@ -3997,7 +4037,7 @@ var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE_
   }
 ));
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
-var SheetDescription = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx29(
+var SheetDescription = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
   SheetPrimitive.Description,
   {
     ref,
@@ -4010,7 +4050,7 @@ SheetDescription.displayName = SheetPrimitive.Description.displayName;
 // src/ui/slider.tsx
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as React9 from "react";
-import { jsx as jsx30, jsxs as jsxs19 } from "react/jsx-runtime";
+import { jsx as jsx31, jsxs as jsxs19 } from "react/jsx-runtime";
 var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs19(
   SliderPrimitive.Root,
   {
@@ -4018,8 +4058,8 @@ var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */
     className: cn("relative flex w-full touch-none select-none items-center", className),
     ...props,
     children: [
-      /* @__PURE__ */ jsx30(SliderPrimitive.Track, { className: "relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary", children: /* @__PURE__ */ jsx30(SliderPrimitive.Range, { className: "absolute h-full bg-primary" }) }),
-      /* @__PURE__ */ jsx30(SliderPrimitive.Thumb, { className: "block h-4 w-4 rounded-full border border-primary/60 bg-background shadow-sm transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" })
+      /* @__PURE__ */ jsx31(SliderPrimitive.Track, { className: "relative h-1.5 w-full grow overflow-hidden rounded-full bg-secondary", children: /* @__PURE__ */ jsx31(SliderPrimitive.Range, { className: "absolute h-full bg-primary" }) }),
+      /* @__PURE__ */ jsx31(SliderPrimitive.Thumb, { className: "block h-4 w-4 rounded-full border border-primary/60 bg-background shadow-sm transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50" })
     ]
   }
 ));
@@ -4028,9 +4068,9 @@ Slider.displayName = SliderPrimitive.Root.displayName;
 // src/ui/tabs.tsx
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as React10 from "react";
-import { jsx as jsx31 } from "react/jsx-runtime";
+import { jsx as jsx32 } from "react/jsx-runtime";
 var Tabs = TabsPrimitive.Root;
-var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
+var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
   TabsPrimitive.List,
   {
     ref,
@@ -4042,7 +4082,7 @@ var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__
   }
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
-var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
+var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
   TabsPrimitive.Trigger,
   {
     ref,
@@ -4054,7 +4094,7 @@ var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PUR
   }
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
-var TabsContent = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
+var TabsContent = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
   TabsPrimitive.Content,
   {
     ref,
@@ -4085,7 +4125,7 @@ import { useState as useState10 } from "react";
 
 // src/components/icon-picker-popover.tsx
 import { useEffect as useEffect6, useMemo, useState as useState9 } from "react";
-import { jsx as jsx32, jsxs as jsxs20 } from "react/jsx-runtime";
+import { jsx as jsx33, jsxs as jsxs20 } from "react/jsx-runtime";
 var COLS = 8;
 var ROW_HEIGHT = 32;
 var LIST_HEIGHT = 256;
@@ -4102,8 +4142,8 @@ function IconPickerPopover({ open, onOpenChange, anchor, onPick }) {
     if (!open) setQuery("");
   }, [open]);
   return /* @__PURE__ */ jsxs20(Popover, { open, onOpenChange, children: [
-    /* @__PURE__ */ jsx32(PopoverTrigger, { asChild: true, children: anchor }),
-    /* @__PURE__ */ jsx32(
+    /* @__PURE__ */ jsx33(PopoverTrigger, { asChild: true, children: anchor }),
+    /* @__PURE__ */ jsx33(
       PopoverContent,
       {
         align: "start",
@@ -4111,7 +4151,7 @@ function IconPickerPopover({ open, onOpenChange, anchor, onPick }) {
         sideOffset: 6,
         className: "w-[340px] p-0",
         "data-testid": "icon-picker-popover",
-        children: /* @__PURE__ */ jsx32(IconPickerBody, { query, onQueryChange: setQuery, recents, onPick })
+        children: /* @__PURE__ */ jsx33(IconPickerBody, { query, onQueryChange: setQuery, recents, onPick })
       }
     )
   ] });
@@ -4129,7 +4169,7 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
   const endIndex = Math.min(filtered.length, endRow * COLS);
   const visible = filtered.slice(startIndex, endIndex);
   return /* @__PURE__ */ jsxs20("div", { className: "flex w-full flex-col", children: [
-    /* @__PURE__ */ jsx32("div", { className: "border-b border-border p-2", children: /* @__PURE__ */ jsx32(
+    /* @__PURE__ */ jsx33("div", { className: "border-b border-border p-2", children: /* @__PURE__ */ jsx33(
       "input",
       {
         type: "text",
@@ -4146,8 +4186,8 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
       }
     ) }),
     showRecents ? /* @__PURE__ */ jsxs20("div", { className: "border-b border-border p-2", "data-testid": "icon-picker-recents", children: [
-      /* @__PURE__ */ jsx32("div", { className: "mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: "Recent" }),
-      /* @__PURE__ */ jsx32(
+      /* @__PURE__ */ jsx33("div", { className: "mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: "Recent" }),
+      /* @__PURE__ */ jsx33(
         "div",
         {
           className: "grid gap-1",
@@ -4157,8 +4197,8 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
       )
     ] }) : null,
     /* @__PURE__ */ jsxs20("div", { className: "p-2", children: [
-      /* @__PURE__ */ jsx32("div", { className: "mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: "All icons" }),
-      filtered.length === 0 ? /* @__PURE__ */ jsx32(
+      /* @__PURE__ */ jsx33("div", { className: "mb-1 px-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: "All icons" }),
+      filtered.length === 0 ? /* @__PURE__ */ jsx33(
         "div",
         {
           className: "flex items-center justify-center text-xs text-muted-foreground",
@@ -4166,14 +4206,14 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
           "data-testid": "icon-picker-empty",
           children: "No icons match."
         }
-      ) : /* @__PURE__ */ jsx32(
+      ) : /* @__PURE__ */ jsx33(
         "div",
         {
           "data-testid": "icon-picker-all",
           className: "overflow-y-auto",
           style: { height: LIST_HEIGHT },
           onScroll: (e) => setScrollTop(e.currentTarget.scrollTop),
-          children: /* @__PURE__ */ jsx32("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx32(
+          children: /* @__PURE__ */ jsx33("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx33(
             "div",
             {
               style: {
@@ -4182,7 +4222,7 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
                 left: 0,
                 right: 0
               },
-              children: /* @__PURE__ */ jsx32(
+              children: /* @__PURE__ */ jsx33(
                 "div",
                 {
                   className: "grid gap-1",
@@ -4199,7 +4239,7 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
 }
 function renderTile(name, onPick, testId) {
   const Icon2 = ICON_REGISTRY[name];
-  return /* @__PURE__ */ jsx32(
+  return /* @__PURE__ */ jsx33(
     "button",
     {
       type: "button",
@@ -4213,14 +4253,14 @@ function renderTile(name, onPick, testId) {
         "hover:bg-accent hover:text-accent-foreground",
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
       ),
-      children: Icon2 ? /* @__PURE__ */ jsx32(Icon2, { className: "h-4 w-4", "aria-hidden": "true" }) : null
+      children: Icon2 ? /* @__PURE__ */ jsx33(Icon2, { className: "h-4 w-4", "aria-hidden": "true" }) : null
     },
     testId
   );
 }
 
 // src/components/canvas-toolbar.tsx
-import { jsx as jsx33, jsxs as jsxs21 } from "react/jsx-runtime";
+import { jsx as jsx34, jsxs as jsxs21 } from "react/jsx-runtime";
 var HTML_BLOCK_DND_TYPE = "application/x-seeflow-create-html-block";
 var TOP_PRIMARY_SHAPES = [
   { shape: "rectangle", label: "Rectangle", commandId: "tool.rectangle", Icon: Square },
@@ -4268,7 +4308,7 @@ function CanvasToolbar({
   const renderShapeButton = ({ shape, commandId, Icon: Icon2 }) => {
     const active = activeShape === shape;
     const tooltip = getCommandTooltip(commandId);
-    return /* @__PURE__ */ jsx33(
+    return /* @__PURE__ */ jsx34(
       "button",
       {
         type: "button",
@@ -4282,7 +4322,7 @@ function CanvasToolbar({
           "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors",
           active ? "bg-primary/10 text-primary border border-primary/30" : "hover:bg-muted"
         ),
-        children: /* @__PURE__ */ jsx33(Icon2, { className: "h-4 w-4" })
+        children: /* @__PURE__ */ jsx34(Icon2, { className: "h-4 w-4" })
       },
       shape
     );
@@ -4295,7 +4335,7 @@ function CanvasToolbar({
       children: [
         TOP_PRIMARY_SHAPES.map(renderShapeButton),
         /* @__PURE__ */ jsxs21(Popover, { open: shapePickerOpen, onOpenChange: setShapePickerOpen, children: [
-          /* @__PURE__ */ jsx33(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx33(
+          /* @__PURE__ */ jsx34(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx34(
             "button",
             {
               type: "button",
@@ -4307,10 +4347,10 @@ function CanvasToolbar({
                 "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors",
                 shapePickerOpen || illustrativeActive ? "bg-primary/10 text-primary border border-primary/30" : "hover:bg-muted"
               ),
-              children: /* @__PURE__ */ jsx33(Shapes, { className: "h-4 w-4", "aria-hidden": "true" })
+              children: /* @__PURE__ */ jsx34(Shapes, { className: "h-4 w-4", "aria-hidden": "true" })
             }
           ) }),
-          /* @__PURE__ */ jsx33(
+          /* @__PURE__ */ jsx34(
             PopoverContent,
             {
               align: "start",
@@ -4321,7 +4361,7 @@ function CanvasToolbar({
               onOpenAutoFocus: (e) => {
                 e.preventDefault();
               },
-              children: /* @__PURE__ */ jsx33("div", { role: "menu", "aria-label": "More shapes", className: "flex flex-col gap-0.5", children: ILLUSTRATIVE_SHAPES2.map(({ shape, label, commandId, Icon: Icon2 }) => {
+              children: /* @__PURE__ */ jsx34("div", { role: "menu", "aria-label": "More shapes", className: "flex flex-col gap-0.5", children: ILLUSTRATIVE_SHAPES2.map(({ shape, label, commandId, Icon: Icon2 }) => {
                 const active = activeShape === shape;
                 const tooltip = getCommandTooltip(commandId);
                 return /* @__PURE__ */ jsxs21(
@@ -4343,8 +4383,8 @@ function CanvasToolbar({
                       active ? "bg-primary/10 text-primary border border-primary/30" : "hover:bg-muted focus:bg-muted focus:outline-none"
                     ),
                     children: [
-                      /* @__PURE__ */ jsx33(Icon2, { className: "h-4 w-4 text-muted-foreground", "aria-hidden": "true" }),
-                      /* @__PURE__ */ jsx33("span", { children: label })
+                      /* @__PURE__ */ jsx34(Icon2, { className: "h-4 w-4 text-muted-foreground", "aria-hidden": "true" }),
+                      /* @__PURE__ */ jsx34("span", { children: label })
                     ]
                   },
                   shape
@@ -4353,7 +4393,7 @@ function CanvasToolbar({
             }
           )
         ] }),
-        onPickIcon ? /* @__PURE__ */ jsx33(
+        onPickIcon ? /* @__PURE__ */ jsx34(
           IconPickerPopover,
           {
             open: iconPickerOpen ?? false,
@@ -4361,7 +4401,7 @@ function CanvasToolbar({
               if (next) onOpenIconPicker?.();
               else onCloseIconPicker?.();
             },
-            anchor: /* @__PURE__ */ jsx33(
+            anchor: /* @__PURE__ */ jsx34(
               "button",
               {
                 type: "button",
@@ -4373,13 +4413,13 @@ function CanvasToolbar({
                   "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors",
                   iconPickerOpen ? "bg-primary/10 text-primary border border-primary/30" : "hover:bg-muted"
                 ),
-                children: /* @__PURE__ */ jsx33(Sticker, { className: "h-4 w-4", "aria-hidden": "true" })
+                children: /* @__PURE__ */ jsx34(Sticker, { className: "h-4 w-4", "aria-hidden": "true" })
               }
             ),
             onPick: onPickIcon
           }
         ) : null,
-        /* @__PURE__ */ jsx33("div", { className: "my-1 h-px w-6 bg-border", "aria-hidden": "true" }),
+        /* @__PURE__ */ jsx34("div", { className: "my-1 h-px w-6 bg-border", "aria-hidden": "true" }),
         SECONDARY_PRIMARY_SHAPES.map(renderShapeButton)
       ]
     }
@@ -4395,7 +4435,7 @@ import {
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Fragment as Fragment5, jsx as jsx34, jsxs as jsxs22 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx35, jsxs as jsxs22 } from "react/jsx-runtime";
 function DetailPanel({
   demoId,
   node,
@@ -4429,7 +4469,7 @@ function DetailPanel({
     });
   };
   const widthStyle = { ["--detail-panel-w"]: `${width}px` };
-  return /* @__PURE__ */ jsx34(
+  return /* @__PURE__ */ jsx35(
     Sheet,
     {
       open,
@@ -4463,7 +4503,7 @@ function DetailPanel({
             if (target?.closest(".react-flow__edge")) e.preventDefault();
           },
           children: [
-            /* @__PURE__ */ jsx34(
+            /* @__PURE__ */ jsx35(
               "div",
               {
                 "aria-label": "Resize detail panel",
@@ -4474,7 +4514,7 @@ function DetailPanel({
             ),
             inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "flex flex-col gap-3", children: [
               /* @__PURE__ */ jsxs22("div", { className: "flex flex-col gap-1", children: [
-                showNameField ? /* @__PURE__ */ jsx34(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsx34(
+                showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsx35(
                   EditableField,
                   {
                     nodeId: inspectableNode.id,
@@ -4490,7 +4530,7 @@ function DetailPanel({
                   // Radix requires a SheetTitle for a11y; keep it sr-only for
                   // ellipse so the panel stops rendering a Name row visually but
                   // still announces the entity to screen readers.
-                  /* @__PURE__ */ jsx34(SheetTitle, { "data-testid": "detail-panel-title", className: "sr-only", children: inspectableNode.id })
+                  /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", className: "sr-only", children: inspectableNode.id })
                 ),
                 /* @__PURE__ */ jsxs22(SheetDescription, { className: "sr-only", children: [
                   inspectableNode.id,
@@ -4499,9 +4539,9 @@ function DetailPanel({
                 ] })
               ] }),
               /* @__PURE__ */ jsxs22("div", { className: "mt-0 flex flex-col gap-3", children: [
-                statusReport ? /* @__PURE__ */ jsx34(StatusSection, { report: statusReport }) : null,
-                showIconField && onIconChange ? /* @__PURE__ */ jsx34(IconRow, { nodeId: inspectableNode.id, icon: currentIcon, onChange: onIconChange }) : null,
-                /* @__PURE__ */ jsx34(
+                statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
+                showIconField && onIconChange ? /* @__PURE__ */ jsx35(IconRow, { nodeId: inspectableNode.id, icon: currentIcon, onChange: onIconChange }) : null,
+                /* @__PURE__ */ jsx35(
                   EditableField,
                   {
                     nodeId: inspectableNode.id,
@@ -4514,7 +4554,7 @@ function DetailPanel({
                     textClassName: "font-medium text-muted-foreground"
                   }
                 ),
-                /* @__PURE__ */ jsx34(
+                /* @__PURE__ */ jsx35(
                   EditableField,
                   {
                     nodeId: inspectableNode.id,
@@ -4527,18 +4567,18 @@ function DetailPanel({
                     markdown: true
                   }
                 ),
-                inspectableNode.type === "htmlNode" && demoId ? /* @__PURE__ */ jsx34(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
+                inspectableNode.type === "htmlNode" && demoId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
             ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "flex flex-col gap-3", children: [
               /* @__PURE__ */ jsxs22("div", { className: "flex flex-col gap-1", children: [
-                /* @__PURE__ */ jsx34(SheetTitle, { "data-testid": "detail-panel-title", children: connector.label ?? "Connector" }),
+                /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: connector.label ?? "Connector" }),
                 /* @__PURE__ */ jsxs22(SheetDescription, { className: "sr-only", children: [
                   connector.id,
                   " \xB7 ",
                   connector.kind
                 ] })
               ] }),
-              /* @__PURE__ */ jsx34("div", { className: "mt-0 flex flex-col gap-3", children: /* @__PURE__ */ jsx34(ConnectorSummary, { connector }) })
+              /* @__PURE__ */ jsx35("div", { className: "mt-0 flex flex-col gap-3", children: /* @__PURE__ */ jsx35(ConnectorSummary, { connector }) })
             ] }) : null
           ]
         }
@@ -4577,7 +4617,7 @@ function EditableField({
   }, [isEditing, value]);
   const isEmpty = value === "";
   if (!onSave) {
-    return /* @__PURE__ */ jsx34(
+    return /* @__PURE__ */ jsx35(
       "div",
       {
         "data-testid": testIdBase,
@@ -4588,7 +4628,7 @@ function EditableField({
           !markdown && "whitespace-pre-wrap break-words",
           textClassName
         ),
-        children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx34(MarkdownContent, { value }) : value
+        children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx35(MarkdownContent, { value }) : value
       }
     );
   }
@@ -4636,7 +4676,7 @@ function EditableField({
     if (isEditing) return;
     setIsEditing(true);
   };
-  return /* @__PURE__ */ jsx34("div", { className: "relative", "data-testid": testIdBase, "data-editing": isEditing ? "true" : "false", children: isEditing ? /* @__PURE__ */ jsx34(
+  return /* @__PURE__ */ jsx35("div", { className: "relative", "data-testid": testIdBase, "data-editing": isEditing ? "true" : "false", children: isEditing ? /* @__PURE__ */ jsx35(
     "div",
     {
       ref: editorRef,
@@ -4661,7 +4701,7 @@ function EditableField({
       "aria-multiline": multiline ? "true" : "false",
       "aria-label": ariaLabel
     }
-  ) : /* @__PURE__ */ jsx34(
+  ) : /* @__PURE__ */ jsx35(
     "button",
     {
       type: "button",
@@ -4673,7 +4713,7 @@ function EditableField({
         !markdown && "whitespace-pre-wrap break-words",
         textClassName
       ),
-      children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx34(MarkdownContent, { value }) : value
+      children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx35(MarkdownContent, { value }) : value
     }
   ) });
 }
@@ -4684,8 +4724,8 @@ function IconRow({
 }) {
   const [open, setOpen] = useState11(false);
   return /* @__PURE__ */ jsxs22("div", { "data-testid": "detail-panel-icon", className: "flex items-center gap-2 px-2", children: [
-    /* @__PURE__ */ jsx34("span", { className: "text-xs font-medium uppercase tracking-wide text-muted-foreground w-16 shrink-0", children: "Icon" }),
-    /* @__PURE__ */ jsx34(
+    /* @__PURE__ */ jsx35("span", { className: "text-xs font-medium uppercase tracking-wide text-muted-foreground w-16 shrink-0", children: "Icon" }),
+    /* @__PURE__ */ jsx35(
       IconPickerPopover,
       {
         open,
@@ -4694,7 +4734,7 @@ function IconRow({
           onChange(nodeId, name);
           setOpen(false);
         },
-        anchor: /* @__PURE__ */ jsx34(
+        anchor: /* @__PURE__ */ jsx35(
           "button",
           {
             type: "button",
@@ -4706,9 +4746,9 @@ function IconRow({
               "hover:bg-muted"
             ),
             children: icon ? /* @__PURE__ */ jsxs22(Fragment5, { children: [
-              /* @__PURE__ */ jsx34(Icon, { name: icon, size: 16, "aria-hidden": true }),
-              /* @__PURE__ */ jsx34("span", { className: "font-mono text-xs", children: icon })
-            ] }) : /* @__PURE__ */ jsx34("span", { className: "text-muted-foreground italic", children: "None" })
+              /* @__PURE__ */ jsx35(Icon, { name: icon, size: 16, "aria-hidden": true }),
+              /* @__PURE__ */ jsx35("span", { className: "font-mono text-xs", children: icon })
+            ] }) : /* @__PURE__ */ jsx35("span", { className: "text-muted-foreground italic", children: "None" })
           }
         )
       }
@@ -4724,7 +4764,7 @@ function IconRow({
         className: "h-8 gap-1 px-2 text-xs",
         onClick: () => onChange(nodeId, null),
         children: [
-          /* @__PURE__ */ jsx34(X3, { className: "h-3.5 w-3.5" }),
+          /* @__PURE__ */ jsx35(X3, { className: "h-3.5 w-3.5" }),
           "Clear"
         ]
       }
@@ -4761,8 +4801,8 @@ function HtmlNodeSection({
       "data-testid": "detail-panel-html-node",
       children: [
         /* @__PURE__ */ jsxs22("div", { className: "flex flex-col gap-1", children: [
-          /* @__PURE__ */ jsx34("span", { className: "font-mono text-[11px] text-muted-foreground uppercase tracking-widest", children: "Path" }),
-          /* @__PURE__ */ jsx34(
+          /* @__PURE__ */ jsx35("span", { className: "font-mono text-[11px] text-muted-foreground uppercase tracking-widest", children: "Path" }),
+          /* @__PURE__ */ jsx35(
             "code",
             {
               "data-testid": "detail-panel-html-path",
@@ -4786,7 +4826,7 @@ function HtmlNodeSection({
               "data-testid": "detail-panel-html-open",
               "aria-label": "Open in editor",
               children: [
-                /* @__PURE__ */ jsx34(PencilLine, { className: "h-3.5 w-3.5" }),
+                /* @__PURE__ */ jsx35(PencilLine, { className: "h-3.5 w-3.5" }),
                 "Open in editor"
               ]
             }
@@ -4805,13 +4845,13 @@ function HtmlNodeSection({
               "data-testid": "detail-panel-html-reveal",
               "aria-label": "Reveal in Finder/Explorer",
               children: [
-                /* @__PURE__ */ jsx34(FolderOpen, { className: "h-3.5 w-3.5" }),
+                /* @__PURE__ */ jsx35(FolderOpen, { className: "h-3.5 w-3.5" }),
                 "Reveal"
               ]
             }
           ) : null
         ] }) : null,
-        status.kind === "error" ? /* @__PURE__ */ jsx34(
+        status.kind === "error" ? /* @__PURE__ */ jsx35(
           "div",
           {
             "data-testid": "detail-panel-html-status",
@@ -4862,7 +4902,7 @@ function StatusSection({
       "data-state": report.state,
       children: [
         /* @__PURE__ */ jsxs22("div", { className: "flex items-center justify-between gap-2", children: [
-          /* @__PURE__ */ jsx34(
+          /* @__PURE__ */ jsx35(
             StatusBadge,
             {
               state: report.state,
@@ -4870,7 +4910,7 @@ function StatusSection({
               "data-testid": "detail-panel-status-badge"
             }
           ),
-          /* @__PURE__ */ jsx34(
+          /* @__PURE__ */ jsx35(
             "span",
             {
               className: "shrink-0 text-[10px] text-muted-foreground",
@@ -4879,7 +4919,7 @@ function StatusSection({
             }
           )
         ] }),
-        report.detail ? /* @__PURE__ */ jsx34(
+        report.detail ? /* @__PURE__ */ jsx35(
           "div",
           {
             "data-testid": "detail-panel-status-detail",
@@ -4887,14 +4927,14 @@ function StatusSection({
             children: report.detail
           }
         ) : null,
-        entries.length > 0 ? /* @__PURE__ */ jsx34(
+        entries.length > 0 ? /* @__PURE__ */ jsx35(
           "dl",
           {
             "data-testid": "detail-panel-status-data",
             className: "grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[11px]",
             children: entries.map(([key, value]) => /* @__PURE__ */ jsxs22("div", { className: "contents", "data-testid": "detail-panel-status-data-row", children: [
-              /* @__PURE__ */ jsx34("dt", { className: "truncate font-medium text-muted-foreground", children: key }),
-              /* @__PURE__ */ jsx34("dd", { className: "break-all font-mono text-foreground", children: formatStatusValue(value) })
+              /* @__PURE__ */ jsx35("dt", { className: "truncate font-medium text-muted-foreground", children: key }),
+              /* @__PURE__ */ jsx35("dd", { className: "break-all font-mono text-foreground", children: formatStatusValue(value) })
             ] }, key))
           }
         ) : null
@@ -4903,25 +4943,25 @@ function StatusSection({
   );
 }
 function MarkdownContent({ value }) {
-  return /* @__PURE__ */ jsx34(
+  return /* @__PURE__ */ jsx35(
     ReactMarkdown,
     {
       remarkPlugins: [remarkGfm],
       components: {
-        h1: ({ children }) => /* @__PURE__ */ jsx34("h1", { className: "mb-1 text-base font-bold leading-snug", children }),
-        h2: ({ children }) => /* @__PURE__ */ jsx34("h2", { className: "mb-1 text-sm font-semibold leading-snug", children }),
-        h3: ({ children }) => /* @__PURE__ */ jsx34("h3", { className: "mb-0.5 text-sm font-medium leading-snug", children }),
-        p: ({ children }) => /* @__PURE__ */ jsx34("p", { className: "mb-2 last:mb-0 leading-relaxed", children }),
-        ul: ({ children }) => /* @__PURE__ */ jsx34("ul", { className: "mb-2 list-disc pl-4 last:mb-0", children }),
-        ol: ({ children }) => /* @__PURE__ */ jsx34("ol", { className: "mb-2 list-decimal pl-4 last:mb-0", children }),
-        li: ({ children }) => /* @__PURE__ */ jsx34("li", { className: "mb-0.5", children }),
+        h1: ({ children }) => /* @__PURE__ */ jsx35("h1", { className: "mb-1 text-base font-bold leading-snug", children }),
+        h2: ({ children }) => /* @__PURE__ */ jsx35("h2", { className: "mb-1 text-sm font-semibold leading-snug", children }),
+        h3: ({ children }) => /* @__PURE__ */ jsx35("h3", { className: "mb-0.5 text-sm font-medium leading-snug", children }),
+        p: ({ children }) => /* @__PURE__ */ jsx35("p", { className: "mb-2 last:mb-0 leading-relaxed", children }),
+        ul: ({ children }) => /* @__PURE__ */ jsx35("ul", { className: "mb-2 list-disc pl-4 last:mb-0", children }),
+        ol: ({ children }) => /* @__PURE__ */ jsx35("ol", { className: "mb-2 list-decimal pl-4 last:mb-0", children }),
+        li: ({ children }) => /* @__PURE__ */ jsx35("li", { className: "mb-0.5", children }),
         code: ({ children, className }) => {
           const isBlock = className?.includes("language-");
-          return isBlock ? /* @__PURE__ */ jsx34("code", { className: "block overflow-x-auto rounded bg-muted/60 px-2 py-1 font-mono text-xs", children }) : /* @__PURE__ */ jsx34("code", { className: "rounded bg-muted/60 px-1 py-0.5 font-mono text-xs", children });
+          return isBlock ? /* @__PURE__ */ jsx35("code", { className: "block overflow-x-auto rounded bg-muted/60 px-2 py-1 font-mono text-xs", children }) : /* @__PURE__ */ jsx35("code", { className: "rounded bg-muted/60 px-1 py-0.5 font-mono text-xs", children });
         },
-        pre: ({ children }) => /* @__PURE__ */ jsx34("pre", { className: "mb-2 last:mb-0", children }),
-        blockquote: ({ children }) => /* @__PURE__ */ jsx34("blockquote", { className: "mb-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground last:mb-0", children }),
-        a: ({ href, children }) => /* @__PURE__ */ jsx34(
+        pre: ({ children }) => /* @__PURE__ */ jsx35("pre", { className: "mb-2 last:mb-0", children }),
+        blockquote: ({ children }) => /* @__PURE__ */ jsx35("blockquote", { className: "mb-2 border-l-2 border-muted-foreground/30 pl-3 italic text-muted-foreground last:mb-0", children }),
+        a: ({ href, children }) => /* @__PURE__ */ jsx35(
           "a",
           {
             href,
@@ -4931,35 +4971,35 @@ function MarkdownContent({ value }) {
             children
           }
         ),
-        strong: ({ children }) => /* @__PURE__ */ jsx34("strong", { className: "font-semibold", children }),
-        em: ({ children }) => /* @__PURE__ */ jsx34("em", { className: "italic", children }),
-        hr: () => /* @__PURE__ */ jsx34("hr", { className: "my-2 border-border" }),
-        table: ({ children }) => /* @__PURE__ */ jsx34("div", { className: "mb-2 overflow-x-auto last:mb-0", children: /* @__PURE__ */ jsx34("table", { className: "w-full border-collapse text-xs", children }) }),
-        th: ({ children }) => /* @__PURE__ */ jsx34("th", { className: "border border-border bg-muted/40 px-2 py-1 text-left font-medium", children }),
-        td: ({ children }) => /* @__PURE__ */ jsx34("td", { className: "border border-border px-2 py-1", children })
+        strong: ({ children }) => /* @__PURE__ */ jsx35("strong", { className: "font-semibold", children }),
+        em: ({ children }) => /* @__PURE__ */ jsx35("em", { className: "italic", children }),
+        hr: () => /* @__PURE__ */ jsx35("hr", { className: "my-2 border-border" }),
+        table: ({ children }) => /* @__PURE__ */ jsx35("div", { className: "mb-2 overflow-x-auto last:mb-0", children: /* @__PURE__ */ jsx35("table", { className: "w-full border-collapse text-xs", children }) }),
+        th: ({ children }) => /* @__PURE__ */ jsx35("th", { className: "border border-border bg-muted/40 px-2 py-1 text-left font-medium", children }),
+        td: ({ children }) => /* @__PURE__ */ jsx35("td", { className: "border border-border px-2 py-1", children })
       },
       children: value
     }
   );
 }
 function ConnectorSummary({ connector }) {
-  return /* @__PURE__ */ jsx34("div", { className: "rounded-md border bg-card px-3 py-2 text-xs", children: /* @__PURE__ */ jsxs22("dl", { className: "divide-y", children: [
-    /* @__PURE__ */ jsx34(SummaryRow, { label: "Source", value: connector.source }),
-    /* @__PURE__ */ jsx34(SummaryRow, { label: "Target", value: connector.target }),
-    /* @__PURE__ */ jsx34(SummaryRow, { label: "Kind", value: connector.kind }),
-    connector.label ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Label", value: connector.label }) : null,
-    connector.style ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Style", value: connector.style }) : null,
-    connector.color ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Color", value: connector.color }) : null,
-    connector.direction ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Direction", value: connector.direction }) : null,
-    connector.kind === "http" && connector.url ? /* @__PURE__ */ jsx34(SummaryRow, { label: "URL", value: `${connector.method ?? "GET"} ${connector.url}` }) : null,
-    connector.kind === "event" ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Event", value: connector.eventName }) : null,
-    connector.kind === "queue" ? /* @__PURE__ */ jsx34(SummaryRow, { label: "Queue", value: connector.queueName }) : null
+  return /* @__PURE__ */ jsx35("div", { className: "rounded-md border bg-card px-3 py-2 text-xs", children: /* @__PURE__ */ jsxs22("dl", { className: "divide-y", children: [
+    /* @__PURE__ */ jsx35(SummaryRow, { label: "Source", value: connector.source }),
+    /* @__PURE__ */ jsx35(SummaryRow, { label: "Target", value: connector.target }),
+    /* @__PURE__ */ jsx35(SummaryRow, { label: "Kind", value: connector.kind }),
+    connector.label ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Label", value: connector.label }) : null,
+    connector.style ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Style", value: connector.style }) : null,
+    connector.color ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Color", value: connector.color }) : null,
+    connector.direction ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Direction", value: connector.direction }) : null,
+    connector.kind === "http" && connector.url ? /* @__PURE__ */ jsx35(SummaryRow, { label: "URL", value: `${connector.method ?? "GET"} ${connector.url}` }) : null,
+    connector.kind === "event" ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Event", value: connector.eventName }) : null,
+    connector.kind === "queue" ? /* @__PURE__ */ jsx35(SummaryRow, { label: "Queue", value: connector.queueName }) : null
   ] }) });
 }
 function SummaryRow({ label, value }) {
   return /* @__PURE__ */ jsxs22("div", { className: "flex items-start gap-3 py-2 first:pt-0 last:pb-0", children: [
-    /* @__PURE__ */ jsx34("dt", { className: "w-20 shrink-0 font-medium text-muted-foreground", children: label }),
-    /* @__PURE__ */ jsx34("dd", { className: "flex-1 break-all font-mono", children: value })
+    /* @__PURE__ */ jsx35("dt", { className: "w-20 shrink-0 font-medium text-muted-foreground", children: label }),
+    /* @__PURE__ */ jsx35("dd", { className: "flex-1 break-all font-mono", children: value })
   ] });
 }
 
@@ -5205,7 +5245,7 @@ import {
   Type as Type2
 } from "lucide-react";
 import { useEffect as useEffect8, useState as useState13 } from "react";
-import { Fragment as Fragment6, jsx as jsx35, jsxs as jsxs23 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx36, jsxs as jsxs23 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
 var DEFAULT_BORDER_SIZE = 3;
@@ -5376,13 +5416,13 @@ function StyleStrip({
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);
     };
-    return /* @__PURE__ */ jsx35(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+    return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
       "div",
       {
         "data-testid": "canvas-style-strip",
         className: "pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-md backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx35(
+          /* @__PURE__ */ jsx36(
             SwatchButton,
             {
               testId: "style-strip-icon-color",
@@ -5396,7 +5436,7 @@ function StyleStrip({
             }
           ),
           showChangeIcon ? /* @__PURE__ */ jsxs23(Tooltip, { children: [
-            /* @__PURE__ */ jsx35(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx35(
+            /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
               "button",
               {
                 type: "button",
@@ -5408,10 +5448,10 @@ function StyleStrip({
                   "inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
                   "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
                 ),
-                children: /* @__PURE__ */ jsx35(Sticker2, { className: "h-4 w-4" })
+                children: /* @__PURE__ */ jsx36(Sticker2, { className: "h-4 w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx35(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: "Change icon" })
+            /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: "Change icon" })
           ] }) : null
         ]
       }
@@ -5440,13 +5480,13 @@ function StyleStrip({
     const previewImageCornerRadius = (n) => {
       for (const node of nodes) onStyleNodePreview?.(node.id, { cornerRadius: n });
     };
-    return /* @__PURE__ */ jsx35(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+    return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
       "div",
       {
         "data-testid": "canvas-style-strip",
         className: "pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-md backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx35(
+          /* @__PURE__ */ jsx36(
             SwatchButton,
             {
               testId: "style-strip-image-border-color",
@@ -5459,7 +5499,7 @@ function StyleStrip({
               onSelect: applyImageBorderColor
             }
           ),
-          /* @__PURE__ */ jsx35(
+          /* @__PURE__ */ jsx36(
             PopoverButton,
             {
               testId: "style-strip-image-border-style",
@@ -5467,9 +5507,9 @@ function StyleStrip({
               ariaLabel: "image border style",
               renderIcon: () => {
                 const Icon2 = BORDER_STYLE_OPTIONS.find((o) => o.value === imageBorderStyle)?.icon ?? LineSolidIcon;
-                return /* @__PURE__ */ jsx35(Icon2, { className: "h-4 w-4" });
+                return /* @__PURE__ */ jsx36(Icon2, { className: "h-4 w-4" });
               },
-              children: /* @__PURE__ */ jsx35(
+              children: /* @__PURE__ */ jsx36(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5480,14 +5520,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx35(
+          /* @__PURE__ */ jsx36(
             PopoverButton,
             {
               testId: "style-strip-image-border-width",
               tooltip: "Border width",
               ariaLabel: "image border width",
-              renderIcon: () => /* @__PURE__ */ jsx35("span", { className: "font-mono text-[10px] tabular-nums", children: imageBorderWidth }),
-              children: /* @__PURE__ */ jsx35(
+              renderIcon: () => /* @__PURE__ */ jsx36("span", { className: "font-mono text-[10px] tabular-nums", children: imageBorderWidth }),
+              children: /* @__PURE__ */ jsx36(
                 SliderControl,
                 {
                   value: firstImage?.data.borderWidth,
@@ -5502,14 +5542,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx35(
+          /* @__PURE__ */ jsx36(
             PopoverButton,
             {
               testId: "style-strip-image-corner-radius",
               tooltip: "Corners",
               ariaLabel: "image corner radius",
-              renderIcon: () => /* @__PURE__ */ jsx35(Squircle, { className: "h-4 w-4" }),
-              children: /* @__PURE__ */ jsx35(
+              renderIcon: () => /* @__PURE__ */ jsx36(Squircle, { className: "h-4 w-4" }),
+              children: /* @__PURE__ */ jsx36(
                 SliderControl,
                 {
                   value: firstImage?.data.cornerRadius,
@@ -5534,7 +5574,7 @@ function StyleStrip({
   const renderColorsTrigger = () => {
     if (pureConnector) {
       const edge = COLOR_TOKENS[borderColorActive].edge;
-      return /* @__PURE__ */ jsx35(
+      return /* @__PURE__ */ jsx36(
         "span",
         {
           className: "inline-block h-5 w-5 rounded-full ring-1 ring-border",
@@ -5544,7 +5584,7 @@ function StyleStrip({
     }
     const borderHex = COLOR_TOKENS[borderColorActive].border;
     const fillHex = COLOR_TOKENS[backgroundActive].background;
-    return /* @__PURE__ */ jsx35(
+    return /* @__PURE__ */ jsx36(
       "span",
       {
         className: "inline-block h-5 w-5 rounded-md ring-1 ring-border",
@@ -5552,13 +5592,13 @@ function StyleStrip({
       }
     );
   };
-  return /* @__PURE__ */ jsx35(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+  return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
     "div",
     {
       "data-testid": "canvas-style-strip",
       className: "pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-md backdrop-blur",
       children: [
-        !isTextShape ? /* @__PURE__ */ jsx35(
+        !isTextShape ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-colors",
@@ -5566,7 +5606,7 @@ function StyleStrip({
             ariaLabel: "colors",
             renderIcon: renderColorsTrigger,
             children: /* @__PURE__ */ jsxs23("div", { className: "flex w-56 flex-col gap-3", children: [
-              /* @__PURE__ */ jsx35(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx35(
+              /* @__PURE__ */ jsx36(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx36(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-border-color",
@@ -5578,7 +5618,7 @@ function StyleStrip({
                   onSelect: applyBorderColor
                 }
               ) }),
-              showFillSection ? /* @__PURE__ */ jsx35(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx35(
+              showFillSection ? /* @__PURE__ */ jsx36(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx36(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-fill",
@@ -5593,7 +5633,7 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        showBorderSection ? /* @__PURE__ */ jsx35(
+        showBorderSection ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-border",
@@ -5601,10 +5641,10 @@ function StyleStrip({
             ariaLabel: pureConnector ? "connector" : "border",
             renderIcon: () => {
               const Icon2 = (pureConnector ? CONNECTOR_STYLE_OPTIONS.find((o) => o.value === connectorStyleActive)?.icon : BORDER_STYLE_OPTIONS.find((o) => o.value === borderStyleActiveNode)?.icon) ?? LineSolidIcon;
-              return /* @__PURE__ */ jsx35(Icon2, { className: "h-4 w-4" });
+              return /* @__PURE__ */ jsx36(Icon2, { className: "h-4 w-4" });
             },
             children: /* @__PURE__ */ jsxs23("div", { className: "flex w-56 flex-col gap-3", children: [
-              /* @__PURE__ */ jsx35(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx35(
+              /* @__PURE__ */ jsx36(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx36(
                 IconToggleGroup,
                 {
                   ariaLabel: "Connector style",
@@ -5612,7 +5652,7 @@ function StyleStrip({
                   onChange: (s) => applyBorderStyle(s),
                   options: CONNECTOR_STYLE_OPTIONS
                 }
-              ) : /* @__PURE__ */ jsx35(
+              ) : /* @__PURE__ */ jsx36(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5621,7 +5661,7 @@ function StyleStrip({
                   options: BORDER_STYLE_OPTIONS
                 }
               ) }),
-              /* @__PURE__ */ jsx35(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx35(
+              /* @__PURE__ */ jsx36(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx36(
                 SliderControl,
                 {
                   value: widthCurrent,
@@ -5637,20 +5677,20 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes || pureConnector ? /* @__PURE__ */ jsx35(
+        hasNodes || pureConnector ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-text",
             tooltip: "Text",
             ariaLabel: "text",
-            renderIcon: () => /* @__PURE__ */ jsx35(Type2, { className: "h-4 w-4" }),
+            renderIcon: () => /* @__PURE__ */ jsx36(Type2, { className: "h-4 w-4" }),
             children: /* @__PURE__ */ jsxs23("div", { className: "flex w-56 flex-col gap-3", children: [
-              /* @__PURE__ */ jsx35(
+              /* @__PURE__ */ jsx36(
                 PopoverSection,
                 {
                   label: "Size",
                   testId: pureConnector ? "style-strip-connector-font-size" : "style-strip-font-size",
-                  children: /* @__PURE__ */ jsx35(
+                  children: /* @__PURE__ */ jsx36(
                     SliderControl,
                     {
                       value: pureConnector ? firstConnector?.fontSize : firstVisualNode?.data.fontSize,
@@ -5666,7 +5706,7 @@ function StyleStrip({
                   )
                 }
               ),
-              showTextColorSection ? /* @__PURE__ */ jsx35(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx35(
+              showTextColorSection ? /* @__PURE__ */ jsx36(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx36(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-text-color",
@@ -5681,14 +5721,14 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes && !isTextShape ? /* @__PURE__ */ jsx35(
+        hasNodes && !isTextShape ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-corner-radius",
             tooltip: "Corners",
             ariaLabel: "corner radius",
-            renderIcon: () => /* @__PURE__ */ jsx35(Squircle, { className: "h-4 w-4" }),
-            children: /* @__PURE__ */ jsx35(
+            renderIcon: () => /* @__PURE__ */ jsx36(Squircle, { className: "h-4 w-4" }),
+            children: /* @__PURE__ */ jsx36(
               SliderControl,
               {
                 value: firstVisualNode?.data.cornerRadius,
@@ -5704,7 +5744,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx35(
+        pureConnector ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-path",
@@ -5712,9 +5752,9 @@ function StyleStrip({
             ariaLabel: "connector path",
             renderIcon: () => {
               const Icon2 = PATH_OPTIONS.find((o) => o.value === pathActive)?.icon ?? PathCurveIcon;
-              return /* @__PURE__ */ jsx35(Icon2, { className: "h-4 w-4" });
+              return /* @__PURE__ */ jsx36(Icon2, { className: "h-4 w-4" });
             },
-            children: /* @__PURE__ */ jsx35(
+            children: /* @__PURE__ */ jsx36(
               IconToggleGroup,
               {
                 ariaLabel: "Connector path",
@@ -5725,7 +5765,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx35(
+        pureConnector ? /* @__PURE__ */ jsx36(
           PopoverButton,
           {
             testId: "style-strip-direction",
@@ -5733,9 +5773,9 @@ function StyleStrip({
             ariaLabel: "direction",
             renderIcon: () => {
               const Icon2 = DIRECTION_OPTIONS.find((o) => o.value === directionActive)?.icon ?? ArrowRight;
-              return /* @__PURE__ */ jsx35(Icon2, { className: "h-4 w-4" });
+              return /* @__PURE__ */ jsx36(Icon2, { className: "h-4 w-4" });
             },
-            children: /* @__PURE__ */ jsx35(
+            children: /* @__PURE__ */ jsx36(
               IconToggleGroup,
               {
                 ariaLabel: "Connector direction",
@@ -5777,7 +5817,7 @@ function SwatchButton({
   const isUnset = activeToken === "default";
   return /* @__PURE__ */ jsxs23(Popover, { open, onOpenChange: setOpen, children: [
     /* @__PURE__ */ jsxs23(Tooltip, { children: [
-      /* @__PURE__ */ jsx35(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx35(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx35(
+      /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
         "button",
         {
           type: "button",
@@ -5789,13 +5829,13 @@ function SwatchButton({
             "group relative inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
           ),
-          children: /* @__PURE__ */ jsx35(
+          children: /* @__PURE__ */ jsx36(
             "span",
             {
               "data-testid": innerTestId,
               className: "relative h-5 w-5 rounded-full ring-1 ring-border",
               style: swatchTriggerFillStyle(activeToken, previewKind),
-              children: isUnset ? /* @__PURE__ */ jsx35(
+              children: isUnset ? /* @__PURE__ */ jsx36(
                 "span",
                 {
                   "aria-hidden": "true",
@@ -5811,18 +5851,18 @@ function SwatchButton({
           )
         }
       ) }) }),
-      /* @__PURE__ */ jsx35(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: tooltip })
+      /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx35(
+    /* @__PURE__ */ jsx36(
       PopoverContent,
       {
         side: "right",
         align: "start",
         className: "w-auto p-2",
         "data-testid": `${innerTestId}-popover`,
-        children: /* @__PURE__ */ jsx35("div", { className: "grid grid-cols-4 gap-1.5", children: PALETTE_TOKENS.map((token) => {
+        children: /* @__PURE__ */ jsx36("div", { className: "grid grid-cols-4 gap-1.5", children: PALETTE_TOKENS.map((token) => {
           const isActive = activeToken === token;
-          return /* @__PURE__ */ jsx35(
+          return /* @__PURE__ */ jsx36(
             "button",
             {
               type: "button",
@@ -5840,7 +5880,7 @@ function SwatchButton({
                 isActive ? "ring-2 ring-ring ring-offset-2 ring-offset-popover" : "hover:scale-110"
               ),
               style: swatchPreviewStyle(token, previewKind),
-              children: isActive ? /* @__PURE__ */ jsx35(
+              children: isActive ? /* @__PURE__ */ jsx36(
                 Check,
                 {
                   className: "h-3 w-3 drop-shadow-sm",
@@ -5864,7 +5904,7 @@ function ColorSwatchGrid({
   ariaLabel,
   onSelect
 }) {
-  return /* @__PURE__ */ jsx35(
+  return /* @__PURE__ */ jsx36(
     "div",
     {
       "data-testid": testId,
@@ -5873,7 +5913,7 @@ function ColorSwatchGrid({
       className: "grid grid-cols-4 gap-1.5",
       children: PALETTE_TOKENS.map((token) => {
         const isActive = activeToken === token;
-        return /* @__PURE__ */ jsx35(
+        return /* @__PURE__ */ jsx36(
           "button",
           {
             type: "button",
@@ -5888,7 +5928,7 @@ function ColorSwatchGrid({
               isActive ? "ring-2 ring-ring ring-offset-2 ring-offset-popover" : "hover:scale-110"
             ),
             style: swatchPreviewStyle(token, previewKind),
-            children: isActive ? /* @__PURE__ */ jsx35(
+            children: isActive ? /* @__PURE__ */ jsx36(
               Check,
               {
                 className: "h-3 w-3 drop-shadow-sm",
@@ -5908,7 +5948,7 @@ function PopoverSection({
   children
 }) {
   return /* @__PURE__ */ jsxs23("div", { className: "flex flex-col gap-1.5", "data-testid": testId, children: [
-    /* @__PURE__ */ jsx35("div", { className: "text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: label }),
+    /* @__PURE__ */ jsx36("div", { className: "text-[11px] font-medium uppercase tracking-wide text-muted-foreground", children: label }),
     children
   ] });
 }
@@ -5922,7 +5962,7 @@ function PopoverButton({
   const [open, setOpen] = useState13(false);
   return /* @__PURE__ */ jsxs23(Popover, { open, onOpenChange: setOpen, children: [
     /* @__PURE__ */ jsxs23(Tooltip, { children: [
-      /* @__PURE__ */ jsx35(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx35(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx35(
+      /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
         "button",
         {
           type: "button",
@@ -5936,9 +5976,9 @@ function PopoverButton({
           children: renderIcon()
         }
       ) }) }),
-      /* @__PURE__ */ jsx35(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: tooltip })
+      /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "px-2 py-1 text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx35(PopoverContent, { side: "right", align: "start", className: "w-auto p-3", children })
+    /* @__PURE__ */ jsx36(PopoverContent, { side: "right", align: "start", className: "w-auto p-3", children })
   ] });
 }
 function SliderControl({
@@ -5961,7 +6001,7 @@ function SliderControl({
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
   return /* @__PURE__ */ jsxs23("div", { className: "flex w-48 items-center gap-3", children: [
-    /* @__PURE__ */ jsx35(
+    /* @__PURE__ */ jsx36(
       Slider,
       {
         min,
@@ -5980,7 +6020,7 @@ function SliderControl({
         className: cn("flex-1", showPlaceholder && "opacity-60")
       }
     ),
-    /* @__PURE__ */ jsx35(
+    /* @__PURE__ */ jsx36(
       "span",
       {
         "data-testid": `${testId}-value`,
@@ -6019,7 +6059,7 @@ import {
   useState as useState14
 } from "react";
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment7, jsx as jsx36, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -6354,7 +6394,7 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
     const orientedMarkerEnd = fixedNodeIsSource ? reconnectingEdge?.markerEnd : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
-    return /* @__PURE__ */ jsx36(
+    return /* @__PURE__ */ jsx37(
       "path",
       {
         d: path,
@@ -7590,12 +7630,12 @@ function SeeflowCanvas(props) {
   const sidebarDemoId = projectId ?? null;
   const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
   const iconRegistryValue = useMemo2(() => ({ custom: customIcons ?? {} }), [customIcons]);
-  return /* @__PURE__ */ jsx36(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsxs24(
+  return /* @__PURE__ */ jsx37(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx37(
     "div",
     {
       "data-testid": "seeflow-canvas",
       ref: wrapperRef,
-      className: "relative h-full w-full",
+      className: "seeflow-canvas-root relative h-full w-full",
       style: wrapperCursor ? { cursor: wrapperCursor } : void 0,
       onPointerDownCapture: onWrapperPointerDownCapture,
       onPointerDown: (e) => {
@@ -7618,7 +7658,7 @@ function SeeflowCanvas(props) {
       onContextMenuCapture: onWrapperContextMenuCapture,
       onDragOver: onWrapperDragOver,
       onDrop: onWrapperDrop,
-      children: [
+      children: /* @__PURE__ */ jsxs24(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
         /* @__PURE__ */ jsxs24(
           ReactFlow,
           {
@@ -7720,11 +7760,11 @@ function SeeflowCanvas(props) {
               setContextMenuPos({ x: e.clientX, y: e.clientY });
             } : void 0,
             children: [
-              /* @__PURE__ */ jsx36(StoreApiBridge, { storeApiRef }),
-              /* @__PURE__ */ jsx36(ZoomBridge, { wrapperRef }),
-              /* @__PURE__ */ jsx36(Background, { gap: 12, size: 0.6 }),
+              /* @__PURE__ */ jsx37(StoreApiBridge, { storeApiRef }),
+              /* @__PURE__ */ jsx37(ZoomBridge, { wrapperRef }),
+              /* @__PURE__ */ jsx37(Background, { gap: 12, size: 0.6 }),
               /* @__PURE__ */ jsxs24(Controls, { showInteractive: false, showFitView: false, children: [
-                /* @__PURE__ */ jsx36(
+                /* @__PURE__ */ jsx37(
                   ControlButton,
                   {
                     "data-testid": "controls-fit-view",
@@ -7734,10 +7774,10 @@ function SeeflowCanvas(props) {
                     onClick: () => {
                       rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
                     },
-                    children: /* @__PURE__ */ jsx36(Maximize2, { className: "h-3 w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx37(Maximize2, { className: "h-3 w-3", "aria-hidden": "true" })
                   }
                 ),
-                /* @__PURE__ */ jsx36(
+                /* @__PURE__ */ jsx37(
                   ControlButton,
                   {
                     "data-testid": "controls-tidy",
@@ -7745,19 +7785,19 @@ function SeeflowCanvas(props) {
                     title: "Tidy layout (\u2318\u21E7L)",
                     disabled: !onTidy,
                     onClick: () => onTidy?.(),
-                    children: /* @__PURE__ */ jsx36(LayoutDashboard, { className: "h-3 w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx37(LayoutDashboard, { className: "h-3 w-3", "aria-hidden": "true" })
                   }
                 )
               ] }),
-              flags.showResizeHandles ? /* @__PURE__ */ jsx36(
+              flags.showResizeHandles ? /* @__PURE__ */ jsx37(
                 SelectionResizeOverlay,
                 {
                   selectedNodes: selectionOverlayNodes,
                   onMultiResize
                 }
               ) : null,
-              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx36(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs24("div", { className: "flex flex-col gap-2", children: [
-                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx36(
+              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx37(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs24("div", { className: "flex flex-col gap-2", children: [
+                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx37(
                   CanvasToolbar,
                   {
                     activeShape: drawShape,
@@ -7768,7 +7808,7 @@ function SeeflowCanvas(props) {
                     onPickIcon
                   }
                 ) : null,
-                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx36(
+                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx37(
                   StyleStrip,
                   {
                     nodes: selectedNodesForStyleStrip,
@@ -7786,7 +7826,7 @@ function SeeflowCanvas(props) {
             ]
           }
         ),
-        ghostRect ? /* @__PURE__ */ jsx36(
+        ghostRect ? /* @__PURE__ */ jsx37(
           "div",
           {
             "data-testid": "canvas-draw-ghost",
@@ -7807,7 +7847,7 @@ function SeeflowCanvas(props) {
             children: (() => {
               const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : void 0;
               if (!GhostRenderer) return null;
-              return /* @__PURE__ */ jsx36(
+              return /* @__PURE__ */ jsx37(
                 GhostRenderer,
                 {
                   width: ghostRect.width,
@@ -7832,7 +7872,7 @@ function SeeflowCanvas(props) {
               }
             },
             children: [
-              /* @__PURE__ */ jsx36(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
+              /* @__PURE__ */ jsx37(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx37(
                 "div",
                 {
                   ref: contextTriggerRef,
@@ -7848,7 +7888,7 @@ function SeeflowCanvas(props) {
                 }
               ) }),
               /* @__PURE__ */ jsxs24(ContextMenuContent, { "data-testid": "node-context-menu", children: [
-                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx36(
+                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx37(
                   ContextMenuItem,
                   {
                     "data-testid": "connector-endpoint-context-menu-unpin",
@@ -7858,7 +7898,7 @@ function SeeflowCanvas(props) {
                 ) : null,
                 contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs24(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
                   "Copy",
-                  /* @__PURE__ */ jsx36(ContextMenuShortcut, { children: copyShortcut })
+                  /* @__PURE__ */ jsx37(ContextMenuShortcut, { children: copyShortcut })
                 ] }) : null,
                 onPasteAt ? /* @__PURE__ */ jsxs24(
                   ContextMenuItem,
@@ -7868,12 +7908,12 @@ function SeeflowCanvas(props) {
                     onSelect: handlePastePick,
                     children: [
                       "Paste",
-                      /* @__PURE__ */ jsx36(ContextMenuShortcut, { children: pasteShortcut })
+                      /* @__PURE__ */ jsx37(ContextMenuShortcut, { children: pasteShortcut })
                     ]
                   }
                 ) : null,
-                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx36(ContextMenuSeparator, {}) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx36(
+                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx37(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-change-icon",
@@ -7881,9 +7921,9 @@ function SeeflowCanvas(props) {
                     children: "Change icon"
                   }
                 ) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx36(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
                 contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs24(Fragment7, { children: [
-                  /* @__PURE__ */ jsx36(
+                  /* @__PURE__ */ jsx37(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-front",
@@ -7891,7 +7931,7 @@ function SeeflowCanvas(props) {
                       children: "Bring to front"
                     }
                   ),
-                  /* @__PURE__ */ jsx36(
+                  /* @__PURE__ */ jsx37(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-forward",
@@ -7899,7 +7939,7 @@ function SeeflowCanvas(props) {
                       children: "Bring forward"
                     }
                   ),
-                  /* @__PURE__ */ jsx36(
+                  /* @__PURE__ */ jsx37(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-backward",
@@ -7907,7 +7947,7 @@ function SeeflowCanvas(props) {
                       children: "Send backward"
                     }
                   ),
-                  /* @__PURE__ */ jsx36(
+                  /* @__PURE__ */ jsx37(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-back",
@@ -7916,12 +7956,12 @@ function SeeflowCanvas(props) {
                     }
                   )
                 ] }) : null,
-                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx36(ContextMenuSeparator, {}) : null,
+                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
                 contextOnNode && onToggleNodeLock ? (() => {
                   const single = contextNodeIdRef.current;
                   const targetIds = single ? [single] : selectedNodeIds;
                   const label = targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id)) ? "Unlock" : "Lock";
-                  return /* @__PURE__ */ jsx36(
+                  return /* @__PURE__ */ jsx37(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-toggle-lock",
@@ -7931,8 +7971,8 @@ function SeeflowCanvas(props) {
                     }
                   );
                 })() : null,
-                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx36(ContextMenuSeparator, {}) : null,
-                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx36(
+                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
+                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx37(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-delete",
@@ -7953,7 +7993,7 @@ function SeeflowCanvas(props) {
               if (!open) setDropPopover(null);
             },
             children: [
-              /* @__PURE__ */ jsx36(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx36(
+              /* @__PURE__ */ jsx37(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx37(
                 "div",
                 {
                   "data-testid": "drop-popover-anchor",
@@ -7967,7 +8007,7 @@ function SeeflowCanvas(props) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsx36(
+              /* @__PURE__ */ jsx37(
                 PopoverContent,
                 {
                   "data-testid": "drop-popover",
@@ -7978,7 +8018,7 @@ function SeeflowCanvas(props) {
                   onOpenAutoFocus: (e) => {
                     e.preventDefault();
                   },
-                  children: /* @__PURE__ */ jsx36("div", { role: "menu", "aria-label": "Create connected node", className: "flex flex-col gap-0.5", children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs24(
+                  children: /* @__PURE__ */ jsx37("div", { role: "menu", "aria-label": "Create connected node", className: "flex flex-col gap-0.5", children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs24(
                     "button",
                     {
                       type: "button",
@@ -8000,8 +8040,8 @@ function SeeflowCanvas(props) {
                         "focus:bg-accent focus:text-accent-foreground focus:outline-none"
                       ),
                       children: [
-                        /* @__PURE__ */ jsx36(Icon2, { className: "h-4 w-4 text-muted-foreground", "aria-hidden": "true" }),
-                        /* @__PURE__ */ jsx36("span", { children: label })
+                        /* @__PURE__ */ jsx37(Icon2, { className: "h-4 w-4 text-muted-foreground", "aria-hidden": "true" }),
+                        /* @__PURE__ */ jsx37("span", { children: label })
                       ]
                     },
                     shape
@@ -8011,7 +8051,7 @@ function SeeflowCanvas(props) {
             ]
           }
         ) : null,
-        shouldRenderSidebar ? /* @__PURE__ */ jsx36(
+        shouldRenderSidebar ? /* @__PURE__ */ jsx37(
           DetailPanel,
           {
             demoId: sidebarDemoId,
@@ -8028,7 +8068,7 @@ function SeeflowCanvas(props) {
             }
           }
         ) : null
-      ]
+      ] })
     }
   ) });
 }

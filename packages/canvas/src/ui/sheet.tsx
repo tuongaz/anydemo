@@ -3,12 +3,23 @@ import { type VariantProps, cva } from 'class-variance-authority';
 import { X } from 'lucide-react';
 import * as React from 'react';
 
+import { useCanvasPortalContainer } from '../components/canvas-portal-container.tsx';
 import { cn } from '../lib/cn.ts';
 
 const Sheet = SheetPrimitive.Root;
 const SheetTrigger = SheetPrimitive.Trigger;
 const SheetClose = SheetPrimitive.Close;
-const SheetPortal = SheetPrimitive.Portal;
+const SheetPortal = ({
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof SheetPrimitive.Portal>) => {
+  const portalContainer = useCanvasPortalContainer();
+  return (
+    <SheetPrimitive.Portal container={portalContainer} {...props}>
+      {children}
+    </SheetPrimitive.Portal>
+  );
+};
 
 const SheetOverlay = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Overlay>,

@@ -2,11 +2,22 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import * as React from 'react';
 
+import { useCanvasPortalContainer } from '../components/canvas-portal-container.tsx';
 import { cn } from '../lib/cn.ts';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
-const DialogPortal = DialogPrimitive.Portal;
+const DialogPortal = ({
+  children,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Portal>) => {
+  const portalContainer = useCanvasPortalContainer();
+  return (
+    <DialogPrimitive.Portal container={portalContainer} {...props}>
+      {children}
+    </DialogPrimitive.Portal>
+  );
+};
 const DialogClose = DialogPrimitive.Close;
 
 const DialogOverlay = React.forwardRef<

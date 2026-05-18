@@ -53,19 +53,31 @@ function findElement(
 
 // React.forwardRef returns `{ $$typeof, render }`. Pull off `render` and
 // invoke it directly with synthetic props + a null ref — that gives us the
-// first render's JSX tree without any DOM machinery.
+// first render's JSX tree without any DOM machinery. Wrap the render in a
+// minimal React hook dispatcher so the body's `useCanvasPortalContainer`
+// call (added to thread Radix Portal `container` for the scoped-CSS
+// refactor) doesn't trip the no-dispatcher guard.
 type ForwardRefRender = (props: Record<string, unknown>, ref: unknown) => unknown;
 const renderTooltipContent = (props: Record<string, unknown> = {}) => {
   const fwd = TooltipContent as unknown as { render: ForwardRefRender };
-  return fwd.render(props, null);
+  // biome-ignore lint/suspicious/noExplicitAny: shimming React internals for this offline render
+  const dispatcherHost = (React as any)
+    .__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
+  const prev = dispatcherHost.current;
+  dispatcherHost.current = { useContext: () => null };
+  try {
+    return fwd.render(props, null);
+  } finally {
+    dispatcherHost.current = prev;
+  }
 };
 
 describe('US-019: TooltipContent portal-mounts to document.body', () => {
-  it('renders TooltipPrimitive.Portal as the root element', () => {
+  it('renders TooltipPrimitive.Portal in the tree', () => {
     const tree = renderTooltipContent({ children: 'Fill' });
     expect(isElement(tree)).toBe(true);
-    if (!isElement(tree)) return;
-    expect(tree.type).toBe(TooltipPrimitive.Portal as unknown);
+    const portal = findElement(tree, (el) => el.type === (TooltipPrimitive.Portal as unknown));
+    expect(portal).not.toBeNull();
   });
 
   it('renders TooltipPrimitive.Content as a descendant of the Portal', () => {

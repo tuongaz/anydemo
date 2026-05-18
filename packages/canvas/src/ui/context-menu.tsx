@@ -1,6 +1,7 @@
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import * as React from 'react';
 
+import { useCanvasPortalContainer } from '../components/canvas-portal-container.tsx';
 import { cn } from '../lib/cn.ts';
 
 const ContextMenu = ContextMenuPrimitive.Root;
@@ -9,18 +10,21 @@ const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
 const ContextMenuContent = React.forwardRef<
   React.ElementRef<typeof ContextMenuPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>
->(({ className, ...props }, ref) => (
-  <ContextMenuPrimitive.Portal>
-    <ContextMenuPrimitive.Content
-      ref={ref}
-      className={cn(
-        'z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
-        className,
-      )}
-      {...props}
-    />
-  </ContextMenuPrimitive.Portal>
-));
+>(({ className, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return (
+    <ContextMenuPrimitive.Portal container={portalContainer}>
+      <ContextMenuPrimitive.Content
+        ref={ref}
+        className={cn(
+          'z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          className,
+        )}
+        {...props}
+      />
+    </ContextMenuPrimitive.Portal>
+  );
+});
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName;
 
 const ContextMenuItem = React.forwardRef<

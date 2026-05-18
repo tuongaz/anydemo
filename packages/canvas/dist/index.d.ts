@@ -1659,7 +1659,7 @@ declare const ContextMenuShortcut: {
 
 declare const Dialog: React.FC<DialogPrimitive.DialogProps>;
 declare const DialogTrigger: React.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React.RefAttributes<HTMLButtonElement>>;
-declare const DialogPortal: React.FC<DialogPrimitive.DialogPortalProps>;
+declare const DialogPortal: ({ children, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Portal>) => react_jsx_runtime.JSX.Element;
 declare const DialogClose: React.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React.RefAttributes<HTMLButtonElement>>;
 declare const DialogOverlay: React.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogOverlayProps & React.RefAttributes<HTMLDivElement>, "ref"> & React.RefAttributes<HTMLDivElement>>;
 declare const DialogContent: React.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogContentProps & React.RefAttributes<HTMLDivElement>, "ref"> & React.RefAttributes<HTMLDivElement>>;
@@ -1728,7 +1728,7 @@ declare const PopoverContent: React.ForwardRefExoticComponent<Omit<PopoverPrimit
 declare const Sheet: React.FC<DialogPrimitive.DialogProps>;
 declare const SheetTrigger: React.ForwardRefExoticComponent<DialogPrimitive.DialogTriggerProps & React.RefAttributes<HTMLButtonElement>>;
 declare const SheetClose: React.ForwardRefExoticComponent<DialogPrimitive.DialogCloseProps & React.RefAttributes<HTMLButtonElement>>;
-declare const SheetPortal: React.FC<DialogPrimitive.DialogPortalProps>;
+declare const SheetPortal: ({ children, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Portal>) => react_jsx_runtime.JSX.Element;
 declare const SheetOverlay: React.ForwardRefExoticComponent<Omit<DialogPrimitive.DialogOverlayProps & React.RefAttributes<HTMLDivElement>, "ref"> & React.RefAttributes<HTMLDivElement>>;
 declare const sheetVariants: (props?: ({
     side?: "top" | "right" | "bottom" | "left" | null | undefined;

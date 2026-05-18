@@ -73,6 +73,7 @@ import {
 } from '../ui/context-menu.tsx';
 import { IconRegistryProvider } from '../ui/icon.tsx';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
+import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import {
@@ -3607,6 +3608,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
         onDragOver={onWrapperDragOver}
         onDrop={onWrapperDrop}
       >
+        <CanvasPortalContainerProvider containerRef={wrapperRef}>
         <ReactFlow
           nodes={rfNodes}
           edges={rfEdges}
@@ -4182,6 +4184,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             }}
           />
         ) : null}
+        </CanvasPortalContainerProvider>
       </div>
     </IconRegistryProvider>
   );
