@@ -96,3 +96,17 @@ Started: Mon 18 May 2026 13:16:06 AEST
   - No test file for button.tsx exists — no test updates needed
   - Manual browser verification needed to confirm button sizing, color, and hover states
 ---
+
+## 2026-05-18 - US-007
+- Updated `apps/web/src/components/ui/tooltip.tsx` TooltipContent className:
+  - Removed `border` (light bg provides sufficient contrast)
+  - Changed `bg-popover` → `bg-foreground` (near-white #fafafa)
+  - Changed `text-popover-foreground` → `text-background` (dark #09090b)
+  - All animation/positioning/shadow classes preserved
+- Files changed: `apps/web/src/components/ui/tooltip.tsx`
+- **Learnings for future iterations:**
+  - TooltipContent is portaled to document.body (Radix Portal) — CSS selectors targeting ancestors won't apply; only inline Tailwind classes matter
+  - Removing `border` from the tooltip is safe when bg-foreground is used — the light bg already creates visual separation on the dark canvas
+  - No test file for tooltip.tsx — no test updates needed
+  - Manual browser verification needed to confirm light tooltip pops against dark canvas
+---
