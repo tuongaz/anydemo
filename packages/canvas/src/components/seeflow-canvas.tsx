@@ -3858,7 +3858,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
                 rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
               }}
             >
-              <Maximize2 className="h-3 w-3" aria-hidden="true" />
+              <Maximize2 className="sf-h-3 sf-w-3" aria-hidden="true" />
             </ControlButton>
             <ControlButton
               data-testid="controls-tidy"
@@ -3867,7 +3867,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
               disabled={!onTidy}
               onClick={() => onTidy?.()}
             >
-              <LayoutDashboard className="h-3 w-3" aria-hidden="true" />
+              <LayoutDashboard className="sf-h-3 sf-w-3" aria-hidden="true" />
             </ControlButton>
           </Controls>
           {/* US-007: multi-select bounding-box resize overlay. Renders only when
@@ -3885,7 +3885,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
           {(flags.showToolbar && onCreateShapeNode) ||
           (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
             <Panel position="top-left">
-              <div className="flex flex-col gap-2">
+              <div className="sf-flex sf-flex-col sf-gap-2">
                 {flags.showToolbar && onCreateShapeNode ? (
                   <CanvasToolbar
                     activeShape={drawShape}
@@ -3919,9 +3919,9 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             data-ghost-shape={drawShape ?? undefined}
             aria-hidden
             className={cn(
-              'pointer-events-none absolute z-10',
+              'sf-pointer-events-none sf-absolute sf-z-10',
               ghostShapeClass,
-              ghostTextOutline ? 'rounded-sm border border-dashed border-muted-foreground/40' : '',
+              ghostTextOutline ? 'sf-rounded-sm sf-border sf-border-dashed sf-border-muted-foreground/40' : '',
             )}
             style={{
               ...ghostShapeStyle,
@@ -3973,7 +3973,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
                 ref={contextTriggerRef}
                 data-testid="node-context-menu-trigger"
                 aria-hidden
-                className="pointer-events-none fixed"
+                className="sf-pointer-events-none sf-fixed"
                 style={{
                   left: contextMenuPos?.x ?? 0,
                   top: contextMenuPos?.y ?? 0,
@@ -4112,7 +4112,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
               <div
                 data-testid="drop-popover-anchor"
                 aria-hidden
-                className="pointer-events-none fixed"
+                className="sf-pointer-events-none sf-fixed"
                 style={{
                   left: dropPopover?.clientX ?? 0,
                   top: dropPopover?.clientY ?? 0,
@@ -4126,14 +4126,14 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
               align="start"
               side="bottom"
               sideOffset={4}
-              className="w-auto p-1"
+              className="sf-w-auto sf-p-1"
               onOpenAutoFocus={(e) => {
                 // Don't pull focus into the popover — keep it on the canvas so
                 // the wrapper-level ESC handler still receives keypresses.
                 e.preventDefault();
               }}
             >
-              <div role="menu" aria-label="Create connected node" className="flex flex-col gap-0.5">
+              <div role="menu" aria-label="Create connected node" className="sf-flex sf-flex-col sf-gap-0.5">
                 {TOOLBAR_SHAPES.map(({ shape, label, Icon }) => (
                   <button
                     key={shape}
@@ -4151,12 +4151,12 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
                       setDropPopover(null);
                     }}
                     className={cn(
-                      'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
-                      'hover:bg-accent hover:text-accent-foreground',
-                      'focus:bg-accent focus:text-accent-foreground focus:outline-none',
+                      'sf-flex sf-items-center sf-gap-2 sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-left sf-text-sm',
+                      'hover:sf-bg-accent hover:sf-text-accent-foreground',
+                      'focus:sf-bg-accent focus:sf-text-accent-foreground focus:sf-outline-none',
                     )}
                   >
-                    <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <Icon className="sf-h-4 sf-w-4 sf-text-muted-foreground" aria-hidden="true" />
                     <span>{label}</span>
                   </button>
                 ))}
