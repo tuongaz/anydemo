@@ -54,7 +54,12 @@ export {
   NODE_DEFAULT_BG_WHITE,
   colorTokenStyle,
 } from './lib/color-tokens.ts';
-export type { EdgeColorStyle, NodeColorStyle, TextColorStyle } from './lib/color-tokens.ts';
+export type {
+  EdgeColorStyle,
+  NodeColorStyle,
+  NodeHeaderColorStyle,
+  TextColorStyle,
+} from './lib/color-tokens.ts';
 
 // ----------------------------------------------------------------------------
 // 3. Icon registry
