@@ -1,14 +1,10 @@
-// US-024: CanvasAdapter abstraction over the studio REST surface.
+// CanvasAdapter abstraction over the studio REST surface.
 //
 // The adapter binds a demoId (== projectId in the studio registry) at
 // construction and exposes single-method calls that drop the demoId param.
-// US-025 will swap every direct `@/lib/api` REST call inside demo-canvas /
-// demo-view for `adapter.method(...)`; US-028 then relocates the interface +
-// REST impl into @seeflow/canvas so embedders can plug in their own backend.
-//
-// Schema types come from @seeflow/canvas (single source of truth). Patch shapes
-// mirror the wire format accepted by apps/studio's REST endpoints — kept here,
-// not in api.ts, so the canvas package can own them after US-028.
+// Patch shapes mirror the wire format accepted by apps/studio's REST endpoints
+// and are owned by the canvas package so embedders can plug in their own
+// backend.
 
 import type {
   ColorToken,
@@ -21,7 +17,7 @@ import type {
   RunResult,
   ShapeKind,
   StatusReport,
-} from '@seeflow/canvas';
+} from '../types.ts';
 
 export type NodeKind =
   | 'playNode'

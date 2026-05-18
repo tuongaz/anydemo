@@ -29,11 +29,11 @@ import { join } from 'node:path';
 const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
 const indexCssPath = join(repoRoot, 'apps/web/src/index.css');
 const editableEdgePath = join(repoRoot, 'packages/canvas/src/edges/editable-edge.tsx');
-const demoCanvasPath = join(repoRoot, 'apps/web/src/components/demo-canvas.tsx');
+const seeflowCanvasPath = join(repoRoot, 'packages/canvas/src/components/seeflow-canvas.tsx');
 
 describe('connectors paint under nodes; labels stack between edges and nodes', () => {
   it('DEFAULT_EDGE_OPTIONS sets zIndex 0 so edges paint under nodes', () => {
-    const src = readFileSync(demoCanvasPath, 'utf-8');
+    const src = readFileSync(seeflowCanvasPath, 'utf-8');
     const rule = src.match(/DEFAULT_EDGE_OPTIONS\s*=\s*\{\s*zIndex:\s*(\d+)\s*\}/);
     expect(rule).not.toBeNull();
     if (!rule) throw new Error('expected DEFAULT_EDGE_OPTIONS zIndex literal');

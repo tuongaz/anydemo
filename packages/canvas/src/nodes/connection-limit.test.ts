@@ -22,7 +22,7 @@ const noConnectionLimit = [
   'packages/canvas/src/nodes/state-node.tsx',
   'packages/canvas/src/nodes/icon-node.tsx',
   'packages/canvas/src/nodes/image-node.tsx',
-  'apps/web/src/components/demo-canvas.tsx',
+  'packages/canvas/src/components/seeflow-canvas.tsx',
 ];
 const noIsValidConnection = [
   'packages/canvas/src/nodes/shape-node.tsx',

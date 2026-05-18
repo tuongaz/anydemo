@@ -1,8 +1,9 @@
-// US-024: REST implementation of CanvasAdapter. Mirrors the existing endpoints
-// in `apps/web/src/lib/api.ts` so US-025 can swap call sites without changing
-// any wire-level behavior. The error shape (JSON body with optional `error`
-// field, falling back to a `METHOD URL → status` string) matches the legacy
-// surface so optimistic-update rollback paths in demo-view keep working.
+// REST implementation of CanvasAdapter. Mirrors the canonical studio endpoints
+// so embedders that don't override `fetch` get the same wire-level behavior as
+// the in-app studio (POST/PATCH/DELETE on /api/demos/:demoId/{nodes,connectors}
+// + POST /api/projects/:demoId/files/upload). The error shape (JSON body with
+// optional `error` field, falling back to a `METHOD URL → status` string) lets
+// embedder rollback paths use a single catch handler.
 
 import type {
   CanvasAdapter,
@@ -14,7 +15,7 @@ import type {
   ReorderOp,
   UpdateNodePositionResult,
   UploadImageResult,
-} from './canvas-adapter';
+} from './types.ts';
 
 export interface RestAdapterOptions {
   /** URL prefix (e.g. '' in-studio, 'https://example.com' for cross-origin). */

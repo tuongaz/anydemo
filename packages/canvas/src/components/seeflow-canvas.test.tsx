@@ -1,36 +1,32 @@
 import { describe, expect, it } from 'bun:test';
+import { type Connection, type Node, ReactFlow } from '@xyflow/react';
+import * as React from 'react';
+import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
+import { NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { CloudShape } from '../nodes/shapes/cloud.tsx';
+import { DatabaseShape } from '../nodes/shapes/database.tsx';
+import { QueueShape } from '../nodes/shapes/queue.tsx';
+import { ServerShape } from '../nodes/shapes/server.tsx';
+import { UserShape } from '../nodes/shapes/user.tsx';
+import type { Connector, DemoNode } from '../types.ts';
+import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
 import {
   type ClipboardShortcutEventLike,
-  DemoCanvas,
-  type DemoCanvasProps,
+  SeeflowCanvas,
+  type SeeflowCanvasProps,
   classifyHandleDropFailure,
   classifyReconnectBodyDrop,
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
   handleClipboardShortcut,
   resolveFlags,
-} from '@/components/demo-canvas';
-import type { Connector, DemoNode } from '@/lib/api';
-import type { CanvasAdapter, CanvasRuntime } from '@/lib/canvas-adapter';
-import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
-import {
-  CanvasToolbar,
-  CloudShape,
-  DatabaseShape,
-  HTML_BLOCK_DND_TYPE,
-  type MultiResizeUpdate,
-  QueueShape,
-  SelectionResizeOverlay,
-  ServerShape,
-  StyleStrip,
-  UserShape,
-} from '@seeflow/canvas';
-import { type Connection, type Node, ReactFlow } from '@xyflow/react';
-import * as React from 'react';
+} from './seeflow-canvas.tsx';
+import { type MultiResizeUpdate, SelectionResizeOverlay } from './selection-resize-overlay.tsx';
+import { StyleStrip } from './style-strip.tsx';
 
 // Bun runs apps/web tests without a DOM. The hook-shim pattern (also used by
 // icon-node.test.tsx / icon-picker-popover.test.tsx) replaces React's internal
-// dispatcher with synchronous stubs so we can call DemoCanvas as a function
+// dispatcher with synchronous stubs so we can call SeeflowCanvas as a function
 // and walk the returned React element tree. Sub-components — ReactFlow,
 // Background, Controls, StoreApiBridge, CanvasToolbar etc. — are captured as
 // `{ type, props }` placeholders without executing their render bodies, so
@@ -120,7 +116,7 @@ function findElement(
   return null;
 }
 
-// US-025: every DemoCanvasProps now requires an adapter. Inside these
+// US-025: every SeeflowCanvasProps now requires an adapter. Inside these
 // hook-shim tests no method is ever called, so a throwing stub catches any
 // accidental mutation paths the test bodies introduce later.
 const noopAdapter: CanvasAdapter = new Proxy({} as CanvasAdapter, {
@@ -135,12 +131,12 @@ const noopAdapter: CanvasAdapter = new Proxy({} as CanvasAdapter, {
 // were merged into a single `runtime` prop. Tests can keep passing
 // `nodeOverrides` / `connectorOverrides` directly; the wrapper lifts them into
 // `runtime.pendingOverrides` so the assertions reach the same code paths.
-type LegacyOverrides = Partial<DemoCanvasProps> & {
+type LegacyOverrides = Partial<SeeflowCanvasProps> & {
   nodeOverrides?: Record<string, Partial<DemoNode>>;
   connectorOverrides?: Record<string, Partial<Connector>>;
 };
 
-function callDemoCanvas(
+function callSeeflowCanvas(
   overrides: LegacyOverrides = {},
   hookOptions: {
     useStateOverrides?: ReadonlyArray<unknown>;
@@ -153,7 +149,7 @@ function callDemoCanvas(
     (nodeOverrides || connectorOverrides
       ? { pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides } }
       : undefined);
-  const props: DemoCanvasProps = {
+  const props: SeeflowCanvasProps = {
     // US-027: tests default to mode='edit' so the legacy assertions (every
     // chrome render + handler reachable) continue to hold. Per-test overrides
     // can flip to mode='view' to assert the view-mode gating.
@@ -173,7 +169,7 @@ function callDemoCanvas(
     runtime: builtRuntime,
   };
   return renderWithHooks(
-    () => (DemoCanvas as unknown as (p: DemoCanvasProps) => unknown)(props),
+    () => (SeeflowCanvas as unknown as (p: SeeflowCanvasProps) => unknown)(props),
     hookOptions,
   );
 }
@@ -200,14 +196,14 @@ function makeConnection(source: string, target: string): Connection {
   return { source, target, sourceHandle: null, targetHandle: null };
 }
 
-describe('DemoCanvas', () => {
+describe('SeeflowCanvas', () => {
   it('wires selectNodesOnDrag={false} on the ReactFlow root', () => {
     // US-018: dragging an unselected node moves it without auto-selecting
     // (and therefore without opening the detail panel). React Flow defaults
     // this to true; the explicit false on the JSX is the only switch.
-    const tree = callDemoCanvas();
+    const tree = callSeeflowCanvas();
     const rf = findElement(tree, (el) => el.type === ReactFlow);
-    if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+    if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
     expect(rf.props.selectNodesOnDrag).toBe(false);
   });
 
@@ -217,9 +213,9 @@ describe('DemoCanvas', () => {
     // mousedown and mouseup register as a drag (no selection) instead of a
     // click. Symptom: clicking a node often does nothing on the first try.
     // The explicit positive value gives the user click-tolerance.
-    const tree = callDemoCanvas();
+    const tree = callSeeflowCanvas();
     const rf = findElement(tree, (el) => el.type === ReactFlow);
-    if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+    if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
     expect(rf.props.nodeClickDistance).toBeGreaterThan(0);
   });
 
@@ -230,13 +226,13 @@ describe('DemoCanvas', () => {
       // Setting node.connectable=false makes the unselected node's handles
       // ignore connection-start gestures regardless of the global
       // nodesConnectable, so onConnectStart never fires from those handles.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
         selectedNodeIds: [],
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       const a = rfNodes.find((n) => n.id === 'a');
       const b = rfNodes.find((n) => n.id === 'b');
@@ -249,13 +245,13 @@ describe('DemoCanvas', () => {
       // nodesConnectable, which we wire to !!onCreateConnector && !drawShape.
       // This keeps read-only and draw-mode gating consistent on the selected
       // node without redundantly recomputing it per node.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
         selectedNodeIds: ['a'],
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       const a = rfNodes.find((n) => n.id === 'a');
       const b = rfNodes.find((n) => n.id === 'b');
@@ -267,13 +263,13 @@ describe('DemoCanvas', () => {
       // Confirms the PRD's "Connecting BETWEEN two unselected nodes is now
       // impossible" — both sides of the canvas are gated off until one is
       // explicitly selected by the user.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b'), makeShapeNode('c')],
         selectedNodeIds: ['c'],
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       expect(rfNodes.find((n) => n.id === 'a')?.connectable).toBe(false);
       expect(rfNodes.find((n) => n.id === 'b')?.connectable).toBe(false);
@@ -288,9 +284,9 @@ describe('DemoCanvas', () => {
     // and skip onConnect. We assert the prop is wired and exercise the
     // callback directly with synthetic Connections.
     function getValidator(nodes: DemoNode[]): (c: Connection) => boolean {
-      const tree = callDemoCanvas({ nodes, selectedNodeIds: [], onCreateConnector: () => {} });
+      const tree = callSeeflowCanvas({ nodes, selectedNodeIds: [], onCreateConnector: () => {} });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const validator = rf.props.isValidConnection as ((c: Connection) => boolean) | undefined;
       if (typeof validator !== 'function') {
         throw new Error('isValidConnection not wired on ReactFlow root');
@@ -299,9 +295,9 @@ describe('DemoCanvas', () => {
     }
 
     it('wires isValidConnection on the ReactFlow root', () => {
-      const tree = callDemoCanvas();
+      const tree = callSeeflowCanvas();
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(typeof rf.props.isValidConnection).toBe('function');
     });
 
@@ -386,14 +382,14 @@ describe('DemoCanvas', () => {
       nodeOverrides: Record<string, Partial<DemoNode>>,
       selectedNodeIds: readonly string[] = [],
     ): (c: Connection) => boolean {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes,
         nodeOverrides,
         selectedNodeIds,
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const validator = rf.props.isValidConnection as ((c: Connection) => boolean) | undefined;
       if (typeof validator !== 'function') {
         throw new Error('isValidConnection not wired on ReactFlow root');
@@ -434,13 +430,13 @@ describe('DemoCanvas', () => {
       // that are not text can be connected.
       const child: DemoNode = makeShapeNode('child');
       const top = makeShapeNode('top');
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [child, top],
         selectedNodeIds: [],
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const validator = rf.props.isValidConnection as (c: Connection) => boolean;
       expect(validator(makeConnection('top', 'child'))).toBe(true);
       expect(validator(makeConnection('child', 'top'))).toBe(true);
@@ -633,14 +629,14 @@ describe('DemoCanvas', () => {
       // practice: a freshly-created node is unselected, so the buildNode
       // path stamps `connectable: false` on its rfNode payload. Without
       // this, the AC's failing repro wouldn't reproduce at all.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('existing')],
         nodeOverrides: { fresh: makeShapeNodeOverride('fresh') },
         selectedNodeIds: ['existing'],
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       const fresh = rfNodes.find((n) => n.id === 'fresh');
       expect(fresh).toBeDefined();
@@ -659,9 +655,9 @@ describe('DemoCanvas', () => {
     it('disables xyflow gesture handling on the empty pane when in draw mode', () => {
       // US-003: drawShape state was lifted to demo-view, so we drive draw
       // mode via the `activeShape` prop instead of patching a useState slot.
-      const tree = callDemoCanvas({ activeShape: 'rectangle' });
+      const tree = callSeeflowCanvas({ activeShape: 'rectangle' });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.selectionOnDrag).toBe(false);
       expect(rf.props.panOnDrag).toBe(false);
       expect(rf.props.nodesDraggable).toBe(false);
@@ -711,7 +707,7 @@ describe('DemoCanvas', () => {
       ) => {
         captured.push({ shape, pos, size });
       };
-      const tree = callDemoCanvas(
+      const tree = callSeeflowCanvas(
         { onCreateShapeNode, activeShape: 'rectangle' },
         {
           // US-003: drawShape state lives in demo-view now, so we pass
@@ -754,7 +750,7 @@ describe('DemoCanvas', () => {
           isElement(el) &&
           (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
       );
-      if (!wrapper) throw new Error('wrapper div not found in DemoCanvas tree');
+      if (!wrapper) throw new Error('wrapper div not found in SeeflowCanvas tree');
 
       const onPointerDown = wrapper.props.onPointerDown as (e: unknown) => void;
       const onPointerMove = wrapper.props.onPointerMove as (e: unknown) => void;
@@ -818,7 +814,7 @@ describe('DemoCanvas', () => {
         pos: { x: number; y: number };
         size: { width: number; height: number };
       }> = [];
-      const tree = callDemoCanvas(
+      const tree = callSeeflowCanvas(
         {
           activeShape: 'ellipse',
           onCreateShapeNode: (shape, pos, size) => {
@@ -878,7 +874,7 @@ describe('DemoCanvas', () => {
     it('pointerdown without drawShape set is a no-op (gesture only runs in draw mode)', () => {
       const refs: { current: unknown }[] = [];
       const captured: unknown[] = [];
-      const tree = callDemoCanvas(
+      const tree = callSeeflowCanvas(
         { onCreateShapeNode: (...args: unknown[]) => captured.push(args) },
         { refSink: refs },
       );
@@ -932,7 +928,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -955,7 +951,7 @@ describe('DemoCanvas', () => {
       // 200 wide, 140 tall (matches database SHAPE_DEFAULT_SIZE for an at-
       // template ghost — the cylinder reads proportional).
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -986,7 +982,10 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'rectangle' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { activeShape: 'rectangle' },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1012,7 +1011,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1029,7 +1028,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1055,7 +1054,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1074,7 +1073,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1091,7 +1090,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1110,7 +1109,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1127,7 +1126,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1146,7 +1145,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'cloud' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'cloud' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1163,7 +1162,7 @@ describe('DemoCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callDemoCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
       const ghost = findElement(
         tree,
         (el) =>
@@ -1186,7 +1185,7 @@ describe('DemoCanvas', () => {
       // hit that sibling instead of the anchor and the user couldn't grab
       // the outlet. rfEdges must therefore push selected edges to the end
       // of the array so xyflow's EdgeRenderer outputs them last in DOM.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
         connectors: [
           { id: 'e1', source: 'a', target: 'b', kind: 'default' },
@@ -1196,7 +1195,7 @@ describe('DemoCanvas', () => {
         selectedConnectorIds: ['e2'],
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfEdges = rf.props.edges as Array<{ id: string }>;
       // e2 (selected) MUST sit at the END of the array — that's what makes
       // its SVG render last and win hit-testing among same-zIndex edges.
@@ -1237,7 +1236,7 @@ describe('DemoCanvas', () => {
       tree: unknown;
       overlay: ReturnType<typeof findElement>;
     } {
-      const tree = callDemoCanvas(props);
+      const tree = callSeeflowCanvas(props);
       const overlay = findElement(tree, (el) => el.type === SelectionResizeOverlay);
       return { tree, overlay };
     }
@@ -1251,7 +1250,7 @@ describe('DemoCanvas', () => {
         selectedNodeIds: ['a', 'b'],
         onMultiResize: () => {},
       });
-      if (!overlay) throw new Error('SelectionResizeOverlay not in DemoCanvas tree');
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
       const selected = overlay.props.selectedNodes as ReadonlyArray<{
         id: string;
         position: { x: number; y: number };
@@ -1267,7 +1266,7 @@ describe('DemoCanvas', () => {
         nodes: [makeSizedShape('a', { x: 0, y: 0 }, { width: 50, height: 50 })],
         selectedNodeIds: ['a'],
       });
-      if (!overlay) throw new Error('SelectionResizeOverlay not in DemoCanvas tree');
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
       const selected = overlay.props.selectedNodes as ReadonlyArray<unknown>;
       expect(selected).toEqual([]);
     });
@@ -1285,7 +1284,7 @@ describe('DemoCanvas', () => {
         selectedNodeIds: ['a', 'b'],
         onMultiResize,
       });
-      if (!overlay) throw new Error('SelectionResizeOverlay not in DemoCanvas tree');
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
       const wired = overlay.props.onMultiResize as ((u: MultiResizeUpdate[]) => void) | undefined;
       expect(typeof wired).toBe('function');
       wired?.([{ id: 'a', position: { x: 5, y: 5 } }]);
@@ -1310,7 +1309,7 @@ describe('DemoCanvas', () => {
           } as Partial<DemoNode>,
         },
       });
-      if (!overlay) throw new Error('SelectionResizeOverlay not in DemoCanvas tree');
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
       const selected = overlay.props.selectedNodes as ReadonlyArray<{
         id: string;
         position: { x: number; y: number };
@@ -1324,7 +1323,7 @@ describe('DemoCanvas', () => {
 
   // US-022: Cmd/Ctrl + C / Cmd/Ctrl + V shortcut wiring exercised via the
   // exported `handleClipboardShortcut` helper (mirrors the US-017 pattern).
-  // The actual listener in DemoCanvas is a thin useEffect that forwards into
+  // The actual listener in SeeflowCanvas is a thin useEffect that forwards into
   // this helper; the hook-shim test runner doesn't run useEffect, but the
   // logic under test is the same.
   describe('US-022: Cmd/Ctrl + C / V copy & paste via handleClipboardShortcut', () => {
@@ -1620,7 +1619,7 @@ describe('DemoCanvas', () => {
       // a callback wired, BOTH handlers must be present — without
       // onNodeContextMenu, right-clicks on any node fall through to the pane
       // handler regardless of the LockBadge pointer-events fix.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [lockedShape('a')],
         selectedNodeIds: ['a'],
         onPasteAt: () => {},
@@ -1636,7 +1635,7 @@ describe('DemoCanvas', () => {
       // Synthetic invocation of xyflow's per-node contextmenu callback with a
       // locked-node payload. The handler must e.preventDefault() to suppress
       // the browser's native menu and set up the Radix trigger state.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [lockedShape('a')],
         selectedNodeIds: ['a'],
         onPasteAt: () => {},
@@ -1672,7 +1671,7 @@ describe('DemoCanvas', () => {
       // activeGroupId removed; contextMenuPos now at slot 4, contextOnNode at slot 5.
       useStateOverrides[4] = { x: 100, y: 100 };
       useStateOverrides[5] = true;
-      const tree = callDemoCanvas(
+      const tree = callSeeflowCanvas(
         {
           nodes: [lockedShape('a')],
           selectedNodeIds: ['a'],
@@ -1694,7 +1693,7 @@ describe('DemoCanvas', () => {
       useStateOverrides2[4] = { x: 100, y: 100 };
       useStateOverrides2[5] = true;
       const refSink2: { current: unknown }[] = [];
-      const tree2 = callDemoCanvas(
+      const tree2 = callSeeflowCanvas(
         {
           nodes: [lockedShape('a')],
           selectedNodeIds: ['a'],
@@ -1737,7 +1736,7 @@ describe('DemoCanvas', () => {
       const useStateOverrides: unknown[] = [];
       useStateOverrides[4] = { x: 100, y: 100 };
       useStateOverrides[5] = false; // contextOnNode: false (pane-mode)
-      const tree = callDemoCanvas(
+      const tree = callSeeflowCanvas(
         {
           nodes: [lockedShape('a')],
           selectedNodeIds: ['a'],
@@ -1769,7 +1768,7 @@ describe('DemoCanvas', () => {
       // documented fitView options (padding 0.15, duration 300). The built-in
       // one would have a different icon + default options, so it must stay
       // suppressed.
-      const tree = callDemoCanvas();
+      const tree = callSeeflowCanvas();
       const controlsRoot = findElement(tree, (el) =>
         Boolean((el.props as { showFitView?: unknown }).showFitView !== undefined),
       );
@@ -1779,7 +1778,7 @@ describe('DemoCanvas', () => {
     });
 
     it('renders the Fit View ControlButton with Lucide-styled tooltip', () => {
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const btn = findByTestId(tree, 'controls-fit-view');
       expect(btn).not.toBeNull();
       expect(btn?.props['aria-label']).toBe('Fit view');
@@ -1787,7 +1786,7 @@ describe('DemoCanvas', () => {
     });
 
     it('renders the Auto Align (Tidy) ControlButton with the documented tooltip', () => {
-      const tree = callDemoCanvas({ onTidy: () => {} });
+      const tree = callSeeflowCanvas({ onTidy: () => {} });
       const btn = findByTestId(tree, 'controls-tidy');
       expect(btn).not.toBeNull();
       expect(btn?.props['aria-label']).toBe('Tidy layout (⌘⇧L)');
@@ -1795,28 +1794,28 @@ describe('DemoCanvas', () => {
     });
 
     it('Fit View button is disabled when there are no nodes on the canvas', () => {
-      const tree = callDemoCanvas({ nodes: [] });
+      const tree = callSeeflowCanvas({ nodes: [] });
       const btn = findByTestId(tree, 'controls-fit-view');
       expect(btn).not.toBeNull();
       expect(btn?.props.disabled).toBe(true);
     });
 
     it('Fit View button is enabled when at least one node is on the canvas', () => {
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const btn = findByTestId(tree, 'controls-fit-view');
       expect(btn).not.toBeNull();
       expect(btn?.props.disabled).toBe(false);
     });
 
     it('Auto Align is disabled when no onTidy prop is wired', () => {
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const btn = findByTestId(tree, 'controls-tidy');
       expect(btn).not.toBeNull();
       expect(btn?.props.disabled).toBe(true);
     });
 
     it('Auto Align is enabled when an onTidy callback is wired', () => {
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')], onTidy: () => {} });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')], onTidy: () => {} });
       const btn = findByTestId(tree, 'controls-tidy');
       expect(btn).not.toBeNull();
       expect(btn?.props.disabled).toBe(false);
@@ -1824,7 +1823,7 @@ describe('DemoCanvas', () => {
 
     it('clicking Auto Align fires the onTidy prop', () => {
       let tidyCalls = 0;
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a')],
         onTidy: () => {
           tidyCalls += 1;
@@ -1844,8 +1843,8 @@ describe('DemoCanvas', () => {
       // capture the fitView args without needing a real ReactFlowInstance.
       const refSink: { current: unknown }[] = [];
       const fitViewCalls: unknown[] = [];
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] }, { refSink });
-      // rfInstanceRef is the THIRD useRef in DemoCanvas (slot 2):
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] }, { refSink });
+      // rfInstanceRef is the THIRD useRef in SeeflowCanvas (slot 2):
       //   slot 0 = flagsRef (US-027)
       //   slot 1 = wrapperRef
       //   slot 2 = rfInstanceRef
@@ -1878,7 +1877,7 @@ describe('DemoCanvas', () => {
     it('clicking Fit View is a no-op when rfInstanceRef has no instance attached', () => {
       // Defensive: if the canvas mounts and the user clicks Fit View before
       // onInit fires, the click must not throw. fitView simply doesn't run.
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const btn = findByTestId(tree, 'controls-fit-view');
       if (!btn) throw new Error('Fit View button not found');
       const onClick = btn.props.onClick as (() => void) | undefined;
@@ -1891,7 +1890,7 @@ describe('DemoCanvas', () => {
       // in that order". Zoom-in/zoom-out are owned by xyflow's <Controls>
       // (showZoom default true). We assert the post-zoom order on OUR
       // ControlButton children: Fit View, then Auto Align.
-      const tree = callDemoCanvas({ nodes: [makeShapeNode('a')], onTidy: () => {} });
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')], onTidy: () => {} });
       const controlsRoot = findElement(tree, (el) =>
         Boolean((el.props as { showFitView?: unknown }).showFitView !== undefined),
       );
@@ -1968,7 +1967,7 @@ describe('DemoCanvas', () => {
       new File([new Uint8Array([0])], name, { type });
 
     it('wires onDragOver + onDrop on the wrapper when onCreateImageFromFile is set', () => {
-      const tree = callDemoCanvas({ onCreateImageFromFile: () => {} });
+      const tree = callSeeflowCanvas({ onCreateImageFromFile: () => {} });
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       expect(typeof (wrapper.props as { onDragOver?: unknown }).onDragOver).toBe('function');
@@ -1976,7 +1975,7 @@ describe('DemoCanvas', () => {
     });
 
     it('onDragOver preventDefault()s when the OS hints at file drag', () => {
-      const tree = callDemoCanvas({ onCreateImageFromFile: () => {} });
+      const tree = callSeeflowCanvas({ onCreateImageFromFile: () => {} });
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDragOver = (wrapper.props as { onDragOver?: (e: unknown) => void }).onDragOver;
@@ -1987,7 +1986,7 @@ describe('DemoCanvas', () => {
     });
 
     it('onDragOver does NOT preventDefault when the drag is not a file payload', () => {
-      const tree = callDemoCanvas({ onCreateImageFromFile: () => {} });
+      const tree = callSeeflowCanvas({ onCreateImageFromFile: () => {} });
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDragOver = (wrapper.props as { onDragOver?: (e: unknown) => void }).onDragOver;
@@ -2000,7 +1999,7 @@ describe('DemoCanvas', () => {
     });
 
     it('onDragOver is a no-op when onCreateImageFromFile is NOT wired', () => {
-      const tree = callDemoCanvas({});
+      const tree = callSeeflowCanvas({});
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDragOver = (wrapper.props as { onDragOver?: (e: unknown) => void }).onDragOver;
@@ -2019,7 +2018,7 @@ describe('DemoCanvas', () => {
       // suppress the browser's default 'open this image in a new tab' even
       // when we can't honor the drop).
       const dispatched: unknown[] = [];
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         onCreateImageFromFile: (a) => dispatched.push(a),
       });
       const wrapper = findCanvasWrapper(tree);
@@ -2035,7 +2034,7 @@ describe('DemoCanvas', () => {
 
     it("threads onRetryImageUpload into each node's runtime data as data.onRetryUpload", () => {
       const onRetryImageUpload = (_id: string) => {};
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a')],
         onRetryImageUpload,
       });
@@ -2099,7 +2098,7 @@ describe('DemoCanvas', () => {
     }
 
     it('does NOT forward an htmlBlockEnabled prop to CanvasToolbar (toolbar tile removed)', () => {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         onCreateShapeNode: () => {},
         onCreateHtmlNode: () => {},
       });
@@ -2109,7 +2108,7 @@ describe('DemoCanvas', () => {
     });
 
     it('onDragOver preventDefault()s when the HTML block marker is present and handler is wired', () => {
-      const tree = callDemoCanvas({ onCreateHtmlNode: () => {} });
+      const tree = callSeeflowCanvas({ onCreateHtmlNode: () => {} });
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDragOver = (wrapper.props as { onDragOver?: (e: unknown) => void }).onDragOver;
@@ -2123,7 +2122,7 @@ describe('DemoCanvas', () => {
       // Wiring `onCreateImageFromFile` keeps the wrapper handlers attached,
       // but the html-block branch must self-gate on `onCreateHtmlNode` so a
       // read-only-for-blocks canvas doesn't accept a stray html block tile.
-      const tree = callDemoCanvas({ onCreateImageFromFile: () => {} });
+      const tree = callSeeflowCanvas({ onCreateImageFromFile: () => {} });
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDragOver = (wrapper.props as { onDragOver?: (e: unknown) => void }).onDragOver;
@@ -2139,7 +2138,7 @@ describe('DemoCanvas', () => {
       // suppress browser default behaviour for the synthetic drop, even when
       // we can't honor the position).
       const dispatched: Array<{ position: { x: number; y: number } }> = [];
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         onCreateHtmlNode: (a) => dispatched.push(a),
       });
       const wrapper = findCanvasWrapper(tree);
@@ -2160,7 +2159,7 @@ describe('DemoCanvas', () => {
       // preventDefault (it always does when wired), but the htmlNode-create
       // path stays inert.
       const imgDispatched: unknown[] = [];
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         onCreateImageFromFile: (a) => imgDispatched.push(a),
       });
       const wrapper = findCanvasWrapper(tree);
@@ -2177,7 +2176,7 @@ describe('DemoCanvas', () => {
     it('onDrop is a complete no-op when neither image nor htmlNode handlers are wired', () => {
       // Read-only canvas: drop fires but no preventDefault, no dispatch — the
       // browser's native default still runs.
-      const tree = callDemoCanvas({});
+      const tree = callSeeflowCanvas({});
       const wrapper = findCanvasWrapper(tree);
       if (!wrapper) throw new Error('canvas wrapper not found');
       const onDrop = (wrapper.props as { onDrop?: (e: unknown) => void }).onDrop;
@@ -2194,7 +2193,7 @@ describe('DemoCanvas', () => {
     // exercise the post-render React-element tree (no live DOM); each gate
     // is verified by inspecting the ReactFlow root's resolved props.
     it('ReactFlow root has nodesConnectable=false even when onCreateConnector is wired in view mode', () => {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
@@ -2204,7 +2203,7 @@ describe('DemoCanvas', () => {
         },
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.nodesConnectable).toBe(false);
     });
 
@@ -2212,47 +2211,47 @@ describe('DemoCanvas', () => {
       // xyflow has no global `edgesDeletable` flag; the only path to delete
       // is the delete-key chord. Setting it null leaves the user with no
       // delete pathway in view mode (the context menu is already gated above).
-      const tree = callDemoCanvas({ mode: 'view', adapter: undefined });
+      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.deleteKeyCode).toBeNull();
     });
 
     it('ReactFlow root wires deleteKeyCode in edit mode', () => {
-      const tree = callDemoCanvas({});
+      const tree = callSeeflowCanvas({});
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.deleteKeyCode).toEqual(['Backspace', 'Delete']);
     });
 
     it('ReactFlow root suppresses onConnect in view mode', () => {
       // The discriminated union allows callers to pass onCreateConnector even
       // in view mode (typed as Partial<…>); the wiring still drops it.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         onCreateConnector: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.onConnect).toBeUndefined();
     });
 
     it('ReactFlow root suppresses onNodeContextMenu / onPaneContextMenu in view mode', () => {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         onDeleteNode: () => {},
         onPasteAt: () => {},
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.onNodeContextMenu).toBeUndefined();
       expect(rf.props.onPaneContextMenu).toBeUndefined();
     });
 
     it('CanvasToolbar is hidden in view mode even when onCreateShapeNode is wired', () => {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         onCreateShapeNode: () => {},
@@ -2262,7 +2261,7 @@ describe('DemoCanvas', () => {
     });
 
     it('StyleStrip is hidden in view mode even when style handlers are wired', () => {
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         onStyleNode: () => {},
@@ -2273,7 +2272,7 @@ describe('DemoCanvas', () => {
     });
 
     it('SelectionResizeOverlay is suppressed in view mode', () => {
-      const tree = callDemoCanvas({ mode: 'view', adapter: undefined });
+      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
       const overlay = findElement(tree, (el) => el.type === SelectionResizeOverlay);
       expect(overlay).toBeNull();
     });
@@ -2281,7 +2280,7 @@ describe('DemoCanvas', () => {
     it('connector edge.data.onLabelChange is undefined in view mode (label is read-only)', () => {
       // Connector label inline-edit gates on the data callback being wired;
       // dropping it in view mode flips the EditableEdge to read-only.
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         connectors: [
@@ -2300,7 +2299,7 @@ describe('DemoCanvas', () => {
         },
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const edges = rf.props.edges as Array<{ id?: string; data?: { onLabelChange?: unknown } }>;
       const c1 = edges.find((e) => e.id === 'c1');
       expect(c1?.data?.onLabelChange).toBeUndefined();
@@ -2310,7 +2309,7 @@ describe('DemoCanvas', () => {
       // Inline name/description edits gate on the data callbacks being wired
       // (the shape-node uses `onNameChange === undefined` as the read-only
       // signal that suppresses the dblclick-to-edit path).
-      const tree = callDemoCanvas({
+      const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         nodes: [makeShapeNode('a')],
@@ -2322,7 +2321,7 @@ describe('DemoCanvas', () => {
         },
       });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const rfNodes = rf.props.nodes as Node[];
       const a = rfNodes.find((n) => n.id === 'a');
       expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
@@ -2333,7 +2332,7 @@ describe('DemoCanvas', () => {
 
 describe('US-027: resolveFlags helper', () => {
   // Pure helper test — covers the mode preset + the override layer. Behavior
-  // gates inside <DemoCanvas> consume the resolved flag set, so pinning
+  // gates inside <SeeflowCanvas> consume the resolved flag set, so pinning
   // resolveFlags pins the gating contract end-to-end.
   it("returns the edit preset when no overrides are passed (mode='edit')", () => {
     expect(resolveFlags({ mode: 'edit' })).toEqual({

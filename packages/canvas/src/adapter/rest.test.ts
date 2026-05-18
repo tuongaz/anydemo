@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { createRestAdapter } from './canvas-adapter-rest';
+import { createRestAdapter } from './rest.ts';
 
 interface FetchCall {
   url: string;

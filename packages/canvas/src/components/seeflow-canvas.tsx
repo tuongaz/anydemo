@@ -1,49 +1,3 @@
-import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
-import type { CanvasAdapter, CanvasRuntime } from '@/lib/canvas-adapter';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import {
-  CanvasToolbar,
-  type ConnectorStylePatch,
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuTrigger,
-  EditableEdge,
-  type EditableEdgeData,
-  HTML_BLOCK_DND_TYPE,
-  HtmlNode,
-  ILLUSTRATIVE_SHAPE_RENDERERS,
-  IconNode,
-  ImageNode,
-  type MultiResizeUpdate,
-  NEW_NODE_BORDER_WIDTH,
-  type NodeStatus,
-  type NodeStylePatch,
-  type OverlayInputNode,
-  PlayNode,
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  SHAPE_DEFAULT_SIZE,
-  SelectionResizeOverlay,
-  ShapeNode,
-  type Side,
-  StateNode,
-  StyleStrip,
-  TOOLBAR_SHAPES,
-  cn,
-  computeImageDims,
-  connectorToEdge,
-  endpointFromPin,
-  endpointToPin,
-  getNodeIntersection,
-  handleCanvasFileDrop,
-  projectCursorToPerimeter,
-  shapeChromeClass,
-  shapeChromeStyle,
-} from '@seeflow/canvas';
 import {
   Background,
   type Connection,
@@ -81,6 +35,50 @@ import {
   useRef,
   useState,
 } from 'react';
+import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
+import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
+import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
+import { cn } from '../lib/cn.ts';
+import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import { connectorToEdge } from '../lib/connector-to-edge.ts';
+import {
+  type Side,
+  endpointFromPin,
+  endpointToPin,
+  getNodeIntersection,
+  projectCursorToPerimeter,
+} from '../lib/floating-edge-geometry.ts';
+import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
+import { HtmlNode } from '../nodes/html-node.tsx';
+import { IconNode } from '../nodes/icon-node.tsx';
+import { ImageNode } from '../nodes/image-node.tsx';
+import { PlayNode } from '../nodes/play-node.tsx';
+import {
+  SHAPE_DEFAULT_SIZE,
+  ShapeNode,
+  shapeChromeClass,
+  shapeChromeStyle,
+} from '../nodes/shape-node.tsx';
+import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
+import { StateNode } from '../nodes/state-node.tsx';
+import type { NodeStatus } from '../nodes/status-pill.tsx';
+import type { Connector, DemoNode, EdgePin, ShapeKind } from '../types.ts';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+} from '../ui/context-menu.tsx';
+import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
+import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
+import {
+  type MultiResizeUpdate,
+  type OverlayInputNode,
+  SelectionResizeOverlay,
+} from './selection-resize-overlay.tsx';
+import { type ConnectorStylePatch, type NodeStylePatch, StyleStrip } from './style-strip.tsx';
 
 import '@xyflow/react/dist/style.css';
 
@@ -91,7 +89,7 @@ import '@xyflow/react/dist/style.css';
  * inert, but pan/zoom and SSE-driven status badges still work so the canvas
  * remains a useful presentation surface.
  */
-export type DemoCanvasMode = 'edit' | 'view';
+export type SeeflowCanvasMode = 'edit' | 'view';
 
 /**
  * US-027: per-feature override flags. Each flag is optional; when unset the
@@ -122,7 +120,7 @@ export interface CanvasFeatureOverrides {
 
 /**
  * US-027: every flag resolved to a concrete boolean. The render body of
- * {@link DemoCanvas} reads exclusively from this shape so the gating logic is
+ * {@link SeeflowCanvas} reads exclusively from this shape so the gating logic is
  * a single hop away from the mode preset + the overrides.
  */
 export interface ResolvedCanvasFlags {
@@ -174,12 +172,12 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
 /**
  * US-027: resolve the effective flag set from the canvas mode + caller
  * overrides. Pure so it's trivially unit-testable. The function does NOT
- * inspect any DemoCanvas prop other than `mode` + the override fields — keeping
+ * inspect any SeeflowCanvas prop other than `mode` + the override fields — keeping
  * the contract narrow lets demo-canvas pass exactly the slice it needs and
  * makes the helper safe to import standalone.
  */
 export function resolveFlags(
-  input: { mode: DemoCanvasMode } & Omit<CanvasFeatureOverrides, 'storageKey'>,
+  input: { mode: SeeflowCanvasMode } & Omit<CanvasFeatureOverrides, 'storageKey'>,
 ): ResolvedCanvasFlags {
   const defaults = input.mode === 'edit' ? EDIT_DEFAULTS : VIEW_DEFAULTS;
   return {
@@ -203,7 +201,7 @@ export function resolveFlags(
  * discriminated union below can attach the mode-specific shape without
  * duplicating ~50 prop definitions.
  */
-interface DemoCanvasBaseProps extends CanvasFeatureOverrides {
+interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * US-004: project id used by file-backed nodes (imageNode, future htmlNode)
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
@@ -556,13 +554,13 @@ interface DemoCanvasBaseProps extends CanvasFeatureOverrides {
 /**
  * US-027: discriminated union — `adapter` is required in edit mode, optional
  * in view mode (a view-mode embedder has no mutations to persist). Both arms
- * share {@link DemoCanvasBaseProps}; the discriminator + adapter shape are the
+ * share {@link SeeflowCanvasBaseProps}; the discriminator + adapter shape are the
  * only difference. TypeScript narrows `props.adapter` to `CanvasAdapter` in
  * the edit branch without callers having to assert.
  */
-export type DemoCanvasProps =
-  | (DemoCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter })
-  | (DemoCanvasBaseProps & { mode: 'view'; adapter?: CanvasAdapter });
+export type SeeflowCanvasProps =
+  | (SeeflowCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter })
+  | (SeeflowCanvasBaseProps & { mode: 'view'; adapter?: CanvasAdapter });
 
 // Below this threshold we treat the gesture as an accidental click / tiny
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
@@ -1344,7 +1342,7 @@ const dataStatusFor = (runs: RunsMap, id: string): NodeStatus | undefined => run
 const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
   runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
 
-export function DemoCanvas(props: DemoCanvasProps) {
+export function SeeflowCanvas(props: SeeflowCanvasProps) {
   const {
     mode,
     // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —

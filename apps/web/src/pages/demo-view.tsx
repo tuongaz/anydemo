@@ -1,5 +1,4 @@
 import { CommandPalette } from '@/components/command-palette';
-import { DemoCanvas } from '@/components/demo-canvas';
 import { DetailPanel } from '@/components/detail-panel';
 import { ExportDialog } from '@/components/export-dialog';
 import { RestartDemoButton } from '@/components/restart-demo-button';
@@ -17,10 +16,8 @@ import type {
   DemoNode,
   DemoSummary,
   EdgePin,
-  ReorderOp,
   ShapeKind,
 } from '@/lib/api';
-import { createRestAdapter } from '@/lib/canvas-adapter-rest';
 import { buildPastePayload } from '@/lib/clipboard';
 import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
@@ -31,11 +28,14 @@ import {
   DEFAULT_STORAGE_PREFIX,
   ICON_DEFAULT_SIZE,
   type NodeStylePatch,
+  type ReorderOp,
   SHAPE_DEFAULT_SIZE,
+  SeeflowCanvas,
   applyLayout,
   applyNudge,
   buildNewShapeData,
   computeIconInsertPosition,
+  createRestAdapter,
   getLastUsedStyle,
   getNudgeDelta,
   getZoomChord,
@@ -174,7 +174,7 @@ export function DemoView({
   const [panelNodeId, setPanelNodeId] = useState<string | null>(null);
   const [panelConnectorId, setPanelConnectorId] = useState<string | null>(null);
   // US-015: id of a freshly drop-popover-created node that should mount in
-  // inline label-edit mode. Read by DemoCanvas (injected as
+  // inline label-edit mode. Read by SeeflowCanvas (injected as
   // `data.autoEditOnMount: true` on that node) and consumed once at the node's
   // first render; we don't bother clearing it because the node's internal
   // `isEditing` state is hooks-owned and indifferent to later renders.
@@ -223,7 +223,7 @@ export function DemoView({
   const [editError, setEditError] = useState<string | null>(null);
   // US-003: bottom-toolbar draw-mode state lives on the page so the global
   // bare-key keyboard handler (V/R/O/T/S/D) and the upcoming command palette
-  // can drive tool switches. DemoCanvas reads `activeShape` and calls
+  // can drive tool switches. SeeflowCanvas reads `activeShape` and calls
   // `setActiveShape` from props — its toolbar wiring is unchanged.
   const [activeShape, setActiveShape] = useState<ShapeKind | null>(null);
   // Mirror into a ref so the bare-key keydown effect reads the live value
@@ -235,7 +235,7 @@ export function DemoView({
   // US-006: command-palette open state. The Cmd/Ctrl+P chord flips this true
   // and the (placeholder) dialog renders gated on it. Full UI lands in US-007.
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // React Flow instance handed up from `<DemoCanvas onRfInit>` (US-024). Used
+  // React Flow instance handed up from `<SeeflowCanvas onRfInit>` (US-024). Used
   // by the zoom-chord handler below — only the page owns the keyboard
   // listener so the canvas stays free of page-level chord wiring.
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
@@ -368,7 +368,7 @@ export function DemoView({
   const demoId = detail?.id ?? null;
   // US-025: persistence adapter built from the demo's id. Bound to one demo for
   // its lifetime; rebuilt on demo switch. Every REST mutation in this file (and
-  // the prop threaded to <DemoCanvas>) now routes through this adapter.
+  // the prop threaded to <SeeflowCanvas>) now routes through this adapter.
   const adapter = useMemo(
     () => (demoId ? createRestAdapter({ baseUrl: '', demoId }) : null),
     [demoId],
@@ -1669,7 +1669,7 @@ export function DemoView({
 
   // US-015: icon-picker state slice. Lives here (not in demo-canvas) so the
   // detail panel's "Change icon…" button can dispatch openIconPicker('replace',
-  // nodeId) without going through DemoCanvas. demo-canvas is a transparent
+  // nodeId) without going through SeeflowCanvas. demo-canvas is a transparent
   // pass-through for the toolbar's controlled-open chrome. `mode='replace'`
   // pairs with `nodeId` to tell handleIconPicked which existing node to swap.
   const [iconPicker, setIconPicker] = useState<{
@@ -2078,7 +2078,7 @@ export function DemoView({
   // Both are skipped while focus is in any editable element so the browser's
   // native chords keep working inside form controls / InlineEdit.
   //
-  // US-022: Cmd+C and Cmd+V are NOT handled here — DemoCanvas owns them via
+  // US-022: Cmd+C and Cmd+V are NOT handled here — SeeflowCanvas owns them via
   // its own `handleClipboardShortcut` listener (wired through the new
   // `onCopySelection` / `onPasteSelection` props). The resolver still emits
   // `copy` / `paste` action types for the Cmd+D path, but the dispatcher
@@ -2314,7 +2314,7 @@ export function DemoView({
   }, [onTidy]);
 
   // Toolbar button click: same scope rule as the chord (selection-empty →
-  // 'all'). Handed to <DemoCanvas> below; CanvasToolbar disables the button
+  // 'all'). Handed to <SeeflowCanvas> below; CanvasToolbar disables the button
   // when no demo is loaded (onTidy unset).
   const onToolbarTidy = useCallback(() => {
     const scope = selectedIdsRef.current.length > 0 ? 'selection' : 'all';
@@ -3028,7 +3028,7 @@ export function DemoView({
       </div>
 
       {demo && adapter ? (
-        <DemoCanvas
+        <SeeflowCanvas
           mode="edit"
           adapter={adapter}
           projectId={demoId ?? undefined}

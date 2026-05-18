@@ -198,6 +198,40 @@ export type {
   StyleStripProps,
 } from './components/style-strip.tsx';
 
+export {
+  SeeflowCanvas,
+  classifyHandleDropFailure,
+  classifyReconnectBodyDrop,
+  computeUnmovedLockPin,
+  eventTargetIsOtherNode,
+  handleClipboardShortcut,
+  resolveFlags,
+} from './components/seeflow-canvas.tsx';
+export type {
+  CanvasFeatureOverrides,
+  ClipboardShortcutDeps,
+  ClipboardShortcutEventLike,
+  ResolvedCanvasFlags,
+  SeeflowCanvasMode,
+  SeeflowCanvasProps,
+} from './components/seeflow-canvas.tsx';
+
+export { createRestAdapter } from './adapter/rest.ts';
+export type { RestAdapterOptions } from './adapter/rest.ts';
+export type {
+  CanvasAdapter,
+  CanvasRuntime,
+  ConnectorCreateInput,
+  ConnectorPatch,
+  NodeCreateInput,
+  NodeKind,
+  NodePatch,
+  PlayNodeResult,
+  ReorderOp,
+  UpdateNodePositionResult,
+  UploadImageResult,
+} from './adapter/types.ts';
+
 export * from './edges/index.ts';
 export * from './nodes/index.ts';
 export * from './ui/index.ts';
