@@ -22,3 +22,5 @@ ralph/
 .claude/skills/run-ralph
 docs
 apps/cloud/cdk.out
+ralph/prd.json
+ralph/progress.txt
