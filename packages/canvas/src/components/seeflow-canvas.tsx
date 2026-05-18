@@ -584,6 +584,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * Absent → the panel's detail field renders read-only.
    */
   onDetailChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-008: opt-in viewport auto-fit. `undefined` / `false` → no auto-fit.
+   * `true` → fit on initial mount (after rfInstance is ready and
+   * `nodes.length > 0`); future stories extend this to also fit on external
+   * node changes via `autoFitViewSignal`. Pass an object to enable each
+   * trigger independently (e.g. `{ onMount: false }` to skip the mount-fit
+   * but still react to the signal). See {@link resolveAutoFitView}.
+   */
+  autoFitView?: AutoFitView;
 }
 
 /**
@@ -601,6 +610,60 @@ export type SeeflowCanvasProps =
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
 // still produces a usable node rather than a 0×0 ghost.
 const MIN_DRAW_SIZE = 40;
+
+/**
+ * US-008: canonical options for every fitView call originating from inside
+ * the canvas (manual Fit View button, auto-fit-view on mount, future
+ * signal-driven external-change fit). Centralized so the manual and
+ * automatic paths cannot drift apart.
+ */
+export const FIT_VIEW_OPTIONS = {
+  padding: 0.15,
+  duration: 300,
+  includeHiddenNodes: false,
+} as const;
+
+/**
+ * US-008: granular auto-fit-view config. Both flags default to `true` when the
+ * parent value resolves to a truthy `autoFitView` (i.e. `true` or an object).
+ * `onMount` fires once on initial mount after the React Flow instance is
+ * available and `nodes.length > 0`. `onExternalNodeChange` (wired in US-009)
+ * fires when the host bumps `autoFitViewSignal`.
+ */
+export type AutoFitViewConfig = {
+  onMount?: boolean;
+  onExternalNodeChange?: boolean;
+};
+
+/**
+ * US-008: public `autoFitView` prop value. `undefined` / `false` → no
+ * auto-fit. `true` → both flags default to `true`. An object lets callers
+ * opt into / out of each trigger independently.
+ */
+export type AutoFitView = boolean | AutoFitViewConfig;
+
+/**
+ * US-008: pure resolver — collapse the optional `autoFitView` prop into the
+ * concrete pair of booleans every downstream effect reads. Keeps the prop's
+ * boolean / object / undefined union out of the rendering hot path and makes
+ * the default behavior (both triggers ON when `autoFitView` is truthy)
+ * trivially unit-testable.
+ */
+export function resolveAutoFitView(value: AutoFitView | undefined): {
+  onMount: boolean;
+  onExternalNodeChange: boolean;
+} {
+  if (value === undefined || value === false) {
+    return { onMount: false, onExternalNodeChange: false };
+  }
+  if (value === true) {
+    return { onMount: true, onExternalNodeChange: true };
+  }
+  return {
+    onMount: value.onMount ?? true,
+    onExternalNodeChange: value.onExternalNodeChange ?? true,
+  };
+}
 
 /**
  * Resolve the cursor's screen-space coordinates from the mouse/touch event
@@ -1447,6 +1510,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onNameChange,
     onDescriptionChange,
     onDetailChange,
+    autoFitView,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -1504,6 +1568,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   useEffect(() => {
     flagsRef.current = flags;
   }, [flags]);
+  // US-008: collapse the public `autoFitView` prop (boolean | object |
+  // undefined) into a stable pair of booleans every downstream effect reads.
+  // Memoized on the raw prop reference so callers passing the same value
+  // (or its object form) don't re-trigger the effects below on every render.
+  const resolvedAutoFitView = useMemo(() => resolveAutoFitView(autoFitView), [autoFitView]);
   // US-026: destructure the bundled `runtime` prop into the legacy per-stream
   // names every downstream call site already uses. Keeps the diff focused on
   // the prop API while preserving the existing memo/dependency wiring.
@@ -1520,6 +1589,27 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // gesture (the underlying flow conversion handles the transform).
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+  // US-008: one-shot guard for the auto-fit-view mount effect. Flipped to
+  // `true` the first time the canvas calls `fitView` from the mount path so
+  // re-renders (selection changes, prop churn) don't re-fit the viewport.
+  const didMountFitRef = useRef(false);
+  // US-008: late-nodes mount-fit. The primary mount-fit path lives inside
+  // <ReactFlow>'s `onInit` callback (so the fit happens the same tick the
+  // instance becomes available), but hosts that mount the canvas with an
+  // empty `nodes` prop and populate it asynchronously (e.g. an SSE-driven
+  // initial load) need this effect to catch up — it re-runs when `nodes` or
+  // the resolved `onMount` flag changes and fits the viewport on the first
+  // render where every guard is satisfied. `didMountFitRef` ensures the two
+  // paths can't double-fire.
+  useEffect(() => {
+    if (didMountFitRef.current) return;
+    if (!resolvedAutoFitView.onMount) return;
+    if (nodes.length === 0) return;
+    const rfInstance = rfInstanceRef.current;
+    if (!rfInstance) return;
+    rfInstance.fitView(FIT_VIEW_OPTIONS);
+    didMountFitRef.current = true;
+  }, [nodes, resolvedAutoFitView.onMount]);
   // US-006: handle to the React Flow store (registered by <StoreApiBridge>).
   // Used to call `cancelConnection` when ESC cancels an in-flight connection.
   const storeApiRef = useRef<StoreApi | null>(null);
@@ -3565,6 +3655,14 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
           // outline reads a sensible value before the first onMove fires.
           const wrapper = wrapperRef.current;
           if (wrapper) wrapper.style.setProperty('--rf-zoom', String(instance.getZoom()));
+          // US-008: mount-fit. Reuses the same guard the late-nodes useEffect
+          // checks (`didMountFitRef`) so whichever path fires first wins and
+          // the other no-ops — preventing double-fit when nodes are already
+          // present at onInit time.
+          if (!didMountFitRef.current && resolvedAutoFitView.onMount && nodes.length > 0) {
+            instance.fitView(FIT_VIEW_OPTIONS);
+            didMountFitRef.current = true;
+          }
           onRfInit?.(instance);
         }}
         onMove={(_e, viewport) => {
@@ -3655,11 +3753,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             title="Fit view"
             disabled={nodes.length === 0}
             onClick={() => {
-              rfInstanceRef.current?.fitView({
-                padding: 0.15,
-                duration: 300,
-                includeHiddenNodes: false,
-              });
+              rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
             }}
           >
             <Maximize2 className="h-3 w-3" aria-hidden="true" />

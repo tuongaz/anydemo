@@ -10,6 +10,7 @@ Embeddable React Flow canvas. See `README.md` for the full public API.
 - **Tailwind:** package ships unstyled. Host JIT-scans this source — keep classes literal (no dynamic class strings).
 - **Adapter seam:** edit mode requires a `CanvasAdapter` (`src/adapter/types.ts`). All mutations route through it — never call `fetch` from inside the canvas.
 - **Built-in sidebar:** `<SeeflowCanvas>` renders `<DetailPanel>` internally — driven by `selectedNodeIds[0]` / `selectedConnectorIds[0]`. Hosts pass `onNameChange` / `onDescriptionChange` / `onDetailChange` field-edit callbacks and a single `statusReport` for the selected node directly into the canvas. `disableSidebar={true}` suppresses it (custom inspector). `CanvasAdapter` does NOT expose its bound demoId — use the existing `projectId` prop for the sidebar's `demoId` lookup.
+- **Auto-fit-view:** opt-in via `autoFitView?: boolean | { onMount?: boolean; onExternalNodeChange?: boolean }`. `undefined` / `false` → no auto-fit. `true` → fit on mount once nodes load. Every internal fitView call (manual button, mount-fit, future signal-fit) goes through the module-level `FIT_VIEW_OPTIONS` constant — never inline literals. The mount-fit fires from BOTH the `<ReactFlow>` `onInit` callback (primary path) AND a late-nodes `useEffect`; both serialize through `didMountFitRef` so the fit fires exactly once.
 
 ## Workflow
 

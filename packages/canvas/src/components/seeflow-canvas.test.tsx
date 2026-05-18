@@ -13,6 +13,7 @@ import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import {
   type ClipboardShortcutEventLike,
+  FIT_VIEW_OPTIONS,
   SeeflowCanvas,
   type SeeflowCanvasProps,
   classifyHandleDropFailure,
@@ -20,6 +21,7 @@ import {
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
   handleClipboardShortcut,
+  resolveAutoFitView,
   resolveFlags,
 } from './seeflow-canvas.tsx';
 import { type MultiResizeUpdate, SelectionResizeOverlay } from './selection-resize-overlay.tsx';
@@ -675,14 +677,14 @@ describe('SeeflowCanvas', () => {
       flags: 0,
       wrapper: 1,
       rfInstance: 2,
-      // US-018 added editHandlesRef (slot 3, after storeApiRef) so every
-      // draw-* ref shifted down by one. activeGroupIdRef removed, shifting
-      // all draw-* refs back up by one. Update this map alongside any
+      // US-008 added didMountFitRef (slot 3, immediately after rfInstanceRef)
+      // so every ref below drifted down by one. US-018 added editHandlesRef
+      // (now slot 4, after storeApiRef). Update this map alongside any
       // future useRef addition above drawShape.
-      drawShape: 12,
-      drawStart: 13,
-      drawCurrent: 14,
-      drawing: 15,
+      drawShape: 13,
+      drawStart: 14,
+      drawCurrent: 15,
+      drawing: 16,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
@@ -2465,6 +2467,148 @@ describe('SeeflowCanvas', () => {
       expect(typeof onClose).toBe('function');
       onClose?.();
       expect(calls).toEqual([[[], []]]);
+    });
+  });
+
+  describe('US-008: autoFitView mount-fit', () => {
+    // The mount-fit lives in <ReactFlow>'s onInit handler (the late-nodes
+    // useEffect path is the SAME guard re-tried on prop change — both
+    // serialize through `didMountFitRef`). The hook-shim renderer captures
+    // <ReactFlow> as a placeholder element, so we extract its onInit prop
+    // and invoke it with a stub instance to observe the fitView call.
+
+    function captureFitView(props: Partial<LegacyOverrides>): {
+      tree: unknown;
+      fitViewCalls: unknown[];
+    } {
+      const fitViewCalls: unknown[] = [];
+      const refSink: { current: unknown }[] = [];
+      const tree = callSeeflowCanvas(props, { refSink });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const onInit = (rf.props as { onInit?: (i: unknown) => void }).onInit;
+      if (typeof onInit !== 'function') throw new Error('onInit not wired');
+      const stubInstance = {
+        fitView: (opts: unknown) => {
+          fitViewCalls.push(opts);
+        },
+        getZoom: () => 1,
+      };
+      onInit(stubInstance);
+      // Verify the stub landed in rfInstanceRef so the manual Fit View button
+      // path (and the late-nodes useEffect, when invoked in production)
+      // would see the same instance the test just exercised.
+      expect(refSink[2]?.current).toBe(stubInstance);
+      return { tree, fitViewCalls };
+    }
+
+    it('autoFitView default (undefined) → onInit does NOT call fitView on mount', () => {
+      const { fitViewCalls } = captureFitView({ nodes: [makeShapeNode('a')] });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView=true with nodes → onInit calls fitView exactly once with FIT_VIEW_OPTIONS', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+      });
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+      // Defensive: the options object itself must match the documented shape
+      // (padding 0.15, duration 300, includeHiddenNodes false) so a future
+      // refactor that swaps the constant for an inline literal still satisfies
+      // the contract.
+      expect(fitViewCalls[0]).toEqual({
+        padding: 0.15,
+        duration: 300,
+        includeHiddenNodes: false,
+      });
+    });
+
+    it('autoFitView=true with nodes.length=0 → onInit does NOT call fitView', () => {
+      const { fitViewCalls } = captureFitView({ nodes: [], autoFitView: true });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView={{ onMount: false }} → onInit does NOT call fitView', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: false },
+      });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView={{ onMount: true }} (explicit object form) → onInit calls fitView once', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: true },
+      });
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('autoFitView=false → onInit does NOT call fitView (mirror of default)', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: false,
+      });
+      expect(fitViewCalls.length).toBe(0);
+    });
+  });
+});
+
+describe('US-008: resolveAutoFitView helper', () => {
+  // Pure helper test — covers the union (undefined | boolean | object). The
+  // mount + signal-driven fit effects inside SeeflowCanvas consume the
+  // resolved pair of booleans, so pinning resolveAutoFitView pins the whole
+  // auto-fit contract end-to-end.
+  it('undefined → both triggers off', () => {
+    expect(resolveAutoFitView(undefined)).toEqual({
+      onMount: false,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('false → both triggers off', () => {
+    expect(resolveAutoFitView(false)).toEqual({
+      onMount: false,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('true → both triggers on (the documented shorthand)', () => {
+    expect(resolveAutoFitView(true)).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('empty object {} → both triggers default to true', () => {
+    // Same semantics as `true`. The object form exists for granular opt-out.
+    expect(resolveAutoFitView({})).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('{ onMount: false } → only the mount trigger flips off', () => {
+    expect(resolveAutoFitView({ onMount: false })).toEqual({
+      onMount: false,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('{ onExternalNodeChange: false } → only the signal trigger flips off', () => {
+    expect(resolveAutoFitView({ onExternalNodeChange: false })).toEqual({
+      onMount: true,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('explicit { onMount: true, onExternalNodeChange: true } → both on', () => {
+    expect(resolveAutoFitView({ onMount: true, onExternalNodeChange: true })).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
     });
   });
 });
