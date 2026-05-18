@@ -143,3 +143,16 @@ Started: Mon 18 May 2026 13:16:06 AEST
   - No test files exist for dialog components — no test updates needed
   - Manual browser verification needed to confirm emerald border appears on focus
 ---
+
+## 2026-05-18 - US-010
+- Fixed header.tsx Workflow icon: removed hardcoded `color="#34d399"` prop, added `className="text-emerald-400"` — Lucide icons render via `currentColor` so className controls the stroke
+- Fixed detail-panel.tsx SheetContent: changed `backdrop-blur-sm` to `backdrop-blur-[14px]` to match design spec of blur(14px); `backdrop-blur-sm` = 4px, not 14px
+- resize-controls.tsx: verified `background: 'hsl(var(--background))'` inline style is syntactically valid — `--background` is a bare HSL triplet (`240 10% 3.9%`) and `hsl()` wrapper is correct — no change needed
+- Files changed: `apps/web/src/components/header.tsx`, `apps/web/src/components/detail-panel.tsx`
+- **Learnings for future iterations:**
+  - Lucide icons use `currentColor` for stroke — always use `className="text-*"` instead of `color=""` prop for design-system consistency
+  - Tailwind `backdrop-blur-sm` = 4px, not 14px — use arbitrary value `backdrop-blur-[14px]` for exact spec values
+  - CSS `hsl(var(--token))` where `--token` is a bare triplet (e.g. `240 10% 3.9%`) is valid modern CSS (space-separated HSL syntax)
+  - No test file for header.tsx — no test updates needed
+  - Manual browser verification needed to confirm logo color and panel blur
+---
