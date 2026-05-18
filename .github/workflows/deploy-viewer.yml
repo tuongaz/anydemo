@@ -1,11 +1,11 @@
-name: Deploy Viewer
+name: Build Web Bundle
 
 on:
   workflow_dispatch:
 
 jobs:
-  deploy:
-    name: Build and deploy apps/viewer to S3 + CloudFront
+  build-web:
+    name: Build apps/web and commit dist/web
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -18,13 +18,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ap-southeast-2
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
@@ -43,49 +36,4 @@ jobs:
             git commit -m "build: rebuild dist/web [skip ci]"
             git push
           fi
-
-      - name: Build viewer
-        run: cd apps/viewer && bun run build
-
-      - name: Get deployment targets from CloudFormation
-        id: cfn
-        run: |
-          BUCKET=$(aws cloudformation describe-stacks \
-            --stack-name SeeflowStack \
-            --query "Stacks[0].Outputs[?OutputKey=='ViewerBucketName'].OutputValue" \
-            --output text)
-          echo "bucket=$BUCKET" >> "$GITHUB_OUTPUT"
-
-          CF_DOMAIN=$(aws cloudformation describe-stacks \
-            --stack-name SeeflowStack \
-            --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomain'].OutputValue" \
-            --output text)
-
-          DIST_ID=$(aws cloudfront list-distributions \
-            --query "DistributionList.Items[?DomainName=='${CF_DOMAIN}'].Id | [0]" \
-            --output text)
-          echo "dist_id=$DIST_ID" >> "$GITHUB_OUTPUT"
-
-      - name: Sync hashed assets (immutable cache)
-        run: |
-          aws s3 sync apps/viewer/dist s3://${{ steps.cfn.outputs.bucket }}/ \
-            --delete \
-            --exclude "index.html" \
-            --cache-control "public,max-age=31536000,immutable"
-
-      - name: Upload index.html (no-cache)
-        run: |
-          aws s3 cp apps/viewer/dist/index.html \
-            s3://${{ steps.cfn.outputs.bucket }}/index.html \
-            --cache-control "no-cache,no-store,must-revalidate"
-
-      - name: Invalidate CloudFront cache
-        run: |
-          aws cloudfront create-invalidation \
-            --distribution-id ${{ steps.cfn.outputs.dist_id }} \
-            --paths "/*"
-
-      - name: Summary
-        run: echo "Deployed apps/viewer to https://seeflow.dev" >> "$GITHUB_STEP_SUMMARY"
-
 
