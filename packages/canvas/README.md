@@ -23,16 +23,17 @@ The host app must provide:
 - `lucide-react` (icons)
 - `react-markdown` (^10) and `remark-gfm` (^4) — required for the built-in sidebar's status section
 
-## Tailwind setup
+## Styling
 
-The canvas ships unstyled components — Tailwind classes are JIT-scanned by the
-host. Add the package source to your `tailwind.config` `content` array:
+Two imports — that's the whole setup. No Tailwind configuration, no CSS
+variables, no font setup. The package ships pre-compiled styles
+(`dist/style.css`) with all utilities under the `sf-` prefix and tokens scoped
+to `.seeflow-canvas-root`, so the consumer's `:root` and global stylesheet stay
+untouched.
 
-```js
-content: [
-  './src/**/*.{ts,tsx}',
-  '../../packages/canvas/src/**/*.{ts,tsx}', // ← required
-],
+```tsx
+import '@seeflow/canvas/style.css';
+import { SeeflowCanvas } from '@seeflow/canvas';
 ```
 
 ## Quickstart — view mode
