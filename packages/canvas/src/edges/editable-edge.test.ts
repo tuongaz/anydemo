@@ -27,7 +27,7 @@ import { join } from 'node:path';
 //      is the agreed plate; an empty label renders no plate at all so
 //      the canvas keeps no ghost artifact.
 const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
-const indexCssPath = join(repoRoot, 'apps/web/src/index.css');
+const indexCssPath = join(repoRoot, 'packages/canvas/src/styles/index.css');
 const editableEdgePath = join(repoRoot, 'packages/canvas/src/edges/editable-edge.tsx');
 const seeflowCanvasPath = join(repoRoot, 'packages/canvas/src/components/seeflow-canvas.tsx');
 
