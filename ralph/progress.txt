@@ -1,0 +1,23 @@
+## Codebase Patterns
+- CSS @import must come before @tailwind directives in index.css
+- Shadcn HSL token format: `--token: H S% L%` (no `hsl()` wrapper in the var definition)
+- Canvas-specific rules in index.css live outside @layer blocks to maintain specificity over xyflow library defaults
+- `bun run format` auto-converts single quotes to double quotes (Biome config)
+
+# Ralph Progress Log
+Started: Mon 18 May 2026 11:48:07 AEST
+---
+
+## 2026-05-18 - US-001
+- Replaced light :root + .dark CSS blocks with single permanent dark :root using zinc-950/emerald palette
+- Added Google Fonts @import for Inter + JetBrains Mono at top of file
+- Added dotted grid background-image to body (radial-gradient 32px)
+- Added extended custom vars: --emerald-glow, --shadow-card, --shadow-window, --shadow-glow-ok, --shadow-glow-pending, --ring-selected, --bg-canvas, --amber, --amber-hi, --danger, --font-mono
+- All canvas-specific rules (handles, edges, z-index, cursors) preserved unchanged
+- Files changed: apps/web/src/index.css
+- **Learnings for future iterations:**
+  - The @import must be the very first line before @tailwind directives
+  - Biome formats single quotes to double quotes — just run `bun run format` to fix
+  - Canvas rules are intentionally outside @layer blocks for cascade specificity
+  - The .dark block was removed entirely; the app is now permanently dark-themed
+---
