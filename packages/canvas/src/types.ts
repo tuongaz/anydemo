@@ -34,6 +34,7 @@ export interface NodeData extends NodeVisual, NodeDescription {
   stateSource: { kind: 'request' | 'event' };
   playAction?: HttpAction;
   handlerModule?: string;
+  icon?: string;
 }
 
 export interface HttpAction {
@@ -80,6 +81,7 @@ export interface IconNodeData extends NodeDescription {
 export interface HtmlNodeData extends NodeVisual, NodeDescription {
   htmlPath: string;
   name?: string;
+  icon?: string;
 }
 
 interface NodeBase {
