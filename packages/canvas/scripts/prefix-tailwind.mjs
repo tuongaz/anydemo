@@ -93,6 +93,8 @@ const TAILWIND_PREFIXES = [
   'will-change',
   'appearance',
   'placeholder',
+  // Animation utilities used by tailwindcss-animate.
+  'slide', 'fade', 'zoom', 'spin', 'ping', 'pulse', 'bounce',
 ];
 
 const PREFIX_PATTERN = new RegExp(

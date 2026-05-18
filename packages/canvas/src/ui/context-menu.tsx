@@ -17,7 +17,7 @@ const ContextMenuContent = React.forwardRef<
       <ContextMenuPrimitive.Content
         ref={ref}
         className={cn(
-          'z-50 min-w-[10rem] overflow-hidden rounded-md border bg-popover p-1 text-popover-foreground shadow-md data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
+          'sf-z-50 sf-min-w-[10rem] sf-overflow-hidden sf-rounded-md sf-border sf-bg-popover sf-p-1 sf-text-popover-foreground sf-shadow-md data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95',
           className,
         )}
         {...props}
@@ -34,7 +34,7 @@ const ContextMenuItem = React.forwardRef<
   <ContextMenuPrimitive.Item
     ref={ref}
     className={cn(
-      'relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none data-[disabled]:pointer-events-none data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground data-[disabled]:opacity-50',
+      'sf-relative sf-flex sf-cursor-default sf-select-none sf-items-center sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none data-[disabled]:sf-pointer-events-none data-[highlighted]:sf-bg-accent data-[highlighted]:sf-text-accent-foreground data-[disabled]:sf-opacity-50',
       className,
     )}
     {...props}
@@ -48,7 +48,7 @@ const ContextMenuSeparator = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ContextMenuPrimitive.Separator
     ref={ref}
-    className={cn('-mx-1 my-1 h-px bg-border', className)}
+    className={cn('-sf-mx-1 sf-my-1 sf-h-px sf-bg-border', className)}
     {...props}
   />
 ));
@@ -56,7 +56,7 @@ ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
 
 const ContextMenuShortcut = ({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) => (
   <span
-    className={cn('ml-auto pl-4 text-xs tracking-widest text-muted-foreground', className)}
+    className={cn('sf-ml-auto sf-pl-4 sf-text-xs sf-tracking-widest sf-text-muted-foreground', className)}
     {...props}
   />
 );
