@@ -24,7 +24,8 @@ export function StudioHome({ demos }: StudioHomeProps) {
                 type="button"
                 onClick={() => navigate(`/d/${demo.slug}`)}
                 data-testid={`studio-home-demo-${demo.slug}`}
-                className="flex w-full flex-col items-start gap-0.5 rounded-md border bg-card px-4 py-3 text-left transition-colors hover:bg-accent hover:text-accent-foreground"
+                className="flex w-full flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-input"
+                style={{ boxShadow: 'var(--shadow-card)' }}
               >
                 <span className="text-sm font-medium">{demo.name}</span>
                 <span className="truncate text-xs text-muted-foreground">{demo.repoPath}</span>
