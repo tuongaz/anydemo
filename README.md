@@ -51,6 +51,33 @@ curl -fsSL https://raw.githubusercontent.com/tuongaz/seeflow/main/install.sh | b
 
 The plugin scans your routes and database connections, generates `seeflow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
 
+## Run with Docker
+
+Try SeeFlow without installing Bun or Node:
+
+```bash
+docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
+# then open http://localhost:4321
+```
+
+The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present.
+
+Runtime env vars:
+
+- `SEEFLOW_PORT` — port the studio listens on (default `4321`)
+- `SEEFLOW_FLOW` — flow file path relative to the workspace (default `.seeflow/seeflow.json`)
+- `SEEFLOW_WORKSPACE` — workspace mount point inside the container (default `/workspace`)
+
+Bake demos into a derived image so the container ships with your flow:
+
+```dockerfile
+FROM tuongaz/seeflow
+COPY ./my-demos /workspace
+# docker build -t my-flow . && docker run --rm -it -p 4321:4321 my-flow
+```
+
+Published image tags: `:latest`, `:<version>` (e.g. `:0.1.16`), and `:<major>.<minor>` (e.g. `:0.1`).
+
 ## MCP server
 
 SeeFlow ships an MCP server so any MCP-aware editor can list, register, and edit demos directly. The studio must be running first.
