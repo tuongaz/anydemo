@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
-import type { DemoNode } from '@/lib/api';
 import * as React from 'react';
+import type { DemoNode } from '../types.ts';
 
 // The DetailPanel root reads localStorage on first render
 // (getStoredDetailPanelWidth) and writes back on resize. Provide a Map-backed
@@ -24,7 +24,7 @@ const mockWindow = {
 (globalThis as unknown as { window: typeof mockWindow }).window = mockWindow;
 
 const { DetailPanel, EditableField, StatusSection, formatRelativeTime } = await import(
-  '@seeflow/canvas'
+  './detail-panel.tsx'
 );
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
