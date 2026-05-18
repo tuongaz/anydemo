@@ -1,7 +1,14 @@
 name: Build Web Bundle
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-web:
@@ -36,4 +43,3 @@ jobs:
             git commit -m "build: rebuild dist/web [skip ci]"
             git push
           fi
-
