@@ -111,3 +111,15 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - All four button variants in canvas-toolbar (primary shapes, shape picker trigger, shape picker menu items, icon picker trigger) need consistent active/inactive class treatment
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
+
+## 2026-05-18 - US-009
+- SheetContent in detail-panel.tsx: added `bg-card/94 backdrop-blur-sm border-border` className to match design system sidebar spec (translucent zinc-900 with blur)
+- HtmlNodeSection "Path" label: updated from `font-medium tracking-wide text-[10px]` to `font-mono text-[11px] uppercase tracking-widest` (design system section label pattern)
+- No hardcoded light colors found; component was already using design tokens throughout
+- Files changed: apps/web/src/components/detail-panel.tsx
+- **Learnings for future iterations:**
+  - `bg-card/94` (94% opacity) + `backdrop-blur-sm` is the design system sidebar surface pattern — adds translucency and blur over the canvas
+  - When using SheetContent from sheet.tsx (which has `bg-card` in its base CVA class), passing `bg-card/94` via className is safely resolved by tailwind-merge since `cn()` uses it
+  - Section label design pattern: `font-mono text-[11px] text-muted-foreground uppercase tracking-widest` — use for any label headings within panel sections
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
