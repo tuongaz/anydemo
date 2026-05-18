@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { ICON_NAMES, ICON_REGISTRY } from '@/lib/icon-registry';
+import { ICON_NAMES, ICON_REGISTRY } from './icon-registry.ts';
 
 describe('ICON_REGISTRY', () => {
   it('exposes more than 1000 lucide icons', () => {
