@@ -86,11 +86,9 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
   // Border + background tokens are independent — picking a border color
   // shouldn't tint the background and vice versa. Border unset → fall
   // through to the theme default (--border) via the 'default' token.
-  // US-021: when `backgroundColor` is unset, the node renders a literal white
-  // fill (NODE_DEFAULT_BG_WHITE) instead of the theme-tied --card, so dark
-  // theme keeps a crisp white play-node on the darker canvas. An explicit
-  // token (including 'default') still wins so a user can opt back into the
-  // theme-aware shade. Field stays unset on disk.
+  // US-021: when `backgroundColor` is unset, falls back to NODE_DEFAULT_BG_WHITE
+  // (hsl(var(--card)) dark surface). An explicit token (including 'default')
+  // still wins. Field stays unset on disk.
   // US-010: selection outline moved to CSS (`.react-flow__node.selected > div`
   // in index.css) so per-render style-object identity is stable for
   // `React.memo`'s prop-equality check below — no inline `outline*` keys

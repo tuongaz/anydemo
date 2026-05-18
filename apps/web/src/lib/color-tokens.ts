@@ -58,12 +58,11 @@ export const COLOR_TOKENS = COLOR_TOKEN_MAP;
  * US-021: render-time fallback for in-scope node types when `data.backgroundColor`
  * is unset. Applies to shape (rectangle + ellipse), image, and play nodes —
  * NOT text (chromeless per US-003), NOT group (container, transparent), NOT
- * icon (chromeless SVG glyph, no `backgroundColor` field in its schema). The
- * literal `#ffffff` is intentional: dark theme keeps a crisp white node on the
- * darker canvas, matching whiteboard-app conventions. NOT persisted to disk —
- * the field stays unset, the renderer just falls back to this value.
+ * icon (chromeless SVG glyph, no `backgroundColor` field in its schema).
+ * Uses the design system's dark surface token so nodes blend into the dark canvas.
+ * NOT persisted to disk — the field stays unset, the renderer just falls back to this value.
  */
-export const NODE_DEFAULT_BG_WHITE = '#ffffff';
+export const NODE_DEFAULT_BG_WHITE = 'hsl(var(--card))';
 
 export type NodeColorStyle = Pick<CSSProperties, 'borderColor' | 'backgroundColor'>;
 export type EdgeColorStyle = Pick<CSSProperties, 'stroke'>;

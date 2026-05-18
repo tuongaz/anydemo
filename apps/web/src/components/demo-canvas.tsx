@@ -3433,7 +3433,7 @@ export function DemoCanvas({
               inline the same default resolution here: `borderColor` →
               `colorTokenStyle(undefined, 'node').borderColor` (theme-aware
               border via `hsl(var(--border))`), `backgroundColor` →
-              `NODE_DEFAULT_BG_WHITE` (US-021 white fallback).
+              `NODE_DEFAULT_BG_WHITE` (US-021 dark card surface fallback).
               US-022: dispatch through `ILLUSTRATIVE_SHAPE_RENDERERS` so adding
               a new illustrative shape only touches the registry. */}
           {(() => {

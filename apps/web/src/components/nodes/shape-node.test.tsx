@@ -41,10 +41,9 @@ describe('shape-node chrome helpers', () => {
   });
 
   describe('shapeChromeStyle', () => {
-    it('rectangle/ellipse default to theme border + WHITE background (US-021)', () => {
-      // US-021: unset backgroundColor renders a literal #ffffff fill on
-      // rectangle + ellipse so the canvas reads as a clean diagram on light
-      // AND dark themes. Text + sticky are special-cased separately below.
+    it('rectangle/ellipse default to theme border + NODE_DEFAULT_BG_WHITE background (US-021)', () => {
+      // US-021: unset backgroundColor renders NODE_DEFAULT_BG_WHITE (dark card
+      // surface) on rectangle + ellipse. Text + sticky are special-cased separately below.
       const rect = shapeChromeStyle('rectangle');
       expect(rect.borderColor).toBe(COLOR_TOKENS.default.border);
       expect(rect.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
@@ -93,29 +92,25 @@ describe('shape-node chrome helpers', () => {
       expect(text).toEqual({});
     });
 
-    // US-021: render-time default-white fallback for in-scope shape variants.
+    // US-021: render-time dark card surface fallback for in-scope shape variants.
     // Sticky and text are special-cased (sticky → amber, text → chromeless).
-    describe('US-021 default white background', () => {
-      it('rectangle with explicit backgroundColor wins over the white fallback', () => {
+    describe('US-021 default node background', () => {
+      it('rectangle with explicit backgroundColor wins over the fallback', () => {
         const rect = shapeChromeStyle('rectangle', { backgroundColor: 'blue' });
         expect(rect.backgroundColor).toBe(COLOR_TOKENS.blue.background);
       });
 
       it('rectangle with backgroundColor=default keeps theme --card token (explicit wins)', () => {
-        // Explicit `default` token is the only way to opt back into the
-        // theme-aware --card fill once the white default lands. The renderer
-        // never auto-injects the field on disk, so this only fires when the
-        // user picks `default` from the property panel.
         const rect = shapeChromeStyle('rectangle', { backgroundColor: 'default' });
         expect(rect.backgroundColor).toBe(COLOR_TOKENS.default.background);
       });
 
-      it('ellipse falls back to white when backgroundColor is unset', () => {
+      it('ellipse falls back to NODE_DEFAULT_BG_WHITE when backgroundColor is unset', () => {
         const ellipse = shapeChromeStyle('ellipse');
         expect(ellipse.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
       });
 
-      it('sticky keeps amber default — NOT overridden by US-021 white fallback', () => {
+      it('sticky keeps amber default — NOT overridden by US-021 fallback', () => {
         const sticky = shapeChromeStyle('sticky');
         expect(sticky.backgroundColor).toBe(COLOR_TOKENS.amber.background);
       });

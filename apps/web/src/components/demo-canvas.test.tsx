@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from '@/components/canvas-toolbar';
+import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
   type ClipboardShortcutEventLike,
   DemoCanvas,
@@ -939,9 +940,9 @@ describe('DemoCanvas', () => {
       expect(props.height).toBe(140);
       // Defaults mirror what the committed node resolves to via
       // resolveIllustrativeColors with empty data: theme-aware border via the
-      // shadcn --border CSS var and the US-021 white-fallback background.
+      // shadcn --border CSS var and the US-021 dark card surface fallback.
       expect(props.borderColor).toBe('hsl(var(--border))');
-      expect(props.backgroundColor).toBe('#ffffff');
+      expect(props.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
     });
 
     it('does NOT render DatabaseShape in the ghost for non-database shapes', () => {
@@ -1010,7 +1011,7 @@ describe('DemoCanvas', () => {
       expect(props.width).toBe(200);
       expect(props.height).toBe(140);
       expect(props.borderColor).toBe('hsl(var(--border))');
-      expect(props.backgroundColor).toBe('#ffffff');
+      expect(props.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
     });
 
     it('does NOT render ServerShape in the ghost for non-server shapes', () => {

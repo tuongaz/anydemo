@@ -133,9 +133,8 @@ export function shapeChromeStyle(
   // chrome-free — otherwise CSS borders would overlap the SVG strokes and
   // backgrounds would clip the rim.
   if (isIllustrativeShape(shape)) return {};
-  // US-021: rectangle + ellipse fall back to a literal white fill when the
-  // author hasn't set `backgroundColor`, so the canvas reads as a clean diagram
-  // on light AND dark themes (whiteboard-app convention). The field stays
+  // US-021: rectangle + ellipse fall back to NODE_DEFAULT_BG_WHITE (dark card
+  // surface) when the author hasn't set `backgroundColor`. The field stays
   // unset on disk — this is a render-time fallback only. Sticky keeps its
   // pre-existing amber default; text is excluded (chromeless per US-003).
   const explicitToken = data?.backgroundColor;
@@ -160,11 +159,10 @@ export function shapeChromeStyle(
 
 // US-009: resolve a shapeNode's ColorToken `borderColor` / `backgroundColor`
 // into concrete CSS values for the per-shape SVG. Unset `backgroundColor`
-// falls through to NODE_DEFAULT_BG_WHITE so cylinders read crisp on dark
-// themes, mirroring the US-021 white-default already applied to rectangle /
-// ellipse. Inline in `ShapeNodeImpl` (vs a nested component) so the test
-// suite's hook-shim renderer sees the per-shape SVG element directly in the
-// returned tree.
+// falls through to NODE_DEFAULT_BG_WHITE (dark card surface), mirroring the
+// US-021 fallback already applied to rectangle / ellipse. Inline in
+// `ShapeNodeImpl` (vs a nested component) so the test suite's hook-shim
+// renderer sees the per-shape SVG element directly in the returned tree.
 function resolveIllustrativeColors(data: ShapeNodeData): {
   borderColor: string | undefined;
   backgroundColor: string | undefined;

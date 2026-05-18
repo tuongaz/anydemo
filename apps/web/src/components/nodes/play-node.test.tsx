@@ -173,10 +173,9 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
   });
 });
 
-// US-021 (text-and-group-resize): default-white background fallback for the
-// play-node container. Unset `data.backgroundColor` → literal #ffffff (NOT
-// the theme-tied --card from the 'default' token), so dark theme keeps a
-// crisp white node on the darker canvas. Field stays unset on disk.
+// US-021 (text-and-group-resize): default background fallback for the
+// play-node container. Unset `data.backgroundColor` → NODE_DEFAULT_BG_WHITE
+// (hsl(var(--card)) dark surface). Field stays unset on disk.
 function findPlayContainer(tree: unknown): ReactElementLike {
   const container = findElement(tree, (el) => {
     const p = el.props as { 'data-testid'?: string };
@@ -256,8 +255,8 @@ describe('PlayNode status badge (US-007)', () => {
   });
 });
 
-describe('PlayNode default-white fill (US-021 default node background)', () => {
-  it('renders #ffffff when backgroundColor is unset', () => {
+describe('PlayNode default background fill (US-021 default node background)', () => {
+  it('renders NODE_DEFAULT_BG_WHITE when backgroundColor is unset', () => {
     const tree = callPlayNode({});
     const container = findPlayContainer(tree);
     const style = (container.props as { style?: CSSProperties }).style ?? {};
