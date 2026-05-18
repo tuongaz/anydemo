@@ -1,0 +1,38 @@
+# Dependencies — installed fresh in the Docker builder stage.
+node_modules
+**/node_modules
+
+# Local state — not part of the runnable image.
+.git
+.github
+
+# Per-workspace registry/snapshots; the runtime mounts a real /workspace at run time.
+.seeflow
+**/.seeflow
+
+# Local tooling caches.
+.playwright-mcp
+.claude
+.claude-plugin
+.cursor-plugin
+
+# Ralph autonomous-agent loop files (PRD, progress log, prompts).
+ralph/
+
+# Documentation / design source — not consumed at runtime.
+docs/
+design/
+
+# Logs and OS detritus.
+*.log
+.DS_Store
+
+# Repo-root marketing assets — large and unused inside the image.
+demo.gif
+*.png
+
+# Build outputs — the builder stage rebuilds these from source.
+apps/**/dist
+
+# Example-app installs — never copied into the image.
+examples/**/node_modules
