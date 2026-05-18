@@ -7,10 +7,12 @@ SHELL := /bin/bash
 # `make register DIR=<path>` — DIR avoids clobbering the shell PATH env var.
 DIR ?= .
 ITERATIONS ?= 10
+DOCKER_IMAGE ?= tuongaz/seeflow
+DOCKER_TAG ?= dev
 
 CLI := bun run apps/studio/src/cli.ts
 
-.PHONY: help install dev build typecheck lint format test clean start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release deploy gh.deploy
+.PHONY: help install dev build typecheck lint format test clean start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release deploy gh.deploy docker.build docker.run docker.buildx docker.push
 
 SEEFLOW_SCHEMA_SRC := apps/studio/src/schema.ts
 SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
@@ -18,14 +20,18 @@ SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
 help: ## Show this target list
 	@echo "SeeFlow — make targets"
 	@echo ""
-	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z_-]+:.*## / {printf "  \033[36m%-12s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@awk 'BEGIN {FS = ":.*## "} /^[a-zA-Z._-]+:.*## / {printf "  \033[36m%-26s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "Variables (override on the command line):"
-	@echo "  DIR=<path>   path passed to 'make register' (default: .)"
+	@echo "  DIR=<path>           path passed to 'make register' / 'make docker.run' (default: .)"
+	@echo "  ITERATIONS=<n>       iterations passed to 'make ralph' (default: 10)"
+	@echo "  DOCKER_IMAGE=<name>  image name for docker.* targets (default: tuongaz/seeflow)"
+	@echo "  DOCKER_TAG=<tag>     image tag for docker.* targets (default: dev)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev"
 	@echo "  make register DIR=examples/todo-demo-target"
+	@echo "  make docker.run DIR=examples/todo-demo-target"
 
 install: ## Install all workspace deps via bun
 	bun install
@@ -102,6 +108,18 @@ verify-seeflow-schema-sync: ## Fail if vendored schema has drifted from apps/stu
 
 smoke-seeflow: ## End-to-end smoke: registers TWO demos in one repo via plugin scripts (studio must be running)
 	@bun run skills/seeflow/scripts/smoke.ts
+
+docker.build: ## Build the local Docker image (DOCKER_IMAGE:DOCKER_TAG)
+	docker build -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+
+docker.run: ## Run the Docker image, mounting DIR as /workspace (port 4321)
+	docker run --rm -it -p 4321:4321 -v $(abspath $(DIR)):/workspace $(DOCKER_IMAGE):$(DOCKER_TAG)
+
+docker.buildx: ## Build multi-arch image (linux/amd64,linux/arm64) without pushing
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) .
+
+docker.push: ## Build and push multi-arch image to the registry
+	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) --push .
 
 OTP ?=
 
