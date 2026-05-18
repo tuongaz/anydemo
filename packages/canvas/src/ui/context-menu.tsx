@@ -1,7 +1,7 @@
 import * as ContextMenuPrimitive from '@radix-ui/react-context-menu';
 import * as React from 'react';
 
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
 
 const ContextMenu = ContextMenuPrimitive.Root;
 const ContextMenuTrigger = ContextMenuPrimitive.Trigger;

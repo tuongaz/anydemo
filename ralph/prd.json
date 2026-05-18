@@ -190,8 +190,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved 13 UI primitives (button, command, context-menu, dialog, dropdown-menu, icon-toggle-group, line-style-icons, popover, sheet, slider, tabs, tooltip + tooltip.test) plus barrel index.ts into packages/canvas/src/ui/. Promoted clsx + tailwind-merge from canvas peerDependencies to dependencies; added @radix-ui/{react-context-menu,react-dialog,react-dropdown-menu,react-popover,react-slider,react-slot,react-tabs,react-tooltip} + class-variance-authority + cmdk + tailwindcss-animate as dependencies. apps/web/package.json no longer lists any of those 13 packages. 15 apps/web non-UI files updated to import from @seeflow/canvas; deleted apps/web/src/components/ui/."
     },
     {
       "id": "US-012",

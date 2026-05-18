@@ -23,15 +23,6 @@ import {
   type NodeStylePatch,
   StyleStrip,
 } from '@/components/style-strip';
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuSeparator,
-  ContextMenuShortcut,
-  ContextMenuTrigger,
-} from '@/components/ui/context-menu';
-import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
@@ -39,6 +30,15 @@ import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/a
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuSeparator,
+  ContextMenuShortcut,
+  ContextMenuTrigger,
+  Popover,
+  PopoverAnchor,
+  PopoverContent,
   type Side,
   cn,
   computeImageDims,

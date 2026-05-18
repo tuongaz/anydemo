@@ -1,6 +1,9 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import { Button } from '@/components/ui/button';
+import type { CreateProjectResult, DemoSummary } from '@/lib/api';
+import { deleteDemo } from '@/lib/api';
+import { navigate } from '@/lib/router';
 import {
+  Button,
   Command,
   CommandEmpty,
   CommandGroup,
@@ -9,19 +12,16 @@ import {
   CommandList,
   CommandSeparator,
   CommandShortcut,
-} from '@/components/ui/command';
-import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import type { CreateProjectResult, DemoSummary } from '@/lib/api';
-import { deleteDemo } from '@/lib/api';
-import { navigate } from '@/lib/router';
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@seeflow/canvas';
 import { ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 

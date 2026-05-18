@@ -1,6 +1,7 @@
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@seeflow/canvas';
 import { type ComponentType, Fragment } from 'react';
+
+import { cn } from '../lib/cn.ts';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip.tsx';
 
 export type IconToggleOption<V extends string> = {
   value: V;

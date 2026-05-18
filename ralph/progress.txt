@@ -5,6 +5,8 @@
 - Type imports inside @seeflow/canvas use `.ts` extensions (e.g. `from './types.ts'`); follow the existing convention when adding new exports
 - Plain `@types/*` packages live in `devDependencies` for canvas, but apps/web historically kept some `@types/*` in `dependencies` — match the existing block in each package.json
 - When canvas package needs a runtime dep that apps/web already lists (e.g. `clsx`, `tailwind-merge`), add it to `peerDependencies` in `packages/canvas/package.json` (matches the US-006 pattern for `@xyflow/react`). bun workspace hoisting resolves it via apps/web. Later P2/P3 stories may upgrade these to full `dependencies` and remove them from apps/web.
+- When promoting a canvas peerDependency to a real `dependency` (US-011 pattern): remove the entry from `peerDependencies`, add the same package+version to `dependencies`, then remove the corresponding line from `apps/web/package.json`. bun install resolves transitively from canvas. apps/web files that didn't import the package directly need no other changes — workspace hoisting just works.
+- Re-exporting an entire submodule barrel (US-011 pattern): `export * from './ui/index.ts';` at the bottom of `packages/canvas/src/index.ts` is the cleanest way to expose all primitives. The submodule's own index.ts uses explicit named re-exports (`export { Button } from './button.tsx';`) — this preserves tree-shaking while keeping the top-level barrel concise.
 - Biome's `useImportType` rule does NOT auto-merge duplicate imports from the same module — after a bulk path-swap that produces two `from '@seeflow/canvas'` lines in the same file, manually splice the new symbol into the existing import block (alphabetical) instead of waiting for `biome check --fix` to fix it
 - `bun run lint` (Biome) is import-order strict; running `bunx @biomejs/biome check --fix <file>` is the safe way to resolve `organizeImports` errors
 - Always run `bun run format` before `bun run lint` per CLAUDE.md
@@ -173,3 +175,35 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - For test files that use `InlineEdit` as a type-only reference (e.g. `el.type === InlineEdit` in shape-node.test and icon-node.test), the import must remain a VALUE import (not `import type`) because the test compares `el.type` against the component function at runtime. Don't be tempted to convert these to `import type`.
   - Biome auto-wraps an import block to multiple lines when the single-line form would exceed 100 chars (the project's default line width). editable-edge.tsx hit that threshold after adding `InlineEdit` to a 5-specifier import. For multi-line imports, place specifiers one-per-line alphabetically with trailing commas.
   - When grep returns N web import sites for a file being deleted, remember the file's OWN test is in that count. Actual update count = N − 1 (US-010: grep showed 8, actual updates = 7).
+
+## 2026-05-18 - US-011
+- Moved the entire `apps/web/src/components/ui/` directory (13 files: button, command, context-menu, dialog, dropdown-menu, icon-toggle-group, line-style-icons, popover, sheet, slider, tabs, tooltip, tooltip.test) → `packages/canvas/src/ui/`. Created `packages/canvas/src/ui/index.ts` as the explicit named-re-export barrel for every primitive (alphabetical, types split via `export type {…}`).
+- Rewrote `@/` imports inside every moved file:
+  - All `from '@seeflow/canvas'` imports of `cn` (US-008) became `from '../lib/cn.ts'` to avoid self-importing the canvas barrel.
+  - `command.tsx`: `from '@/components/ui/dialog'` → `from './dialog.tsx'`.
+  - `icon-toggle-group.tsx`: `from '@/components/ui/tooltip'` → `from './tooltip.tsx'`.
+  - `tooltip.test.tsx`: `from '@/components/ui/tooltip'` → `from './tooltip.tsx'`; biome reorganized the import block so the relative tooltip import lands below the absolute imports.
+- Re-exported the `./ui` barrel from `packages/canvas/src/index.ts` via `export * from './ui/index.ts';` (single line, last entry — confirms tree-shaking works with the explicit per-file re-exports inside `ui/index.ts`).
+- Dependency shifts:
+  - `packages/canvas/package.json`: removed `clsx` + `tailwind-merge` from `peerDependencies`; added them + 8 Radix packages (`@radix-ui/react-{context-menu,dialog,dropdown-menu,popover,slider,slot,tabs,tooltip}`) + `class-variance-authority` + `cmdk` + `tailwindcss-animate` to `dependencies` (alphabetically sorted). Final peers: `@xyflow/react`, `lucide-react`, `react`.
+  - `apps/web/package.json`: removed all 13 packages listed above. Remaining deps: `@seeflow/canvas`, `@xyflow/react`, `fflate`, `html-to-image`, `jspdf`, `lucide-react`, `react`, `react-dom`, `react-markdown`, `remark-gfm`.
+  - `bun install`: lockfile updated (35 packages re-resolved); no further apps/web changes needed because Radix etc. now resolve transitively from canvas via workspace hoisting.
+- Updated 15 apps/web non-UI files to import from `@seeflow/canvas`:
+  - `sed -i ''` bulk swap of `from '@/components/ui/[a-z-]*'` → `from '@seeflow/canvas'` across 15 files: `App.tsx`, `components/{canvas-toolbar,create-project-dialog,demo-canvas,detail-panel,empty-state,export-dialog,icon-picker-popover,project-switcher,restart-demo-button,restart-demo-button.test,share-menu,style-strip}.tsx`, `components/nodes/{play-node,play-node.test}.tsx`.
+  - 12 of those 15 files ended up with multiple `from '@seeflow/canvas'` import lines (because they previously imported BOTH `cn` and one or more `@/components/ui/*` paths). Manually merged each duplicate into a single import block, alphabetized — Biome's `useImportType` does NOT auto-merge duplicate `from`s, per the existing US-002/US-008 codebase pattern.
+  - `bunx biome check --fix` on `App.tsx`, `create-project-dialog.tsx`, `export-dialog.tsx`, `nodes/play-node.test.tsx` reordered their import groups (one group needed to move above another after the swap). Biome formatter collapsed `detail-panel.tsx`'s 6-specifier canvas import onto a single line.
+- `command-palette.tsx` still imports `@radix-ui/react-dialog` directly (US-019 portal pattern); that resolves transitively from canvas via workspace hoisting — no apps/web manifest entry needed.
+- Deleted `apps/web/src/components/ui/` (the whole directory).
+- Files changed (high level):
+  - Added 14 files under `packages/canvas/src/ui/` (12 primitives + index.ts + tooltip.test.tsx)
+  - Modified `packages/canvas/src/index.ts`, `packages/canvas/package.json`, `apps/web/package.json`, `bun.lock`
+  - Modified 15 apps/web non-UI files (`App.tsx` + 14 components)
+  - Deleted `apps/web/src/components/ui/` directory (13 files)
+- Verified: `bun run typecheck` ✅ (5 workspaces), `bun run format` ✅ (no changes after one auto-fix), `bun run lint` ✅ (no fixes after one auto-fix round), `bun test` ✅ (1304 pass / 1 skip / 0 fail across 72 files); `bun test packages/canvas/src/ui/tooltip.test.tsx` ✅ (5 pass / 6 expect()).
+- **Learnings for future iterations:**
+  - The single-line `export * from './ui/index.ts';` at the bottom of `packages/canvas/src/index.ts` is a much lower-overhead way to re-export a submodule than 13 individual `export {} from './ui/<file>.tsx'` blocks. The barrel inside `ui/index.ts` does the explicit-name work. Future US-012/US-013 (`./nodes` barrel) and US-014 (`./edges` barrel) can reuse this pattern.
+  - Bulk-swap recipe that works for stories like US-011 with N>5 web import sites: (1) `grep -rl "from '@/components/ui/" apps/web/src | xargs sed -i '' "s|from '@/components/ui/[a-z-]*'|from '@seeflow/canvas'|g"` (path swap), (2) walk every file that now has multiple `from '@seeflow/canvas'` lines and merge them into one alphabetical import block by hand, (3) `bunx @biomejs/biome check --fix <files>` for any import-group ordering Biome wants, (4) `bun run format` to catch single-line collapses Biome's formatter wants.
+  - When a workspace's `tailwind.config.{ts,js}` calls `require('tailwindcss-animate')` (apps/web does), removing `tailwindcss-animate` from apps/web/package.json is safe as long as `@seeflow/canvas` declares it: workspace hoisting resolves the `require()` from the root node_modules tree.
+  - Detail-panel imports a 6-specifier set from canvas (Button, Sheet, SheetContent, SheetDescription, SheetTitle, cn). Biome's default 100-char line width collapses this onto ONE line, NOT multi-line — because alphabetical 6-specifier list is under 100 chars. Inversely, project-switcher.tsx's 18-specifier import block stays multi-line. The breakpoint is the literal char width, not a specifier count.
+  - The peer→dep promotion pattern (US-011 for clsx/tailwind-merge): when a canvas-side dep is promoted from `peerDependencies` to `dependencies`, the apps/web entry can be removed because canvas now owns the install. Don't leave the package in BOTH peerDeps and deps — Bun warns/errors on that duplicate listing.
+---

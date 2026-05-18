@@ -1,7 +1,7 @@
 import * as TabsPrimitive from '@radix-ui/react-tabs';
 import * as React from 'react';
 
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
 
 const Tabs = TabsPrimitive.Root;
 

@@ -1,14 +1,3 @@
-import { IconToggleGroup, type IconToggleOption } from '@/components/ui/icon-toggle-group';
-import {
-  LineDashedIcon,
-  LineDottedIcon,
-  LineSolidIcon,
-  PathCurveIcon,
-  PathStepIcon,
-} from '@/components/ui/line-style-icons';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Slider } from '@/components/ui/slider';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import type {
   ColorToken,
   Connector,
@@ -18,7 +7,24 @@ import type {
   DemoNode,
 } from '@/lib/api';
 import { COLOR_TOKENS } from '@/lib/color-tokens';
-import { cn } from '@seeflow/canvas';
+import {
+  IconToggleGroup,
+  type IconToggleOption,
+  LineDashedIcon,
+  LineDottedIcon,
+  LineSolidIcon,
+  PathCurveIcon,
+  PathStepIcon,
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+  Slider,
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+  cn,
+} from '@seeflow/canvas';
 import {
   ArrowLeftRight,
   ArrowRight,

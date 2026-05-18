@@ -1,6 +1,4 @@
 import { StatusBadge } from '@/components/nodes/status-badge';
-import { Button } from '@/components/ui/button';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '@/components/ui/sheet';
 import {
   type Connector,
   type DemoNode,
@@ -13,7 +11,7 @@ import {
   setStoredDetailPanelWidth,
   startResizeGesture,
 } from '@/lib/detail-panel-width';
-import { cn } from '@seeflow/canvas';
+import { Button, Sheet, SheetContent, SheetDescription, SheetTitle, cn } from '@seeflow/canvas';
 import { FolderOpen, PencilLine } from 'lucide-react';
 import {
   type CSSProperties,

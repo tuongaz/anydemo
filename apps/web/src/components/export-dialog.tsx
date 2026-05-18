@@ -1,13 +1,13 @@
-import { Button } from '@/components/ui/button';
+import { type Visibility, useExportToCloud } from '@/hooks/use-export-to-cloud';
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { type Visibility, useExportToCloud } from '@/hooks/use-export-to-cloud';
+} from '@seeflow/canvas';
 import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 

@@ -1,5 +1,4 @@
 import { Header } from '@/components/header';
-import { TooltipProvider } from '@/components/ui/tooltip';
 import { useDemoData } from '@/hooks/use-demo-data';
 import { useDemos } from '@/hooks/use-demos';
 import { useNodeEvents } from '@/hooks/use-node-events';
@@ -11,6 +10,7 @@ import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/la
 import { navigate, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
+import { TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect } from 'react';
 
 const matchDemoSlug = (pathname: string): string | null => {

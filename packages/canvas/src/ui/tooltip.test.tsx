@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { TooltipContent } from '@/components/ui/tooltip';
 import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as React from 'react';
+import { TooltipContent } from './tooltip.tsx';
 
 // US-019: the side panel's tooltips (Fill, Border, Lock, …) live inside
 // xyflow's `<Panel>` which is a sibling of the zoom/pan-transformed

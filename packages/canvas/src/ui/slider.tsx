@@ -1,7 +1,7 @@
 import * as SliderPrimitive from '@radix-ui/react-slider';
 import * as React from 'react';
 
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
 
 const Slider = React.forwardRef<
   React.ElementRef<typeof SliderPrimitive.Root>,

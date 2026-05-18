@@ -1,5 +1,4 @@
-import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@seeflow/canvas';
 import { Loader2, RefreshCw } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

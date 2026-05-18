@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { RestartDemoButton } from '@/components/restart-demo-button';
-import { Button } from '@/components/ui/button';
+import { Button } from '@seeflow/canvas';
 import { Loader2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
 

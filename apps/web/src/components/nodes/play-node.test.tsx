@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { PlayNode } from '@/components/nodes/play-node';
-import { Button } from '@/components/ui/button';
 import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
+import { Button } from '@seeflow/canvas';
 import type { NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import * as React from 'react';

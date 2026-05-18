@@ -1,13 +1,13 @@
-import { Button } from '@/components/ui/button';
+import { type CreateProjectResult, createProject } from '@/lib/api';
 import {
+  Button,
   Dialog,
   DialogContent,
   DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { type CreateProjectResult, createProject } from '@/lib/api';
+} from '@seeflow/canvas';
 import { useEffect, useState } from 'react';
 
 export interface CreateProjectDialogProps {
