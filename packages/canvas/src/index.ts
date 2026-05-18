@@ -96,3 +96,6 @@ export type {
   AutoLayoutOptions,
   LayoutDirection,
 } from './lib/auto-layout.ts';
+
+export { connectorToEdge, styleForKind } from './lib/connector-to-edge.ts';
+export type { DerivedEdge } from './lib/connector-to-edge.ts';

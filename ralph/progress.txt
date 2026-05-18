@@ -9,6 +9,7 @@
 - Quality gate per Ralph CLAUDE.md: `bun run typecheck`, `bun test`, `bun run format`, `bun run lint`
 - Canvas package's tsconfig only includes `["bun", "react"]` types — when adding a `.test.ts` file under `packages/canvas/src`, no extra changes are needed (`bun:test` resolves via the `bun` types entry added in US-002). `@types/bun` is in the canvas devDependencies.
 - When moving a util into @seeflow/canvas: copy file → create test alongside with `from './<name>'` self-import → add re-export block (values + types separately) at the bottom of `packages/canvas/src/index.ts` using `.ts` extensions → update web import sites to `@seeflow/canvas` → delete originals → run `bunx @biomejs/biome check --fix <changed web files>` to fix import order before lint.
+- `@xyflow/react` is now a peerDependency of `@seeflow/canvas` (added in US-006). bun install auto-populates `packages/canvas/node_modules/@xyflow/react` so canvas tests resolve it. Any future-moved file that imports from `@xyflow/react` will work without further package.json changes.
 
 # Ralph Progress Log
 Started: Mon 18 May 2026 15:41:24 AEST
@@ -84,4 +85,20 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - The `dagre` dep already living on @seeflow/canvas (US-001) made this move zero-friction at the dependency layer — confirms US-001's foresight. The remaining `import dagre from 'dagre'` in `apps/web/src/pages/demo-view.tsx` (referenced as a US-001 gotcha) is no longer present in this file as of US-005, but verify via grep before US-007's final sweep.
   - When the only `@/lib/...` import in a target web file points to a single module, and the file already has an existing `@seeflow/canvas` import block, the cleanest two-step Edit pattern is: (1) remove the old `from '@/lib/<name>'` line entirely; (2) splice the new symbols into the existing `@seeflow/canvas` block alphabetically. This is what US-003 and US-005 both used.
   - For US-006 (next, connector-to-edge): the file additionally imports from `@/lib/color-tokens` — the canvas package already re-exports the color-tokens module from `./lib/color-tokens.ts`, so inside the moved file rewrite that import to `./color-tokens` (per the story description). Don't forget the test file may also have a `@/` import.
+---
+
+## 2026-05-18 - US-006
+- Moved `connector-to-edge.ts` (+ test) from `apps/web/src/lib/` into `packages/canvas/src/lib/`. Rewrote two internal `@/` imports: `@/lib/api` type imports → `'../types.ts'`; `@/lib/color-tokens` → `'./color-tokens.ts'` (both already live in the canvas package).
+- Test self-import switched from `@/lib/connector-to-edge` to `./connector-to-edge`; the `@/lib/api` Connector type import in the test rewrote to `'../types.ts'`. All 32 tests pass (69 expect() calls).
+- Added a re-export block at the bottom of `packages/canvas/src/index.ts` (value: `connectorToEdge`, `styleForKind`; type: `DerivedEdge`).
+- Added `@xyflow/react: "*"` to `peerDependencies` in `packages/canvas/package.json`. Without it, bun couldn't resolve `@xyflow/react` from inside the canvas package when running tests. `bun install` populated `packages/canvas/node_modules/@xyflow/react` and updated `bun.lock`.
+- Updated the single web import site (`apps/web/src/components/demo-canvas.tsx`): removed the dedicated `from '@/lib/connector-to-edge'` line and spliced `connectorToEdge` (alphabetical: between `computeImageDims` and `endpointFromPin`) into the existing `from '@seeflow/canvas'` import block.
+- The other grep match (`apps/web/src/components/style-strip.tsx:104`) was a comment ("Mirrors connector-to-edge.ts STYLE_BY_KIND…") — not an import — so no change needed there.
+- Files changed: `packages/canvas/src/lib/connector-to-edge.ts` (new), `packages/canvas/src/lib/connector-to-edge.test.ts` (new), `packages/canvas/src/index.ts`, `packages/canvas/package.json`, `bun.lock`, `apps/web/src/components/demo-canvas.tsx`, deleted `apps/web/src/lib/connector-to-edge.ts` + `.test.ts`
+- Verified: `bun test packages/canvas/src/lib/connector-to-edge.test.ts` ✅ (32 pass / 69 expect()), `bun run typecheck` ✅ (all 5 workspaces), `bun run format` ✅ (no changes), `bun run lint` ✅, `bun test` ✅ (1304 pass / 1 skip / 0 fail)
+- **Learnings for future iterations:**
+  - When moving a canvas file that imports `@xyflow/react` (any node component, edge component, or canvas hook), `@xyflow/react` already resolves inside `packages/canvas` as of US-006 — no further package.json changes needed.
+  - When a moved file has both `@/lib/api` (types) AND `@/lib/color-tokens`, BOTH targets already exist inside the canvas package today: `'../types.ts'` for schema types, `'./color-tokens.ts'` for the styling helper. This is now the canonical rewrite for any canvas-bound file with these two `@/` imports.
+  - `bun test` continues to print intentional error stack traces for `apps/studio/src/registry.test.ts` JSON parse path — these are expected. Final line `1304 pass / 0 fail` is the green signal.
+  - Future stories that need to move React-Flow-touching components (US-013 nodes, US-014 edges) should keep the alphabetical-merge rule for the demo-canvas import block: insert symbols in lexicographic order among the existing `from '@seeflow/canvas'` specifiers to avoid Biome organizeImports fix-ups.
 ---

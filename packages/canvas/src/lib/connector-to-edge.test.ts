@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import type { Connector } from '@/lib/api';
-import { connectorToEdge, styleForKind } from '@/lib/connector-to-edge';
 import { MarkerType } from '@xyflow/react';
+import type { Connector } from '../types.ts';
+import { connectorToEdge, styleForKind } from './connector-to-edge';
 
 describe('connectorToEdge', () => {
   it('preserves id/source/target and uses the editableEdge custom type', () => {

@@ -108,6 +108,7 @@
         "typescript": "^5.6.3",
       },
       "peerDependencies": {
+        "@xyflow/react": "*",
         "lucide-react": "*",
         "react": "*",
       },

@@ -1,6 +1,6 @@
-import type { Connector, ConnectorPath, ConnectorStyle, EdgePin } from '@/lib/api';
-import { colorTokenStyle } from '@/lib/color-tokens';
 import { type EdgeMarker, MarkerType } from '@xyflow/react';
+import type { Connector, ConnectorPath, ConnectorStyle, EdgePin } from '../types.ts';
+import { colorTokenStyle } from './color-tokens.ts';
 
 export interface DerivedEdge {
   id: string;
