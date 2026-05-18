@@ -10,7 +10,6 @@ import * as lambdaNodejs from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as route53 from 'aws-cdk-lib/aws-route53';
 import * as route53Targets from 'aws-cdk-lib/aws-route53-targets';
 import * as s3 from 'aws-cdk-lib/aws-s3';
-import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 import type { Construct } from 'constructs';
 
 interface SeeflowStackProps extends cdk.StackProps {
@@ -136,12 +135,6 @@ export class SeeflowStack extends cdk.Stack {
       target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
     });
 
-    new s3deploy.BucketDeployment(this, 'ViewerDeployment', {
-      sources: [s3deploy.Source.asset(path.join(__dirname, '../../viewer/dist'))],
-      destinationBucket: viewerBucket,
-      distribution,
-      distributionPaths: ['/*'],
-    });
 
     new cdk.CfnOutput(this, 'DiagramsBucketName', {
       value: diagramsBucket.bucketName,

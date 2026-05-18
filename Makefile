@@ -119,9 +119,9 @@ gh.deploy: ## Bump patch version, commit+tag (triggers npm publish), then deploy
 	git push; \
 	git tag v$$NEW; \
 	git push origin v$$NEW; \
-	gh workflow run deploy-viewer.yml; \
+	gh workflow run deploy.yml --repo tuongaz/seeflow-viewer; \
 	echo "Tag v$$NEW pushed — npm publish running at: https://github.com/tuongaz/seeflow/actions/workflows/publish.yml"; \
-	echo "Viewer deploy running at: https://github.com/tuongaz/seeflow/actions/workflows/deploy-viewer.yml"
+	echo "Viewer deploy running at: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"
 
 release: ## Publish @tuongaz/seeflow to npm (NPM_TOKEN=<tok> make release; add OTP=<code> if 2FA is required)
 	@test -n "$(NPM_TOKEN)" || (echo "ERROR: NPM_TOKEN is not set" >&2; exit 1)

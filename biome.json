@@ -24,12 +24,6 @@
       "recommended": true
     }
   },
-  "overrides": [
-    {
-      "include": ["apps/viewer/src/components/hero-animation/**"],
-      "linter": { "enabled": false }
-    }
-  ],
   "formatter": {
     "enabled": true,
     "indentStyle": "space",
