@@ -1,18 +1,18 @@
 {
   "project": "SeeFlow",
-  "branchName": "ralph/ui-dark-theme-fixes",
-  "description": "Fix all UI issues found in the dark-theme audit: white node backgrounds, light-theme color tokens, wrong CSS variable values, React Flow Controls white panel, inverted tooltip, button sizing/color deviations, and status component light-theme classes.",
+  "branchName": "ralph/canvas-extraction",
+  "description": "Extract canvas-rendering code from apps/web into @seeflow/canvas so the canvas becomes a reusable standalone package. Implements the design in docs/plans/2026-05-18-canvas-package-extraction-design.md across 5 phases: pure utilities, nodes/edges, chrome components, orchestrator + adapter, and final wiring.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Fix CSS token values in index.css to match design system",
-      "description": "As a developer, I need the shadcn CSS variables in index.css to match the design.html source of truth exactly, so every component that consumes them renders at the correct color.",
+      "title": "P1: Move dagre runtime dep from apps/web into @seeflow/canvas",
+      "description": "As the canvas maintainer, I need dagre available inside the @seeflow/canvas package because the auto-layout helper depends on it and will be moved next. Add dagre + @types/dagre to packages/canvas/package.json and remove them from apps/web/package.json, then run bun install.",
       "acceptanceCriteria": [
-        "Fix --primary-foreground: change from '160 68% 60%' (light emerald) to the HSL equivalent of #052e22 (dark forest green, approx '162 89% 10%')",
-        "Fix --secondary: change from '240 3.7% 15.9%' (#27272a) to match design's #1f1f23 (approx '240 6% 13%')",
-        "Fix --muted: change from '240 3.7% 15.9%' (#27272a) to match design's #1c1c20 (approx '240 7% 12%')",
-        "--background, --foreground, --card, --popover, --border, --ring, --destructive tokens remain unchanged",
-        "Typecheck passes"
+        "packages/canvas/package.json has 'dagre': '^0.8.5' in dependencies and '@types/dagre': '^0.7.54' in devDependencies",
+        "apps/web/package.json no longer lists dagre or @types/dagre",
+        "bun install runs successfully and bun.lockb is updated",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 1,
       "passes": true,
@@ -20,158 +20,548 @@
     },
     {
       "id": "US-002",
-      "title": "Add React Flow Controls dark-theme CSS overrides to index.css",
-      "description": "As a user, I want the zoom/fit/tidy toolbar in the bottom-left of the canvas to match the dark design system, not the React Flow default white background.",
+      "title": "P1: Move floating-edge-geometry into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/floating-edge-geometry.ts and its test into packages/canvas/src/lib/, then update the two import sites in apps/web (demo-canvas.tsx and edges/editable-edge.tsx) to import from @seeflow/canvas.",
       "acceptanceCriteria": [
-        "Add CSS overrides in index.css for .react-flow__controls: background hsl(var(--card)), border 1px solid hsl(var(--border)), border-radius var(--radius), box-shadow var(--shadow-card)",
-        "Add CSS overrides for .react-flow__controls-button: background hsl(var(--secondary)), color hsl(var(--foreground)), border-bottom 1px solid hsl(var(--border))",
-        "Add hover state for .react-flow__controls-button:hover: background hsl(var(--accent))",
-        "Add disabled state for .react-flow__controls-button:disabled: opacity 0.4, cursor not-allowed",
-        "Add SVG fill override for .react-flow__controls-button svg: fill currentColor",
-        "The controls panel (zoom in, zoom out, fit view, tidy) renders with dark card background and subtle borders — no white visible",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/floating-edge-geometry.ts exists with all original exports",
+        "packages/canvas/src/lib/floating-edge-geometry.test.ts exists; test's self-import uses './floating-edge-geometry' not '@/...'",
+        "packages/canvas/src/index.ts re-exports './lib/floating-edge-geometry'",
+        "No file under apps/web/src imports from '@/lib/floating-edge-geometry'",
+        "apps/web/src/lib/floating-edge-geometry.ts and its test no longer exist",
+        "bun test packages/canvas/src/lib/floating-edge-geometry.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Fix named color token backgrounds and borders in color-tokens.ts to dark-theme values",
-      "description": "As a user, I want colored nodes (slate, blue, green, amber, red, purple, pink) to render with dark-theme appropriate backgrounds instead of near-white (96-98% lightness) backgrounds that look like white blobs on the dark canvas.",
+      "title": "P1: Move canvas-drop into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/canvas-drop.ts and its test into packages/canvas/src/lib/. Update the single import site in apps/web/src/components/demo-canvas.tsx.",
       "acceptanceCriteria": [
-        "Replace all named token backgrounds from near-white (96-98% lightness) to dark tinted values (approx 10-18% lightness) that are visually distinct on the dark canvas",
-        "Replace all named token border colors from mid-tone (60-70% lightness) to appropriate saturation for dark backgrounds (approx 40-55% lightness)",
-        "Edge stroke colors remain distinct and readable on dark canvas",
-        "Suggested dark-theme mappings: slate bg hsl(215,15%,15%) border hsl(215,20%,40%), blue bg hsl(214,30%,14%) border hsl(213,70%,55%), green bg hsl(142,25%,13%) border hsl(142,50%,45%), amber bg hsl(43,30%,14%) border hsl(43,70%,50%), red bg hsl(0,25%,14%) border hsl(0,70%,55%), purple bg hsl(270,20%,15%) border hsl(270,60%,60%), pink bg hsl(330,20%,14%) border hsl(330,60%,60%)",
-        "default token remains using CSS vars (hsl(var(--border)) / hsl(var(--card)))",
-        "NODE_DEFAULT_BG_WHITE constant is unchanged in this story (addressed in US-004)",
-        "Typecheck passes",
-        "Tests pass"
+        "packages/canvas/src/lib/canvas-drop.ts and canvas-drop.test.ts exist; test self-import uses './canvas-drop'",
+        "packages/canvas/src/index.ts re-exports './lib/canvas-drop'",
+        "No file under apps/web/src imports from '@/lib/canvas-drop'",
+        "apps/web/src/lib/canvas-drop.ts and its test no longer exist",
+        "bun test packages/canvas/src/lib/canvas-drop.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Replace hardcoded white node default background with dark surface color",
-      "description": "As a user, I want play nodes, rectangles, ellipses, and illustrative shapes (database, server, user, queue, cloud) to render with a dark background by default instead of solid white (#ffffff), matching the design system's zinc-900 surface.",
+      "title": "P1: Move keyboard-shortcuts into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/keyboard-shortcuts.ts and its test into packages/canvas/src/lib/. Switch the internal 'ShapeKind' type import from '@/lib/api' to '../types'. Update the 4 web import sites (canvas-toolbar, command-palette, command-palette test, demo-view).",
       "acceptanceCriteria": [
-        "Change NODE_DEFAULT_BG_WHITE in color-tokens.ts from '#ffffff' to 'hsl(var(--card))' (zinc-900 #18181b)",
-        "play-node.tsx: when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
-        "shape-node.tsx rectangle and ellipse: when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
-        "shape-node.tsx illustrative shapes (database, server, user, queue, cloud): when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
-        "demo-canvas.tsx draw ghost: GhostRenderer receives hsl(var(--card)) as backgroundColor (not NODE_DEFAULT_BG_WHITE literal since the value changed)",
-        "Sticky notes retain their amber default background (unaffected by this change)",
-        "Text shapes remain chromeless (unaffected)",
-        "State nodes remain unaffected (they already use colorTokenStyle default which maps to --card)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/keyboard-shortcuts.ts exists; its 'ShapeKind' import comes from '../types'",
+        "packages/canvas/src/lib/keyboard-shortcuts.test.ts exists; self-import uses './keyboard-shortcuts'",
+        "packages/canvas/src/index.ts re-exports './lib/keyboard-shortcuts'",
+        "No file under apps/web/src imports from '@/lib/keyboard-shortcuts'",
+        "apps/web/src/lib/keyboard-shortcuts.ts and its test no longer exist",
+        "bun test packages/canvas/src/lib/keyboard-shortcuts.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Fix status-pill and status-badge to use dark-theme colors only",
-      "description": "As a user, I want status indicators on nodes (running/done/error/idle dots and pills) to render with dark-appropriate colors, not the light-theme Tailwind 100-scale classes that appear as near-white patches.",
+      "title": "P1: Move auto-layout into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/auto-layout.ts and its test into packages/canvas/src/lib/. The file only depends on 'dagre' (already moved in US-001). Update the single import site in apps/web/src/pages/demo-view.tsx.",
       "acceptanceCriteria": [
-        "status-pill.tsx: replace bg-amber-100, bg-emerald-100, bg-rose-100 (and any other light-scale bg-*-100) with dark equivalents (e.g. bg-amber-950/50, bg-emerald-950/50, bg-rose-950/50 or CSS variable equivalents)",
-        "status-pill.tsx: replace light-scale text colors and border colors with dark-theme appropriate values that are readable on dark surface",
-        "status-badge.tsx: remove light-theme fallback classes (bg-emerald-500, bg-amber-500, bg-rose-500, bg-slate-400). Since darkMode:['class'] requires a .dark class on <html> which is not set, dark: prefixes are inactive. Replace all dual light/dark: class pairs with single dark-appropriate classes (e.g. just text-emerald-400, text-amber-400, text-rose-400, text-slate-400)",
-        "Status dots and pills remain visually distinct and readable for each state (idle/running/done/error/pending)",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/auto-layout.ts and auto-layout.test.ts exist; test self-import uses './auto-layout'",
+        "packages/canvas/src/index.ts re-exports './lib/auto-layout'",
+        "No file under apps/web/src imports from '@/lib/auto-layout'",
+        "apps/web/src/lib/auto-layout.ts and its test no longer exist",
+        "bun test packages/canvas/src/lib/auto-layout.test.ts passes",
+        "bun run typecheck passes (verifies dagre resolves from the package)",
+        "bun test passes (full suite)"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Fix button.tsx to match design system sizes, colors, and hover states",
-      "description": "As a user, I want all buttons across the app to match the design system specification: correct heights, correct primary button text/hover color, correct font weight for primary, and ghost button starting text color.",
+      "title": "P1: Move connector-to-edge into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/connector-to-edge.ts and its test into packages/canvas/src/lib/. Rewrite its internal imports: '@/lib/api' types → '../types'; '@/lib/color-tokens' → './color-tokens'. Update the single import site in demo-canvas.tsx.",
       "acceptanceCriteria": [
-        "Default button height: change from h-10 (40px) to h-9 (36px)",
-        "sm button height: change from h-9 (36px) to h-8 (32px) — closest Tailwind to design's 30px",
-        "icon button size: change from h-10 w-10 (40px) to h-9 w-9 (36px)",
-        "Default (primary) variant: change text from text-zinc-950 to text-primary-foreground (picks up the fixed --primary-foreground token from US-001)",
-        "Default (primary) variant: add font-semibold to the variant class (font-weight 600 per design)",
-        "Default (primary) variant: change hover from hover:bg-primary/90 to hover:bg-emerald-400 (closest to design's var(--emerald-hi) = #34d399)",
-        "Ghost variant: add text-muted-foreground as the base text color",
-        "Outline variant: change hover from hover:bg-muted to hover:bg-secondary so it picks up the corrected --secondary token",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/connector-to-edge.ts exists; type imports come from '../types' and './color-tokens'",
+        "packages/canvas/src/lib/connector-to-edge.test.ts exists; self-import uses './connector-to-edge'; any other '@/' imports inside the test are converted to relative",
+        "packages/canvas/src/index.ts re-exports './lib/connector-to-edge'",
+        "No file under apps/web/src imports from '@/lib/connector-to-edge'",
+        "apps/web/src/lib/connector-to-edge.ts and its test no longer exist",
+        "bun test packages/canvas/src/lib/connector-to-edge.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Fix tooltip to use inverted (light background, dark text) styling",
-      "description": "As a user, I want tooltips to be visually distinct from the dark canvas — the design system specifies an inverse tooltip (light #fafafa background with dark #09090b text) so it pops against the dark UI.",
+      "title": "P1: Verify Phase 1 — full sweep + smoke test",
+      "description": "Final verification of Phase 1: no straggler '@/lib/...' imports for the 5 moved utilities, full test suite, typecheck, format, lint, and a manual studio smoke test.",
       "acceptanceCriteria": [
-        "tooltip.tsx TooltipContent: change base className from 'bg-popover text-popover-foreground' to 'bg-foreground text-background' (or equivalent classes that produce a white/near-white background with dark text)",
-        "The tooltip border, if any, should be subtle or removed since the light background provides sufficient contrast",
-        "Existing animation/positioning classes are preserved",
-        "Tooltip is visually distinct — light background with dark text — when shown on the dark canvas",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "grep -rln \"from '@/lib/connector-to-edge'|from '@/lib/floating-edge-geometry'|from '@/lib/canvas-drop'|from '@/lib/auto-layout'|from '@/lib/keyboard-shortcuts'\" apps/web/src returns no output",
+        "bun test passes (full suite)",
+        "bun run typecheck passes",
+        "bun run format leaves no changes (or any changes are committed)",
+        "bun run lint passes",
+        "Verify in browser using dev-browser skill: studio loads a demo, drag a node, drop an image, draw an edge, trigger auto-layout, press a keyboard shortcut (e.g. 'R'). No regressions."
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Fix play-node play button to use CSS variables instead of raw Tailwind emerald",
-      "description": "As a developer, I want the Play button inside play-node to use the design system's --emerald and --emerald-hi tokens rather than raw Tailwind emerald-400/500 classes, so it stays consistent if the brand color changes.",
+      "title": "P2: Move cn helper (utils.ts) into @seeflow/canvas as lib/cn.ts",
+      "description": "Move apps/web/src/lib/utils.ts → packages/canvas/src/lib/cn.ts (renamed since 'cn' is its only export). Update every apps/web import of '@/lib/utils' to '@seeflow/canvas'.",
       "acceptanceCriteria": [
-        "In play-node.tsx, find the Play button's hover/active/focus color classes that reference emerald-500 or dark:emerald-400",
-        "Replace raw Tailwind palette classes with CSS variable equivalents: use text-primary or a style referencing var(--emerald) / var(--emerald-hi)",
-        "Remove all dark: prefix variants from the play button (they are inactive anyway since no .dark class is on <html>)",
-        "Play button still shows correct emerald color in idle, running, error, and done states",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/cn.ts exists exporting 'cn'",
+        "packages/canvas/src/index.ts re-exports './lib/cn'",
+        "apps/web/src/lib/utils.ts no longer exists",
+        "No file under apps/web/src imports from '@/lib/utils'",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Fix input focus states to show emerald border color",
-      "description": "As a user, I want form inputs in dialogs to show an emerald border when focused, matching the design system's focus spec (border-color: var(--emerald)) in addition to the existing ring.",
+      "title": "P2: Move debounce and file-url into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/debounce.ts (+ test) and apps/web/src/lib/file-url.ts into packages/canvas/src/lib/. Update all apps/web import sites.",
       "acceptanceCriteria": [
-        "In create-project-dialog.tsx: the project name input gets focus:border-ring class (maps to --ring = --emerald) in addition to the existing focus-visible:ring-2",
-        "In export-dialog.tsx: the email input, flow name input, and visibility select get focus:border-ring class",
-        "Alternatively, a global input focus style can be added to index.css targeting .rounded-md.border elements on focus to apply border-color: hsl(var(--ring))",
-        "On focus, inputs show an emerald-colored border AND the ring glow — matching design's 'border-color: var(--emerald) + box-shadow: 0 0 0 3px rgba(16,185,129,0.18)'",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/lib/debounce.ts and debounce.test.ts exist; test self-import uses './debounce'",
+        "packages/canvas/src/lib/file-url.ts exists",
+        "packages/canvas/src/index.ts re-exports both",
+        "apps/web/src/lib/debounce.ts, debounce.test.ts, and file-url.ts no longer exist",
+        "No file under apps/web/src imports from '@/lib/debounce' or '@/lib/file-url'",
+        "bun test packages/canvas/src/lib/debounce.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Fix remaining small polish issues: header logo, resize-controls syntax, detail panel blur",
-      "description": "As a developer, I want to clean up the remaining minor deviations from the design system: hardcoded colors, incorrect CSS variable syntax, and blur value mismatch.",
+      "title": "P2: Move inline-edit component into @seeflow/canvas",
+      "description": "Move apps/web/src/components/inline-edit.tsx → packages/canvas/src/components/inline-edit.tsx. Rewrite its internal imports: '@/lib/debounce' → '../lib/debounce'; '@/lib/utils' → '../lib/cn'. Update all apps/web import sites.",
       "acceptanceCriteria": [
-        "header.tsx: change <Workflow size={20} color=\"#34d399\" strokeWidth={2} /> to use className=\"text-emerald-400\" (or style={{ color: 'var(--emerald-hi)' }}) and remove the hardcoded color prop",
-        "resize-controls.tsx: verify the inline style using 'hsl(var(--background))' is syntactically valid. If --background is an HSL triplet (it is: '240 10% 3.9%'), the hsl() wrapper is correct. If it resolves without issues leave it; if it causes rendering bugs, change to 'hsl(var(--background))'",
-        "detail-panel.tsx: find the backdrop-blur-sm class on the panel container and change to backdrop-blur-[14px] to match the design sidebar spec of blur(14px)",
-        "No regressions to existing layout or interactions",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "packages/canvas/src/components/inline-edit.tsx exists; its imports use '../lib/debounce' and '../lib/cn'",
+        "packages/canvas/src/index.ts re-exports './components/inline-edit'",
+        "apps/web/src/components/inline-edit.tsx no longer exists",
+        "No file under apps/web/src imports from '@/components/inline-edit'",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "P2: Move UI primitives (Radix wrappers) into @seeflow/canvas",
+      "description": "Move the entire apps/web/src/components/ui/ directory → packages/canvas/src/ui/. Fix every internal '@/lib/utils' import inside moved files to '../lib/cn'. Add a barrel file packages/canvas/src/ui/index.ts. Shift Radix + cva + clsx + tailwind-merge + cmdk + tailwindcss-animate runtime deps from apps/web/package.json to packages/canvas/package.json. Update every apps/web import of '@/components/ui/*' to '@seeflow/canvas'.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/ui/ contains every file that was in apps/web/src/components/ui/",
+        "packages/canvas/src/ui/index.ts barrel-exports every primitive",
+        "packages/canvas/src/index.ts re-exports './ui'",
+        "No '@/' import remains inside packages/canvas/src/ui/",
+        "packages/canvas/package.json includes every Radix package referenced by the primitives, plus class-variance-authority, clsx, tailwind-merge, cmdk, tailwindcss-animate as dependencies",
+        "apps/web/package.json no longer lists those packages",
+        "bun install succeeds",
+        "No file under apps/web/src imports from '@/components/ui/'",
+        "apps/web/src/components/ui/ no longer exists",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "P2: Move node 'primitive' files (badges, pills, placeholders, resize helpers, shapes/) into @seeflow/canvas",
+      "description": "Move the small, low-dependency node files first: lock-badge.tsx, status-badge.tsx, status-pill.tsx, placeholder-card.tsx, resize-controls.tsx, use-resize-gesture.ts, and the entire shapes/ subdirectory (registry.ts + cloud/database/server/user/queue.tsx + types.ts if present). Move their tests too. Rewrite '@/' imports inside moved files to relative paths or '../lib/...'.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/nodes/ contains: lock-badge.tsx, status-badge.tsx, status-pill.tsx, placeholder-card.tsx, resize-controls.tsx, use-resize-gesture.ts, plus a shapes/ subdir with registry.ts + cloud.tsx + database.tsx + server.tsx + user.tsx + queue.tsx (and types.ts if it exists)",
+        "All matching .test.ts/.test.tsx files moved alongside",
+        "No '@/' imports inside any moved file (verify with grep)",
+        "packages/canvas/src/index.ts re-exports the public symbols from these files (use a partial './nodes' barrel)",
+        "Original apps/web/src/components/nodes/{lock-badge,status-badge,status-pill,placeholder-card,resize-controls,use-resize-gesture,shapes/*} files no longer exist",
+        "No file under apps/web/src imports those primitives via '@/components/nodes/...'",
+        "bun test passes (full suite, including moved node primitive tests)",
+        "bun run typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "P2: Move main node components (play, state, shape, image, icon, html) into @seeflow/canvas",
+      "description": "Move the 6 main node component files plus their tests into packages/canvas/src/nodes/. Rewrite every '@/' import inside the moved files to relative or '@seeflow/canvas'-equivalent imports. Update apps/web/src/components/demo-canvas.tsx import sites.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/nodes/{play-node,state-node,shape-node,image-node,icon-node,html-node}.tsx all exist",
+        "All matching .test.tsx files moved alongside",
+        "No '@/' imports inside any moved file",
+        "packages/canvas/src/nodes/index.ts barrel exports all node types and components",
+        "packages/canvas/src/index.ts re-exports './nodes'",
+        "Original apps/web/src/components/nodes/ no longer exists",
+        "apps/web/src/components/demo-canvas.tsx imports node components from '@seeflow/canvas'",
+        "bun test packages/canvas/src/nodes passes",
+        "bun test passes (full suite)",
+        "bun run typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "P2: Move edges/ directory into @seeflow/canvas",
+      "description": "Move apps/web/src/components/edges/ (editable-edge.tsx + editable-edge.test.ts) → packages/canvas/src/edges/. Rewrite '@/lib/floating-edge-geometry' → '../lib/floating-edge-geometry' and other '@/' imports to relative. Update demo-canvas.tsx import.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/edges/editable-edge.tsx exists with no '@/' imports",
+        "packages/canvas/src/edges/editable-edge.test.ts exists; self-import is relative",
+        "packages/canvas/src/edges/index.ts barrel exports the edge",
+        "packages/canvas/src/index.ts re-exports './edges'",
+        "apps/web/src/components/edges/ no longer exists",
+        "apps/web/src/components/demo-canvas.tsx imports editable-edge from '@seeflow/canvas'",
+        "bun test packages/canvas/src/edges/editable-edge.test.ts passes",
+        "bun test passes (full suite)",
+        "bun run typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "P2: Verify Phase 2 — sweep + browser smoke test",
+      "description": "Final Phase 2 verification: no '@/' imports inside packages/canvas/src, no stale apps/web imports of moved modules, full suite + lint + format, and a manual studio smoke test covering rendering, inline-edit, resize, edge draw, toolbar popover, context menu.",
+      "acceptanceCriteria": [
+        "grep -rln \"from '@/\" packages/canvas/src returns no output",
+        "grep -rln \"from '@/components/nodes|from '@/components/edges|from '@/components/inline-edit|from '@/components/ui|from '@/lib/utils|from '@/lib/debounce|from '@/lib/file-url'\" apps/web/src returns no output",
+        "bun test passes (full suite)",
+        "bun run typecheck passes",
+        "bun run format leaves no changes (or are committed)",
+        "bun run lint passes",
+        "Verify in browser using dev-browser skill: render every node kind, inline-edit a name, resize a node, draw an edge, open toolbar popover, open context menu — all work"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "P3: Move scale-nodes and detail-panel-width into @seeflow/canvas",
+      "description": "Move apps/web/src/lib/scale-nodes.ts (+ test) and detail-panel-width.ts (+ test) into packages/canvas/src/lib/. Rewrite any '@/' imports. Update apps/web import sites.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/lib/scale-nodes.ts, scale-nodes.test.ts, detail-panel-width.ts, detail-panel-width.test.ts all exist",
+        "Test self-imports are relative",
+        "packages/canvas/src/index.ts re-exports both modules",
+        "Original apps/web/src/lib files no longer exist",
+        "No file under apps/web/src imports from '@/lib/scale-nodes' or '@/lib/detail-panel-width'",
+        "bun test packages/canvas/src/lib/scale-nodes.test.ts and detail-panel-width.test.ts pass",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "P3: Move icon-picker-popover and its helpers into @seeflow/canvas",
+      "description": "Move apps/web/src/components/icon-picker-popover.tsx → packages/canvas/src/components/. Also move apps/web/src/lib/icon-insert.ts (+ test) and icon-recents.ts (+ test) into packages/canvas/src/lib/. Rewrite '@/' imports to relative. Update apps/web import sites.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/components/icon-picker-popover.tsx exists with no '@/' imports",
+        "packages/canvas/src/lib/icon-insert.ts (+ test) and icon-recents.ts (+ test) exist with no '@/' imports",
+        "packages/canvas/src/index.ts re-exports all three new modules",
+        "Original apps/web/src/components/icon-picker-popover.tsx and apps/web/src/lib/icon-insert*, icon-recents* no longer exist",
+        "No apps/web/src import sites use the old '@/' paths for these modules",
+        "bun test packages/canvas/src/lib/icon-insert.test.ts and icon-recents.test.ts pass",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "P3: Move style-strip into @seeflow/canvas",
+      "description": "Move apps/web/src/components/style-strip.tsx (+ any test) → packages/canvas/src/components/style-strip.tsx. Rewrite '@/components/ui/*' → '../ui/*'; '@/lib/utils' → '../lib/cn'; '@/lib/color-tokens' → '../lib/color-tokens'; '@/lib/api' types → '../types'. Update demo-canvas.tsx import.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/components/style-strip.tsx exists with no '@/' imports",
+        "Any test file moved alongside; self-import is relative",
+        "packages/canvas/src/index.ts re-exports './components/style-strip'",
+        "apps/web/src/components/style-strip.tsx no longer exists",
+        "apps/web/src/components/demo-canvas.tsx imports style-strip from '@seeflow/canvas'",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "P3: Move node-defaults and last-used-style into @seeflow/canvas; parameterize storage key",
+      "description": "Move apps/web/src/lib/node-defaults.ts (+ test) and last-used-style.ts (+ test) into packages/canvas/src/lib/. Their NodeStylePatch and ConnectorStylePatch type imports now resolve via '../components/style-strip' (moved in US-018) or '../types'. In last-used-style.ts, replace the hardcoded 'seeflow:last-used-style:v1' STORAGE_KEY with a prefix-based helper: export DEFAULT_STORAGE_PREFIX = 'seeflow' and let exported functions accept a prefix argument. Update apps/web call sites to pass DEFAULT_STORAGE_PREFIX so existing behavior is preserved.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/lib/node-defaults.ts (+ test) and last-used-style.ts (+ test) exist with no '@/' imports",
+        "last-used-style.ts exports DEFAULT_STORAGE_PREFIX and accepts a prefix in its read/write helpers",
+        "Existing localStorage key 'seeflow:last-used-style:v1' is produced when DEFAULT_STORAGE_PREFIX is used (backwards-compatible)",
+        "packages/canvas/src/index.ts re-exports both modules",
+        "Original apps/web/src/lib/node-defaults* and last-used-style* no longer exist",
+        "No apps/web/src import uses the old '@/' paths",
+        "bun test packages/canvas/src/lib/node-defaults.test.ts and last-used-style.test.ts pass",
+        "bun test passes (full suite)",
+        "bun run typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "P3: Move selection-resize-overlay into @seeflow/canvas",
+      "description": "Move apps/web/src/components/selection-resize-overlay.tsx (+ test if present) → packages/canvas/src/components/. Rewrite '@/lib/scale-nodes' → '../lib/scale-nodes'. Update demo-canvas.tsx import.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/components/selection-resize-overlay.tsx exists with no '@/' imports",
+        "Any test moved alongside",
+        "packages/canvas/src/index.ts re-exports './components/selection-resize-overlay'",
+        "apps/web/src/components/selection-resize-overlay.tsx no longer exists",
+        "apps/web/src/components/demo-canvas.tsx imports it from '@seeflow/canvas'",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "P3: Move canvas-toolbar into @seeflow/canvas",
+      "description": "Move apps/web/src/components/canvas-toolbar.tsx (+ test if present) → packages/canvas/src/components/. Rewrite '@/components/icon-picker-popover' → '../components/icon-picker-popover' (or '../icon-picker-popover' depending on layout); '@/components/ui/popover' → '../ui/popover'; '@/lib/utils' → '../lib/cn'; '@/lib/api' types → '../types'; '@/lib/keyboard-shortcuts' → '../lib/keyboard-shortcuts'. Update demo-canvas.tsx import.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/components/canvas-toolbar.tsx exists with no '@/' imports",
+        "Any test moved alongside",
+        "packages/canvas/src/index.ts re-exports './components/canvas-toolbar'",
+        "apps/web/src/components/canvas-toolbar.tsx no longer exists",
+        "apps/web/src/components/demo-canvas.tsx imports CanvasToolbar from '@seeflow/canvas'",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "P3: Move detail-panel into @seeflow/canvas (or defer if coupled)",
+      "description": "Inspect apps/web/src/components/detail-panel.tsx. If it imports only types, UI primitives, and canvas helpers, move it to packages/canvas/src/components/detail-panel.tsx with imports rewritten to relative. If it directly reads '@/hooks/*' app state or calls REST functions from '@/lib/api', do NOT move yet — instead, mark this story passed with notes='deferred to P4: detail-panel has app-coupling at <files/lines>'.",
+      "acceptanceCriteria": [
+        "Either: packages/canvas/src/components/detail-panel.tsx exists with no '@/' imports AND apps/web/src/components/detail-panel.tsx no longer exists AND apps/web/src/components/demo-canvas.tsx imports DetailPanel from '@seeflow/canvas'",
+        "OR: notes field is set explaining the deferral and listing the specific app-coupling import lines",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "P3: Verify Phase 3 — sweep + browser smoke test",
+      "description": "Final Phase 3 verification: no '@/' imports in packages/canvas/src, full suite + lint, and manual smoke test of toolbar/icon picker, style strip persistence via last-used-style, detail panel (if moved), and multi-select resize overlay.",
+      "acceptanceCriteria": [
+        "grep -rln \"from '@/\" packages/canvas/src returns no output",
+        "bun test passes (full suite)",
+        "bun run typecheck passes",
+        "bun run format leaves no changes (or are committed)",
+        "bun run lint passes",
+        "Verify in browser using dev-browser skill: open toolbar + icon picker; select a node and change its color via style-strip; create a new node and verify the new color is applied (last-used-style); multi-select with marquee and scale via bounding box overlay"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "P4: Add CanvasAdapter interface + createRestAdapter factory in apps/web",
+      "description": "Create apps/web/src/lib/canvas-adapter.ts defining the CanvasAdapter interface (createNode, updateNode, deleteNode, reorderNode, createConnector, updateConnector, deleteConnector, uploadImage, optional playNode) and the input/patch types. Create apps/web/src/lib/canvas-adapter-rest.ts exporting createRestAdapter({baseUrl, demoId, fetch?}) that returns a CanvasAdapter implementation mirroring the existing REST endpoints in apps/web/src/lib/api.ts. Write tests in apps/web/src/lib/canvas-adapter-rest.test.ts covering at least createNode and updateNode (using fetch mocks). No demo-canvas changes in this story.",
+      "acceptanceCriteria": [
+        "apps/web/src/lib/canvas-adapter.ts exists with CanvasAdapter interface + input/patch types; types import schema types from '@seeflow/canvas'",
+        "apps/web/src/lib/canvas-adapter-rest.ts exists exporting createRestAdapter",
+        "apps/web/src/lib/canvas-adapter-rest.test.ts has at least 2 passing tests (createNode + one other) using fetch mocks",
+        "bun test apps/web/src/lib/canvas-adapter-rest.test.ts passes",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "P4: Wire demo-canvas mutations through CanvasAdapter",
+      "description": "Add adapter: CanvasAdapter as a required prop on the demo-canvas component. Replace every direct call to createNode/updateNode/deleteNode/reorderNode/createConnector/updateConnector/deleteConnector/uploadImage/playNode (imported from '@/lib/api') inside apps/web/src/components/demo-canvas.tsx with props.adapter.method(...). Drop the now-unused REST function imports from demo-canvas.tsx (keep type-only imports). Instantiate createRestAdapter in apps/web/src/pages/demo-view.tsx (or whichever page constructs the canvas) and pass it down. Behavior must be unchanged.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/demo-canvas.tsx no longer imports REST functions (createNode, updateNode, etc.) from '@/lib/api' — only type imports remain",
+        "Every mutation site inside demo-canvas.tsx now goes through props.adapter",
+        "apps/web/src/pages/demo-view.tsx (or equivalent) constructs createRestAdapter({baseUrl: '', demoId: demo.id}) via useMemo and passes it as the adapter prop",
+        "bun run typecheck passes",
+        "bun test passes (full suite)",
+        "Verify in browser using dev-browser skill: create a node, update a node position, delete a connector — all still persist correctly"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "P4: Replace runtime hook reads with a runtime prop on demo-canvas",
+      "description": "Move the RunResult and StatusReport type definitions from apps/web/src/hooks/use-node-runs.ts (and similar) into @seeflow/canvas (e.g., packages/canvas/src/types.ts) so the adapter file can reference them. Define CanvasRuntime in apps/web/src/lib/canvas-adapter.ts as { runs?: Map<string, RunResult>; statuses?: Map<string, StatusReport>; pendingOverrides?: Map<string, Partial<NodeData>> }. Add runtime?: CanvasRuntime to demo-canvas props. Remove every call to useNodeRuns(), useNodeStatuses(), usePendingOverrides() inside demo-canvas.tsx — replace each with props.runtime?.runs?.get(id) etc. Pass runtime from demo-view.tsx (which still reads the hooks).",
+      "acceptanceCriteria": [
+        "RunResult and StatusReport types live in @seeflow/canvas and are re-exported via packages/canvas/src/index.ts",
+        "CanvasRuntime type defined in apps/web/src/lib/canvas-adapter.ts",
+        "apps/web/src/components/demo-canvas.tsx contains no useNodeRuns / useNodeStatuses / usePendingOverrides imports or calls",
+        "All runtime data inside demo-canvas reads from props.runtime",
+        "apps/web/src/pages/demo-view.tsx reads the hooks and passes runtime={{ runs, statuses, pendingOverrides }} to demo-canvas",
+        "bun run typecheck passes",
+        "bun test passes (full suite)",
+        "Verify in browser using dev-browser skill: trigger a node play, watch the status badge update via SSE — must still work"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "P4: Add mode prop with view/edit semantics + feature override flags",
+      "description": "In apps/web/src/components/demo-canvas.tsx, convert the props type into a discriminated union: { mode: 'edit'; adapter: CanvasAdapter; ... } | { mode: 'view'; adapter?: CanvasAdapter; ... }. Add optional feature flag props: showToolbar, showStyleStrip, showDetailPanel, showStatusBadges, showResizeHandles, enableKeyboard, enableContextMenu, enableDragDrop, enableImageDrop, enableZoom, enablePan, storageKey. Add a resolveFlags(props) helper that returns effective flags from the mode preset + overrides (edit defaults everything true; view defaults chrome+editing flags to false but keeps showStatusBadges/enableZoom/enablePan true). Gate every chrome render (toolbar, style-strip, detail-panel) and every editing handler on the resolved flags. For node drag: in view mode, update local state only — do NOT call adapter.updateNode. For connectors in view mode: onConnect is a no-op, edgesDeletable={false}, label inline-edit is read-only, edge context menu does not open. demo-view.tsx passes mode='edit'. Add at least one unit test for resolveFlags.",
+      "acceptanceCriteria": [
+        "demo-canvas props are a TS discriminated union on mode='view'|'edit'; adapter is required only in edit",
+        "resolveFlags helper exists and has at least one unit test",
+        "Every chrome render is wrapped in its resolved flag",
+        "View-mode node drag updates local state but does not call adapter.updateNode (no PATCH request fires)",
+        "View-mode disables connector create, delete, label edit, and context menu",
+        "demo-view.tsx passes mode='edit' explicitly",
+        "bun test passes (full suite)",
+        "bun run typecheck passes",
+        "Verify in browser using dev-browser skill: temporarily switch demo-view to mode='view' — confirm toolbar gone, nodes draggable but no network calls on drop (check network panel), edges immovable. Revert to mode='edit' before committing."
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "P4: Move orchestrator + adapter into @seeflow/canvas as SeeflowCanvas",
+      "description": "Verify demo-canvas.tsx has no remaining '@/' imports (if it does, stop and report). Move apps/web/src/components/demo-canvas.tsx → packages/canvas/src/components/seeflow-canvas.tsx, renaming the exported symbol DemoCanvas → SeeflowCanvas. Move apps/web/src/lib/canvas-adapter.ts → packages/canvas/src/adapter/types.ts; canvas-adapter-rest.ts → packages/canvas/src/adapter/rest.ts; canvas-adapter-rest.test.ts → packages/canvas/src/adapter/rest.test.ts. Rewrite imports inside the moved files from '@seeflow/canvas' to relative ('../types', '../lib/...', '../nodes', etc.) to avoid self-importing the barrel. Update packages/canvas/src/index.ts to re-export the new modules. apps/web will be broken at the type level after this story; US-029 fixes it immediately.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/components/seeflow-canvas.tsx exists exporting SeeflowCanvas; no '@/' imports; no self-imports of '@seeflow/canvas' (uses relative paths)",
+        "packages/canvas/src/adapter/types.ts, rest.ts, rest.test.ts exist with relative imports",
+        "packages/canvas/src/index.ts re-exports the orchestrator and adapter modules",
+        "apps/web/src/components/demo-canvas.tsx no longer exists",
+        "apps/web/src/lib/canvas-adapter*.ts no longer exists",
+        "bun run typecheck on packages/canvas alone passes (cd packages/canvas && bun run typecheck)",
+        "bun test packages/canvas/src/components/seeflow-canvas.test.tsx passes (if a test exists)",
+        "bun test packages/canvas/src/adapter/rest.test.ts passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "P4/P5: Wire apps/web/src/components/canvas.tsx to render <SeeflowCanvas>",
+      "description": "Rewrite apps/web/src/components/canvas.tsx (and/or apps/web/src/pages/demo-view.tsx) so the canvas import becomes import { SeeflowCanvas, createRestAdapter } from '@seeflow/canvas'. Build the adapter via createRestAdapter({baseUrl: '', demoId: demo.id}) inside useMemo. Read the runtime hooks (useNodeRuns, useNodeStatuses, usePendingOverrides — these stay in apps/web) and pass runtime={{ runs, statuses, pendingOverrides }}. Render <SeeflowCanvas mode='edit' demo={demo} adapter={adapter} runtime={runtime} />. Delete any leftover unused imports from '@/lib/api'.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/canvas.tsx (or the page rendering the canvas) imports from '@seeflow/canvas' only — no '@/components/demo-canvas' imports remain",
+        "createRestAdapter is wrapped in useMemo with demo.id as the dep",
+        "runtime is constructed from useNodeRuns/useNodeStatuses/usePendingOverrides and passed down",
+        "mode='edit' is passed explicitly",
+        "bun run typecheck passes",
+        "bun test passes (full suite)",
+        "Verify in browser using dev-browser skill: studio loads, all interactions (drag, drop image, draw edge, edit label, resize, play node + SSE status, refresh page) work exactly as before US-028"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "P5: Delete orphaned files in apps/web after the extraction",
+      "description": "Scan apps/web/src for files no longer imported by anything (orphans after the canvas moved out). Likely candidates: parts of apps/web/src/lib/api.ts that only existed for canvas mutations (now in the adapter), any leftover canvas-specific helpers. Carefully verify each candidate has zero importers before deleting (lazy routes / dynamic imports can hide use). Keep any api.ts exports still used outside the canvas (demo list, project CRUD, etc.).",
+      "acceptanceCriteria": [
+        "Every deleted file confirmed to have zero importers in apps/web/src (search both static imports and any dynamic import('...') patterns)",
+        "Each deletion is a separate commit with a clear message naming the file",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "P5: Add @seeflow/canvas to apps/web Tailwind content path",
+      "description": "Inspect apps/web/tailwind.config.ts (or .js). If the content array does not already cover packages/canvas/src, add '../../packages/canvas/src/**/*.{ts,tsx}' to it.",
+      "acceptanceCriteria": [
+        "apps/web/tailwind.config.{ts,js} content array includes a glob that matches packages/canvas/src/**/*.{ts,tsx}",
+        "bun run dev starts and the studio renders styled correctly — sample a node in DevTools and confirm its Tailwind classes have computed styles",
+        "bun run typecheck passes",
+        "Verify in browser using dev-browser skill: studio renders with correct styling on all node kinds and chrome (no unstyled / broken-layout regressions)"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "P5: Organize @seeflow/canvas public barrel + add README",
+      "description": "Restructure packages/canvas/src/index.ts into clearly grouped sections (Types, Theming, Helpers, Adapter, Nodes, Edges, UI primitives, Chrome, Main entry SeeflowCanvas). Create packages/canvas/README.md covering: install, peer deps (react, react-dom, @xyflow/react, lucide-react), Tailwind content config, minimal <SeeflowCanvas mode='view'> + mode='edit' quickstart examples, and CanvasAdapter interface overview with a link to the source file. Keep README ~80 lines.",
+      "acceptanceCriteria": [
+        "packages/canvas/src/index.ts is grouped into labeled sections via comments",
+        "No duplicate exports (bun run typecheck would error otherwise)",
+        "packages/canvas/README.md exists with: install, peer deps, Tailwind content note, quickstart code samples for both modes, link/pointer to CanvasAdapter source",
+        "bun run typecheck passes",
+        "bun test passes (full suite)"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "P5: Final exhaustive smoke test of the studio",
+      "description": "Run the full toolchain (install/typecheck/test/format/lint) and exercise every canvas interaction in the studio: render all node kinds, inline edit name + edge label, change color (last-used-style persists), drag, drop image, draw edge with auto-pick and user-pin endpoints, delete via context menu and keyboard, keyboard shortcuts (R/E/etc.), auto-layout, detail panel edit, play node + SSE status update, hard refresh mid-edit. Then temporarily set mode='view' in canvas.tsx, verify chrome is hidden / node drag is local-only / connectors locked / zoom + pan + status badges work, and revert mode='edit'.",
+      "acceptanceCriteria": [
+        "bun install, bun run typecheck, bun test, bun run format, bun run lint all pass with no changes outstanding",
+        "Verify in browser using dev-browser skill: every interaction listed in the description works without regression (render every node kind, inline-edit, color change persistence, drag, image drop, edge draw with floating + pinned endpoints, delete, keyboard shortcuts, auto-layout, detail panel, play + SSE, refresh)",
+        "Verify in browser using dev-browser skill: mode='view' hides chrome, nodes draggable with zero PATCH requests in the network panel, connectors immovable. Revert change before final commit.",
+        "apps/web/src/components/canvas.tsx is back to mode='edit' (verified with git diff showing no remaining mode='view' string)"
+      ],
+      "priority": 33,
+      "passes": false,
       "notes": ""
     }
   ]

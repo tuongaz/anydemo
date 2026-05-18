@@ -1,158 +1,29 @@
 ## Codebase Patterns
-- CSS tokens in index.css are in HSL triplet format (no `hsl()` wrapper) — used as `hsl(var(--token))` at usage sites
-- Branch for this PRD: `ralph/ui-dark-theme-fixes` (created from main)
+- Branch for this PRD: `ralph/canvas-extraction` (created from main)
+- Monorepo workspaces: `apps/*` + `packages/*` declared in root package.json; canvas package is `@seeflow/canvas` consumed via `workspace:*`
+- Canvas package layout: `packages/canvas/src/{index.ts, types.ts, lib/}` — barrel re-exports go in `src/index.ts`, scaffold already extracts shared schema types + color tokens + icon registry
+- Type imports inside @seeflow/canvas use `.ts` extensions (e.g. `from './types.ts'`); follow the existing convention when adding new exports
+- Plain `@types/*` packages live in `devDependencies` for canvas, but apps/web historically kept some `@types/*` in `dependencies` — match the existing block in each package.json
+- `bun run lint` (Biome) is import-order strict; running `bunx @biomejs/biome check --fix <file>` is the safe way to resolve `organizeImports` errors
+- Always run `bun run format` before `bun run lint` per CLAUDE.md
+- Quality gate per Ralph CLAUDE.md: `bun run typecheck`, `bun test`, `bun run format`, `bun run lint`
 
 # Ralph Progress Log
-Started: Mon 18 May 2026 13:16:06 AEST
+Started: Mon 18 May 2026 15:41:24 AEST
 ---
 
 ## 2026-05-18 - US-001
-- Fixed three CSS token values in `apps/web/src/index.css` to match design system
-  - `--primary-foreground`: `160 68% 60%` → `162 89% 10%` (dark forest green #052e22)
-  - `--secondary`: `240 3.7% 15.9%` → `240 6% 13%` (#1f1f23)
-  - `--muted`: `240 3.7% 15.9%` → `240 7% 12%` (#1c1c20)
-- Files changed: `apps/web/src/index.css`
+- Moved `dagre` runtime dep from apps/web into @seeflow/canvas, in preparation for moving `auto-layout.ts` (US-005) into the canvas package
+- Added `dagre: ^0.8.5` to `packages/canvas/package.json` dependencies and `@types/dagre: ^0.7.54` to its devDependencies
+- Removed `dagre` and `@types/dagre` from `apps/web/package.json` dependencies (note: `@types/dagre` had been listed under dependencies, not devDependencies, in the apps/web manifest — preserved that block layout but the package is gone now)
+- Ran `bun install` — lockfile updated, no other changes
+- Created branch `ralph/canvas-extraction` from main
+- Fixed pre-existing Biome organizeImports lint error in `apps/web/src/lib/api.ts` so `bun run lint` stays green (lint was failing on main before this story; ran `biome check --fix`)
+- Files changed: `packages/canvas/package.json`, `apps/web/package.json`, `bun.lock`, `apps/web/src/lib/api.ts` (import order fix only)
+- Verified: `bun run typecheck` ✅, `bun test` ✅ (1304 pass / 1 skip / 0 fail), `bun run format` ✅ (no changes), `bun run lint` ✅
 - **Learnings for future iterations:**
-  - CSS variable values are stored as bare HSL triplets (e.g. `240 6% 13%`), not wrapped in `hsl()` — `hsl()` is added at the usage site
-  - Tokens like `--accent`, `--border` still use the old `240 3.7% 15.9%` value — US-001 only fixed secondary and muted per spec
-  - Typecheck, format, and lint all pass with just a CSS-only change
----
-
-## 2026-05-18 - US-003
-- Updated `apps/web/src/lib/color-tokens.ts` with dark-theme background and border values for all named color tokens (slate, blue, green, amber, red, purple, pink)
-  - Backgrounds changed from near-white (96-98% lightness) to dark tinted values (13-15% lightness)
-  - Borders changed from mid-tone (56-75% lightness) to appropriate dark-background values (40-60% lightness)
-  - Edge stroke colors retained (already readable on dark canvas)
-  - `default` token unchanged (uses CSS vars — adapts automatically)
-  - `NODE_DEFAULT_BG_WHITE` unchanged (addressed in US-004)
-- Files changed: `apps/web/src/lib/color-tokens.ts`
-- **Learnings for future iterations:**
-  - color-tokens.ts uses inline HSL strings (`hsl(h, s%, l%)`) — NOT CSS variable references
-  - Edge stroke values were already appropriate for dark canvas; only bg and border needed updating
-  - Manual browser verification needed to confirm dark-tinted nodes are visually distinct
----
-
-## 2026-05-18 - US-002
-- Added React Flow Controls dark-theme CSS overrides to `apps/web/src/index.css`
-  - `.react-flow__controls`: background hsl(var(--card)), border, border-radius, box-shadow
-  - `.react-flow__controls-button`: background hsl(var(--secondary)), color hsl(var(--foreground)), border-bottom
-  - `.react-flow__controls-button:hover`: background hsl(var(--accent))
-  - `.react-flow__controls-button:disabled`: opacity 0.4, cursor not-allowed
-  - `.react-flow__controls-button svg`: fill currentColor
-- Files changed: `apps/web/src/index.css`
-- **Learnings for future iterations:**
-  - React Flow library default styles are light-theme; override with CSS selectors outside @layer to ensure specificity
-  - All `.react-flow__controls` overrides are pure CSS additions — no JSX changes needed
-  - Manual browser verification needed to confirm no white background visible on the controls panel
----
-
-## 2026-05-18 - US-004
-- Changed `NODE_DEFAULT_BG_WHITE` in `apps/web/src/lib/color-tokens.ts` from `'#ffffff'` to `'hsl(var(--card))'`
-- All consumers (play-node.tsx, shape-node.tsx, demo-canvas.tsx) reference the constant so they pick up the new value automatically — no JSX changes needed
-- Updated misleading comments in play-node.tsx, shape-node.tsx, demo-canvas.tsx that referenced "white fill" or "#ffffff"
-- Fixed test assertions in demo-canvas.test.tsx that hardcoded `'#ffffff'` — replaced with `NODE_DEFAULT_BG_WHITE` import
-- Updated test descriptions in play-node.test.tsx and shape-node.test.tsx to remove "#ffffff" / "white" references
-- Files changed: `apps/web/src/lib/color-tokens.ts`, `apps/web/src/components/nodes/play-node.tsx`, `apps/web/src/components/nodes/shape-node.tsx`, `apps/web/src/components/demo-canvas.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`, `apps/web/src/components/nodes/shape-node.test.tsx`, `apps/web/src/components/demo-canvas.test.tsx`
-- **Learnings for future iterations:**
-  - When changing a constant value, grep for hardcoded string usages in tests — they won't reference the constant
-  - Sticky keeps amber default (color-tokens `amber.background`) — unaffected by NODE_DEFAULT_BG_WHITE
-  - Text shapes return empty style early in shapeChromeStyle — unaffected
-  - Illustrative shapes (database, server, user, queue, cloud) call `resolveIllustrativeColors` which uses the constant — single change propagates everywhere
-  - Manual browser verification needed to confirm nodes now show dark card surface instead of white
----
-
-## 2026-05-18 - US-005
-- Replaced light-theme classes in `status-pill.tsx` with dark equivalents
-  - `running`: `bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100` → `bg-amber-950/50 text-amber-300`
-  - `done`: `bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100` → `bg-emerald-950/50 text-emerald-300`
-  - `error`: `bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100` → `bg-rose-950/50 text-rose-300`
-- Replaced dual light/dark: class pairs in `status-badge.tsx` with single dark-appropriate values
-  - `ok`: `bg-emerald-500 dark:bg-emerald-400` → `bg-emerald-400`
-  - `warn`: `bg-amber-500 dark:bg-amber-400` → `bg-amber-400`
-  - `error`: `bg-rose-500 dark:bg-rose-400` → `bg-rose-400`
-  - `pending`: `bg-slate-400 dark:bg-slate-500` → `bg-slate-400` (unchanged)
-- Updated test assertions in `status-badge.test.tsx` and `play-node.test.tsx` to match new class names
-- Fixed pre-existing import order lint error in `demo-canvas.test.tsx` (biome organizeImports)
-- Files changed: `apps/web/src/components/nodes/status-pill.tsx`, `apps/web/src/components/nodes/status-badge.tsx`, `apps/web/src/components/nodes/status-badge.test.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`, `apps/web/src/components/demo-canvas.test.tsx`
-- **Learnings for future iterations:**
-  - `dark:` Tailwind prefixes are inactive without `.dark` on `<html>` — always replace dual light/dark: pairs with single dark-appropriate classes
-  - When changing component styling, grep for class name strings in ALL test files (not just the component's own test)
-  - Biome import order violations from prior stories can accumulate — fix them in the same commit to keep lint green
----
-
-## 2026-05-18 - US-006
-- Updated `apps/web/src/components/ui/button.tsx` to match design system spec:
-  - Default size: `h-10` → `h-9` (40px → 36px)
-  - sm size: `h-9` → `h-8` (36px → 32px)
-  - icon size: `h-10 w-10` → `h-9 w-9` (40px → 36px)
-  - Default variant text: `text-zinc-950` → `text-primary-foreground`
-  - Default variant: added `font-semibold`
-  - Default variant hover: `hover:bg-primary/90` → `hover:bg-emerald-400`
-  - Ghost variant: added `text-muted-foreground` as base color
-  - Outline variant hover: `hover:bg-muted` → `hover:bg-secondary`
-- Files changed: `apps/web/src/components/ui/button.tsx`
-- **Learnings for future iterations:**
-  - button.tsx uses CVA (class-variance-authority) — variants and sizes are separate keys in the `variants` object
-  - No test file for button.tsx exists — no test updates needed
-  - Manual browser verification needed to confirm button sizing, color, and hover states
----
-
-## 2026-05-18 - US-007
-- Updated `apps/web/src/components/ui/tooltip.tsx` TooltipContent className:
-  - Removed `border` (light bg provides sufficient contrast)
-  - Changed `bg-popover` → `bg-foreground` (near-white #fafafa)
-  - Changed `text-popover-foreground` → `text-background` (dark #09090b)
-  - All animation/positioning/shadow classes preserved
-- Files changed: `apps/web/src/components/ui/tooltip.tsx`
-- **Learnings for future iterations:**
-  - TooltipContent is portaled to document.body (Radix Portal) — CSS selectors targeting ancestors won't apply; only inline Tailwind classes matter
-  - Removing `border` from the tooltip is safe when bg-foreground is used — the light bg already creates visual separation on the dark canvas
-  - No test file for tooltip.tsx — no test updates needed
-  - Manual browser verification needed to confirm light tooltip pops against dark canvas
----
-
-## 2026-05-18 - US-008
-- Updated `apps/web/src/components/nodes/play-node.tsx` Play button className:
-  - `hover:bg-emerald-500` → `hover:bg-primary` (uses hsl(var(--primary)) = emerald #10b981)
-  - `hover:text-white` → `hover:text-primary-foreground`
-  - `focus-visible:bg-emerald-500` → `focus-visible:bg-primary`
-  - `focus-visible:text-white` → `focus-visible:text-primary-foreground`
-  - Removed `dark:hover:bg-emerald-400` and `dark:focus-visible:bg-emerald-400` (inactive, no .dark on <html>)
-  - Error border: removed `dark:border-rose-400` (kept `border-rose-500`)
-- Updated `apps/web/src/components/nodes/play-node.test.tsx` to match new class names
-- Files changed: `apps/web/src/components/nodes/play-node.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`
-- **Learnings for future iterations:**
-  - `bg-primary` = `hsl(var(--primary))` = emerald #10b981 — the CSS-variable-based equivalent of `bg-emerald-500`
-  - `text-primary-foreground` = dark forest green #052e22 — correct contrast on emerald bg (fixed in US-001)
-  - `dark:` Tailwind prefixes on individual component classes are inactive (no .dark class on <html>) — always remove them in this project
-  - When tests assert on specific Tailwind class strings, grep for the old class names to find all tests that need updating
-  - Manual browser verification needed to confirm emerald hover still appears on play button
----
-
-## 2026-05-18 - US-009
-- Added `focus:border-ring` class to all form inputs/selects in dialog components
-  - `create-project-dialog.tsx`: project name input
-  - `export-dialog.tsx`: email input, flow name input, visibility select
-- `--ring` token is already emerald (`160 84% 39.4%`) — no CSS changes needed
-- The existing `focus-visible:ring-2 focus-visible:ring-ring` provides the ring glow; `focus:border-ring` adds the emerald border color on focus
-- Files changed: `apps/web/src/components/create-project-dialog.tsx`, `apps/web/src/components/export-dialog.tsx`
-- **Learnings for future iterations:**
-  - `focus:` and `focus-visible:` serve different purposes — `focus:` triggers on any focus (mouse or keyboard), `focus-visible:` only on keyboard focus
-  - `border-ring` maps to `border-color: hsl(var(--ring))` which is already emerald — no extra CSS token needed
-  - The share URL input in export-dialog (readonly, bg-muted) was intentionally left without focus:border-ring since it's read-only and non-interactive
-  - No test files exist for dialog components — no test updates needed
-  - Manual browser verification needed to confirm emerald border appears on focus
----
-
-## 2026-05-18 - US-010
-- Fixed header.tsx Workflow icon: removed hardcoded `color="#34d399"` prop, added `className="text-emerald-400"` — Lucide icons render via `currentColor` so className controls the stroke
-- Fixed detail-panel.tsx SheetContent: changed `backdrop-blur-sm` to `backdrop-blur-[14px]` to match design spec of blur(14px); `backdrop-blur-sm` = 4px, not 14px
-- resize-controls.tsx: verified `background: 'hsl(var(--background))'` inline style is syntactically valid — `--background` is a bare HSL triplet (`240 10% 3.9%`) and `hsl()` wrapper is correct — no change needed
-- Files changed: `apps/web/src/components/header.tsx`, `apps/web/src/components/detail-panel.tsx`
-- **Learnings for future iterations:**
-  - Lucide icons use `currentColor` for stroke — always use `className="text-*"` instead of `color=""` prop for design-system consistency
-  - Tailwind `backdrop-blur-sm` = 4px, not 14px — use arbitrary value `backdrop-blur-[14px]` for exact spec values
-  - CSS `hsl(var(--token))` where `--token` is a bare triplet (e.g. `240 10% 3.9%`) is valid modern CSS (space-separated HSL syntax)
-  - No test file for header.tsx — no test updates needed
-  - Manual browser verification needed to confirm logo color and panel blur
+  - `dagre` is also a dep of root package.json and apps/studio/package.json (used by `apps/studio/src/diagram.ts`) — removing it from apps/web does NOT affect those usages; do not touch the root or studio manifest
+  - `apps/web/src/lib/auto-layout.ts` and `apps/web/src/pages/demo-view.tsx` still import `dagre` directly today; the web app still resolves it transitively via the @seeflow/canvas workspace dep, so US-001's removal from apps/web doesn't break the build. When US-005 actually moves auto-layout.ts into the canvas package, demo-view.tsx's `import dagre from 'dagre'` will need to either be removed or remain (apps/web will still see dagre via the workspace package). Verify after that move.
+  - Existing main-branch lint state was NOT green (`apps/web/src/lib/api.ts` had unsorted imports). Future iterations should run `bun run lint` early and fix accumulated organizeImports issues in the same commit
+  - Test output prints intentional error stack traces (events.test.ts, registry.test.ts) — these are expected and don't indicate failures; check the final `pass / fail` line
 ---
