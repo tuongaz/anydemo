@@ -128,3 +128,18 @@ Started: Mon 18 May 2026 13:16:06 AEST
   - When tests assert on specific Tailwind class strings, grep for the old class names to find all tests that need updating
   - Manual browser verification needed to confirm emerald hover still appears on play button
 ---
+
+## 2026-05-18 - US-009
+- Added `focus:border-ring` class to all form inputs/selects in dialog components
+  - `create-project-dialog.tsx`: project name input
+  - `export-dialog.tsx`: email input, flow name input, visibility select
+- `--ring` token is already emerald (`160 84% 39.4%`) — no CSS changes needed
+- The existing `focus-visible:ring-2 focus-visible:ring-ring` provides the ring glow; `focus:border-ring` adds the emerald border color on focus
+- Files changed: `apps/web/src/components/create-project-dialog.tsx`, `apps/web/src/components/export-dialog.tsx`
+- **Learnings for future iterations:**
+  - `focus:` and `focus-visible:` serve different purposes — `focus:` triggers on any focus (mouse or keyboard), `focus-visible:` only on keyboard focus
+  - `border-ring` maps to `border-color: hsl(var(--ring))` which is already emerald — no extra CSS token needed
+  - The share URL input in export-dialog (readonly, bg-muted) was intentionally left without focus:border-ring since it's read-only and non-interactive
+  - No test files exist for dialog components — no test updates needed
+  - Manual browser verification needed to confirm emerald border appears on focus
+---
