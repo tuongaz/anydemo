@@ -84,7 +84,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, click a node, the sidebar opens and edits/file actions still work end-to-end"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

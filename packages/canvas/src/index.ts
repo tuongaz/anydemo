@@ -234,6 +234,15 @@ export type {
 } from './components/canvas-toolbar.tsx';
 
 export {
+  DetailPanel,
+  EditableField,
+  formatRelativeTime,
+  HtmlNodeSection,
+  StatusSection,
+} from './components/detail-panel.tsx';
+export type { DetailPanelProps } from './components/detail-panel.tsx';
+
+export {
   filterIcons,
   IconPickerBody,
   IconPickerPopover,

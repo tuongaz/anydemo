@@ -1,22 +1,3 @@
-import {
-  type Connector,
-  type DemoNode,
-  type StatusReport,
-  openProjectFile,
-  revealProjectFile,
-} from '@/lib/api';
-import {
-  Button,
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetTitle,
-  StatusBadge,
-  cn,
-  getStoredDetailPanelWidth,
-  setStoredDetailPanelWidth,
-  startResizeGesture,
-} from '@seeflow/canvas';
 import { FolderOpen, PencilLine } from 'lucide-react';
 import {
   type CSSProperties,
@@ -30,11 +11,30 @@ import {
 } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import type { CanvasAdapter } from '../adapter/types.ts';
+import { cn } from '../lib/cn.ts';
+import {
+  getStoredDetailPanelWidth,
+  setStoredDetailPanelWidth,
+  startResizeGesture,
+} from '../lib/detail-panel-width.ts';
+import { StatusBadge } from '../nodes/status-badge.tsx';
+import type { Connector, DemoNode, StatusReport } from '../types.ts';
+import { Button } from '../ui/button.tsx';
+import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
 
 export interface DetailPanelProps {
   demoId: string | null;
   node: DemoNode | null;
   connector: Connector | null;
+  /**
+   * Optional canvas adapter used for project-scoped file actions on htmlNode
+   * details (Open in editor / Reveal in OS file manager). When omitted or when
+   * a method (`openFile` / `revealFile`) is undefined, the corresponding
+   * button is hidden so embedders without filesystem support don't render
+   * dead affordances.
+   */
+  adapter?: CanvasAdapter | null;
   // Three-field consolidation: name (header), description (light-bold body),
   // detail (long-form body). All three share the same single-click → edit,
   // blur → save UX via EditableField. When a callback is omitted the field
@@ -56,6 +56,7 @@ export function DetailPanel({
   demoId,
   node,
   connector,
+  adapter,
   onNameChange,
   onDescriptionChange,
   onDetailChange,
@@ -209,7 +210,7 @@ export function DetailPanel({
               />
 
               {inspectableNode.type === 'htmlNode' && demoId ? (
-                <HtmlNodeSection projectId={demoId} htmlPath={inspectableNode.data.htmlPath} />
+                <HtmlNodeSection adapter={adapter} htmlPath={inspectableNode.data.htmlPath} />
               ) : null}
             </div>
           </div>
@@ -419,49 +420,34 @@ export function EditableField({
 }
 
 // htmlNode detail section — surfaces the relative `data.htmlPath` and provides
-// Open-in-editor + Reveal-in-file-manager shellout buttons. Both POST to the
-// project-scoped /files endpoint; on `ok: false` (EDITOR unset, spawn failure,
-// file missing) the helper falls back to copying the absolute path to the
-// clipboard and surfacing an inline status line.
+// Open-in-editor + Reveal-in-file-manager shellout buttons. Both route through
+// the host-supplied `adapter.openFile` / `adapter.revealFile`. When either
+// adapter method is undefined the corresponding button is hidden so embedders
+// without filesystem support don't render dead affordances.
 export function HtmlNodeSection({
-  projectId,
+  adapter,
   htmlPath,
 }: {
-  projectId: string;
+  adapter: CanvasAdapter | null | undefined;
   htmlPath: string;
 }) {
   const [status, setStatus] = useState<{
-    kind: 'idle' | 'pending' | 'copied' | 'error';
+    kind: 'idle' | 'pending' | 'error';
     message?: string;
   }>({ kind: 'idle' });
 
-  const fallbackCopy = async (absPath: string, hint: string) => {
-    try {
-      await navigator.clipboard.writeText(absPath);
-      setStatus({ kind: 'copied', message: hint });
-      setTimeout(() => setStatus({ kind: 'idle' }), 1200);
-    } catch (err) {
-      setStatus({
-        kind: 'error',
-        message: err instanceof Error ? err.message : 'Clipboard write failed',
-      });
-    }
-  };
+  const canOpen = typeof adapter?.openFile === 'function';
+  const canReveal = typeof adapter?.revealFile === 'function';
 
   const dispatch = async (action: 'open' | 'reveal') => {
     setStatus({ kind: 'pending' });
     try {
-      const result =
-        action === 'open'
-          ? await openProjectFile(projectId, htmlPath)
-          : await revealProjectFile(projectId, htmlPath);
-      if (result.ok) {
-        setStatus({ kind: 'idle' });
-        return;
+      if (action === 'open') {
+        await adapter?.openFile?.(htmlPath);
+      } else {
+        await adapter?.revealFile?.(htmlPath);
       }
-      const hint =
-        action === 'open' ? 'Copied path — paste into your editor' : 'Copied path to clipboard';
-      await fallbackCopy(result.absPath, hint);
+      setStatus({ kind: 'idle' });
     } catch (err) {
       setStatus({
         kind: 'error',
@@ -486,46 +472,49 @@ export function HtmlNodeSection({
           {htmlPath}
         </code>
       </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1.5 px-2"
-          onClick={() => {
-            void dispatch('open');
-          }}
-          disabled={status.kind === 'pending'}
-          data-testid="detail-panel-html-open"
-          aria-label="Open in editor"
-        >
-          <PencilLine className="h-3.5 w-3.5" />
-          Open in editor
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          className="h-7 gap-1.5 px-2"
-          onClick={() => {
-            void dispatch('reveal');
-          }}
-          disabled={status.kind === 'pending'}
-          data-testid="detail-panel-html-reveal"
-          aria-label="Reveal in Finder/Explorer"
-        >
-          <FolderOpen className="h-3.5 w-3.5" />
-          Reveal
-        </Button>
-      </div>
-      {status.kind === 'copied' || status.kind === 'error' ? (
+      {canOpen || canReveal ? (
+        <div className="flex flex-wrap items-center gap-2">
+          {canOpen ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => {
+                void dispatch('open');
+              }}
+              disabled={status.kind === 'pending'}
+              data-testid="detail-panel-html-open"
+              aria-label="Open in editor"
+            >
+              <PencilLine className="h-3.5 w-3.5" />
+              Open in editor
+            </Button>
+          ) : null}
+          {canReveal ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => {
+                void dispatch('reveal');
+              }}
+              disabled={status.kind === 'pending'}
+              data-testid="detail-panel-html-reveal"
+              aria-label="Reveal in Finder/Explorer"
+            >
+              <FolderOpen className="h-3.5 w-3.5" />
+              Reveal
+            </Button>
+          ) : null}
+        </div>
+      ) : null}
+      {status.kind === 'error' ? (
         <div
           data-testid="detail-panel-html-status"
           data-status={status.kind}
-          className={cn(
-            'text-[11px]',
-            status.kind === 'copied' ? 'text-muted-foreground' : 'text-destructive',
-          )}
+          className={cn('text-[11px] text-destructive')}
         >
           {status.message ?? ''}
         </div>

@@ -24,7 +24,7 @@ const mockWindow = {
 (globalThis as unknown as { window: typeof mockWindow }).window = mockWindow;
 
 const { DetailPanel, EditableField, StatusSection, formatRelativeTime } = await import(
-  '@/components/detail-panel'
+  '@seeflow/canvas'
 );
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run

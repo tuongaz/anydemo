@@ -1,5 +1,4 @@
 import { CommandPalette } from '@/components/command-palette';
-import { DetailPanel } from '@/components/detail-panel';
 import { ExportDialog } from '@/components/export-dialog';
 import { RestartDemoButton } from '@/components/restart-demo-button';
 import { ShareMenu } from '@/components/share-menu';
@@ -26,6 +25,7 @@ import {
   type CommandId,
   type ConnectorStylePatch,
   DEFAULT_STORAGE_PREFIX,
+  DetailPanel,
   ICON_DEFAULT_SIZE,
   type NodeStylePatch,
   type ReorderOp,
@@ -3135,6 +3135,7 @@ export function DemoView({
         demoId={detail?.id ?? null}
         node={inspectedNode}
         connector={inspectedConnector}
+        adapter={adapter}
         statusReport={inspectedStatusReport}
         // Three-field consolidation: panel + canvas dispatchers share the
         // same coalesce keys (`node:<id>:name|description|detail`) so a
