@@ -624,3 +624,28 @@ button:disabled {
 .react-flow__node.selected .react-flow__resize-control.handle.bottom.right {
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
 }
+
+/* US-002: React Flow Controls panel — dark-theme overrides so the zoom/fit
+ * toolbar matches the design system card surface instead of the library's
+ * default white background. */
+.react-flow__controls {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+}
+.react-flow__controls-button {
+  background: hsl(var(--secondary));
+  color: hsl(var(--foreground));
+  border-bottom: 1px solid hsl(var(--border));
+}
+.react-flow__controls-button:hover {
+  background: hsl(var(--accent));
+}
+.react-flow__controls-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.react-flow__controls-button svg {
+  fill: currentColor;
+}
