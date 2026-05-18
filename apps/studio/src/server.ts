@@ -86,6 +86,12 @@ export function createApp(options: CreateAppOptions = {}): Hono {
 
   app.get('/health', (c) => c.json({ ok: true }));
 
+  // `/healthz` is the readiness probe used by the Docker entrypoint and any
+  // external orchestrator (Kubernetes-style). Kept separate from `/health`
+  // (legacy `{ ok: true }` shape) so existing CLI / smoke-test consumers
+  // don't churn. Route is unauthenticated and stateless.
+  app.get('/healthz', (c) => c.json({ status: 'ok' }));
+
   // Vendored runtime assets (e.g. Tailwind Play CDN for htmlNode). Served
   // identically in dev and prod so they don't depend on the web bundle.
   // The `{[A-Za-z0-9._-]+}` regex constrains :file to a single safe segment,
