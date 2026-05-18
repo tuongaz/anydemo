@@ -264,8 +264,8 @@
         "Verify in browser using dev-browser skill: render every node kind, inline-edit a name, resize a node, draw an edge, open toolbar popover, open context menu — all work"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Sweep clean: `grep -rln \"from '@/\" packages/canvas/src` and the apps/web stale-import grep both return zero. Quality gate green: typecheck (5 workspaces), bun test (1304 pass / 1 skip / 0 fail across 72 files), bun run format (no fixes), bun run lint (no fixes across 230 files). Browser smoke via Playwright against prod-bundle studio (port 5173 still occupied per US-007): e-commerce-platform demo renders 9 nodes (play+state+shape kinds) with 9 edges + 36 handles; order-pipeline renders 4 nodes + 3 edges + 16 handles. Verified interactively: Shape toolbar popover opens with Database/Server/User/Queue/Cloud entries, right-click on api-gateway node opens the context menu (Copy/Paste/Bring to front/.../Delete), double-click on the API Gateway label activates the inline-edit contenteditable, single-click selects (4 edge-draw handles render + NodeResizer overlays), 'R' keyboard shortcut flips the Rectangle tool to aria-pressed=true + data-active=true. Console errors observed were exclusively the known ERR_INCOMPLETE_CHUNKED_ENCODING SSE warnings (per US-007 Codebase Patterns)."
     },
     {
       "id": "US-016",
