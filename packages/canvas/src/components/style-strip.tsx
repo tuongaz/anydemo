@@ -1,30 +1,3 @@
-import type {
-  ColorToken,
-  Connector,
-  ConnectorDirection,
-  ConnectorPath,
-  ConnectorStyle,
-  DemoNode,
-} from '@/lib/api';
-import { COLOR_TOKENS } from '@/lib/color-tokens';
-import {
-  IconToggleGroup,
-  type IconToggleOption,
-  LineDashedIcon,
-  LineDottedIcon,
-  LineSolidIcon,
-  PathCurveIcon,
-  PathStepIcon,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  Slider,
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-  cn,
-} from '@seeflow/canvas';
 import {
   ArrowLeftRight,
   ArrowRight,
@@ -36,6 +9,27 @@ import {
   Type,
 } from 'lucide-react';
 import { type ReactNode, useEffect, useState } from 'react';
+import { cn } from '../lib/cn.ts';
+import { COLOR_TOKENS } from '../lib/color-tokens.ts';
+import type {
+  ColorToken,
+  Connector,
+  ConnectorDirection,
+  ConnectorPath,
+  ConnectorStyle,
+  DemoNode,
+} from '../types.ts';
+import { IconToggleGroup, type IconToggleOption } from '../ui/icon-toggle-group.tsx';
+import {
+  LineDashedIcon,
+  LineDottedIcon,
+  LineSolidIcon,
+  PathCurveIcon,
+  PathStepIcon,
+} from '../ui/line-style-icons.tsx';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
+import { Slider } from '../ui/slider.tsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx';
 
 export interface NodeStylePatch {
   borderColor?: ColorToken;

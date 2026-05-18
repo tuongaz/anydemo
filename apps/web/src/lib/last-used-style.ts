@@ -10,7 +10,7 @@
  * JSON, missing storage, or write failures all degrade silently to empty
  * buckets — last-used is convenience, never a correctness boundary.
  */
-import type { ConnectorStylePatch, NodeStylePatch } from '@/components/style-strip';
+import type { ConnectorStylePatch, NodeStylePatch } from '@seeflow/canvas';
 
 const STORAGE_KEY = 'seeflow:last-used-style:v1';
 

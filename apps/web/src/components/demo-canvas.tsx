@@ -4,11 +4,6 @@ import {
   type OverlayInputNode,
   SelectionResizeOverlay,
 } from '@/components/selection-resize-overlay';
-import {
-  type ConnectorStylePatch,
-  type NodeStylePatch,
-  StyleStrip,
-} from '@/components/style-strip';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
@@ -16,6 +11,7 @@ import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/a
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
 import {
+  type ConnectorStylePatch,
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
@@ -29,6 +25,7 @@ import {
   IconNode,
   ImageNode,
   type NodeStatus,
+  type NodeStylePatch,
   PlayNode,
   Popover,
   PopoverAnchor,
@@ -37,6 +34,7 @@ import {
   ShapeNode,
   type Side,
   StateNode,
+  StyleStrip,
   cn,
   computeImageDims,
   connectorToEdge,

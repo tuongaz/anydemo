@@ -1,7 +1,7 @@
-import type { NodeStylePatch } from '@/components/style-strip';
 import type { CreateNodeBody, DemoNode, ImageNodeData } from '@/lib/api';
 import type { ImageDataDefaults } from '@/lib/node-defaults';
 import { buildNewImageData } from '@/lib/node-defaults';
+import type { NodeStylePatch } from '@seeflow/canvas';
 
 /**
  * US-008: pure orchestration for the OS-image-drop upload flow. Sits between

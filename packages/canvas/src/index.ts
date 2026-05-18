@@ -149,6 +149,13 @@ export type {
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
 
+export { StyleStrip } from './components/style-strip.tsx';
+export type {
+  ConnectorStylePatch,
+  NodeStylePatch,
+  StyleStripProps,
+} from './components/style-strip.tsx';
+
 export * from './edges/index.ts';
 export * from './nodes/index.ts';
 export * from './ui/index.ts';

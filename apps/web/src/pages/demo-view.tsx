@@ -4,7 +4,6 @@ import { DetailPanel } from '@/components/detail-panel';
 import { ExportDialog } from '@/components/export-dialog';
 import { RestartDemoButton } from '@/components/restart-demo-button';
 import { ShareMenu } from '@/components/share-menu';
-import type { ConnectorStylePatch, NodeStylePatch } from '@/components/style-strip';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -38,7 +37,9 @@ import { buildNewShapeData } from '@/lib/node-defaults';
 import {
   type AutoLayoutNode,
   type CommandId,
+  type ConnectorStylePatch,
   ICON_DEFAULT_SIZE,
+  type NodeStylePatch,
   SHAPE_DEFAULT_SIZE,
   applyLayout,
   applyNudge,

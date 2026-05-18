@@ -1,7 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { type NodeStylePatch, StyleStrip, type StyleStripProps } from '@/components/style-strip';
-import type { Connector, DemoNode } from '@/lib/api';
 import * as React from 'react';
+import type { Connector, DemoNode } from '../types.ts';
+import { type NodeStylePatch, StyleStrip, type StyleStripProps } from './style-strip.tsx';
 
 // Same dispatcher-shim trick used by icon-node.test.tsx and
 // icon-picker-popover.test.tsx — apps/web tests run without a DOM, so we

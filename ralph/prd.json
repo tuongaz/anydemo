@@ -317,8 +317,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 18,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fourth component move under packages/canvas/src/components/ (after inline-edit US-010, the 6 node renderers US-013, and icon-picker-popover US-017). Moved style-strip.tsx + style-strip.test.tsx into the canvas package. Rewrote internal imports to relative paths: `@/lib/api` types → `'../types.ts'`; `@/lib/color-tokens` → `'../lib/color-tokens.ts'`; the prior `@seeflow/canvas` self-import block split into 6 per-file relative imports (`'../lib/cn.ts'`, `'../ui/icon-toggle-group.tsx'`, `'../ui/line-style-icons.tsx'`, `'../ui/popover.tsx'`, `'../ui/slider.tsx'`, `'../ui/tooltip.tsx'`). The test file's self-import switched to `'./style-strip.tsx'`; its `@/lib/api` Connector + DemoNode types now resolve from `'../types.ts'`. Added barrel re-exports: `StyleStrip` (value) and `ConnectorStylePatch` + `NodeStylePatch` + `StyleStripProps` (types) in packages/canvas/src/index.ts (block between InlineEdit and the submodule barrels). Updated 5 apps/web import sites (the test file was the 6th — moved with the component): demo-canvas.tsx (merged StyleStrip + 2 type imports into existing @seeflow/canvas block), demo-canvas.test.tsx (merged StyleStrip alphabetically into existing block), pages/demo-view.tsx (merged ConnectorStylePatch + NodeStylePatch types alphabetically), lib/image-upload-flow.ts (simple line swap), lib/node-defaults.ts (simple line swap), lib/last-used-style.ts (simple line swap). All 24 moved tests pass (60 expect() calls). Full quality gate green: typecheck across 5 workspaces, bun test 1304/0, format + lint no fixes."
     },
     {
       "id": "US-019",
