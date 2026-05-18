@@ -84,16 +84,126 @@ import {
 
 import '@xyflow/react/dist/style.css';
 
-export interface DemoCanvasProps {
-  /**
-   * US-025: persistence adapter bound to this demo. Replaces the implicit
-   * `@/lib/api` REST coupling that demo-view used to call directly. Every
-   * mutation (node/connector CRUD, image upload, optional playNode) routes
-   * through this adapter. US-027 will narrow this prop into a discriminated
-   * union (required in edit mode, optional in view mode); for now it's
-   * required so edit-mode callsites can pass through without conditionals.
-   */
-  adapter: CanvasAdapter;
+/**
+ * US-027: canvas operating mode. `edit` is the studio default — every chrome
+ * affordance renders and every mutation handler is live. `view` is the
+ * embedder-facing read-only mode — chrome is suppressed, editing handlers
+ * inert, but pan/zoom and SSE-driven status badges still work so the canvas
+ * remains a useful presentation surface.
+ */
+export type DemoCanvasMode = 'edit' | 'view';
+
+/**
+ * US-027: per-feature override flags. Each flag is optional; when unset the
+ * effective value comes from the mode preset in {@link resolveFlags}. Use these
+ * to surgically toggle a chrome affordance or interaction without flipping the
+ * whole canvas into the other mode (e.g. a mostly-`view` canvas that still
+ * lets the user pan but with status badges hidden).
+ *
+ * `storageKey` is a pass-through for future canvas-side persistence (e.g. a
+ * future viewport memory). It is currently unused inside demo-canvas; the
+ * studio's last-used-style namespace lives in `demo-view.tsx` via
+ * `DEFAULT_STORAGE_PREFIX` and is unaffected by this prop.
+ */
+export interface CanvasFeatureOverrides {
+  showToolbar?: boolean;
+  showStyleStrip?: boolean;
+  showDetailPanel?: boolean;
+  showStatusBadges?: boolean;
+  showResizeHandles?: boolean;
+  enableKeyboard?: boolean;
+  enableContextMenu?: boolean;
+  enableDragDrop?: boolean;
+  enableImageDrop?: boolean;
+  enableZoom?: boolean;
+  enablePan?: boolean;
+  storageKey?: string;
+}
+
+/**
+ * US-027: every flag resolved to a concrete boolean. The render body of
+ * {@link DemoCanvas} reads exclusively from this shape so the gating logic is
+ * a single hop away from the mode preset + the overrides.
+ */
+export interface ResolvedCanvasFlags {
+  showToolbar: boolean;
+  showStyleStrip: boolean;
+  showDetailPanel: boolean;
+  showStatusBadges: boolean;
+  showResizeHandles: boolean;
+  enableKeyboard: boolean;
+  enableContextMenu: boolean;
+  enableDragDrop: boolean;
+  enableImageDrop: boolean;
+  enableZoom: boolean;
+  enablePan: boolean;
+}
+
+const EDIT_DEFAULTS: ResolvedCanvasFlags = {
+  showToolbar: true,
+  showStyleStrip: true,
+  showDetailPanel: true,
+  showStatusBadges: true,
+  showResizeHandles: true,
+  enableKeyboard: true,
+  enableContextMenu: true,
+  enableDragDrop: true,
+  enableImageDrop: true,
+  enableZoom: true,
+  enablePan: true,
+};
+
+const VIEW_DEFAULTS: ResolvedCanvasFlags = {
+  showToolbar: false,
+  showStyleStrip: false,
+  showDetailPanel: false,
+  // View mode keeps status badges (driven by SSE) so the canvas can serve as
+  // a live monitoring surface — the AC excludes status badges from "chrome".
+  showStatusBadges: true,
+  showResizeHandles: false,
+  enableKeyboard: false,
+  enableContextMenu: false,
+  enableDragDrop: false,
+  enableImageDrop: false,
+  // Pan/zoom remain on in view mode so embedders get a navigable canvas; the
+  // gestures don't mutate persisted state.
+  enableZoom: true,
+  enablePan: true,
+};
+
+/**
+ * US-027: resolve the effective flag set from the canvas mode + caller
+ * overrides. Pure so it's trivially unit-testable. The function does NOT
+ * inspect any DemoCanvas prop other than `mode` + the override fields — keeping
+ * the contract narrow lets demo-canvas pass exactly the slice it needs and
+ * makes the helper safe to import standalone.
+ */
+export function resolveFlags(
+  input: { mode: DemoCanvasMode } & Omit<CanvasFeatureOverrides, 'storageKey'>,
+): ResolvedCanvasFlags {
+  const defaults = input.mode === 'edit' ? EDIT_DEFAULTS : VIEW_DEFAULTS;
+  return {
+    showToolbar: input.showToolbar ?? defaults.showToolbar,
+    showStyleStrip: input.showStyleStrip ?? defaults.showStyleStrip,
+    showDetailPanel: input.showDetailPanel ?? defaults.showDetailPanel,
+    showStatusBadges: input.showStatusBadges ?? defaults.showStatusBadges,
+    showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
+    enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
+    enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
+    enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
+    enableImageDrop: input.enableImageDrop ?? defaults.enableImageDrop,
+    enableZoom: input.enableZoom ?? defaults.enableZoom,
+    enablePan: input.enablePan ?? defaults.enablePan,
+  };
+}
+
+/**
+ * US-027: every demo-canvas prop OTHER than the discriminator (`mode`) and
+ * `adapter` (whose required-ness flips with mode). Extracted so the
+ * discriminated union below can attach the mode-specific shape without
+ * duplicating ~50 prop definitions.
+ */
+interface DemoCanvasBaseProps extends CanvasFeatureOverrides {
   /**
    * US-004: project id used by file-backed nodes (imageNode, future htmlNode)
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
@@ -442,6 +552,17 @@ export interface DemoCanvasProps {
   activeShape: ShapeKind | null;
   onSelectShape: (shape: ShapeKind | null) => void;
 }
+
+/**
+ * US-027: discriminated union — `adapter` is required in edit mode, optional
+ * in view mode (a view-mode embedder has no mutations to persist). Both arms
+ * share {@link DemoCanvasBaseProps}; the discriminator + adapter shape are the
+ * only difference. TypeScript narrows `props.adapter` to `CanvasAdapter` in
+ * the edit branch without callers having to assert.
+ */
+export type DemoCanvasProps =
+  | (DemoCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter })
+  | (DemoCanvasBaseProps & { mode: 'view'; adapter?: CanvasAdapter });
 
 // Below this threshold we treat the gesture as an accidental click / tiny
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
@@ -1223,68 +1344,126 @@ const dataStatusFor = (runs: RunsMap, id: string): NodeStatus | undefined => run
 const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
   runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
 
-export function DemoCanvas({
-  // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —
-  // every mutation site is still routed through callbacks the parent supplies.
-  // US-026/27 begin reading adapter.* directly from inside the component.
-  adapter: _adapter,
-  projectId,
-  nodes,
-  connectors,
-  selectedNodeIds,
-  selectedConnectorIds,
-  onSelectionChange,
-  // US-026: single bundled runtime prop replacing runs/statusByNode/
-  // nodeOverrides/connectorOverrides. Destructured below into local aliases so
-  // the existing read sites keep the same shape; the parent now owns the seam.
-  runtime,
-  onPlayNode,
-  onNodePositionChange,
-  onNodePositionsChange,
-  onNodeResize,
-  onMultiResize,
-  onNodeNameChange,
-  onNodeDescriptionChange,
-  onConnectorLabelChange,
-  onCreateShapeNode,
-  onCreateImageFromFile,
-  onRetryImageUpload,
-  onCreateHtmlNode,
-  onCreateConnector,
-  onReconnectConnector,
-  onReorderNode,
-  onDeleteNode,
-  onCopyNode,
-  onPasteAt,
-  hasClipboard,
-  onCopySelection,
-  onPasteSelection,
-  selectedNodes,
-  selectedConnectors,
-  onStyleNode,
-  onStyleNodePreview,
-  onStyleNodes,
-  onStyleNodesPreview,
-  onStyleConnector,
-  onStyleConnectorPreview,
-  onRfInit,
-  onTidy,
-  onNodeClick,
-  onConnectorClick,
-  onPaneClick,
-  onCreateAndConnectFromPane,
-  pendingEditNodeId,
-  iconPickerOpen,
-  onOpenIconPicker,
-  onCloseIconPicker,
-  onPickIcon,
-  onRequestIconReplace,
-  onPinEndpoint,
-  onUnpinEndpoint,
-  onToggleNodeLock,
-  activeShape,
-  onSelectShape,
-}: DemoCanvasProps) {
+export function DemoCanvas(props: DemoCanvasProps) {
+  const {
+    mode,
+    // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —
+    // every mutation site is still routed through callbacks the parent supplies.
+    // US-026/27 begin reading adapter.* directly from inside the component.
+    adapter: _adapter,
+    projectId,
+    nodes,
+    connectors,
+    selectedNodeIds,
+    selectedConnectorIds,
+    onSelectionChange,
+    // US-026: single bundled runtime prop replacing runs/statusByNode/
+    // nodeOverrides/connectorOverrides. Destructured below into local aliases so
+    // the existing read sites keep the same shape; the parent now owns the seam.
+    runtime,
+    onPlayNode,
+    onNodePositionChange,
+    onNodePositionsChange,
+    onNodeResize,
+    onMultiResize,
+    onNodeNameChange,
+    onNodeDescriptionChange,
+    onConnectorLabelChange,
+    onCreateShapeNode,
+    onCreateImageFromFile,
+    onRetryImageUpload,
+    onCreateHtmlNode,
+    onCreateConnector,
+    onReconnectConnector,
+    onReorderNode,
+    onDeleteNode,
+    onCopyNode,
+    onPasteAt,
+    hasClipboard,
+    onCopySelection,
+    onPasteSelection,
+    selectedNodes,
+    selectedConnectors,
+    onStyleNode,
+    onStyleNodePreview,
+    onStyleNodes,
+    onStyleNodesPreview,
+    onStyleConnector,
+    onStyleConnectorPreview,
+    onRfInit,
+    onTidy,
+    onNodeClick,
+    onConnectorClick,
+    onPaneClick,
+    onCreateAndConnectFromPane,
+    pendingEditNodeId,
+    iconPickerOpen,
+    onOpenIconPicker,
+    onCloseIconPicker,
+    onPickIcon,
+    onRequestIconReplace,
+    onPinEndpoint,
+    onUnpinEndpoint,
+    onToggleNodeLock,
+    activeShape,
+    onSelectShape,
+    showToolbar,
+    showStyleStrip,
+    showDetailPanel,
+    showStatusBadges,
+    showResizeHandles,
+    enableKeyboard,
+    enableContextMenu,
+    enableDragDrop,
+    enableImageDrop,
+    enableZoom,
+    enablePan,
+  } = props;
+  // US-027: collapse mode + feature overrides into the concrete flag set every
+  // gate below reads from. `isEditMode` is the discriminator-derived boolean
+  // used for behaviors that aren't purely chrome (node drag persistence,
+  // connector mutations, edges deletable, etc.) — they always follow the mode
+  // and aren't individually overridable since they encode the read/write
+  // semantics of the canvas.
+  const flags = useMemo(
+    () =>
+      resolveFlags({
+        mode,
+        showToolbar,
+        showStyleStrip,
+        showDetailPanel,
+        showStatusBadges,
+        showResizeHandles,
+        enableKeyboard,
+        enableContextMenu,
+        enableDragDrop,
+        enableImageDrop,
+        enableZoom,
+        enablePan,
+      }),
+    [
+      mode,
+      showToolbar,
+      showStyleStrip,
+      showDetailPanel,
+      showStatusBadges,
+      showResizeHandles,
+      enableKeyboard,
+      enableContextMenu,
+      enableDragDrop,
+      enableImageDrop,
+      enableZoom,
+      enablePan,
+    ],
+  );
+  const isEditMode = mode === 'edit';
+  // US-027: mirror `flags` into a ref so empty-deps useCallback bodies (like
+  // `onWrapperContextMenuCapture` below) can read the live value without
+  // having to be redeclared every render.
+  const flagsRef = useRef(flags);
+  useEffect(() => {
+    flagsRef.current = flags;
+  }, [flags]);
   // US-026: destructure the bundled `runtime` prop into the legacy per-stream
   // names every downstream call site already uses. Keeps the diff focused on
   // the prop API while preserving the existing memo/dependency wiring.
@@ -1517,6 +1696,10 @@ export function DemoCanvas({
   // (Marquee cancellation was removed in US-022 — the marquee gesture is no
   //  longer wired; primary-mouse drag on empty canvas is a no-op.)
   useEffect(() => {
+    // US-027: in view mode the canvas is read-only — no draw/connection/
+    // selection gestures can be in flight, and there's no edit chrome whose
+    // ESC chain we'd need to drive. Skip wiring the listener entirely.
+    if (!flags.enableKeyboard) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       // 1. Inline label edit — defer to InlineEdit's own handler.
@@ -1569,7 +1752,7 @@ export function DemoCanvas({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [exitDrawMode]);
+  }, [exitDrawMode, flags.enableKeyboard]);
 
   // US-022: Cmd/Ctrl + C / Cmd/Ctrl + V — copy/paste the current selection.
   // Mirrors the US-017 pattern: pure helper drives the dispatch, the listener
@@ -1578,6 +1761,10 @@ export function DemoCanvas({
   // multi-id signature for keyboard copy), so undo plumbing + single-undo-step
   // + edge filtering come for free from the parent's existing implementation.
   useEffect(() => {
+    // US-027: keyboard chord wiring is gated together with the ESC chain. In
+    // view mode the canvas surfaces nothing for the user to copy and nothing
+    // to paste into.
+    if (!flags.enableKeyboard) return;
     const onKey = (e: KeyboardEvent) => {
       handleClipboardShortcut({
         event: e,
@@ -1590,7 +1777,7 @@ export function DemoCanvas({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection]);
+  }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
     if (!drawShapeRef.current) return;
@@ -1791,6 +1978,9 @@ export function DemoCanvas({
       clientX: number,
       clientY: number,
     ) => {
+      // US-027: gate endpoint context menu on the same flag as the rest of
+      // the context-menu chain.
+      if (!flagsRef.current.enableContextMenu) return;
       contextNodeIdRef.current = null;
       setContextOnNode(false);
       setContextNodeType(null);
@@ -1911,6 +2101,9 @@ export function DemoCanvas({
           onResize: onNodeResize,
           setResizing,
           onNameChange: (() => {
+            // US-027: view mode → inline name edit is suppressed (the node's
+            // dblclick-to-edit path gates on this callback being wired).
+            if (!isEditMode) return undefined;
             // Ellipse drops the Name concept entirely — its centered label
             // renders `description`, and the detail panel hides the Name
             // field. Suppressing the callback also makes
@@ -1923,6 +2116,8 @@ export function DemoCanvas({
             return onNodeNameChange;
           })(),
           onDescriptionChange: (() => {
+            // US-027: same read-only gate as onNameChange above.
+            if (!isEditMode) return undefined;
             // Rectangle, ellipse, and sticky shapes render a description body — wire
             // the canvas-side inline edit so dblclick on the body lands an
             // edit. Other shape kinds (text/database) and imageNode /
@@ -2000,6 +2195,7 @@ export function DemoCanvas({
     onNodeDescriptionChange,
     onRetryImageUpload,
     pendingEditNodeId,
+    isEditMode,
   ]);
 
   // React Flow needs internal node state + onNodesChange to render drag
@@ -2321,6 +2517,10 @@ export function DemoCanvas({
   // capture-phase listener on the wrapper lets us pre-empt the native menu
   // and open Radix BEFORE xyflow gets the event.
   const onWrapperContextMenuCapture = useCallback((e: ReactMouseEvent<HTMLDivElement>) => {
+    // US-027: view mode disables every context-menu pathway. Skip so the
+    // browser's native right-click menu surfaces normally if the embedder
+    // wants it.
+    if (!flagsRef.current.enableContextMenu) return;
     // Only intervene when there's a multi-selection. Single-node and pane
     // right-clicks still flow through xyflow's onNodeContextMenu /
     // onPaneContextMenu paths (which handle their own preventDefault).
@@ -2359,8 +2559,11 @@ export function DemoCanvas({
       const types = dt.types ? Array.from(dt.types) : [];
       const hasFiles = types.includes('Files');
       const hasHtmlBlock = types.includes(HTML_BLOCK_DND_TYPE);
-      const acceptImage = hasFiles && !!onCreateImageFromFile;
-      const acceptHtmlBlock = hasHtmlBlock && !!onCreateHtmlNode;
+      // US-027: gate image drops on enableImageDrop, html-block drops on
+      // enableDragDrop. Either flag can be flipped off independently of mode
+      // for a partially-read-only canvas.
+      const acceptImage = hasFiles && !!onCreateImageFromFile && flags.enableImageDrop;
+      const acceptHtmlBlock = hasHtmlBlock && !!onCreateHtmlNode && flags.enableDragDrop;
       if (!acceptImage && !acceptHtmlBlock) return;
       e.preventDefault();
       try {
@@ -2370,7 +2573,7 @@ export function DemoCanvas({
         // read-only mid-dispatch — ignore; the preventDefault is what counts.
       }
     },
-    [onCreateImageFromFile, onCreateHtmlNode],
+    [onCreateImageFromFile, onCreateHtmlNode, flags.enableImageDrop, flags.enableDragDrop],
   );
 
   // US-008 + US-017: drop on the canvas wrapper. Two payload kinds, same
@@ -2392,7 +2595,7 @@ export function DemoCanvas({
       // Only honor the HTML block drop when the parent wired the handler;
       // otherwise fall through (the marker on its own shouldn't enable
       // creation on a read-only canvas).
-      if (isHtmlBlockDrop && onCreateHtmlNode) {
+      if (isHtmlBlockDrop && onCreateHtmlNode && flags.enableDragDrop) {
         e.preventDefault();
         const rfInstance = rfInstanceRef.current;
         if (!rfInstance) return;
@@ -2403,7 +2606,8 @@ export function DemoCanvas({
         onCreateHtmlNode({ position: flowPos });
         return;
       }
-      if (!onCreateImageFromFile) return;
+      // US-027: image drop gated on enableImageDrop.
+      if (!onCreateImageFromFile || !flags.enableImageDrop) return;
       // Capture clientX/Y synchronously — the synthetic event is recycled by
       // React once the handler returns, so the awaited dims read would see
       // stale coordinates.
@@ -2417,7 +2621,7 @@ export function DemoCanvas({
         dispatch: onCreateImageFromFile,
       });
     },
-    [onCreateImageFromFile, onCreateHtmlNode],
+    [onCreateImageFromFile, onCreateHtmlNode, flags.enableImageDrop, flags.enableDragDrop],
   );
 
   const reconnectableEdges = !!onReconnectConnector;
@@ -2452,7 +2656,10 @@ export function DemoCanvas({
         ...next,
         data: {
           ...next.data,
-          onLabelChange: onConnectorLabelChange,
+          // US-027: view mode → suppress the inline label-edit handler so the
+          // connector label renders read-only (EditableEdge gates on whether
+          // this prop is wired).
+          onLabelChange: isEditMode ? onConnectorLabelChange : undefined,
           reconnectable: enableReconnect,
           // US-018: stable callback (useCallback with empty deps) so the
           // memoized edge cache key doesn't churn.
@@ -2511,6 +2718,7 @@ export function DemoCanvas({
     onConnectorLabelChange,
     reconnectableEdges,
     registerEditHandle,
+    isEditMode,
   ]);
 
   // Mirror rfEdges into a ref so onEdgesChange (declared earlier) reads the
@@ -2537,6 +2745,11 @@ export function DemoCanvas({
   // specific handle dot.
   const onConnect = useCallback(
     (conn: Connection) => {
+      // US-027: view mode → new connector creation is suppressed even when a
+      // caller mistakenly passes onCreateConnector. nodesConnectable is also
+      // gated below so the gesture can't start in the first place; this is the
+      // defensive second gate at commit time.
+      if (!isEditMode) return;
       if (!onCreateConnector) return;
       const { source, target } = conn;
       if (!source || !target) return;
@@ -2556,7 +2769,7 @@ export function DemoCanvas({
       const persistTarget = reversed ? source : target;
       onCreateConnector(persistSource, persistTarget);
     },
-    [onCreateConnector],
+    [onCreateConnector, isEditMode],
   );
 
   // US-004: text-shape nodes (data.shape === 'text') are pure annotations and
@@ -2988,6 +3201,9 @@ export function DemoCanvas({
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [spaceDragging, setSpaceDragging] = useState(false);
   useEffect(() => {
+    // US-027: Space-held pan is a keyboard affordance — gate on the same flag
+    // as the ESC chain and the Cmd+C/V handlers above.
+    if (!flags.enableKeyboard) return;
     const isEditable = (el: Element | null): boolean => {
       if (!el) return false;
       const tag = el.tagName;
@@ -3013,7 +3229,7 @@ export function DemoCanvas({
       window.removeEventListener('keydown', onKeyDown);
       window.removeEventListener('keyup', onKeyUp);
     };
-  }, []);
+  }, [flags.enableKeyboard]);
 
   // Multi-node drag-stop: React Flow passes the full set of nodes that moved
   // (the active drag plus every other selected node, since selected items
@@ -3025,6 +3241,11 @@ export function DemoCanvas({
   const commitDraggedNodes = useCallback(
     (draggedNodes: Node[]) => {
       if (draggedNodes.length === 0) return;
+      // US-027: view mode — React Flow's internal applyNodeChanges has already
+      // updated the local rfNodes during the drag, so the visual move stuck.
+      // We just skip the parent dispatches that would have persisted via the
+      // adapter — no PATCH fires, no undo entry is pushed.
+      if (!isEditMode) return;
       if (draggedNodes.length === 1) {
         const moved = draggedNodes[0];
         if (moved && onNodePositionChange) {
@@ -3045,7 +3266,7 @@ export function DemoCanvas({
         onNodePositionChange(moved.id, { x: moved.position.x, y: moved.position.y });
       }
     },
-    [onNodePositionChange, onNodePositionsChange],
+    [onNodePositionChange, onNodePositionsChange, isEditMode],
   );
 
   const onNodeDragStopCb = useCallback(
@@ -3145,10 +3366,28 @@ export function DemoCanvas({
         edgeTypes={edgeTypes}
         proOptions={{ hideAttribution: true }}
         fitView
-        nodesDraggable={!!onNodePositionChange && !drawShape}
-        nodesConnectable={!!onCreateConnector && !drawShape}
+        // US-027: nodes remain draggable in view mode so the canvas feels
+        // alive (local-state-only repositioning). commitDraggedNodes above
+        // gates the actual PATCH dispatch.
+        nodesDraggable={(isEditMode ? !!onNodePositionChange : true) && !drawShape}
+        // US-027: view mode → handles are never connectable. Both the global
+        // and per-node connectable flags are gated; combined with the onConnect
+        // early return this is a triple-gate against stray edge creation.
+        nodesConnectable={isEditMode && !!onCreateConnector && !drawShape}
+        // US-027: in view mode we disable keyboard-driven deletion entirely
+        // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
+        // flag — the per-edge `deletable` defaults to true and only the
+        // delete-key path opt-outs at the top level. Combined with the
+        // context-menu gate above, this leaves no UI path for the user to
+        // delete a node or connector in view mode.
+        deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
+        // US-027: zoom and pan are explicit so view-mode embedders that
+        // disable them via flag overrides get the expected behavior. The
+        // default for both is true to match the legacy edit-mode behavior.
+        zoomOnScroll={flags.enableZoom}
+        zoomOnPinch={flags.enableZoom}
         className={connecting ? 'seeflow-connecting' : undefined}
-        onConnect={onConnect}
+        onConnect={isEditMode ? onConnect : undefined}
         // US-004: reject any connection where either endpoint is a text-shape
         // node — pure annotations are never connectable. See the
         // `isValidConnection` definition above for the full rationale.
@@ -3168,7 +3407,7 @@ export function DemoCanvas({
           setConnectSource(params.nodeId ?? null);
         }}
         onConnectEnd={onConnectEndCb}
-        onReconnect={onReconnectConnector ? onReconnect : undefined}
+        onReconnect={isEditMode && onReconnectConnector ? onReconnect : undefined}
         onReconnectStart={(_e, edge, handleType) => {
           setConnecting(true);
           reconnectSucceededRef.current = false;
@@ -3239,7 +3478,9 @@ export function DemoCanvas({
         // (default would be 'Shift') since selectionOnDrag already covers
         // marquee — keeping shift free for additive multi-select via click.
         selectionOnDrag={!drawShape}
-        panOnDrag={drawShape ? false : [1, 2]}
+        // US-027: panning gated on the resolved flag. Draw mode still wins
+        // (toolbar shape gesture owns primary-drag).
+        panOnDrag={drawShape ? false : flags.enablePan ? [1, 2] : false}
         selectionMode={SelectionMode.Partial}
         selectionKeyCode={null}
         multiSelectionKeyCode={drawShape ? null : ['Meta', 'Shift']}
@@ -3306,7 +3547,7 @@ export function DemoCanvas({
         }}
         onPaneClick={handlePaneClickWithGroupExit}
         onNodeContextMenu={
-          contextEnabled
+          flags.enableContextMenu && contextEnabled
             ? (e, node) => {
                 // Suppress the browser's default menu and open our own at the
                 // cursor. The id sticks in a ref (read by item callbacks); the
@@ -3322,7 +3563,7 @@ export function DemoCanvas({
             : undefined
         }
         onPaneContextMenu={
-          onPasteAt
+          flags.enableContextMenu && onPasteAt
             ? (e) => {
                 // Right-click on empty canvas opens the same menu but with
                 // only the pane-applicable items (Paste). The "ContextMenu"
@@ -3377,15 +3618,20 @@ export function DemoCanvas({
         {/* US-007: multi-select bounding-box resize overlay. Renders only when
             ≥ 2 selected nodes are NOT all children of the same group; the
             internal check is in `<SelectionResizeOverlay>`. We pass through
-            unconditionally — empty / ineligible selections render nothing. */}
-        <SelectionResizeOverlay
-          selectedNodes={selectionOverlayNodes}
-          onMultiResize={onMultiResize}
-        />
-        {onCreateShapeNode || onStyleNode || onStyleConnector ? (
+            unconditionally — empty / ineligible selections render nothing.
+            US-027: gated on flags.showResizeHandles so view-mode embedders
+            skip the overlay machinery entirely. */}
+        {flags.showResizeHandles ? (
+          <SelectionResizeOverlay
+            selectedNodes={selectionOverlayNodes}
+            onMultiResize={onMultiResize}
+          />
+        ) : null}
+        {(flags.showToolbar && onCreateShapeNode) ||
+        (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
           <Panel position="top-left">
             <div className="flex flex-col gap-2">
-              {onCreateShapeNode ? (
+              {flags.showToolbar && onCreateShapeNode ? (
                 <CanvasToolbar
                   activeShape={drawShape}
                   onSelectShape={setDrawShape}
@@ -3395,7 +3641,7 @@ export function DemoCanvas({
                   onPickIcon={onPickIcon}
                 />
               ) : null}
-              {onStyleNode && onStyleConnector ? (
+              {flags.showStyleStrip && onStyleNode && onStyleConnector ? (
                 <StyleStrip
                   nodes={selectedNodesForStyleStrip}
                   connectors={selectedConnectors ?? []}
@@ -3456,7 +3702,7 @@ export function DemoCanvas({
           })()}
         </div>
       ) : null}
-      {contextEnabled ? (
+      {flags.enableContextMenu && contextEnabled ? (
         <ContextMenu
           onOpenChange={(open) => {
             if (!open) {

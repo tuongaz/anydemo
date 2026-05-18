@@ -8,6 +8,7 @@ import {
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
   handleClipboardShortcut,
+  resolveFlags,
 } from '@/components/demo-canvas';
 import type { Connector, DemoNode } from '@/lib/api';
 import type { CanvasAdapter, CanvasRuntime } from '@/lib/canvas-adapter';
@@ -153,6 +154,10 @@ function callDemoCanvas(
       ? { pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides } }
       : undefined);
   const props: DemoCanvasProps = {
+    // US-027: tests default to mode='edit' so the legacy assertions (every
+    // chrome render + handler reachable) continue to hold. Per-test overrides
+    // can flip to mode='view' to assert the view-mode gating.
+    mode: 'edit',
     adapter: noopAdapter,
     nodes: [],
     connectors: [],
@@ -669,16 +674,18 @@ describe('DemoCanvas', () => {
     // useRef is added above any of these, the indices shift and this test
     // fails loudly with a clear "ref index drifted" assertion below.
     const REF = {
-      wrapper: 0,
-      rfInstance: 1,
+      // US-027 added flagsRef (slot 0) so every existing ref shifted by +1.
+      flags: 0,
+      wrapper: 1,
+      rfInstance: 2,
       // US-018 added editHandlesRef (slot 3, after storeApiRef) so every
       // draw-* ref shifted down by one. activeGroupIdRef removed, shifting
       // all draw-* refs back up by one. Update this map alongside any
       // future useRef addition above drawShape.
-      drawShape: 11,
-      drawStart: 12,
-      drawCurrent: 13,
-      drawing: 14,
+      drawShape: 12,
+      drawStart: 13,
+      drawCurrent: 14,
+      drawing: 15,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
@@ -1838,9 +1845,10 @@ describe('DemoCanvas', () => {
       const refSink: { current: unknown }[] = [];
       const fitViewCalls: unknown[] = [];
       const tree = callDemoCanvas({ nodes: [makeShapeNode('a')] }, { refSink });
-      // rfInstanceRef is the SECOND useRef in DemoCanvas (slot 1):
-      //   slot 0 = wrapperRef
-      //   slot 1 = rfInstanceRef
+      // rfInstanceRef is the THIRD useRef in DemoCanvas (slot 2):
+      //   slot 0 = flagsRef (US-027)
+      //   slot 1 = wrapperRef
+      //   slot 2 = rfInstanceRef
       // Inject a fake ReactFlowInstance with a fitView spy. If the ref slot
       // ordering changes in the future the test will fail loudly because
       // fitViewCalls stays empty.
@@ -1849,7 +1857,7 @@ describe('DemoCanvas', () => {
           fitViewCalls.push(opts);
         },
       };
-      const rfRef = refSink[1];
+      const rfRef = refSink[2];
       if (!rfRef) throw new Error('rfInstanceRef slot not captured');
       rfRef.current = stubInstance;
 
@@ -2178,5 +2186,230 @@ describe('DemoCanvas', () => {
       expect(() => onDrop(e)).not.toThrow();
       expect(e.defaultPrevented).toBe(false);
     });
+  });
+
+  describe("US-027: mode='view' gates editing and chrome", () => {
+    // Sanity contract on the discriminated union — view mode swaps the
+    // mutation surface off without requiring an adapter. The hook-shim tests
+    // exercise the post-render React-element tree (no live DOM); each gate
+    // is verified by inspecting the ReactFlow root's resolved props.
+    it('ReactFlow root has nodesConnectable=false even when onCreateConnector is wired in view mode', () => {
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        selectedNodeIds: ['a'],
+        onCreateConnector: () => {
+          throw new Error('view-mode onCreateConnector must not be invoked');
+        },
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      expect(rf.props.nodesConnectable).toBe(false);
+    });
+
+    it('ReactFlow root disables deleteKeyCode in view mode', () => {
+      // xyflow has no global `edgesDeletable` flag; the only path to delete
+      // is the delete-key chord. Setting it null leaves the user with no
+      // delete pathway in view mode (the context menu is already gated above).
+      const tree = callDemoCanvas({ mode: 'view', adapter: undefined });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      expect(rf.props.deleteKeyCode).toBeNull();
+    });
+
+    it('ReactFlow root wires deleteKeyCode in edit mode', () => {
+      const tree = callDemoCanvas({});
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      expect(rf.props.deleteKeyCode).toEqual(['Backspace', 'Delete']);
+    });
+
+    it('ReactFlow root suppresses onConnect in view mode', () => {
+      // The discriminated union allows callers to pass onCreateConnector even
+      // in view mode (typed as Partial<…>); the wiring still drops it.
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        onCreateConnector: () => {},
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      expect(rf.props.onConnect).toBeUndefined();
+    });
+
+    it('ReactFlow root suppresses onNodeContextMenu / onPaneContextMenu in view mode', () => {
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        onDeleteNode: () => {},
+        onPasteAt: () => {},
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      expect(rf.props.onNodeContextMenu).toBeUndefined();
+      expect(rf.props.onPaneContextMenu).toBeUndefined();
+    });
+
+    it('CanvasToolbar is hidden in view mode even when onCreateShapeNode is wired', () => {
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        onCreateShapeNode: () => {},
+      });
+      const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
+      expect(toolbar).toBeNull();
+    });
+
+    it('StyleStrip is hidden in view mode even when style handlers are wired', () => {
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        onStyleNode: () => {},
+        onStyleConnector: () => {},
+      });
+      const strip = findElement(tree, (el) => el.type === StyleStrip);
+      expect(strip).toBeNull();
+    });
+
+    it('SelectionResizeOverlay is suppressed in view mode', () => {
+      const tree = callDemoCanvas({ mode: 'view', adapter: undefined });
+      const overlay = findElement(tree, (el) => el.type === SelectionResizeOverlay);
+      expect(overlay).toBeNull();
+    });
+
+    it('connector edge.data.onLabelChange is undefined in view mode (label is read-only)', () => {
+      // Connector label inline-edit gates on the data callback being wired;
+      // dropping it in view mode flips the EditableEdge to read-only.
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        connectors: [
+          {
+            id: 'c1',
+            source: 'a',
+            target: 'b',
+            sourceHandleAutoPicked: true,
+            targetHandleAutoPicked: true,
+            kind: 'default',
+          } as Connector,
+        ],
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        onConnectorLabelChange: () => {
+          throw new Error('view-mode onConnectorLabelChange must not be invoked');
+        },
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      const edges = rf.props.edges as Array<{ id?: string; data?: { onLabelChange?: unknown } }>;
+      const c1 = edges.find((e) => e.id === 'c1');
+      expect(c1?.data?.onLabelChange).toBeUndefined();
+    });
+
+    it('node.data.onNameChange and onDescriptionChange are undefined in view mode', () => {
+      // Inline name/description edits gate on the data callbacks being wired
+      // (the shape-node uses `onNameChange === undefined` as the read-only
+      // signal that suppresses the dblclick-to-edit path).
+      const tree = callDemoCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        onNodeNameChange: () => {
+          throw new Error('view-mode onNodeNameChange must not be invoked');
+        },
+        onNodeDescriptionChange: () => {
+          throw new Error('view-mode onNodeDescriptionChange must not be invoked');
+        },
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in DemoCanvas tree');
+      const rfNodes = rf.props.nodes as Node[];
+      const a = rfNodes.find((n) => n.id === 'a');
+      expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
+      expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBeUndefined();
+    });
+  });
+});
+
+describe('US-027: resolveFlags helper', () => {
+  // Pure helper test — covers the mode preset + the override layer. Behavior
+  // gates inside <DemoCanvas> consume the resolved flag set, so pinning
+  // resolveFlags pins the gating contract end-to-end.
+  it("returns the edit preset when no overrides are passed (mode='edit')", () => {
+    expect(resolveFlags({ mode: 'edit' })).toEqual({
+      showToolbar: true,
+      showStyleStrip: true,
+      showDetailPanel: true,
+      showStatusBadges: true,
+      showResizeHandles: true,
+      enableKeyboard: true,
+      enableContextMenu: true,
+      enableDragDrop: true,
+      enableImageDrop: true,
+      enableZoom: true,
+      enablePan: true,
+    });
+  });
+
+  it("returns the view preset when no overrides are passed (mode='view')", () => {
+    // The view preset hides chrome + disables every editing path, but keeps
+    // pan/zoom (so the canvas is navigable) and status badges (so SSE-driven
+    // monitoring still surfaces).
+    expect(resolveFlags({ mode: 'view' })).toEqual({
+      showToolbar: false,
+      showStyleStrip: false,
+      showDetailPanel: false,
+      showStatusBadges: true,
+      showResizeHandles: false,
+      enableKeyboard: false,
+      enableContextMenu: false,
+      enableDragDrop: false,
+      enableImageDrop: false,
+      enableZoom: true,
+      enablePan: true,
+    });
+  });
+
+  it('lets a per-feature override turn an edit-mode flag off', () => {
+    // Edit mode + hide the toolbar (e.g. a presentation slice that wants
+    // every editing keyboard shortcut + persistence on, but no on-canvas
+    // shape picker chrome).
+    const resolved = resolveFlags({ mode: 'edit', showToolbar: false });
+    expect(resolved.showToolbar).toBe(false);
+    // Other defaults stay edit-on.
+    expect(resolved.showStyleStrip).toBe(true);
+    expect(resolved.enableContextMenu).toBe(true);
+  });
+
+  it('lets a per-feature override turn a view-mode flag on', () => {
+    // View mode + opt-in to status badges (already on by default) and
+    // opt-in to keyboard shortcuts (off by default) — e.g. a kiosk where
+    // panning + zoom + ESC clear should still work.
+    const resolved = resolveFlags({
+      mode: 'view',
+      enableKeyboard: true,
+      showStatusBadges: true,
+    });
+    expect(resolved.enableKeyboard).toBe(true);
+    expect(resolved.showStatusBadges).toBe(true);
+    // Other view defaults stay view-off.
+    expect(resolved.showToolbar).toBe(false);
+    expect(resolved.enableContextMenu).toBe(false);
+  });
+
+  it('treats undefined override as "use preset" (does not coerce to false)', () => {
+    // Regression net: a future refactor must not accidentally drop the `??`
+    // and use `||` or `Boolean(input.flag)` — those would treat undefined as
+    // false in edit mode, regressing the toolbar away.
+    const resolved = resolveFlags({ mode: 'edit', showToolbar: undefined });
+    expect(resolved.showToolbar).toBe(true);
+  });
+
+  it('respects explicit false even in edit mode (override wins over preset)', () => {
+    expect(resolveFlags({ mode: 'edit', enablePan: false }).enablePan).toBe(false);
+  });
+
+  it('respects explicit true even in view mode (override wins over preset)', () => {
+    expect(resolveFlags({ mode: 'view', showToolbar: true }).showToolbar).toBe(true);
   });
 });

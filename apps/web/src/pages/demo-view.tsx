@@ -3029,6 +3029,7 @@ export function DemoView({
 
       {demo && adapter ? (
         <DemoCanvas
+          mode="edit"
           adapter={adapter}
           projectId={demoId ?? undefined}
           nodes={visibleNodes ?? demo.nodes}
