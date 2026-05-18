@@ -117,14 +117,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       {body}
       <Handle
@@ -132,14 +132,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       {data.name !== undefined && data.name !== '' ? (
         <div

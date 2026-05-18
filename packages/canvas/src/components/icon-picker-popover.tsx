@@ -111,7 +111,7 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
         </div>
       ) : null}
 
-      <div className="p-2">
+      <div className="sf-p-2">
         <div className="sf-mb-1 sf-px-1 sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground">
           All icons
         </div>

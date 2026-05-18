@@ -106,14 +106,14 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       {IconComponent ? (
         <IconComponent
@@ -155,14 +155,14 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
     </div>
   );

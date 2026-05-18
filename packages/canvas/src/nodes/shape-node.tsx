@@ -90,7 +90,7 @@ export const SHAPE_CLASS: Record<ShapeKind, string> = {
   rectangle: 'sf-rounded-lg sf-border-[3px] sf-bg-transparent',
   ellipse: 'sf-rounded-full sf-border-[3px] sf-bg-transparent',
   sticky: 'sf-rounded-md sf-border-[3px] sf-shadow-md -sf-rotate-1',
-  text: 'bg-transparent',
+  text: 'sf-bg-transparent',
   // US-009: illustrative shapes have no wrapper chrome — the inline SVG owns
   // border + fill so the wrapper stays a transparent positioning host.
   database: '',
@@ -177,7 +177,7 @@ function resolveIllustrativeColors(data: ShapeNodeData): {
 }
 
 // Handles stay hidden by default and only render on the active (selected) node
-// — the `selected && '!opacity-100'` branch in each <Handle>'s className. While
+// — the `selected && '!sf-opacity-100'` branch in each <Handle>'s className. While
 // a connection is in progress, `.react-flow.seeflow-connecting .react-flow__handle`
 // (apps/web/src/index.css) globally forces `opacity: 1` so drop targets light
 // up across all nodes during the drag, preserving the US-014 auto-snap UX.
@@ -445,7 +445,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
               type="button"
               className={cn(
                 'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-font-semibold sf-text-[18px] sf-leading-tight',
-                nameEditable ? 'hover:opacity-80' : '',
+                nameEditable ? 'hover:sf-opacity-80' : '',
               )}
               style={labelFontStyle}
             >
@@ -475,7 +475,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
             className={cn(
               'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[16px] sf-leading-tight',
               hasDescription ? 'text-muted-foreground' : 'sf-italic sf-text-muted-foreground/40',
-              descEditable ? 'hover:opacity-80' : '',
+              descEditable ? 'hover:sf-opacity-80' : '',
             )}
             style={descriptionFontStyle}
           >
@@ -498,7 +498,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         // the inner div's `overflow-hidden` (needed for the header bg to
         // respect the rounded corners) clips them, matching the state-node
         // pattern.
-        useHeaderLayout ? '' : 'relative',
+        useHeaderLayout ? '' : 'sf-relative',
         useHeaderLayout
           ? 'sf-flex sf-flex-col sf-overflow-hidden sf-text-left'
           : 'sf-flex sf-items-center sf-justify-center sf-p-2 sf-text-center sf-text-[22px]',
@@ -528,7 +528,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Top}
           id="t"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
         />
       )}
       {!isText && (
@@ -537,7 +537,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Left}
           id="l"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
         />
       )}
       {useHeaderLayout ? headerBodyContent : singleLabelContent}
@@ -547,7 +547,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Right}
           id="r"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
         />
       )}
       {!isText && (
@@ -556,7 +556,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Bottom}
           id="b"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
         />
       )}
     </div>

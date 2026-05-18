@@ -99,14 +99,14 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       {data._uploading ? (
         // US-008: optimistic-placement loading state. The <img> is suppressed
@@ -150,14 +150,14 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!opacity-100')}
+        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
       />
     </div>
   );

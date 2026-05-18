@@ -144,7 +144,9 @@ export function CanvasToolbar({
         onClick={() => onSelectShape(active ? null : shape)}
         className={cn(
           'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
-          active ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30' : 'hover:bg-muted',
+          active
+            ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
+            : 'hover:sf-bg-muted',
         )}
       >
         <Icon className="sf-h-4 sf-w-4" />
@@ -170,7 +172,7 @@ export function CanvasToolbar({
               'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
               shapePickerOpen || illustrativeActive
                 ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-                : 'hover:bg-muted',
+                : 'hover:sf-bg-muted',
             )}
           >
             <Shapes className="sf-h-4 sf-w-4" aria-hidden="true" />
@@ -239,7 +241,7 @@ export function CanvasToolbar({
                 'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
                 iconPickerOpen
                   ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-                  : 'hover:bg-muted',
+                  : 'hover:sf-bg-muted',
               )}
             >
               <Sticker className="sf-h-4 sf-w-4" aria-hidden="true" />

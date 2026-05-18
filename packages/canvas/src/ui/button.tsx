@@ -9,9 +9,11 @@ const buttonVariants = cva(
   {
     variants: {
       variant: {
-        default: 'sf-bg-primary sf-text-primary-foreground sf-font-semibold hover:sf-bg-emerald-400',
+        default:
+          'sf-bg-primary sf-text-primary-foreground sf-font-semibold hover:sf-bg-emerald-400',
         destructive: 'sf-bg-destructive sf-text-destructive-foreground hover:sf-bg-destructive/90',
-        outline: 'sf-border sf-border-input sf-bg-background hover:sf-bg-secondary hover:sf-text-foreground',
+        outline:
+          'sf-border sf-border-input sf-bg-background hover:sf-bg-secondary hover:sf-text-foreground',
         secondary: 'sf-bg-secondary sf-text-secondary-foreground hover:sf-bg-secondary/80',
         ghost: 'sf-text-muted-foreground hover:sf-bg-muted hover:sf-text-foreground',
         link: 'sf-text-primary sf-underline-offset-4 hover:sf-underline',

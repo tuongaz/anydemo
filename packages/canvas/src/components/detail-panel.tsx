@@ -130,7 +130,7 @@ export function DetailPanel({
     >
       <SheetContent
         side="right"
-        className="overflow-y-auto bg-card/94 backdrop-blur-[14px] border-border sm:!w-[var(--detail-panel-w)] sm:!max-w-[var(--detail-panel-w)]"
+        className="sf-overflow-y-auto sf-bg-card/94 sf-backdrop-blur-[14px] sf-border-border sm:!sf-w-[var(--detail-panel-w)] sm:!sf-max-w-[var(--detail-panel-w)]"
         style={widthStyle}
         data-testid="detail-panel"
         onEscapeKeyDown={(e) => {
@@ -481,7 +481,7 @@ export function IconRow({
             aria-pressed={open}
             className={cn(
               'sf-inline-flex sf-h-8 sf-min-w-8 sf-items-center sf-gap-2 sf-rounded-md sf-border sf-border-input sf-bg-background sf-px-2 sf-text-sm sf-transition-colors',
-              'hover:bg-muted',
+              'hover:sf-bg-muted',
             )}
           >
             {icon ? (
@@ -699,7 +699,9 @@ export function StatusSection({
           {entries.map(([key, value]) => (
             <div key={key} className="contents" data-testid="detail-panel-status-data-row">
               <dt className="sf-truncate sf-font-medium sf-text-muted-foreground">{key}</dt>
-              <dd className="sf-break-all sf-font-mono sf-text-foreground">{formatStatusValue(value)}</dd>
+              <dd className="sf-break-all sf-font-mono sf-text-foreground">
+                {formatStatusValue(value)}
+              </dd>
             </div>
           ))}
         </dl>
@@ -713,7 +715,9 @@ function MarkdownContent({ value }: { value: string }) {
     <ReactMarkdown
       remarkPlugins={[remarkGfm]}
       components={{
-        h1: ({ children }) => <h1 className="sf-mb-1 sf-text-base sf-font-bold sf-leading-snug">{children}</h1>,
+        h1: ({ children }) => (
+          <h1 className="sf-mb-1 sf-text-base sf-font-bold sf-leading-snug">{children}</h1>
+        ),
         h2: ({ children }) => (
           <h2 className="sf-mb-1 sf-text-sm sf-font-semibold sf-leading-snug">{children}</h2>
         ),
@@ -721,8 +725,12 @@ function MarkdownContent({ value }: { value: string }) {
           <h3 className="sf-mb-0.5 sf-text-sm sf-font-medium sf-leading-snug">{children}</h3>
         ),
         p: ({ children }) => <p className="sf-mb-2 last:sf-mb-0 sf-leading-relaxed">{children}</p>,
-        ul: ({ children }) => <ul className="sf-mb-2 sf-list-disc sf-pl-4 last:sf-mb-0">{children}</ul>,
-        ol: ({ children }) => <ol className="sf-mb-2 sf-list-decimal sf-pl-4 last:sf-mb-0">{children}</ol>,
+        ul: ({ children }) => (
+          <ul className="sf-mb-2 sf-list-disc sf-pl-4 last:sf-mb-0">{children}</ul>
+        ),
+        ol: ({ children }) => (
+          <ol className="sf-mb-2 sf-list-decimal sf-pl-4 last:sf-mb-0">{children}</ol>
+        ),
         li: ({ children }) => <li className="mb-0.5">{children}</li>,
         code: ({ children, className }) => {
           const isBlock = className?.includes('language-');
@@ -731,7 +739,9 @@ function MarkdownContent({ value }: { value: string }) {
               {children}
             </code>
           ) : (
-            <code className="sf-rounded sf-bg-muted/60 sf-px-1 sf-py-0.5 sf-font-mono sf-text-xs">{children}</code>
+            <code className="sf-rounded sf-bg-muted/60 sf-px-1 sf-py-0.5 sf-font-mono sf-text-xs">
+              {children}
+            </code>
           );
         },
         pre: ({ children }) => <pre className="sf-mb-2 last:sf-mb-0">{children}</pre>,
@@ -763,7 +773,9 @@ function MarkdownContent({ value }: { value: string }) {
             {children}
           </th>
         ),
-        td: ({ children }) => <td className="sf-border sf-border-border sf-px-2 sf-py-1">{children}</td>,
+        td: ({ children }) => (
+          <td className="sf-border sf-border-border sf-px-2 sf-py-1">{children}</td>
+        ),
       }}
     >
       {value}

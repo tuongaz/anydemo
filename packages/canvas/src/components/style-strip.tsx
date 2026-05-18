@@ -464,7 +464,9 @@ export function StyleStrip({
             tooltip="Border width"
             ariaLabel="image border width"
             renderIcon={() => (
-              <span className="sf-font-mono sf-text-[10px] sf-tabular-nums">{imageBorderWidth}</span>
+              <span className="sf-font-mono sf-text-[10px] sf-tabular-nums">
+                {imageBorderWidth}
+              </span>
             )}
           >
             <SliderControl
@@ -854,13 +856,13 @@ function SwatchButton({
                   'sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all',
                   isActive
                     ? 'sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover'
-                    : 'hover:scale-110',
+                    : 'hover:sf-scale-110',
                 )}
                 style={swatchPreviewStyle(token, previewKind)}
               >
                 {isActive ? (
                   <Check
-                    className="h-3 w-3 drop-shadow-sm"
+                    className="sf-h-3 sf-w-3 sf-drop-shadow-sm"
                     style={{ color: 'hsl(var(--foreground))' }}
                   />
                 ) : null}
@@ -914,13 +916,15 @@ function ColorSwatchGrid({
             title={token}
             className={cn(
               'sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all',
-              isActive ? 'sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover' : 'hover:scale-110',
+              isActive
+                ? 'sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover'
+                : 'hover:sf-scale-110',
             )}
             style={swatchPreviewStyle(token, previewKind)}
           >
             {isActive ? (
               <Check
-                className="h-3 w-3 drop-shadow-sm"
+                className="sf-h-3 sf-w-3 sf-drop-shadow-sm"
                 style={{ color: 'hsl(var(--foreground))' }}
               />
             ) : null}
@@ -1054,7 +1058,7 @@ function SliderControl({
         onValueCommit={([v]) => onCommit(v ?? min)}
         data-testid={testId}
         data-indeterminate={showPlaceholder ? 'true' : undefined}
-        className={cn('flex-1', showPlaceholder && 'opacity-60')}
+        className={cn('sf-flex-1', showPlaceholder && 'sf-opacity-60')}
       />
       <span
         data-testid={`${testId}-value`}

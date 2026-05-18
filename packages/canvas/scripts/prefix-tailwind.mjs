@@ -50,51 +50,179 @@ const KNOWN_NON_TAILWIND = new Set([
 ]);
 
 const TAILWIND_PLAIN_WORDS = new Set([
-  'flex', 'grid', 'block', 'inline', 'hidden', 'table', 'contents',
-  'group', 'peer', 'truncate', 'italic', 'antialiased',
-  'rounded', 'border', 'ring', 'shadow',
-  'absolute', 'relative', 'fixed', 'sticky', 'static',
-  'uppercase', 'lowercase', 'capitalize',
-  'underline', 'transition', 'transform',
-  'isolate', 'visible', 'invisible', 'container',
+  'flex',
+  'grid',
+  'block',
+  'inline',
+  'hidden',
+  'table',
+  'contents',
+  'group',
+  'peer',
+  'truncate',
+  'italic',
+  'antialiased',
+  'rounded',
+  'border',
+  'ring',
+  'shadow',
+  'absolute',
+  'relative',
+  'fixed',
+  'sticky',
+  'static',
+  'uppercase',
+  'lowercase',
+  'capitalize',
+  'underline',
+  'transition',
+  'transform',
+  'isolate',
+  'visible',
+  'invisible',
+  'container',
 ]);
 
 const TAILWIND_PREFIXES = [
-  'bg', 'text', 'font', 'leading', 'tracking', 'indent', 'list', 'decoration',
-  'p', 'px', 'py', 'pt', 'pr', 'pb', 'pl', 'ps', 'pe',
-  'm', 'mx', 'my', 'mt', 'mr', 'mb', 'ml', 'ms', 'me',
-  'gap', 'space',
-  'h', 'w', 'min', 'max', 'size',
-  'top', 'right', 'bottom', 'left', 'inset', 'z', 'order',
-  'rounded', 'border', 'divide', 'outline', 'ring',
-  'shadow', 'opacity', 'blur', 'brightness', 'contrast',
-  'grayscale', 'invert', 'saturate', 'sepia', 'hue',
-  'backdrop', 'mix-blend', 'bg-blend',
-  'transition', 'duration', 'ease', 'delay', 'animate',
-  'translate', 'rotate', 'scale', 'skew', 'origin', 'transform',
-  'cursor', 'select', 'resize', 'scroll', 'touch', 'user-select',
-  'pointer-events', 'whitespace', 'overflow', 'overscroll',
-  'fill', 'stroke',
-  'inline-flex', 'inline-grid', 'inline-block',
-  'flex', 'grid', 'col', 'row', 'place', 'justify', 'items', 'content', 'self',
-  'aspect', 'columns', 'break',
-  'hidden', 'visible', 'invisible',
-  'isolation', 'isolate',
-  'sr-only', 'not-sr-only',
-  'caret', 'accent',
+  'bg',
+  'text',
+  'font',
+  'leading',
+  'tracking',
+  'indent',
+  'list',
+  'decoration',
+  'p',
+  'px',
+  'py',
+  'pt',
+  'pr',
+  'pb',
+  'pl',
+  'ps',
+  'pe',
+  'm',
+  'mx',
+  'my',
+  'mt',
+  'mr',
+  'mb',
+  'ml',
+  'ms',
+  'me',
+  'gap',
+  'space',
+  'h',
+  'w',
+  'min',
+  'max',
+  'size',
+  'top',
+  'right',
+  'bottom',
+  'left',
+  'inset',
+  'z',
+  'order',
+  'rounded',
+  'border',
+  'divide',
+  'outline',
+  'ring',
+  'shadow',
+  'opacity',
+  'blur',
+  'brightness',
+  'contrast',
+  'grayscale',
+  'invert',
+  'saturate',
+  'sepia',
+  'hue',
+  'backdrop',
+  'mix-blend',
+  'bg-blend',
+  'transition',
+  'duration',
+  'ease',
+  'delay',
+  'animate',
+  'translate',
+  'rotate',
+  'scale',
+  'skew',
+  'origin',
+  'transform',
+  'cursor',
+  'select',
+  'resize',
+  'scroll',
+  'touch',
+  'user-select',
+  'pointer-events',
+  'whitespace',
+  'overflow',
+  'overscroll',
+  'fill',
+  'stroke',
+  'inline-flex',
+  'inline-grid',
+  'inline-block',
+  'flex',
+  'grid',
+  'col',
+  'row',
+  'place',
+  'justify',
+  'items',
+  'content',
+  'self',
+  'aspect',
+  'columns',
+  'break',
+  'hidden',
+  'visible',
+  'invisible',
+  'isolation',
+  'isolate',
+  'sr-only',
+  'not-sr-only',
+  'caret',
+  'accent',
   'object',
-  'shrink', 'grow', 'basis',
-  'truncate', 'line-clamp',
-  'underline', 'overline', 'no-underline', 'line-through',
-  'italic', 'not-italic',
-  'antialiased', 'subpixel-antialiased',
-  'normal-nums', 'tabular-nums', 'ordinal',
-  'uppercase', 'lowercase', 'capitalize', 'normal-case',
+  'shrink',
+  'grow',
+  'basis',
+  'truncate',
+  'line-clamp',
+  'underline',
+  'overline',
+  'no-underline',
+  'line-through',
+  'italic',
+  'not-italic',
+  'antialiased',
+  'subpixel-antialiased',
+  'normal-nums',
+  'tabular-nums',
+  'ordinal',
+  'uppercase',
+  'lowercase',
+  'capitalize',
+  'normal-case',
   'will-change',
   'appearance',
   'placeholder',
   // Animation utilities used by tailwindcss-animate.
-  'slide', 'fade', 'zoom', 'spin', 'ping', 'pulse', 'bounce',
+  'slide',
+  'fade',
+  'zoom',
+  'spin',
+  'ping',
+  'pulse',
+  'bounce',
+  // Filter utilities.
+  'drop-shadow',
 ];
 
 const PREFIX_PATTERN = new RegExp(
@@ -107,6 +235,7 @@ function isTailwindToken(token) {
   const colonIdx = token.lastIndexOf(':');
   let base = colonIdx === -1 ? token : token.slice(colonIdx + 1);
   if (base.startsWith('-')) base = base.slice(1);
+  if (base.startsWith('!')) base = base.slice(1);
   if (!base) return false;
   if (TAILWIND_PLAIN_WORDS.has(base)) return true;
   if (base.includes('[')) {
@@ -115,16 +244,21 @@ function isTailwindToken(token) {
   return PREFIX_PATTERN.test(base);
 }
 
+// Splice `sf-` into the base of a Tailwind token, preserving leading
+// `-` (negative margin/padding) and `!` (important modifier) signs.
+function prefixBase(base) {
+  if (base.startsWith('!')) return `!sf-${base.slice(1)}`;
+  if (base.startsWith('-')) return `-sf-${base.slice(1)}`;
+  return `sf-${base}`;
+}
+
 function prefixToken(token) {
   if (!isTailwindToken(token)) return token;
   const colonIdx = token.lastIndexOf(':');
-  if (colonIdx === -1) {
-    return token.startsWith('-') ? `-sf${token}` : `sf-${token}`;
-  }
+  if (colonIdx === -1) return prefixBase(token);
   const variants = token.slice(0, colonIdx);
   const base = token.slice(colonIdx + 1);
-  const prefixed = base.startsWith('-') ? `-sf${base}` : `sf-${base}`;
-  return `${variants}:${prefixed}`;
+  return `${variants}:${prefixBase(base)}`;
 }
 
 function prefixString(s) {
@@ -143,21 +277,24 @@ function stripComments(src) {
     const ch = src[i];
     const next = src[i + 1];
     if (ch === '/' && next === '/') {
-      out.push(' '); out.push(' ');
+      out.push(' ');
+      out.push(' ');
       i += 2;
       while (i < src.length && src[i] !== '\n') {
         out.push(' ');
         i++;
       }
     } else if (ch === '/' && next === '*') {
-      out.push(' '); out.push(' ');
+      out.push(' ');
+      out.push(' ');
       i += 2;
       while (i < src.length && !(src[i] === '*' && src[i + 1] === '/')) {
         out.push(src[i] === '\n' ? '\n' : ' ');
         i++;
       }
       if (i < src.length) {
-        out.push(' '); out.push(' ');
+        out.push(' ');
+        out.push(' ');
         i += 2;
       }
     } else if (ch === '"' || ch === "'" || ch === '`') {
@@ -166,7 +303,8 @@ function stripComments(src) {
       i++;
       while (i < src.length && src[i] !== quote) {
         if (src[i] === '\\' && i + 1 < src.length) {
-          out.push(src[i]); out.push(src[i + 1]);
+          out.push(src[i]);
+          out.push(src[i + 1]);
           i += 2;
         } else {
           out.push(src[i]);

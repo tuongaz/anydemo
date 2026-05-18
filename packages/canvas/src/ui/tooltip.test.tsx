@@ -61,8 +61,8 @@ type ForwardRefRender = (props: Record<string, unknown>, ref: unknown) => unknow
 const renderTooltipContent = (props: Record<string, unknown> = {}) => {
   const fwd = TooltipContent as unknown as { render: ForwardRefRender };
   // biome-ignore lint/suspicious/noExplicitAny: shimming React internals for this offline render
-  const dispatcherHost = (React as any)
-    .__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED.ReactCurrentDispatcher;
+  const dispatcherHost = (React as any).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED
+    .ReactCurrentDispatcher;
   const prev = dispatcherHost.current;
   dispatcherHost.current = { useContext: () => null };
   try {

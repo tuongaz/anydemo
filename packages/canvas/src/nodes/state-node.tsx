@@ -142,14 +142,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!opacity-100')}
+        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!opacity-100')}
+        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
       />
       <div
         className="sf-flex sf-shrink-0 sf-items-center sf-justify-between sf-gap-2 sf-border-b sf-px-2 sf-py-2"
@@ -185,7 +185,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
               type="button"
               className={cn(
                 'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-font-semibold sf-leading-tight',
-                nameEditable ? 'hover:opacity-80' : '',
+                nameEditable ? 'hover:sf-opacity-80' : '',
               )}
               style={labelFontStyle}
             >
@@ -220,7 +220,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
             type="button"
             className={cn(
               'sf-block sf-w-full sf-whitespace-normal sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-text-muted-foreground',
-              descEditable ? 'hover:opacity-80' : '',
+              descEditable ? 'hover:sf-opacity-80' : '',
             )}
             style={descriptionFontStyle}
           >
@@ -233,14 +233,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!opacity-100')}
+        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!opacity-100')}
+        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
       />
     </div>
   );
