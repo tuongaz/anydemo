@@ -13,7 +13,10 @@
   "peerDependencies": {
     "@xyflow/react": "*",
     "lucide-react": "*",
-    "react": "*"
+    "react": "*",
+    "react-dom": "*",
+    "react-markdown": "^10",
+    "remark-gfm": "^4"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.2",

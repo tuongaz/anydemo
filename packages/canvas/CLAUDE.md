@@ -6,7 +6,7 @@ Embeddable React Flow canvas. See `README.md` for the full public API.
 
 - **Public API:** `src/index.ts` only. Host apps must `import { ... } from '@seeflow/canvas'` — never deep-import from `packages/canvas/src/...`.
 - **Internal imports:** relative paths (`'../lib/foo.ts'`). No `@/` aliases here — those belong to `apps/web`.
-- **Peer deps** (`react`, `react-dom`, `@xyflow/react`, `lucide-react`): the host provides them. Do not move them into `dependencies`.
+- **Peer deps** (`react`, `react-dom`, `@xyflow/react`, `lucide-react`, `react-markdown`, `remark-gfm`): the host provides them. Do not move them into `dependencies`. `react-markdown` + `remark-gfm` back the built-in sidebar's status section.
 - **Tailwind:** package ships unstyled. Host JIT-scans this source — keep classes literal (no dynamic class strings).
 - **Adapter seam:** edit mode requires a `CanvasAdapter` (`src/adapter/types.ts`). All mutations route through it — never call `fetch` from inside the canvas.
 

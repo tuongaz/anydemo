@@ -65,7 +65,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
