@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { Handle, type NodeProps } from '@xyflow/react';
 import * as React from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
-import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import {
   SHAPE_CLASS,
@@ -398,6 +398,45 @@ describe('ShapeNode header/body layout (rectangle + ellipse)', () => {
     );
     expect(headers).toHaveLength(1);
     expect(bodies).toHaveLength(1);
+  });
+
+  // US-002: replaces the prior `bg-muted/30` overlay on the header. The header
+  // now carries an inline backgroundColor derived from the body token so the
+  // header reads as clearly darker on every color (default + the seven colored
+  // tokens). The class string MUST NOT include bg-muted/30 anymore — otherwise
+  // the overlay would tint the per-token color and defeat the contrast goal.
+  it('rectangle header uses inline backgroundColor from colorTokenStyle (default token)', () => {
+    const tree = callShapeNode({
+      shape: 'rectangle',
+      name: 'Order Service',
+      description: 'Body',
+    });
+    const header = findAll(
+      tree,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'shape-node-header',
+    )[0];
+    const props = header?.props as
+      | { style?: { backgroundColor?: string }; className?: string }
+      | undefined;
+    expect(props?.style?.backgroundColor).toBe(
+      colorTokenStyle(undefined, 'node-header').backgroundColor,
+    );
+    expect(props?.className ?? '').not.toContain('bg-muted/30');
+  });
+
+  it('rectangle header uses the token-specific headerBackground when backgroundColor is set', () => {
+    const tree = callShapeNode({
+      shape: 'rectangle',
+      name: 'Cache',
+      description: 'Body',
+      backgroundColor: 'blue',
+    });
+    const header = findAll(
+      tree,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'shape-node-header',
+    )[0];
+    const props = header?.props as { style?: { backgroundColor?: string } } | undefined;
+    expect(props?.style?.backgroundColor).toBe(COLOR_TOKENS.blue.headerBackground);
   });
 
   it('ellipse NEVER renders a header even when a name is set (description-only shape)', () => {

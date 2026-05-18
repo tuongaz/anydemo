@@ -421,7 +421,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
   const headerBodyContent = (
     <>
       <div
-        className="relative flex shrink-0 items-center border-b bg-muted/30 px-2 py-1.5"
+        className="relative flex shrink-0 items-center border-b px-2 py-1.5"
+        style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="shape-node-header"
       >
         <div

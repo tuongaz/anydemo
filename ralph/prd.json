@@ -16,7 +16,7 @@
         "bun run format then bun run lint pass with no errors"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -33,7 +33,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo with nodes of several different color tokens, confirm headers read as a clearly darker shade on every token"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
