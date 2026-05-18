@@ -36,3 +36,28 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Edit tool's replace_all is safe for `var(--border)` → `hsl(var(--border))` since the :root definition doesn't contain `var(--border)` as a substring
   - design.html is a standalone file; it must define all shadcn tokens locally (it cannot import index.css)
 ---
+
+## 2026-05-18 - US-003
+- Updated button.tsx primary variant: changed `text-primary-foreground` to `text-zinc-950` for dark text on emerald background
+- Ghost variant: changed `hover:bg-accent hover:text-accent-foreground` to `hover:bg-muted hover:text-foreground` (more semantically correct zinc surface)
+- Outline variant: changed `hover:bg-accent hover:text-accent-foreground` to `hover:bg-muted hover:text-foreground` (removes any white-background risk)
+- Added `disabled:text-muted-foreground` to base classes for muted zinc disabled state
+- Files changed: apps/web/src/components/ui/button.tsx
+- **Learnings for future iterations:**
+  - `--primary-foreground` is light emerald (#34d399) — NOT suitable for text on emerald buttons; use `text-zinc-950` or `text-background` for dark text on emerald backgrounds
+  - `--accent` and `--muted` resolve to the same zinc-800 value with our tokens; prefer `muted` semantically for hover surfaces
+  - All checks passed without server running — button.tsx is pure Tailwind/CVA with no runtime deps
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
+
+## 2026-05-18 - US-004
+- sheet.tsx: changed `bg-background` to `bg-card border-border` in sheetVariants base class
+- dialog.tsx: changed `bg-background` to `bg-card` and `border` to `border border-border` in DialogContent
+- command.tsx: changed `bg-popover text-popover-foreground` to `bg-card text-foreground` in Command base; changed `aria-selected:bg-accent aria-selected:text-accent-foreground` to `aria-selected:bg-muted aria-selected:text-foreground` in CommandItem
+- Files changed: apps/web/src/components/ui/sheet.tsx, apps/web/src/components/ui/dialog.tsx, apps/web/src/components/ui/command.tsx
+- **Learnings for future iterations:**
+  - `--popover` token is not explicitly defined in our token set; `bg-card` is the correct zinc surface replacement for `bg-popover`
+  - `bg-accent` and `bg-muted` resolve to the same zinc-800 with our tokens; use `bg-muted` semantically for hover/selected surfaces
+  - Sheet side variants (border-b, border-t, border-r, border-l) set which border sides render; adding `border-border` to the base sets the color for all sides
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
