@@ -1,5 +1,4 @@
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from '@/components/canvas-toolbar';
-import { EditableEdge, type EditableEdgeData } from '@/components/edges/editable-edge';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -23,6 +22,8 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
+  EditableEdge,
+  type EditableEdgeData,
   HtmlNode,
   ILLUSTRATIVE_SHAPE_RENDERERS,
   IconNode,

@@ -247,8 +247,8 @@
         "bun run typecheck passes"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved editable-edge.tsx + its static-fence test into packages/canvas/src/edges/. Test's repoRoot reduced from 5 `..` to 4 `..` (canvas package sits one level shallower than apps/web/src/components/edges/). The fence still reads apps/web/src/index.css + demo-canvas.tsx for the cross-file invariants (CSS z-index + DEFAULT_EDGE_OPTIONS literal) — only the editableEdgePath swapped to packages/canvas/src/edges/editable-edge.tsx. Created edges/index.ts barrel (EditableEdge value + EditableEdgeData/EditableEdgeType types) and added one `export * from './edges/index.ts';` line to the top-level barrel. demo-canvas.tsx's dedicated `from '@/components/edges/editable-edge'` import was deleted; EditableEdge (value) and `type EditableEdgeData` were merged alphabetically into the existing `@seeflow/canvas` import block (between ContextMenuTrigger and HtmlNode)."
     },
     {
       "id": "US-015",

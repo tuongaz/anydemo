@@ -1,12 +1,3 @@
-import type { ConnectorPath, EdgePin } from '@/lib/api';
-import {
-  type Endpoint,
-  InlineEdit,
-  type Pin,
-  type Side,
-  cn,
-  resolveEdgeEndpoints,
-} from '@seeflow/canvas';
 import {
   BaseEdge,
   type Edge,
@@ -19,6 +10,15 @@ import {
   useInternalNode,
 } from '@xyflow/react';
 import { useEffect, useState } from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { cn } from '../lib/cn.ts';
+import {
+  type Endpoint,
+  type Pin,
+  type Side,
+  resolveEdgeEndpoints,
+} from '../lib/floating-edge-geometry.ts';
+import type { ConnectorPath, EdgePin } from '../types.ts';
 
 // Smoothstep corner rounding — matches typical "zigzag" diagrams without
 // looking jagged. (US-017)

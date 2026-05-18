@@ -26,9 +26,9 @@ import { join } from 'node:path';
 //      cleanly behind the text. `bg-background` (theme background token)
 //      is the agreed plate; an empty label renders no plate at all so
 //      the canvas keeps no ghost artifact.
-const repoRoot = join(import.meta.dir, '..', '..', '..', '..', '..');
+const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
 const indexCssPath = join(repoRoot, 'apps/web/src/index.css');
-const editableEdgePath = join(repoRoot, 'apps/web/src/components/edges/editable-edge.tsx');
+const editableEdgePath = join(repoRoot, 'packages/canvas/src/edges/editable-edge.tsx');
 const demoCanvasPath = join(repoRoot, 'apps/web/src/components/demo-canvas.tsx');
 
 describe('connectors paint under nodes; labels stack between edges and nodes', () => {
