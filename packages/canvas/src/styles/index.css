@@ -51,29 +51,54 @@
 }
 
 /* Utilities scoped to the wrapper */
-.seeflow-canvas-root .seeflow-no-scrollbar { scrollbar-width: none; }
-.seeflow-canvas-root .seeflow-no-scrollbar::-webkit-scrollbar { display: none; }
+.seeflow-canvas-root .seeflow-no-scrollbar {
+  scrollbar-width: none;
+}
+.seeflow-canvas-root .seeflow-no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
 
 @keyframes seeflow-ping-fast {
-  0% { transform: scale(1); opacity: 1; }
-  75%, 100% { transform: scale(1.6); opacity: 0; }
+  0% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  75%,
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
 }
 .seeflow-canvas-root .animate-ping-fast {
   animation: seeflow-ping-fast 0.7s cubic-bezier(0, 0, 0.2, 1);
 }
 
 @keyframes seeflow-node-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4); }
-  50% { box-shadow: 0 0 0 6px rgba(245, 158, 11, 0); }
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(245, 158, 11, 0);
+  }
 }
 .seeflow-canvas-root .seeflow-node-pulse {
   animation: seeflow-node-pulse 1.4s ease-in-out infinite;
 }
 
 @keyframes inline-edit-shake {
-  0%, 100% { transform: translateX(0); }
-  20%, 60% { transform: translateX(-3px); }
-  40%, 80% { transform: translateX(3px); }
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20%,
+  60% {
+    transform: translateX(-3px);
+  }
+  40%,
+  80% {
+    transform: translateX(3px);
+  }
 }
 .seeflow-canvas-root .inline-edit-shake {
   animation: inline-edit-shake 0.32s ease-in-out;
@@ -89,19 +114,37 @@
 
 /* Cursor rules — all confined to the wrapper */
 .seeflow-canvas-root .react-flow__node,
-.seeflow-canvas-root .react-flow__node * { cursor: default; }
-.seeflow-canvas-root .react-flow__node [contenteditable="true"] { cursor: text; }
-.seeflow-canvas-root button:not(:disabled) { cursor: pointer; }
-.seeflow-canvas-root button:disabled { cursor: not-allowed; }
-.seeflow-canvas-root .react-flow__node button:not([data-testid="play-button"]) { cursor: default; }
+.seeflow-canvas-root .react-flow__node * {
+  cursor: default;
+}
+.seeflow-canvas-root .react-flow__node [contenteditable="true"] {
+  cursor: text;
+}
+.seeflow-canvas-root button:not(:disabled) {
+  cursor: pointer;
+}
+.seeflow-canvas-root button:disabled {
+  cursor: not-allowed;
+}
+.seeflow-canvas-root .react-flow__node button:not([data-testid="play-button"]) {
+  cursor: default;
+}
 
 /* Pane cursor */
-.seeflow-canvas-root .react-flow .react-flow__pane.selection { cursor: default; }
-.seeflow-canvas-root .react-flow .react-flow__pane.draggable { cursor: grab; }
-.seeflow-canvas-root .react-flow .react-flow__pane.dragging { cursor: grabbing; }
+.seeflow-canvas-root .react-flow .react-flow__pane.selection {
+  cursor: default;
+}
+.seeflow-canvas-root .react-flow .react-flow__pane.draggable {
+  cursor: grab;
+}
+.seeflow-canvas-root .react-flow .react-flow__pane.dragging {
+  cursor: grabbing;
+}
 
 /* React Flow visual tweaks */
-.seeflow-canvas-root .react-flow__node.connectingfrom { opacity: 0.85; }
+.seeflow-canvas-root .react-flow__node.connectingfrom {
+  opacity: 0.85;
+}
 
 .seeflow-canvas-root .react-flow__node .react-flow__handle {
   background: var(--seeflow-handle-fill) !important;
@@ -152,15 +195,23 @@
   z-index: 2000;
 }
 
-.seeflow-canvas-root .react-flow.seeflow-connecting
+.seeflow-canvas-root
+  .react-flow.seeflow-connecting
   .react-flow__node:not([data-connect-source="true"])
-  .react-flow__handle { opacity: 0 !important; }
+  .react-flow__handle {
+  opacity: 0 !important;
+}
 
-.seeflow-canvas-root .react-flow.seeflow-connecting .react-flow__node[data-connect-target="true"] > div {
+.seeflow-canvas-root
+  .react-flow.seeflow-connecting
+  .react-flow__node[data-connect-target="true"]
+  > div {
   border-color: hsl(var(--muted-foreground)) !important;
   border-style: dashed !important;
 }
-.seeflow-canvas-root .react-flow.seeflow-connecting .react-flow__node-group[data-connect-target="true"] {
+.seeflow-canvas-root
+  .react-flow.seeflow-connecting
+  .react-flow__node-group[data-connect-target="true"] {
   border-color: hsl(var(--muted-foreground)) !important;
   border-style: dashed !important;
 }
@@ -185,9 +236,15 @@
   background: transparent;
   border-radius: 4px;
 }
-.seeflow-canvas-root .react-flow__node-group.selected { border-color: transparent; }
-.seeflow-canvas-root .react-flow__node-group.selected::after { z-index: 0; }
-.seeflow-canvas-root .react-flow__node[data-gated-child="true"] { pointer-events: none; }
+.seeflow-canvas-root .react-flow__node-group.selected {
+  border-color: transparent;
+}
+.seeflow-canvas-root .react-flow__node-group.selected::after {
+  z-index: 0;
+}
+.seeflow-canvas-root .react-flow__node[data-gated-child="true"] {
+  pointer-events: none;
+}
 .seeflow-canvas-root .react-flow__node-group:has(> [data-testid="group-node"][data-active="true"]) {
   border: 2px solid hsl(var(--primary));
   background: hsl(var(--primary) / 0.04);
@@ -251,6 +308,13 @@
   color: hsl(var(--foreground));
   border-bottom: 1px solid hsl(var(--border));
 }
-.seeflow-canvas-root .react-flow__controls-button:hover { background: hsl(var(--accent)); }
-.seeflow-canvas-root .react-flow__controls-button:disabled { opacity: 0.4; cursor: not-allowed; }
-.seeflow-canvas-root .react-flow__controls-button svg { fill: currentColor; }
+.seeflow-canvas-root .react-flow__controls-button:hover {
+  background: hsl(var(--accent));
+}
+.seeflow-canvas-root .react-flow__controls-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.seeflow-canvas-root .react-flow__controls-button svg {
+  fill: currentColor;
+}

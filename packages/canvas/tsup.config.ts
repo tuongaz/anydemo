@@ -6,13 +6,6 @@ export default defineConfig({
   dts: true,
   sourcemap: true,
   clean: false,
-  external: [
-    'react',
-    'react-dom',
-    '@xyflow/react',
-    'lucide-react',
-    'react-markdown',
-    'remark-gfm',
-  ],
+  external: ['react', 'react-dom', '@xyflow/react', 'lucide-react', 'react-markdown', 'remark-gfm'],
   outDir: 'dist',
 });

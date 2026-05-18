@@ -3574,7 +3574,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
       <div
         data-testid="seeflow-canvas"
         ref={wrapperRef}
-        className="relative h-full w-full"
+        className="seeflow-canvas-root relative h-full w-full"
         style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
         // US-010: capture-phase listener fires before xyflow's pane handlers.
         // Snapshots the additive base + shift state for a pending marquee so
