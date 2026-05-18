@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@radix-ui/react-dialog": "^1.1.2",
     "@seeflow/canvas": "workspace:*",
     "@xyflow/react": "^12.3.5",
     "fflate": "^0.8.2",
