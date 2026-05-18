@@ -239,7 +239,7 @@ export function CommandPalette({ open, onOpenChange, runCommand, ctx }: CommandP
           // the right. With margin-based centering nothing transforms, so the
           // enter animation only fades opacity — which is what we want.
           className={cn(
-            'fixed left-0 right-0 top-[20%] z-50 mx-auto w-[480px] max-w-[90vw] border bg-background shadow-lg duration-200',
+            'fixed left-0 right-0 top-[20%] z-50 mx-auto w-[480px] max-w-[90vw] border border-border bg-card shadow-lg duration-200',
             'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0',
             'sm:rounded-lg',
           )}
@@ -317,9 +317,9 @@ export function CommandPalette({ open, onOpenChange, runCommand, ctx }: CommandP
                           className={cn(
                             'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm outline-none',
                             row.enabled
-                              ? 'cursor-pointer text-foreground hover:bg-accent'
+                              ? 'cursor-pointer text-foreground hover:bg-muted'
                               : 'cursor-not-allowed text-muted-foreground/50',
-                            isHighlighted && row.enabled ? 'bg-accent' : '',
+                            isHighlighted && row.enabled ? 'bg-muted' : '',
                           )}
                         >
                           <div className="flex min-w-0 flex-col">
