@@ -110,3 +110,21 @@ Started: Mon 18 May 2026 13:16:06 AEST
   - No test file for tooltip.tsx — no test updates needed
   - Manual browser verification needed to confirm light tooltip pops against dark canvas
 ---
+
+## 2026-05-18 - US-008
+- Updated `apps/web/src/components/nodes/play-node.tsx` Play button className:
+  - `hover:bg-emerald-500` → `hover:bg-primary` (uses hsl(var(--primary)) = emerald #10b981)
+  - `hover:text-white` → `hover:text-primary-foreground`
+  - `focus-visible:bg-emerald-500` → `focus-visible:bg-primary`
+  - `focus-visible:text-white` → `focus-visible:text-primary-foreground`
+  - Removed `dark:hover:bg-emerald-400` and `dark:focus-visible:bg-emerald-400` (inactive, no .dark on <html>)
+  - Error border: removed `dark:border-rose-400` (kept `border-rose-500`)
+- Updated `apps/web/src/components/nodes/play-node.test.tsx` to match new class names
+- Files changed: `apps/web/src/components/nodes/play-node.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`
+- **Learnings for future iterations:**
+  - `bg-primary` = `hsl(var(--primary))` = emerald #10b981 — the CSS-variable-based equivalent of `bg-emerald-500`
+  - `text-primary-foreground` = dark forest green #052e22 — correct contrast on emerald bg (fixed in US-001)
+  - `dark:` Tailwind prefixes on individual component classes are inactive (no .dark class on <html>) — always remove them in this project
+  - When tests assert on specific Tailwind class strings, grep for the old class names to find all tests that need updating
+  - Manual browser verification needed to confirm emerald hover still appears on play button
+---
