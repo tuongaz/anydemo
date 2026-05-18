@@ -36,16 +36,17 @@ import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
 import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
-import { computeImageDims, handleCanvasFileDrop } from '@/lib/canvas-drop';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import { connectorToEdge } from '@/lib/connector-to-edge';
 import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
 import { cn } from '@/lib/utils';
 import {
   type Side,
+  computeImageDims,
   endpointFromPin,
   endpointToPin,
   getNodeIntersection,
+  handleCanvasFileDrop,
   projectCursorToPerimeter,
 } from '@seeflow/canvas';
 import {

@@ -8,7 +8,7 @@ import {
   extractImageFile,
   handleCanvasFileDrop,
   isAcceptableImageFile,
-} from '@/lib/canvas-drop';
+} from './canvas-drop';
 
 /** Build a File with the given name + optional MIME type. Body content is
  *  irrelevant — these helpers only inspect name/type. */

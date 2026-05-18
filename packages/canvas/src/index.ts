@@ -48,3 +48,18 @@ export type {
   Side,
   XY,
 } from './lib/floating-edge-geometry.ts';
+
+export {
+  IMAGE_DROP_EXTS,
+  IMAGE_DROP_MAX_LONGEST_SIDE,
+  IMAGE_DROP_SVG_FALLBACK,
+  clampImageDims,
+  computeImageDims,
+  extractImageFile,
+  handleCanvasFileDrop,
+  isAcceptableImageFile,
+} from './lib/canvas-drop.ts';
+export type {
+  CanvasDropDispatchArgs,
+  HandleCanvasFileDropArgs,
+} from './lib/canvas-drop.ts';

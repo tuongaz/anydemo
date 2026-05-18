@@ -44,3 +44,17 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - Re-exports in `packages/canvas/src/index.ts` should split value exports vs `export type {}` blocks (matches the existing pattern at the top of the file). Both blocks use the `.ts` extension on the path.
   - The full quality gate sequence that works without drama: edit → `bunx biome check --fix <files>` → `bun run typecheck` → `bun run format` → `bun run lint` → `bun test`.
 ---
+
+## 2026-05-18 - US-003
+- Moved `canvas-drop.ts` (+ test) from `apps/web/src/lib/` into `packages/canvas/src/lib/`. The module is pure (no React, no API deps), so the move was straightforward — no internal imports to rewrite.
+- Test self-import switched from `@/lib/canvas-drop` to `./canvas-drop`. All 21 tests still pass.
+- Added a re-export block at the bottom of `packages/canvas/src/index.ts` (values + types split, `.ts` extensions, matching the convention from US-002).
+- The single web import site (`apps/web/src/components/demo-canvas.tsx` line 39) had its own dedicated `from '@/lib/canvas-drop'` import. Merged `computeImageDims` and `handleCanvasFileDrop` into the existing `from '@seeflow/canvas'` import block, keeping symbols alphabetically sorted to satisfy Biome `organizeImports`.
+- No Biome fixes were needed after the edit (the alphabetical insertion order was already correct).
+- Files changed: `packages/canvas/src/lib/canvas-drop.ts` (new), `packages/canvas/src/lib/canvas-drop.test.ts` (new), `packages/canvas/src/index.ts`, `apps/web/src/components/demo-canvas.tsx`, deleted `apps/web/src/lib/canvas-drop.ts` + `.test.ts`
+- Verified: `bun test packages/canvas/src/lib/canvas-drop.test.ts` ✅ (21 pass / 47 expect()), `bun run typecheck` ✅, `bun run format` ✅ (no changes), `bun run lint` ✅, `bun test` ✅ (1304 pass / 1 skip / 0 fail)
+- **Learnings for future iterations:**
+  - When a module to move has zero internal '@/' imports (pure helpers like canvas-drop), the move is just: copy file → rewrite test self-import to `./<name>` → add re-export block → update web import sites → delete originals. No further fixes needed.
+  - When the target web file already has an existing `from '@seeflow/canvas'` import block, prefer MERGING the new symbols into it (alphabetical order) rather than adding a second `from '@seeflow/canvas'` line — Biome will flag a duplicate-import otherwise. This saves a `biome check --fix` round-trip.
+  - The `bun test` registry.test.ts "JSON Parse error" output is the intentional error path being exercised. Always look at the final `pass / fail` count line — 1304 pass / 0 fail is green.
+---
