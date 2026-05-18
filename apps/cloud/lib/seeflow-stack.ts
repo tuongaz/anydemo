@@ -135,7 +135,6 @@ export class SeeflowStack extends cdk.Stack {
       target: route53.RecordTarget.fromAlias(new route53Targets.CloudFrontTarget(distribution)),
     });
 
-
     new cdk.CfnOutput(this, 'DiagramsBucketName', {
       value: diagramsBucket.bucketName,
       exportName: 'SeeflowDiagramsBucketName',
