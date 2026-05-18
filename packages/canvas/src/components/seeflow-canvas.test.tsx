@@ -34,12 +34,19 @@ import { StyleStrip } from './style-strip.tsx';
 // Background, Controls, StoreApiBridge, CanvasToolbar etc. — are captured as
 // `{ type, props }` placeholders without executing their render bodies, so
 // xyflow's zustand-provider requirement never trips.
+/**
+ * Captured useEffect call. `cb` is the effect body, `deps` mirrors the second
+ * argument (undefined = "every render"). The US-009 tests fire `cb()` manually
+ * to simulate React's mount-run + dep-change re-run behavior under the shim.
+ */
+type CapturedEffect = { cb: () => void; deps?: readonly unknown[] };
+
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
-  useEffect: () => void;
+  useEffect: (cb: () => void, deps?: readonly unknown[]) => void;
 };
 
 /**
@@ -47,15 +54,19 @@ type Hooks = {
  * value with the corresponding entry from the array (undefined = passthrough).
  * `refSink`, when provided, receives each useRef in declaration order so the
  * test can mutate ref.current to drive handlers that read from refs.
+ * `effectSink`, when provided, captures each useEffect's `{ cb, deps }` in
+ * declaration order so a test can fire individual effects manually (US-009 —
+ * simulating React's mount + dep-change re-run semantics under the shim).
  */
 function renderWithHooks<T>(
   fn: () => T,
   options: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
+    effectSink?: CapturedEffect[];
   } = {},
 ): T {
-  const { useStateOverrides, refSink } = options;
+  const { useStateOverrides, refSink, effectSink } = options;
   const internals = (
     React as unknown as {
       __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
@@ -80,7 +91,9 @@ function renderWithHooks<T>(
       refSink?.push(ref as { current: unknown });
       return ref;
     },
-    useEffect: () => {},
+    useEffect: (cb: () => void, deps?: readonly unknown[]) => {
+      effectSink?.push({ cb, deps });
+    },
   };
   try {
     return fn();
@@ -144,6 +157,7 @@ function callSeeflowCanvas(
   hookOptions: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
+    effectSink?: CapturedEffect[];
   } = {},
 ): unknown {
   const { nodeOverrides, connectorOverrides, runtime, ...rest } = overrides;
@@ -677,14 +691,18 @@ describe('SeeflowCanvas', () => {
       flags: 0,
       wrapper: 1,
       rfInstance: 2,
-      // US-008 added didMountFitRef (slot 3, immediately after rfInstanceRef)
-      // so every ref below drifted down by one. US-018 added editHandlesRef
-      // (now slot 4, after storeApiRef). Update this map alongside any
-      // future useRef addition above drawShape.
-      drawShape: 13,
-      drawStart: 14,
-      drawCurrent: 15,
-      drawing: 16,
+      // US-008 added didMountFitRef (slot 3, immediately after rfInstanceRef).
+      // US-009 added three more auto-fit refs in slots 4-6 (pendingFitRef,
+      // signalEffectMountedRef, resolvedAutoFitViewRef), so every ref below
+      // drifted down by three more. Update this map alongside any future
+      // useRef addition above drawShape.
+      pendingFit: 4,
+      signalEffectMounted: 5,
+      resolvedAutoFitView: 6,
+      drawShape: 16,
+      drawStart: 17,
+      drawCurrent: 18,
+      drawing: 19,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
@@ -2552,6 +2570,160 @@ describe('SeeflowCanvas', () => {
         nodes: [makeShapeNode('a')],
         autoFitView: false,
       });
+      expect(fitViewCalls.length).toBe(0);
+    });
+  });
+
+  describe('US-009: autoFitViewSignal external-change fit', () => {
+    // The signal-watching effect is wired with deps `[autoFitViewSignal]` and
+    // skipped on its first run via `signalEffectMountedRef`. The hook-shim
+    // captures useEffect callbacks in `effectSink`, so we fire the signal
+    // effect twice: the first call simulates React's mount run (skip), the
+    // second call simulates React re-running it after the host bumps the
+    // signal. `resizingRef` / `draggingRef` are driven through the production
+    // setResizing / onNodeDragStop wires so the interaction-guard path uses
+    // the same closures the runtime uses.
+    type EffectEntry = { cb: () => void; deps?: readonly unknown[] };
+    type StubInstance = { fitView: (opts: unknown) => void; getZoom: () => number };
+
+    function setup(props: Partial<LegacyOverrides>): {
+      tree: unknown;
+      effects: EffectEntry[];
+      refs: { current: unknown }[];
+      stub: StubInstance;
+      fitViewCalls: unknown[];
+      signalEffect: EffectEntry;
+    } {
+      const fitViewCalls: unknown[] = [];
+      const refs: { current: unknown }[] = [];
+      const effects: EffectEntry[] = [];
+      const tree = callSeeflowCanvas(props, { refSink: refs, effectSink: effects });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const stub: StubInstance = {
+        fitView: (opts: unknown) => {
+          fitViewCalls.push(opts);
+        },
+        getZoom: () => 1,
+      };
+      const onInit = (rf.props as { onInit?: (i: unknown) => void }).onInit;
+      if (typeof onInit !== 'function') throw new Error('onInit not wired');
+      onInit(stub);
+      // The signal effect is the one whose deps array has exactly one entry
+      // matching the `autoFitViewSignal` prop value. Identifying it by deps
+      // shape keeps the test robust against unrelated effects being added
+      // above or below it in declaration order.
+      const target = props.autoFitViewSignal;
+      const signalEffect = effects.find(
+        (e) => Array.isArray(e.deps) && e.deps.length === 1 && e.deps[0] === target,
+      );
+      if (!signalEffect) {
+        throw new Error(
+          `signal-watching effect (deps: [${String(target)}]) not found in captured effects`,
+        );
+      }
+      return { tree, effects, refs, stub, fitViewCalls, signalEffect };
+    }
+
+    it('autoFitView=true, signal bump → exactly one fitView with FIT_VIEW_OPTIONS', () => {
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      // onInit already fired the mount-fit (autoFitView=true + nodes>0).
+      expect(fitViewCalls.length).toBe(1);
+      fitViewCalls.length = 0;
+      // First effect run = mount tick → signalEffectMountedRef flips, skip.
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+      // Second effect run = simulated re-run after host bumped the signal.
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('signal bump while resizing → defer; clearing isResizing flushes exactly one fitView', () => {
+      const { fitViewCalls, signalEffect, tree } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      fitViewCalls.length = 0; // discard mount-fit
+      // Drive isResizing through the production setResizing closure attached
+      // to the rfNode's data — same channel NodeResizer uses at runtime.
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const rfNode = (rf.props as { nodes: Node[] }).nodes[0];
+      if (!rfNode) throw new Error('rfNode not built');
+      const setResizing = (rfNode.data as { setResizing?: (on: boolean) => void }).setResizing;
+      if (typeof setResizing !== 'function')
+        throw new Error('setResizing missing from rfNode.data');
+      setResizing(true);
+      // Mount run + bump run while interaction in flight → defer, no fit.
+      signalEffect.cb();
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+      // Clearing isResizing triggers flushPendingFit → exactly one fitView.
+      setResizing(false);
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+      // The flush is idempotent — a redundant setResizing(false) does nothing.
+      setResizing(false);
+      expect(fitViewCalls.length).toBe(1);
+    });
+
+    it('signal bump while dragging → defer; onNodeDragStop flushes exactly one fitView', () => {
+      const { fitViewCalls, signalEffect, tree } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      fitViewCalls.length = 0; // discard mount-fit
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const onNodeDragStart = (rf.props as { onNodeDragStart?: () => void }).onNodeDragStart;
+      const onNodeDragStop = (
+        rf.props as {
+          onNodeDragStop?: (e: unknown, n: Node, dragged: Node[]) => void;
+        }
+      ).onNodeDragStop;
+      if (typeof onNodeDragStart !== 'function') throw new Error('onNodeDragStart not wired');
+      if (typeof onNodeDragStop !== 'function') throw new Error('onNodeDragStop not wired');
+      onNodeDragStart();
+      signalEffect.cb(); // mount tick → skip
+      signalEffect.cb(); // bump while dragging → defer
+      expect(fitViewCalls.length).toBe(0);
+      // Drag stops with the dragged-node list. The committedDraggedNodes call
+      // path requires a node with a real position; reuse the existing rfNode.
+      const rfNode = (rf.props as { nodes: Node[] }).nodes[0];
+      if (!rfNode) throw new Error('rfNode not built');
+      onNodeDragStop(null, rfNode, [rfNode]);
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('autoFitView={{ onExternalNodeChange: false }} → signal bump does NOT fit', () => {
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: false, onExternalNodeChange: false },
+        autoFitViewSignal: 0,
+      });
+      // Mount run skips; bump run reads onExternalNodeChange=false → skip.
+      signalEffect.cb();
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView default (undefined) → signal bump does NOT fit', () => {
+      // Symmetric to the AC's view-mode default; the signal is inert until
+      // the host opts in via autoFitView.
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitViewSignal: 0,
+      });
+      signalEffect.cb();
+      signalEffect.cb();
       expect(fitViewCalls.length).toBe(0);
     });
   });

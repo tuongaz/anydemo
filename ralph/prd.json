@@ -150,7 +150,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

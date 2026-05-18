@@ -593,6 +593,17 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * but still react to the signal). See {@link resolveAutoFitView}.
    */
   autoFitView?: AutoFitView;
+  /**
+   * US-009: host-bumped counter that triggers an external-change fit. Bump
+   * (any monotonic change) when an SSE / adapter update inserts or deletes
+   * nodes so the viewport re-frames around the new graph. Only effective
+   * when {@link autoFitView} resolves `onExternalNodeChange` to `true`. The
+   * very first observed value is treated as the baseline and never fits
+   * (so this doesn't double-fire with the mount-fit). If the signal bumps
+   * while a node drag or resize is in flight, the fit is deferred and
+   * flushed once the interaction ends.
+   */
+  autoFitViewSignal?: number;
 }
 
 /**
@@ -1511,6 +1522,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onDescriptionChange,
     onDetailChange,
     autoFitView,
+    autoFitViewSignal,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -1593,6 +1605,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // `true` the first time the canvas calls `fitView` from the mount path so
   // re-renders (selection changes, prop churn) don't re-fit the viewport.
   const didMountFitRef = useRef(false);
+  // US-009: deferred-fit slot for the signal-driven external-change fit.
+  // When the signal bumps mid-drag / mid-resize, the would-be `fitView` call
+  // is stashed here and flushed by {@link flushPendingFit} once the
+  // interaction ends. Storing the intent (not the options) keeps the flush
+  // path tied to {@link FIT_VIEW_OPTIONS} so the manual and auto paths can't
+  // drift.
+  const pendingFitRef = useRef(false);
+  // US-009: one-shot guard so the signal-watching effect's initial run (any
+  // mount of the canvas always invokes a useEffect once with the seed deps)
+  // skips firing fitView. Without this, a host that mounts the canvas with
+  // an `autoFitViewSignal` already set would double-fire with the mount-fit
+  // path.
+  const signalEffectMountedRef = useRef(false);
+  // US-009: mirror `resolvedAutoFitView` into a ref so the signal-watching
+  // effect (deps: only `[autoFitViewSignal]`) reads the latest flag without
+  // re-running when the flag flips. Inline assignment instead of a useEffect
+  // so the test renderer (which no-ops effects) still sees the live value.
+  const resolvedAutoFitViewRef = useRef(resolvedAutoFitView);
+  resolvedAutoFitViewRef.current = resolvedAutoFitView;
   // US-008: late-nodes mount-fit. The primary mount-fit path lives inside
   // <ReactFlow>'s `onInit` callback (so the fit happens the same tick the
   // instance becomes available), but hosts that mount the canvas with an
@@ -1996,9 +2027,49 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // resizingRef is set/cleared by node components via data.setResizing.
   const draggingRef = useRef(false);
   const resizingRef = useRef(false);
-  const setResizing = useCallback((on: boolean) => {
-    resizingRef.current = on;
+  // US-009: flush a deferred external-change fit once any in-flight node
+  // drag / resize finishes. Idempotent: a second call after the first
+  // consume is a no-op (pendingFitRef is back to false). Re-checks the
+  // interaction refs in case the user chained drag → resize and the first
+  // gesture ended but a different one is still live.
+  const flushPendingFit = useCallback(() => {
+    if (!pendingFitRef.current) return;
+    if (resizingRef.current || draggingRef.current) return;
+    pendingFitRef.current = false;
+    rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, []);
+  const setResizing = useCallback(
+    (on: boolean) => {
+      resizingRef.current = on;
+      // US-009: once a resize gesture ends, flush any deferred external-change
+      // fit so the viewport re-frames around the new graph without yanking the
+      // user mid-gesture.
+      if (!on) flushPendingFit();
+    },
+    [flushPendingFit],
+  );
+  // US-009: signal-driven external-change fit. Bumping `autoFitViewSignal`
+  // re-runs this effect; the first run (initial mount tick) flips
+  // `signalEffectMountedRef` and skips so the signal path doesn't double-fire
+  // with the mount-fit. When an interaction is in flight, the fit is
+  // deferred to `pendingFitRef` and flushed by {@link flushPendingFit}.
+  // The `onExternalNodeChange` flag is read via a ref so flipping it alone
+  // (without a signal bump) does NOT yank the viewport. `autoFitViewSignal`
+  // is intentionally the SOLE dep: the cb doesn't consume its value, only
+  // the change event itself triggers the re-run (per the US-009 spec).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only dep
+  useEffect(() => {
+    if (!signalEffectMountedRef.current) {
+      signalEffectMountedRef.current = true;
+      return;
+    }
+    if (!resolvedAutoFitViewRef.current.onExternalNodeChange) return;
+    if (resizingRef.current || draggingRef.current) {
+      pendingFitRef.current = true;
+      return;
+    }
+    rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
+  }, [autoFitViewSignal]);
 
   // Right-click context menu state. Radix's <ContextMenu.Root> is event-driven
   // (its <Trigger> opens the menu on its own contextmenu event) and has no
@@ -3403,8 +3474,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     (_e: unknown, _node: Node, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // US-009: flush any deferred external-change fit now that the drag is
+      // complete (mirrors the resize-end flush wired in setResizing).
+      flushPendingFit();
     },
-    [commitDraggedNodes],
+    [commitDraggedNodes, flushPendingFit],
   );
 
   const onSelectionDragStartCb = useCallback(() => {
@@ -3414,8 +3488,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     (_e: unknown, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // US-009: flush any deferred external-change fit (same channel as
+      // single-node drag stop above).
+      flushPendingFit();
     },
-    [commitDraggedNodes],
+    [commitDraggedNodes, flushPendingFit],
   );
 
   const handleNodeClickWithGroupGate = useCallback(
