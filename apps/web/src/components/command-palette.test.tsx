@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import { CommandPalette, type CommandPaletteProps } from '@/components/command-palette';
-import { COMMANDS, type CommandContext, type CommandId } from '@/lib/keyboard-shortcuts';
+import { COMMANDS, type CommandContext, type CommandId } from '@seeflow/canvas';
 import * as React from 'react';
 
 // apps/web tests run without a DOM. Shim React's internal hook dispatcher so we

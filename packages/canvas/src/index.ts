@@ -63,3 +63,28 @@ export type {
   CanvasDropDispatchArgs,
   HandleCanvasFileDropArgs,
 } from './lib/canvas-drop.ts';
+
+export {
+  COMMANDS,
+  IS_MAC,
+  applyNudge,
+  formatShortcut,
+  getCommandTooltip,
+  getNudgeDelta,
+  getZoomChord,
+  resolveClipboardChord,
+  resolveToolShortcut,
+} from './lib/keyboard-shortcuts.ts';
+export type {
+  ClipboardChord,
+  ClipboardChordInput,
+  CommandCategory,
+  CommandContext,
+  CommandDef,
+  CommandId,
+  ModifierEvent,
+  NudgeDelta,
+  ShortcutParts,
+  ToolShortcutResult,
+  ZoomAction,
+} from './lib/keyboard-shortcuts.ts';

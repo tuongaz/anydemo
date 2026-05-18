@@ -38,6 +38,8 @@ import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { computeIconInsertPosition } from '@/lib/icon-insert';
 import { pushRecent } from '@/lib/icon-recents';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
+import { getLastUsedStyle, rememberConnectorStyle, rememberNodeStyle } from '@/lib/last-used-style';
+import { buildNewShapeData } from '@/lib/node-defaults';
 import {
   type CommandId,
   applyNudge,
@@ -45,9 +47,7 @@ import {
   getZoomChord,
   resolveClipboardChord,
   resolveToolShortcut,
-} from '@/lib/keyboard-shortcuts';
-import { getLastUsedStyle, rememberConnectorStyle, rememberNodeStyle } from '@/lib/last-used-style';
-import { buildNewShapeData } from '@/lib/node-defaults';
+} from '@seeflow/canvas';
 import type { ReactFlowInstance } from '@xyflow/react';
 import { jsPDF } from 'jspdf';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';

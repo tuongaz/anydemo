@@ -1,12 +1,12 @@
+import { cn } from '@/lib/utils';
+import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   COMMANDS,
   type CommandCategory,
   type CommandContext,
   type CommandDef,
   type CommandId,
-} from '@/lib/keyboard-shortcuts';
-import { cn } from '@/lib/utils';
-import * as DialogPrimitive from '@radix-ui/react-dialog';
+} from '@seeflow/canvas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export interface CommandPaletteProps {

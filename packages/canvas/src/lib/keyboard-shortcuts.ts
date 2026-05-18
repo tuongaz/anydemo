@@ -3,7 +3,7 @@
 // the dispatcher reads and returns the resolved action (or null for unrelated
 // keys). Wiring lives in `demo-view.tsx`.
 
-import type { ShapeKind } from '@/lib/api';
+import type { ShapeKind } from '../types.ts';
 
 export type ModifierEvent = Pick<
   KeyboardEvent,

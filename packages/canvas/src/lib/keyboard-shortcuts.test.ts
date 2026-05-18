@@ -10,7 +10,7 @@ import {
   getZoomChord,
   resolveClipboardChord,
   resolveToolShortcut,
-} from '@/lib/keyboard-shortcuts';
+} from './keyboard-shortcuts';
 
 const ev = (
   overrides: Partial<{
