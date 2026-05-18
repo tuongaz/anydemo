@@ -63,6 +63,19 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
 
+## 2026-05-18 - US-006
+- Replaced `rounded-md` with `rounded-lg` on demo picker button cards
+- Added explicit `border-border` to button card (was just `border` before)
+- Removed `hover:bg-accent hover:text-accent-foreground` (would flip to white surface)
+- Added `hover:border-input` for border-brightening hover (zinc-700 vs zinc-800 default)
+- Added `style={{ boxShadow: 'var(--shadow-card)' }}` inline style for card shadow
+- Files changed: apps/web/src/pages/studio-home.tsx
+- **Learnings for future iterations:**
+  - `--shadow-card` must be applied via inline style since Tailwind has no utility for it; `style={{ boxShadow: 'var(--shadow-card)' }}` is the pattern
+  - For border-brightening hover, `hover:border-input` (zinc-700) vs default `border-border` (zinc-800) is a subtle but effective design signal
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
+
 ## 2026-05-18 - US-004
 - sheet.tsx: changed `bg-background` to `bg-card border-border` in sheetVariants base class
 - dialog.tsx: changed `bg-background` to `bg-card` and `border` to `border border-border` in DialogContent
