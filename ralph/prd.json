@@ -532,8 +532,8 @@
         "Verify in browser using dev-browser skill: studio renders with correct styling on all node kinds and chrome (no unstyled / broken-layout regressions)"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added `'../../packages/canvas/src/**/*.{ts,tsx}'` to apps/web/tailwind.config.js content array (the repo uses .js, not .ts). bun run format collapsed the array back to a single line — both forms are equivalent. Browser smoke test verified Tailwind classes from canvas-package components (toolbar button: rounded-md→6px; play node child: rounded-lg→8px; play button: text-sm/font-medium) all compute to concrete styles in the rebuilt prod bundle on port 4321. The path didn't manifest as a regression in earlier stories because canvas-side class strings were duplicated under apps/web/src/** — this is a defensive correctness fix so future canvas-only classes get picked up automatically. Quality gate: bun run typecheck ✅ (5 workspaces), bun test ✅ (1325 pass / 1 skip / 0 fail), bun run format ✅ (228 files, 1 fix — the reflow), bun run lint ✅ (228 files)."
     },
     {
       "id": "US-032",
