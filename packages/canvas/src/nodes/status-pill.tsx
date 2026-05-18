@@ -3,9 +3,9 @@ import { cn } from '../lib/cn.ts';
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 
 const STYLES: Record<Exclude<NodeStatus, 'idle'>, string> = {
-  running: 'bg-amber-950/50 text-amber-300 animate-pulse',
-  done: 'bg-emerald-950/50 text-emerald-300',
-  error: 'bg-rose-950/50 text-rose-300',
+  running: 'sf-bg-amber-950/50 sf-text-amber-300 sf-animate-pulse',
+  done: 'sf-bg-emerald-950/50 sf-text-emerald-300',
+  error: 'sf-bg-rose-950/50 sf-text-rose-300',
 };
 
 // Idle is intentionally invisible — the pill is meaningful state, not chrome.
@@ -23,7 +23,7 @@ export function StatusPill({
       data-status={status}
       data-testid={dataTestId}
       className={cn(
-        'inline-flex h-4 items-center rounded-full px-1.5 py-0 font-normal text-[9px] uppercase tracking-wide',
+        'sf-inline-flex sf-h-4 sf-items-center sf-rounded-full sf-px-1.5 sf-py-0 sf-font-normal sf-text-[9px] sf-uppercase sf-tracking-wide',
         STYLES[status],
       )}
     >

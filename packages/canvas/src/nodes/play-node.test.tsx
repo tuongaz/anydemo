@@ -114,10 +114,10 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
     const tree = callPlayNode({ playAction: { kind: 'http' }, onPlay: () => {} });
     const button = findPlayButton(tree);
     const className = String((button.props as { className?: string }).className ?? '');
-    expect(className).toContain('hover:bg-primary');
-    expect(className).toContain('hover:text-primary-foreground');
-    expect(className).toContain('focus-visible:bg-primary');
-    expect(className).toContain('focus-visible:text-primary-foreground');
+    expect(className).toContain('hover:sf-bg-primary');
+    expect(className).toContain('hover:sf-text-primary-foreground');
+    expect(className).toContain('focus-visible:sf-bg-primary');
+    expect(className).toContain('focus-visible:sf-text-primary-foreground');
   });
 
   it('keeps the circular shape + size classes alongside the new hover styles', () => {
@@ -125,9 +125,9 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
     const button = findPlayButton(tree);
     const className = String((button.props as { className?: string }).className ?? '');
     // The hover styling must NOT have replaced the circle chrome.
-    expect(className).toContain('h-8');
-    expect(className).toContain('w-8');
-    expect(className).toContain('rounded-full');
+    expect(className).toContain('sf-h-8');
+    expect(className).toContain('sf-w-8');
+    expect(className).toContain('sf-rounded-full');
   });
 
   it('error state keeps both the rose border AND the emerald hover classes', () => {
@@ -140,11 +140,11 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
     const button = findPlayButton(tree);
     const className = String((button.props as { className?: string }).className ?? '');
     // Rose border for the error indication.
-    expect(className).toContain('border-rose-500');
+    expect(className).toContain('sf-border-rose-500');
     // Emerald hover still applies — user is going to retry; the green
     // affordance should still color-code the click target.
-    expect(className).toContain('hover:bg-primary');
-    expect(className).toContain('hover:text-primary-foreground');
+    expect(className).toContain('hover:sf-bg-primary');
+    expect(className).toContain('hover:sf-text-primary-foreground');
   });
 
   it('disabled state (no action wired) — the Button base class blocks pointer events, hover styles are inert', () => {

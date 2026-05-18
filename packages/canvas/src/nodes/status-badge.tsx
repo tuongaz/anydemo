@@ -25,11 +25,11 @@ export function StatusBadge({ state, summary, 'data-testid': testId }: StatusBad
     <span
       data-testid={testId}
       data-state={state}
-      className="inline-flex max-w-full items-center gap-1.5 text-[11px] leading-tight text-muted-foreground"
+      className="sf-inline-flex sf-max-w-full sf-items-center sf-gap-1.5 sf-text-[11px] sf-leading-tight sf-text-muted-foreground"
     >
-      <span aria-hidden className={cn('h-2 w-2 shrink-0 rounded-full', DOT_STYLES[state])} />
+      <span aria-hidden className={cn('sf-h-2 sf-w-2 sf-shrink-0 sf-rounded-full', DOT_STYLES[state])} />
       {summary ? (
-        <span className="min-w-0 flex-1 truncate" title={summary}>
+        <span className="sf-min-w-0 sf-flex-1 sf-truncate" title={summary}>
           {summary}
         </span>
       ) : null}
