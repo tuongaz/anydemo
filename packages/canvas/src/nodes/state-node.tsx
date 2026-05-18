@@ -4,6 +4,7 @@ import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { NodeData, StatusReport } from '../types.ts';
+import { Icon } from '../ui/icon.tsx';
 import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { type NodeStatus, StatusPill } from './status-pill.tsx';
@@ -155,6 +156,15 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="node-header"
       >
+        {data.icon ? (
+          <Icon
+            name={data.icon}
+            size={16}
+            className="shrink-0"
+            style={colorTokenStyle(data.textColor, 'text')}
+            aria-hidden
+          />
+        ) : null}
         <div
           className="min-w-0 flex-1 text-[18px] font-semibold leading-tight"
           style={labelFontStyle}
