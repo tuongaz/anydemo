@@ -7,6 +7,9 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
+      // Alias the canvas package to its source for HMR in monorepo dev.
+      // External consumers resolve to `dist/` via the package's exports map.
+      '@seeflow/canvas': path.resolve(__dirname, '../../packages/canvas/src/index.ts'),
     },
   },
   server: {
