@@ -1,5 +1,5 @@
-import { fileUrl } from '@/lib/file-url';
 import { subscribeFileChanged } from '@/lib/file-watch-bus';
+import { fileUrl } from '@seeflow/canvas';
 import { useEffect, useState } from 'react';
 
 /**

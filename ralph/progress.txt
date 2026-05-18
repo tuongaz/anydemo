@@ -137,3 +137,20 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - For US-011 (next major move — the Radix/UI primitives): the `peerDependencies` block of `packages/canvas/package.json` already contains `clsx` and `tailwind-merge` (added here for US-008). When US-011 promotes them to `dependencies` it should also remove them from `peerDependencies` to avoid duplicate-listing. Also, `tailwindcss-animate` is currently in `apps/web/dependencies` but used as a tailwind plugin (not imported in JS), so it doesn't need a canvas-side mirror until US-011 actually moves the UI primitives.
   - The `bun test` `apps/studio/src/registry.test.ts` JSON parse stack trace still appears for the intentional-error path — final `1304 pass / 0 fail` confirms green.
 ---
+
+## 2026-05-18 - US-009
+- Moved `debounce.ts` (+ test) and `file-url.ts` from `apps/web/src/lib/` into `packages/canvas/src/lib/`. Both modules are pure (no React, no canvas internal deps) — verbatim file copies, no internal import rewrites needed.
+- Test self-import switched from `@/lib/debounce` to `./debounce`. All 5 tests still pass (12 expect() calls).
+- Added a re-export block at the bottom of `packages/canvas/src/index.ts`: value `createDebouncer` (+ types `Debouncer`, `DebouncerOptions`) for debounce; value `fileUrl` for file-url (no public types). Followed the established split convention (`export {}` vs `export type {}` blocks, `.ts` extensions).
+- Updated 3 web import sites:
+  - `apps/web/src/components/nodes/image-node.tsx`: removed the dedicated `from '@/lib/file-url'` line; merged `fileUrl` (alphabetical: after `cn`) into the existing `from '@seeflow/canvas'` block.
+  - `apps/web/src/components/inline-edit.tsx`: removed the dedicated `from '@/lib/debounce'` line; merged `createDebouncer` (alphabetical: after `cn`) into the existing `from '@seeflow/canvas'` block.
+  - `apps/web/src/lib/use-html-content.ts`: replaced `from '@/lib/file-url'` with `from '@seeflow/canvas'`; biome import order placed the new line below the `@/lib/file-watch-bus` import (no second `@seeflow/canvas` import existed here previously, so this is a fresh single-line specifier).
+- Ran `bunx biome check --fix` on the 3 changed files — no fixes applied (the manual ordering was correct on first try).
+- Files changed: `packages/canvas/src/lib/debounce.ts` (new), `packages/canvas/src/lib/debounce.test.ts` (new), `packages/canvas/src/lib/file-url.ts` (new), `packages/canvas/src/index.ts`, `apps/web/src/components/nodes/image-node.tsx`, `apps/web/src/components/inline-edit.tsx`, `apps/web/src/lib/use-html-content.ts`, deleted `apps/web/src/lib/debounce.ts` + `.test.ts` + `apps/web/src/lib/file-url.ts`
+- Verified: `bun test packages/canvas/src/lib/debounce.test.ts` ✅ (5 pass / 12 expect()), `bun run typecheck` ✅ (5 workspaces), `bun run format` ✅ (no changes), `bun run lint` ✅ (Checked 226 files), `bun test` ✅ (1304 pass / 1 skip / 0 fail across 72 files).
+- **Learnings for future iterations:**
+  - For US-010 (next: move inline-edit component): the component imports both `createDebouncer` (US-009) and `cn` (US-008) — both are now in @seeflow/canvas. When the file relocates to `packages/canvas/src/components/`, its `@seeflow/canvas` import block needs to switch to relative paths (`../lib/debounce`, `../lib/cn`) per the US-010 spec. Existing imports of inline-edit in apps/web (search `from '@/components/inline-edit'`) all need to swap to `@seeflow/canvas`.
+  - `use-html-content.ts` sits in `apps/web/src/lib/` and has remaining `@/` imports (`@/lib/file-watch-bus`). It's app-coupled (SSE/file-watch bus) and will not be moved as part of the canvas extraction. The file survived US-009 because its only canvas-bound import (`file-url`) was swapped to `@seeflow/canvas` cleanly.
+  - Biome's import grouping is location-aware: `apps/web/src/components/` files keep `@seeflow/canvas` next to `@xyflow/react` externals (after `@/` imports); `apps/web/src/lib/` files mix `@seeflow/canvas` and `@/` together. Run `bunx biome check --fix <file>` rather than guessing the order.
+---
