@@ -384,8 +384,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 22,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "DEFERRED to P4. apps/web/src/components/detail-panel.tsx (lines 1-7) imports the REST functions `openProjectFile` + `revealProjectFile` from `@/lib/api` and calls them inside the `HtmlNodeSection.dispatch` helper (lines 451-471 — the Open-in-editor / Reveal buttons POST to `/api/projects/<id>/files`). Those two helpers are defined in `apps/web/src/lib/api.ts:531` (`openProjectFile`) and `apps/web/src/lib/api.ts:539` (`revealProjectFile`); both wrap a `requestFileAction` private helper that fetches `/api/projects/.../files`. Per the story's second acceptance criterion this is the textbook 'calls REST functions from @/lib/api' deferral case — moving now would require leaking project-scoped REST URLs into canvas or duplicating the file-action transport, both undone by P4's CanvasAdapter (US-024 onward). The type-only imports on those same lines (`Connector`, `DemoNode`, `StatusReport`) and the canvas-side imports (`Button`, `Sheet*`, `StatusBadge`, `cn`, `getStoredDetailPanelWidth`/`setStoredDetailPanelWidth`, `startResizeGesture`) all resolve from @seeflow/canvas already, so the only barrier really is those two REST helpers. Plan: extend CanvasAdapter in US-024 with optional `openProjectFile?` / `revealProjectFile?` (or fold them into a generic `fileAction` method), then move detail-panel.tsx + detail-panel.test.tsx into packages/canvas/src/components/ in US-028 alongside the rest of the orchestrator. No code changes in this story — only PRD/progress updates. Quality gate verified: bun run typecheck ✅ (5 workspaces), bun test ✅ (1308 pass / 1 skip / 0 fail across 72 files, same as US-021 baseline)."
     },
     {
       "id": "US-023",
