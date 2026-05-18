@@ -1,15 +1,20 @@
 {
   "name": "@seeflow/canvas",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
   "type": "module",
   "main": "./src/index.ts",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./style.css": "./dist/style.css"
   },
   "scripts": {
+    "build": "rm -rf dist && bun run build:css && bun run build:js",
+    "build:css": "tailwindcss -c tailwind.config.cjs -i src/styles/index.css -o dist/style.css --minify",
+    "build:css:watch": "tailwindcss -c tailwind.config.cjs -i src/styles/index.css -o dist/style.css --watch",
+    "build:js": "tsup",
     "typecheck": "tsc --noEmit"
   },
+  "files": ["dist", "README.md"],
   "peerDependencies": {
     "@xyflow/react": "*",
     "lucide-react": "*",
