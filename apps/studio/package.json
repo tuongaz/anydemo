@@ -1,6 +1,6 @@
 {
   "name": "@tuongaz/seeflow",
-  "version": "0.1.15",
+  "version": "0.1.17",
   "description": "Local studio that hosts file-defined demos as React Flow canvases wired to a running app via REST + SSE + Zod schema.",
   "keywords": [
     "seeflow",
