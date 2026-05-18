@@ -16,6 +16,10 @@ Local studio that hosts file-defined demos as React Flow canvases wired to a run
 - **Zod** schema at `apps/studio/src/schema.ts` (single source of truth).
 - **Biome** for lint/format. Run `bun run format` before `bun run lint`.
 
+## Design System
+
+**`design/design.html`** is the single source of truth for all UI/UX work. You MUST reference it before making any frontend changes — colors, typography, spacing, components, motion, and copy voice are all defined there. Never deviate from its tokens or patterns.
+
 ## Commands
 
 ```bash

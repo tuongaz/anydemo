@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="en" data-screen-label="SeeFlow Design System">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>SeeFlow — Design System</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    /* ── Color ──────────────────────────────────── */
+    --bg:          #09090b;   /* zinc-950 */
+    --bg-canvas:   #0a0a0c;
+    --bg-deep:     #050507;
+    --surface:     #18181b;   /* zinc-900 */
+    --border:      #27272a;   /* zinc-800 */
+    --border-hi:   #3f3f46;   /* zinc-700 */
+    --text:        #fafafa;   /* zinc-50 */
+    --text-mute:   #a1a1aa;   /* zinc-400 */
+    --text-dim:    #71717a;   /* zinc-500 */
+    --text-faint:  #52525b;   /* zinc-600 */
+    --emerald:     #10b981;
+    --emerald-hi:  #34d399;
+    --emerald-glow: rgba(16,185,129,0.35);
+    --amber:       #f59e0b;
+    --amber-hi:    #fbbf24;
+    --danger:      #ef4444;
+
+    /* ── Spacing ────────────────────────────────── */
+    --r-sm: 4px;
+    --r-md: 8px;
+    --r-lg: 12px;
+    --r-xl: 16px;
+    --r-pill: 999px;
+
+    /* ── Type ───────────────────────────────────── */
+    --font-sans: 'Inter', system-ui, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    /* ── Shadow / glow ──────────────────────────── */
+    --shadow-card:       0 4px 12px -2px rgba(0,0,0,0.5);
+    --shadow-window:     0 30px 80px -20px rgba(0,0,0,0.6), 0 0 60px -20px var(--emerald-glow);
+    --shadow-glow-ok:    0 0 30px -4px rgba(16,185,129,0.45);
+    --shadow-glow-pending: 0 0 30px -4px rgba(245,158,11,0.45);
+    --ring-selected:     0 0 0 3px rgba(16,185,129,0.22), 0 0 40px -6px rgba(16,185,129,0.55);
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg-deep);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    letter-spacing: -0.01em;
+  }
+  body {
+    background-image:
+      radial-gradient(rgba(255,255,255,0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
+  }
+
+  /* ── Layout ─────────────────────────────────── */
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 80px 56px 120px; }
+  header.hero {
+    display: flex; flex-direction: column; gap: 24px;
+    padding-bottom: 56px; margin-bottom: 64px;
+    border-bottom: 1px solid var(--border);
+  }
+  .brand {
+    display: flex; align-items: center; gap: 14px;
+    font-weight: 600; font-size: 22px; letter-spacing: -0.02em;
+  }
+  .brand svg { color: var(--emerald-hi); }
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px; color: var(--text-dim);
+    letter-spacing: 0.18em; text-transform: uppercase;
+  }
+  h1.title {
+    margin: 0; font-size: 64px; font-weight: 600;
+    letter-spacing: -0.04em; line-height: 1.02;
+    max-width: 900px;
+  }
+  .lede {
+    margin: 0; font-size: 20px; color: var(--text-mute);
+    max-width: 720px; line-height: 1.55;
+  }
+
+  /* ── Section ────────────────────────────────── */
+  section { margin-bottom: 96px; }
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 24px; margin-bottom: 32px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .section-head h2 {
+    margin: 0; font-size: 28px; font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .section-head .num {
+    font-family: var(--font-mono);
+    color: var(--text-faint);
+    font-size: 13px; letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* ── Color swatches ────────────────────────── */
+  .grid { display: grid; gap: 16px; }
+  .grid-3 { grid-template-columns: repeat(3, 1fr); }
+  .grid-4 { grid-template-columns: repeat(4, 1fr); }
+  .grid-2 { grid-template-columns: repeat(2, 1fr); }
+  .grid-auto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+
+  .swatch {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    background: var(--surface);
+  }
+  .swatch .chip {
+    height: 96px;
+    border-bottom: 1px solid var(--border);
+  }
+  .swatch .meta {
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .swatch .name {
+    font-size: 14px; font-weight: 500;
+    color: var(--text);
+  }
+  .swatch .hex {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim);
+  }
+  .swatch .role {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-faint);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+
+  /* ── Type specimens ─────────────────────────── */
+  .type-row {
+    display: grid;
+    grid-template-columns: 140px 1fr;
+    gap: 32px; align-items: baseline;
+    padding: 24px 0;
+    border-top: 1px solid var(--border);
+  }
+  .type-row:first-of-type { border-top: 0; padding-top: 0; }
+  .type-meta {
+    display: flex; flex-direction: column; gap: 4px;
+  }
+  .type-meta .label {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim); letter-spacing: 0.06em;
+    text-transform: uppercase;
+  }
+  .type-meta .spec {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-faint);
+  }
+  .type-sample { color: var(--text); }
+
+  /* ── Spacing / radii ────────────────────────── */
+  .token-card {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+    padding: 20px;
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .token-card .demo { display: flex; align-items: center; gap: 12px; min-height: 64px; }
+  .token-card .demo .box {
+    background: rgba(16,185,129,0.15);
+    border: 1px solid var(--emerald);
+  }
+  .token-meta {
+    display: flex; justify-content: space-between; align-items: baseline;
+    font-family: var(--font-mono); font-size: 12px;
+  }
+  .token-meta .name { color: var(--text); }
+  .token-meta .val  { color: var(--text-dim); }
+
+  /* ── Components ─────────────────────────────── */
+  .comp-card {
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg);
+    padding: 28px;
+    display: flex; flex-direction: column; gap: 18px;
+  }
+  .comp-card .label {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-dim); letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* Node card (canvas) */
+  .node {
+    width: 240px; min-height: 120px;
+    background: var(--surface);
+    border: 1.5px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 14px 16px;
+    display: flex; flex-direction: column; gap: 8px;
+    box-shadow: var(--shadow-card);
+  }
+  .node.is-pending {
+    border-color: var(--amber);
+    box-shadow: var(--shadow-glow-pending);
+  }
+  .node.is-ok {
+    border-color: var(--emerald);
+    box-shadow: var(--shadow-glow-ok);
+  }
+  .node.is-selected {
+    border-color: var(--emerald-hi);
+    box-shadow: var(--ring-selected);
+  }
+  .node-head { display: flex; align-items: center; gap: 10px; }
+  .node-icon {
+    width: 28px; height: 28px; border-radius: 6px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-mute);
+  }
+  .node-icon.ok { color: var(--emerald-hi); }
+  .node-icon.pending { color: var(--amber-hi); }
+  .node-title { font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+  .node-sub {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* Status pills */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 3px 8px; border-radius: var(--r-sm);
+    font-family: var(--font-mono); font-size: 11px;
+    align-self: flex-start;
+    white-space: nowrap;
+  }
+  .pill.ok {
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.3);
+    color: var(--emerald-hi);
+  }
+  .pill.pending {
+    background: rgba(245,158,11,0.10);
+    border: 1px solid rgba(245,158,11,0.3);
+    color: var(--amber-hi);
+  }
+  .pill.live {
+    background: rgba(16,185,129,0.12);
+    border: 1px solid rgba(16,185,129,0.25);
+    color: var(--emerald-hi);
+    letter-spacing: 0.15em; text-transform: uppercase;
+  }
+  .pill .dot {
+    width: 6px; height: 6px; border-radius: 3px;
+    background: currentColor;
+  }
+  .pill .spinner {
+    width: 10px; height: 10px;
+    border: 1.6px solid rgba(251,191,36,0.25);
+    border-top-color: var(--amber-hi);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* Edge demo */
+  .edge-demo { background: var(--bg-canvas); border-radius: var(--r-md); padding: 24px; border: 1px solid var(--border); }
+
+  /* Window frame */
+  .frame {
+    background: rgba(9,9,11,0.6);
+    backdrop-filter: blur(8px);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    overflow: hidden;
+    box-shadow: var(--shadow-window);
+  }
+  .frame-bar {
+    height: 44px; display: flex; align-items: center;
+    padding: 0 18px; gap: 10px;
+    border-bottom: 1px solid var(--border);
+    background: rgba(24,24,27,0.7);
+    position: relative;
+  }
+  .frame-bar .dots { display: flex; gap: 8px; }
+  .frame-bar .dots span {
+    width: 12px; height: 12px; border-radius: 6px; background: var(--border-hi);
+  }
+  .frame-bar .title {
+    position: absolute; left: 50%; transform: translateX(-50%);
+    display: flex; align-items: center; gap: 12px;
+    font-family: var(--font-mono); font-size: 13px;
+    color: var(--text-dim);
+    white-space: nowrap;
+  }
+  .frame-body { padding: 28px; }
+
+  /* Terminal sample */
+  .term { font-family: var(--font-mono); font-size: 16px; line-height: 1.8; }
+  .term .prompt { color: var(--emerald-hi); }
+  .term .cmd { color: var(--text); }
+  .term .dim { color: var(--text-mute); }
+  .term .faint { color: var(--text-faint); margin-right: 14px; }
+  .term .ok { color: var(--text); }
+  .term .ok-tag { color: var(--emerald-hi); }
+
+  /* Sidebar sample */
+  .sidebar {
+    width: 360px; background: rgba(9,9,11,0.94);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 28px 26px;
+    display: flex; flex-direction: column; gap: 20px;
+    box-shadow: -12px 0 40px -12px rgba(0,0,0,0.6);
+  }
+  .sidebar h4 {
+    margin: 0; font-size: 20px; font-weight: 600;
+    letter-spacing: -0.02em;
+  }
+  .sidebar-section-label {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-dim);
+    letter-spacing: 0.18em; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+  .endpoint {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 12px; border-radius: var(--r-md);
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 13px;
+    white-space: nowrap;
+  }
+  .method-pill {
+    padding: 2px 7px; border-radius: 3px;
+    background: rgba(16,185,129,0.15);
+    color: var(--emerald-hi);
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.05em;
+  }
+  .activity-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: var(--r-md);
+    background: rgba(255,255,255,0.02);
+    border: 1px solid var(--border);
+    font-family: var(--font-mono); font-size: 12px;
+    white-space: nowrap;
+  }
+  .activity-row .dot { width: 6px; height: 6px; border-radius: 3px; flex-shrink: 0; }
+  .activity-row .dot.ok { background: var(--emerald-hi); }
+  .activity-row .dot.err { background: var(--danger); }
+
+  /* SVG glyphs */
+  .glyph svg { display: block; }
+  .glyph-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 12px;
+  }
+  .glyph-card {
+    display: flex; flex-direction: column; align-items: center; gap: 8px;
+    padding: 18px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    background: var(--surface);
+  }
+  .glyph-card .name {
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-dim);
+  }
+
+  /* Motion / timeline */
+  .timeline {
+    display: grid;
+    grid-template-columns: 80px 1fr 220px;
+    gap: 24px;
+    padding: 16px 0;
+    border-top: 1px solid var(--border);
+    align-items: start;
+  }
+  .timeline:first-of-type { border-top: 0; }
+  .timeline .t {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--emerald-hi);
+    letter-spacing: 0.04em;
+  }
+  .timeline .beat {
+    font-size: 16px; color: var(--text);
+    font-weight: 500;
+  }
+  .timeline .beat .desc {
+    display: block; margin-top: 4px;
+    font-size: 14px; color: var(--text-mute); font-weight: 400;
+  }
+  .timeline .ease {
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim);
+    text-align: right;
+  }
+
+  /* Voice */
+  .voice {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 24px;
+  }
+  .voice .col {
+    padding: 24px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--surface);
+  }
+  .voice h4 {
+    margin: 0 0 16px; font-size: 14px;
+    font-family: var(--font-mono); letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .voice .col.do h4 { color: var(--emerald-hi); }
+  .voice .col.dont h4 { color: var(--danger); }
+  .voice ul {
+    margin: 0; padding: 0; list-style: none;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .voice li {
+    color: var(--text-mute); font-size: 15px; line-height: 1.5;
+    padding-left: 20px; position: relative;
+  }
+  .voice li::before {
+    content: ''; position: absolute; left: 0; top: 0.6em;
+    width: 8px; height: 1.5px;
+  }
+  .voice .do li::before { background: var(--emerald); }
+  .voice .dont li::before { background: var(--danger); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- ──────────────────── HERO ──────────────────── -->
+  <header class="hero">
+    <div class="brand">
+      <svg width="32" height="32" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <rect width="8" height="8" x="3" y="3" rx="2"/>
+        <path d="M7 11v4a2 2 0 0 0 2 2h4"/>
+        <rect width="8" height="8" x="13" y="13" rx="2"/>
+      </svg>
+      <span>SeeFlow</span>
+    </div>
+    <div class="eyebrow">Design System · v0.1</div>
+    <h1 class="title">A control-panel aesthetic for architecture that&nbsp;runs.</h1>
+    <p class="lede">Tokens, type, motion and component patterns extracted from the SeeFlow hero animation. Dark zinc foundation, emerald as the signal color, Inter for product voice, JetBrains Mono for anything mechanical.</p>
+  </header>
+
+  <!-- ──────────────────── COLOR ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Color</h2>
+      <span class="num">01 / palette</span>
+    </div>
+
+    <h3 style="margin: 0 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Surfaces</h3>
+    <div class="grid grid-4">
+      <div class="swatch">
+        <div class="chip" style="background: #050507;"></div>
+        <div class="meta">
+          <span class="name">Deep</span>
+          <span class="hex">#050507</span>
+          <span class="role">page background</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #09090b;"></div>
+        <div class="meta">
+          <span class="name">Background</span>
+          <span class="hex">#09090b · zinc-950</span>
+          <span class="role">stage / scene</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #0a0a0c;"></div>
+        <div class="meta">
+          <span class="name">Canvas</span>
+          <span class="hex">#0a0a0c</span>
+          <span class="role">diagram backdrop</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #18181b;"></div>
+        <div class="meta">
+          <span class="name">Surface</span>
+          <span class="hex">#18181b · zinc-900</span>
+          <span class="role">cards / nodes</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin: 40px 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Borders &amp; text</h3>
+    <div class="grid grid-4">
+      <div class="swatch">
+        <div class="chip" style="background: #27272a;"></div>
+        <div class="meta">
+          <span class="name">Border</span>
+          <span class="hex">#27272a · zinc-800</span>
+          <span class="role">card edge</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #3f3f46;"></div>
+        <div class="meta">
+          <span class="name">Border high</span>
+          <span class="hex">#3f3f46 · zinc-700</span>
+          <span class="role">window dots, hairlines</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #71717a;"></div>
+        <div class="meta">
+          <span class="name">Text dim</span>
+          <span class="hex">#71717a · zinc-500</span>
+          <span class="role">secondary copy</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #fafafa;"></div>
+        <div class="meta">
+          <span class="name" style="color:#09090b;">Text</span>
+          <span class="hex" style="color:#52525b;">#fafafa · zinc-50</span>
+          <span class="role" style="color:#71717a;">primary copy</span>
+        </div>
+      </div>
+    </div>
+
+    <h3 style="margin: 40px 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Signal — status &amp; brand</h3>
+    <div class="grid grid-4">
+      <div class="swatch">
+        <div class="chip" style="background: linear-gradient(135deg, #10b981, #34d399); box-shadow: inset 0 0 60px rgba(16,185,129,0.4);"></div>
+        <div class="meta">
+          <span class="name">Emerald</span>
+          <span class="hex">#10b981 → #34d399</span>
+          <span class="role">brand · 200 OK · live</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: linear-gradient(135deg, #f59e0b, #fbbf24);"></div>
+        <div class="meta">
+          <span class="name">Amber</span>
+          <span class="hex">#f59e0b → #fbbf24</span>
+          <span class="role">pending / in-flight</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: #ef4444;"></div>
+        <div class="meta">
+          <span class="name">Danger</span>
+          <span class="hex">#ef4444</span>
+          <span class="role">4xx / 5xx</span>
+        </div>
+      </div>
+      <div class="swatch">
+        <div class="chip" style="background: radial-gradient(circle at 50% 50%, rgba(16,185,129,0.55), transparent 70%), #09090b;"></div>
+        <div class="meta">
+          <span class="name">Emerald glow</span>
+          <span class="hex">rgba(16,185,129,0.35)</span>
+          <span class="role">window &amp; node halos</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── TYPE ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Type</h2>
+      <span class="num">02 / typography</span>
+    </div>
+
+    <div style="display: flex; gap: 32px; margin-bottom: 32px;">
+      <div style="flex:1; padding: 28px; border:1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);">
+        <div class="eyebrow" style="margin-bottom: 16px;">Sans · Product voice</div>
+        <div style="font-family: var(--font-sans); font-size: 64px; font-weight: 600; letter-spacing: -0.04em; line-height: 1;">Inter</div>
+        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 12px;">400 · 500 · 600 · 700</div>
+      </div>
+      <div style="flex:1; padding: 28px; border:1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);">
+        <div class="eyebrow" style="margin-bottom: 16px;">Mono · Mechanical</div>
+        <div style="font-family: var(--font-mono); font-size: 64px; font-weight: 500; letter-spacing: 0; line-height: 1;">JetBrains</div>
+        <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 12px;">400 · 500 · 600</div>
+      </div>
+    </div>
+
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Display</span>
+        <span class="spec">Inter · 64 / 600 · -0.04em</span>
+      </div>
+      <div class="type-sample" style="font-size: 64px; font-weight: 600; letter-spacing: -0.04em; line-height: 1.02;">Architecture that runs.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Title</span>
+        <span class="spec">Inter · 32 / 500 · -0.02em</span>
+      </div>
+      <div class="type-sample" style="font-size: 32px; font-weight: 500; letter-spacing: -0.02em;">Click a node. Fire a real request.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Heading</span>
+        <span class="spec">Inter · 22 / 600 · -0.02em</span>
+      </div>
+      <div class="type-sample" style="font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Payment Service</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Body</span>
+        <span class="spec">Inter · 16 / 400 · -0.01em</span>
+      </div>
+      <div class="type-sample" style="font-size: 16px; line-height: 1.55; color: var(--text-mute); max-width: 580px;">Generated from the codebase. Each node is wired to a running service — click it to send a real request and watch the response light up downstream nodes.</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Mono · code</span>
+        <span class="spec">JetBrains · 14 / 400</span>
+      </div>
+      <div class="type-sample" style="font-family: var(--font-mono); font-size: 14px; color: var(--text);">POST /payment/charge · 142ms · 200 OK</div>
+    </div>
+    <div class="type-row">
+      <div class="type-meta">
+        <span class="label">Mono · label</span>
+        <span class="spec">JetBrains · 11 / 500 · 0.18em · UPPER</span>
+      </div>
+      <div class="type-sample" style="font-family: var(--font-mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.18em; text-transform: uppercase;">02 / generate</div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── SPACING ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Spacing &amp; radii</h2>
+      <span class="num">03 / geometry</span>
+    </div>
+
+    <div class="grid grid-4">
+      <div class="token-card">
+        <div class="demo"><div class="box" style="width: 24px; height: 24px; border-radius: 4px;"></div></div>
+        <div class="token-meta"><span class="name">r-sm</span><span class="val">4px</span></div>
+      </div>
+      <div class="token-card">
+        <div class="demo"><div class="box" style="width: 48px; height: 48px; border-radius: 8px;"></div></div>
+        <div class="token-meta"><span class="name">r-md</span><span class="val">8px</span></div>
+      </div>
+      <div class="token-card">
+        <div class="demo"><div class="box" style="width: 64px; height: 64px; border-radius: 12px;"></div></div>
+        <div class="token-meta"><span class="name">r-lg</span><span class="val">12px</span></div>
+      </div>
+      <div class="token-card">
+        <div class="demo"><div class="box" style="width: 96px; height: 64px; border-radius: 16px;"></div></div>
+        <div class="token-meta"><span class="name">r-xl</span><span class="val">16px · windows</span></div>
+      </div>
+    </div>
+
+    <h3 style="margin: 40px 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Shadow &amp; glow</h3>
+    <div class="grid grid-3">
+      <div class="token-card">
+        <div class="demo" style="justify-content: center;">
+          <div style="width: 80px; height: 80px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-card);"></div>
+        </div>
+        <div class="token-meta"><span class="name">shadow-card</span><span class="val">y4 b12</span></div>
+      </div>
+      <div class="token-card">
+        <div class="demo" style="justify-content: center;">
+          <div style="width: 80px; height: 80px; border-radius: 12px; background: var(--surface); border: 1.5px solid var(--emerald); box-shadow: var(--shadow-glow-ok);"></div>
+        </div>
+        <div class="token-meta"><span class="name">glow-ok</span><span class="val">emerald 45%</span></div>
+      </div>
+      <div class="token-card">
+        <div class="demo" style="justify-content: center;">
+          <div style="width: 80px; height: 80px; border-radius: 12px; background: var(--surface); border: 1.5px solid var(--amber); box-shadow: var(--shadow-glow-pending);"></div>
+        </div>
+        <div class="token-meta"><span class="name">glow-pending</span><span class="val">amber 45%</span></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── COMPONENTS ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Components</h2>
+      <span class="num">04 / building blocks</span>
+    </div>
+
+    <!-- Node cards -->
+    <div class="comp-card" style="margin-bottom: 24px;">
+      <div class="label">Node card · 4 states</div>
+      <div style="display: flex; gap: 20px; flex-wrap: wrap;">
+        <div class="node">
+          <div class="node-head">
+            <div class="node-icon">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+            </div>
+            <div class="node-title">Auth Service</div>
+          </div>
+          <div class="node-sub">JWT · OAuth2</div>
+        </div>
+        <div class="node is-pending">
+          <div class="node-head">
+            <div class="node-icon pending">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+            </div>
+            <div class="node-title">Payment</div>
+          </div>
+          <div class="node-sub">Stripe API</div>
+          <span class="pill pending"><span class="spinner"></span>Processing…</span>
+        </div>
+        <div class="node is-ok">
+          <div class="node-head">
+            <div class="node-icon ok">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>
+            </div>
+            <div class="node-title">Inventory DB</div>
+          </div>
+          <div class="node-sub">PostgreSQL</div>
+          <span class="pill ok"><span class="dot"></span>200 OK</span>
+        </div>
+        <div class="node is-selected">
+          <div class="node-head">
+            <div class="node-icon ok">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+            </div>
+            <div class="node-title">Payment</div>
+          </div>
+          <div class="node-sub">Stripe API · selected</div>
+          <span class="pill ok"><span class="dot"></span>200 OK</span>
+        </div>
+      </div>
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); display: flex; gap: 32px;">
+        <span>idle · border #27272a</span>
+        <span>pending · amber + glow + spinner</span>
+        <span>ok · emerald + glow + pill</span>
+        <span>selected · emerald ring 3px</span>
+      </div>
+    </div>
+
+    <!-- Status pills -->
+    <div class="comp-card" style="margin-bottom: 24px;">
+      <div class="label">Status pills</div>
+      <div style="display: flex; gap: 12px; flex-wrap: wrap;">
+        <span class="pill ok"><span class="dot"></span>200 OK</span>
+        <span class="pill pending"><span class="spinner"></span>Processing…</span>
+        <span class="pill live"><span class="dot"></span>Live</span>
+        <span class="pill" style="background: rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.3); color:#fca5a5;"><span class="dot"></span>402 Payment Required</span>
+        <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid var(--border); color: var(--text-mute);">142 ms</span>
+      </div>
+    </div>
+
+    <!-- Window frame -->
+    <div class="comp-card" style="margin-bottom: 24px;">
+      <div class="label">Window frame · scene container</div>
+      <div class="frame">
+        <div class="frame-bar">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="title">
+            checkout-flow.json
+            <span class="pill live"><span class="dot"></span>Live</span>
+          </div>
+        </div>
+        <div class="frame-body" style="background: var(--bg-canvas); padding: 56px; color: var(--text-dim); font-family: var(--font-mono); font-size: 14px; text-align: center;">
+          [ scene content — terminal, canvas, end-card ]
+        </div>
+      </div>
+    </div>
+
+    <!-- Terminal -->
+    <div class="comp-card" style="margin-bottom: 24px;">
+      <div class="label">Terminal output</div>
+      <div class="frame">
+        <div class="frame-bar">
+          <div class="dots"><span></span><span></span><span></span></div>
+          <div class="title">
+            <span style="color: var(--text-faint);">~/checkout-flow $</span> seeflow
+            <span class="pill live"><span class="dot"></span>AI Agent</span>
+          </div>
+        </div>
+        <div class="frame-body term">
+          <div><span class="prompt">❯</span> <span class="cmd">/seeflow show me the checkout feature</span></div>
+          <div><span class="faint">·</span><span class="dim">Analyzing codebase…</span></div>
+          <div><span class="faint">·</span><span class="dim">Found 3 services: API Gateway, Payment, Inventory DB.</span></div>
+          <div><span class="faint">·</span><span class="dim">Generating seeflow.json…</span></div>
+          <div style="margin-top: 8px;">✓ <span class="ok">Done — canvas ready at</span> <span class="ok-tag">localhost:4321</span></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="comp-card">
+      <div class="label">Node detail sidebar</div>
+      <div style="display: flex; gap: 24px; align-items: flex-start;">
+        <div class="sidebar">
+          <div>
+            <div class="sidebar-section-label">Node detail</div>
+            <div style="display: flex; align-items: center; gap: 12px;">
+              <div class="node-icon ok" style="width: 32px; height: 32px; border-radius: 7px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/></svg>
+              </div>
+              <div style="flex:1;">
+                <h4>Payment</h4>
+                <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);">Stripe API · service</div>
+              </div>
+            </div>
+          </div>
+          <div style="display: flex; gap: 10px;">
+            <span class="pill ok"><span class="dot"></span>200 OK</span>
+            <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid var(--border); color: var(--text-mute);">142 ms</span>
+          </div>
+          <div>
+            <div class="sidebar-section-label">Endpoint</div>
+            <div class="endpoint">
+              <span class="method-pill">POST</span>
+              <span>/payment/charge</span>
+            </div>
+          </div>
+          <div>
+            <div class="sidebar-section-label">Recent activity</div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <div class="activity-row">
+                <span class="dot ok"></span>
+                <span style="color: var(--text); font-weight: 600; width: 28px;">200</span>
+                <span style="color: var(--text-dim); width: 48px;">142ms</span>
+                <span style="color: var(--text-faint); margin-left: auto;">just now</span>
+              </div>
+              <div class="activity-row">
+                <span class="dot ok"></span>
+                <span style="color: var(--text); font-weight: 600; width: 28px;">200</span>
+                <span style="color: var(--text-dim); width: 48px;">98ms</span>
+                <span style="color: var(--text-faint); margin-left: auto;">12s ago</span>
+              </div>
+              <div class="activity-row">
+                <span class="dot err"></span>
+                <span style="color: var(--text); font-weight: 600; width: 28px;">402</span>
+                <span style="color: var(--text-dim); width: 48px;">87ms</span>
+                <span style="color: var(--text-faint); margin-left: auto;">2m ago</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div style="flex: 1; color: var(--text-dim); font-size: 14px; line-height: 1.6;">
+          <p style="margin: 0 0 12px;">Slides in from the right edge of the canvas. <strong style="color: var(--text);">tx: 420px → 0</strong>, easeOutCubic, 500ms.</p>
+          <p style="margin: 0 0 12px;">Content reveals in a stagger: <strong style="color: var(--text);">+0, +150, +300, +450ms</strong> per block. Activity rows pile in at <strong style="color: var(--text);">+80ms</strong> each.</p>
+          <p style="margin: 0;">The originating node gets a 3px emerald ring while the sidebar is open so the user keeps the visual link between the row of activity and the system it describes.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── GLYPHS ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Glyphs</h2>
+      <span class="num">05 / iconography</span>
+    </div>
+
+    <div class="glyph-grid">
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>
+        </svg>
+        <span class="name">flow</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 4-7 8-7s8 3 8 7"/>
+        </svg>
+        <span class="name">client</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="8" rx="2"/><rect x="2" y="13" width="20" height="8" rx="2"/><path d="M6 7h.01M6 17h.01"/>
+        </svg>
+        <span class="name">gateway</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="3"/><path d="M9 9h6v6H9z"/>
+        </svg>
+        <span class="name">service</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/>
+        </svg>
+        <span class="name">database</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/>
+        </svg>
+        <span class="name">success</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>
+        </svg>
+        <span class="name">file</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="var(--text)">
+          <polygon points="6,4 20,12 6,20"/>
+        </svg>
+        <span class="name">play</span>
+      </div>
+      <div class="glyph-card glyph">
+        <svg width="32" height="32" viewBox="0 0 22 26">
+          <path d="M1 1 L1 19 L6 14 L9 22 L12 21 L9 13 L16 13 Z" fill="var(--text)" stroke="#000" stroke-width="1"/>
+        </svg>
+        <span class="name">cursor</span>
+      </div>
+    </div>
+
+    <p style="font-size: 13px; color: var(--text-dim); margin-top: 16px; max-width: 720px;">All glyphs are stroked at <code style="font-family: var(--font-mono); color: var(--text-mute);">stroke-width: 2</code> (heavier 2.2 for the wordmark), round caps and joins, 24px viewBox. Color is inherited via <code style="font-family: var(--font-mono); color: var(--text-mute);">currentColor</code> so glyphs adopt node state.</p>
+  </section>
+
+  <!-- ──────────────────── MOTION ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Motion</h2>
+      <span class="num">06 / timing</span>
+    </div>
+
+    <h3 style="margin: 0 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Easing curves</h3>
+    <div class="grid grid-3">
+      <div class="token-card">
+        <svg viewBox="0 0 100 60" style="width: 100%; height: 80px;">
+          <path d="M 5 55 C 5 55, 60 55, 95 5" fill="none" stroke="var(--emerald-hi)" stroke-width="1.6"/>
+        </svg>
+        <div class="token-meta"><span class="name">easeOutCubic</span><span class="val">entries</span></div>
+      </div>
+      <div class="token-card">
+        <svg viewBox="0 0 100 60" style="width: 100%; height: 80px;">
+          <path d="M 5 55 C 5 5, 95 55, 95 5" fill="none" stroke="var(--emerald-hi)" stroke-width="1.6"/>
+        </svg>
+        <div class="token-meta"><span class="name">easeInOutCubic</span><span class="val">cursor travel</span></div>
+      </div>
+      <div class="token-card">
+        <svg viewBox="0 0 100 60" style="width: 100%; height: 80px;">
+          <path d="M 5 55 C 40 55, 40 -10, 95 5" fill="none" stroke="var(--emerald-hi)" stroke-width="1.6"/>
+        </svg>
+        <div class="token-meta"><span class="name">easeOutBack</span><span class="val">nodes pop in</span></div>
+      </div>
+    </div>
+
+    <h3 style="margin: 40px 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Hero loop timeline · 30s</h3>
+    <div>
+      <div class="timeline">
+        <span class="t">0.0 — 9.2s</span>
+        <div class="beat">01 · Prompt
+          <span class="desc">Cursor types <code style="font-family: var(--font-mono); color: var(--text-mute);">/seeflow show me the checkout feature</code>. Response lines stagger in (+0.55s each). Generated file pill appears.</span>
+        </div>
+        <span class="ease">typewriter · 2.2s</span>
+      </div>
+      <div class="timeline">
+        <span class="t">8.8 — 13.0s</span>
+        <div class="beat">02 · Wire
+          <span class="desc">Window swaps to canvas. 7 nodes materialize one at a time (easeOutBack). Edges draw in via dashoffset.</span>
+        </div>
+        <span class="ease">+0.4s / node</span>
+      </div>
+      <div class="timeline">
+        <span class="t">5.4 — 9.3s in-scene</span>
+        <div class="beat">03 · Run
+          <span class="desc">Cursor glides to Gateway · click pulse · packets fly along edges. Nodes flip pending → ok with status pills.</span>
+        </div>
+        <span class="ease">packet 0.55s · easeInOutCubic</span>
+      </div>
+      <div class="timeline">
+        <span class="t">10.7 — 17.2s in-scene</span>
+        <div class="beat">04 · Inspect
+          <span class="desc">Second click on Payment. Sidebar slides in from right, content reveals in 4 staggered blocks. Originating node gets a 3px emerald ring.</span>
+        </div>
+        <span class="ease">slide 0.5s · easeOutCubic</span>
+      </div>
+      <div class="timeline">
+        <span class="t">26.6 — 30.0s</span>
+        <div class="beat">05 · End card
+          <span class="desc">Wordmark + tagline + install command, fade-up stagger.</span>
+        </div>
+        <span class="ease">+0.4s per line</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── VOICE ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Voice</h2>
+      <span class="num">07 / copy</span>
+    </div>
+
+    <div class="voice">
+      <div class="col do">
+        <h4>Do</h4>
+        <ul>
+          <li>Lead with the verb. "Click. Fire. Inspect."</li>
+          <li>Use mono for anything mechanical — paths, commands, timings, status codes.</li>
+          <li>Pair plain English with a concrete proof. "Real responses. Live nodes."</li>
+          <li>Keep section labels short and serialized: <code style="font-family: var(--font-mono); color: var(--text-mute);">02 / generate</code>.</li>
+        </ul>
+      </div>
+      <div class="col dont">
+        <h4>Don't</h4>
+        <ul>
+          <li>No "revolutionize," no "seamlessly," no "next-generation."</li>
+          <li>No exclamation marks. The product is confident; punctuation doesn't have to be.</li>
+          <li>No emoji in product surfaces. Glyphs only.</li>
+          <li>Don't pad with adjectives. Two short sentences beat one long one.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- ──────────────────── PRINCIPLES ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Principles</h2>
+      <span class="num">08 / north stars</span>
+    </div>
+    <div class="grid grid-2" style="gap: 24px;">
+      <div class="token-card" style="padding: 28px;">
+        <div class="eyebrow">01</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">A diagram is a control panel.</h3>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Every node is clickable. Every edge carries a real request. If it can't be touched, it shouldn't be on the canvas.</p>
+      </div>
+      <div class="token-card" style="padding: 28px;">
+        <div class="eyebrow">02</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Color is signal, not decoration.</h3>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Emerald means OK. Amber means pending. Red means broken. Surfaces stay grayscale so signal can't be drowned out.</p>
+      </div>
+      <div class="token-card" style="padding: 28px;">
+        <div class="eyebrow">03</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Motion follows causality.</h3>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">A click animates the cursor. A request animates a packet along an edge. A response animates the receiving node. Nothing moves without a cause.</p>
+      </div>
+      <div class="token-card" style="padding: 28px;">
+        <div class="eyebrow">04</div>
+        <h3 style="margin: 0; font-size: 22px; font-weight: 600; letter-spacing: -0.02em;">Mono earns the spotlight.</h3>
+        <p style="margin: 0; color: var(--text-mute); line-height: 1.6;">Anything a developer would type — paths, statuses, durations — is set in JetBrains Mono. It signals "this came from your real system."</p>
+      </div>
+    </div>
+  </section>
+
+</div>
+</body>
+</html>
