@@ -10,6 +10,7 @@ const window = new Window();
 
 const { HtmlNode } = await import('./html-node.tsx');
 const { PlaceholderCard } = await import('./placeholder-card.tsx');
+const { Icon } = await import('../ui/icon.tsx');
 const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
 const { _setHtmlContentForTest, _clearHtmlContentCacheForTest } = await import(
   '../lib/use-html-content.ts'
@@ -338,5 +339,47 @@ describe('HtmlNode label (US-014)', () => {
       return p['data-testid'] === 'html-node-label';
     });
     expect(label).toBeNull();
+  });
+});
+
+function findLabel(tree: unknown): ReactElementLike | null {
+  return findElement(tree, (el) => {
+    const p = el.props as { 'data-testid'?: string };
+    return p['data-testid'] === 'html-node-label';
+  });
+}
+
+describe('HtmlNode caption icon (US-007)', () => {
+  beforeEach(() => {
+    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
+      kind: 'loaded',
+      html: '<p>ok</p>',
+    });
+  });
+
+  it('renders an Icon inline with the caption when data.icon is set', () => {
+    const tree = callHtmlNode({ name: 'Welcome card', icon: 'sparkles' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    const icon = findElement(label, (el) => el.type === Icon);
+    if (!icon) throw new Error('expected Icon in html-node-label');
+    expect((icon.props as { name?: string }).name).toBe('sparkles');
+    expect((icon.props as { size?: number }).size).toBe(12);
+  });
+
+  it('does not render an Icon in the caption when data.icon is undefined', () => {
+    const tree = callHtmlNode({ name: 'Welcome card' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    expect(findElement(label, (el) => el.type === Icon)).toBeNull();
+  });
+
+  it('renders the caption with no flex/span wrappers when data.icon is undefined', () => {
+    const tree = callHtmlNode({ name: 'Welcome card' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    // Legacy structure: the label div's children is the raw name string,
+    // not a flex-wrapper div with a nested span.
+    expect((label.props as { children?: unknown }).children).toBe('Welcome card');
   });
 });
