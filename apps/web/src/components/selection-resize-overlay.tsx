@@ -1,4 +1,4 @@
-import { type Rect, type ScalableNode, scaleNodesWithinRect } from '@/lib/scale-nodes';
+import { type Rect, type ScalableNode, scaleNodesWithinRect } from '@seeflow/canvas';
 import { ViewportPortal, useReactFlow } from '@xyflow/react';
 import {
   type CSSProperties,

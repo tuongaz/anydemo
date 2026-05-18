@@ -24,7 +24,7 @@ const {
   getStoredDetailPanelWidth,
   setStoredDetailPanelWidth,
   startResizeGesture,
-} = await import('@/lib/detail-panel-width');
+} = await import('./detail-panel-width');
 
 beforeEach(() => {
   memStore.clear();

@@ -6,11 +6,6 @@ import {
   revealProjectFile,
 } from '@/lib/api';
 import {
-  getStoredDetailPanelWidth,
-  setStoredDetailPanelWidth,
-  startResizeGesture,
-} from '@/lib/detail-panel-width';
-import {
   Button,
   Sheet,
   SheetContent,
@@ -18,6 +13,9 @@ import {
   SheetTitle,
   StatusBadge,
   cn,
+  getStoredDetailPanelWidth,
+  setStoredDetailPanelWidth,
+  startResizeGesture,
 } from '@seeflow/canvas';
 import { FolderOpen, PencilLine } from 'lucide-react';
 import {

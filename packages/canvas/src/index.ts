@@ -109,6 +109,21 @@ export type { Debouncer, DebouncerOptions } from './lib/debounce.ts';
 
 export { fileUrl } from './lib/file-url.ts';
 
+export {
+  DETAIL_PANEL_WIDTH_DEFAULT,
+  DETAIL_PANEL_WIDTH_KEY,
+  DETAIL_PANEL_WIDTH_MAX,
+  DETAIL_PANEL_WIDTH_MIN,
+  clampDetailPanelWidth,
+  getStoredDetailPanelWidth,
+  setStoredDetailPanelWidth,
+  startResizeGesture,
+} from './lib/detail-panel-width.ts';
+export type { ResizeGestureCallbacks } from './lib/detail-panel-width.ts';
+
+export { scaleNodesWithinRect } from './lib/scale-nodes.ts';
+export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts';
+
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
 

@@ -282,8 +282,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Both modules are pure utility code with zero internal `@/` imports — verbatim copies into `packages/canvas/src/lib/`. scale-nodes.test.ts self-import was already relative (`./scale-nodes`); detail-panel-width.test.ts self-import switched from `@/lib/detail-panel-width` to `./detail-panel-width`. Added two re-export blocks to packages/canvas/src/index.ts (values + types split, alphabetically placed after `fileUrl`). Updated 2 web import sites: selection-resize-overlay.tsx (single-line swap to `@seeflow/canvas`) and detail-panel.tsx (merged 3 detail-panel-width specifiers into the existing 7-specifier `@seeflow/canvas` block, alphabetical). Biome check --fix returned no fixes. Tests: 31 pass / 71 expect() across both moved files; full suite 1304 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-017",
