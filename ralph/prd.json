@@ -167,7 +167,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, run /seeflow to generate a new node via the plugin (or trigger any SSE node:created path), confirm the canvas auto-fits when the node appears, and confirm dragging a shape from the toolbar onto the canvas does NOT yank the viewport"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
