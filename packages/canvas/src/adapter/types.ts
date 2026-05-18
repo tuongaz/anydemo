@@ -197,4 +197,8 @@ export interface CanvasAdapter {
   /** Optional: invoke the node's playAction. Adapters that don't support
    *  server-side execution can omit this — view-mode canvases never call it. */
   playNode?(nodeId: string): Promise<PlayNodeResult>;
+  /** Optional: ask the host to open the given project-scoped file in its editor. */
+  openFile?(path: string): Promise<void>;
+  /** Optional: ask the host to reveal the given project-scoped file in its OS file manager. */
+  revealFile?(path: string): Promise<void>;
 }

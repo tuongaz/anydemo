@@ -136,5 +136,23 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
     async playNode(nodeId: string): Promise<PlayNodeResult> {
       return await requestJson<PlayNodeResult>(fetchImpl, 'POST', `${demoBase}/play/${nodeId}`, {});
     },
+
+    async openFile(path: string): Promise<void> {
+      await requestJson<unknown>(
+        fetchImpl,
+        'POST',
+        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/open`,
+        { path },
+      );
+    },
+
+    async revealFile(path: string): Promise<void> {
+      await requestJson<unknown>(
+        fetchImpl,
+        'POST',
+        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/reveal`,
+        { path },
+      );
+    },
   };
 };
