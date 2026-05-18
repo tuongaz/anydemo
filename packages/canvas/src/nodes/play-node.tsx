@@ -6,6 +6,7 @@ import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import type { NodeData, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
+import { Icon } from '../ui/icon.tsx';
 import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusBadge } from './status-badge.tsx';
@@ -176,6 +177,15 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
         className="flex shrink-0 items-center justify-between gap-2 border-b bg-muted/30 px-2 py-2"
         data-testid="node-header"
       >
+        {data.icon ? (
+          <Icon
+            name={data.icon}
+            size={16}
+            className="shrink-0"
+            style={colorTokenStyle(data.textColor, 'text')}
+            aria-hidden
+          />
+        ) : null}
         <div
           className="min-w-0 flex-1 text-[18px] font-semibold leading-tight"
           style={labelFontStyle}

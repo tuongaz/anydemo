@@ -4,6 +4,7 @@ import type { CSSProperties } from 'react';
 import * as React from 'react';
 import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
 import { Button } from '../ui/button.tsx';
+import { Icon } from '../ui/icon.tsx';
 import { PlayNode } from './play-node.tsx';
 
 // Mirrors the hook-shim pattern from icon-node.test.tsx — no DOM, no React
@@ -249,6 +250,36 @@ describe('PlayNode status badge (US-007)', () => {
       const dotClassName = String((dot.props as { className?: string }).className ?? '');
       expect(dotClassName).toContain(dotClass);
     }
+  });
+});
+
+function findHeader(tree: unknown): ReactElementLike {
+  const header = findElement(
+    tree,
+    (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'node-header',
+  );
+  if (!header) throw new Error('node-header not found');
+  return header;
+}
+
+function findHeaderIcon(tree: unknown): ReactElementLike | null {
+  const header = findHeader(tree);
+  return findElement(header, (el) => el.type === Icon);
+}
+
+describe('PlayNode header icon (US-005)', () => {
+  it('renders an Icon in the header when data.icon is set', () => {
+    const tree = callPlayNode({ icon: 'database' });
+    const icon = findHeaderIcon(tree);
+    if (!icon) throw new Error('expected Icon in node-header');
+    expect((icon.props as { name?: string }).name).toBe('database');
+    expect((icon.props as { size?: number }).size).toBe(16);
+    expect((icon.props as { className?: string }).className).toBe('shrink-0');
+  });
+
+  it('does not render an Icon in the header when data.icon is undefined', () => {
+    const tree = callPlayNode({});
+    expect(findHeaderIcon(tree)).toBeNull();
   });
 });
 
