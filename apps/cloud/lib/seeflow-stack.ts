@@ -37,6 +37,8 @@ export class SeeflowStack extends cdk.Stack {
       runtime: lambda.Runtime.NODEJS_22_X,
       entry: path.join(__dirname, '../lambda/api/index.ts'),
       handler: 'handler',
+      memorySize: 1024,
+      timeout: cdk.Duration.seconds(15),
       environment: {
         DIAGRAMS_BUCKET_NAME: diagramsBucket.bucketName,
       },
