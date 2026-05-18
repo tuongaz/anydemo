@@ -17,12 +17,12 @@
     --popover-foreground: 0 0% 98%;
 
     --primary: 160 84% 39.4%; /* emerald   #10b981 */
-    --primary-foreground: 160 68% 60%; /* emerald-hi #34d399 */
+    --primary-foreground: 162 89% 10%; /* dark forest green #052e22 */
 
-    --secondary: 240 3.7% 15.9%; /* zinc-800  #27272a */
+    --secondary: 240 6% 13%; /* #1f1f23 */
     --secondary-foreground: 0 0% 98%;
 
-    --muted: 240 3.7% 15.9%; /* zinc-800 */
+    --muted: 240 7% 12%; /* #1c1c20 */
     --muted-foreground: 240 4.4% 64.9%; /* zinc-400  #a1a1aa */
 
     --accent: 240 3.7% 15.9%;
