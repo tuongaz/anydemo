@@ -1,13 +1,3 @@
-import type { ShapeKind } from '@/lib/api';
-import {
-  type CommandId,
-  IconPickerPopover,
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-  cn,
-  getCommandTooltip,
-} from '@seeflow/canvas';
 import {
   Circle,
   Cloud,
@@ -22,6 +12,11 @@ import {
   User,
 } from 'lucide-react';
 import { useState } from 'react';
+import { cn } from '../lib/cn.ts';
+import { type CommandId, getCommandTooltip } from '../lib/keyboard-shortcuts.ts';
+import type { ShapeKind } from '../types.ts';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
+import { IconPickerPopover } from './icon-picker-popover.tsx';
 
 /**
  * dataTransfer MIME-like type recognised by the canvas drop handler as an

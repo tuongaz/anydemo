@@ -1,10 +1,10 @@
-import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from '@/components/canvas-toolbar';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
 import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import {
+  CanvasToolbar,
   type ConnectorStylePatch,
   ContextMenu,
   ContextMenuContent,
@@ -14,6 +14,7 @@ import {
   ContextMenuTrigger,
   EditableEdge,
   type EditableEdgeData,
+  HTML_BLOCK_DND_TYPE,
   HtmlNode,
   ILLUSTRATIVE_SHAPE_RENDERERS,
   IconNode,
@@ -33,6 +34,7 @@ import {
   type Side,
   StateNode,
   StyleStrip,
+  TOOLBAR_SHAPES,
   cn,
   computeImageDims,
   connectorToEdge,

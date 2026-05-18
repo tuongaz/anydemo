@@ -153,6 +153,16 @@ export {
 export type { ImageDataDefaults, ShapeDataDefaults } from './lib/node-defaults.ts';
 
 export {
+  CanvasToolbar,
+  HTML_BLOCK_DND_TYPE,
+  TOOLBAR_SHAPES,
+} from './components/canvas-toolbar.tsx';
+export type {
+  CanvasToolbarProps,
+  ToolbarShapeEntry,
+} from './components/canvas-toolbar.tsx';
+
+export {
   IconPickerBody,
   IconPickerPopover,
   filterIcons,

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { CanvasToolbar, TOOLBAR_SHAPES } from '@/components/canvas-toolbar';
-import type { ShapeKind } from '@/lib/api';
 import * as React from 'react';
+import type { ShapeKind } from '../types.ts';
+import { CanvasToolbar, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 
 // Bun runs apps/web tests without a DOM. The hook-shim pattern (also used by
 // icon-node.test.tsx / demo-canvas.test.tsx) replaces React's internal

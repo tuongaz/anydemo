@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from '@/components/canvas-toolbar';
 import {
   type ClipboardShortcutEventLike,
   DemoCanvas,
@@ -13,8 +12,10 @@ import {
 import type { DemoNode } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
+  CanvasToolbar,
   CloudShape,
   DatabaseShape,
+  HTML_BLOCK_DND_TYPE,
   type MultiResizeUpdate,
   QueueShape,
   SelectionResizeOverlay,
