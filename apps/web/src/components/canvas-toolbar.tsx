@@ -144,9 +144,7 @@ export function CanvasToolbar({
         onClick={() => onSelectShape(active ? null : shape)}
         className={cn(
           'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
-          active
-            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-            : 'hover:bg-accent hover:text-accent-foreground',
+          active ? 'bg-primary/10 text-primary border border-primary/30' : 'hover:bg-muted',
         )}
       >
         <Icon className="h-4 w-4" />
@@ -157,7 +155,7 @@ export function CanvasToolbar({
   return (
     <div
       data-testid="canvas-toolbar"
-      className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border bg-background/95 p-1 shadow-md backdrop-blur"
+      className="pointer-events-auto flex flex-col items-center gap-1 rounded-lg border border-border bg-card p-1 shadow-md backdrop-blur"
     >
       {TOP_PRIMARY_SHAPES.map(renderShapeButton)}
       <Popover open={shapePickerOpen} onOpenChange={setShapePickerOpen}>
@@ -171,8 +169,8 @@ export function CanvasToolbar({
             className={cn(
               'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
               shapePickerOpen || illustrativeActive
-                ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                : 'hover:bg-accent hover:text-accent-foreground',
+                ? 'bg-primary/10 text-primary border border-primary/30'
+                : 'hover:bg-muted',
             )}
           >
             <Shapes className="h-4 w-4" aria-hidden="true" />
@@ -211,8 +209,8 @@ export function CanvasToolbar({
                   className={cn(
                     'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
                     active
-                      ? 'bg-primary text-primary-foreground'
-                      : 'hover:bg-accent hover:text-accent-foreground focus:bg-accent focus:text-accent-foreground focus:outline-none',
+                      ? 'bg-primary/10 text-primary border border-primary/30'
+                      : 'hover:bg-muted focus:bg-muted focus:outline-none',
                   )}
                 >
                   <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
@@ -240,8 +238,8 @@ export function CanvasToolbar({
               className={cn(
                 'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors',
                 iconPickerOpen
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'hover:bg-accent hover:text-accent-foreground',
+                  ? 'bg-primary/10 text-primary border border-primary/30'
+                  : 'hover:bg-muted',
               )}
             >
               <Sticker className="h-4 w-4" aria-hidden="true" />
