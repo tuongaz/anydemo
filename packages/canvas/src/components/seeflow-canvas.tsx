@@ -62,7 +62,7 @@ import {
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import { StateNode } from '../nodes/state-node.tsx';
 import type { NodeStatus } from '../nodes/status-pill.tsx';
-import type { Connector, DemoNode, EdgePin, ShapeKind } from '../types.ts';
+import type { Connector, DemoNode, EdgePin, ShapeKind, StatusReport } from '../types.ts';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -73,6 +73,7 @@ import {
 } from '../ui/context-menu.tsx';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
+import { DetailPanel } from './detail-panel.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -549,6 +550,60 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   activeShape: ShapeKind | null;
   onSelectShape: (shape: ShapeKind | null) => void;
+  /**
+   * US-007: hide the built-in DetailPanel sidebar entirely. View-mode embeds
+   * and hosts that supply their own inspector set this to true. When false (or
+   * unset) the canvas renders {@link DetailPanel} as part of its own layout,
+   * driven by `selectedNodeIds[0]` / `selectedConnectorIds[0]`.
+   */
+  disableSidebar?: boolean;
+  /**
+   * US-007: latest StatusReport for the currently inspected node, forwarded to
+   * the built-in DetailPanel's Status section. The host owns the per-node
+   * status map and slices it down to the single selected entry. Undefined when
+   * the selected node has no statusAction or hasn't emitted yet.
+   */
+  statusReport?: StatusReport & { ts: number };
+  /**
+   * US-007: persist a new node name from a DetailPanel edit. Mirrors
+   * {@link onNodeNameChange} (the inline-on-canvas edit handler) — both share
+   * the same coalesce key in the parent so a typing session across the canvas
+   * and sidebar produces a single undo entry. Absent → the panel's name field
+   * renders read-only.
+   */
+  onNameChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-007: persist a new node description from a DetailPanel edit. Mirrors
+   * {@link onNodeDescriptionChange}. Absent → the panel's description field
+   * renders read-only.
+   */
+  onDescriptionChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-007: persist a new node detail (long-form notes) from a DetailPanel
+   * edit. No on-canvas equivalent today — the detail field is sidebar-only.
+   * Absent → the panel's detail field renders read-only.
+   */
+  onDetailChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-008: opt-in viewport auto-fit. `undefined` / `false` → no auto-fit.
+   * `true` → fit on initial mount (after rfInstance is ready and
+   * `nodes.length > 0`); future stories extend this to also fit on external
+   * node changes via `autoFitViewSignal`. Pass an object to enable each
+   * trigger independently (e.g. `{ onMount: false }` to skip the mount-fit
+   * but still react to the signal). See {@link resolveAutoFitView}.
+   */
+  autoFitView?: AutoFitView;
+  /**
+   * US-009: host-bumped counter that triggers an external-change fit. Bump
+   * (any monotonic change) when an SSE / adapter update inserts or deletes
+   * nodes so the viewport re-frames around the new graph. Only effective
+   * when {@link autoFitView} resolves `onExternalNodeChange` to `true`. The
+   * very first observed value is treated as the baseline and never fits
+   * (so this doesn't double-fire with the mount-fit). If the signal bumps
+   * while a node drag or resize is in flight, the fit is deferred and
+   * flushed once the interaction ends.
+   */
+  autoFitViewSignal?: number;
 }
 
 /**
@@ -566,6 +621,60 @@ export type SeeflowCanvasProps =
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
 // still produces a usable node rather than a 0×0 ghost.
 const MIN_DRAW_SIZE = 40;
+
+/**
+ * US-008: canonical options for every fitView call originating from inside
+ * the canvas (manual Fit View button, auto-fit-view on mount, future
+ * signal-driven external-change fit). Centralized so the manual and
+ * automatic paths cannot drift apart.
+ */
+export const FIT_VIEW_OPTIONS = {
+  padding: 0.15,
+  duration: 300,
+  includeHiddenNodes: false,
+} as const;
+
+/**
+ * US-008: granular auto-fit-view config. Both flags default to `true` when the
+ * parent value resolves to a truthy `autoFitView` (i.e. `true` or an object).
+ * `onMount` fires once on initial mount after the React Flow instance is
+ * available and `nodes.length > 0`. `onExternalNodeChange` (wired in US-009)
+ * fires when the host bumps `autoFitViewSignal`.
+ */
+export type AutoFitViewConfig = {
+  onMount?: boolean;
+  onExternalNodeChange?: boolean;
+};
+
+/**
+ * US-008: public `autoFitView` prop value. `undefined` / `false` → no
+ * auto-fit. `true` → both flags default to `true`. An object lets callers
+ * opt into / out of each trigger independently.
+ */
+export type AutoFitView = boolean | AutoFitViewConfig;
+
+/**
+ * US-008: pure resolver — collapse the optional `autoFitView` prop into the
+ * concrete pair of booleans every downstream effect reads. Keeps the prop's
+ * boolean / object / undefined union out of the rendering hot path and makes
+ * the default behavior (both triggers ON when `autoFitView` is truthy)
+ * trivially unit-testable.
+ */
+export function resolveAutoFitView(value: AutoFitView | undefined): {
+  onMount: boolean;
+  onExternalNodeChange: boolean;
+} {
+  if (value === undefined || value === false) {
+    return { onMount: false, onExternalNodeChange: false };
+  }
+  if (value === true) {
+    return { onMount: true, onExternalNodeChange: true };
+  }
+  return {
+    onMount: value.onMount ?? true,
+    onExternalNodeChange: value.onExternalNodeChange ?? true,
+  };
+}
 
 /**
  * Resolve the cursor's screen-space coordinates from the mouse/touch event
@@ -1345,10 +1454,12 @@ const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
 export function SeeflowCanvas(props: SeeflowCanvasProps) {
   const {
     mode,
-    // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —
-    // every mutation site is still routed through callbacks the parent supplies.
-    // US-026/27 begin reading adapter.* directly from inside the component.
-    adapter: _adapter,
+    // US-007: `adapter` is forwarded to the built-in DetailPanel so its
+    // htmlNode file-action buttons (Open in editor / Reveal in OS file
+    // manager) route through `adapter.openFile` / `adapter.revealFile`. Every
+    // other mutation site still goes through the explicit callback props the
+    // parent supplies.
+    adapter,
     projectId,
     nodes,
     connectors,
@@ -1405,6 +1516,13 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onToggleNodeLock,
     activeShape,
     onSelectShape,
+    disableSidebar,
+    statusReport,
+    onNameChange,
+    onDescriptionChange,
+    onDetailChange,
+    autoFitView,
+    autoFitViewSignal,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -1462,6 +1580,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   useEffect(() => {
     flagsRef.current = flags;
   }, [flags]);
+  // US-008: collapse the public `autoFitView` prop (boolean | object |
+  // undefined) into a stable pair of booleans every downstream effect reads.
+  // Memoized on the raw prop reference so callers passing the same value
+  // (or its object form) don't re-trigger the effects below on every render.
+  const resolvedAutoFitView = useMemo(() => resolveAutoFitView(autoFitView), [autoFitView]);
   // US-026: destructure the bundled `runtime` prop into the legacy per-stream
   // names every downstream call site already uses. Keeps the diff focused on
   // the prop API while preserving the existing memo/dependency wiring.
@@ -1478,6 +1601,46 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // gesture (the underlying flow conversion handles the transform).
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
+  // US-008: one-shot guard for the auto-fit-view mount effect. Flipped to
+  // `true` the first time the canvas calls `fitView` from the mount path so
+  // re-renders (selection changes, prop churn) don't re-fit the viewport.
+  const didMountFitRef = useRef(false);
+  // US-009: deferred-fit slot for the signal-driven external-change fit.
+  // When the signal bumps mid-drag / mid-resize, the would-be `fitView` call
+  // is stashed here and flushed by {@link flushPendingFit} once the
+  // interaction ends. Storing the intent (not the options) keeps the flush
+  // path tied to {@link FIT_VIEW_OPTIONS} so the manual and auto paths can't
+  // drift.
+  const pendingFitRef = useRef(false);
+  // US-009: one-shot guard so the signal-watching effect's initial run (any
+  // mount of the canvas always invokes a useEffect once with the seed deps)
+  // skips firing fitView. Without this, a host that mounts the canvas with
+  // an `autoFitViewSignal` already set would double-fire with the mount-fit
+  // path.
+  const signalEffectMountedRef = useRef(false);
+  // US-009: mirror `resolvedAutoFitView` into a ref so the signal-watching
+  // effect (deps: only `[autoFitViewSignal]`) reads the latest flag without
+  // re-running when the flag flips. Inline assignment instead of a useEffect
+  // so the test renderer (which no-ops effects) still sees the live value.
+  const resolvedAutoFitViewRef = useRef(resolvedAutoFitView);
+  resolvedAutoFitViewRef.current = resolvedAutoFitView;
+  // US-008: late-nodes mount-fit. The primary mount-fit path lives inside
+  // <ReactFlow>'s `onInit` callback (so the fit happens the same tick the
+  // instance becomes available), but hosts that mount the canvas with an
+  // empty `nodes` prop and populate it asynchronously (e.g. an SSE-driven
+  // initial load) need this effect to catch up — it re-runs when `nodes` or
+  // the resolved `onMount` flag changes and fits the viewport on the first
+  // render where every guard is satisfied. `didMountFitRef` ensures the two
+  // paths can't double-fire.
+  useEffect(() => {
+    if (didMountFitRef.current) return;
+    if (!resolvedAutoFitView.onMount) return;
+    if (nodes.length === 0) return;
+    const rfInstance = rfInstanceRef.current;
+    if (!rfInstance) return;
+    rfInstance.fitView(FIT_VIEW_OPTIONS);
+    didMountFitRef.current = true;
+  }, [nodes, resolvedAutoFitView.onMount]);
   // US-006: handle to the React Flow store (registered by <StoreApiBridge>).
   // Used to call `cancelConnection` when ESC cancels an in-flight connection.
   const storeApiRef = useRef<StoreApi | null>(null);
@@ -1864,9 +2027,49 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // resizingRef is set/cleared by node components via data.setResizing.
   const draggingRef = useRef(false);
   const resizingRef = useRef(false);
-  const setResizing = useCallback((on: boolean) => {
-    resizingRef.current = on;
+  // US-009: flush a deferred external-change fit once any in-flight node
+  // drag / resize finishes. Idempotent: a second call after the first
+  // consume is a no-op (pendingFitRef is back to false). Re-checks the
+  // interaction refs in case the user chained drag → resize and the first
+  // gesture ended but a different one is still live.
+  const flushPendingFit = useCallback(() => {
+    if (!pendingFitRef.current) return;
+    if (resizingRef.current || draggingRef.current) return;
+    pendingFitRef.current = false;
+    rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, []);
+  const setResizing = useCallback(
+    (on: boolean) => {
+      resizingRef.current = on;
+      // US-009: once a resize gesture ends, flush any deferred external-change
+      // fit so the viewport re-frames around the new graph without yanking the
+      // user mid-gesture.
+      if (!on) flushPendingFit();
+    },
+    [flushPendingFit],
+  );
+  // US-009: signal-driven external-change fit. Bumping `autoFitViewSignal`
+  // re-runs this effect; the first run (initial mount tick) flips
+  // `signalEffectMountedRef` and skips so the signal path doesn't double-fire
+  // with the mount-fit. When an interaction is in flight, the fit is
+  // deferred to `pendingFitRef` and flushed by {@link flushPendingFit}.
+  // The `onExternalNodeChange` flag is read via a ref so flipping it alone
+  // (without a signal bump) does NOT yank the viewport. `autoFitViewSignal`
+  // is intentionally the SOLE dep: the cb doesn't consume its value, only
+  // the change event itself triggers the re-run (per the US-009 spec).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: trigger-only dep
+  useEffect(() => {
+    if (!signalEffectMountedRef.current) {
+      signalEffectMountedRef.current = true;
+      return;
+    }
+    if (!resolvedAutoFitViewRef.current.onExternalNodeChange) return;
+    if (resizingRef.current || draggingRef.current) {
+      pendingFitRef.current = true;
+      return;
+    }
+    rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
+  }, [autoFitViewSignal]);
 
   // Right-click context menu state. Radix's <ContextMenu.Root> is event-driven
   // (its <Trigger> opens the menu on its own contextmenu event) and has no
@@ -3271,8 +3474,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     (_e: unknown, _node: Node, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // US-009: flush any deferred external-change fit now that the drag is
+      // complete (mirrors the resize-end flush wired in setResizing).
+      flushPendingFit();
     },
-    [commitDraggedNodes],
+    [commitDraggedNodes, flushPendingFit],
   );
 
   const onSelectionDragStartCb = useCallback(() => {
@@ -3282,8 +3488,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     (_e: unknown, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // US-009: flush any deferred external-change fit (same channel as
+      // single-node drag stop above).
+      flushPendingFit();
     },
-    [commitDraggedNodes],
+    [commitDraggedNodes, flushPendingFit],
   );
 
   const handleNodeClickWithGroupGate = useCallback(
@@ -3318,6 +3527,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
         ? 'grabbing'
         : 'grab'
       : undefined;
+
+  // US-007: derive the built-in sidebar's target entity from the first selected
+  // node / connector. Reads from the canvas's existing `nodes` / `connectors`
+  // props — the parent applies its pending overrides upstream so the lookup
+  // here already sees the optimistic edits. Multi-select keeps the first id as
+  // the inspected target; the rest still light up the selection ring + drive
+  // the style strip via `selectedNodes` / `selectedConnectors`.
+  const sidebarNodeId = selectedNodeIds[0];
+  const sidebarConnectorId = selectedConnectorIds[0];
+  const sidebarNode = sidebarNodeId ? (nodes.find((n) => n.id === sidebarNodeId) ?? null) : null;
+  const sidebarConnector = sidebarConnectorId
+    ? (connectors.find((c) => c.id === sidebarConnectorId) ?? null)
+    : null;
+  // The DetailPanel only reads `demoId` to gate htmlNode file-action visibility;
+  // CanvasAdapter doesn't expose its bound demoId on the type, so we route via
+  // the existing `projectId` prop (which the studio already passes — identical
+  // value, no new wiring at the host).
+  const sidebarDemoId = projectId ?? null;
+  const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
 
   return (
     <div
@@ -3504,6 +3732,14 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
           // outline reads a sensible value before the first onMove fires.
           const wrapper = wrapperRef.current;
           if (wrapper) wrapper.style.setProperty('--rf-zoom', String(instance.getZoom()));
+          // US-008: mount-fit. Reuses the same guard the late-nodes useEffect
+          // checks (`didMountFitRef`) so whichever path fires first wins and
+          // the other no-ops — preventing double-fit when nodes are already
+          // present at onInit time.
+          if (!didMountFitRef.current && resolvedAutoFitView.onMount && nodes.length > 0) {
+            instance.fitView(FIT_VIEW_OPTIONS);
+            didMountFitRef.current = true;
+          }
           onRfInit?.(instance);
         }}
         onMove={(_e, viewport) => {
@@ -3594,11 +3830,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             title="Fit view"
             disabled={nodes.length === 0}
             onClick={() => {
-              rfInstanceRef.current?.fitView({
-                padding: 0.15,
-                duration: 300,
-                includeHiddenNodes: false,
-              });
+              rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
             }}
           >
             <Maximize2 className="h-3 w-3" aria-hidden="true" />
@@ -3906,6 +4138,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             </div>
           </PopoverContent>
         </Popover>
+      ) : null}
+      {shouldRenderSidebar ? (
+        <DetailPanel
+          demoId={sidebarDemoId}
+          node={sidebarNode}
+          connector={sidebarConnector}
+          adapter={adapter ?? null}
+          statusReport={statusReport}
+          onNameChange={onNameChange}
+          onDescriptionChange={onDescriptionChange}
+          onDetailChange={onDetailChange}
+          onClose={() => {
+            // US-007: the panel is selection-driven, so closing it means
+            // clearing the selection. Pane-click already routes through xyflow
+            // and fires the same callback; this path covers the Sheet's X
+            // button and any Radix-triggered dismissal.
+            onSelectionChangeRef.current?.([], []);
+          }}
+        />
       ) : null}
     </div>
   );

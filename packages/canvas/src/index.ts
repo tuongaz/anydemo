@@ -54,7 +54,12 @@ export {
   NODE_DEFAULT_BG_WHITE,
   colorTokenStyle,
 } from './lib/color-tokens.ts';
-export type { EdgeColorStyle, NodeColorStyle, TextColorStyle } from './lib/color-tokens.ts';
+export type {
+  EdgeColorStyle,
+  NodeColorStyle,
+  NodeHeaderColorStyle,
+  TextColorStyle,
+} from './lib/color-tokens.ts';
 
 // ----------------------------------------------------------------------------
 // 3. Icon registry
@@ -227,6 +232,15 @@ export type {
   CanvasToolbarProps,
   ToolbarShapeEntry,
 } from './components/canvas-toolbar.tsx';
+
+export {
+  DetailPanel,
+  EditableField,
+  formatRelativeTime,
+  HtmlNodeSection,
+  StatusSection,
+} from './components/detail-panel.tsx';
+export type { DetailPanelProps } from './components/detail-panel.tsx';
 
 export {
   filterIcons,

@@ -10,8 +10,10 @@ import { ServerShape } from '../nodes/shapes/server.tsx';
 import { UserShape } from '../nodes/shapes/user.tsx';
 import type { Connector, DemoNode } from '../types.ts';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
+import { DetailPanel } from './detail-panel.tsx';
 import {
   type ClipboardShortcutEventLike,
+  FIT_VIEW_OPTIONS,
   SeeflowCanvas,
   type SeeflowCanvasProps,
   classifyHandleDropFailure,
@@ -19,6 +21,7 @@ import {
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
   handleClipboardShortcut,
+  resolveAutoFitView,
   resolveFlags,
 } from './seeflow-canvas.tsx';
 import { type MultiResizeUpdate, SelectionResizeOverlay } from './selection-resize-overlay.tsx';
@@ -31,12 +34,19 @@ import { StyleStrip } from './style-strip.tsx';
 // Background, Controls, StoreApiBridge, CanvasToolbar etc. — are captured as
 // `{ type, props }` placeholders without executing their render bodies, so
 // xyflow's zustand-provider requirement never trips.
+/**
+ * Captured useEffect call. `cb` is the effect body, `deps` mirrors the second
+ * argument (undefined = "every render"). The US-009 tests fire `cb()` manually
+ * to simulate React's mount-run + dep-change re-run behavior under the shim.
+ */
+type CapturedEffect = { cb: () => void; deps?: readonly unknown[] };
+
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
-  useEffect: () => void;
+  useEffect: (cb: () => void, deps?: readonly unknown[]) => void;
 };
 
 /**
@@ -44,15 +54,19 @@ type Hooks = {
  * value with the corresponding entry from the array (undefined = passthrough).
  * `refSink`, when provided, receives each useRef in declaration order so the
  * test can mutate ref.current to drive handlers that read from refs.
+ * `effectSink`, when provided, captures each useEffect's `{ cb, deps }` in
+ * declaration order so a test can fire individual effects manually (US-009 —
+ * simulating React's mount + dep-change re-run semantics under the shim).
  */
 function renderWithHooks<T>(
   fn: () => T,
   options: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
+    effectSink?: CapturedEffect[];
   } = {},
 ): T {
-  const { useStateOverrides, refSink } = options;
+  const { useStateOverrides, refSink, effectSink } = options;
   const internals = (
     React as unknown as {
       __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
@@ -77,7 +91,9 @@ function renderWithHooks<T>(
       refSink?.push(ref as { current: unknown });
       return ref;
     },
-    useEffect: () => {},
+    useEffect: (cb: () => void, deps?: readonly unknown[]) => {
+      effectSink?.push({ cb, deps });
+    },
   };
   try {
     return fn();
@@ -141,6 +157,7 @@ function callSeeflowCanvas(
   hookOptions: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
+    effectSink?: CapturedEffect[];
   } = {},
 ): unknown {
   const { nodeOverrides, connectorOverrides, runtime, ...rest } = overrides;
@@ -674,14 +691,18 @@ describe('SeeflowCanvas', () => {
       flags: 0,
       wrapper: 1,
       rfInstance: 2,
-      // US-018 added editHandlesRef (slot 3, after storeApiRef) so every
-      // draw-* ref shifted down by one. activeGroupIdRef removed, shifting
-      // all draw-* refs back up by one. Update this map alongside any
-      // future useRef addition above drawShape.
-      drawShape: 12,
-      drawStart: 13,
-      drawCurrent: 14,
-      drawing: 15,
+      // US-008 added didMountFitRef (slot 3, immediately after rfInstanceRef).
+      // US-009 added three more auto-fit refs in slots 4-6 (pendingFitRef,
+      // signalEffectMountedRef, resolvedAutoFitViewRef), so every ref below
+      // drifted down by three more. Update this map alongside any future
+      // useRef addition above drawShape.
+      pendingFit: 4,
+      signalEffectMounted: 5,
+      resolvedAutoFitView: 6,
+      drawShape: 16,
+      drawStart: 17,
+      drawCurrent: 18,
+      drawing: 19,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
@@ -2326,6 +2347,440 @@ describe('SeeflowCanvas', () => {
       const a = rfNodes.find((n) => n.id === 'a');
       expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
       expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBeUndefined();
+    });
+  });
+
+  describe('US-007: built-in DetailPanel sidebar', () => {
+    // Selection-driven sidebar: SeeflowCanvas internalizes <DetailPanel> and
+    // derives its target from selectedNodeIds[0] / selectedConnectorIds[0].
+    // The hook-shim tree captures <DetailPanel ...> as a placeholder element
+    // (its body isn't executed) so we can assert its forwarded props directly.
+
+    function findDetailPanel(tree: unknown) {
+      return findElement(tree, (el) => el.type === DetailPanel);
+    }
+
+    it('renders a DetailPanel sibling inside the canvas wrapper by default', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+    });
+
+    it('passes the first selected node into DetailPanel.node', () => {
+      const a = makeShapeNode('a');
+      const b = makeShapeNode('b');
+      const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a'] });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { node?: DemoNode }).node).toBe(a);
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('passes the first selected connector into DetailPanel.connector', () => {
+      const conn: Connector = {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        sourceHandleAutoPicked: true,
+        targetHandleAutoPicked: true,
+        kind: 'default',
+      } as Connector;
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        connectors: [conn],
+        selectedConnectorIds: ['c1'],
+      });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { connector?: Connector }).connector).toBe(conn);
+      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+    });
+
+    it('panel.node and panel.connector are null when nothing is selected', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const panel = findDetailPanel(tree);
+      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('forwards adapter, statusReport, demoId, and field-edit callbacks', () => {
+      const onNameChange = () => {};
+      const onDescriptionChange = () => {};
+      const onDetailChange = () => {};
+      const statusReport = { state: 'ok' as const, summary: 's', ts: 7 };
+      const tree = callSeeflowCanvas({
+        projectId: 'proj-123',
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        statusReport,
+        onNameChange,
+        onDescriptionChange,
+        onDetailChange,
+      });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      const props = panel?.props as {
+        adapter?: CanvasAdapter | null;
+        demoId?: string | null;
+        statusReport?: typeof statusReport;
+        onNameChange?: typeof onNameChange;
+        onDescriptionChange?: typeof onDescriptionChange;
+        onDetailChange?: typeof onDetailChange;
+      };
+      expect(props.adapter).toBe(noopAdapter);
+      expect(props.demoId).toBe('proj-123');
+      expect(props.statusReport).toBe(statusReport);
+      expect(props.onNameChange).toBe(onNameChange);
+      expect(props.onDescriptionChange).toBe(onDescriptionChange);
+      expect(props.onDetailChange).toBe(onDetailChange);
+    });
+
+    it('disableSidebar={true} suppresses the DetailPanel entirely', () => {
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        disableSidebar: true,
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it("mode='view' suppresses the DetailPanel via flags.showDetailPanel=false", () => {
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it('showDetailPanel={true} override surfaces the panel even in view mode', () => {
+      // The CanvasFeatureOverrides escape hatch — a view-mode embedder that
+      // still wants the built-in sidebar can lift the gate without flipping
+      // the mode (would also opt back into adapter-driven mutations).
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        showDetailPanel: true,
+      });
+      expect(findDetailPanel(tree)).not.toBeNull();
+    });
+
+    it('onClose clears the selection via onSelectionChange([], [])', () => {
+      // The Sheet's X button / Radix-driven dismissal routes through onClose;
+      // because the panel is selection-driven, closing it means clearing both
+      // selection arrays so the next render's panel.node/connector go null.
+      const calls: Array<[string[], string[]]> = [];
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        onSelectionChange: (nodeIds, connectorIds) => {
+          calls.push([nodeIds, connectorIds]);
+        },
+      });
+      const panel = findDetailPanel(tree);
+      const onClose = (panel?.props as { onClose?: () => void }).onClose;
+      expect(typeof onClose).toBe('function');
+      onClose?.();
+      expect(calls).toEqual([[[], []]]);
+    });
+  });
+
+  describe('US-008: autoFitView mount-fit', () => {
+    // The mount-fit lives in <ReactFlow>'s onInit handler (the late-nodes
+    // useEffect path is the SAME guard re-tried on prop change — both
+    // serialize through `didMountFitRef`). The hook-shim renderer captures
+    // <ReactFlow> as a placeholder element, so we extract its onInit prop
+    // and invoke it with a stub instance to observe the fitView call.
+
+    function captureFitView(props: Partial<LegacyOverrides>): {
+      tree: unknown;
+      fitViewCalls: unknown[];
+    } {
+      const fitViewCalls: unknown[] = [];
+      const refSink: { current: unknown }[] = [];
+      const tree = callSeeflowCanvas(props, { refSink });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const onInit = (rf.props as { onInit?: (i: unknown) => void }).onInit;
+      if (typeof onInit !== 'function') throw new Error('onInit not wired');
+      const stubInstance = {
+        fitView: (opts: unknown) => {
+          fitViewCalls.push(opts);
+        },
+        getZoom: () => 1,
+      };
+      onInit(stubInstance);
+      // Verify the stub landed in rfInstanceRef so the manual Fit View button
+      // path (and the late-nodes useEffect, when invoked in production)
+      // would see the same instance the test just exercised.
+      expect(refSink[2]?.current).toBe(stubInstance);
+      return { tree, fitViewCalls };
+    }
+
+    it('autoFitView default (undefined) → onInit does NOT call fitView on mount', () => {
+      const { fitViewCalls } = captureFitView({ nodes: [makeShapeNode('a')] });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView=true with nodes → onInit calls fitView exactly once with FIT_VIEW_OPTIONS', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+      });
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+      // Defensive: the options object itself must match the documented shape
+      // (padding 0.15, duration 300, includeHiddenNodes false) so a future
+      // refactor that swaps the constant for an inline literal still satisfies
+      // the contract.
+      expect(fitViewCalls[0]).toEqual({
+        padding: 0.15,
+        duration: 300,
+        includeHiddenNodes: false,
+      });
+    });
+
+    it('autoFitView=true with nodes.length=0 → onInit does NOT call fitView', () => {
+      const { fitViewCalls } = captureFitView({ nodes: [], autoFitView: true });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView={{ onMount: false }} → onInit does NOT call fitView', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: false },
+      });
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView={{ onMount: true }} (explicit object form) → onInit calls fitView once', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: true },
+      });
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('autoFitView=false → onInit does NOT call fitView (mirror of default)', () => {
+      const { fitViewCalls } = captureFitView({
+        nodes: [makeShapeNode('a')],
+        autoFitView: false,
+      });
+      expect(fitViewCalls.length).toBe(0);
+    });
+  });
+
+  describe('US-009: autoFitViewSignal external-change fit', () => {
+    // The signal-watching effect is wired with deps `[autoFitViewSignal]` and
+    // skipped on its first run via `signalEffectMountedRef`. The hook-shim
+    // captures useEffect callbacks in `effectSink`, so we fire the signal
+    // effect twice: the first call simulates React's mount run (skip), the
+    // second call simulates React re-running it after the host bumps the
+    // signal. `resizingRef` / `draggingRef` are driven through the production
+    // setResizing / onNodeDragStop wires so the interaction-guard path uses
+    // the same closures the runtime uses.
+    type EffectEntry = { cb: () => void; deps?: readonly unknown[] };
+    type StubInstance = { fitView: (opts: unknown) => void; getZoom: () => number };
+
+    function setup(props: Partial<LegacyOverrides>): {
+      tree: unknown;
+      effects: EffectEntry[];
+      refs: { current: unknown }[];
+      stub: StubInstance;
+      fitViewCalls: unknown[];
+      signalEffect: EffectEntry;
+    } {
+      const fitViewCalls: unknown[] = [];
+      const refs: { current: unknown }[] = [];
+      const effects: EffectEntry[] = [];
+      const tree = callSeeflowCanvas(props, { refSink: refs, effectSink: effects });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const stub: StubInstance = {
+        fitView: (opts: unknown) => {
+          fitViewCalls.push(opts);
+        },
+        getZoom: () => 1,
+      };
+      const onInit = (rf.props as { onInit?: (i: unknown) => void }).onInit;
+      if (typeof onInit !== 'function') throw new Error('onInit not wired');
+      onInit(stub);
+      // The signal effect is the one whose deps array has exactly one entry
+      // matching the `autoFitViewSignal` prop value. Identifying it by deps
+      // shape keeps the test robust against unrelated effects being added
+      // above or below it in declaration order.
+      const target = props.autoFitViewSignal;
+      const signalEffect = effects.find(
+        (e) => Array.isArray(e.deps) && e.deps.length === 1 && e.deps[0] === target,
+      );
+      if (!signalEffect) {
+        throw new Error(
+          `signal-watching effect (deps: [${String(target)}]) not found in captured effects`,
+        );
+      }
+      return { tree, effects, refs, stub, fitViewCalls, signalEffect };
+    }
+
+    it('autoFitView=true, signal bump → exactly one fitView with FIT_VIEW_OPTIONS', () => {
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      // onInit already fired the mount-fit (autoFitView=true + nodes>0).
+      expect(fitViewCalls.length).toBe(1);
+      fitViewCalls.length = 0;
+      // First effect run = mount tick → signalEffectMountedRef flips, skip.
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+      // Second effect run = simulated re-run after host bumped the signal.
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('signal bump while resizing → defer; clearing isResizing flushes exactly one fitView', () => {
+      const { fitViewCalls, signalEffect, tree } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      fitViewCalls.length = 0; // discard mount-fit
+      // Drive isResizing through the production setResizing closure attached
+      // to the rfNode's data — same channel NodeResizer uses at runtime.
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const rfNode = (rf.props as { nodes: Node[] }).nodes[0];
+      if (!rfNode) throw new Error('rfNode not built');
+      const setResizing = (rfNode.data as { setResizing?: (on: boolean) => void }).setResizing;
+      if (typeof setResizing !== 'function')
+        throw new Error('setResizing missing from rfNode.data');
+      setResizing(true);
+      // Mount run + bump run while interaction in flight → defer, no fit.
+      signalEffect.cb();
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+      // Clearing isResizing triggers flushPendingFit → exactly one fitView.
+      setResizing(false);
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+      // The flush is idempotent — a redundant setResizing(false) does nothing.
+      setResizing(false);
+      expect(fitViewCalls.length).toBe(1);
+    });
+
+    it('signal bump while dragging → defer; onNodeDragStop flushes exactly one fitView', () => {
+      const { fitViewCalls, signalEffect, tree } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: true,
+        autoFitViewSignal: 0,
+      });
+      fitViewCalls.length = 0; // discard mount-fit
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      const onNodeDragStart = (rf.props as { onNodeDragStart?: () => void }).onNodeDragStart;
+      const onNodeDragStop = (
+        rf.props as {
+          onNodeDragStop?: (e: unknown, n: Node, dragged: Node[]) => void;
+        }
+      ).onNodeDragStop;
+      if (typeof onNodeDragStart !== 'function') throw new Error('onNodeDragStart not wired');
+      if (typeof onNodeDragStop !== 'function') throw new Error('onNodeDragStop not wired');
+      onNodeDragStart();
+      signalEffect.cb(); // mount tick → skip
+      signalEffect.cb(); // bump while dragging → defer
+      expect(fitViewCalls.length).toBe(0);
+      // Drag stops with the dragged-node list. The committedDraggedNodes call
+      // path requires a node with a real position; reuse the existing rfNode.
+      const rfNode = (rf.props as { nodes: Node[] }).nodes[0];
+      if (!rfNode) throw new Error('rfNode not built');
+      onNodeDragStop(null, rfNode, [rfNode]);
+      expect(fitViewCalls.length).toBe(1);
+      expect(fitViewCalls[0]).toBe(FIT_VIEW_OPTIONS);
+    });
+
+    it('autoFitView={{ onExternalNodeChange: false }} → signal bump does NOT fit', () => {
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitView: { onMount: false, onExternalNodeChange: false },
+        autoFitViewSignal: 0,
+      });
+      // Mount run skips; bump run reads onExternalNodeChange=false → skip.
+      signalEffect.cb();
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+    });
+
+    it('autoFitView default (undefined) → signal bump does NOT fit', () => {
+      // Symmetric to the AC's view-mode default; the signal is inert until
+      // the host opts in via autoFitView.
+      const { fitViewCalls, signalEffect } = setup({
+        nodes: [makeShapeNode('a')],
+        autoFitViewSignal: 0,
+      });
+      signalEffect.cb();
+      signalEffect.cb();
+      expect(fitViewCalls.length).toBe(0);
+    });
+  });
+});
+
+describe('US-008: resolveAutoFitView helper', () => {
+  // Pure helper test — covers the union (undefined | boolean | object). The
+  // mount + signal-driven fit effects inside SeeflowCanvas consume the
+  // resolved pair of booleans, so pinning resolveAutoFitView pins the whole
+  // auto-fit contract end-to-end.
+  it('undefined → both triggers off', () => {
+    expect(resolveAutoFitView(undefined)).toEqual({
+      onMount: false,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('false → both triggers off', () => {
+    expect(resolveAutoFitView(false)).toEqual({
+      onMount: false,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('true → both triggers on (the documented shorthand)', () => {
+    expect(resolveAutoFitView(true)).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('empty object {} → both triggers default to true', () => {
+    // Same semantics as `true`. The object form exists for granular opt-out.
+    expect(resolveAutoFitView({})).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('{ onMount: false } → only the mount trigger flips off', () => {
+    expect(resolveAutoFitView({ onMount: false })).toEqual({
+      onMount: false,
+      onExternalNodeChange: true,
+    });
+  });
+
+  it('{ onExternalNodeChange: false } → only the signal trigger flips off', () => {
+    expect(resolveAutoFitView({ onExternalNodeChange: false })).toEqual({
+      onMount: true,
+      onExternalNodeChange: false,
+    });
+  });
+
+  it('explicit { onMount: true, onExternalNodeChange: true } → both on', () => {
+    expect(resolveAutoFitView({ onMount: true, onExternalNodeChange: true })).toEqual({
+      onMount: true,
+      onExternalNodeChange: true,
     });
   });
 });

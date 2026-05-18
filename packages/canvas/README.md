@@ -21,6 +21,7 @@ The host app must provide:
 - `react-dom` (^18) — required by Radix UI primitives
 - `@xyflow/react` (^12)
 - `lucide-react` (icons)
+- `react-markdown` (^10) and `remark-gfm` (^4) — required for the built-in sidebar's status section
 
 ## Tailwind setup
 

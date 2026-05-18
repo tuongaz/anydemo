@@ -175,6 +175,47 @@ describe('createRestAdapter (US-024)', () => {
     );
   });
 
+  it('openFile POSTs the path to /api/projects/:id/files/open', async () => {
+    const { impl, calls } = stubFetch(() =>
+      stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
+    );
+    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+
+    await adapter.openFile?.('flows/demo/state.ts');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/projects/demo-42/files/open');
+    expect(calls[0]?.method).toBe('POST');
+    expect(calls[0]?.headers?.['content-type']).toBe('application/json');
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/demo/state.ts' });
+  });
+
+  it('revealFile POSTs the path to /api/projects/:id/files/reveal', async () => {
+    const { impl, calls } = stubFetch(() =>
+      stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
+    );
+    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+
+    await adapter.revealFile?.('flows/demo/state.ts');
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe('/api/projects/demo-42/files/reveal');
+    expect(calls[0]?.method).toBe('POST');
+    expect(calls[0]?.headers?.['content-type']).toBe('application/json');
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/demo/state.ts' });
+  });
+
+  it('openFile and revealFile URL-encode the demoId in the projects path', async () => {
+    const { impl, calls } = stubFetch(() => stubResponse({ ok: true, absPath: '/abs/x' }));
+    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo with space', fetch: impl });
+
+    await adapter.openFile?.('a.ts');
+    await adapter.revealFile?.('a.ts');
+
+    expect(calls[0]?.url).toBe('/api/projects/demo%20with%20space/files/open');
+    expect(calls[1]?.url).toBe('/api/projects/demo%20with%20space/files/reveal');
+  });
+
   it('prepends the configured baseUrl to every request URL', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({

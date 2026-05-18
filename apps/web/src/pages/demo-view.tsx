@@ -1,5 +1,4 @@
 import { CommandPalette } from '@/components/command-palette';
-import { DetailPanel } from '@/components/detail-panel';
 import { ExportDialog } from '@/components/export-dialog';
 import { RestartDemoButton } from '@/components/restart-demo-button';
 import { ShareMenu } from '@/components/share-menu';
@@ -166,13 +165,6 @@ export function DemoView({
   // canvas selection rings honor the full arrays.
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [selectedConnectorIds, setSelectedConnectorIds] = useState<string[]>([]);
-  // US-003: detail panel target is decoupled from selection so a node-drag
-  // (which selects the dragged node) doesn't open the panel as a side effect.
-  // Set on real click events from the canvas; cleared on pane click, panel
-  // close, and demo switch. inspectedNode/inspectedConnector below derive
-  // from these instead of from selectedIds/selectedConnectorIds.
-  const [panelNodeId, setPanelNodeId] = useState<string | null>(null);
-  const [panelConnectorId, setPanelConnectorId] = useState<string | null>(null);
   // US-015: id of a freshly drop-popover-created node that should mount in
   // inline label-edit mode. Read by SeeflowCanvas (injected as
   // `data.autoEditOnMount: true` on that node) and consumed once at the node's
@@ -235,6 +227,13 @@ export function DemoView({
   // US-006: command-palette open state. The Cmd/Ctrl+P chord flips this true
   // and the (placeholder) dialog renders gated on it. Full UI lands in US-007.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // US-010: monotonic counter handed to <SeeflowCanvas autoFitViewSignal>. Bumped
+  // by the demoNodes-diff effect below when an SSE-driven reload adds or removes
+  // a node id that wasn't part of an in-flight local mutation. Local creates /
+  // deletes echo back through the same SSE stream but their ids sit in the
+  // pending-override / pending-deletion sets at echo time and are filtered out.
+  const [autoFitViewSignal, setAutoFitViewSignal] = useState(0);
+  const prevDemoNodeIdsRef = useRef<ReadonlySet<string> | null>(null);
   // React Flow instance handed up from `<SeeflowCanvas onRfInit>` (US-024). Used
   // by the zoom-chord handler below — only the page owns the keyboard
   // listener so the canvas stays free of page-level chord wiring.
@@ -262,8 +261,6 @@ export function DemoView({
   useEffect(() => {
     setSelectedIds([]);
     setSelectedConnectorIds([]);
-    setPanelNodeId(null);
-    setPanelConnectorId(null);
     setPendingEditNodeId(null);
     resetNodeOverrides();
     resetConnectorOverrides();
@@ -288,23 +285,11 @@ export function DemoView({
     setSelectedConnectorIds(connectorIds);
   }, []);
 
-  // US-003: explicit click handlers drive the detail panel. xyflow fires
-  // these only for click gestures (no drag), so a node-drag-start no longer
-  // pops the inspector open. Clicking a node opens its panel; clicking the
-  // empty pane closes it.
-  // US-015: connector clicks no longer open the panel (decorative edges
-  // shouldn't inflate the inspector). Selection still works via xyflow
-  // `onSelectionChange`. `panelConnectorId` clear-to-null sites are
-  // intentionally retained so a future story can re-introduce a connector
-  // panel without re-deriving the cleanup paths.
-  const onNodeClickOpenPanel = useCallback((nodeId: string) => {
-    setPanelNodeId(nodeId);
-    setPanelConnectorId(null);
-  }, []);
-  const onPaneClickClosePanel = useCallback(() => {
-    setPanelNodeId(null);
-    setPanelConnectorId(null);
-  }, []);
+  // US-007: the built-in DetailPanel inside <SeeflowCanvas> is driven by
+  // `selectedNodeIds[0]` / `selectedConnectorIds[0]`. xyflow's selection
+  // already routes through `onSelectionChange`, so the panel opens on click
+  // and closes on pane-click (which clears the selection) without a separate
+  // panel-target state.
 
   const demoNodes = detail?.demo?.nodes;
   const demoConnectors = detail?.demo?.connectors;
@@ -334,6 +319,46 @@ export function DemoView({
     }
     if (Date.now() - undoLastMutationAt() > 2000) clearUndo();
   }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, undoLastMutationAt, clearUndo]);
+
+  // US-010: bump `autoFitViewSignal` whenever the SSE-driven demo:reload echo
+  // adds or removes a node id that wasn't part of a still-pending local
+  // mutation. Read from closure: the pending-override and pending-deletion
+  // sets are still populated at the moment the echo arrives (the prune effect
+  // above schedules their clear, but its setOverrides/setIds dispatch only
+  // resolves in the next render, so this render's closure still holds them).
+  // The first observed snapshot is treated as a baseline — no bump on initial
+  // load. Same suppression covers demo-id resets (the reset effect on
+  // detail.id empties overrides/deletions BEFORE the new demoNodes lands, so
+  // a fresh demo's nodes count as external and bump — desired: a demo switch
+  // should re-frame the canvas).
+  // biome-ignore lint/correctness/useExhaustiveDependencies: overrides/deletions read from render closure; only re-run on demoNodes change
+  useEffect(() => {
+    if (!demoNodes) return;
+    const prev = prevDemoNodeIdsRef.current;
+    const curr: ReadonlySet<string> = new Set(demoNodes.map((n) => n.id));
+    prevDemoNodeIdsRef.current = curr;
+    if (prev === null) return;
+    const overrideIds = nodePending.overrides;
+    const deletedIds = nodeDeletions.ids;
+    let external = false;
+    for (const id of curr) {
+      if (prev.has(id)) continue;
+      if (!(id in overrideIds)) {
+        external = true;
+        break;
+      }
+    }
+    if (!external) {
+      for (const id of prev) {
+        if (curr.has(id)) continue;
+        if (!deletedIds.has(id)) {
+          external = true;
+          break;
+        }
+      }
+    }
+    if (external) setAutoFitViewSignal((s) => s + 1);
+  }, [demoNodes]);
 
   useEffect(() => {
     if (demoConnectors) {
@@ -919,8 +944,6 @@ export function DemoView({
       if (cascadedIds.length > 0) markConnectorsDeleted(cascadedIds);
       setSelectedIds((prev) => prev.filter((id) => id !== nodeId));
       setSelectedConnectorIds((prev) => prev.filter((id) => !cascadedIdSet.has(id)));
-      if (panelNodeId === nodeId) setPanelNodeId(null);
-      if (panelConnectorId && cascadedIdSet.has(panelConnectorId)) setPanelConnectorId(null);
       markMutation();
       const nodeSnapshot = node;
       const connectorSnapshots = cascaded;
@@ -957,8 +980,6 @@ export function DemoView({
       adapter,
       demoNodes,
       demoConnectors,
-      panelNodeId,
-      panelConnectorId,
       markNodeDeleted,
       markConnectorsDeleted,
       unmarkNodeDeleted,
@@ -1019,7 +1040,6 @@ export function DemoView({
       // US-016: hide the connector from the canvas immediately.
       markConnectorDeleted(connId);
       setSelectedConnectorIds((prev) => prev.filter((id) => id !== connId));
-      if (panelConnectorId === connId) setPanelConnectorId(null);
       markMutation();
       const connSnapshot = conn;
       pushUndo({
@@ -1043,7 +1063,6 @@ export function DemoView({
       demoId,
       adapter,
       demoConnectors,
-      panelConnectorId,
       markConnectorDeleted,
       unmarkConnectorDeleted,
       pushUndo,
@@ -1121,14 +1140,6 @@ export function DemoView({
       setSelectedConnectorIds((prev) =>
         prev.filter((id) => !explicitConnIdSet.has(id) && !cascadedConnIdSet.has(id)),
       );
-      // Close the inspector when its target is doomed.
-      if (panelNodeId && cascadingNodeIdSet.has(panelNodeId)) setPanelNodeId(null);
-      if (
-        panelConnectorId &&
-        (explicitConnIdSet.has(panelConnectorId) || cascadedConnIdSet.has(panelConnectorId))
-      ) {
-        setPanelConnectorId(null);
-      }
       markMutation();
       // ONE undo entry. `do` re-runs the batch deletes; `undo` re-creates
       // every node first (so connector endpoints exist on disk) and then
@@ -1211,8 +1222,6 @@ export function DemoView({
       adapter,
       demoNodes,
       demoConnectors,
-      panelNodeId,
-      panelConnectorId,
       markNodesDeleted,
       markConnectorsDeleted,
       unmarkNodeDeleted,
@@ -2872,35 +2881,11 @@ export function DemoView({
   const connectorOverrides = connectorPending.overrides;
   const deletedNodeIds = nodeDeletions.ids;
   const deletedConnectorIds = connectorDeletions.ids;
-  // Inspector single-shot: only opens when EXACTLY one entity is selected
-  // (single node or single connector, not a mixed selection). Multi-select
-  // US-003: panel target comes from explicit click events (panelNodeId /
-  // panelConnectorId), NOT from selectedIds. Selection still drives the ring
-  // and the style strip; opening the inspector is now a separate signal so
-  // dragging a node doesn't pop the panel open. The lookup-returns-null
-  // path also closes the panel automatically when the referenced entity is
-  // removed (delete, undo, demo reload). US-016: also returns null while the
-  // entity is in the optimistic-delete set so a just-deleted node's panel
-  // closes within the same tick — without waiting for the SSE echo to drop
-  // the entity from `demo.nodes`.
-  const inspectedNode = useMemo<DemoNode | null>(() => {
-    if (!panelNodeId) return null;
-    if (deletedNodeIds.has(panelNodeId)) return null;
-    const found = demo?.nodes.find((n) => n.id === panelNodeId);
-    if (!found) return null;
-    const ov = nodeOverrides[panelNodeId];
-    if (!ov) return found;
-    const data = ov.data ? { ...found.data, ...ov.data } : found.data;
-    return { ...found, ...ov, data } as DemoNode;
-  }, [demo, panelNodeId, nodeOverrides, deletedNodeIds]);
-  const inspectedConnector = useMemo<Connector | null>(() => {
-    if (!panelConnectorId) return null;
-    if (deletedConnectorIds.has(panelConnectorId)) return null;
-    const found = demo?.connectors.find((c) => c.id === panelConnectorId);
-    if (!found) return null;
-    const ov = connectorOverrides[panelConnectorId];
-    return ov ? ({ ...found, ...ov } as Connector) : found;
-  }, [demo, panelConnectorId, connectorOverrides, deletedConnectorIds]);
+  // US-007: the built-in DetailPanel inside <SeeflowCanvas> derives its target
+  // from `selectedNodeIds[0]` / `selectedConnectorIds[0]` against the
+  // visibleNodes/visibleConnectors props we already pass to the canvas — so the
+  // optimistic-override + optimistic-delete merging already lives in those
+  // arrays. No separate `inspectedNode` / `inspectedConnector` derivation here.
 
   // Style-strip arrays: every selected entity (with optimistic overrides
   // merged) so the strip can fan out edits across the multi-selection.
@@ -2998,13 +2983,13 @@ export function DemoView({
     );
   }
 
-  const inspectedRun = panelNodeId ? runs[panelNodeId] : undefined;
-  const inspectedEvents = panelNodeId ? (nodeEvents[panelNodeId] ?? []) : [];
-  // US-007: latest StatusReport for the inspected node, surfaced in the
-  // DetailPanel's Status section. Undefined when the node has no entry in
-  // the hook's status map (no statusAction defined, or the script hasn't
-  // emitted yet).
-  const inspectedStatusReport = panelNodeId ? statusByNode[panelNodeId] : undefined;
+  // US-007: latest StatusReport for the currently selected node, forwarded into
+  // <SeeflowCanvas>'s built-in sidebar. Sliced down to the single first-
+  // selected node (multi-select keeps the first id as the inspector target).
+  // Undefined when there's no node selection or the node has no entry in the
+  // status map (no statusAction defined, or the script hasn't emitted yet).
+  const sidebarNodeId = selectedIds[0];
+  const sidebarStatusReport = sidebarNodeId ? statusByNode[sidebarNodeId] : undefined;
 
   return (
     <div className="relative h-full w-full">
@@ -3081,12 +3066,16 @@ export function DemoView({
           onStyleConnectorPreview={onStyleConnectorPreview}
           onRfInit={onRfInit}
           onTidy={demoNodes ? onToolbarTidy : undefined}
-          onNodeClick={onNodeClickOpenPanel}
-          onPaneClick={onPaneClickClosePanel}
           onCreateAndConnectFromPane={onCreateAndConnectFromPane}
           pendingEditNodeId={pendingEditNodeId}
           activeShape={activeShape}
           onSelectShape={setActiveShape}
+          statusReport={sidebarStatusReport}
+          onNameChange={onNodeNameChange}
+          onDescriptionChange={onNodeDescriptionChange}
+          onDetailChange={onNodeDetailChange}
+          autoFitView={true}
+          autoFitViewSignal={autoFitViewSignal}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
@@ -3128,27 +3117,6 @@ export function DemoView({
           // props and falls back to false when the parent didn't supply it.
           canExportDemo: Boolean(demoId),
           canResetSession: Boolean(onRestartDemo),
-        }}
-      />
-
-      <DetailPanel
-        demoId={detail?.id ?? null}
-        node={inspectedNode}
-        connector={inspectedConnector}
-        statusReport={inspectedStatusReport}
-        // Three-field consolidation: panel + canvas dispatchers share the
-        // same coalesce keys (`node:<id>:name|description|detail`) so a
-        // typing session across the canvas and sidebar produces a single
-        // undo entry.
-        onNameChange={onNodeNameChange}
-        onDescriptionChange={onNodeDescriptionChange}
-        onDetailChange={onNodeDetailChange}
-        onClose={() => {
-          // US-003: panel state is decoupled from selection — closing the
-          // panel only clears the open-target. The user's selection ring
-          // (and the style strip it drives) is preserved.
-          setPanelNodeId(null);
-          setPanelConnectorId(null);
         }}
       />
 

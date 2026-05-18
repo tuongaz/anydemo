@@ -16,7 +16,7 @@
         "bun run format then bun run lint pass with no errors"
       ],
       "priority": 1,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -33,7 +33,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo with nodes of several different color tokens, confirm headers read as a clearly darker shade on every token"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -49,7 +49,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -65,7 +65,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -84,7 +84,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, click a node, the sidebar opens and edits/file actions still work end-to-end"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -99,7 +99,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 6,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -117,7 +117,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, sidebar still opens on selection, resize handle still works, edits still persist to the backend"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -134,7 +134,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -150,7 +150,7 @@
         "bun run format then bun run lint pass"
       ],
       "priority": 9,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -167,7 +167,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, run /seeflow to generate a new node via the plugin (or trigger any SSE node:created path), confirm the canvas auto-fits when the node appears, and confirm dragging a shape from the toolbar onto the canvas does NOT yank the viewport"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
