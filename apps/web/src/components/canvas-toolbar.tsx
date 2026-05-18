@@ -1,7 +1,7 @@
-import { IconPickerPopover } from '@/components/icon-picker-popover';
 import type { ShapeKind } from '@/lib/api';
 import {
   type CommandId,
+  IconPickerPopover,
   Popover,
   PopoverContent,
   PopoverTrigger,

@@ -1,4 +1,4 @@
-import { ICON_DEFAULT_SIZE } from '@seeflow/canvas';
+import { ICON_DEFAULT_SIZE } from '../nodes/icon-node.tsx';
 
 export interface IconInsertRfInstance {
   screenToFlowPosition: (p: { x: number; y: number }) => { x: number; y: number };

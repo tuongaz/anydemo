@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { buildIconInsertPayload, computeIconInsertPosition } from '@/lib/icon-insert';
-import { ICON_DEFAULT_SIZE } from '@seeflow/canvas';
+import { ICON_DEFAULT_SIZE } from '../nodes/icon-node.tsx';
+import { buildIconInsertPayload, computeIconInsertPosition } from './icon-insert.ts';
 
 // Identity-transform stand-in: pans/zooms are no-ops, so the flow-space center
 // equals the screen-space center. Keeps the math under test isolated from any

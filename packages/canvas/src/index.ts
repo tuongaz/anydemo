@@ -121,8 +121,30 @@ export {
 } from './lib/detail-panel-width.ts';
 export type { ResizeGestureCallbacks } from './lib/detail-panel-width.ts';
 
+export {
+  buildIconInsertPayload,
+  computeIconInsertPosition,
+} from './lib/icon-insert.ts';
+export type {
+  IconInsertPayload,
+  IconInsertRfInstance,
+  IconInsertViewport,
+} from './lib/icon-insert.ts';
+
+export { ICON_RECENTS_STORAGE_KEY, getRecents, pushRecent } from './lib/icon-recents.ts';
+
 export { scaleNodesWithinRect } from './lib/scale-nodes.ts';
 export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts';
+
+export {
+  IconPickerBody,
+  IconPickerPopover,
+  filterIcons,
+} from './components/icon-picker-popover.tsx';
+export type {
+  IconPickerBodyProps,
+  IconPickerPopoverProps,
+} from './components/icon-picker-popover.tsx';
 
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';

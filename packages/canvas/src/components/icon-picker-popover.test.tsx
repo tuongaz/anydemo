@@ -1,11 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
-import {
-  IconPickerBody,
-  type IconPickerBodyProps,
-  filterIcons,
-} from '@/components/icon-picker-popover';
 import type { ChangeEvent } from 'react';
 import * as React from 'react';
+import { IconPickerBody, type IconPickerBodyProps, filterIcons } from './icon-picker-popover.tsx';
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
 // without a DOM, so we can't mount the real component tree. Instead we shim

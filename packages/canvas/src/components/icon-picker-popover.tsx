@@ -1,7 +1,8 @@
-import { getRecents } from '@/lib/icon-recents';
-import { ICON_NAMES, ICON_REGISTRY } from '@/lib/icon-registry';
-import { Popover, PopoverContent, PopoverTrigger, cn } from '@seeflow/canvas';
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
+import { cn } from '../lib/cn.ts';
+import { getRecents } from '../lib/icon-recents.ts';
+import { ICON_NAMES, ICON_REGISTRY } from '../lib/icon-registry.ts';
+import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 
 // Layout constants. Tile is h-7 w-7 (28px); rows are tile + 4px gap = 32px.
 // LIST_HEIGHT * COLS keeps the all-icons grid roughly square in the popover.

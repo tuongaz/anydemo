@@ -15,7 +15,7 @@ const mockLocalStorage = {
   localStorage: mockLocalStorage,
 };
 
-const { ICON_RECENTS_STORAGE_KEY, getRecents, pushRecent } = await import('@/lib/icon-recents');
+const { ICON_RECENTS_STORAGE_KEY, getRecents, pushRecent } = await import('./icon-recents.ts');
 
 beforeEach(() => {
   memStore.clear();

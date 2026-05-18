@@ -300,8 +300,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 17,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved icon-picker-popover.tsx → packages/canvas/src/components/ (third component move after inline-edit + the 6 node renderers). Moved icon-insert.ts (+test) and icon-recents.ts (+test) → packages/canvas/src/lib/. Inside the moved icon-insert.ts the `ICON_DEFAULT_SIZE` import switched from `@seeflow/canvas` → `'../nodes/icon-node.tsx'` (sibling node renderer is the source of truth — can't self-import the barrel). Inside the moved icon-picker-popover.tsx: 4 imports rewritten — `@/lib/icon-recents` → `'../lib/icon-recents.ts'`, `@/lib/icon-registry` → `'../lib/icon-registry.ts'`, `@seeflow/canvas` (cn + Popover trio) → `'../lib/cn.ts'` + `'../ui/popover.tsx'` (anti-cycle pattern from US-010/US-014). The picker test self-import switched to `./icon-picker-popover.tsx`. Updated 2 apps/web import sites: canvas-toolbar.tsx (removed dedicated icon-picker-popover line; merged `IconPickerPopover` into the existing `@seeflow/canvas` import block alphabetically) and pages/demo-view.tsx (removed both dedicated lines; merged `computeIconInsertPosition` + `pushRecent` into the existing `@seeflow/canvas` block). All 25 moved tests pass (8 icon-insert + 10 icon-recents + 7 icon-picker)."
     },
     {
       "id": "US-018",

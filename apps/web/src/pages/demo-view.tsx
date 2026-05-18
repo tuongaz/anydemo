@@ -32,8 +32,6 @@ import {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
-import { computeIconInsertPosition } from '@/lib/icon-insert';
-import { pushRecent } from '@/lib/icon-recents';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { getLastUsedStyle, rememberConnectorStyle, rememberNodeStyle } from '@/lib/last-used-style';
 import { buildNewShapeData } from '@/lib/node-defaults';
@@ -44,8 +42,10 @@ import {
   SHAPE_DEFAULT_SIZE,
   applyLayout,
   applyNudge,
+  computeIconInsertPosition,
   getNudgeDelta,
   getZoomChord,
+  pushRecent,
   resolveClipboardChord,
   resolveToolShortcut,
 } from '@seeflow/canvas';
