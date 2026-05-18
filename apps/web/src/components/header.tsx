@@ -17,7 +17,7 @@ export function Header({
   onProjectUnregistered,
 }: HeaderProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b bg-background px-4">
+    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-4">
       <button
         type="button"
         onClick={() => navigate('/')}
@@ -27,7 +27,6 @@ export function Header({
           gap: 6,
           fontWeight: 700,
           fontSize: 16,
-          color: '#0f172a',
           letterSpacing: '-0.02em',
           background: 'none',
           border: 'none',
