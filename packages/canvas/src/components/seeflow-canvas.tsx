@@ -586,6 +586,12 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onDetailChange?: (nodeId: string, value: string) => void;
   /**
+   * US-009: persist a new icon name from the DetailPanel icon picker. `null`
+   * clears the field on disk. Absent → the panel's icon row is hidden
+   * (mirrors the read-only treatment of onNameChange / onDescriptionChange).
+   */
+  onIconChange?: (nodeId: string, icon: string | null) => void;
+  /**
    * US-008: opt-in viewport auto-fit. `undefined` / `false` → no auto-fit.
    * `true` → fit on initial mount (after rfInstance is ready and
    * `nodes.length > 0`); future stories extend this to also fit on external
@@ -1530,6 +1536,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onNameChange,
     onDescriptionChange,
     onDetailChange,
+    onIconChange,
     autoFitView,
     autoFitViewSignal,
     customIcons,
@@ -4165,6 +4172,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             onNameChange={onNameChange}
             onDescriptionChange={onDescriptionChange}
             onDetailChange={onDetailChange}
+            onIconChange={onIconChange}
             onClose={() => {
               // US-007: the panel is selection-driven, so closing it means
               // clearing the selection. Pane-click already routes through xyflow

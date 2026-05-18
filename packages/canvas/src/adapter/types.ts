@@ -57,8 +57,13 @@ export interface NodePatch {
   strokeWidth?: number;
   /** iconNode-only: accessible alt text. Lands at data.alt. */
   alt?: string;
-  /** iconNode-only: kebab-case Lucide icon name. Lands at data.icon. */
-  icon?: string;
+  /**
+   * Kebab-case Lucide icon name. Lands at data.icon. On play/state/html
+   * nodes the field is optional and `null` clears it (the studio strips the
+   * key from disk). On iconNode the post-merge reparse keeps the field
+   * required.
+   */
+  icon?: string | null;
   /** Lock state. true freezes the node; false unlocks. */
   locked?: boolean;
   /** Short body text rendered on the canvas and as light-bold in the sidebar. */

@@ -1588,6 +1588,39 @@ describe('PATCH /api/demos/:id/nodes/:nodeId', () => {
     expect('description' in (node?.data ?? {})).toBe(false);
     expect('detail' in (node?.data ?? {})).toBe(false);
   });
+
+  // US-009: persist an icon name, then clear it via null. NodePatchBodySchema
+  // accepts string | null | undefined for icon; mergeNodeUpdates strips the
+  // key from disk on null (same compactness rule used for description /
+  // detail empty-string).
+  it('persists icon name then strips it on disk when null is patched', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/demos/register', { repoPath, demoPath: '.seeflow/seeflow.json' })
+    ).json()) as { id: string };
+
+    const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const setRes = await patch(app, `/api/demos/${reg.id}/nodes/api-checkout`, {
+      icon: 'database',
+    });
+    expect(setRes.status).toBe(200);
+    let onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+    };
+    expect(onDisk.nodes.find((n) => n.id === 'api-checkout')?.data.icon).toBe('database');
+
+    const clearRes = await patch(app, `/api/demos/${reg.id}/nodes/api-checkout`, {
+      icon: null,
+    });
+    expect(clearRes.status).toBe(200);
+    onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
+    expect(node?.data.icon).toBeUndefined();
+    expect('icon' in (node?.data ?? {})).toBe(false);
+  });
 });
 
 describe('POST /api/demos/:id/nodes', () => {

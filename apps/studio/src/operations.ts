@@ -83,10 +83,12 @@ export const NodePatchBodySchema = z
     strokeWidth: z.number().min(0.5).max(4).optional(),
     // iconNode-only: accessible alt text for the icon. Lands at data.alt.
     alt: z.string().optional(),
-    // iconNode-only: kebab-case Lucide icon name. Lands at data.icon. The
-    // post-merge reparse enforces the schema's `.min(1)` non-empty rule and
-    // gates that this lands only on an iconNode.
-    icon: z.string().min(1).optional(),
+    // kebab-case Lucide icon name. Lands at data.icon. The post-merge reparse
+    // enforces the schema's `.min(1)` non-empty rule for nodes that require
+    // icon (iconNode), and gates which variants allow it. Explicit `null`
+    // clears the field (mergeNodeUpdates strips the key from disk) — mirrors
+    // the empty-string clear convention used for description / detail.
+    icon: z.string().min(1).nullable().optional(),
     // US-019: lock state. Lands at data.locked; persists across save/reload.
     // Absent → unlocked default (no badge, all gestures work).
     locked: z.boolean().optional(),
@@ -142,6 +144,16 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     // so seeflow.json stays compact and round-tripping a cleared node doesn't
     // reintroduce the field.
     if ((key === 'description' || key === 'detail') && updates[key] === '') {
+      if (key in data) {
+        delete data[key];
+        touchedData = true;
+      }
+      continue;
+    }
+    // US-009: explicit null on icon is the clear signal (`.min(1)` rules out
+    // the empty-string convention used for description / detail). Strip the
+    // key from disk so a re-parsed demo doesn't reintroduce it.
+    if (key === 'icon' && updates[key] === null) {
       if (key in data) {
         delete data[key];
         touchedData = true;

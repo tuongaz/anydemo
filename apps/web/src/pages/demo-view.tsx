@@ -1399,6 +1399,40 @@ export function DemoView({
     [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
+  // US-009: persist a new icon name (or clear it via null) from the
+  // DetailPanel icon picker. `null` flows through to PATCH unchanged — the
+  // studio's mergeNodeUpdates strips the key from disk when icon is null.
+  // The optimistic override uses `undefined` for the cleared state so the
+  // canvas renders the no-icon variant immediately.
+  const onNodeIconChange = useCallback(
+    (nodeId: string, next: string | null) => {
+      if (!demoId || !adapter) return;
+      const node = demoNodes?.find((n) => n.id === nodeId);
+      if (!node) return;
+      const prev = 'icon' in node.data ? (node.data.icon ?? null) : null;
+      setNodeOverride(nodeId, {
+        data: { icon: next ?? undefined },
+      } as Partial<DemoNode>);
+      setEditError(null);
+      markMutation();
+      pushUndo({
+        do: async () => {
+          await adapter.updateNode(nodeId, { icon: next });
+        },
+        undo: async () => {
+          await adapter.updateNode(nodeId, { icon: prev });
+        },
+        coalesceKey: `node:${nodeId}:icon`,
+      });
+      adapter.updateNode(nodeId, { icon: next }).catch((err) => {
+        dropUndoTop();
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode icon failed', err);
+      });
+    },
+    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+  );
+
   const onCreateShapeNode = useCallback(
     (shape: ShapeKind, position: Position, dims: { width: number; height: number }) => {
       if (!demoId || !adapter) return;
@@ -3074,6 +3108,7 @@ export function DemoView({
           onNameChange={onNodeNameChange}
           onDescriptionChange={onNodeDescriptionChange}
           onDetailChange={onNodeDetailChange}
+          onIconChange={onNodeIconChange}
           autoFitView={true}
           autoFitViewSignal={autoFitViewSignal}
         />
