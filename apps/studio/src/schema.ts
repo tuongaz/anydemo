@@ -127,6 +127,9 @@ const NodeDataBaseSchema = z.object({
   // Reserved for v2: a module path resolved by future skills runtime.
   // Schema-only at v1 — never read at runtime.
   handlerModule: z.string().optional(),
+  // Decorative header glyph. Lucide icon name (kebab-case) resolved by the
+  // canvas <Icon> primitive; falls back to a placeholder when unknown.
+  icon: z.string().optional(),
   ...NodeVisualBaseShape,
   ...NodeDescriptionBaseShape,
 });
@@ -230,6 +233,9 @@ const HtmlNodeDataSchema = z.object({
     message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
   }),
   name: z.string().optional(),
+  // Decorative caption glyph. Lucide icon name (kebab-case) resolved by the
+  // canvas <Icon> primitive; rendered inline with the caption when set.
+  icon: z.string().optional(),
   ...NodeVisualBaseShape,
   ...NodeDescriptionBaseShape,
 });
