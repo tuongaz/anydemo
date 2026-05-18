@@ -4,7 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
-} from '@/components/nodes/shapes/types';
+} from './types.ts';
 
 // US-023: person glyph — a head circle in the top quarter sitting above a
 // half-pill torso (rounded top corners, flat bottom). Reads as the

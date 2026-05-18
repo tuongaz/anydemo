@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { StatusBadge, type StatusBadgeProps } from '@/components/nodes/status-badge';
+import { StatusBadge, type StatusBadgeProps } from './status-badge.tsx';
 
 type ReactElementLike = {
   type: unknown;

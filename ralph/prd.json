@@ -208,8 +208,8 @@
         "bun run typecheck passes"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved 7 primitive node files (lock-badge, status-badge, status-pill, placeholder-card, resize-controls, use-resize-gesture) + shapes/ subdir (registry, types, cloud, database, server, user, queue) into packages/canvas/src/nodes/. Created nodes barrel + nested shapes barrel. Added StatusReportState type to canvas/types.ts and re-exported via @seeflow/canvas (apps/web/src/lib/api.ts now re-exports it from canvas — single source of truth ahead of US-026). 11 apps/web import sites updated, originals deleted."
     },
     {
       "id": "US-013",

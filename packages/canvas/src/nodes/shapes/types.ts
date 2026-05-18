@@ -1,5 +1,5 @@
 // US-009: per-shape illustrative components live under
-// `apps/web/src/components/nodes/shapes/` and all consume this single
+// `packages/canvas/src/nodes/shapes/` and all consume this single
 // `ShapePartProps` shape so `shape-node.tsx` can dispatch to any of them with
 // the same resolved chrome inputs.
 //

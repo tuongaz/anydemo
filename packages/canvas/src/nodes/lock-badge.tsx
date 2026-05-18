@@ -1,5 +1,5 @@
-import { cn } from '@seeflow/canvas';
 import { Lock } from 'lucide-react';
+import { cn } from '../lib/cn.ts';
 
 /**
  * US-019: small lock indicator rendered on a node's top-right corner when

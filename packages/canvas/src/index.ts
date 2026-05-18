@@ -22,6 +22,7 @@ export type {
   DefaultConnector,
   Connector,
   Demo,
+  StatusReportState,
 } from './types.ts';
 
 export {
@@ -110,4 +111,5 @@ export { fileUrl } from './lib/file-url.ts';
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
 
+export * from './nodes/index.ts';
 export * from './ui/index.ts';

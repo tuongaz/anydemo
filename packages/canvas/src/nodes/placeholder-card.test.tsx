@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { PlaceholderCard } from '@/components/nodes/placeholder-card';
+import { PlaceholderCard } from './placeholder-card.tsx';
 
 type ReactElementLike = {
   type: unknown;

@@ -1,11 +1,15 @@
-import { LockBadge } from '@/components/nodes/lock-badge';
-import { ResizeControls } from '@/components/nodes/resize-controls';
-import { StatusBadge } from '@/components/nodes/status-badge';
-import type { NodeStatus } from '@/components/nodes/status-pill';
-import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import type { NodeData, StatusReport } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { Button, InlineEdit, cn } from '@seeflow/canvas';
+import {
+  Button,
+  InlineEdit,
+  LockBadge,
+  type NodeStatus,
+  ResizeControls,
+  StatusBadge,
+  cn,
+  useResizeGesture,
+} from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Loader2, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';

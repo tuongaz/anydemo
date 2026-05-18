@@ -1,4 +1,4 @@
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
 
 /**
  * US-014: shared inline placeholder for file-backed renderers when the

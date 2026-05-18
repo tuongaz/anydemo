@@ -1,9 +1,7 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { ICON_FALLBACK_NAME, IconNode } from '@/components/nodes/icon-node';
-import { LockBadge } from '@/components/nodes/lock-badge';
-import { ResizeControls } from '@/components/nodes/resize-controls';
 import { ICON_REGISTRY } from '@/lib/icon-registry';
-import { InlineEdit } from '@seeflow/canvas';
+import { InlineEdit, LockBadge, ResizeControls } from '@seeflow/canvas';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
 

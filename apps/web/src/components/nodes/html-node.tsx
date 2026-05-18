@@ -1,13 +1,9 @@
-import { LockBadge } from '@/components/nodes/lock-badge';
-import { PlaceholderCard } from '@/components/nodes/placeholder-card';
-import { ResizeControls } from '@/components/nodes/resize-controls';
-import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import type { HtmlNodeData } from '@/lib/api';
 import { colorTokenStyle } from '@/lib/color-tokens';
 import { injectSanitizedHtml } from '@/lib/inject-sanitized-html';
 import { ensureTailwindLoaded } from '@/lib/tailwind-runtime';
 import { useHtmlContent } from '@/lib/use-html-content';
-import { cn } from '@seeflow/canvas';
+import { LockBadge, PlaceholderCard, ResizeControls, cn, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type ReactNode, memo, useEffect } from 'react';
 

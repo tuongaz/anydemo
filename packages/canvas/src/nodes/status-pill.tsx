@@ -1,4 +1,4 @@
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
 
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 

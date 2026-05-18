@@ -9,7 +9,7 @@ const window = new Window();
 (globalThis as { DOMParser?: unknown }).DOMParser = window.DOMParser;
 
 const { HtmlNode } = await import('@/components/nodes/html-node');
-const { PlaceholderCard } = await import('@/components/nodes/placeholder-card');
+const { PlaceholderCard } = await import('@seeflow/canvas');
 const { COLOR_TOKENS } = await import('@/lib/color-tokens');
 const { _setHtmlContentForTest, _clearHtmlContentCacheForTest } = await import(
   '@/lib/use-html-content'

@@ -25,6 +25,7 @@ import type {
   QueueConnector,
   ShapeKind,
   ShapeNodeData,
+  StatusReportState,
 } from '@seeflow/canvas';
 
 export type {
@@ -50,6 +51,7 @@ export type {
   DefaultConnector,
   Connector,
   Demo,
+  StatusReportState,
 } from '@seeflow/canvas';
 
 export interface DemoSummary {
@@ -61,12 +63,10 @@ export interface DemoSummary {
   valid: boolean;
 }
 
-// Mirror of `StatusReportSchema` in apps/studio/src/schema.ts. One record per
-// `node:status` SSE frame; the studio's StatusRunner parses each non-empty
-// stdout line from a statusAction script via `StatusReportSchema.safeParse`
-// before broadcasting. Keep this in lockstep with the studio schema.
-export type StatusReportState = 'ok' | 'warn' | 'error' | 'pending';
-
+// `StatusReportState` (the literal union) lives in @seeflow/canvas/types.ts as
+// of US-012; re-exported above so apps/web's existing import paths still work.
+// The `StatusReport` interface below stays here until US-026, which moves the
+// runtime types (`RunResult`, `StatusReport`) into the canvas.
 export interface StatusReport {
   state: StatusReportState;
   summary?: string;

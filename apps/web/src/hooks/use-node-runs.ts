@@ -1,4 +1,4 @@
-import type { NodeStatus } from '@/components/nodes/status-pill';
+import type { NodeStatus } from '@seeflow/canvas';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
 export interface NodeRunState {

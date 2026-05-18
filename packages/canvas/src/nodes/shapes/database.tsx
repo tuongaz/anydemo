@@ -4,7 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
-} from '@/components/nodes/shapes/types';
+} from './types.ts';
 
 // Standard database glyph (cylinder seen from front). Composition is the three
 // pieces the PRD calls out:

@@ -1,9 +1,6 @@
-import { LockBadge } from '@/components/nodes/lock-badge';
-import { ResizeControls } from '@/components/nodes/resize-controls';
-import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import type { ImageNodeData } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { cn, fileUrl } from '@seeflow/canvas';
+import { LockBadge, ResizeControls, cn, fileUrl, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, memo } from 'react';
 

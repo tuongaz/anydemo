@@ -10,11 +10,6 @@ import {
   eventTargetIsOtherNode,
   handleClipboardShortcut,
 } from '@/components/demo-canvas';
-import { CloudShape } from '@/components/nodes/shapes/cloud';
-import { DatabaseShape } from '@/components/nodes/shapes/database';
-import { QueueShape } from '@/components/nodes/shapes/queue';
-import { ServerShape } from '@/components/nodes/shapes/server';
-import { UserShape } from '@/components/nodes/shapes/user';
 import {
   type MultiResizeUpdate,
   SelectionResizeOverlay,
@@ -22,6 +17,7 @@ import {
 import { StyleStrip } from '@/components/style-strip';
 import type { DemoNode } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
+import { CloudShape, DatabaseShape, QueueShape, ServerShape, UserShape } from '@seeflow/canvas';
 import { type Connection, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 

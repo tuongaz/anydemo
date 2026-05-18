@@ -10,9 +10,7 @@ import {
   shapeChromeClass,
   shapeChromeStyle,
 } from '@/components/nodes/shape-node';
-import { ILLUSTRATIVE_SHAPE_RENDERERS } from '@/components/nodes/shapes/registry';
 import { StateNode } from '@/components/nodes/state-node';
-import type { NodeStatus } from '@/components/nodes/status-pill';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -36,6 +34,8 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
+  ILLUSTRATIVE_SHAPE_RENDERERS,
+  type NodeStatus,
   Popover,
   PopoverAnchor,
   PopoverContent,

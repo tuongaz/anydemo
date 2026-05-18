@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { LockBadge } from '@/components/nodes/lock-badge';
+import { LockBadge } from './lock-badge.tsx';
 
 type ReactElementLike = {
   type: unknown;

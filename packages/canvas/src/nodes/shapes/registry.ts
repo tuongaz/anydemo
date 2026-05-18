@@ -1,11 +1,11 @@
-import { CloudShape } from '@/components/nodes/shapes/cloud';
-import { DatabaseShape } from '@/components/nodes/shapes/database';
-import { QueueShape } from '@/components/nodes/shapes/queue';
-import { ServerShape } from '@/components/nodes/shapes/server';
-import type { ShapePartProps } from '@/components/nodes/shapes/types';
-import { UserShape } from '@/components/nodes/shapes/user';
-import type { ShapeKind } from '@/lib/api';
 import type { FC } from 'react';
+import type { ShapeKind } from '../../types.ts';
+import { CloudShape } from './cloud.tsx';
+import { DatabaseShape } from './database.tsx';
+import { QueueShape } from './queue.tsx';
+import { ServerShape } from './server.tsx';
+import type { ShapePartProps } from './types.ts';
+import { UserShape } from './user.tsx';
 
 // US-022: single source of truth for illustrative-shape dispatch. Both
 // `shape-node.tsx` (the committed node) and `demo-canvas.tsx` (the drag-create

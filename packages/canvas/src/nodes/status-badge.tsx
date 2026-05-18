@@ -1,5 +1,5 @@
-import type { StatusReportState } from '@/lib/api';
-import { cn } from '@seeflow/canvas';
+import { cn } from '../lib/cn.ts';
+import type { StatusReportState } from '../types.ts';
 
 const DOT_STYLES: Record<StatusReportState, string> = {
   ok: 'bg-emerald-400',

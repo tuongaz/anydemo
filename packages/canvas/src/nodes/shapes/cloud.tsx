@@ -4,7 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
-} from '@/components/nodes/shapes/types';
+} from './types.ts';
 
 // US-025: cloud glyph — three top bumps (small / large / small) sitting on a
 // short rectangular skirt with a flat bottom. The bumps are sized so they

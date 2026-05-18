@@ -4,7 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
-} from '@/components/nodes/shapes/types';
+} from './types.ts';
 
 // US-024: message-queue glyph — a horizontal pill (rx = height/2 for true
 // capsule ends) divided into 4 vertical cells by 3 evenly-spaced separators.

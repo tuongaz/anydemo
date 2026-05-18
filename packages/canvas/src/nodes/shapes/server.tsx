@@ -4,7 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
-} from '@/components/nodes/shapes/types';
+} from './types.ts';
 
 // US-022: rack-chassis glyph. Three equal horizontal bays separated by two
 // dividers, each bay carrying a small filled LED on the right. Reads as a 3U

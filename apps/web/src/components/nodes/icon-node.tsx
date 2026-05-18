@@ -1,10 +1,7 @@
-import { LockBadge } from '@/components/nodes/lock-badge';
-import { ResizeControls } from '@/components/nodes/resize-controls';
-import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import type { IconNodeData } from '@/lib/api';
 import { colorTokenStyle } from '@/lib/color-tokens';
 import { ICON_REGISTRY } from '@/lib/icon-registry';
-import { InlineEdit, cn } from '@seeflow/canvas';
+import { InlineEdit, LockBadge, ResizeControls, cn, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
 
