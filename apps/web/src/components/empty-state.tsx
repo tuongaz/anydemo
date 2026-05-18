@@ -27,14 +27,16 @@ export function EmptyState() {
           <Terminal className="h-6 w-6 text-muted-foreground" />
         </div>
         <div className="space-y-2">
-          <h1 className="text-2xl font-semibold tracking-tight">No demos registered yet</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            No demos registered yet
+          </h1>
           <p className="text-sm text-muted-foreground">
             Point SeeFlow at any folder containing a{' '}
             <code className="rounded bg-muted px-1.5 py-0.5 text-xs">.seeflow/seeflow.json</code>{' '}
             file and it'll appear here.
           </p>
         </div>
-        <div className="flex w-full items-center gap-2 rounded-md border bg-card px-3 py-2 font-mono text-sm">
+        <div className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-mono text-sm">
           <span className="text-muted-foreground select-none">$</span>
           <code className="flex-1 truncate text-left">{REGISTER_COMMAND}</code>
           <Button
