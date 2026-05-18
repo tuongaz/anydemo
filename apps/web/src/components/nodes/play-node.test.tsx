@@ -113,12 +113,10 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
     const tree = callPlayNode({ playAction: { kind: 'http' }, onPlay: () => {} });
     const button = findPlayButton(tree);
     const className = String((button.props as { className?: string }).className ?? '');
-    expect(className).toContain('hover:bg-emerald-500');
-    expect(className).toContain('hover:text-white');
-    expect(className).toContain('focus-visible:bg-emerald-500');
-    expect(className).toContain('focus-visible:text-white');
-    expect(className).toContain('dark:hover:bg-emerald-400');
-    expect(className).toContain('dark:focus-visible:bg-emerald-400');
+    expect(className).toContain('hover:bg-primary');
+    expect(className).toContain('hover:text-primary-foreground');
+    expect(className).toContain('focus-visible:bg-primary');
+    expect(className).toContain('focus-visible:text-primary-foreground');
   });
 
   it('keeps the circular shape + size classes alongside the new hover styles', () => {
@@ -142,11 +140,10 @@ describe('PlayNode play button (US-021 hover affordance)', () => {
     const className = String((button.props as { className?: string }).className ?? '');
     // Rose border for the error indication.
     expect(className).toContain('border-rose-500');
-    expect(className).toContain('dark:border-rose-400');
     // Emerald hover still applies — user is going to retry; the green
     // affordance should still color-code the click target.
-    expect(className).toContain('hover:bg-emerald-500');
-    expect(className).toContain('hover:text-white');
+    expect(className).toContain('hover:bg-primary');
+    expect(className).toContain('hover:text-primary-foreground');
   });
 
   it('disabled state (no action wired) — the Button base class blocks pointer events, hover styles are inert', () => {

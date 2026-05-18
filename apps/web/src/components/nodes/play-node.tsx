@@ -218,8 +218,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
             // on the Button base class blocks the hover state while running
             // or unplayable, so the rule below applies only to live targets.
             className={cn(
-              'h-8 w-8 rounded-full p-0 hover:bg-emerald-500 hover:text-white focus-visible:bg-emerald-500 focus-visible:text-white dark:hover:bg-emerald-400 dark:focus-visible:bg-emerald-400',
-              isError && 'border-2 border-rose-500 dark:border-rose-400',
+              'h-8 w-8 rounded-full p-0 hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground',
+              isError && 'border-2 border-rose-500',
             )}
             data-testid="play-button"
             data-status={status ?? 'idle'}
