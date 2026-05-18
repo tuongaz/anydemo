@@ -9,6 +9,7 @@ node_modules
 # Per-workspace registry/snapshots; the runtime mounts a real /workspace at run time.
 .seeflow
 **/.seeflow
+!apps/studio/examples/**/.seeflow
 
 # Local tooling caches.
 .playwright-mcp

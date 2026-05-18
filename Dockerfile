@@ -46,6 +46,7 @@ ENV NODE_ENV=production \
 COPY --from=web-builder /src/apps/studio/src ./apps/studio/src
 COPY --from=web-builder /src/apps/studio/dist/web ./apps/studio/dist/web
 COPY --from=web-builder /src/apps/studio/bin ./apps/studio/bin
+COPY --from=web-builder /src/apps/studio/examples ./apps/studio/examples
 COPY --from=web-builder /src/apps/studio/package.json ./apps/studio/package.json
 COPY --from=web-builder /src/packages ./packages
 COPY --from=web-builder /src/package.json ./package.json
