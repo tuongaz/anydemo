@@ -3,6 +3,8 @@
 - Shadcn HSL token format: `--token: H S% L%` (no `hsl()` wrapper in the var definition)
 - Canvas-specific rules in index.css live outside @layer blocks to maintain specificity over xyflow library defaults
 - `bun run format` auto-converts single quotes to double quotes (Biome config)
+- design.html uses the same shadcn HSL tokens as index.css; design aliases (--bg, --surface, etc.) point to `hsl(var(--shadcn-name))`
+- `--border` clashes with shadcn's raw `--border` token name — all `var(--border)` usages must be wrapped as `hsl(var(--border))` in design.html
 
 # Ralph Progress Log
 Started: Mon 18 May 2026 11:48:07 AEST
@@ -20,4 +22,17 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Biome formats single quotes to double quotes — just run `bun run format` to fix
   - Canvas rules are intentionally outside @layer blocks for cascade specificity
   - The .dark block was removed entirely; the app is now permanently dark-themed
+---
+
+## 2026-05-18 - US-002
+- Added shadcn HSL tokens to design.html :root (--background, --foreground, --card, --primary, --primary-foreground, --border, --input, --muted-foreground) matching index.css exactly
+- Changed design alias vars (--bg, --surface, --border-hi, --text, --text-mute, --emerald, --emerald-hi) from hex to `hsl(var(--shadcn-name))`
+- `--border` name collides with shadcn raw token; resolved by defining `--border: 240 3.7% 15.9%` and updating all 23 usages to `hsl(var(--border))`
+- Custom vars with no shadcn equivalent (--bg-canvas, --bg-deep, --text-dim, --text-faint, --emerald-glow, --amber, --amber-hi, --danger, shadows) kept as-is
+- Google Fonts import (Inter + JetBrains Mono) was already present — no change needed
+- Files changed: design/design.html
+- **Learnings for future iterations:**
+  - `--border` is a shadcn token name AND a design alias — defining it as raw HSL means all CSS/inline usages must use `hsl(var(--border))` not bare `var(--border)`
+  - Edit tool's replace_all is safe for `var(--border)` → `hsl(var(--border))` since the :root definition doesn't contain `var(--border)` as a substring
+  - design.html is a standalone file; it must define all shadcn tokens locally (it cannot import index.css)
 ---
