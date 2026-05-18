@@ -416,13 +416,31 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
 
 **RULE — detail on important nodes:** Every `playNode` and `stateNode` that carries meaningful behaviour MUST include a `detail` field. `detail` renders as **markdown** — use it to explain what the node does, what it emits, why it matters, sample payloads, links to source files, or anything an audience member would ask. Decorative `shapeNode`/`iconNode` entries are exempt.
 
+**RULE — icon on important nodes:** Every `playNode` and `stateNode` SHOULD include an `icon` field — a kebab-case Lucide icon name that visually echoes the kind. Renders left of the name. Decorative; not a status indicator.
+
 `kind`: `service`, `endpoint`, `worker`, `workflow`, `queue`, `topic`, `bus`, `db`, `store`, `cache`, `scheduler`, `external-api`, `trigger`.
+
+| `kind` | suggested `icon` |
+|---|---|
+| `service` | `server` |
+| `endpoint` | `plug` |
+| `worker` | `cog` |
+| `workflow` | `git-branch` |
+| `queue` | `list-ordered` |
+| `topic` / `bus` | `radio-tower` |
+| `db` | `database` |
+| `store` | `archive` |
+| `cache` | `zap` |
+| `scheduler` | `clock` |
+| `external-api` | `cloud` |
+| `trigger` | `play` |
 
 ```json
 {
   "id": "checkout-api", "type": "playNode", "position": { "x": 100, "y": 200 },
   "data": {
     "name": "POST /checkout", "kind": "service",
+    "icon": "server", // kind=service → server (see kind→icon table above)
     "stateSource": { "kind": "request" },
     "playAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
                     "scriptPath": "checkout-flow/scripts/play-checkout.ts",
@@ -441,6 +459,7 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
   "id": "order-db", "type": "stateNode", "position": { "x": 600, "y": 200 },
   "data": {
     "name": "Orders DB", "kind": "db",
+    "icon": "database",
     "stateSource": { "kind": "event" },
     "statusAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
                       "scriptPath": "checkout-flow/scripts/status-orders.ts",
@@ -488,7 +507,7 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
 - `htmlPath` — relative path under `.seeflow/`. No leading `/`, no `..`. E.g. `checkout-flow/legend.html`.
 
 **Optional styling fields (same as shapeNode):**
-`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`
+`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`, `icon`
 
 **Default size:** 320 × 200 px. Set `width`/`height` to override.
 
