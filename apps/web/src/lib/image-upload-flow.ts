@@ -1,5 +1,5 @@
 import type { NodeStylePatch } from '@/components/style-strip';
-import type { CreateNodeBody, DemoNode } from '@/lib/api';
+import type { CreateNodeBody, DemoNode, ImageNodeData } from '@/lib/api';
 import type { ImageDataDefaults } from '@/lib/node-defaults';
 import { buildNewImageData } from '@/lib/node-defaults';
 
@@ -79,7 +79,7 @@ export const buildUploadingOverride = (args: {
     width: args.dims.width,
     height: args.dims.height,
     _uploading: true,
-  },
+  } as ImageNodeData,
 });
 
 /** Build the override placed AFTER the upload succeeds. Matches the data that
@@ -111,7 +111,7 @@ export const buildFailedOverride = (args: {
     width: args.dims.width,
     height: args.dims.height,
     _uploadError: args.message,
-  },
+  } as ImageNodeData,
 });
 
 const buildUploadedImageData = (args: {
