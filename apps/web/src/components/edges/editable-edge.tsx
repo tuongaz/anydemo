@@ -1,12 +1,7 @@
 import { InlineEdit } from '@/components/inline-edit';
 import type { ConnectorPath, EdgePin } from '@/lib/api';
-import {
-  type Endpoint,
-  type Pin,
-  type Side,
-  resolveEdgeEndpoints,
-} from '@/lib/floating-edge-geometry';
 import { cn } from '@/lib/utils';
+import { type Endpoint, type Pin, type Side, resolveEdgeEndpoints } from '@seeflow/canvas';
 import {
   BaseEdge,
   type Edge,

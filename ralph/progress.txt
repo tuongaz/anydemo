@@ -7,6 +7,8 @@
 - `bun run lint` (Biome) is import-order strict; running `bunx @biomejs/biome check --fix <file>` is the safe way to resolve `organizeImports` errors
 - Always run `bun run format` before `bun run lint` per CLAUDE.md
 - Quality gate per Ralph CLAUDE.md: `bun run typecheck`, `bun test`, `bun run format`, `bun run lint`
+- Canvas package's tsconfig only includes `["bun", "react"]` types — when adding a `.test.ts` file under `packages/canvas/src`, no extra changes are needed (`bun:test` resolves via the `bun` types entry added in US-002). `@types/bun` is in the canvas devDependencies.
+- When moving a util into @seeflow/canvas: copy file → create test alongside with `from './<name>'` self-import → add re-export block (values + types separately) at the bottom of `packages/canvas/src/index.ts` using `.ts` extensions → update web import sites to `@seeflow/canvas` → delete originals → run `bunx @biomejs/biome check --fix <changed web files>` to fix import order before lint.
 
 # Ralph Progress Log
 Started: Mon 18 May 2026 15:41:24 AEST
@@ -26,4 +28,19 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - `apps/web/src/lib/auto-layout.ts` and `apps/web/src/pages/demo-view.tsx` still import `dagre` directly today; the web app still resolves it transitively via the @seeflow/canvas workspace dep, so US-001's removal from apps/web doesn't break the build. When US-005 actually moves auto-layout.ts into the canvas package, demo-view.tsx's `import dagre from 'dagre'` will need to either be removed or remain (apps/web will still see dagre via the workspace package). Verify after that move.
   - Existing main-branch lint state was NOT green (`apps/web/src/lib/api.ts` had unsorted imports). Future iterations should run `bun run lint` early and fix accumulated organizeImports issues in the same commit
   - Test output prints intentional error stack traces (events.test.ts, registry.test.ts) — these are expected and don't indicate failures; check the final `pass / fail` line
+---
+
+## 2026-05-18 - US-002
+- Moved `floating-edge-geometry.ts` (+ test) from `apps/web/src/lib/` into `packages/canvas/src/lib/` and updated the two import sites in apps/web (`components/demo-canvas.tsx`, `components/edges/editable-edge.tsx`) to pull from `@seeflow/canvas`
+- Added a re-export block at the bottom of `packages/canvas/src/index.ts` (values + types, using `.ts` extension paths to match the existing convention)
+- The moved test self-imports as `./floating-edge-geometry` (no leading `@/`)
+- Added `@types/bun: ^1.1.0` to `packages/canvas/package.json` devDependencies and `"bun"` to the canvas `tsconfig.json` `types` array so `bun:test` resolves inside the canvas package — required because the canvas tsconfig had `types: ["react"]` only, which made `tsc --noEmit` fail with TS2307 on `from 'bun:test'`
+- Ran `bunx @biomejs/biome check --fix` on the two changed web files to clear the new `organizeImports` violations after switching to `@seeflow/canvas`
+- Files changed: `packages/canvas/src/lib/floating-edge-geometry.ts` (new), `packages/canvas/src/lib/floating-edge-geometry.test.ts` (new), `packages/canvas/src/index.ts`, `packages/canvas/package.json`, `packages/canvas/tsconfig.json`, `bun.lock`, `apps/web/src/components/demo-canvas.tsx`, `apps/web/src/components/edges/editable-edge.tsx`, and the two deleted apps/web files
+- Verified: `bun test packages/canvas/src/lib/floating-edge-geometry.test.ts` ✅ (39 pass, 123 expect()), `bun run typecheck` ✅, `bun run format` ✅ (no changes after fix), `bun run lint` ✅, `bun test` ✅ (1304 pass / 1 skip / 0 fail)
+- **Learnings for future iterations:**
+  - The canvas tsconfig now has `types: ["bun", "react"]` and `@types/bun` in devDependencies — future moves of `.test.ts` files into `packages/canvas/src` will resolve `bun:test` without further changes. Do NOT re-add `bun` to types or re-add `@types/bun` to package.json in subsequent stories.
+  - Biome `organizeImports` consistently flags after switching an import path between `@/...` and `@seeflow/canvas`. Cheapest fix: `bunx @biomejs/biome check --fix <changed files>` immediately after the edit, before running `bun run lint`.
+  - Re-exports in `packages/canvas/src/index.ts` should split value exports vs `export type {}` blocks (matches the existing pattern at the top of the file). Both blocks use the `.ts` extension on the path.
+  - The full quality gate sequence that works without drama: edit → `bunx biome check --fix <files>` → `bun run typecheck` → `bun run format` → `bun run lint` → `bun test`.
 ---

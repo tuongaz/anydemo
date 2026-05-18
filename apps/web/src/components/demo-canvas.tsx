@@ -39,15 +39,15 @@ import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/a
 import { computeImageDims, handleCanvasFileDrop } from '@/lib/canvas-drop';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import { connectorToEdge } from '@/lib/connector-to-edge';
+import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
+import { cn } from '@/lib/utils';
 import {
   type Side,
   endpointFromPin,
   endpointToPin,
   getNodeIntersection,
   projectCursorToPerimeter,
-} from '@/lib/floating-edge-geometry';
-import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
-import { cn } from '@/lib/utils';
+} from '@seeflow/canvas';
 import {
   Background,
   type Connection,

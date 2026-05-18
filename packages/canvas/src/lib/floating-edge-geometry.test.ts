@@ -7,7 +7,7 @@ import {
   getNodeIntersection,
   projectCursorToPerimeter,
   resolveEdgeEndpoints,
-} from '@/lib/floating-edge-geometry';
+} from './floating-edge-geometry';
 
 describe('getNodeIntersection', () => {
   // Standard 100×60 rectangle anchored at the origin so center=(50,30).

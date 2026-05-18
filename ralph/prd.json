@@ -33,7 +33,7 @@
         "bun test passes (full suite)"
       ],
       "priority": 2,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

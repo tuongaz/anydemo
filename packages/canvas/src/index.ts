@@ -32,3 +32,19 @@ export {
 export type { NodeColorStyle, EdgeColorStyle, TextColorStyle } from './lib/color-tokens.ts';
 
 export { ICON_REGISTRY, ICON_FALLBACK_NAME, ICON_NAMES } from './lib/icon-registry.ts';
+
+export {
+  endpointFromPin,
+  endpointToPin,
+  getNodeIntersection,
+  projectCursorToPerimeter,
+  resolveEdgeEndpoints,
+} from './lib/floating-edge-geometry.ts';
+export type {
+  Endpoint,
+  EndpointInput,
+  FloatingRect,
+  Pin,
+  Side,
+  XY,
+} from './lib/floating-edge-geometry.ts';
