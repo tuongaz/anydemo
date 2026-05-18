@@ -9,28 +9,19 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet"/>
 <style>
   :root {
-    /* ── Shadcn HSL tokens (dark-first, zinc/emerald palette) ── */
-    --background: 240 10% 3.9%;          /* zinc-950 */
-    --foreground: 0 0% 98%;              /* zinc-50 */
-    --card: 240 5.9% 10.6%;              /* zinc-900 */
-    --primary: 160 84% 39.4%;            /* emerald */
-    --primary-foreground: 160 68% 60%;   /* emerald-hi */
-    --border: 240 3.7% 15.9%;            /* zinc-800 */
-    --input: 240 3.7% 26.1%;             /* zinc-700 */
-    --muted-foreground: 240 4.4% 64.9%;  /* zinc-400 */
-
     /* ── Color ──────────────────────────────────── */
-    --bg:          hsl(var(--background));
+    --bg:          #09090b;   /* zinc-950 */
     --bg-canvas:   #0a0a0c;
     --bg-deep:     #050507;
-    --surface:     hsl(var(--card));
-    --border-hi:   hsl(var(--input));
-    --text:        hsl(var(--foreground));
-    --text-mute:   hsl(var(--muted-foreground));
+    --surface:     #18181b;   /* zinc-900 */
+    --border:      #27272a;   /* zinc-800 */
+    --border-hi:   #3f3f46;   /* zinc-700 */
+    --text:        #fafafa;   /* zinc-50 */
+    --text-mute:   #a1a1aa;   /* zinc-400 */
     --text-dim:    #71717a;   /* zinc-500 */
     --text-faint:  #52525b;   /* zinc-600 */
-    --emerald:     hsl(var(--primary));
-    --emerald-hi:  hsl(var(--primary-foreground));
+    --emerald:     #10b981;
+    --emerald-hi:  #34d399;
     --emerald-glow: rgba(16,185,129,0.35);
     --amber:       #f59e0b;
     --amber-hi:    #fbbf24;
@@ -53,6 +44,31 @@
     --shadow-glow-ok:    0 0 30px -4px rgba(16,185,129,0.45);
     --shadow-glow-pending: 0 0 30px -4px rgba(245,158,11,0.45);
     --ring-selected:     0 0 0 3px rgba(16,185,129,0.22), 0 0 40px -6px rgba(16,185,129,0.55);
+
+    /* ── shadcn/ui semantic tokens ─────────────── */
+    /* Use these in tailwind.config / globals.css so SeeFlow's palette */
+    /* drives every shadcn primitive without per-component overrides.  */
+    --background:        var(--bg);          /* zinc-950 */
+    --foreground:        var(--text);
+    --card:              var(--surface);     /* zinc-900 */
+    --card-foreground:   var(--text);
+    --popover:           #0f0f12;
+    --popover-foreground: var(--text);
+    --primary:           var(--emerald);     /* CTAs, focus rings */
+    --primary-foreground: #052e22;           /* dark emerald text on emerald bg */
+    --secondary:         #1f1f23;            /* between surface & border */
+    --secondary-foreground: var(--text);
+    --muted:             #1c1c20;
+    --muted-foreground:  var(--text-mute);
+    --accent:            #1f1f23;
+    --accent-foreground: var(--text);
+    --destructive:       var(--danger);
+    --destructive-foreground: #fef2f2;
+    --warning:           var(--amber);
+    --warning-foreground: #271a04;
+    --input:             #1c1c20;
+    --ring:              var(--emerald);     /* focus-visible outline */
+    --radius:            var(--r-md);        /* shadcn `--radius`, 8px */
   }
   *, *::before, *::after { box-sizing: border-box; }
   html, body {
@@ -74,7 +90,7 @@
   header.hero {
     display: flex; flex-direction: column; gap: 24px;
     padding-bottom: 56px; margin-bottom: 64px;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
   }
   .brand {
     display: flex; align-items: center; gap: 14px;
@@ -102,7 +118,7 @@
     display: flex; align-items: baseline; justify-content: space-between;
     gap: 24px; margin-bottom: 32px;
     padding-bottom: 16px;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
   }
   .section-head h2 {
     margin: 0; font-size: 28px; font-weight: 600;
@@ -123,14 +139,14 @@
   .grid-auto { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 
   .swatch {
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-lg);
     overflow: hidden;
     background: var(--surface);
   }
   .swatch .chip {
     height: 96px;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
   }
   .swatch .meta {
     padding: 14px 16px;
@@ -156,7 +172,7 @@
     grid-template-columns: 140px 1fr;
     gap: 32px; align-items: baseline;
     padding: 24px 0;
-    border-top: 1px solid hsl(var(--border));
+    border-top: 1px solid var(--border);
   }
   .type-row:first-of-type { border-top: 0; padding-top: 0; }
   .type-meta {
@@ -175,7 +191,7 @@
 
   /* ── Spacing / radii ────────────────────────── */
   .token-card {
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-lg);
     background: var(--surface);
     padding: 20px;
@@ -195,7 +211,7 @@
 
   /* ── Components ─────────────────────────────── */
   .comp-card {
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-lg);
     background: var(--bg);
     padding: 28px;
@@ -211,7 +227,7 @@
   .node {
     width: 240px; min-height: 120px;
     background: var(--surface);
-    border: 1.5px solid hsl(var(--border));
+    border: 1.5px solid var(--border);
     border-radius: var(--r-lg);
     padding: 14px 16px;
     display: flex; flex-direction: column; gap: 8px;
@@ -233,7 +249,7 @@
   .node-icon {
     width: 28px; height: 28px; border-radius: 6px;
     background: rgba(255,255,255,0.04);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     display: flex; align-items: center; justify-content: center;
     color: var(--text-mute);
   }
@@ -283,13 +299,13 @@
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* Edge demo */
-  .edge-demo { background: var(--bg-canvas); border-radius: var(--r-md); padding: 24px; border: 1px solid hsl(var(--border)); }
+  .edge-demo { background: var(--bg-canvas); border-radius: var(--r-md); padding: 24px; border: 1px solid var(--border); }
 
   /* Window frame */
   .frame {
     background: rgba(9,9,11,0.6);
     backdrop-filter: blur(8px);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-xl);
     overflow: hidden;
     box-shadow: var(--shadow-window);
@@ -297,7 +313,7 @@
   .frame-bar {
     height: 44px; display: flex; align-items: center;
     padding: 0 18px; gap: 10px;
-    border-bottom: 1px solid hsl(var(--border));
+    border-bottom: 1px solid var(--border);
     background: rgba(24,24,27,0.7);
     position: relative;
   }
@@ -327,7 +343,7 @@
   .sidebar {
     width: 360px; background: rgba(9,9,11,0.94);
     backdrop-filter: blur(14px);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-lg);
     padding: 28px 26px;
     display: flex; flex-direction: column; gap: 20px;
@@ -347,7 +363,7 @@
     display: flex; align-items: center; gap: 10px;
     padding: 10px 12px; border-radius: var(--r-md);
     background: rgba(255,255,255,0.03);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     font-family: var(--font-mono); font-size: 13px;
     white-space: nowrap;
   }
@@ -362,7 +378,7 @@
     display: flex; align-items: center; gap: 10px;
     padding: 8px 10px; border-radius: var(--r-md);
     background: rgba(255,255,255,0.02);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     font-family: var(--font-mono); font-size: 12px;
     white-space: nowrap;
   }
@@ -372,6 +388,430 @@
 
   /* SVG glyphs */
   .glyph svg { display: block; }
+
+  /* ─────────────────────────────────────────────────────────────────── */
+  /* shadcn/ui primitives — themed for SeeFlow                                 */
+  /* ─────────────────────────────────────────────────────────────────── */
+
+  /* Demo strip: 16px padded row that hosts component samples */
+  .strip {
+    display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+    padding: 20px;
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    background: var(--bg);
+  }
+  .strip + .strip-caption {
+    margin-top: 10px;
+    font-family: var(--font-mono); font-size: 12px;
+    color: var(--text-dim);
+  }
+
+  /* ── Button ─────────────────────────────────── */
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center;
+    gap: 8px;
+    height: 36px; padding: 0 16px;
+    border-radius: var(--radius);
+    border: 1px solid transparent;
+    font-family: var(--font-sans); font-size: 14px; font-weight: 500;
+    letter-spacing: -0.005em;
+    cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, color 120ms ease, box-shadow 120ms ease, opacity 120ms ease;
+    white-space: nowrap;
+    user-select: none;
+  }
+  .btn:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);
+  }
+  .btn[disabled], .btn.is-disabled { opacity: 0.5; cursor: not-allowed; pointer-events: none; }
+
+  /* Variants */
+  .btn-primary {
+    background: var(--primary); color: var(--primary-foreground);
+    font-weight: 600;
+  }
+  .btn-primary:hover { background: var(--emerald-hi); }
+  .btn-secondary {
+    background: var(--secondary); color: var(--text);
+    border-color: var(--border);
+  }
+  .btn-secondary:hover { background: #26262b; border-color: var(--border-hi); }
+  .btn-outline {
+    background: transparent; color: var(--text);
+    border-color: var(--border-hi);
+  }
+  .btn-outline:hover { background: var(--secondary); border-color: var(--border-hi); }
+  .btn-ghost {
+    background: transparent; color: var(--text-mute);
+  }
+  .btn-ghost:hover { background: var(--secondary); color: var(--text); }
+  .btn-destructive {
+    background: var(--destructive); color: var(--destructive-foreground);
+    font-weight: 600;
+  }
+  .btn-destructive:hover { background: #dc2626; }
+  .btn-link {
+    background: transparent; color: var(--emerald-hi);
+    padding: 0; height: auto;
+    text-decoration: underline; text-underline-offset: 4px;
+    text-decoration-color: rgba(52,211,153,0.4);
+  }
+  .btn-link:hover { text-decoration-color: var(--emerald-hi); }
+
+  /* Sizes */
+  .btn-sm  { height: 30px; padding: 0 12px; font-size: 13px; border-radius: 6px; }
+  .btn-lg  { height: 44px; padding: 0 22px; font-size: 15px; border-radius: 10px; }
+  .btn-icon { width: 36px; padding: 0; }
+  .btn-icon.btn-sm { width: 30px; }
+  .btn-icon.btn-lg { width: 44px; }
+
+  .btn .spinner {
+    width: 12px; height: 12px;
+    border: 1.6px solid currentColor; opacity: 0.85;
+    border-right-color: transparent; border-radius: 50%;
+    animation: spin 0.7s linear infinite;
+  }
+
+  /* ── Input / Textarea ──────────────────────── */
+  .field {
+    display: flex; flex-direction: column; gap: 6px;
+    font-family: var(--font-sans);
+  }
+  .field-label {
+    font-size: 13px; font-weight: 500; color: var(--text);
+    letter-spacing: -0.005em;
+  }
+  .field-help {
+    font-size: 12px; color: var(--text-dim);
+  }
+  .field-error {
+    font-size: 12px; color: #fca5a5;
+    display: flex; align-items: center; gap: 6px;
+  }
+
+  .input, .textarea, .select-trigger {
+    width: 100%;
+    height: 36px; padding: 0 12px;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    background: var(--input);
+    color: var(--text);
+    font-family: var(--font-sans); font-size: 14px;
+    letter-spacing: -0.005em;
+    transition: border-color 120ms, box-shadow 120ms, background 120ms;
+    outline: none;
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--text-faint); }
+  .input:hover, .textarea:hover, .select-trigger:hover { border-color: var(--border-hi); }
+  .input:focus, .textarea:focus, .select-trigger:focus, .input.is-focus, .select-trigger.is-focus {
+    border-color: var(--emerald);
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.18);
+  }
+  .input.is-error { border-color: var(--destructive); }
+  .input.is-error:focus, .input.is-error.is-focus { box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+  .input.is-mono { font-family: var(--font-mono); font-size: 13px; }
+  .textarea {
+    height: auto; min-height: 96px;
+    padding: 10px 12px; resize: vertical;
+    line-height: 1.5;
+  }
+
+  /* Input with prefix/suffix */
+  .input-group {
+    display: flex; align-items: center;
+    border: 1px solid var(--border);
+    background: var(--input);
+    border-radius: var(--radius);
+    overflow: hidden;
+    transition: border-color 120ms, box-shadow 120ms;
+  }
+  .input-group:focus-within {
+    border-color: var(--emerald);
+    box-shadow: 0 0 0 3px rgba(16,185,129,0.18);
+  }
+  .input-group .input {
+    border: 0; box-shadow: none; background: transparent; height: 34px;
+  }
+  .input-group .input:focus { box-shadow: none; }
+  .input-affix {
+    display: flex; align-items: center;
+    padding: 0 10px;
+    color: var(--text-dim);
+    font-family: var(--font-mono); font-size: 13px;
+    background: rgba(255,255,255,0.025);
+    height: 100%;
+  }
+  .input-affix.right { border-left: 1px solid var(--border); }
+  .input-affix.left  { border-right: 1px solid var(--border); }
+
+  /* Select trigger (visual only) */
+  .select-trigger {
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer;
+  }
+  .select-trigger .placeholder { color: var(--text-faint); }
+  .select-trigger .chev { color: var(--text-dim); }
+
+  /* ── Checkbox / Radio ──────────────────────── */
+  .check-row {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--font-sans); font-size: 14px;
+    color: var(--text); cursor: pointer;
+  }
+  .check {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border-hi);
+    border-radius: 4px;
+    background: var(--input);
+    display: flex; align-items: center; justify-content: center;
+    transition: background 120ms, border-color 120ms;
+    flex-shrink: 0;
+  }
+  .check.is-checked {
+    background: var(--emerald); border-color: var(--emerald);
+  }
+  .check.is-checked svg { color: var(--primary-foreground); }
+  .check.is-checked:not(.is-checked) svg { display: none; }
+
+  .radio {
+    width: 16px; height: 16px;
+    border: 1.5px solid var(--border-hi);
+    border-radius: 50%;
+    background: var(--input);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .radio.is-checked { border-color: var(--emerald); }
+  .radio.is-checked::after {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--emerald);
+  }
+
+  /* ── Switch ────────────────────────────────── */
+  .switch {
+    width: 36px; height: 20px;
+    border-radius: 999px;
+    background: var(--border);
+    position: relative;
+    transition: background 160ms ease;
+    flex-shrink: 0;
+  }
+  .switch::after {
+    content: ''; position: absolute;
+    width: 14px; height: 14px;
+    background: var(--text); border-radius: 50%;
+    top: 3px; left: 3px;
+    transition: left 160ms ease, background 160ms ease;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+  .switch.is-on { background: var(--emerald); }
+  .switch.is-on::after { left: 19px; background: #f0fdf4; }
+
+  /* ── Badge ─────────────────────────────────── */
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid transparent;
+    font-family: var(--font-sans); font-size: 11px; font-weight: 500;
+    letter-spacing: 0;
+    line-height: 1.4;
+    white-space: nowrap;
+  }
+  .badge-default     { background: var(--emerald); color: var(--primary-foreground); font-weight: 600; }
+  .badge-secondary   { background: var(--secondary); color: var(--text-mute); border-color: var(--border); }
+  .badge-outline     { background: transparent; color: var(--text-mute); border-color: var(--border-hi); }
+  .badge-destructive { background: rgba(239,68,68,0.15); color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+  .badge-warning     { background: rgba(245,158,11,0.15); color: var(--amber-hi); border-color: rgba(245,158,11,0.3); }
+  .badge-success     { background: rgba(16,185,129,0.12); color: var(--emerald-hi); border-color: rgba(16,185,129,0.3); }
+  .badge .dot        { width: 5px; height: 5px; border-radius: 3px; background: currentColor; }
+
+  /* ── Alert ─────────────────────────────────── */
+  .alert {
+    display: flex; gap: 12px;
+    padding: 14px 16px;
+    border-radius: var(--r-md);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-family: var(--font-sans);
+  }
+  .alert .alert-icon { color: var(--text-mute); flex-shrink: 0; padding-top: 2px; }
+  .alert .alert-title { font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 2px; letter-spacing: -0.01em; }
+  .alert .alert-desc  { font-size: 13px; color: var(--text-mute); line-height: 1.5; }
+  .alert-destructive { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.3); }
+  .alert-destructive .alert-icon { color: #fca5a5; }
+  .alert-destructive .alert-title { color: #fecaca; }
+  .alert-destructive .alert-desc  { color: #fca5a5; }
+  .alert-success { background: rgba(16,185,129,0.06); border-color: rgba(16,185,129,0.3); }
+  .alert-success .alert-icon { color: var(--emerald-hi); }
+  .alert-success .alert-title { color: var(--emerald-hi); }
+
+  /* ── Card ──────────────────────────────────── */
+  .s-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    overflow: hidden;
+    display: flex; flex-direction: column;
+    box-shadow: var(--shadow-card);
+  }
+  .s-card-header { padding: 20px 22px 0; }
+  .s-card-title  { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+  .s-card-desc   { margin: 4px 0 0; font-size: 13px; color: var(--text-mute); }
+  .s-card-content { padding: 18px 22px; }
+  .s-card-footer {
+    padding: 14px 22px;
+    border-top: 1px solid var(--border);
+    background: rgba(0,0,0,0.2);
+    display: flex; align-items: center; justify-content: flex-end; gap: 8px;
+  }
+
+  /* ── Tabs ──────────────────────────────────── */
+  .tabs-list {
+    display: inline-flex; gap: 2px; padding: 4px;
+    background: var(--input); border: 1px solid var(--border);
+    border-radius: var(--r-md);
+  }
+  .tab {
+    padding: 6px 14px;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 500;
+    color: var(--text-mute);
+    background: transparent; border-radius: 6px;
+    cursor: pointer; border: 0;
+    transition: background 120ms, color 120ms;
+  }
+  .tab:hover { color: var(--text); }
+  .tab.is-active {
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.4);
+  }
+
+  /* ── Tooltip ───────────────────────────────── */
+  .tooltip {
+    display: inline-block;
+    padding: 6px 10px;
+    background: var(--text); color: var(--bg);
+    border-radius: 6px;
+    font-family: var(--font-sans); font-size: 12px; font-weight: 500;
+    box-shadow: 0 8px 24px -8px rgba(0,0,0,0.6);
+    position: relative;
+  }
+  .tooltip::after {
+    content: ''; position: absolute; bottom: -4px; left: 50%;
+    transform: translateX(-50%) rotate(45deg);
+    width: 8px; height: 8px; background: var(--text);
+  }
+
+  /* ── Dialog (visual sample) ────────────────── */
+  .dialog {
+    width: 440px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-lg);
+    padding: 24px;
+    box-shadow: 0 30px 60px -20px rgba(0,0,0,0.8);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .dialog .dialog-title { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: -0.02em; }
+  .dialog .dialog-desc  { margin: 0 0 16px; font-size: 14px; color: var(--text-mute); line-height: 1.5; }
+  .dialog .dialog-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 8px; }
+
+  /* ── Dropdown menu ─────────────────────────── */
+  .menu {
+    background: var(--popover);
+    border: 1px solid var(--border);
+    border-radius: var(--r-md);
+    padding: 4px;
+    min-width: 200px;
+    box-shadow: 0 12px 32px -8px rgba(0,0,0,0.6);
+  }
+  .menu-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 7px 10px;
+    border-radius: 5px;
+    font-family: var(--font-sans); font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+  }
+  .menu-item:hover, .menu-item.is-active { background: var(--accent); }
+  .menu-item .shortcut {
+    margin-left: auto; font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-faint); letter-spacing: 0.04em;
+  }
+  .menu-item.is-destructive { color: #fca5a5; }
+  .menu-item.is-destructive:hover { background: rgba(239,68,68,0.12); }
+  .menu-separator {
+    height: 1px; background: var(--border);
+    margin: 4px -4px;
+  }
+  .menu-label {
+    padding: 6px 10px 4px;
+    font-family: var(--font-mono); font-size: 10px;
+    color: var(--text-dim); letter-spacing: 0.18em;
+    text-transform: uppercase;
+  }
+
+  /* ── Table ─────────────────────────────────── */
+  .s-table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--font-sans); font-size: 13px;
+  }
+  .s-table thead th {
+    text-align: left; padding: 10px 14px;
+    font-family: var(--font-mono); font-size: 11px;
+    color: var(--text-dim); letter-spacing: 0.12em; text-transform: uppercase;
+    font-weight: 500;
+    border-bottom: 1px solid var(--border);
+  }
+  .s-table tbody td {
+    padding: 12px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  .s-table tbody tr:hover td { background: rgba(255,255,255,0.02); }
+  .s-table tbody tr:last-child td { border-bottom: 0; }
+  .s-table td.mono { font-family: var(--font-mono); font-size: 12px; color: var(--text-mute); }
+
+  /* ── Skeleton ──────────────────────────────── */
+  .skel {
+    background: linear-gradient(90deg, var(--secondary) 0%, var(--border) 50%, var(--secondary) 100%);
+    background-size: 200% 100%;
+    animation: skel-shimmer 1.4s ease-in-out infinite;
+    border-radius: 6px;
+  }
+  @keyframes skel-shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+
+  /* ── Avatar ────────────────────────────────── */
+  .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--secondary);
+    border: 1px solid var(--border);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-family: var(--font-sans); font-size: 13px; font-weight: 600;
+    color: var(--text);
+    flex-shrink: 0;
+  }
+  .avatar-emerald { background: rgba(16,185,129,0.15); color: var(--emerald-hi); border-color: rgba(16,185,129,0.3); }
+
+  /* ── Progress ──────────────────────────────── */
+  .progress {
+    width: 100%; height: 8px;
+    background: var(--input);
+    border-radius: 999px; overflow: hidden;
+  }
+  .progress > .bar {
+    height: 100%; background: var(--emerald);
+    border-radius: 999px;
+  }
+
+  /* ── Separator ─────────────────────────────── */
+  .sep { height: 1px; background: var(--border); border: 0; margin: 16px 0; }
+  .sep-v { width: 1px; background: var(--border); align-self: stretch; }
+
   .glyph-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
@@ -380,7 +820,7 @@
   .glyph-card {
     display: flex; flex-direction: column; align-items: center; gap: 8px;
     padding: 18px 12px;
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-md);
     background: var(--surface);
   }
@@ -395,7 +835,7 @@
     grid-template-columns: 80px 1fr 220px;
     gap: 24px;
     padding: 16px 0;
-    border-top: 1px solid hsl(var(--border));
+    border-top: 1px solid var(--border);
     align-items: start;
   }
   .timeline:first-of-type { border-top: 0; }
@@ -424,7 +864,7 @@
   }
   .voice .col {
     padding: 24px;
-    border: 1px solid hsl(var(--border));
+    border: 1px solid var(--border);
     border-radius: var(--r-lg);
     background: var(--surface);
   }
@@ -594,12 +1034,12 @@
     </div>
 
     <div style="display: flex; gap: 32px; margin-bottom: 32px;">
-      <div style="flex:1; padding: 28px; border:1px solid hsl(var(--border)); border-radius: var(--r-lg); background: var(--surface);">
+      <div style="flex:1; padding: 28px; border:1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);">
         <div class="eyebrow" style="margin-bottom: 16px;">Sans · Product voice</div>
         <div style="font-family: var(--font-sans); font-size: 64px; font-weight: 600; letter-spacing: -0.04em; line-height: 1;">Inter</div>
         <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 12px;">400 · 500 · 600 · 700</div>
       </div>
-      <div style="flex:1; padding: 28px; border:1px solid hsl(var(--border)); border-radius: var(--r-lg); background: var(--surface);">
+      <div style="flex:1; padding: 28px; border:1px solid var(--border); border-radius: var(--r-lg); background: var(--surface);">
         <div class="eyebrow" style="margin-bottom: 16px;">Mono · Mechanical</div>
         <div style="font-family: var(--font-mono); font-size: 64px; font-weight: 500; letter-spacing: 0; line-height: 1;">JetBrains</div>
         <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); margin-top: 12px;">400 · 500 · 600</div>
@@ -680,7 +1120,7 @@
     <div class="grid grid-3">
       <div class="token-card">
         <div class="demo" style="justify-content: center;">
-          <div style="width: 80px; height: 80px; border-radius: 12px; background: var(--surface); border: 1px solid hsl(var(--border)); box-shadow: var(--shadow-card);"></div>
+          <div style="width: 80px; height: 80px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-card);"></div>
         </div>
         <div class="token-meta"><span class="name">shadow-card</span><span class="val">y4 b12</span></div>
       </div>
@@ -766,7 +1206,7 @@
         <span class="pill pending"><span class="spinner"></span>Processing…</span>
         <span class="pill live"><span class="dot"></span>Live</span>
         <span class="pill" style="background: rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.3); color:#fca5a5;"><span class="dot"></span>402 Payment Required</span>
-        <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid hsl(var(--border)); color: var(--text-mute);">142 ms</span>
+        <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid var(--border); color: var(--text-mute);">142 ms</span>
       </div>
     </div>
 
@@ -827,7 +1267,7 @@
           </div>
           <div style="display: flex; gap: 10px;">
             <span class="pill ok"><span class="dot"></span>200 OK</span>
-            <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid hsl(var(--border)); color: var(--text-mute);">142 ms</span>
+            <span class="pill" style="background: rgba(255,255,255,0.04); border:1px solid var(--border); color: var(--text-mute);">142 ms</span>
           </div>
           <div>
             <div class="sidebar-section-label">Endpoint</div>
@@ -869,11 +1309,499 @@
     </div>
   </section>
 
+  <!-- ──────────────────── SHADCN UI ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>shadcn/ui</h2>
+      <span class="num">05 / web primitives</span>
+    </div>
+
+    <p style="margin: 0 0 32px; color: var(--text-mute); font-size: 16px; max-width: 720px; line-height: 1.55;">
+      Drop these tokens into <code style="font-family: var(--font-mono); color: var(--text);">globals.css</code> and shadcn/ui primitives inherit SeeFlow's palette automatically — no per-component overrides needed.
+    </p>
+
+    <!-- Token mapping -->
+    <div class="comp-card" style="margin-bottom: 40px;">
+      <div class="label">Token map · SeeFlow → shadcn</div>
+      <pre style="margin: 0; font-family: var(--font-mono); font-size: 12.5px; line-height: 1.7; color: var(--text-mute); background: #0c0c0e; padding: 18px 22px; border: 1px solid var(--border); border-radius: var(--r-md); overflow-x: auto;"><span style="color: var(--text-faint);">/* globals.css — dark theme */</span>
+.dark {
+  --background: <span style="color: var(--emerald-hi);">240 6% 7%</span>;          <span style="color: var(--text-faint);">/* zinc-950   #09090b */</span>
+  --foreground: <span style="color: var(--emerald-hi);">0 0% 98%</span>;            <span style="color: var(--text-faint);">/* zinc-50    #fafafa */</span>
+  --card:       <span style="color: var(--emerald-hi);">240 5% 11%</span>;          <span style="color: var(--text-faint);">/* zinc-900   #18181b */</span>
+  --popover:    <span style="color: var(--emerald-hi);">240 7% 6%</span>;
+  --primary:    <span style="color: var(--emerald-hi);">160 84% 39%</span>;         <span style="color: var(--text-faint);">/* emerald-500 #10b981 */</span>
+  --primary-foreground: <span style="color: var(--emerald-hi);">158 80% 10%</span>;
+  --secondary:  <span style="color: var(--emerald-hi);">240 4% 13%</span>;
+  --muted:      <span style="color: var(--emerald-hi);">240 5% 11%</span>;
+  --muted-foreground: <span style="color: var(--emerald-hi);">240 5% 65%</span>;   <span style="color: var(--text-faint);">/* zinc-400 */</span>
+  --accent:     <span style="color: var(--emerald-hi);">240 4% 13%</span>;
+  --destructive: <span style="color: var(--emerald-hi);">0 84% 60%</span>;          <span style="color: var(--text-faint);">/* red-500   #ef4444 */</span>
+  --border:     <span style="color: var(--emerald-hi);">240 4% 16%</span>;           <span style="color: var(--text-faint);">/* zinc-800 */</span>
+  --input:      <span style="color: var(--emerald-hi);">240 5% 12%</span>;
+  --ring:       <span style="color: var(--emerald-hi);">160 84% 39%</span>;          <span style="color: var(--text-faint);">/* emerald — focus */</span>
+  --radius:     <span style="color: var(--emerald-hi);">0.5rem</span>;               <span style="color: var(--text-faint);">/* 8px */</span>
+}</pre>
+      <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim); line-height: 1.6;">
+        Theme is dark-only — SeeFlow has no light mode. Keep <code>--primary</code> emerald (not blue) so CTAs read as "live signal," not generic web button. Keep <code>--radius</code> at <code>0.5rem</code> — anything bigger softens the control-panel feel.
+      </div>
+    </div>
+
+    <!-- BUTTONS -->
+    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Button</h3>
+
+    <div class="strip">
+      <button class="btn btn-primary">Run flow</button>
+      <button class="btn btn-secondary">Inspect</button>
+      <button class="btn btn-outline">Cancel</button>
+      <button class="btn btn-ghost">View logs</button>
+      <button class="btn btn-destructive">Stop service</button>
+      <a href="#" class="btn btn-link">Open in editor</a>
+    </div>
+    <div class="strip-caption">Variants · primary, secondary, outline, ghost, destructive, link</div>
+
+    <div class="strip" style="margin-top: 16px;">
+      <button class="btn btn-primary btn-sm">Run</button>
+      <button class="btn btn-primary">Run flow</button>
+      <button class="btn btn-primary btn-lg">Run full pipeline</button>
+      <span class="sep-v"></span>
+      <button class="btn btn-secondary btn-icon btn-sm" aria-label="settings">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.65 1.65 0 0 0-1.8-.3 1.65 1.65 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.65 1.65 0 0 0-1-1.5 1.65 1.65 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.65 1.65 0 0 0 .3-1.8 1.65 1.65 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.65 1.65 0 0 0 1.5-1 1.65 1.65 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.65 1.65 0 0 0 1.8.3h0a1.65 1.65 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.65 1.65 0 0 0 1 1.5h0a1.65 1.65 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.65 1.65 0 0 0-.3 1.8v0a1.65 1.65 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.65 1.65 0 0 0-1.5 1z"/></svg>
+      </button>
+      <button class="btn btn-secondary btn-icon" aria-label="settings">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.65 1.65 0 0 0-1.8-.3 1.65 1.65 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.65 1.65 0 0 0-1-1.5 1.65 1.65 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.65 1.65 0 0 0 .3-1.8 1.65 1.65 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.65 1.65 0 0 0 1.5-1 1.65 1.65 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.65 1.65 0 0 0 1.8.3h0a1.65 1.65 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.65 1.65 0 0 0 1 1.5h0a1.65 1.65 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.65 1.65 0 0 0-.3 1.8v0a1.65 1.65 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.65 1.65 0 0 0-1.5 1z"/></svg>
+      </button>
+      <button class="btn btn-secondary btn-icon btn-lg" aria-label="settings">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.65 1.65 0 0 0-1.8-.3 1.65 1.65 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.65 1.65 0 0 0-1-1.5 1.65 1.65 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.65 1.65 0 0 0 .3-1.8 1.65 1.65 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.65 1.65 0 0 0 1.5-1 1.65 1.65 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.65 1.65 0 0 0 1.8.3h0a1.65 1.65 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.65 1.65 0 0 0 1 1.5h0a1.65 1.65 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.65 1.65 0 0 0-.3 1.8v0a1.65 1.65 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.65 1.65 0 0 0-1.5 1z"/></svg>
+      </button>
+    </div>
+    <div class="strip-caption">Sizes · sm 30px · default 36px · lg 44px · icon variants</div>
+
+    <div class="strip" style="margin-top: 16px;">
+      <button class="btn btn-primary">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><polygon points="6,4 20,12 6,20"/></svg>
+        Run flow
+      </button>
+      <button class="btn btn-secondary">
+        Open canvas
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7"/><path d="M7 7h10v10"/></svg>
+      </button>
+      <button class="btn btn-primary">
+        <span class="spinner"></span>
+        Generating…
+      </button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+      <span class="sep-v"></span>
+      <button class="btn btn-primary" style="box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ring);">Focused</button>
+    </div>
+    <div class="strip-caption">States · with icon · loading · disabled · focus-visible ring</div>
+
+    <!-- Button rules -->
+    <div class="voice" style="margin-top: 32px;">
+      <div class="col do">
+        <h4>Do</h4>
+        <ul>
+          <li>One primary button per surface — emerald is signal; reserve it.</li>
+          <li>Verb-first labels: <em>Run flow</em>, <em>Inspect node</em>, <em>Open canvas</em>.</li>
+          <li>Use <code style="font-family: var(--font-mono); color: var(--text-mute);">destructive</code> only for actions that delete or stop a real service.</li>
+          <li>Icons go on the left for actions, right for navigation/external.</li>
+        </ul>
+      </div>
+      <div class="col dont">
+        <h4>Don't</h4>
+        <ul>
+          <li>No filled secondary buttons in another accent color — use outline/ghost.</li>
+          <li>Don't replace text with an icon unless it's a universally understood tool (gear, x, kebab).</li>
+          <li>No gradient fills, drop shadows on hover, or transform scales.</li>
+          <li>No "Submit" — always describe the action: <em>Save changes</em>, <em>Send request</em>.</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- FORM -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Form fields</h3>
+
+    <div class="grid grid-2" style="gap: 20px;">
+      <div class="strip" style="flex-direction: column; align-items: stretch; gap: 18px;">
+        <div class="field">
+          <label class="field-label">Service name</label>
+          <input class="input" placeholder="checkout-api"/>
+          <span class="field-help">Lowercase, hyphens. Becomes the node id on the canvas.</span>
+        </div>
+        <div class="field">
+          <label class="field-label">Endpoint URL</label>
+          <div class="input-group">
+            <span class="input-affix left">https://</span>
+            <input class="input" placeholder="api.acme.com/checkout"/>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Request body</label>
+          <textarea class="textarea is-mono" style="font-family: var(--font-mono); font-size: 13px;">{
+  "items": ["sku_42"],
+  "currency": "USD"
+}</textarea>
+        </div>
+      </div>
+      <div class="strip" style="flex-direction: column; align-items: stretch; gap: 18px;">
+        <div class="field">
+          <label class="field-label">Default focus</label>
+          <input class="input is-focus" value="https://api.acme.com"/>
+          <span class="field-help">Emerald 3px ring · rgba(16,185,129,0.18)</span>
+        </div>
+        <div class="field">
+          <label class="field-label">Error state</label>
+          <input class="input is-error" value="not-a-url"/>
+          <span class="field-error">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+            Must be a valid URL.
+          </span>
+        </div>
+        <div class="field">
+          <label class="field-label">Method</label>
+          <div class="select-trigger">
+            <span>POST</span>
+            <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Search</label>
+          <div class="input-group">
+            <span class="input-affix left">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            </span>
+            <input class="input" placeholder="Filter nodes…"/>
+            <span class="input-affix right">⌘K</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Choice controls -->
+    <h3 style="margin: 40px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Choice controls</h3>
+
+    <div class="grid grid-3" style="gap: 16px;">
+      <div class="comp-card">
+        <div class="label">Checkbox</div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label class="check-row">
+            <span class="check is-checked">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </span>
+            Auto-refresh canvas
+          </label>
+          <label class="check-row">
+            <span class="check"></span>
+            Stream server logs
+          </label>
+          <label class="check-row" style="opacity: 0.5; cursor: not-allowed;">
+            <span class="check"></span>
+            Record session (Pro)
+          </label>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Radio</div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <label class="check-row"><span class="radio is-checked"></span> Local <span style="font-family: var(--font-mono); color: var(--text-faint); font-size: 12px;">(localhost:4321)</span></label>
+          <label class="check-row"><span class="radio"></span> Staging</label>
+          <label class="check-row"><span class="radio"></span> Production</label>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Switch</div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <label class="check-row" style="justify-content: space-between;">
+            <span>Live mode</span>
+            <span class="switch is-on"></span>
+          </label>
+          <label class="check-row" style="justify-content: space-between;">
+            <span>Show packet trails</span>
+            <span class="switch is-on"></span>
+          </label>
+          <label class="check-row" style="justify-content: space-between;">
+            <span>Replay last request</span>
+            <span class="switch"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Badge -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Badge</h3>
+    <div class="strip">
+      <span class="badge badge-default">200 OK</span>
+      <span class="badge badge-secondary">142 ms</span>
+      <span class="badge badge-outline">v0.4.1</span>
+      <span class="badge badge-success"><span class="dot"></span>Live</span>
+      <span class="badge badge-warning"><span class="dot"></span>Pending</span>
+      <span class="badge badge-destructive"><span class="dot"></span>502 Bad Gateway</span>
+    </div>
+    <div class="strip-caption">Default · secondary · outline · success · warning · destructive. Status badges always lead with a 5px dot.</div>
+
+    <!-- Alert -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Alert</h3>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div class="alert">
+        <div class="alert-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4"/><path d="M12 8h.01"/></svg>
+        </div>
+        <div>
+          <div class="alert-title">Canvas reloads when you save</div>
+          <div class="alert-desc">Changes to <code style="font-family: var(--font-mono); color: var(--text);">seeflow.json</code> apply hot — you don't need to restart the dev server.</div>
+        </div>
+      </div>
+      <div class="alert alert-success">
+        <div class="alert-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
+        </div>
+        <div>
+          <div class="alert-title">Connected to checkout-api</div>
+          <div class="alert-desc">9 endpoints discovered · last heartbeat 1s ago.</div>
+        </div>
+      </div>
+      <div class="alert alert-destructive">
+        <div class="alert-icon">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+        </div>
+        <div>
+          <div class="alert-title">Payment service unreachable</div>
+          <div class="alert-desc">5 consecutive timeouts on <code style="font-family: var(--font-mono); color: #fca5a5;">POST /payment/charge</code>. Check the running container.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Card</h3>
+    <div class="grid grid-2" style="gap: 20px;">
+      <div class="s-card">
+        <div class="s-card-header">
+          <h4 class="s-card-title">Payment service</h4>
+          <p class="s-card-desc">Stripe API · connected</p>
+        </div>
+        <div class="s-card-content" style="display: flex; flex-direction: column; gap: 10px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px;">
+            <span style="color: var(--text-dim);">Endpoint</span>
+            <span>POST /payment/charge</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px;">
+            <span style="color: var(--text-dim);">p99 latency</span>
+            <span class="badge badge-success"><span class="dot"></span>43 ms</span>
+          </div>
+          <div style="display: flex; justify-content: space-between; align-items: center; font-family: var(--font-mono); font-size: 13px;">
+            <span style="color: var(--text-dim);">Last 100 requests</span>
+            <span>98% OK</span>
+          </div>
+        </div>
+        <div class="s-card-footer">
+          <button class="btn btn-ghost btn-sm">View logs</button>
+          <button class="btn btn-primary btn-sm">Inspect</button>
+        </div>
+      </div>
+      <div class="s-card">
+        <div class="s-card-header">
+          <h4 class="s-card-title">Share this canvas</h4>
+          <p class="s-card-desc">Anyone with the link can view (read-only).</p>
+        </div>
+        <div class="s-card-content">
+          <div class="input-group">
+            <input class="input is-mono" value="https://seeflow.dev/c/8f3a-checkout" readonly/>
+            <button class="btn btn-secondary btn-sm" style="margin: 4px; height: 28px;">Copy</button>
+          </div>
+        </div>
+        <div class="s-card-footer">
+          <label class="check-row">
+            <span class="switch is-on"></span>
+            Public
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabs / Tooltip / Dropdown / Dialog -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Tabs, tooltip, dropdown, dialog</h3>
+    <div class="grid grid-2" style="gap: 20px;">
+      <div class="comp-card">
+        <div class="label">Tabs</div>
+        <div class="tabs-list">
+          <button class="tab is-active">Canvas</button>
+          <button class="tab">Logs</button>
+          <button class="tab">Activity</button>
+          <button class="tab">Settings</button>
+        </div>
+      </div>
+      <div class="comp-card" style="align-items: flex-start;">
+        <div class="label">Tooltip</div>
+        <div style="display: flex; align-items: center; gap: 28px;">
+          <button class="btn btn-secondary btn-icon" aria-label="refresh">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 21v-5h5"/></svg>
+          </button>
+          <span class="tooltip">Refresh canvas · ⌘R</span>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Dropdown menu</div>
+        <div class="menu">
+          <div class="menu-label">Node actions</div>
+          <div class="menu-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" style="color: var(--emerald-hi);"><polygon points="6,4 20,12 6,20"/></svg>
+            Run
+            <span class="shortcut">⌘R</span>
+          </div>
+          <div class="menu-item is-active">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+            Inspect
+            <span class="shortcut">I</span>
+          </div>
+          <div class="menu-item">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>
+            Open source
+          </div>
+          <div class="menu-separator"></div>
+          <div class="menu-item is-destructive">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            Remove from canvas
+          </div>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Dialog</div>
+        <div class="dialog">
+          <h4 class="dialog-title">Stop payment service?</h4>
+          <p class="dialog-desc">In-flight requests will fail with a 503. This affects the running checkout flow.</p>
+          <div class="dialog-actions">
+            <button class="btn btn-ghost">Cancel</button>
+            <button class="btn btn-destructive">Stop service</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Table</h3>
+    <div class="s-card">
+      <table class="s-table">
+        <thead>
+          <tr>
+            <th>Endpoint</th>
+            <th>Method</th>
+            <th>Status</th>
+            <th>Latency</th>
+            <th>Last hit</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="mono">/checkout</td>
+            <td><span class="badge badge-success">POST</span></td>
+            <td><span class="badge badge-success"><span class="dot"></span>200</span></td>
+            <td class="mono">142 ms</td>
+            <td class="mono">just now</td>
+          </tr>
+          <tr>
+            <td class="mono">/payment/charge</td>
+            <td><span class="badge badge-success">POST</span></td>
+            <td><span class="badge badge-success"><span class="dot"></span>200</span></td>
+            <td class="mono">98 ms</td>
+            <td class="mono">12s ago</td>
+          </tr>
+          <tr>
+            <td class="mono">/inventory/reserve</td>
+            <td><span class="badge badge-secondary">GET</span></td>
+            <td><span class="badge badge-warning"><span class="dot"></span>Pending</span></td>
+            <td class="mono">—</td>
+            <td class="mono">48s ago</td>
+          </tr>
+          <tr>
+            <td class="mono">/notify</td>
+            <td><span class="badge badge-success">POST</span></td>
+            <td><span class="badge badge-destructive"><span class="dot"></span>502</span></td>
+            <td class="mono">5,003 ms</td>
+            <td class="mono">2m ago</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Skeleton + Avatar + Progress -->
+    <h3 style="margin: 48px 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Skeleton, avatar, progress</h3>
+    <div class="grid grid-3" style="gap: 20px;">
+      <div class="comp-card">
+        <div class="label">Skeleton</div>
+        <div style="display: flex; gap: 12px; align-items: center;">
+          <div class="skel" style="width: 36px; height: 36px; border-radius: 50%;"></div>
+          <div style="flex:1; display: flex; flex-direction: column; gap: 6px;">
+            <div class="skel" style="height: 12px; width: 60%;"></div>
+            <div class="skel" style="height: 10px; width: 80%;"></div>
+          </div>
+        </div>
+        <div class="skel" style="height: 90px; width: 100%;"></div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Avatar</div>
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <div class="avatar avatar-emerald">SF</div>
+          <div class="avatar">TN</div>
+          <div class="avatar" style="background: #1c1c20; color: var(--text-dim);">+5</div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="avatar avatar-emerald">SF</div>
+          <div>
+            <div style="font-size: 14px; font-weight: 500;">checkout-api</div>
+            <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-dim);">localhost:4321 · online</div>
+          </div>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">Progress</div>
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div>
+            <div style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--text-dim);">Analyzing codebase</span>
+              <span>72%</span>
+            </div>
+            <div class="progress"><div class="bar" style="width: 72%;"></div></div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--text-dim);">Generating diagram</span>
+              <span>34%</span>
+            </div>
+            <div class="progress"><div class="bar" style="width: 34%; background: var(--amber);"></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- General shadcn rules -->
+    <div class="voice" style="margin-top: 48px;">
+      <div class="col do">
+        <h4>Do</h4>
+        <ul>
+          <li>Set <code style="font-family: var(--font-mono); color: var(--text-mute);">--radius: 0.5rem</code> globally. Bigger radii read as marketing, not tooling.</li>
+          <li>Use mono for any value that comes from the system: paths, IDs, latencies, status codes.</li>
+          <li>Status colors are reserved — emerald = ok/live, amber = pending, red = error.</li>
+          <li>Always pair input changes with optimistic UI (spinner in the button, not blocking the form).</li>
+          <li>Focus ring is 3px emerald @ 18% — visible but doesn't shout.</li>
+        </ul>
+      </div>
+      <div class="col dont">
+        <h4>Don't</h4>
+        <ul>
+          <li>Don't override <code style="font-family: var(--font-mono); color: var(--text-mute);">--primary</code> per-component. If a button needs a different color it's a different role.</li>
+          <li>Don't introduce a new neutral. Zinc-800/700/500/400 already cover every border &amp; text need.</li>
+          <li>Don't add hover shadows or transforms — hovers shift background only.</li>
+          <li>Don't use the default shadcn blue ring — emerald is the SeeFlow signal color and the ring is part of that signal.</li>
+          <li>Don't use modals for confirmations under 3 words long. Inline confirm with a destructive button is fine.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- ──────────────────── GLYPHS ──────────────────── -->
   <section>
     <div class="section-head">
       <h2>Glyphs</h2>
-      <span class="num">05 / iconography</span>
+      <span class="num">06 / iconography</span>
     </div>
 
     <div class="glyph-grid">
@@ -940,7 +1868,7 @@
   <section>
     <div class="section-head">
       <h2>Motion</h2>
-      <span class="num">06 / timing</span>
+      <span class="num">07 / timing</span>
     </div>
 
     <h3 style="margin: 0 0 16px; font-size: 14px; font-family: var(--font-mono); color: var(--text-dim); letter-spacing: 0.1em; text-transform: uppercase;">Easing curves</h3>
@@ -1009,7 +1937,7 @@
   <section>
     <div class="section-head">
       <h2>Voice</h2>
-      <span class="num">07 / copy</span>
+      <span class="num">08 / copy</span>
     </div>
 
     <div class="voice">
@@ -1038,7 +1966,7 @@
   <section>
     <div class="section-head">
       <h2>Principles</h2>
-      <span class="num">08 / north stars</span>
+      <span class="num">09 / north stars</span>
     </div>
     <div class="grid grid-2" style="gap: 24px;">
       <div class="token-card" style="padding: 28px;">
