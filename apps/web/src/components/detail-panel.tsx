@@ -102,7 +102,7 @@ export function DetailPanel({
     >
       <SheetContent
         side="right"
-        className="overflow-y-auto bg-card/94 backdrop-blur-sm border-border sm:!w-[var(--detail-panel-w)] sm:!max-w-[var(--detail-panel-w)]"
+        className="overflow-y-auto bg-card/94 backdrop-blur-[14px] border-border sm:!w-[var(--detail-panel-w)] sm:!max-w-[var(--detail-panel-w)]"
         style={widthStyle}
         data-testid="detail-panel"
         onEscapeKeyDown={(e) => {

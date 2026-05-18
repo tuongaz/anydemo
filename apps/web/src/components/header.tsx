@@ -34,7 +34,7 @@ export function Header({
           padding: 0,
         }}
       >
-        <Workflow size={20} color="#34d399" strokeWidth={2} />
+        <Workflow size={20} strokeWidth={2} className="text-emerald-400" />
         SeeFlow
       </button>
       <div className="flex items-center gap-3">
