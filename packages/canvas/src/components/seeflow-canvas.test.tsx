@@ -10,6 +10,7 @@ import { ServerShape } from '../nodes/shapes/server.tsx';
 import { UserShape } from '../nodes/shapes/user.tsx';
 import type { Connector, DemoNode } from '../types.ts';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
+import { DetailPanel } from './detail-panel.tsx';
 import {
   type ClipboardShortcutEventLike,
   SeeflowCanvas,
@@ -2326,6 +2327,144 @@ describe('SeeflowCanvas', () => {
       const a = rfNodes.find((n) => n.id === 'a');
       expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
       expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBeUndefined();
+    });
+  });
+
+  describe('US-007: built-in DetailPanel sidebar', () => {
+    // Selection-driven sidebar: SeeflowCanvas internalizes <DetailPanel> and
+    // derives its target from selectedNodeIds[0] / selectedConnectorIds[0].
+    // The hook-shim tree captures <DetailPanel ...> as a placeholder element
+    // (its body isn't executed) so we can assert its forwarded props directly.
+
+    function findDetailPanel(tree: unknown) {
+      return findElement(tree, (el) => el.type === DetailPanel);
+    }
+
+    it('renders a DetailPanel sibling inside the canvas wrapper by default', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+    });
+
+    it('passes the first selected node into DetailPanel.node', () => {
+      const a = makeShapeNode('a');
+      const b = makeShapeNode('b');
+      const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a'] });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { node?: DemoNode }).node).toBe(a);
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('passes the first selected connector into DetailPanel.connector', () => {
+      const conn: Connector = {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        sourceHandleAutoPicked: true,
+        targetHandleAutoPicked: true,
+        kind: 'default',
+      } as Connector;
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        connectors: [conn],
+        selectedConnectorIds: ['c1'],
+      });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { connector?: Connector }).connector).toBe(conn);
+      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+    });
+
+    it('panel.node and panel.connector are null when nothing is selected', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const panel = findDetailPanel(tree);
+      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('forwards adapter, statusReport, demoId, and field-edit callbacks', () => {
+      const onNameChange = () => {};
+      const onDescriptionChange = () => {};
+      const onDetailChange = () => {};
+      const statusReport = { state: 'ok' as const, summary: 's', ts: 7 };
+      const tree = callSeeflowCanvas({
+        projectId: 'proj-123',
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        statusReport,
+        onNameChange,
+        onDescriptionChange,
+        onDetailChange,
+      });
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      const props = panel?.props as {
+        adapter?: CanvasAdapter | null;
+        demoId?: string | null;
+        statusReport?: typeof statusReport;
+        onNameChange?: typeof onNameChange;
+        onDescriptionChange?: typeof onDescriptionChange;
+        onDetailChange?: typeof onDetailChange;
+      };
+      expect(props.adapter).toBe(noopAdapter);
+      expect(props.demoId).toBe('proj-123');
+      expect(props.statusReport).toBe(statusReport);
+      expect(props.onNameChange).toBe(onNameChange);
+      expect(props.onDescriptionChange).toBe(onDescriptionChange);
+      expect(props.onDetailChange).toBe(onDetailChange);
+    });
+
+    it('disableSidebar={true} suppresses the DetailPanel entirely', () => {
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        disableSidebar: true,
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it("mode='view' suppresses the DetailPanel via flags.showDetailPanel=false", () => {
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it('showDetailPanel={true} override surfaces the panel even in view mode', () => {
+      // The CanvasFeatureOverrides escape hatch — a view-mode embedder that
+      // still wants the built-in sidebar can lift the gate without flipping
+      // the mode (would also opt back into adapter-driven mutations).
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        showDetailPanel: true,
+      });
+      expect(findDetailPanel(tree)).not.toBeNull();
+    });
+
+    it('onClose clears the selection via onSelectionChange([], [])', () => {
+      // The Sheet's X button / Radix-driven dismissal routes through onClose;
+      // because the panel is selection-driven, closing it means clearing both
+      // selection arrays so the next render's panel.node/connector go null.
+      const calls: Array<[string[], string[]]> = [];
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+        onSelectionChange: (nodeIds, connectorIds) => {
+          calls.push([nodeIds, connectorIds]);
+        },
+      });
+      const panel = findDetailPanel(tree);
+      const onClose = (panel?.props as { onClose?: () => void }).onClose;
+      expect(typeof onClose).toBe('function');
+      onClose?.();
+      expect(calls).toEqual([[[], []]]);
     });
   });
 });

@@ -117,7 +117,7 @@
         "Verify in browser using dev-browser skill: bun run dev, open a demo, sidebar still opens on selection, resize handle still works, edits still persist to the backend"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

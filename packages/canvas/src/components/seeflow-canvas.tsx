@@ -62,7 +62,7 @@ import {
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import { StateNode } from '../nodes/state-node.tsx';
 import type { NodeStatus } from '../nodes/status-pill.tsx';
-import type { Connector, DemoNode, EdgePin, ShapeKind } from '../types.ts';
+import type { Connector, DemoNode, EdgePin, ShapeKind, StatusReport } from '../types.ts';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -73,6 +73,7 @@ import {
 } from '../ui/context-menu.tsx';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
+import { DetailPanel } from './detail-panel.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -549,6 +550,40 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   activeShape: ShapeKind | null;
   onSelectShape: (shape: ShapeKind | null) => void;
+  /**
+   * US-007: hide the built-in DetailPanel sidebar entirely. View-mode embeds
+   * and hosts that supply their own inspector set this to true. When false (or
+   * unset) the canvas renders {@link DetailPanel} as part of its own layout,
+   * driven by `selectedNodeIds[0]` / `selectedConnectorIds[0]`.
+   */
+  disableSidebar?: boolean;
+  /**
+   * US-007: latest StatusReport for the currently inspected node, forwarded to
+   * the built-in DetailPanel's Status section. The host owns the per-node
+   * status map and slices it down to the single selected entry. Undefined when
+   * the selected node has no statusAction or hasn't emitted yet.
+   */
+  statusReport?: StatusReport & { ts: number };
+  /**
+   * US-007: persist a new node name from a DetailPanel edit. Mirrors
+   * {@link onNodeNameChange} (the inline-on-canvas edit handler) — both share
+   * the same coalesce key in the parent so a typing session across the canvas
+   * and sidebar produces a single undo entry. Absent → the panel's name field
+   * renders read-only.
+   */
+  onNameChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-007: persist a new node description from a DetailPanel edit. Mirrors
+   * {@link onNodeDescriptionChange}. Absent → the panel's description field
+   * renders read-only.
+   */
+  onDescriptionChange?: (nodeId: string, value: string) => void;
+  /**
+   * US-007: persist a new node detail (long-form notes) from a DetailPanel
+   * edit. No on-canvas equivalent today — the detail field is sidebar-only.
+   * Absent → the panel's detail field renders read-only.
+   */
+  onDetailChange?: (nodeId: string, value: string) => void;
 }
 
 /**
@@ -1345,10 +1380,12 @@ const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
 export function SeeflowCanvas(props: SeeflowCanvasProps) {
   const {
     mode,
-    // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —
-    // every mutation site is still routed through callbacks the parent supplies.
-    // US-026/27 begin reading adapter.* directly from inside the component.
-    adapter: _adapter,
+    // US-007: `adapter` is forwarded to the built-in DetailPanel so its
+    // htmlNode file-action buttons (Open in editor / Reveal in OS file
+    // manager) route through `adapter.openFile` / `adapter.revealFile`. Every
+    // other mutation site still goes through the explicit callback props the
+    // parent supplies.
+    adapter,
     projectId,
     nodes,
     connectors,
@@ -1405,6 +1442,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onToggleNodeLock,
     activeShape,
     onSelectShape,
+    disableSidebar,
+    statusReport,
+    onNameChange,
+    onDescriptionChange,
+    onDetailChange,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -3319,6 +3361,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
         : 'grab'
       : undefined;
 
+  // US-007: derive the built-in sidebar's target entity from the first selected
+  // node / connector. Reads from the canvas's existing `nodes` / `connectors`
+  // props — the parent applies its pending overrides upstream so the lookup
+  // here already sees the optimistic edits. Multi-select keeps the first id as
+  // the inspected target; the rest still light up the selection ring + drive
+  // the style strip via `selectedNodes` / `selectedConnectors`.
+  const sidebarNodeId = selectedNodeIds[0];
+  const sidebarConnectorId = selectedConnectorIds[0];
+  const sidebarNode = sidebarNodeId ? (nodes.find((n) => n.id === sidebarNodeId) ?? null) : null;
+  const sidebarConnector = sidebarConnectorId
+    ? (connectors.find((c) => c.id === sidebarConnectorId) ?? null)
+    : null;
+  // The DetailPanel only reads `demoId` to gate htmlNode file-action visibility;
+  // CanvasAdapter doesn't expose its bound demoId on the type, so we route via
+  // the existing `projectId` prop (which the studio already passes — identical
+  // value, no new wiring at the host).
+  const sidebarDemoId = projectId ?? null;
+  const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
+
   return (
     <div
       data-testid="seeflow-canvas"
@@ -3906,6 +3967,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             </div>
           </PopoverContent>
         </Popover>
+      ) : null}
+      {shouldRenderSidebar ? (
+        <DetailPanel
+          demoId={sidebarDemoId}
+          node={sidebarNode}
+          connector={sidebarConnector}
+          adapter={adapter ?? null}
+          statusReport={statusReport}
+          onNameChange={onNameChange}
+          onDescriptionChange={onDescriptionChange}
+          onDetailChange={onDetailChange}
+          onClose={() => {
+            // US-007: the panel is selection-driven, so closing it means
+            // clearing the selection. Pane-click already routes through xyflow
+            // and fires the same callback; this path covers the Sheet's X
+            // button and any Radix-triggered dismissal.
+            onSelectionChangeRef.current?.([], []);
+          }}
+        />
       ) : null}
     </div>
   );
