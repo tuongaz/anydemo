@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { seeflowHome } from './paths.ts';
 
 export interface StudioConfig {
   port: number;
@@ -10,11 +10,11 @@ export interface StudioConfig {
 export const DEFAULT_CONFIG: StudioConfig = { port: 4321, host: '0.0.0.0' };
 
 export function defaultConfigPath(): string {
-  return join(homedir(), '.seeflow', 'config.json');
+  return join(seeflowHome(), 'config.json');
 }
 
 export function defaultPidPath(): string {
-  return join(homedir(), '.seeflow', 'seeflow.pid');
+  return join(seeflowHome(), 'seeflow.pid');
 }
 
 export function readConfig(path = defaultConfigPath()): StudioConfig {

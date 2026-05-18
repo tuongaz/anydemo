@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
+import { seeflowHome } from './paths.ts';
 
 export interface DemoEntry {
   id: string;
@@ -31,7 +31,7 @@ export interface Registry {
 }
 
 export function defaultRegistryPath(): string {
-  return join(homedir(), '.seeflow', 'registry.json');
+  return join(seeflowHome(), 'registry.json');
 }
 
 export function slugify(name: string): string {

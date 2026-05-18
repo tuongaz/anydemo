@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { cpSync, existsSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { isAbsolute, join, resolve } from 'node:path';
 import { createEventBus } from './events.ts';
+import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
@@ -139,7 +139,7 @@ async function seedExamples(registry: Registry) {
 }
 
 async function seedExample(registry: Registry, exampleName: string) {
-  const destDir = join(homedir(), '.seeflow', exampleName);
+  const destDir = join(seeflowHome(), exampleName);
   const demoPath = '.seeflow/seeflow.json';
 
   // Always sync from source so that schema changes and example updates are

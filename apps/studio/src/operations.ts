@@ -8,9 +8,9 @@
 // Future stories add patch_node + connector helpers alongside these.
 
 import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { homedir } from 'node:os';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
+import { seeflowHome } from './paths.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
@@ -171,7 +171,11 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
 export interface OperationsDeps {
   registry: Registry;
   watcher?: DemoWatcher;
-  /** Override the base directory for new projects. Defaults to ~/.seeflow. Tests inject a tmp dir. */
+  /**
+   * Override the base directory for new projects. Defaults to seeflowHome()
+   * — `${SEEFLOW_WORKSPACE}/.seeflow` inside Docker, `~/.seeflow` locally.
+   * Tests inject a tmp dir.
+   */
   projectBaseDir?: string;
 }
 
@@ -621,7 +625,7 @@ export async function createProjectImpl(
 ): Promise<CreateProjectOutcome> {
   const { registry, watcher } = deps;
   const { name } = body;
-  const baseDir = deps.projectBaseDir ?? join(homedir(), '.seeflow');
+  const baseDir = deps.projectBaseDir ?? seeflowHome();
   const folderPath = join(baseDir, slugify(name));
 
   const demoFullPath = join(folderPath, DEFAULT_DEMO_RELATIVE_PATH);

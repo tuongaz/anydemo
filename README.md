@@ -60,7 +60,7 @@ docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
 # then open http://localhost:4321
 ```
 
-The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present.
+The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present. All flows you create from the UI, plus the studio's registry, are written under `/workspace/.seeflow/` so they survive `docker run --rm` and restart with the next `docker run`.
 
 ### Configuration
 
