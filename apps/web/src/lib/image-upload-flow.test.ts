@@ -6,7 +6,7 @@ import {
   buildUploadingOverride,
   performImageDropUpload,
 } from '@/lib/image-upload-flow';
-import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
+import { NEW_NODE_BORDER_WIDTH } from '@seeflow/canvas';
 
 interface OverrideEvent {
   id: string;

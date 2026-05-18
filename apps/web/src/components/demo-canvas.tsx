@@ -9,7 +9,6 @@ import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
 import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { NEW_NODE_BORDER_WIDTH } from '@/lib/node-defaults';
 import {
   type ConnectorStylePatch,
   ContextMenu,
@@ -24,6 +23,7 @@ import {
   ILLUSTRATIVE_SHAPE_RENDERERS,
   IconNode,
   ImageNode,
+  NEW_NODE_BORDER_WIDTH,
   type NodeStatus,
   type NodeStylePatch,
   PlayNode,

@@ -32,21 +32,24 @@ import {
 import { buildPastePayload } from '@/lib/clipboard';
 import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
-import { getLastUsedStyle, rememberConnectorStyle, rememberNodeStyle } from '@/lib/last-used-style';
-import { buildNewShapeData } from '@/lib/node-defaults';
 import {
   type AutoLayoutNode,
   type CommandId,
   type ConnectorStylePatch,
+  DEFAULT_STORAGE_PREFIX,
   ICON_DEFAULT_SIZE,
   type NodeStylePatch,
   SHAPE_DEFAULT_SIZE,
   applyLayout,
   applyNudge,
+  buildNewShapeData,
   computeIconInsertPosition,
+  getLastUsedStyle,
   getNudgeDelta,
   getZoomChord,
   pushRecent,
+  rememberConnectorStyle,
+  rememberNodeStyle,
   resolveClipboardChord,
   resolveToolShortcut,
 } from '@seeflow/canvas';
@@ -645,7 +648,7 @@ export function DemoView({
       // Remember the user's pick BEFORE the PATCH dispatches — last-used tracks
       // intent (what they picked), not server-confirmed state. A later network
       // failure does not roll the bucket back.
-      rememberNodeStyle(patch);
+      rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
       const node = demoNodes?.find((n) => n.id === nodeId);
       // Snapshot only the keys the caller is touching — we want undo to
       // restore those exact fields and leave anything else alone.
@@ -692,7 +695,7 @@ export function DemoView({
       if (nodeIds.length === 0) return;
       // Remember the user's pick on the batch path too — the single-node
       // `onStyleNode` does the same.
-      rememberNodeStyle(patch);
+      rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
       const targets = nodeIds
         .map((id) => {
           const node = demoNodes?.find((n) => n.id === id);
@@ -805,7 +808,7 @@ export function DemoView({
   const onStyleConnector = useCallback(
     (connId: string, patch: ConnectorStylePatch) => {
       if (!demoId) return;
-      rememberConnectorStyle(patch);
+      rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, patch);
       const conn = demoConnectors?.find((c) => c.id === connId);
       // Snapshot only the keys the caller is touching so undo restores those
       // exact fields and leaves anything else alone.
@@ -1370,7 +1373,7 @@ export function DemoView({
       // on disk that lack these fields keep their renderer-side fallbacks.
       // Last-used style overlays on top of those factory defaults so a fresh
       // shape mirrors the user's most recent style choice.
-      const data = buildNewShapeData(shape, dims, getLastUsedStyle().node);
+      const data = buildNewShapeData(shape, dims, getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node);
       const payload = {
         id,
         type: 'shapeNode' as const,
@@ -1571,7 +1574,7 @@ export function DemoView({
       setEditError(null);
       markMutation();
       void performImageDropUpload(
-        { ...args, demoId, lastUsed: getLastUsedStyle().node },
+        { ...args, demoId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
           upload: uploadImageFile,
           createNode,
@@ -1743,7 +1746,7 @@ export function DemoView({
       // point the user aimed at (user rule: "cursor over node → closest
       // perimeter point").
       const targetPin = options?.targetPin;
-      const lastUsedConnector = getLastUsedStyle().connector;
+      const lastUsedConnector = getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector;
       const optimistic: DefaultConnector = {
         id,
         source,
@@ -1816,7 +1819,7 @@ export function DemoView({
       // skips border) — same path the toolbar drag-create uses. Last-used
       // overlay so the dropped node + the connector both carry the user's
       // most recent style.
-      const lastUsed = getLastUsedStyle();
+      const lastUsed = getLastUsedStyle(DEFAULT_STORAGE_PREFIX);
       const shapeData = buildNewShapeData(shape, dims, lastUsed.node);
       const nodePayload = {
         id: newNodeId,

@@ -4,7 +4,7 @@ import {
   NEW_NODE_FONT_SIZE,
   buildNewImageData,
   buildNewShapeData,
-} from './node-defaults';
+} from './node-defaults.ts';
 
 describe('buildNewShapeData', () => {
   it('rectangle gets borderSize=1 and fontSize=12', () => {

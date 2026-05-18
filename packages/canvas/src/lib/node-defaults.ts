@@ -22,8 +22,8 @@
  * reproduces today's behavior exactly. Property irrelevant to a given kind
  * (e.g. `cornerRadius` on ellipse, `borderSize` on text) is silently dropped.
  */
-import type { ShapeKind } from '@/lib/api';
-import type { NodeStylePatch } from '@seeflow/canvas';
+import type { NodeStylePatch } from '../components/style-strip.tsx';
+import type { ShapeKind } from '../types.ts';
 
 /** Default border thickness for new nodes. */
 export const NEW_NODE_BORDER_WIDTH = 3;
