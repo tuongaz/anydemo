@@ -1,5 +1,10 @@
-import type { CreateNodeBody, DemoNode, ImageNodeData } from '@/lib/api';
-import { type ImageDataDefaults, type NodeStylePatch, buildNewImageData } from '@seeflow/canvas';
+import type { DemoNode, ImageNodeData } from '@/lib/api';
+import {
+  type ImageDataDefaults,
+  type NodeCreateInput,
+  type NodeStylePatch,
+  buildNewImageData,
+} from '@seeflow/canvas';
 
 /**
  * US-008: pure orchestration for the OS-image-drop upload flow. Sits between
@@ -42,7 +47,7 @@ export interface PerformImageDropUploadArgs {
 
 export interface PerformImageDropUploadDeps {
   upload: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
-  createNode: (demoId: string, body: CreateNodeBody) => Promise<{ id: string }>;
+  createNode: (demoId: string, body: NodeCreateInput) => Promise<{ id: string }>;
   deleteNode: (demoId: string, nodeId: string) => Promise<{ ok: true }>;
   setOverride: (id: string, partial: Partial<DemoNode>) => void;
   /** Push the create-undo entry on success. Absent → undo not wired. */
@@ -152,7 +157,7 @@ export const performImageDropUpload = async (
   //    server echo lands) and persist via createNode.
   deps.setOverride(nodeId, buildUploadedOverride({ path, dims, originalFilename, lastUsed }));
   const data = buildUploadedImageData({ path, dims, originalFilename, lastUsed });
-  const payload: CreateNodeBody = {
+  const payload: NodeCreateInput = {
     id: nodeId,
     type: 'imageNode',
     position,

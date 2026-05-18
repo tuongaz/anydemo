@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import type { CreateNodeBody, DemoNode } from '@/lib/api';
+import type { DemoNode } from '@/lib/api';
 import {
   buildFailedOverride,
   buildUploadedOverride,
   buildUploadingOverride,
   performImageDropUpload,
 } from '@/lib/image-upload-flow';
-import { NEW_NODE_BORDER_WIDTH } from '@seeflow/canvas';
+import { NEW_NODE_BORDER_WIDTH, type NodeCreateInput } from '@seeflow/canvas';
 
 interface OverrideEvent {
   id: string;
@@ -18,11 +18,11 @@ const stubFile = (name = 'pic.png', type = 'image/png'): File =>
 
 const buildDeps = (overrides?: {
   upload?: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
-  createNode?: (demoId: string, body: CreateNodeBody) => Promise<{ id: string }>;
+  createNode?: (demoId: string, body: NodeCreateInput) => Promise<{ id: string }>;
 }) => {
   const overrideEvents: OverrideEvent[] = [];
   const uploadCalls: { projectId: string; file: File; filename: string }[] = [];
-  const createCalls: { demoId: string; body: CreateNodeBody }[] = [];
+  const createCalls: { demoId: string; body: NodeCreateInput }[] = [];
   const deleteCalls: { demoId: string; nodeId: string }[] = [];
   const undoCalls: { do: () => Promise<void>; undo: () => Promise<void> }[] = [];
   const retryRemembered: { nodeId: string; args: unknown }[] = [];
@@ -37,7 +37,7 @@ const buildDeps = (overrides?: {
       }),
     createNode:
       overrides?.createNode ??
-      (async (demoId: string, body: CreateNodeBody) => {
+      (async (demoId: string, body: NodeCreateInput) => {
         createCalls.push({ demoId, body });
         return { id: body.id ?? 'server-generated' };
       }),

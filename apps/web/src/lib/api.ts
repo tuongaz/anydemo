@@ -1,57 +1,31 @@
 // Shared canvas types — single source of truth lives in @seeflow/canvas.
 // App-specific extensions (transient upload state, runtime API types) are
 // defined below and re-exported alongside the shared types.
-import type {
-  ImageNodeData as BaseImageNodeData,
-  ColorToken,
-  Connector,
-  ConnectorBase,
-  ConnectorDirection,
-  ConnectorPath,
-  ConnectorStyle,
-  DefaultConnector,
-  Demo,
-  DemoNode,
-  EdgePin,
-  EdgePinSide,
-  EventConnector,
-  HtmlNodeData,
-  HttpAction,
-  HttpConnector,
-  IconNodeData,
-  NodeData,
-  NodeDescription,
-  NodeVisual,
-  QueueConnector,
-  ShapeKind,
-  ShapeNodeData,
-  StatusReport,
-  StatusReportState,
-} from '@seeflow/canvas';
+import type { ImageNodeData as BaseImageNodeData, Demo } from '@seeflow/canvas';
 
 export type {
   ColorToken,
-  NodeVisual,
-  NodeDescription,
-  NodeData,
-  HttpAction,
-  ShapeKind,
-  ShapeNodeData,
-  IconNodeData,
-  HtmlNodeData,
-  DemoNode,
-  ConnectorStyle,
+  Connector,
+  ConnectorBase,
   ConnectorDirection,
   ConnectorPath,
-  EdgePinSide,
-  EdgePin,
-  ConnectorBase,
-  HttpConnector,
-  EventConnector,
-  QueueConnector,
+  ConnectorStyle,
   DefaultConnector,
-  Connector,
   Demo,
+  DemoNode,
+  EdgePin,
+  EdgePinSide,
+  EventConnector,
+  HtmlNodeData,
+  HttpAction,
+  HttpConnector,
+  IconNodeData,
+  NodeData,
+  NodeDescription,
+  NodeVisual,
+  QueueConnector,
+  ShapeKind,
+  ShapeNodeData,
   StatusReport,
   StatusReportState,
 } from '@seeflow/canvas';
@@ -65,14 +39,10 @@ export interface DemoSummary {
   valid: boolean;
 }
 
-// `StatusReportState` (the literal union, US-012) and `StatusReport` (the full
-// runtime payload, US-013) both live in @seeflow/canvas/types.ts; re-exported
-// above so apps/web's existing import paths still work. `RunResult` will move
-// next in US-026 alongside the use-node-runs hook.
-
 // US-008: extends the shared ImageNodeData with transient upload-state flags.
 // These fields are never serialized to disk — they live only in the in-memory
-// nodeOverrides map and are cleared before createNode is called.
+// nodeOverrides map and are cleared before the canvas adapter's createNode is
+// called.
 export interface ImageNodeData extends BaseImageNodeData {
   _uploading?: boolean;
   _uploadError?: string;
@@ -106,299 +76,6 @@ export interface PlayResult {
   body?: unknown;
   error?: string;
 }
-
-export interface UpdatePositionResult {
-  ok: boolean;
-  position: { x: number; y: number };
-}
-
-export const updateNodePosition = async (
-  demoId: string,
-  nodeId: string,
-  position: { x: number; y: number },
-): Promise<UpdatePositionResult> => {
-  const res = await fetch(`/api/demos/${demoId}/nodes/${nodeId}/position`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(position),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `PATCH /api/demos/${demoId}/nodes/${nodeId}/position → ${res.status}`,
-    );
-  }
-  return (await res.json()) as UpdatePositionResult;
-};
-
-export interface UpdateNodeBody {
-  position?: { x: number; y: number };
-  name?: string;
-  borderColor?: ColorToken;
-  backgroundColor?: ColorToken;
-  borderSize?: number;
-  /** Image node border-thickness (1–8). Distinct from shape nodes' `borderSize`. */
-  borderWidth?: number;
-  borderStyle?: 'solid' | 'dashed' | 'dotted';
-  fontSize?: number;
-  textColor?: ColorToken;
-  cornerRadius?: number;
-  width?: number;
-  height?: number;
-  shape?: ShapeKind;
-  /** iconNode-only: stroke color token. Lands at data.color. */
-  color?: ColorToken;
-  /** iconNode-only: glyph stroke width in [0.5, 4]. Lands at data.strokeWidth. */
-  strokeWidth?: number;
-  /** iconNode-only: accessible alt text. Lands at data.alt. */
-  alt?: string;
-  /** iconNode-only: kebab-case Lucide icon name. Lands at data.icon. */
-  icon?: string;
-  /** US-019: lock state. true freezes the node; false unlocks. */
-  locked?: boolean;
-  /** Short body text rendered on the canvas and as light-bold in the sidebar.
-   * Lands at data.description. Empty string clears the field on disk. */
-  description?: string;
-  /** Long-form sidebar-only body text. Lands at data.detail. Empty string
-   * clears the field on disk. */
-  detail?: string;
-}
-
-export const updateNode = async (
-  demoId: string,
-  nodeId: string,
-  patch: UpdateNodeBody,
-): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${demoId}/nodes/${nodeId}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `PATCH /api/demos/${demoId}/nodes/${nodeId} → ${res.status}`,
-    );
-  }
-  return (await res.json()) as { ok: true };
-};
-
-export interface UpdateConnectorBody {
-  label?: string;
-  style?: ConnectorStyle;
-  color?: ColorToken;
-  direction?: ConnectorDirection;
-  borderSize?: number;
-  path?: ConnectorPath;
-  /** US-018: per-connector label font size in px. */
-  fontSize?: number;
-  kind?: Connector['kind'];
-  eventName?: string;
-  queueName?: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  url?: string;
-  /** Reconnect: retarget this edge to a different source node. */
-  source?: string;
-  /** Reconnect: retarget this edge to a different target node. */
-  target?: string;
-  /**
-   * Reconnect: pin the source endpoint to a specific source handle. `null`
-   * (US-025) clears the field on disk — used by reconnect-to-body to drop a
-   * previously-pinned handle id when the endpoint flips back to floating.
-   */
-  sourceHandle?: string | null;
-  /** Reconnect: pin the target endpoint to a specific target handle. `null` clears. */
-  targetHandle?: string | null;
-  /**
-   * US-025: `true`/absent means "render floating" against the line through
-   * the two node centers; `false` means "render pinned to the stored handle
-   * id". (Pre-US-025: `true` meant "rerouter-managed".)
-   */
-  sourceHandleAutoPicked?: boolean;
-  /** US-025: same as sourceHandleAutoPicked but for the target endpoint. */
-  targetHandleAutoPicked?: boolean;
-  /**
-   * US-007: pin the source endpoint at `(side, t)` along the source node's
-   * perimeter. `null` (wire-format) clears any stored pin so the endpoint
-   * reverts to floating/handle-pinned behavior; `undefined` leaves the field
-   * untouched.
-   */
-  sourcePin?: EdgePin | null;
-  /** US-007: same as sourcePin but for the target endpoint. */
-  targetPin?: EdgePin | null;
-}
-
-export const updateConnector = async (
-  demoId: string,
-  connId: string,
-  patch: UpdateConnectorBody,
-): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${demoId}/connectors/${connId}`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(patch),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `PATCH /api/demos/${demoId}/connectors/${connId} → ${res.status}`,
-    );
-  }
-  return (await res.json()) as { ok: true };
-};
-
-export interface CreateNodeBody {
-  id?: string;
-  type: 'playNode' | 'stateNode' | 'shapeNode' | 'imageNode' | 'iconNode' | 'htmlNode';
-  position: { x: number; y: number };
-  data: Record<string, unknown>;
-}
-
-export const createNode = async (
-  demoId: string,
-  node: CreateNodeBody,
-): Promise<{ ok: true; id: string; node: Record<string, unknown> }> => {
-  const res = await fetch(`/api/demos/${demoId}/nodes`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(node),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(errorBody?.error ?? `POST /api/demos/${demoId}/nodes → ${res.status}`);
-  }
-  return (await res.json()) as { ok: true; id: string; node: Record<string, unknown> };
-};
-
-export interface CreateConnectorBody {
-  id?: string;
-  source: string;
-  target: string;
-  sourceHandle?: string;
-  targetHandle?: string;
-  sourceHandleAutoPicked?: boolean;
-  targetHandleAutoPicked?: boolean;
-  // Per-endpoint perimeter pin. When set, the connector's endpoint is
-  // anchored at `(side, t)` on the connected node's bbox. Used when a
-  // create-from-body-drop fallback projects the cursor onto the target
-  // node's perimeter (user rule: "cursor over node → closest perimeter
-  // point and use that").
-  sourcePin?: EdgePin;
-  targetPin?: EdgePin;
-  kind?: Connector['kind'];
-  label?: string;
-  style?: ConnectorStyle;
-  color?: ColorToken;
-  direction?: ConnectorDirection;
-  eventName?: string;
-  queueName?: string;
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  url?: string;
-}
-
-export const createConnector = async (
-  demoId: string,
-  body: CreateConnectorBody,
-): Promise<{ ok: true; id: string }> => {
-  const res = await fetch(`/api/demos/${demoId}/connectors`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(errorBody?.error ?? `POST /api/demos/${demoId}/connectors → ${res.status}`);
-  }
-  return (await res.json()) as { ok: true; id: string };
-};
-
-export type ReorderOp =
-  | { op: 'forward' }
-  | { op: 'backward' }
-  | { op: 'toFront' }
-  | { op: 'toBack' }
-  | { op: 'toIndex'; index: number };
-
-export const reorderNode = async (
-  demoId: string,
-  nodeId: string,
-  body: ReorderOp,
-): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${demoId}/nodes/${nodeId}/order`, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `PATCH /api/demos/${demoId}/nodes/${nodeId}/order → ${res.status}`,
-    );
-  }
-  return (await res.json()) as { ok: true };
-};
-
-export const deleteNode = async (demoId: string, nodeId: string): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${demoId}/nodes/${nodeId}`, { method: 'DELETE' });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `DELETE /api/demos/${demoId}/nodes/${nodeId} → ${res.status}`,
-    );
-  }
-  return (await res.json()) as { ok: true };
-};
-
-export const deleteConnector = async (demoId: string, connId: string): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${demoId}/connectors/${connId}`, { method: 'DELETE' });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `DELETE /api/demos/${demoId}/connectors/${connId} → ${res.status}`,
-    );
-  }
-  return (await res.json()) as { ok: true };
-};
 
 export interface CreateProjectBody {
   name: string;
@@ -464,10 +141,6 @@ export const restartDemo = async (demoId: string): Promise<RestartDemoResult> =>
   }
   return (await res.json()) as RestartDemoResult;
 };
-
-export interface UploadImageResult {
-  path: string;
-}
 
 /**
  * US-018: response shape for the two project-file shell-out endpoints
@@ -540,38 +213,6 @@ export const revealProjectFile = async (
   projectId: string,
   path: string,
 ): Promise<FileActionResult> => requestFileAction(projectId, 'reveal', path);
-
-/**
- * US-008: POST a single image File to the project's upload endpoint (US-007).
- * `filename` overrides the File's own `.name` for the server-side slugging.
- * The browser sets the multipart boundary automatically — never pass an
- * explicit `content-type` header.
- */
-export const uploadImageFile = async (
-  projectId: string,
-  file: File,
-  filename: string,
-): Promise<UploadImageResult> => {
-  const form = new FormData();
-  form.append('file', file);
-  form.append('filename', filename);
-  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files/upload`, {
-    method: 'POST',
-    body: form,
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(
-      errorBody?.error ?? `POST /api/projects/${projectId}/files/upload → ${res.status}`,
-    );
-  }
-  return (await res.json()) as UploadImageResult;
-};
 
 export const playNode = async (demoId: string, nodeId: string): Promise<PlayResult> => {
   const res = await fetch(`/api/demos/${demoId}/play/${nodeId}`, {
