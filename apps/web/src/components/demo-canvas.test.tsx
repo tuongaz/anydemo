@@ -9,8 +9,8 @@ import {
   eventTargetIsOtherNode,
   handleClipboardShortcut,
 } from '@/components/demo-canvas';
-import type { DemoNode } from '@/lib/api';
-import type { CanvasAdapter } from '@/lib/canvas-adapter';
+import type { Connector, DemoNode } from '@/lib/api';
+import type { CanvasAdapter, CanvasRuntime } from '@/lib/canvas-adapter';
 import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
   CanvasToolbar,
@@ -130,13 +130,28 @@ const noopAdapter: CanvasAdapter = new Proxy({} as CanvasAdapter, {
   },
 });
 
+// US-026: legacy convenience for tests written before the per-stream props
+// were merged into a single `runtime` prop. Tests can keep passing
+// `nodeOverrides` / `connectorOverrides` directly; the wrapper lifts them into
+// `runtime.pendingOverrides` so the assertions reach the same code paths.
+type LegacyOverrides = Partial<DemoCanvasProps> & {
+  nodeOverrides?: Record<string, Partial<DemoNode>>;
+  connectorOverrides?: Record<string, Partial<Connector>>;
+};
+
 function callDemoCanvas(
-  overrides: Partial<DemoCanvasProps> = {},
+  overrides: LegacyOverrides = {},
   hookOptions: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
   } = {},
 ): unknown {
+  const { nodeOverrides, connectorOverrides, runtime, ...rest } = overrides;
+  const builtRuntime: CanvasRuntime | undefined =
+    runtime ??
+    (nodeOverrides || connectorOverrides
+      ? { pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides } }
+      : undefined);
   const props: DemoCanvasProps = {
     adapter: noopAdapter,
     nodes: [],
@@ -149,7 +164,8 @@ function callDemoCanvas(
     // behavior they did when drawShape was internal state.
     activeShape: null,
     onSelectShape: () => {},
-    ...overrides,
+    ...rest,
+    runtime: builtRuntime,
   };
   return renderWithHooks(
     () => (DemoCanvas as unknown as (p: DemoCanvasProps) => unknown)(props),
@@ -1210,7 +1226,7 @@ describe('DemoCanvas', () => {
       return node;
     }
 
-    function findOverlay(props: Partial<DemoCanvasProps>): {
+    function findOverlay(props: LegacyOverrides): {
       tree: unknown;
       overlay: ReturnType<typeof findElement>;
     } {

@@ -1,8 +1,5 @@
-import type { NodeRuns } from '@/hooks/use-node-runs';
-import type { NodeStatuses } from '@/hooks/use-node-statuses';
-import type { OverrideMap } from '@/hooks/use-pending-overrides';
 import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
-import type { CanvasAdapter } from '@/lib/canvas-adapter';
+import type { CanvasAdapter, CanvasRuntime } from '@/lib/canvas-adapter';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import {
   CanvasToolbar,
@@ -117,29 +114,18 @@ export interface DemoCanvasProps {
    * Shift/Cmd-click toggle). The parent mirrors the arrays into its own state.
    */
   onSelectionChange?: (nodeIds: string[], connectorIds: string[]) => void;
-  /** Per-node run state from SSE events. */
-  runs?: NodeRuns;
   /**
-   * US-007: latest StatusReport per node, driven by `node:status` SSE events.
-   * Injected into each play/state node's `data.statusReport` so the renderer
-   * can show a colored dot + ellipsized summary below the header. Empty / no
-   * entry → no badge row (no layout shift vs. legacy renders).
+   * US-026: read-only runtime state — per-node SSE `runs`, latest `statuses`,
+   * and optimistic `pendingOverrides.{nodes,connectors}` that haven't been
+   * reconciled by the server yet. Replaces the per-stream props (`runs`,
+   * `statusByNode`, `nodeOverrides`, `connectorOverrides`) so demo-canvas
+   * has a single seam for runtime data. Every field is optional; absent →
+   * the canvas renders without dynamic chrome (no status badges / overlay
+   * indicators), matching the view-mode default.
    */
-  statusByNode?: NodeStatuses;
+  runtime?: CanvasRuntime;
   /** Click handler for a PlayNode's Play button. */
   onPlayNode?: (nodeId: string) => void;
-  /**
-   * Optimistic per-node overrides. When present, they shallow-merge over the
-   * server `nodes` (with `data` shallow-merged one level deeper). Used by the
-   * parent to keep an edit visually pinned while the PATCH round-trips.
-   */
-  nodeOverrides?: OverrideMap<DemoNode>;
-  /**
-   * Optimistic per-connector overrides. Shallow-merged over the server
-   * `connectors` so style/color/direction edits are visible immediately
-   * (without waiting for the SSE echo of the file rewrite).
-   */
-  connectorOverrides?: OverrideMap<Connector>;
   /** Fired once per drag-stop with the node's final position. */
   onNodePositionChange?: (nodeId: string, position: { x: number; y: number }) => void;
   /**
@@ -1215,8 +1201,9 @@ export function handleClipboardShortcut(deps: ClipboardShortcutDeps): boolean {
   return true;
 }
 
-const statusFor = (runs: NodeRuns | undefined, id: string): NodeStatus =>
-  runs?.[id]?.status ?? 'idle';
+type RunsMap = CanvasRuntime['runs'];
+
+const statusFor = (runs: RunsMap, id: string): NodeStatus => runs?.[id]?.status ?? 'idle';
 
 /**
  * Per-node `status` injected into a node's `data` slot. PlayNode (US-030)
@@ -1226,15 +1213,14 @@ const statusFor = (runs: NodeRuns | undefined, id: string): NodeStatus =>
  * its own; passing undefined upstream lets PlayNode see the difference
  * without affecting StateNode.
  */
-const dataStatusFor = (runs: NodeRuns | undefined, id: string): NodeStatus | undefined =>
-  runs?.[id]?.status;
+const dataStatusFor = (runs: RunsMap, id: string): NodeStatus | undefined => runs?.[id]?.status;
 
 /**
  * Per-node error message injected into a node's `data` slot when the most
  * recent run failed. PlayNode (US-018) surfaces it as the play-button
  * tooltip in place of the removed status chip.
  */
-const dataErrorMessageFor = (runs: NodeRuns | undefined, id: string): string | undefined =>
+const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
   runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
 
 export function DemoCanvas({
@@ -1248,11 +1234,11 @@ export function DemoCanvas({
   selectedNodeIds,
   selectedConnectorIds,
   onSelectionChange,
-  runs,
-  statusByNode,
+  // US-026: single bundled runtime prop replacing runs/statusByNode/
+  // nodeOverrides/connectorOverrides. Destructured below into local aliases so
+  // the existing read sites keep the same shape; the parent now owns the seam.
+  runtime,
   onPlayNode,
-  nodeOverrides,
-  connectorOverrides,
   onNodePositionChange,
   onNodePositionsChange,
   onNodeResize,
@@ -1299,6 +1285,13 @@ export function DemoCanvas({
   activeShape,
   onSelectShape,
 }: DemoCanvasProps) {
+  // US-026: destructure the bundled `runtime` prop into the legacy per-stream
+  // names every downstream call site already uses. Keeps the diff focused on
+  // the prop API while preserving the existing memo/dependency wiring.
+  const runs = runtime?.runs;
+  const statusByNode = runtime?.statuses;
+  const nodeOverrides = runtime?.pendingOverrides?.nodes;
+  const connectorOverrides = runtime?.pendingOverrides?.connectors;
   // Bottom-toolbar draw mode (US-028). When `drawShape` is set, the wrapper
   // shows a crosshair cursor and a pointer-down on the React Flow pane begins
   // an Excalidraw-style drag. We track the start + current pointer position in

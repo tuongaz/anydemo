@@ -3036,11 +3036,12 @@ export function DemoView({
           selectedNodeIds={selectedIds}
           selectedConnectorIds={selectedConnectorIds}
           onSelectionChange={onSelectionChange}
-          runs={runs}
-          statusByNode={statusByNode}
+          runtime={{
+            runs,
+            statuses: statusByNode,
+            pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides },
+          }}
           onPlayNode={onPlayNode}
-          nodeOverrides={nodeOverrides}
-          connectorOverrides={connectorOverrides}
           onNodePositionChange={onNodePositionChange}
           onNodePositionsChange={onNodePositionsChange}
           onNodeResize={onNodeResize}

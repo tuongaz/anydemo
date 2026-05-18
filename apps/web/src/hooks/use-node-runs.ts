@@ -1,20 +1,12 @@
-import type { NodeStatus } from '@seeflow/canvas';
+import type { RunResult } from '@seeflow/canvas';
 import { useCallback, useEffect, useReducer, useRef } from 'react';
 
-export interface NodeRunState {
-  status: NodeStatus;
-  runId?: string;
-  /** Filled when status === 'done': upstream HTTP status. */
-  responseStatus?: number;
-  /** Filled when status === 'done': parsed JSON or text body. */
-  body?: unknown;
-  /** Filled when status === 'error': human-readable message. */
-  error?: string;
-  /** ms since epoch of the most recent transition. */
-  ts?: number;
-}
+// US-026: leaf type promoted into @seeflow/canvas. Re-exported here so legacy
+// importers under apps/web (`@/hooks/use-node-runs`) keep working without
+// reaching across the workspace boundary.
+export type NodeRunState = RunResult;
 
-export type NodeRuns = Record<string, NodeRunState>;
+export type NodeRuns = Record<string, RunResult>;
 
 type Action =
   | {

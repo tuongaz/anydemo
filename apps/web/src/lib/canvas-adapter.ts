@@ -16,8 +16,11 @@ import type {
   ConnectorDirection,
   ConnectorPath,
   ConnectorStyle,
+  DemoNode,
   EdgePin,
+  RunResult,
   ShapeKind,
+  StatusReport,
 } from '@seeflow/canvas';
 
 export type NodeKind =
@@ -140,6 +143,34 @@ export interface PlayNodeResult {
   status?: number;
   body?: unknown;
   error?: string;
+}
+
+/**
+ * US-026: read-only runtime state injected into the canvas. Bundles the three
+ * data streams the canvas needs to render dynamic chrome — SSE-driven per-node
+ * `runs`, latest `statuses`, and optimistic `pendingOverrides` for node /
+ * connector edits in flight. The hooks that produce these values stay in
+ * apps/web (`use-node-runs`, `use-node-statuses`, `use-pending-overrides`); the
+ * canvas treats this as an opaque data prop.
+ *
+ * Every field is optional so view-mode embedders can omit the whole prop. Inside
+ * demo-canvas, `runtime?.runs?.[id]` etc. is the canonical access pattern —
+ * the helpers fall back to `'idle'` / `undefined` when the entries are absent.
+ */
+export interface CanvasRuntime {
+  /** Per-node SSE run state, keyed by node id. */
+  runs?: Record<string, RunResult>;
+  /** Latest StatusReport per node, keyed by node id. */
+  statuses?: Record<string, StatusReport>;
+  /**
+   * Optimistic edits that haven't yet been reconciled by the server. Nodes and
+   * connectors are stored separately because their generic parameters differ —
+   * a single map would lose type safety on the values.
+   */
+  pendingOverrides?: {
+    nodes?: Record<string, Partial<DemoNode>>;
+    connectors?: Record<string, Partial<Connector>>;
+  };
 }
 
 /**

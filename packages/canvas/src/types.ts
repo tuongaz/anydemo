@@ -1,3 +1,5 @@
+import type { NodeStatus } from './nodes/status-pill.tsx';
+
 export type ColorToken =
   | 'default'
   | 'slate'
@@ -153,12 +155,32 @@ export type StatusReportState = 'ok' | 'warn' | 'error' | 'pending';
 // fanned out via SSE. The canvas needs the type so play-node + state-node can
 // reference it without an `@/lib/api` import; apps/web/src/lib/api.ts now
 // re-exports this from @seeflow/canvas (same pattern as `StatusReportState`).
-// The hook that produces these values stays in apps/web until US-026.
+// The hook that produces these values stays in apps/web; US-026 added the
+// adapter-side `CanvasRuntime` type that references this so demo-canvas can
+// receive a single bundled runtime prop.
 export interface StatusReport {
   state: StatusReportState;
   summary?: string;
   detail?: string;
   data?: Record<string, unknown>;
+  ts?: number;
+}
+
+// US-026: per-node SSE run state. The leaf type that backs `NodeRuns` in
+// apps/web/src/hooks/use-node-runs.ts; promoted into the canvas package so
+// CanvasRuntime (in apps/web/src/lib/canvas-adapter.ts) can reference it
+// without reaching back into a hook file. The hook continues to produce the
+// values; only the type lives here.
+export interface RunResult {
+  status: NodeStatus;
+  runId?: string;
+  /** Filled when status === 'done': upstream HTTP status. */
+  responseStatus?: number;
+  /** Filled when status === 'done': parsed JSON or text body. */
+  body?: unknown;
+  /** Filled when status === 'error': human-readable message. */
+  error?: string;
+  /** ms since epoch of the most recent transition. */
   ts?: number;
 }
 
