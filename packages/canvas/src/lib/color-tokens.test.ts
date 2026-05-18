@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import type { ColorToken } from '@/lib/api';
-import { COLOR_TOKENS, colorTokenStyle } from '@/lib/color-tokens';
+import type { ColorToken } from '../types.ts';
+import { COLOR_TOKENS, colorTokenStyle } from './color-tokens.ts';
 
 const ALL_TOKENS: ColorToken[] = [
   'default',
