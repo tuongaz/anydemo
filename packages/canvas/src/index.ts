@@ -106,3 +106,6 @@ export { createDebouncer } from './lib/debounce.ts';
 export type { Debouncer, DebouncerOptions } from './lib/debounce.ts';
 
 export { fileUrl } from './lib/file-url.ts';
+
+export { InlineEdit } from './components/inline-edit.tsx';
+export type { InlineEditProps } from './components/inline-edit.tsx';

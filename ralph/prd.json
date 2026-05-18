@@ -169,8 +169,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "First component move from apps/web → packages/canvas/src/components/. Used '../lib/cn.ts' and '../lib/debounce.ts' relative paths inside the moved file per the canvas .ts-extension convention. 7 web import sites updated (test file was the 8th but is deleted with the component)."
     },
     {
       "id": "US-011",

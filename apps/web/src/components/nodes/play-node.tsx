@@ -1,4 +1,3 @@
-import { InlineEdit } from '@/components/inline-edit';
 import { LockBadge } from '@/components/nodes/lock-badge';
 import { ResizeControls } from '@/components/nodes/resize-controls';
 import { StatusBadge } from '@/components/nodes/status-badge';
@@ -7,7 +6,7 @@ import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import { Button } from '@/components/ui/button';
 import type { NodeData, StatusReport } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { cn } from '@seeflow/canvas';
+import { InlineEdit, cn } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Loader2, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';

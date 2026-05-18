@@ -1,5 +1,6 @@
-import { cn, createDebouncer } from '@seeflow/canvas';
 import { type CSSProperties, type KeyboardEvent, useEffect, useRef, useState } from 'react';
+import { cn } from '../lib/cn.ts';
+import { createDebouncer } from '../lib/debounce.ts';
 
 export interface InlineEditProps {
   initialValue: string;

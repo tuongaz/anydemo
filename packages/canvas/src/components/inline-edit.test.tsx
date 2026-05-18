@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
-import { InlineEdit } from '@/components/inline-edit';
 import * as React from 'react';
+import { InlineEdit } from './inline-edit.tsx';
 
 // Bun runs apps/web tests without a DOM. Shim React's internal dispatcher
 // and call InlineEdit as a function so we can inspect the rendered element's

@@ -1,11 +1,10 @@
-import { InlineEdit } from '@/components/inline-edit';
 import { LockBadge } from '@/components/nodes/lock-badge';
 import { ResizeControls } from '@/components/nodes/resize-controls';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '@/components/nodes/shapes/registry';
 import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import type { ShapeKind, ShapeNodeData } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { cn } from '@seeflow/canvas';
+import { InlineEdit, cn } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import {
   type CSSProperties,

@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'bun:test';
-import { InlineEdit } from '@/components/inline-edit';
 import { ResizeControls } from '@/components/nodes/resize-controls';
 import { ShapeNode } from '@/components/nodes/shape-node';
 import {
@@ -14,6 +13,7 @@ import { QueueShape } from '@/components/nodes/shapes/queue';
 import { ServerShape } from '@/components/nodes/shapes/server';
 import { UserShape } from '@/components/nodes/shapes/user';
 import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
+import { InlineEdit } from '@seeflow/canvas';
 import { Handle, type NodeProps } from '@xyflow/react';
 import * as React from 'react';
 
