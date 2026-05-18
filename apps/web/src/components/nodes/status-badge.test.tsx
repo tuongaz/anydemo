@@ -65,9 +65,9 @@ describe('StatusBadge', () => {
 
   it('applies the right Tailwind dot color per state', () => {
     const cases = [
-      { state: 'ok' as const, expected: 'bg-emerald-500' },
-      { state: 'warn' as const, expected: 'bg-amber-500' },
-      { state: 'error' as const, expected: 'bg-rose-500' },
+      { state: 'ok' as const, expected: 'bg-emerald-400' },
+      { state: 'warn' as const, expected: 'bg-amber-400' },
+      { state: 'error' as const, expected: 'bg-rose-400' },
       { state: 'pending' as const, expected: 'bg-slate-400' },
     ];
     for (const { state, expected } of cases) {

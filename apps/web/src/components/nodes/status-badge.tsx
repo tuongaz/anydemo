@@ -1,15 +1,11 @@
 import type { StatusReportState } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
-// US-007: dot color per StatusReport state. The 'pending' slate matches the
-// canvas neutral chrome; the other three reuse the same Tailwind hue families
-// already used in StatusPill / play-button error border so the visual language
-// stays consistent across the surface.
 const DOT_STYLES: Record<StatusReportState, string> = {
-  ok: 'bg-emerald-500 dark:bg-emerald-400',
-  warn: 'bg-amber-500 dark:bg-amber-400',
-  error: 'bg-rose-500 dark:bg-rose-400',
-  pending: 'bg-slate-400 dark:bg-slate-500',
+  ok: 'bg-emerald-400',
+  warn: 'bg-amber-400',
+  error: 'bg-rose-400',
+  pending: 'bg-slate-400',
 };
 
 export interface StatusBadgeProps {

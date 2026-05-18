@@ -218,9 +218,9 @@ describe('PlayNode status badge (US-007)', () => {
 
   it('renders the badge with the summary and the correct dot color per state', () => {
     const cases = [
-      { state: 'ok' as const, dotClass: 'bg-emerald-500' },
-      { state: 'warn' as const, dotClass: 'bg-amber-500' },
-      { state: 'error' as const, dotClass: 'bg-rose-500' },
+      { state: 'ok' as const, dotClass: 'bg-emerald-400' },
+      { state: 'warn' as const, dotClass: 'bg-amber-400' },
+      { state: 'error' as const, dotClass: 'bg-rose-400' },
       { state: 'pending' as const, dotClass: 'bg-slate-400' },
     ];
     for (const { state, dotClass } of cases) {

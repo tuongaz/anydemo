@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'bun:test';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from '@/components/canvas-toolbar';
-import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
   type ClipboardShortcutEventLike,
   DemoCanvas,
@@ -22,6 +21,7 @@ import {
 } from '@/components/selection-resize-overlay';
 import { StyleStrip } from '@/components/style-strip';
 import type { DemoNode } from '@/lib/api';
+import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import { type Connection, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 
