@@ -18,9 +18,24 @@ The SeeFlow plugin reads your codebase, understands your architecture, and gener
 
 ### 1. Start the studio
 
+The fastest path is Docker — no Bun or Node install, and the image boots with a working **Order Pipeline** demo pre-registered so you can hit Play immediately:
+
+```bash
+docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
+# then open http://localhost:4321
+```
+
+The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present. Flows you create from the UI, plus the studio's registry, persist under `$(pwd)/.seeflow/` across restarts.
+
+<details>
+<summary>Prefer to run natively?</summary>
+
 ```bash
 npx tuongaz/seeflow start
 ```
+
+Requires Bun ≥ 1.3 (or Node with npx).
+</details>
 
 ### 2. Install the plugin
 
@@ -51,16 +66,9 @@ curl -fsSL https://raw.githubusercontent.com/tuongaz/seeflow/main/install.sh | b
 
 The plugin scans your routes and database connections, generates `seeflow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
 
-## Run with Docker
+## Docker reference
 
-Try SeeFlow without installing Bun or Node — the image is published on [Docker Hub](https://hub.docker.com/r/tuongaz/seeflow):
-
-```bash
-docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
-# then open http://localhost:4321
-```
-
-The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present. All flows you create from the UI, plus the studio's registry, are written under `/workspace/.seeflow/` so they survive `docker run --rm` and restart with the next `docker run`.
+The image is published on [Docker Hub](https://hub.docker.com/r/tuongaz/seeflow). See Quick Start above for the basic `docker run`.
 
 ### Configuration
 
