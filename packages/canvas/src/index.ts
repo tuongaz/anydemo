@@ -165,6 +165,21 @@ export type {
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
 
+export {
+  SELECTION_OVERLAY_PADDING,
+  SelectionResizeOverlay,
+  computeNewRectFromAnchorDrag,
+  computeSelectionResizeUpdates,
+  computeUnionRect,
+  scheduleRaf,
+  selectionEligibleForOverlay,
+} from './components/selection-resize-overlay.tsx';
+export type {
+  MultiResizeUpdate,
+  OverlayInputNode,
+  SelectionResizeOverlayProps,
+} from './components/selection-resize-overlay.tsx';
+
 export { StyleStrip } from './components/style-strip.tsx';
 export type {
   ConnectorStylePatch,

@@ -1,9 +1,4 @@
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from '@/components/canvas-toolbar';
-import {
-  type MultiResizeUpdate,
-  type OverlayInputNode,
-  SelectionResizeOverlay,
-} from '@/components/selection-resize-overlay';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
@@ -23,14 +18,17 @@ import {
   ILLUSTRATIVE_SHAPE_RENDERERS,
   IconNode,
   ImageNode,
+  type MultiResizeUpdate,
   NEW_NODE_BORDER_WIDTH,
   type NodeStatus,
   type NodeStylePatch,
+  type OverlayInputNode,
   PlayNode,
   Popover,
   PopoverAnchor,
   PopoverContent,
   SHAPE_DEFAULT_SIZE,
+  SelectionResizeOverlay,
   ShapeNode,
   type Side,
   StateNode,

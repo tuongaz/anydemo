@@ -10,16 +10,14 @@ import {
   eventTargetIsOtherNode,
   handleClipboardShortcut,
 } from '@/components/demo-canvas';
-import {
-  type MultiResizeUpdate,
-  SelectionResizeOverlay,
-} from '@/components/selection-resize-overlay';
 import type { DemoNode } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
   CloudShape,
   DatabaseShape,
+  type MultiResizeUpdate,
   QueueShape,
+  SelectionResizeOverlay,
   ServerShape,
   StyleStrip,
   UserShape,

@@ -6,7 +6,7 @@ import {
   computeUnionRect,
   scheduleRaf,
   selectionEligibleForOverlay,
-} from '@/components/selection-resize-overlay';
+} from './selection-resize-overlay.tsx';
 
 const node = (
   id: string,

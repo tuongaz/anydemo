@@ -1,4 +1,3 @@
-import { type Rect, type ScalableNode, scaleNodesWithinRect } from '@seeflow/canvas';
 import { ViewportPortal, useReactFlow } from '@xyflow/react';
 import {
   type CSSProperties,
@@ -6,6 +5,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { type Rect, type ScalableNode, scaleNodesWithinRect } from '../lib/scale-nodes.ts';
 
 /**
  * US-007: multi-select bounding-box resize overlay.

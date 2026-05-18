@@ -353,8 +353,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 20,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fifth component move under packages/canvas/src/components/ (after inline-edit US-010, the 6 node renderers US-013, icon-picker-popover US-017, and style-strip US-018). Moved selection-resize-overlay.tsx + selection-resize-overlay.test.tsx into the canvas package. Rewrote the moved file's `@seeflow/canvas` self-import for Rect/ScalableNode/scaleNodesWithinRect → `'../lib/scale-nodes.ts'` (anti-cycle pattern from US-010/US-014/US-017/US-018). Test self-import switched from `@/components/selection-resize-overlay` → `./selection-resize-overlay.tsx`; all 19 tests pass (29 expect() calls). Added 2 re-export blocks (values + types) to packages/canvas/src/index.ts between InlineEdit and StyleStrip — values: SELECTION_OVERLAY_PADDING, SelectionResizeOverlay, computeNewRectFromAnchorDrag, computeSelectionResizeUpdates, computeUnionRect, scheduleRaf, selectionEligibleForOverlay; types: MultiResizeUpdate, OverlayInputNode, SelectionResizeOverlayProps. Updated 2 apps/web import sites: demo-canvas.tsx (removed dedicated `@/components/selection-resize-overlay` block; merged MultiResizeUpdate type, OverlayInputNode type, and SelectionResizeOverlay value alphabetically into the existing 47-line `@seeflow/canvas` block — Selection... vs Server... resolves to Selection first because at position 3 `l`(0x6C) < `r`(0x72)) and demo-canvas.test.tsx (removed dedicated block; merged MultiResizeUpdate type + SelectionResizeOverlay value into the existing 6-specifier `@seeflow/canvas` block). bunx biome check --fix reported zero fixes — orderings correct on first try. Full quality gate green: typecheck (5 workspaces), bun test (1308 pass / 1 skip / 0 fail), format + lint no fixes."
     },
     {
       "id": "US-021",
