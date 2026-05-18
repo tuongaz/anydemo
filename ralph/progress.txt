@@ -123,3 +123,16 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Section label design pattern: `font-mono text-[11px] text-muted-foreground uppercase tracking-widest` — use for any label headings within panel sections
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
+
+## 2026-05-18 - US-010
+- DialogPrimitive.Content popup surface: changed `bg-background border` to `bg-card border border-border` for explicit dark zinc-900 surface
+- Command row hover: changed `hover:bg-accent` to `hover:bg-muted` for zinc surface treatment
+- Highlighted row: changed `bg-accent` to `bg-muted` (same token, but semantically correct)
+- Input area already used `bg-transparent` — no change needed
+- Files changed: apps/web/src/components/command-palette.tsx
+- **Learnings for future iterations:**
+  - command-palette.tsx uses raw `@radix-ui/react-dialog` (DialogPrimitive), NOT the shadcn command.tsx wrapper — the surface class must be set directly on DialogPrimitive.Content
+  - `bg-background` is valid dark zinc-950 but `bg-card` (zinc-900) is preferred for floating surfaces/popups to create visual separation from the canvas
+  - `hover:bg-accent` and `hover:bg-muted` resolve to the same zinc-800 with our tokens, but `muted` is the semantically correct choice for hover surfaces
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
