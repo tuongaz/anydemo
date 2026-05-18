@@ -41,8 +41,10 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   });
   // Once user-resized (or pre-sized via authoring), the React Flow wrapper
   // owns dimensions and the inner fills via h-full w-full. Before any resize,
-  // we pin the default size so the wrapper auto-sizes to it.
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // we pin the default size so the wrapper auto-sizes to it. `isResizing` is
+  // NOT in this check: see state-node.tsx for the full rationale
+  // (precreated-node click-shrink fix).
+  const sized = data.width !== undefined || data.height !== undefined;
 
   // US-014: htmlNode defaults to a transparent / borderless wrapper so author
   // HTML can paint edge-to-edge. Only fields the author has SET land in the

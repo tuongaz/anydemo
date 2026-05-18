@@ -70,10 +70,11 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
   const [editing, setEditing] = useState<EditField>(null);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
-  // When data.width/height are unset and we're not mid-resize, the React Flow
-  // wrapper has no explicit dims and we own sizing — pin a default width so a
+  // When data.width/height are unset, we own sizing — pin a default width so a
   // long label/description wraps inside the node instead of stretching it.
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // `isResizing` is NOT in this check: see state-node.tsx for the full
+  // rationale (precreated-node click-shrink fix).
+  const sized = data.width !== undefined || data.height !== undefined;
   // US-008: title and body now share the same font size — title is bolded
   // instead of larger. The Style-tab fontSize override applies equally to
   // both, so a user-set 28px bumps the title AND the body to 28px.

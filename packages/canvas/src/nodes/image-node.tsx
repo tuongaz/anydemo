@@ -50,8 +50,10 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
   });
   // Once user-resized (or pre-sized via authoring), the React Flow wrapper
   // owns dimensions and the inner fills via h-full w-full. Before any resize,
-  // we pin a default 200x150 so the wrapper auto-sizes to it.
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // we pin a default 200x150 so the wrapper auto-sizes to it. `isResizing` is
+  // NOT in this check: see state-node.tsx for the full rationale
+  // (precreated-node click-shrink fix).
+  const sized = data.width !== undefined || data.height !== undefined;
 
   // US-010: selection outline moved to CSS (see play-node.tsx note).
   // US-014: render the optional image border from `borderColor` / `borderWidth`

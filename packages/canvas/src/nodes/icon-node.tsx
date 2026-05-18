@@ -51,7 +51,9 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing,
   });
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // `isResizing` deliberately excluded: see state-node.tsx for the full
+  // rationale (precreated-node click-shrink fix).
+  const sized = data.width !== undefined || data.height !== undefined;
   const nameEditable = !!data.onNameChange;
   const [isEditing, setIsEditing] = useState(false);
 

@@ -51,10 +51,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
   const [editing, setEditing] = useState<EditField>(null);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
-  // When data.width/height are unset and we're not mid-resize, the React Flow
-  // wrapper has no explicit dims and we own sizing — pin a default width so a
+  // When data.width/height are unset, we own sizing — pin a default width so a
   // long label/description wraps inside the node instead of stretching it.
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // `isResizing` is NOT in this check: on mousedown of the resize handle with
+  // no movement, dropping the fallback width would leave the inner as `w-full`
+  // of a wrapper that has no explicit width (data.width undef), collapsing it
+  // to intrinsic content width. The first per-tick `onResize` of an actual
+  // drag sets `data.width` and flips `sized` true naturally.
+  const sized = data.width !== undefined || data.height !== undefined;
   // US-008: title and body now share the same font size — title is bolded
   // instead of larger. The Style-tab fontSize override applies equally to
   // both, so a user-set 28px bumps the title AND the body to 28px.

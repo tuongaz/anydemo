@@ -232,10 +232,12 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
   // description and the centered label renders description. The user only
   // surfaces a header when they explicitly set Name via the detail panel.
   const renderSingleLabelAsDescription = isDescriptionLabel || (isHeaderShape && !hasName);
-  // While resizing OR once data.width/height are set, the React Flow wrapper
-  // owns the dimensions; the inner fills via h-full w-full. Before any resize,
-  // we still need an explicit size so the wrapper auto-sizes to it.
-  const sized = isResizing || data.width !== undefined || data.height !== undefined;
+  // Once data.width/height are set, the React Flow wrapper owns the
+  // dimensions; the inner fills via h-full w-full. Before any resize, we still
+  // need an explicit size so the wrapper auto-sizes to it. `isResizing` is NOT
+  // in this check: see state-node.tsx for the full rationale (precreated-node
+  // click-shrink fix).
+  const sized = data.width !== undefined || data.height !== undefined;
 
   // Text shapes are chromeless: no border, no background. Selection still
   // needs a visible affordance — handled below by the unified outer-rect

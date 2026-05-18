@@ -267,6 +267,36 @@ describe('IconNode', () => {
     expect(setResizing).toHaveBeenCalledWith(false);
   });
 
+  it('keeps explicit fallback dims when isResizing flips true with data.width/height undefined (regression: precreated-node click-shrink)', () => {
+    // Before the fix, `sized` flipped true when `isResizing` flipped true even
+    // if `data.width`/`data.height` were undefined — which stripped the inline
+    // width/height and added `w-full h-full` on an outer wrapper that had no
+    // explicit dims (the React Flow node had no `node.width` because
+    // `data.width` was undef). Result: the inner collapsed to intrinsic text
+    // width on mousedown of the resize handle, visibly shrinking before any
+    // drag tick. The user-reported symptom was "click on the resize icon →
+    // the node suddenly shrinks even if I don't move to resize yet", only
+    // happening on freshly created / precreated nodes that hadn't been
+    // resized yet.
+    //
+    // Fix: `sized` no longer depends on `isResizing` — only on whether the
+    // node has persisted dims in data. The first per-tick `onResize` of an
+    // actual drag sets `data.width` and the wrapper-driven sizing kicks in
+    // naturally on the next render.
+    const tree = callIconNode(
+      { icon: 'shopping-cart', onResize: () => {} },
+      { selected: true } as Partial<NodeProps>,
+      [true], // useState index 0 is `isResizing` (set by useResizeGesture).
+    );
+    if (!isElement(tree)) throw new Error('IconNode did not return a React element');
+    const style = tree.props.style as { width?: number; height?: number };
+    expect(style.width).toBe(48);
+    expect(style.height).toBe(48);
+    const className = tree.props.className as string;
+    expect(className).not.toContain('w-full');
+    expect(className).not.toContain('h-full');
+  });
+
   it('calls data.onResize with new dims when width changes (US-021 paired test)', () => {
     const onResize = mock(() => {});
     const setResizing = mock(() => {});
