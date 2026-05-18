@@ -98,3 +98,16 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Heading elements without an explicit color class inherit from the parent chain — but `text-foreground` should be added for clarity when a design token should apply
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
+
+## 2026-05-18 - US-008
+- Toolbar container: changed `bg-background/95` to `bg-card` for correct zinc-900 surface
+- Active tool buttons: changed `bg-primary text-primary-foreground hover:bg-primary/90` to emerald pill pattern `bg-primary/10 text-primary border border-primary/30`
+- Inactive tool buttons: changed `hover:bg-accent hover:text-accent-foreground` to `hover:bg-muted` for zinc surface treatment
+- Applied same changes to: shape picker trigger button, illustrative-shapes popover items, and icon picker anchor button
+- Files changed: apps/web/src/components/canvas-toolbar.tsx
+- **Learnings for future iterations:**
+  - The emerald pill pattern for active state is: `bg-primary/10 text-primary border border-primary/30` (translucent background, colored text, subtle border)
+  - `bg-background/95` (near-transparent overlay on background) should be replaced with `bg-card` for solid opaque zinc-900 surfaces
+  - All four button variants in canvas-toolbar (primary shapes, shape picker trigger, shape picker menu items, icon picker trigger) need consistent active/inactive class treatment
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
