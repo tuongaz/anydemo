@@ -185,7 +185,7 @@
         "Report the merge commit SHA and the pushed branch state at the end"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": ""
     }
   ]
