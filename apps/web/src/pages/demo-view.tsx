@@ -10,25 +10,17 @@ import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
 import { useUndoStack } from '@/hooks/use-undo-stack';
-import {
-  type Connector,
-  type DefaultConnector,
-  type DemoDetail,
-  type DemoNode,
-  type DemoSummary,
-  type EdgePin,
-  type ReorderOp,
-  type ShapeKind,
-  createConnector,
-  createNode,
-  deleteConnector,
-  deleteNode,
-  reorderNode,
-  updateConnector,
-  updateNode,
-  updateNodePosition,
-  uploadImageFile,
+import type {
+  Connector,
+  DefaultConnector,
+  DemoDetail,
+  DemoNode,
+  DemoSummary,
+  EdgePin,
+  ReorderOp,
+  ShapeKind,
 } from '@/lib/api';
+import { createRestAdapter } from '@/lib/canvas-adapter-rest';
 import { buildPastePayload } from '@/lib/clipboard';
 import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
@@ -374,6 +366,13 @@ export function DemoView({
   }, [demoNodes, nodeOrderOverride]);
 
   const demoId = detail?.id ?? null;
+  // US-025: persistence adapter built from the demo's id. Bound to one demo for
+  // its lifetime; rebuilt on demo switch. Every REST mutation in this file (and
+  // the prop threaded to <DemoCanvas>) now routes through this adapter.
+  const adapter = useMemo(
+    () => (demoId ? createRestAdapter({ baseUrl: '', demoId }) : null),
+    [demoId],
+  );
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { setOverride: setNodeOverride, dropOverride: dropNodeOverride } = nodePending;
   // Read live displayed position for a node (override merged) so a multi-node
@@ -386,7 +385,7 @@ export function DemoView({
 
   const onNodePositionChange = useCallback(
     (nodeId: string, position: Position) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       // Snapshot the on-disk pre-state BEFORE the optimistic override so the
       // undo entry can revert to where the node was before the drag started.
       const prev = demoNodes?.find((n) => n.id === nodeId)?.position;
@@ -398,15 +397,15 @@ export function DemoView({
       if (prev) {
         pushUndo({
           do: async () => {
-            await updateNodePosition(demoId, nodeId, position);
+            await adapter.updateNodePosition(nodeId, position);
           },
           undo: async () => {
-            await updateNodePosition(demoId, nodeId, prev);
+            await adapter.updateNodePosition(nodeId, prev);
           },
           coalesceKey: `node:${nodeId}:position`,
         });
       }
-      updateNodePosition(demoId, nodeId, position).catch((err) => {
+      adapter.updateNodePosition(nodeId, position).catch((err) => {
         // Revert: drop the override so the canvas falls back to server data,
         // and drop the optimistic stack entry so the user isn't holding a
         // phantom undo step pointing at a state we never persisted.
@@ -416,7 +415,16 @@ export function DemoView({
         console.error('updateNodePosition failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [
+      demoId,
+      adapter,
+      demoNodes,
+      setNodeOverride,
+      dropNodeOverride,
+      pushUndo,
+      dropUndoTop,
+      markMutation,
+    ],
   );
 
   // US-013: atomic multi-node move (drag-stop with multiple nodes moving
@@ -426,7 +434,7 @@ export function DemoView({
   // Mirrors the onTidy / onStyleNodes batch pattern.
   const onNodePositionsChange = useCallback(
     (updates: { id: string; position: Position }[]) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       if (updates.length === 0) return;
       const overrides = nodeOverridesRef.current;
       const targets = updates
@@ -449,17 +457,17 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await Promise.allSettled(targets.map((t) => updateNodePosition(demoId, t.id, t.next)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNodePosition(t.id, t.next)));
         },
         undo: async () => {
-          await Promise.allSettled(targets.map((t) => updateNodePosition(demoId, t.id, t.prev)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNodePosition(t.id, t.prev)));
         },
       });
       // Fan-out PATCHes; surface a single banner if any leg failed.
       Promise.all(
         targets.map(async (t) => {
           try {
-            await updateNodePosition(demoId, t.id, t.next);
+            await adapter.updateNodePosition(t.id, t.next);
             return null;
           } catch (err) {
             dropNodeOverride(t.id);
@@ -471,12 +479,12 @@ export function DemoView({
         if (firstErr) setEditError(firstErr);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   const onNodeResize = useCallback(
     (nodeId: string, dims: { width: number; height: number; x: number; y: number }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       // US-012: capture both prior size AND prior position so a top/left
       // handle resize (which moves x/y) reverts cleanly on undo.
@@ -506,22 +514,31 @@ export function DemoView({
       if (prev) {
         pushUndo({
           do: async () => {
-            await updateNode(demoId, nodeId, next);
+            await adapter.updateNode(nodeId, next);
           },
           undo: async () => {
-            await updateNode(demoId, nodeId, prev);
+            await adapter.updateNode(nodeId, prev);
           },
           coalesceKey: `node:${nodeId}:resize`,
         });
       }
-      updateNode(demoId, nodeId, next).catch((err) => {
+      adapter.updateNode(nodeId, next).catch((err) => {
         dropNodeOverride(nodeId);
         if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode resize failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [
+      demoId,
+      adapter,
+      demoNodes,
+      setNodeOverride,
+      dropNodeOverride,
+      pushUndo,
+      dropUndoTop,
+      markMutation,
+    ],
   );
 
   // US-007: atomic multi-select bounding-box resize. The canvas overlay
@@ -543,7 +560,7 @@ export function DemoView({
         height?: number;
       }[],
     ) => {
-      if (!demoId || updates.length === 0) return;
+      if (!demoId || !adapter || updates.length === 0) return;
       type DimsPatch = {
         width?: number;
         height?: number;
@@ -586,17 +603,17 @@ export function DemoView({
       const sortedIds = targets.map((t) => t.id).sort();
       pushUndo({
         do: async () => {
-          await Promise.allSettled(targets.map((t) => updateNode(demoId, t.id, t.next)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.next)));
         },
         undo: async () => {
-          await Promise.allSettled(targets.map((t) => updateNode(demoId, t.id, t.prev)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.prev)));
         },
         coalesceKey: `multi:resize:${sortedIds.join(',')}`,
       });
       Promise.all(
         targets.map(async (t) => {
           try {
-            await updateNode(demoId, t.id, t.next);
+            await adapter.updateNode(t.id, t.next);
             return null;
           } catch (err) {
             dropNodeOverride(t.id);
@@ -608,7 +625,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
@@ -644,7 +661,7 @@ export function DemoView({
   // seeing that 'data' on the override matches the variant of the keyed node.
   const onStyleNode = useCallback(
     (nodeId: string, patch: NodeStylePatch) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       // Remember the user's pick BEFORE the PATCH dispatches — last-used tracks
       // intent (what they picked), not server-confirmed state. A later network
       // failure does not roll the bucket back.
@@ -667,22 +684,31 @@ export function DemoView({
         const prevPatch = prev;
         pushUndo({
           do: async () => {
-            await updateNode(demoId, nodeId, patch);
+            await adapter.updateNode(nodeId, patch);
           },
           undo: async () => {
-            await updateNode(demoId, nodeId, prevPatch);
+            await adapter.updateNode(nodeId, prevPatch);
           },
           coalesceKey: `node:${nodeId}:style`,
         });
       }
-      updateNode(demoId, nodeId, patch).catch((err) => {
+      adapter.updateNode(nodeId, patch).catch((err) => {
         dropNodeOverride(nodeId);
         if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode style failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [
+      demoId,
+      adapter,
+      demoNodes,
+      setNodeOverride,
+      dropNodeOverride,
+      pushUndo,
+      dropUndoTop,
+      markMutation,
+    ],
   );
 
   // US-008: atomic style-edit across a multi-node selection. Snapshots prev
@@ -691,7 +717,7 @@ export function DemoView({
   // Mirrors the onTidy batch pattern below.
   const onStyleNodes = useCallback(
     (nodeIds: string[], patch: NodeStylePatch) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       if (nodeIds.length === 0) return;
       // Remember the user's pick on the batch path too — the single-node
       // `onStyleNode` does the same.
@@ -716,10 +742,10 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await Promise.allSettled(targets.map((t) => updateNode(demoId, t.id, patch)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, patch)));
         },
         undo: async () => {
-          await Promise.allSettled(targets.map((t) => updateNode(demoId, t.id, t.prev)));
+          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.prev)));
         },
       });
       // Fire-and-forget fan-out. On per-node failure, drop that node's
@@ -728,7 +754,7 @@ export function DemoView({
       Promise.all(
         targets.map(async (t) => {
           try {
-            await updateNode(demoId, t.id, patch);
+            await adapter.updateNode(t.id, patch);
             return null;
           } catch (err) {
             dropNodeOverride(t.id);
@@ -740,7 +766,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-019: toggle the lock state of one or more nodes as a single undo
@@ -751,7 +777,7 @@ export function DemoView({
   // whole batch.
   const onToggleNodeLock = useCallback(
     (nodeIds: string[]) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       if (nodeIds.length === 0) return;
       const targets = nodeIds
         .map((id) => {
@@ -774,19 +800,19 @@ export function DemoView({
       pushUndo({
         do: async () => {
           await Promise.allSettled(
-            changed.map((t) => updateNode(demoId, t.id, { locked: nextLocked })),
+            changed.map((t) => adapter.updateNode(t.id, { locked: nextLocked })),
           );
         },
         undo: async () => {
           await Promise.allSettled(
-            changed.map((t) => updateNode(demoId, t.id, { locked: t.prev })),
+            changed.map((t) => adapter.updateNode(t.id, { locked: t.prev })),
           );
         },
       });
       Promise.all(
         changed.map(async (t) => {
           try {
-            await updateNode(demoId, t.id, { locked: nextLocked });
+            await adapter.updateNode(t.id, { locked: nextLocked });
             return null;
           } catch (err) {
             dropNodeOverride(t.id);
@@ -798,7 +824,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // Style-tab edit on a connector: color, edge style, direction. Cast through
@@ -807,7 +833,7 @@ export function DemoView({
   // is safe at runtime).
   const onStyleConnector = useCallback(
     (connId: string, patch: ConnectorStylePatch) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, patch);
       const conn = demoConnectors?.find((c) => c.id === connId);
       // Snapshot only the keys the caller is touching so undo restores those
@@ -827,15 +853,15 @@ export function DemoView({
         const prevPatch = prev;
         pushUndo({
           do: async () => {
-            await updateConnector(demoId, connId, patch);
+            await adapter.updateConnector(connId, patch);
           },
           undo: async () => {
-            await updateConnector(demoId, connId, prevPatch);
+            await adapter.updateConnector(connId, prevPatch);
           },
           coalesceKey: `connector:${connId}:style`,
         });
       }
-      updateConnector(demoId, connId, patch).catch((err) => {
+      adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
         if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
@@ -844,6 +870,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoConnectors,
       setConnectorOverride,
       dropConnectorOverride,
@@ -868,7 +895,7 @@ export function DemoView({
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       // US-019: locked nodes opt out of every delete path. Silent no-op —
@@ -901,23 +928,23 @@ export function DemoView({
         do: async () => {
           markNodeDeleted(nodeId);
           if (cascadedIds.length > 0) markConnectorsDeleted(cascadedIds);
-          await deleteNode(demoId, nodeId);
+          await adapter.deleteNode(nodeId);
         },
         undo: async () => {
           unmarkNodeDeleted(nodeId);
           if (cascadedIds.length > 0) unmarkConnectorsDeleted(cascadedIds);
-          await createNode(demoId, {
+          await adapter.createNode({
             id: nodeSnapshot.id,
             type: nodeSnapshot.type,
             position: nodeSnapshot.position,
             data: nodeSnapshot.data as unknown as Record<string, unknown>,
           });
           for (const c of connectorSnapshots) {
-            await createConnector(demoId, { ...c, id: c.id });
+            await adapter.createConnector({ ...c, id: c.id });
           }
         },
       });
-      deleteNode(demoId, nodeId).catch((err) => {
+      adapter.deleteNode(nodeId).catch((err) => {
         unmarkNodeDeleted(nodeId);
         if (cascadedIds.length > 0) unmarkConnectorsDeleted(cascadedIds);
         dropUndoTop();
@@ -927,6 +954,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoNodes,
       demoConnectors,
       panelNodeId,
@@ -951,7 +979,7 @@ export function DemoView({
   // invert from the middle of the array).
   const onReorderNode = useCallback(
     (nodeId: string, op: ReorderOp) => {
-      if (!demoId || !demoNodes) return;
+      if (!demoId || !adapter || !demoNodes) return;
       const currentIds = nodeOrderOverride ?? demoNodes.map((n) => n.id);
       const newIds = applyReorderOpToIds(currentIds, nodeId, op);
       if (!newIds) return;
@@ -961,13 +989,13 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await reorderNode(demoId, nodeId, op);
+          await adapter.reorderNode(nodeId, op);
         },
         undo: async () => {
-          await reorderNode(demoId, nodeId, { op: 'toIndex', index: fromIdx });
+          await adapter.reorderNode(nodeId, { op: 'toIndex', index: fromIdx });
         },
       });
-      reorderNode(demoId, nodeId, op).catch((err) => {
+      adapter.reorderNode(nodeId, op).catch((err) => {
         // Revert: drop the override entirely. The next render uses server
         // state. The optimistic stack entry is also dropped because the do()
         // it wraps was the just-failed call.
@@ -977,12 +1005,12 @@ export function DemoView({
         console.error('reorderNode failed', err);
       });
     },
-    [demoId, demoNodes, nodeOrderOverride, pushUndo, dropUndoTop, markMutation],
+    [demoId, adapter, demoNodes, nodeOrderOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onDeleteConnector = useCallback(
     (connId: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       // Snapshot the full connector BEFORE the delete API call so undo can
       // recreate it with the original id and properties.
       const conn = demoConnectors?.find((c) => c.id === connId);
@@ -997,14 +1025,14 @@ export function DemoView({
       pushUndo({
         do: async () => {
           markConnectorDeleted(connId);
-          await deleteConnector(demoId, connId);
+          await adapter.deleteConnector(connId);
         },
         undo: async () => {
           unmarkConnectorDeleted(connId);
-          await createConnector(demoId, { ...connSnapshot, id: connSnapshot.id });
+          await adapter.createConnector({ ...connSnapshot, id: connSnapshot.id });
         },
       });
-      deleteConnector(demoId, connId).catch((err) => {
+      adapter.deleteConnector(connId).catch((err) => {
         unmarkConnectorDeleted(connId);
         dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
@@ -1013,6 +1041,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoConnectors,
       panelConnectorId,
       markConnectorDeleted,
@@ -1030,7 +1059,7 @@ export function DemoView({
   // onTidy / onStyleNodes batch shape.
   const onDeleteSelection = useCallback(
     (nodeIds: string[], connectorIds: string[]) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       if (nodeIds.length === 0 && connectorIds.length === 0) return;
       const expandedNodeIds = nodeIds;
       // US-019: skip locked nodes silently. Locked nodes opt out of every
@@ -1111,9 +1140,9 @@ export function DemoView({
           if (allDoomedNodeIds.length > 0) markNodesDeleted(allDoomedNodeIds);
           if (allDoomedConnIds.length > 0) markConnectorsDeleted(allDoomedConnIds);
           for (const n of childFirstNodeSnapshots) {
-            await deleteNode(demoId, n.id).catch(() => {});
+            await adapter.deleteNode(n.id).catch(() => {});
           }
-          await Promise.allSettled(explicitConnSnapshots.map((c) => deleteConnector(demoId, c.id)));
+          await Promise.allSettled(explicitConnSnapshots.map((c) => adapter.deleteConnector(c.id)));
         },
         undo: async () => {
           if (allDoomedNodeIds.length > 0) unmarkNodesDeleted(allDoomedNodeIds);
@@ -1121,7 +1150,7 @@ export function DemoView({
           for (let i = childFirstNodeSnapshots.length - 1; i >= 0; i--) {
             const n = childFirstNodeSnapshots[i];
             if (!n) continue;
-            await createNode(demoId, {
+            await adapter.createNode({
               id: n.id,
               type: n.type,
               position: n.position,
@@ -1129,7 +1158,7 @@ export function DemoView({
             });
           }
           for (const c of [...cascadedConnectors, ...explicitConnSnapshots]) {
-            await createConnector(demoId, { ...c, id: c.id });
+            await adapter.createConnector({ ...c, id: c.id });
           }
         },
       });
@@ -1152,7 +1181,7 @@ export function DemoView({
         const failures: string[] = [];
         for (const n of childFirstNodeSnapshots) {
           try {
-            await deleteNode(demoId, n.id);
+            await adapter.deleteNode(n.id);
           } catch (err) {
             unmarkNodeDeleted(n.id);
             const cascadedForN = cascadedByNodeId.get(n.id) ?? [];
@@ -1163,7 +1192,7 @@ export function DemoView({
         const connResults = await Promise.all(
           explicitConnSnapshots.map(async (c) => {
             try {
-              await deleteConnector(demoId, c.id);
+              await adapter.deleteConnector(c.id);
               return null;
             } catch (err) {
               unmarkConnectorDeleted(c.id);
@@ -1179,6 +1208,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoNodes,
       demoConnectors,
       panelNodeId,
@@ -1275,7 +1305,7 @@ export function DemoView({
   // on disk via mergeNodeUpdates' '' → delete handling.
   const onNodeNameChange = useCallback(
     (nodeId: string, name: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       const prevName = node && 'name' in node.data ? node.data.name : undefined;
       // Undo must restore the previous name including the "no name" case.
@@ -1289,26 +1319,26 @@ export function DemoView({
       if (node) {
         pushUndo({
           do: async () => {
-            await updateNode(demoId, nodeId, { name });
+            await adapter.updateNode(nodeId, { name });
           },
           undo: async () => {
-            await updateNode(demoId, nodeId, { name: undoName });
+            await adapter.updateNode(nodeId, { name: undoName });
           },
           coalesceKey: `node:${nodeId}:name`,
         });
       }
-      updateNode(demoId, nodeId, { name }).catch((err) => {
+      adapter.updateNode(nodeId, { name }).catch((err) => {
         if (node) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode name failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onNodeDescriptionChange = useCallback(
     (nodeId: string, next: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = node.data.description ?? '';
@@ -1317,25 +1347,25 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await updateNode(demoId, nodeId, { description: next });
+          await adapter.updateNode(nodeId, { description: next });
         },
         undo: async () => {
-          await updateNode(demoId, nodeId, { description: prev });
+          await adapter.updateNode(nodeId, { description: prev });
         },
         coalesceKey: `node:${nodeId}:description`,
       });
-      updateNode(demoId, nodeId, { description: next }).catch((err) => {
+      adapter.updateNode(nodeId, { description: next }).catch((err) => {
         dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode description failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onNodeDetailChange = useCallback(
     (nodeId: string, next: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = node.data.detail ?? '';
@@ -1344,25 +1374,25 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await updateNode(demoId, nodeId, { detail: next });
+          await adapter.updateNode(nodeId, { detail: next });
         },
         undo: async () => {
-          await updateNode(demoId, nodeId, { detail: prev });
+          await adapter.updateNode(nodeId, { detail: prev });
         },
         coalesceKey: `node:${nodeId}:detail`,
       });
-      updateNode(demoId, nodeId, { detail: next }).catch((err) => {
+      adapter.updateNode(nodeId, { detail: next }).catch((err) => {
         dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode detail failed', err);
       });
     },
-    [demoId, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onCreateShapeNode = useCallback(
     (shape: ShapeKind, position: Position, dims: { width: number; height: number }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       setEditError(null);
       // Generate the id client-side so the optimistic override and the
       // server echo share an id — the SSE-driven prune drops the override
@@ -1395,14 +1425,15 @@ export function DemoView({
       // Push from the .then so the undo entry binds to the server-issued id
       // (matches `onCreateConnector`). No dropTop is needed on .catch because
       // nothing was pushed before the API resolved.
-      createNode(demoId, payload)
+      adapter
+        .createNode(payload)
         .then(({ id: returnedId }) => {
           pushUndo({
             do: async () => {
-              await createNode(demoId, { ...payload, id: returnedId });
+              await adapter.createNode({ ...payload, id: returnedId });
             },
             undo: async () => {
-              await deleteNode(demoId, returnedId);
+              await adapter.deleteNode(returnedId);
             },
           });
         })
@@ -1412,7 +1443,7 @@ export function DemoView({
           console.error('createNode failed', err);
         });
     },
-    [demoId, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-013 (icon picker): commit a new iconNode at the picked viewport
@@ -1422,7 +1453,7 @@ export function DemoView({
   // marked selected on success so the detail panel + style strip open on it.
   const onCreateIconNode = useCallback(
     (iconName: string, position: Position) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       setEditError(null);
       const id = `node-${crypto.randomUUID()}`;
       const data = {
@@ -1445,14 +1476,15 @@ export function DemoView({
       setNodeOverride(id, optimistic as Partial<DemoNode>);
       setSelectedIds([id]);
       markMutation();
-      createNode(demoId, payload)
+      adapter
+        .createNode(payload)
         .then(({ id: returnedId }) => {
           pushUndo({
             do: async () => {
-              await createNode(demoId, { ...payload, id: returnedId });
+              await adapter.createNode({ ...payload, id: returnedId });
             },
             undo: async () => {
-              await deleteNode(demoId, returnedId);
+              await adapter.deleteNode(returnedId);
             },
           });
         })
@@ -1462,7 +1494,7 @@ export function DemoView({
           console.error('createNode (icon) failed', err);
         });
     },
-    [demoId, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-017: commit a new htmlNode at the drop position from the toolbar's
@@ -1483,7 +1515,7 @@ export function DemoView({
   // visible "Loading…" → "Edit me" transition is the expected UX.
   const onCreateHtmlNode = useCallback(
     (args: { position: Position }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       setEditError(null);
       const id = `node-${crypto.randomUUID()}`;
       const htmlPath = `blocks/${id}.html`;
@@ -1502,14 +1534,15 @@ export function DemoView({
       setNodeOverride(id, optimistic as Partial<DemoNode>);
       setSelectedIds([id]);
       markMutation();
-      createNode(demoId, payload)
+      adapter
+        .createNode(payload)
         .then(({ id: returnedId }) => {
           pushUndo({
             do: async () => {
-              await createNode(demoId, { ...payload, id: returnedId });
+              await adapter.createNode({ ...payload, id: returnedId });
             },
             undo: async () => {
-              await deleteNode(demoId, returnedId);
+              await adapter.deleteNode(returnedId);
             },
           });
         })
@@ -1519,7 +1552,7 @@ export function DemoView({
           console.error('createNode (htmlNode) failed', err);
         });
     },
-    [demoId, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-008: retry map for in-flight image uploads. Keyed by the optimistic
@@ -1570,15 +1603,25 @@ export function DemoView({
       position: Position;
       dims: { width: number; height: number };
     }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       setEditError(null);
       markMutation();
+      // US-025: image-upload-flow's deps still match the legacy (demoId, …)
+      // signatures from `@/lib/api`. Wrap the bound adapter into those shapes
+      // so the orchestrator continues to work unchanged; refactoring its
+      // signature is out-of-scope for US-025 and lands in a later P4/P5 story.
       void performImageDropUpload(
         { ...args, demoId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
-          upload: uploadImageFile,
-          createNode,
-          deleteNode,
+          upload: (_projectId, file, filename) => adapter.uploadImage(file, filename),
+          createNode: async (_demoId, body) => {
+            const { id } = await adapter.createNode(body);
+            return { id };
+          },
+          deleteNode: async (_demoId, nodeId) => {
+            await adapter.deleteNode(nodeId);
+            return { ok: true as const };
+          },
           setOverride: setNodeOverride,
           pushUndo,
           rememberRetry: rememberImageRetry,
@@ -1588,7 +1631,15 @@ export function DemoView({
         console.error('image-upload-flow failed', err);
       });
     },
-    [demoId, setNodeOverride, pushUndo, markMutation, rememberImageRetry, forgetImageRetry],
+    [
+      demoId,
+      adapter,
+      setNodeOverride,
+      pushUndo,
+      markMutation,
+      rememberImageRetry,
+      forgetImageRetry,
+    ],
   );
 
   const onCreateImageFromFile = useCallback(
@@ -1598,13 +1649,13 @@ export function DemoView({
       dims: { width: number; height: number };
       originalFilename: string;
     }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       // Generate the id client-side so the optimistic override and the server
       // echo share an id (mirrors `onCreateShapeNode`).
       const nodeId = `node-${crypto.randomUUID()}`;
       runImageUpload({ nodeId, ...args });
     },
-    [demoId, runImageUpload],
+    [demoId, adapter, runImageUpload],
   );
 
   const onRetryImageUpload = useCallback(
@@ -1647,7 +1698,7 @@ export function DemoView({
     (name: string) => {
       pushRecent(name);
       if (iconPicker.mode === 'replace' && iconPicker.nodeId) {
-        if (demoId) {
+        if (demoId && adapter) {
           const targetId = iconPicker.nodeId;
           const node = demoNodes?.find((n) => n.id === targetId);
           const prevIcon = node?.type === 'iconNode' ? node.data.icon : undefined;
@@ -1658,15 +1709,15 @@ export function DemoView({
             const prev = prevIcon;
             pushUndo({
               do: async () => {
-                await updateNode(demoId, targetId, { icon: name });
+                await adapter.updateNode(targetId, { icon: name });
               },
               undo: async () => {
-                await updateNode(demoId, targetId, { icon: prev });
+                await adapter.updateNode(targetId, { icon: prev });
               },
               coalesceKey: `node:${targetId}:icon`,
             });
           }
-          updateNode(demoId, targetId, { icon: name }).catch((err) => {
+          adapter.updateNode(targetId, { icon: name }).catch((err) => {
             dropNodeOverride(targetId);
             if (prevIcon !== undefined) dropUndoTop();
             setEditError(err instanceof Error ? err.message : String(err));
@@ -1689,6 +1740,7 @@ export function DemoView({
       iconPicker.mode,
       iconPicker.nodeId,
       demoId,
+      adapter,
       demoNodes,
       setNodeOverride,
       dropNodeOverride,
@@ -1702,7 +1754,7 @@ export function DemoView({
 
   const onConnectorLabelChange = useCallback(
     (connId: string, label: string) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevLabel = conn?.label;
       setConnectorOverride(connId, { label } as Partial<Connector>);
@@ -1711,15 +1763,15 @@ export function DemoView({
       if (conn) {
         pushUndo({
           do: async () => {
-            await updateConnector(demoId, connId, { label });
+            await adapter.updateConnector(connId, { label });
           },
           undo: async () => {
-            await updateConnector(demoId, connId, { label: prevLabel });
+            await adapter.updateConnector(connId, { label: prevLabel });
           },
           coalesceKey: `connector:${connId}:label`,
         });
       }
-      updateConnector(demoId, connId, { label }).catch((err) => {
+      adapter.updateConnector(connId, { label }).catch((err) => {
         // US-021: keep optimistic visible — see `onNodeNameChange` for the
         // failure-mode rationale.
         if (conn) dropUndoTop();
@@ -1727,7 +1779,7 @@ export function DemoView({
         console.error('updateConnector label failed', err);
       });
     },
-    [demoId, demoConnectors, setConnectorOverride, pushUndo, dropUndoTop, markMutation],
+    [demoId, adapter, demoConnectors, setConnectorOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   // Create a default connector from a handle-drag gesture (US-029). We
@@ -1737,7 +1789,7 @@ export function DemoView({
   // surface the existing edit-error-banner.
   const onCreateConnector = useCallback(
     (source: string, target: string, options?: { targetPin?: EdgePin }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const id = `conn-${crypto.randomUUID()}`;
       // US-025: by default every new connector is floating — both endpoints
       // carry *HandleAutoPicked: true and no handle ids. When the body-drop
@@ -1773,14 +1825,15 @@ export function DemoView({
       // Push from the .then so the undo entry binds to the server-issued id
       // (matches `onCreateShapeNode`). No dropTop is needed on .catch because
       // nothing was pushed before the API resolved.
-      createConnector(demoId, payload)
+      adapter
+        .createConnector(payload)
         .then(({ id: returnedId }) => {
           pushUndo({
             do: async () => {
-              await createConnector(demoId, { ...payload, id: returnedId });
+              await adapter.createConnector({ ...payload, id: returnedId });
             },
             undo: async () => {
-              await deleteConnector(demoId, returnedId);
+              await adapter.deleteConnector(returnedId);
             },
           });
         })
@@ -1790,7 +1843,7 @@ export function DemoView({
           console.error('createConnector failed', err);
         });
     },
-    [demoId, setConnectorOverride, dropConnectorOverride, pushUndo, markMutation],
+    [demoId, adapter, setConnectorOverride, dropConnectorOverride, pushUndo, markMutation],
   );
 
   // US-015: drop-on-pane create-and-connect. Combines `onCreateShapeNode` and
@@ -1810,7 +1863,7 @@ export function DemoView({
       position: Position;
       shape: ShapeKind;
     }) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       setEditError(null);
       const newNodeId = `node-${crypto.randomUUID()}`;
       const newConnId = `conn-${crypto.randomUUID()}`;
@@ -1854,12 +1907,12 @@ export function DemoView({
       // succeeded.
       (async () => {
         try {
-          await createNode(demoId, nodePayload);
-          await createConnector(demoId, connPayload);
+          await adapter.createNode(nodePayload);
+          await adapter.createConnector(connPayload);
           pushUndo({
             do: async () => {
-              await createNode(demoId, nodePayload);
-              await createConnector(demoId, connPayload);
+              await adapter.createNode(nodePayload);
+              await adapter.createConnector(connPayload);
             },
             undo: async () => {
               // Drop the optimistic overrides up-front so a same-tick undo
@@ -1873,8 +1926,8 @@ export function DemoView({
               dropNodeOverride(newNodeId);
               // Connector first (avoids server-side cascade chatter), then
               // the node.
-              await deleteConnector(demoId, newConnId).catch(() => {});
-              await deleteNode(demoId, newNodeId).catch(() => {});
+              await adapter.deleteConnector(newConnId).catch(() => {});
+              await adapter.deleteNode(newNodeId).catch(() => {});
             },
           });
         } catch (err) {
@@ -1887,6 +1940,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       setNodeOverride,
       dropNodeOverride,
       setConnectorOverride,
@@ -1926,7 +1980,7 @@ export function DemoView({
 
   const onPasteNodes = useCallback(
     (flowPos: Position | null) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const payload = clipboardRef.current;
       if (!payload || payload.nodes.length === 0) return;
       const { newNodes, newConnectors } = buildPastePayload<DemoNode, Connector>({
@@ -1965,7 +2019,7 @@ export function DemoView({
       (async () => {
         try {
           for (const n of newNodes) {
-            await createNode(demoId, {
+            await adapter.createNode({
               id: n.id,
               type: n.type,
               position: n.position,
@@ -1973,12 +2027,12 @@ export function DemoView({
             });
           }
           for (const c of newConnectors) {
-            await createConnector(demoId, c);
+            await adapter.createConnector(c);
           }
           pushUndo({
             do: async () => {
               for (const n of newNodes) {
-                await createNode(demoId, {
+                await adapter.createNode({
                   id: n.id,
                   type: n.type,
                   position: n.position,
@@ -1986,14 +2040,14 @@ export function DemoView({
                 });
               }
               for (const c of newConnectors) {
-                await createConnector(demoId, c);
+                await adapter.createConnector(c);
               }
             },
             undo: async () => {
               // Delete connectors first (avoid the "deleted node still has
               // edges" cascade chatter on the server), then nodes.
-              await Promise.allSettled(newConnectors.map((c) => deleteConnector(demoId, c.id)));
-              await Promise.allSettled(newNodes.map((n) => deleteNode(demoId, n.id)));
+              await Promise.allSettled(newConnectors.map((c) => adapter.deleteConnector(c.id)));
+              await Promise.allSettled(newNodes.map((n) => adapter.deleteNode(n.id)));
             },
           });
         } catch (err) {
@@ -2006,6 +2060,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       setNodeOverride,
       dropNodeOverride,
       setConnectorOverride,
@@ -2125,7 +2180,7 @@ export function DemoView({
   // hasn't reported a size yet.
   const onTidy = useCallback(
     (scope: 'all' | 'selection') => {
-      if (!demoId || !demoNodes) return;
+      if (!demoId || !adapter || !demoNodes) return;
       const overrides = nodePending.overrides;
       const inst = rfInstanceRef.current;
       const selectedSet = scope === 'selection' ? new Set(selectedIdsRef.current) : null;
@@ -2195,10 +2250,10 @@ export function DemoView({
       // (undo). Cmd+Z reverts every node in a single keystroke.
       pushUndo({
         do: async () => {
-          await Promise.allSettled(moves.map((m) => updateNodePosition(demoId, m.id, m.next)));
+          await Promise.allSettled(moves.map((m) => adapter.updateNodePosition(m.id, m.next)));
         },
         undo: async () => {
-          await Promise.allSettled(moves.map((m) => updateNodePosition(demoId, m.id, m.prev)));
+          await Promise.allSettled(moves.map((m) => adapter.updateNodePosition(m.id, m.prev)));
         },
       });
       // Fan-out PATCHes; surface a single banner if any leg failed. Successful
@@ -2208,7 +2263,7 @@ export function DemoView({
       Promise.all(
         moves.map(async (m) => {
           try {
-            await updateNodePosition(demoId, m.id, m.next);
+            await adapter.updateNodePosition(m.id, m.next);
             return null;
           } catch (err) {
             dropNodeOverride(m.id);
@@ -2227,6 +2282,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoNodes,
       demoConnectors,
       nodePending.overrides,
@@ -2635,7 +2691,7 @@ export function DemoView({
         targetPin?: EdgePin | null;
       },
     ) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       // Capture every endpoint-shape field so undo can reset whichever side(s)
       // moved (and leave the unchanged side at its original value). The
@@ -2688,15 +2744,15 @@ export function DemoView({
         const prevPatch = prev;
         pushUndo({
           do: async () => {
-            await updateConnector(demoId, connId, patch);
+            await adapter.updateConnector(connId, patch);
           },
           undo: async () => {
-            await updateConnector(demoId, connId, prevPatch);
+            await adapter.updateConnector(connId, prevPatch);
           },
           coalesceKey: `connector:${connId}:reconnect`,
         });
       }
-      updateConnector(demoId, connId, patch).catch((err) => {
+      adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
         if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
@@ -2705,6 +2761,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoConnectors,
       setConnectorOverride,
       dropConnectorOverride,
@@ -2721,7 +2778,7 @@ export function DemoView({
   // the previous state was unpinned) in one entry per drag gesture.
   const onPinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target', pin: EdgePin) => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
@@ -2737,15 +2794,15 @@ export function DemoView({
         }>;
         pushUndo({
           do: async () => {
-            await updateConnector(demoId, connId, { [field]: pin });
+            await adapter.updateConnector(connId, { [field]: pin });
           },
           undo: async () => {
-            await updateConnector(demoId, connId, prevPatch);
+            await adapter.updateConnector(connId, prevPatch);
           },
           coalesceKey: `connector:${connId}:${field}`,
         });
       }
-      updateConnector(demoId, connId, { [field]: pin }).catch((err) => {
+      adapter.updateConnector(connId, { [field]: pin }).catch((err) => {
         dropConnectorOverride(connId);
         if (conn) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
@@ -2754,6 +2811,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoConnectors,
       setConnectorOverride,
       dropConnectorOverride,
@@ -2770,7 +2828,7 @@ export function DemoView({
   // previous pin in one entry.
   const onUnpinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target') => {
-      if (!demoId) return;
+      if (!demoId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       if (!prevPin) return; // Nothing to unpin.
@@ -2780,13 +2838,13 @@ export function DemoView({
       markMutation();
       pushUndo({
         do: async () => {
-          await updateConnector(demoId, connId, { [field]: null });
+          await adapter.updateConnector(connId, { [field]: null });
         },
         undo: async () => {
-          await updateConnector(demoId, connId, { [field]: prevPin });
+          await adapter.updateConnector(connId, { [field]: prevPin });
         },
       });
-      updateConnector(demoId, connId, { [field]: null }).catch((err) => {
+      adapter.updateConnector(connId, { [field]: null }).catch((err) => {
         dropConnectorOverride(connId);
         dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
@@ -2795,6 +2853,7 @@ export function DemoView({
     },
     [
       demoId,
+      adapter,
       demoConnectors,
       setConnectorOverride,
       dropConnectorOverride,
@@ -2968,8 +3027,9 @@ export function DemoView({
         />
       </div>
 
-      {demo ? (
+      {demo && adapter ? (
         <DemoCanvas
+          adapter={adapter}
           projectId={demoId ?? undefined}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}

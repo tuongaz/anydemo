@@ -2,6 +2,7 @@ import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import type { OverrideMap } from '@/hooks/use-pending-overrides';
 import type { Connector, DemoNode, EdgePin, ReorderOp, ShapeKind } from '@/lib/api';
+import type { CanvasAdapter } from '@/lib/canvas-adapter';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
 import {
   CanvasToolbar,
@@ -87,6 +88,15 @@ import {
 import '@xyflow/react/dist/style.css';
 
 export interface DemoCanvasProps {
+  /**
+   * US-025: persistence adapter bound to this demo. Replaces the implicit
+   * `@/lib/api` REST coupling that demo-view used to call directly. Every
+   * mutation (node/connector CRUD, image upload, optional playNode) routes
+   * through this adapter. US-027 will narrow this prop into a discriminated
+   * union (required in edit mode, optional in view mode); for now it's
+   * required so edit-mode callsites can pass through without conditionals.
+   */
+  adapter: CanvasAdapter;
   /**
    * US-004: project id used by file-backed nodes (imageNode, future htmlNode)
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
@@ -1228,6 +1238,10 @@ const dataErrorMessageFor = (runs: NodeRuns | undefined, id: string): string | u
   runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
 
 export function DemoCanvas({
+  // US-025: `adapter` prop is plumbed but not yet read inside demo-canvas —
+  // every mutation site is still routed through callbacks the parent supplies.
+  // US-026/27 begin reading adapter.* directly from inside the component.
+  adapter: _adapter,
   projectId,
   nodes,
   connectors,

@@ -10,6 +10,7 @@ import {
   handleClipboardShortcut,
 } from '@/components/demo-canvas';
 import type { DemoNode } from '@/lib/api';
+import type { CanvasAdapter } from '@/lib/canvas-adapter';
 import { NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import {
   CanvasToolbar,
@@ -118,6 +119,17 @@ function findElement(
   return null;
 }
 
+// US-025: every DemoCanvasProps now requires an adapter. Inside these
+// hook-shim tests no method is ever called, so a throwing stub catches any
+// accidental mutation paths the test bodies introduce later.
+const noopAdapter: CanvasAdapter = new Proxy({} as CanvasAdapter, {
+  get(_t, key) {
+    return () => {
+      throw new Error(`adapter.${String(key)} should not be invoked in unit tests`);
+    };
+  },
+});
+
 function callDemoCanvas(
   overrides: Partial<DemoCanvasProps> = {},
   hookOptions: {
@@ -126,6 +138,7 @@ function callDemoCanvas(
   } = {},
 ): unknown {
   const props: DemoCanvasProps = {
+    adapter: noopAdapter,
     nodes: [],
     connectors: [],
     selectedNodeIds: [],
