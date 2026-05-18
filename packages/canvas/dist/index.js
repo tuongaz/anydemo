@@ -6103,12 +6103,15 @@ var EDIT_DEFAULTS = {
   showDetailPanel: true,
   showStatusBadges: true,
   showResizeHandles: true,
+  showControls: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
   enableImageDrop: true,
   enableZoom: true,
-  enablePan: true
+  enablePan: true,
+  enableSelection: true,
+  enableNodeMove: true
 };
 var VIEW_DEFAULTS = {
   showToolbar: false,
@@ -6118,6 +6121,9 @@ var VIEW_DEFAULTS = {
   // a live monitoring surface — the AC excludes status badges from "chrome".
   showStatusBadges: true,
   showResizeHandles: false,
+  // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
+  // fit-view buttons — they're navigation aids, not editing affordances.
+  showControls: true,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -6125,22 +6131,48 @@ var VIEW_DEFAULTS = {
   // Pan/zoom remain on in view mode so embedders get a navigable canvas; the
   // gestures don't mutate persisted state.
   enableZoom: true,
-  enablePan: true
+  enablePan: true,
+  // Selection + local-state drag remain on so view-mode embedders can still
+  // click a node to mirror selection up to the host (e.g. open their own
+  // inspector) and nudge nodes locally without persisting.
+  enableSelection: true,
+  enableNodeMove: true
+};
+var MINI_DEFAULTS = {
+  showToolbar: false,
+  showStyleStrip: false,
+  showDetailPanel: false,
+  // Status badges off so thumbnails read visually neutral; flip on via
+  // override for a live-state preview.
+  showStatusBadges: false,
+  showResizeHandles: false,
+  showControls: false,
+  enableKeyboard: false,
+  enableContextMenu: false,
+  enableDragDrop: false,
+  enableImageDrop: false,
+  enableZoom: false,
+  enablePan: false,
+  enableSelection: false,
+  enableNodeMove: false
 };
 function resolveFlags(input) {
-  const defaults = input.mode === "edit" ? EDIT_DEFAULTS : VIEW_DEFAULTS;
+  const defaults = input.mode === "edit" ? EDIT_DEFAULTS : input.mode === "mini" ? MINI_DEFAULTS : VIEW_DEFAULTS;
   return {
     showToolbar: input.showToolbar ?? defaults.showToolbar,
     showStyleStrip: input.showStyleStrip ?? defaults.showStyleStrip,
     showDetailPanel: input.showDetailPanel ?? defaults.showDetailPanel,
     showStatusBadges: input.showStatusBadges ?? defaults.showStatusBadges,
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
+    showControls: input.showControls ?? defaults.showControls,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
     enableImageDrop: input.enableImageDrop ?? defaults.enableImageDrop,
     enableZoom: input.enableZoom ?? defaults.enableZoom,
-    enablePan: input.enablePan ?? defaults.enablePan
+    enablePan: input.enablePan ?? defaults.enablePan,
+    enableSelection: input.enableSelection ?? defaults.enableSelection,
+    enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove
   };
 }
 var MIN_DRAW_SIZE = 40;
@@ -6574,12 +6606,15 @@ function SeeflowCanvas(props) {
     showDetailPanel,
     showStatusBadges,
     showResizeHandles,
+    showControls,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
     enableImageDrop,
     enableZoom,
-    enablePan
+    enablePan,
+    enableSelection,
+    enableNodeMove
   } = props;
   const flags = useMemo2(
     () => resolveFlags({
@@ -6589,12 +6624,15 @@ function SeeflowCanvas(props) {
       showDetailPanel,
       showStatusBadges,
       showResizeHandles,
+      showControls,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
       enableImageDrop,
       enableZoom,
-      enablePan
+      enablePan,
+      enableSelection,
+      enableNodeMove
     }),
     [
       mode,
@@ -6603,12 +6641,15 @@ function SeeflowCanvas(props) {
       showDetailPanel,
       showStatusBadges,
       showResizeHandles,
+      showControls,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
       enableImageDrop,
       enableZoom,
-      enablePan
+      enablePan,
+      enableSelection,
+      enableNodeMove
     ]
   );
   const isEditMode = mode === "edit";
@@ -6616,7 +6657,11 @@ function SeeflowCanvas(props) {
   useEffect9(() => {
     flagsRef.current = flags;
   }, [flags]);
-  const resolvedAutoFitView = useMemo2(() => resolveAutoFitView(autoFitView), [autoFitView]);
+  const effectiveAutoFitView = autoFitView ?? (mode === "mini" ? true : void 0);
+  const resolvedAutoFitView = useMemo2(
+    () => resolveAutoFitView(effectiveAutoFitView),
+    [effectiveAutoFitView]
+  );
   const runs = runtime?.runs;
   const statusByNode = runtime?.statuses;
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
@@ -7706,7 +7751,7 @@ function SeeflowCanvas(props) {
             edgeTypes,
             proOptions: { hideAttribution: true },
             fitView: true,
-            nodesDraggable: (isEditMode ? !!onNodePositionChange : true) && !drawShape,
+            nodesDraggable: (isEditMode ? !!onNodePositionChange : true) && !drawShape && flags.enableNodeMove,
             nodesConnectable: isEditMode && !!onCreateConnector && !drawShape,
             deleteKeyCode: isEditMode ? ["Backspace", "Delete"] : null,
             zoomOnScroll: flags.enableZoom,
@@ -7739,10 +7784,10 @@ function SeeflowCanvas(props) {
             reconnectRadius: 10,
             edgesReconnectable: false,
             elevateNodesOnSelect: false,
-            elementsSelectable: !drawShape,
+            elementsSelectable: !drawShape && flags.enableSelection,
             selectNodesOnDrag: false,
             nodeClickDistance: 5,
-            selectionOnDrag: !drawShape,
+            selectionOnDrag: !drawShape && flags.enableSelection,
             panOnDrag: drawShape ? false : flags.enablePan ? [1, 2] : false,
             selectionMode: SelectionMode.Partial,
             selectionKeyCode: null,
@@ -7800,7 +7845,7 @@ function SeeflowCanvas(props) {
               /* @__PURE__ */ jsx37(StoreApiBridge, { storeApiRef }),
               /* @__PURE__ */ jsx37(ZoomBridge, { wrapperRef }),
               /* @__PURE__ */ jsx37(Background, { gap: 12, size: 0.6 }),
-              /* @__PURE__ */ jsxs24(Controls, { showInteractive: false, showFitView: false, children: [
+              flags.showControls ? /* @__PURE__ */ jsxs24(Controls, { showInteractive: false, showFitView: false, children: [
                 /* @__PURE__ */ jsx37(
                   ControlButton,
                   {
@@ -7825,7 +7870,7 @@ function SeeflowCanvas(props) {
                     children: /* @__PURE__ */ jsx37(LayoutDashboard, { className: "sf-h-3 sf-w-3", "aria-hidden": "true" })
                   }
                 )
-              ] }),
+              ] }) : null,
               flags.showResizeHandles ? /* @__PURE__ */ jsx37(
                 SelectionResizeOverlay,
                 {

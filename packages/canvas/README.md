@@ -52,6 +52,31 @@ import { SeeflowCanvas } from '@seeflow/canvas';
 />;
 ```
 
+## Quickstart — mini mode (thumbnails)
+
+Static preview — every chrome affordance off (no Controls cluster, toolbar,
+style-strip, detail panel) and every input path inert (no pan, zoom,
+selection, or node drag). `autoFitView` defaults to `true` so the flow
+self-frames inside whatever box you drop it into. No adapter required.
+
+```tsx
+import { SeeflowCanvas } from '@seeflow/canvas';
+
+<div style={{ width: 240, height: 160 }}>
+  <SeeflowCanvas
+    mode="mini"
+    nodes={nodes}
+    connectors={connectors}
+    selectedNodeIds={[]}
+    selectedConnectorIds={[]}
+  />
+</div>;
+```
+
+Mini mode is just the floor — `CanvasFeatureOverrides` still composes, so a
+thumbnail that wants live-state badges can pass `showStatusBadges={true}`
+without leaving mini mode.
+
 ## Quickstart — edit mode
 
 Edit mode requires a `CanvasAdapter` — the seam through which the canvas

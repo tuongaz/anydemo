@@ -2043,9 +2043,12 @@ declare function SelectionResizeOverlay({ selectedNodes, onMultiResize, paddingP
  * affordance renders and every mutation handler is live. `view` is the
  * embedder-facing read-only mode — chrome is suppressed, editing handlers
  * inert, but pan/zoom and SSE-driven status badges still work so the canvas
- * remains a useful presentation surface.
+ * remains a useful presentation surface. `mini` is the static-preview mode
+ * for thumbnails — every chrome affordance is off (incl. the bottom-left
+ * Controls cluster), all input is inert (no pan, zoom, selection, or node
+ * drag), and auto-fit defaults to ON so the flow frames itself.
  */
-type SeeflowCanvasMode = 'edit' | 'view';
+type SeeflowCanvasMode = 'edit' | 'view' | 'mini';
 /**
  * US-027: per-feature override flags. Each flag is optional; when unset the
  * effective value comes from the mode preset in {@link resolveFlags}. Use these
@@ -2064,12 +2067,30 @@ interface CanvasFeatureOverrides {
     showDetailPanel?: boolean;
     showStatusBadges?: boolean;
     showResizeHandles?: boolean;
+    /**
+     * Gates the bottom-left zoom/fit/tidy `<Controls>` cluster. Default ON for
+     * `edit` and `view`, OFF for `mini` (thumbnails want no chrome).
+     */
+    showControls?: boolean;
     enableKeyboard?: boolean;
     enableContextMenu?: boolean;
     enableDragDrop?: boolean;
     enableImageDrop?: boolean;
     enableZoom?: boolean;
     enablePan?: boolean;
+    /**
+     * Gates `<ReactFlow>` `elementsSelectable` + `selectionOnDrag`. Default ON
+     * for `edit` and `view` (clicking and marquee-selecting a node opens the
+     * inspector / mirrors selection upward); OFF for `mini` so thumbnail
+     * clicks are inert.
+     */
+    enableSelection?: boolean;
+    /**
+     * Gates `<ReactFlow>` `nodesDraggable`. Default ON for `edit` and `view`
+     * (view-mode drag is local-state-only — no PATCH dispatched); OFF for
+     * `mini` so the thumbnail is fully static.
+     */
+    enableNodeMove?: boolean;
     storageKey?: string;
 }
 /**
@@ -2083,12 +2104,15 @@ interface ResolvedCanvasFlags {
     showDetailPanel: boolean;
     showStatusBadges: boolean;
     showResizeHandles: boolean;
+    showControls: boolean;
     enableKeyboard: boolean;
     enableContextMenu: boolean;
     enableDragDrop: boolean;
     enableImageDrop: boolean;
     enableZoom: boolean;
     enablePan: boolean;
+    enableSelection: boolean;
+    enableNodeMove: boolean;
 }
 /**
  * US-027: resolve the effective flag set from the canvas mode + caller
@@ -2555,8 +2579,9 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
 }
 /**
  * US-027: discriminated union — `adapter` is required in edit mode, optional
- * in view mode (a view-mode embedder has no mutations to persist). Both arms
- * share {@link SeeflowCanvasBaseProps}; the discriminator + adapter shape are the
+ * in view mode (a view-mode embedder has no mutations to persist) and in
+ * mini mode (thumbnails dispatch nothing). All three arms share
+ * {@link SeeflowCanvasBaseProps}; the discriminator + adapter shape are the
  * only difference. TypeScript narrows `props.adapter` to `CanvasAdapter` in
  * the edit branch without callers having to assert.
  */
@@ -2565,6 +2590,9 @@ type SeeflowCanvasProps = (SeeflowCanvasBaseProps & {
     adapter: CanvasAdapter;
 }) | (SeeflowCanvasBaseProps & {
     mode: 'view';
+    adapter?: CanvasAdapter;
+}) | (SeeflowCanvasBaseProps & {
+    mode: 'mini';
     adapter?: CanvasAdapter;
 });
 /**

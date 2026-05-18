@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { type Connection, type Node, ReactFlow } from '@xyflow/react';
+import { type Connection, Controls, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
 import { NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
@@ -2350,6 +2350,86 @@ describe('SeeflowCanvas', () => {
     });
   });
 
+  describe("mode='mini' renders a static, chrome-free thumbnail", () => {
+    // Mini-mode contract: every chrome affordance suppressed (no Controls,
+    // toolbar, style-strip, detail panel, resize overlay) AND every input
+    // path inert on the ReactFlow root (nodesDraggable / elementsSelectable
+    // / selectionOnDrag / zoom / pan all false). Auto-fit-view defaults on
+    // so the flow self-frames inside whatever box the consumer hands us.
+
+    it('suppresses the bottom-left Controls cluster', () => {
+      const tree = callSeeflowCanvas({
+        mode: 'mini',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+      });
+      const controls = findElement(tree, (el) => el.type === Controls);
+      expect(controls).toBeNull();
+    });
+
+    it('suppresses toolbar, style-strip, and resize overlay even when handlers are wired', () => {
+      const tree = callSeeflowCanvas({
+        mode: 'mini',
+        adapter: undefined,
+        onCreateShapeNode: () => {},
+        onStyleNode: () => {},
+        onStyleConnector: () => {},
+      });
+      expect(findElement(tree, (el) => el.type === CanvasToolbar)).toBeNull();
+      expect(findElement(tree, (el) => el.type === StyleStrip)).toBeNull();
+      expect(findElement(tree, (el) => el.type === SelectionResizeOverlay)).toBeNull();
+    });
+
+    it('suppresses the DetailPanel sidebar', () => {
+      const tree = callSeeflowCanvas({
+        mode: 'mini',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+      });
+      expect(findElement(tree, (el) => el.type === DetailPanel)).toBeNull();
+    });
+
+    it('makes every ReactFlow input path inert', () => {
+      const tree = callSeeflowCanvas({
+        mode: 'mini',
+        adapter: undefined,
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        // Wiring these MUST NOT re-enable interactivity in mini mode — the
+        // flag system gates ahead of the per-handler wiring.
+        onNodePositionChange: () => {
+          throw new Error('mini-mode onNodePositionChange must not be invoked');
+        },
+        onCreateConnector: () => {
+          throw new Error('mini-mode onCreateConnector must not be invoked');
+        },
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+      expect(rf.props.nodesDraggable).toBe(false);
+      expect(rf.props.nodesConnectable).toBe(false);
+      expect(rf.props.elementsSelectable).toBe(false);
+      expect(rf.props.selectionOnDrag).toBe(false);
+      expect(rf.props.zoomOnScroll).toBe(false);
+      expect(rf.props.zoomOnPinch).toBe(false);
+      expect(rf.props.panOnDrag).toBe(false);
+      expect(rf.props.deleteKeyCode).toBeNull();
+    });
+
+    it('lets a consumer flip individual flags back on (e.g. showStatusBadges)', () => {
+      // The flag system still composes — mini is the floor, not a wall.
+      const tree = callSeeflowCanvas({
+        mode: 'mini',
+        adapter: undefined,
+        showStatusBadges: true,
+        showControls: true,
+      });
+      const controls = findElement(tree, (el) => el.type === Controls);
+      // Controls reappear once the override flips showControls back on.
+      expect(controls).not.toBeNull();
+    });
+  });
+
   describe('US-007: built-in DetailPanel sidebar', () => {
     // Selection-driven sidebar: SeeflowCanvas internalizes <DetailPanel> and
     // derives its target from selectedNodeIds[0] / selectedConnectorIds[0].
@@ -2796,32 +2876,79 @@ describe('US-027: resolveFlags helper', () => {
       showDetailPanel: true,
       showStatusBadges: true,
       showResizeHandles: true,
+      showControls: true,
       enableKeyboard: true,
       enableContextMenu: true,
       enableDragDrop: true,
       enableImageDrop: true,
       enableZoom: true,
       enablePan: true,
+      enableSelection: true,
+      enableNodeMove: true,
     });
   });
 
   it("returns the view preset when no overrides are passed (mode='view')", () => {
     // The view preset hides chrome + disables every editing path, but keeps
-    // pan/zoom (so the canvas is navigable) and status badges (so SSE-driven
-    // monitoring still surfaces).
+    // pan/zoom (so the canvas is navigable), status badges (so SSE-driven
+    // monitoring still surfaces), selection + local-state node drag, and
+    // the bottom-left Controls cluster (zoom-in/out/fit/tidy navigation aids).
     expect(resolveFlags({ mode: 'view' })).toEqual({
       showToolbar: false,
       showStyleStrip: false,
       showDetailPanel: false,
       showStatusBadges: true,
       showResizeHandles: false,
+      showControls: true,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,
       enableImageDrop: false,
       enableZoom: true,
       enablePan: true,
+      enableSelection: true,
+      enableNodeMove: true,
     });
+  });
+
+  it("returns the mini preset when no overrides are passed (mode='mini')", () => {
+    // The mini preset turns every chrome affordance off (incl. the Controls
+    // cluster) AND every input path inert (no pan/zoom, no selection, no
+    // node drag, no keyboard, no context menu). Status badges default off
+    // so thumbnails read visually neutral; consumers flip them on via
+    // override if they want a live-state preview.
+    expect(resolveFlags({ mode: 'mini' })).toEqual({
+      showToolbar: false,
+      showStyleStrip: false,
+      showDetailPanel: false,
+      showStatusBadges: false,
+      showResizeHandles: false,
+      showControls: false,
+      enableKeyboard: false,
+      enableContextMenu: false,
+      enableDragDrop: false,
+      enableImageDrop: false,
+      enableZoom: false,
+      enablePan: false,
+      enableSelection: false,
+      enableNodeMove: false,
+    });
+  });
+
+  it('lets a mini-mode consumer flip individual flags back on', () => {
+    // A thumbnail that wants live-state badges + pan-to-explore is still
+    // expressible via overrides; the mini preset is just the default floor.
+    const resolved = resolveFlags({
+      mode: 'mini',
+      showStatusBadges: true,
+      enablePan: true,
+    });
+    expect(resolved.showStatusBadges).toBe(true);
+    expect(resolved.enablePan).toBe(true);
+    // Other mini defaults stay off.
+    expect(resolved.showControls).toBe(false);
+    expect(resolved.enableSelection).toBe(false);
+    expect(resolved.enableNodeMove).toBe(false);
   });
 
   it('lets a per-feature override turn an edit-mode flag off', () => {
