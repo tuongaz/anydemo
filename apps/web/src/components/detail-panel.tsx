@@ -13,7 +13,7 @@ import {
   setStoredDetailPanelWidth,
   startResizeGesture,
 } from '@/lib/detail-panel-width';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { FolderOpen, PencilLine } from 'lucide-react';
 import {
   type CSSProperties,

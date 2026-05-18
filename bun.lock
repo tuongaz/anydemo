@@ -109,8 +109,10 @@
       },
       "peerDependencies": {
         "@xyflow/react": "*",
+        "clsx": "*",
         "lucide-react": "*",
         "react": "*",
+        "tailwind-merge": "*",
       },
     },
     "packages/sdk": {

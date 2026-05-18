@@ -1,8 +1,7 @@
 import { IconPickerPopover } from '@/components/icon-picker-popover';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import type { ShapeKind } from '@/lib/api';
-import { cn } from '@/lib/utils';
-import { type CommandId, getCommandTooltip } from '@seeflow/canvas';
+import { type CommandId, cn, getCommandTooltip } from '@seeflow/canvas';
 import {
   Circle,
   Cloud,

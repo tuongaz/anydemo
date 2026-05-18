@@ -1,4 +1,4 @@
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { Lock } from 'lucide-react';
 
 /**

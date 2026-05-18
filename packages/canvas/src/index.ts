@@ -99,3 +99,5 @@ export type {
 
 export { connectorToEdge, styleForKind } from './lib/connector-to-edge.ts';
 export type { DerivedEdge } from './lib/connector-to-edge.ts';
+
+export { cn } from './lib/cn.ts';

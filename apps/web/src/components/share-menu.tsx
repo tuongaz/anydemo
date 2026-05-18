@@ -4,7 +4,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { FileDown, Image as ImageIcon, Loader2, Share2, Upload } from 'lucide-react';
 import { useCallback, useState } from 'react';
 

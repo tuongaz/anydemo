@@ -18,7 +18,7 @@ import type {
   DemoNode,
 } from '@/lib/api';
 import { COLOR_TOKENS } from '@/lib/color-tokens';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import {
   ArrowLeftRight,
   ArrowRight,

@@ -1,5 +1,5 @@
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { type ComponentType, Fragment } from 'react';
 
 export type IconToggleOption<V extends string> = {

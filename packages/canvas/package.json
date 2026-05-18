@@ -12,8 +12,10 @@
   },
   "peerDependencies": {
     "@xyflow/react": "*",
+    "clsx": "*",
     "lucide-react": "*",
-    "react": "*"
+    "react": "*",
+    "tailwind-merge": "*"
   },
   "dependencies": {
     "dagre": "^0.8.5"

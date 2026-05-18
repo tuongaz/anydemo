@@ -7,7 +7,7 @@ import { useResizeGesture } from '@/components/nodes/use-resize-gesture';
 import { Button } from '@/components/ui/button';
 import type { NodeData, StatusReport } from '@/lib/api';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Loader2, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';

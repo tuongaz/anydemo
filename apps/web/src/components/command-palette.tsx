@@ -1,4 +1,3 @@
-import { cn } from '@/lib/utils';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
   COMMANDS,
@@ -6,6 +5,7 @@ import {
   type CommandContext,
   type CommandDef,
   type CommandId,
+  cn,
 } from '@seeflow/canvas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 

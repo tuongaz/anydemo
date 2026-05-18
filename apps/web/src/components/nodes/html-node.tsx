@@ -7,7 +7,7 @@ import { colorTokenStyle } from '@/lib/color-tokens';
 import { injectSanitizedHtml } from '@/lib/inject-sanitized-html';
 import { ensureTailwindLoaded } from '@/lib/tailwind-runtime';
 import { useHtmlContent } from '@/lib/use-html-content';
-import { cn } from '@/lib/utils';
+import { cn } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type ReactNode, memo, useEffect } from 'react';
 

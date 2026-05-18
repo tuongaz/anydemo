@@ -135,8 +135,8 @@
         "bun test passes (full suite)"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added clsx + tailwind-merge to canvas peerDependencies (matches US-006 pattern for @xyflow/react). US-011 will move them as full dependencies and remove from apps/web."
     },
     {
       "id": "US-009",

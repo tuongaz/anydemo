@@ -4,6 +4,8 @@
 - Canvas package layout: `packages/canvas/src/{index.ts, types.ts, lib/}` — barrel re-exports go in `src/index.ts`, scaffold already extracts shared schema types + color tokens + icon registry
 - Type imports inside @seeflow/canvas use `.ts` extensions (e.g. `from './types.ts'`); follow the existing convention when adding new exports
 - Plain `@types/*` packages live in `devDependencies` for canvas, but apps/web historically kept some `@types/*` in `dependencies` — match the existing block in each package.json
+- When canvas package needs a runtime dep that apps/web already lists (e.g. `clsx`, `tailwind-merge`), add it to `peerDependencies` in `packages/canvas/package.json` (matches the US-006 pattern for `@xyflow/react`). bun workspace hoisting resolves it via apps/web. Later P2/P3 stories may upgrade these to full `dependencies` and remove them from apps/web.
+- Biome's `useImportType` rule does NOT auto-merge duplicate imports from the same module — after a bulk path-swap that produces two `from '@seeflow/canvas'` lines in the same file, manually splice the new symbol into the existing import block (alphabetical) instead of waiting for `biome check --fix` to fix it
 - `bun run lint` (Biome) is import-order strict; running `bunx @biomejs/biome check --fix <file>` is the safe way to resolve `organizeImports` errors
 - Always run `bun run format` before `bun run lint` per CLAUDE.md
 - Quality gate per Ralph CLAUDE.md: `bun run typecheck`, `bun test`, `bun run format`, `bun run lint`
@@ -119,4 +121,19 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - Playwright MCP's accessibility snapshot collapses React Flow's pane to a single `application` ref — node/edge/handle internals aren't introspectable through the AX tree. For interaction asserts beyond "tool activated"/"demo loaded", fall back to screenshot diffs.
   - Studio's SSE on `/api/events?demoId=…` will produce `ERR_INCOMPLETE_CHUNKED_ENCODING` console errors on every demo switch and on most React re-renders (because the client tears down + re-opens the SSE). These are NOT failures — ignore them when smoke-testing. Real regressions would surface as missing UI / 4xx / 5xx in DevTools network or thrown JS exceptions.
   - For US-015 / US-023 / US-033's smoke tests: the verified-working interaction here was the 'R' keyboard shortcut (rectangle tool). For a richer smoke, candidates worth exercising next time: 'V' (select tool), drag a node via mouse coords (`browser_drag`?), open the share dialog, open the project switcher dialog (⌘K).
+---
+
+## 2026-05-18 - US-008
+- Moved `apps/web/src/lib/utils.ts` → `packages/canvas/src/lib/cn.ts` (renamed: 'cn' is the only export). The new file is a verbatim copy of the original (2 imports: `clsx`, `tailwind-merge`).
+- Added a single-line re-export to the bottom of `packages/canvas/src/index.ts`: `export { cn } from './lib/cn.ts';` (no type companion — `cn` exports no public types).
+- Added `clsx` and `tailwind-merge` to `packages/canvas/package.json` `peerDependencies` (alongside the existing `@xyflow/react`, `lucide-react`, `react` peer entries). `bun install` updated `bun.lock` cleanly; no apps/web manifest changes (the peer deps resolve through workspace hoisting from apps/web's existing dependencies).
+- Bulk-swapped 30 apps/web files from `from '@/lib/utils'` → `from '@seeflow/canvas'` via `sed -i ''`. 26 files were single-line replacements; 4 files (`demo-canvas.tsx`, `command-palette.tsx`, `canvas-toolbar.tsx`, `edges/editable-edge.tsx`) already had a `@seeflow/canvas` import — manually merged `cn` into each existing import block (alphabetical) to avoid duplicate-imports.
+- `bunx biome check --fix apps/web/src/components apps/web/src/pages` then ran cleanly (fixed 1 file's import order); `biome format --write .` after the merges fixed 1 file (`edges/editable-edge.tsx`) to collapse the import to a single-line specifier list.
+- Files changed: `packages/canvas/src/lib/cn.ts` (new), `packages/canvas/src/index.ts`, `packages/canvas/package.json`, `bun.lock`, 30 apps/web files (`components/*`, `components/edges/*`, `components/nodes/*`, `components/ui/*`), deleted `apps/web/src/lib/utils.ts`.
+- Verified: `bun run typecheck` ✅ (5 workspaces), `bun run format` ✅ (no changes after the fix), `bun run lint` ✅ (Checked 226 files), `bun test` ✅ (1304 pass / 1 skip / 0 fail across 72 files).
+- **Learnings for future iterations:**
+  - For a many-file path-swap (this story's 30 files): `grep -rl "from '@/lib/<name>'" apps/web/src | xargs sed -i '' "s|from '@/lib/<name>'|from '@seeflow/canvas'|g"` is the fastest path. Then `bunx biome check --fix <dirs>` for ordering, and manual merge for files that already had a `@seeflow/canvas` import (4 of 30 here).
+  - Biome's `useImportType` does NOT merge two `from '@seeflow/canvas'` lines into one — you must do it by hand. This bit only the 4 files that had a pre-existing canvas import; the other 26 stayed as single-line specifiers and needed no further intervention.
+  - For US-011 (next major move — the Radix/UI primitives): the `peerDependencies` block of `packages/canvas/package.json` already contains `clsx` and `tailwind-merge` (added here for US-008). When US-011 promotes them to `dependencies` it should also remove them from `peerDependencies` to avoid duplicate-listing. Also, `tailwindcss-animate` is currently in `apps/web/dependencies` but used as a tailwind plugin (not imported in JS), so it doesn't need a canvas-side mirror until US-011 actually moves the UI primitives.
+  - The `bun test` `apps/studio/src/registry.test.ts` JSON parse stack trace still appears for the intentional-error path — final `1304 pass / 0 fail` confirms green.
 ---
