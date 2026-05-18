@@ -88,3 +88,11 @@ export type {
   ToolShortcutResult,
   ZoomAction,
 } from './lib/keyboard-shortcuts.ts';
+
+export { applyLayout } from './lib/auto-layout.ts';
+export type {
+  AutoLayoutEdge,
+  AutoLayoutNode,
+  AutoLayoutOptions,
+  LayoutDirection,
+} from './lib/auto-layout.ts';

@@ -71,3 +71,17 @@ Started: Mon 18 May 2026 15:41:24 AEST
   - Biome's `useImportType` rule keeps types in mixed import blocks via `type` modifier (e.g. `import { type CommandId, getCommandTooltip } from '@seeflow/canvas'`). When merging or moving such imports, preserve the `type` modifier on existing type-only specifiers — don't collapse them to a value import.
   - When updating 4+ import sites in one story, always run `bunx @biomejs/biome check --fix <file1> <file2> ...` in a single batched command before any lint/typecheck pass. Biome auto-fixed import order in 3 of 4 files in this story; the 4th (command-palette.test.tsx) was already correct because its single import line didn't need re-grouping.
 ---
+
+## 2026-05-18 - US-005
+- Moved `auto-layout.ts` (+ test) from `apps/web/src/lib/` into `packages/canvas/src/lib/`. The module's only runtime dep is `dagre`, already moved to `packages/canvas/package.json` in US-001 — so no manifest changes were needed.
+- Test self-import switched from `@/lib/auto-layout` to `./auto-layout`. All 8 tests still pass (19 expect() calls).
+- Added a re-export block at the bottom of `packages/canvas/src/index.ts` (value: `applyLayout`; types: `AutoLayoutEdge`, `AutoLayoutNode`, `AutoLayoutOptions`, `LayoutDirection`). Followed the established convention: separate `export {}` vs `export type {}` blocks, `.ts` extensions.
+- Single web import site (`apps/web/src/pages/demo-view.tsx` line 35): merged `applyLayout` (value) and `AutoLayoutNode` (type) into the existing `from '@seeflow/canvas'` import block — kept symbols alphabetically sorted (`applyLayout` before `applyNudge`; `AutoLayoutNode` before `CommandId` type). No second `@seeflow/canvas` import line was created.
+- No Biome fixes were needed after the edit — alphabetical insertion order was correct on first try.
+- Files changed: `packages/canvas/src/lib/auto-layout.ts` (new), `packages/canvas/src/lib/auto-layout.test.ts` (new), `packages/canvas/src/index.ts`, `apps/web/src/pages/demo-view.tsx`, deleted `apps/web/src/lib/auto-layout.ts` + `.test.ts`
+- Verified: `bun test packages/canvas/src/lib/auto-layout.test.ts` ✅ (8 pass / 19 expect()), `bun run typecheck` ✅ (all 5 workspaces), `bun run format` ✅ (no changes), `bun run lint` ✅, `bun test` ✅ (1304 pass / 1 skip / 0 fail)
+- **Learnings for future iterations:**
+  - The `dagre` dep already living on @seeflow/canvas (US-001) made this move zero-friction at the dependency layer — confirms US-001's foresight. The remaining `import dagre from 'dagre'` in `apps/web/src/pages/demo-view.tsx` (referenced as a US-001 gotcha) is no longer present in this file as of US-005, but verify via grep before US-007's final sweep.
+  - When the only `@/lib/...` import in a target web file points to a single module, and the file already has an existing `@seeflow/canvas` import block, the cleanest two-step Edit pattern is: (1) remove the old `from '@/lib/<name>'` line entirely; (2) splice the new symbols into the existing `@seeflow/canvas` block alphabetically. This is what US-003 and US-005 both used.
+  - For US-006 (next, connector-to-edge): the file additionally imports from `@/lib/color-tokens` — the canvas package already re-exports the color-tokens module from `./lib/color-tokens.ts`, so inside the moved file rewrite that import to `./color-tokens` (per the story description). Don't forget the test file may also have a `@/` import.
+---

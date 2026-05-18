@@ -85,7 +85,7 @@
         "bun test passes (full suite)"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

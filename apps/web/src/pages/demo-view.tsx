@@ -32,7 +32,6 @@ import {
   updateNodePosition,
   uploadImageFile,
 } from '@/lib/api';
-import { type AutoLayoutNode, applyLayout } from '@/lib/auto-layout';
 import { buildPastePayload } from '@/lib/clipboard';
 import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { computeIconInsertPosition } from '@/lib/icon-insert';
@@ -41,7 +40,9 @@ import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { getLastUsedStyle, rememberConnectorStyle, rememberNodeStyle } from '@/lib/last-used-style';
 import { buildNewShapeData } from '@/lib/node-defaults';
 import {
+  type AutoLayoutNode,
   type CommandId,
+  applyLayout,
   applyNudge,
   getNudgeDelta,
   getZoomChord,
