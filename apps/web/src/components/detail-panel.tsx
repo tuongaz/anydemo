@@ -102,7 +102,7 @@ export function DetailPanel({
     >
       <SheetContent
         side="right"
-        className="overflow-y-auto sm:!w-[var(--detail-panel-w)] sm:!max-w-[var(--detail-panel-w)]"
+        className="overflow-y-auto bg-card/94 backdrop-blur-sm border-border sm:!w-[var(--detail-panel-w)] sm:!max-w-[var(--detail-panel-w)]"
         style={widthStyle}
         data-testid="detail-panel"
         onEscapeKeyDown={(e) => {
@@ -473,7 +473,9 @@ export function HtmlNodeSection({
       data-testid="detail-panel-html-node"
     >
       <div className="flex flex-col gap-1">
-        <span className="font-medium tracking-wide text-[10px] text-muted-foreground">Path</span>
+        <span className="font-mono text-[11px] text-muted-foreground uppercase tracking-widest">
+          Path
+        </span>
         <code
           data-testid="detail-panel-html-path"
           className="block break-all rounded bg-muted/40 px-2 py-1 font-mono text-[11px]"
