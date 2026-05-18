@@ -79,3 +79,20 @@ Started: Mon 18 May 2026 13:16:06 AEST
   - When changing component styling, grep for class name strings in ALL test files (not just the component's own test)
   - Biome import order violations from prior stories can accumulate — fix them in the same commit to keep lint green
 ---
+
+## 2026-05-18 - US-006
+- Updated `apps/web/src/components/ui/button.tsx` to match design system spec:
+  - Default size: `h-10` → `h-9` (40px → 36px)
+  - sm size: `h-9` → `h-8` (36px → 32px)
+  - icon size: `h-10 w-10` → `h-9 w-9` (40px → 36px)
+  - Default variant text: `text-zinc-950` → `text-primary-foreground`
+  - Default variant: added `font-semibold`
+  - Default variant hover: `hover:bg-primary/90` → `hover:bg-emerald-400`
+  - Ghost variant: added `text-muted-foreground` as base color
+  - Outline variant hover: `hover:bg-muted` → `hover:bg-secondary`
+- Files changed: `apps/web/src/components/ui/button.tsx`
+- **Learnings for future iterations:**
+  - button.tsx uses CVA (class-variance-authority) — variants and sizes are separate keys in the `variants` object
+  - No test file for button.tsx exists — no test updates needed
+  - Manual browser verification needed to confirm button sizing, color, and hover states
+---
