@@ -1,38 +1,54 @@
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222.2 84% 4.9%;
+    /* ── Shadcn HSL tokens (dark-first, zinc/emerald palette) ── */
+    --background: 240 10% 3.9%; /* zinc-950  #09090b */
+    --foreground: 0 0% 98%; /* zinc-50   #fafafa */
 
-    --card: 0 0% 100%;
-    --card-foreground: 222.2 84% 4.9%;
+    --card: 240 5.9% 10.6%; /* zinc-900  #18181b */
+    --card-foreground: 0 0% 98%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222.2 84% 4.9%;
+    --popover: 240 5.9% 10.6%;
+    --popover-foreground: 0 0% 98%;
 
-    --primary: 222.2 47.4% 11.2%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 160 84% 39.4%; /* emerald   #10b981 */
+    --primary-foreground: 160 68% 60%; /* emerald-hi #34d399 */
 
-    --secondary: 210 40% 96.1%;
-    --secondary-foreground: 222.2 47.4% 11.2%;
+    --secondary: 240 3.7% 15.9%; /* zinc-800  #27272a */
+    --secondary-foreground: 0 0% 98%;
 
-    --muted: 210 40% 96.1%;
-    --muted-foreground: 215.4 16.3% 46.9%;
+    --muted: 240 3.7% 15.9%; /* zinc-800 */
+    --muted-foreground: 240 4.4% 64.9%; /* zinc-400  #a1a1aa */
 
-    --accent: 210 40% 96.1%;
-    --accent-foreground: 222.2 47.4% 11.2%;
+    --accent: 240 3.7% 15.9%;
+    --accent-foreground: 0 0% 98%;
 
     --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 214.3 31.8% 91.4%;
-    --input: 214.3 31.8% 91.4%;
-    --ring: 222.2 84% 4.9%;
+    --border: 240 3.7% 15.9%; /* zinc-800  #27272a */
+    --input: 240 3.7% 26.1%; /* zinc-700  #3f3f46 */
+    --ring: 160 84% 39.4%; /* emerald */
 
     --radius: 0.5rem;
+
+    /* ── Extended design-system tokens ── */
+    --bg-canvas: #0a0a0c;
+    --emerald-glow: rgba(16, 185, 129, 0.35);
+    --shadow-card: 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+    --shadow-window: 0 30px 80px -20px rgba(0, 0, 0, 0.6), 0 0 60px -20px var(--emerald-glow);
+    --shadow-glow-ok: 0 0 30px -4px rgba(16, 185, 129, 0.45);
+    --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.45);
+    --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 0 40px -6px rgba(16, 185, 129, 0.55);
+    --amber: #f59e0b;
+    --amber-hi: #fbbf24;
+    --danger: #ef4444;
+    --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
     /* Shared visual tokens for the white-fill dot affordance used by BOTH node
      * outlet handles AND connector endpoint dots. Single source of truth —
@@ -54,28 +70,6 @@
     --seeflow-handle-border-width: calc(1px / var(--rf-zoom, 1));
     --seeflow-handle-size: calc(17px / var(--rf-zoom, 1));
   }
-
-  .dark {
-    --background: 222.2 84% 4.9%;
-    --foreground: 210 40% 98%;
-    --card: 222.2 84% 4.9%;
-    --card-foreground: 210 40% 98%;
-    --popover: 222.2 84% 4.9%;
-    --popover-foreground: 210 40% 98%;
-    --primary: 210 40% 98%;
-    --primary-foreground: 222.2 47.4% 11.2%;
-    --secondary: 217.2 32.6% 17.5%;
-    --secondary-foreground: 210 40% 98%;
-    --muted: 217.2 32.6% 17.5%;
-    --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 32.6% 17.5%;
-    --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 217.2 32.6% 17.5%;
-    --input: 217.2 32.6% 17.5%;
-    --ring: 212.7 26.8% 83.9%;
-  }
 }
 
 @layer base {
@@ -84,6 +78,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    background-image: radial-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+    background-size: 32px 32px;
   }
   html,
   body,
