@@ -43,6 +43,13 @@ export {
   DropdownMenuTrigger,
 } from './dropdown-menu.tsx';
 
+export { Icon, IconRegistryProvider, useIconRegistry } from './icon.tsx';
+export type {
+  IconProps,
+  IconRegistryProviderProps,
+  IconRegistryValue,
+} from './icon.tsx';
+
 export { IconToggleGroup } from './icon-toggle-group.tsx';
 export type { IconToggleGroupProps, IconToggleOption } from './icon-toggle-group.tsx';
 

@@ -23,7 +23,7 @@ import {
   useStore,
   useStoreApi,
 } from '@xyflow/react';
-import { LayoutDashboard, Maximize2 } from 'lucide-react';
+import { LayoutDashboard, type LucideProps, Maximize2 } from 'lucide-react';
 import {
   type ComponentType,
   type PointerEvent,
@@ -71,6 +71,7 @@ import {
   ContextMenuShortcut,
   ContextMenuTrigger,
 } from '../ui/context-menu.tsx';
+import { IconRegistryProvider } from '../ui/icon.tsx';
 import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
@@ -604,6 +605,14 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * flushed once the interaction ends.
    */
   autoFitViewSignal?: number;
+  /**
+   * US-004: host-registered custom icon components reachable by name from
+   * JSON-defined demos. The map is exposed to every <Icon> descendant via
+   * {@link IconRegistryProvider}; resolution order inside <Icon> is
+   * `as` prop → this map → built-in {@link ICON_REGISTRY} → fallback. Absent
+   * → only built-in lucide icons resolve.
+   */
+  customIcons?: Record<string, ComponentType<LucideProps>>;
 }
 
 /**
@@ -1523,6 +1532,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     onDetailChange,
     autoFitView,
     autoFitViewSignal,
+    customIcons,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -3546,367 +3556,373 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // value, no new wiring at the host).
   const sidebarDemoId = projectId ?? null;
   const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
+  // US-004: memoize the icon registry value so the IconRegistryProvider's
+  // context object identity is stable across re-renders when the host's
+  // `customIcons` reference is stable (or undefined). Prevents every <Icon>
+  // descendant from re-rendering on unrelated canvas state churn.
+  const iconRegistryValue = useMemo(() => ({ custom: customIcons ?? {} }), [customIcons]);
 
   return (
-    <div
-      data-testid="seeflow-canvas"
-      ref={wrapperRef}
-      className="relative h-full w-full"
-      style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
-      // US-010: capture-phase listener fires before xyflow's pane handlers.
-      // Snapshots the additive base + shift state for a pending marquee so
-      // the existing selection survives xyflow's reset (see the change-filter
-      // in onNodesChange / onEdgesChange above).
-      onPointerDownCapture={onWrapperPointerDownCapture}
-      onPointerDown={(e) => {
-        if (spaceHeld) setSpaceDragging(true);
-        onPointerDown(e);
-      }}
-      onPointerMove={onPointerMove}
-      onPointerUp={(e) => {
-        setSpaceDragging(false);
-        onPointerUp(e);
-      }}
-      onPointerCancel={() => {
-        drawingRef.current = false;
-        drawStartRef.current = null;
-        drawCurrentRef.current = null;
-        setDrawStart(null);
-        setDrawCurrent(null);
-        setSpaceDragging(false);
-      }}
-      // US-010: capture-phase right-click handler so a multi-selection
-      // right-click opens OUR Radix menu instead of xyflow's single-node
-      // menu (which would also clear the multi-selection en route).
-      onContextMenuCapture={onWrapperContextMenuCapture}
-      // US-008: OS-image drop. Both handlers are no-ops unless
-      // `onCreateImageFromFile` is wired.
-      onDragOver={onWrapperDragOver}
-      onDrop={onWrapperDrop}
-    >
-      <ReactFlow
-        nodes={rfNodes}
-        edges={rfEdges}
-        onNodesChange={onNodesChange}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        proOptions={{ hideAttribution: true }}
-        fitView
-        // US-027: nodes remain draggable in view mode so the canvas feels
-        // alive (local-state-only repositioning). commitDraggedNodes above
-        // gates the actual PATCH dispatch.
-        nodesDraggable={(isEditMode ? !!onNodePositionChange : true) && !drawShape}
-        // US-027: view mode → handles are never connectable. Both the global
-        // and per-node connectable flags are gated; combined with the onConnect
-        // early return this is a triple-gate against stray edge creation.
-        nodesConnectable={isEditMode && !!onCreateConnector && !drawShape}
-        // US-027: in view mode we disable keyboard-driven deletion entirely
-        // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
-        // flag — the per-edge `deletable` defaults to true and only the
-        // delete-key path opt-outs at the top level. Combined with the
-        // context-menu gate above, this leaves no UI path for the user to
-        // delete a node or connector in view mode.
-        deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
-        // US-027: zoom and pan are explicit so view-mode embedders that
-        // disable them via flag overrides get the expected behavior. The
-        // default for both is true to match the legacy edit-mode behavior.
-        zoomOnScroll={flags.enableZoom}
-        zoomOnPinch={flags.enableZoom}
-        className={connecting ? 'seeflow-connecting' : undefined}
-        onConnect={isEditMode ? onConnect : undefined}
-        // US-004: reject any connection where either endpoint is a text-shape
-        // node — pure annotations are never connectable. See the
-        // `isValidConnection` definition above for the full rationale.
-        isValidConnection={isValidConnection}
-        onConnectStart={(_e, params) => {
-          setConnecting(true);
-          connectSucceededRef.current = false;
-          // US-023: capture the drag origin so onConnect / onConnectEnd can
-          // tell which end the user actually started from, regardless of
-          // React Flow's source-type-handle-first normalization.
-          connectStartRef.current = {
-            nodeId: params.nodeId ?? null,
-            handleType: params.handleType ?? null,
-          };
-          // US-017: mark the source node so its own outlets stay visible
-          // (others get hidden via CSS) for the duration of the drag.
-          setConnectSource(params.nodeId ?? null);
+    <IconRegistryProvider value={iconRegistryValue}>
+      <div
+        data-testid="seeflow-canvas"
+        ref={wrapperRef}
+        className="relative h-full w-full"
+        style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
+        // US-010: capture-phase listener fires before xyflow's pane handlers.
+        // Snapshots the additive base + shift state for a pending marquee so
+        // the existing selection survives xyflow's reset (see the change-filter
+        // in onNodesChange / onEdgesChange above).
+        onPointerDownCapture={onWrapperPointerDownCapture}
+        onPointerDown={(e) => {
+          if (spaceHeld) setSpaceDragging(true);
+          onPointerDown(e);
         }}
-        onConnectEnd={onConnectEndCb}
-        onReconnect={isEditMode && onReconnectConnector ? onReconnect : undefined}
-        onReconnectStart={(_e, edge, handleType) => {
-          setConnecting(true);
-          reconnectSucceededRef.current = false;
-          // US-009: mark that this drag is a reconnect (vs new connection) so
-          // the custom connection-line component mirrors the reconnecting
-          // edge's style. Cleared in onReconnectEnd.
-          isReconnectingRef.current = true;
-          // US-017: the anchored end of the edge plays the "source" role for
-          // outlet visibility — its outlets stay visible, others are hidden
-          // via CSS. xyflow passes `handleType` as the type of the FIXED
-          // (anchored) end, so the anchored node id is the matching side.
-          const anchoredNodeId = handleType === 'source' ? edge.source : edge.target;
-          setConnectSource(anchoredNodeId);
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => {
+          setSpaceDragging(false);
+          onPointerUp(e);
         }}
-        onReconnectEnd={onReconnectEndCb}
-        connectionLineComponent={connectionLineComponent}
-        connectionLineStyle={{ strokeWidth: 2 }}
-        // Generous connection radius so the user can release a connect or
-        // reconnect drag near a handle without pixel-perfect aim. React Flow
-        // snaps to the closest handle within this radius.
-        connectionRadius={32}
-        // US-024: SVG EdgeAnchor circle r=10 → 20px hit-region diameter, kept
-        // intentionally larger than the visible portal-rendered endpoint dot
-        // (sized via the shared --seeflow-handle-size token, also driving
-        // outlet handle size) so the user gets a generous click target. The
-        // SVG circle itself is rendered transparent via
-        // `.react-flow__edgeupdater` CSS — only the portal dot is visible.
-        reconnectRadius={10}
-        // US-011: by default xyflow's `edgesReconnectable` is true, which makes
-        // EVERY edge render EdgeAnchor circles regardless of selection.
-        // Previously this was masked by `.react-flow__edgeupdater { opacity: 0 }`,
-        // but now that we paint EdgeAnchor visibly, we need to restrict it to
-        // the single-selected edge — disable the global default and let the
-        // explicit `reconnectable: true` on the selected edge (set in `rfEdges`)
-        // be the only switch that turns EdgeAnchor on.
-        edgesReconnectable={false}
-        // Keep selected nodes at the same z-stack level as their siblings
-        // (US-014). React Flow's default would bump a selected node to
-        // z-index 1000+, but selection is already conveyed by the outline
-        // (US-005) and US-014 pins every node above every edge regardless
-        // of selection — no extra node-vs-node elevation needed.
-        elevateNodesOnSelect={false}
-        elementsSelectable={!drawShape}
-        // US-018: dragging an unselected node moves it WITHOUT auto-selecting
-        // (and therefore without opening the detail panel). React Flow defaults
-        // this to true; an explicit click (mousedown + mouseup without
-        // movement) still selects via onNodeClick.
-        selectNodesOnDrag={false}
-        // xyflow defaults `nodeClickDistance` to 0, which combined with
-        // `selectNodesOnDrag={false}` means ANY sub-pixel pointer jitter
-        // between mousedown and mouseup makes xyflow treat the gesture as a
-        // drag (no selection) instead of a click — the user perceives this as
-        // "clicking a node sometimes doesn't select it, takes a few tries".
-        // 5px matches the marquee/drag threshold most design tools use and
-        // gives mouse/trackpad input enough tolerance to land a click cleanly.
-        nodeClickDistance={5}
-        // US-010 selection model: primary-mouse drag on empty pane draws a
-        // marquee (rubber-band) that multi-selects nodes + edges. Middle and
-        // right-mouse drags pan. Space-held primary drag also pans (via
-        // panActivationKeyCode below). Draw mode disables marquee + pan so the
-        // toolbar's shape gesture owns primary-drag.
-        //
-        // SelectionMode.Partial: an edge / node selects if ANY part is inside
-        // the marquee (matches the design-tool norm — strict-Full would only
-        // select fully-contained shapes, which feels finicky).
-        //
-        // selectionKeyCode=null suppresses xyflow's modifier-marquee fallback
-        // (default would be 'Shift') since selectionOnDrag already covers
-        // marquee — keeping shift free for additive multi-select via click.
-        selectionOnDrag={!drawShape}
-        // US-027: panning gated on the resolved flag. Draw mode still wins
-        // (toolbar shape gesture owns primary-drag).
-        panOnDrag={drawShape ? false : flags.enablePan ? [1, 2] : false}
-        selectionMode={SelectionMode.Partial}
-        selectionKeyCode={null}
-        multiSelectionKeyCode={drawShape ? null : ['Meta', 'Shift']}
-        panActivationKeyCode={drawShape ? null : 'Space'}
-        // US-010: lift the marquee end to a single onSelectionChange call so
-        // the parent's `selectedNodeIds` / `selectedConnectorIds` props don't
-        // churn per frame. The onNodesChange / onEdgesChange handlers above
-        // accumulate the live changes into local refs; this fires once on
-        // pointer-up.
-        onSelectionStart={onSelectionStartCb}
-        onSelectionEnd={onSelectionEndCb}
-        // Pin every edge at zIndex 0 so the connector line ALWAYS paints
-        // under nodes (only the outlet endpoint dots, drawn via
-        // <ViewportPortal> at CSS z-index 2000, sit on top). Setting via
-        // defaultEdgeOptions is preferred to a per-edge zIndex because it
-        // doesn't churn edge identity through connectorToEdge — the option
-        // propagates through xyflow's default edge merging.
-        defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
-        zoomOnDoubleClick={false}
-        onInit={(instance) => {
-          rfInstanceRef.current = instance;
-          // Seed `--rf-zoom` to the initial viewport zoom so the selection
-          // outline reads a sensible value before the first onMove fires.
-          const wrapper = wrapperRef.current;
-          if (wrapper) wrapper.style.setProperty('--rf-zoom', String(instance.getZoom()));
-          // US-008: mount-fit. Reuses the same guard the late-nodes useEffect
-          // checks (`didMountFitRef`) so whichever path fires first wins and
-          // the other no-ops — preventing double-fit when nodes are already
-          // present at onInit time.
-          if (!didMountFitRef.current && resolvedAutoFitView.onMount && nodes.length > 0) {
-            instance.fitView(FIT_VIEW_OPTIONS);
-            didMountFitRef.current = true;
-          }
-          onRfInit?.(instance);
+        onPointerCancel={() => {
+          drawingRef.current = false;
+          drawStartRef.current = null;
+          drawCurrentRef.current = null;
+          setDrawStart(null);
+          setDrawCurrent(null);
+          setSpaceDragging(false);
         }}
-        onMove={(_e, viewport) => {
-          // US-015: panning or zooming the canvas dismisses the drop-popover —
-          // the anchor's flow-space coordinates would otherwise drift away
-          // from the viewport translation. Read from the ref to avoid
-          // re-binding on every popover open/close (onMove fires every frame
-          // while the user pans/zooms).
-          if (dropPopoverRef.current) setDropPopover(null);
-          // Mirror the viewport zoom to a CSS variable so the selection
-          // outline can scale its width/offset inversely (calc(1px /
-          // var(--rf-zoom))) — the outline keeps the same VISUAL thickness
-          // regardless of zoom level. Setting via inline style avoids a
-          // React re-render every frame of pan/zoom.
-          const wrapper = wrapperRef.current;
-          if (wrapper) wrapper.style.setProperty('--rf-zoom', String(viewport.zoom));
-        }}
-        onEdgesChange={onEdgesChange}
-        onNodeDragStart={() => {
-          draggingRef.current = true;
-        }}
-        onNodeDragStop={onNodeDragStopCb}
-        onSelectionDragStart={onSelectionDragStartCb}
-        onSelectionDragStop={onSelectionDragStopCb}
-        // US-003: route React Flow's click-only events to the parent so the
-        // detail panel can be driven by explicit clicks instead of selection
-        // changes. xyflow's `onNodeClick`/`onEdgeClick` fire only for real
-        // clicks (mousedown + mouseup without crossing the drag threshold);
-        // node-drag gestures don't trigger them, so a drag no longer opens
-        // the panel as a side effect.
-        onNodeClick={handleNodeClickWithGroupGate}
-        onEdgeClick={handleEdgeClickWithGroupGate}
-        // US-018: double-click anywhere on the edge body opens the inline
-        // label editor (not just the existing label-button onDoubleClick). The
-        // per-edge `registerEditHandle` map gives us O(1) dispatch without
-        // forcing edge identity to change when editing state flips.
-        onEdgeDoubleClick={(_e, edge) => {
-          editHandlesRef.current.get(edge.id)?.();
-        }}
-        onPaneClick={handlePaneClickWithGroupExit}
-        onNodeContextMenu={
-          flags.enableContextMenu && contextEnabled
-            ? (e, node) => {
-                // Suppress the browser's default menu and open our own at the
-                // cursor. The id sticks in a ref (read by item callbacks); the
-                // position state drives the trigger-position effect that
-                // dispatches the synthetic contextmenu event.
-                e.preventDefault();
-                contextNodeIdRef.current = node.id;
-                setContextOnNode(true);
-                setContextNodeType(node.type ?? null);
-                setContextEndpoint(null);
-                setContextMenuPos({ x: e.clientX, y: e.clientY });
-              }
-            : undefined
-        }
-        onPaneContextMenu={
-          flags.enableContextMenu && onPasteAt
-            ? (e) => {
-                // Right-click on empty canvas opens the same menu but with
-                // only the pane-applicable items (Paste). The "ContextMenu"
-                // event delivered here is either a synthetic ReactMouseEvent
-                // (from React Flow's wrapper) OR a native MouseEvent — both
-                // expose preventDefault + clientX/clientY.
-                e.preventDefault();
-                contextNodeIdRef.current = null;
-                setContextOnNode(false);
-                setContextNodeType(null);
-                setContextEndpoint(null);
-                setContextMenuPos({ x: e.clientX, y: e.clientY });
-              }
-            : undefined
-        }
+        // US-010: capture-phase right-click handler so a multi-selection
+        // right-click opens OUR Radix menu instead of xyflow's single-node
+        // menu (which would also clear the multi-selection en route).
+        onContextMenuCapture={onWrapperContextMenuCapture}
+        // US-008: OS-image drop. Both handlers are no-ops unless
+        // `onCreateImageFromFile` is wired.
+        onDragOver={onWrapperDragOver}
+        onDrop={onWrapperDrop}
       >
-        <StoreApiBridge storeApiRef={storeApiRef} />
-        <ZoomBridge wrapperRef={wrapperRef} />
-        <Background gap={12} size={0.6} />
-        {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
+        <ReactFlow
+          nodes={rfNodes}
+          edges={rfEdges}
+          onNodesChange={onNodesChange}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          proOptions={{ hideAttribution: true }}
+          fitView
+          // US-027: nodes remain draggable in view mode so the canvas feels
+          // alive (local-state-only repositioning). commitDraggedNodes above
+          // gates the actual PATCH dispatch.
+          nodesDraggable={(isEditMode ? !!onNodePositionChange : true) && !drawShape}
+          // US-027: view mode → handles are never connectable. Both the global
+          // and per-node connectable flags are gated; combined with the onConnect
+          // early return this is a triple-gate against stray edge creation.
+          nodesConnectable={isEditMode && !!onCreateConnector && !drawShape}
+          // US-027: in view mode we disable keyboard-driven deletion entirely
+          // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
+          // flag — the per-edge `deletable` defaults to true and only the
+          // delete-key path opt-outs at the top level. Combined with the
+          // context-menu gate above, this leaves no UI path for the user to
+          // delete a node or connector in view mode.
+          deleteKeyCode={isEditMode ? ['Backspace', 'Delete'] : null}
+          // US-027: zoom and pan are explicit so view-mode embedders that
+          // disable them via flag overrides get the expected behavior. The
+          // default for both is true to match the legacy edit-mode behavior.
+          zoomOnScroll={flags.enableZoom}
+          zoomOnPinch={flags.enableZoom}
+          className={connecting ? 'seeflow-connecting' : undefined}
+          onConnect={isEditMode ? onConnect : undefined}
+          // US-004: reject any connection where either endpoint is a text-shape
+          // node — pure annotations are never connectable. See the
+          // `isValidConnection` definition above for the full rationale.
+          isValidConnection={isValidConnection}
+          onConnectStart={(_e, params) => {
+            setConnecting(true);
+            connectSucceededRef.current = false;
+            // US-023: capture the drag origin so onConnect / onConnectEnd can
+            // tell which end the user actually started from, regardless of
+            // React Flow's source-type-handle-first normalization.
+            connectStartRef.current = {
+              nodeId: params.nodeId ?? null,
+              handleType: params.handleType ?? null,
+            };
+            // US-017: mark the source node so its own outlets stay visible
+            // (others get hidden via CSS) for the duration of the drag.
+            setConnectSource(params.nodeId ?? null);
+          }}
+          onConnectEnd={onConnectEndCb}
+          onReconnect={isEditMode && onReconnectConnector ? onReconnect : undefined}
+          onReconnectStart={(_e, edge, handleType) => {
+            setConnecting(true);
+            reconnectSucceededRef.current = false;
+            // US-009: mark that this drag is a reconnect (vs new connection) so
+            // the custom connection-line component mirrors the reconnecting
+            // edge's style. Cleared in onReconnectEnd.
+            isReconnectingRef.current = true;
+            // US-017: the anchored end of the edge plays the "source" role for
+            // outlet visibility — its outlets stay visible, others are hidden
+            // via CSS. xyflow passes `handleType` as the type of the FIXED
+            // (anchored) end, so the anchored node id is the matching side.
+            const anchoredNodeId = handleType === 'source' ? edge.source : edge.target;
+            setConnectSource(anchoredNodeId);
+          }}
+          onReconnectEnd={onReconnectEndCb}
+          connectionLineComponent={connectionLineComponent}
+          connectionLineStyle={{ strokeWidth: 2 }}
+          // Generous connection radius so the user can release a connect or
+          // reconnect drag near a handle without pixel-perfect aim. React Flow
+          // snaps to the closest handle within this radius.
+          connectionRadius={32}
+          // US-024: SVG EdgeAnchor circle r=10 → 20px hit-region diameter, kept
+          // intentionally larger than the visible portal-rendered endpoint dot
+          // (sized via the shared --seeflow-handle-size token, also driving
+          // outlet handle size) so the user gets a generous click target. The
+          // SVG circle itself is rendered transparent via
+          // `.react-flow__edgeupdater` CSS — only the portal dot is visible.
+          reconnectRadius={10}
+          // US-011: by default xyflow's `edgesReconnectable` is true, which makes
+          // EVERY edge render EdgeAnchor circles regardless of selection.
+          // Previously this was masked by `.react-flow__edgeupdater { opacity: 0 }`,
+          // but now that we paint EdgeAnchor visibly, we need to restrict it to
+          // the single-selected edge — disable the global default and let the
+          // explicit `reconnectable: true` on the selected edge (set in `rfEdges`)
+          // be the only switch that turns EdgeAnchor on.
+          edgesReconnectable={false}
+          // Keep selected nodes at the same z-stack level as their siblings
+          // (US-014). React Flow's default would bump a selected node to
+          // z-index 1000+, but selection is already conveyed by the outline
+          // (US-005) and US-014 pins every node above every edge regardless
+          // of selection — no extra node-vs-node elevation needed.
+          elevateNodesOnSelect={false}
+          elementsSelectable={!drawShape}
+          // US-018: dragging an unselected node moves it WITHOUT auto-selecting
+          // (and therefore without opening the detail panel). React Flow defaults
+          // this to true; an explicit click (mousedown + mouseup without
+          // movement) still selects via onNodeClick.
+          selectNodesOnDrag={false}
+          // xyflow defaults `nodeClickDistance` to 0, which combined with
+          // `selectNodesOnDrag={false}` means ANY sub-pixel pointer jitter
+          // between mousedown and mouseup makes xyflow treat the gesture as a
+          // drag (no selection) instead of a click — the user perceives this as
+          // "clicking a node sometimes doesn't select it, takes a few tries".
+          // 5px matches the marquee/drag threshold most design tools use and
+          // gives mouse/trackpad input enough tolerance to land a click cleanly.
+          nodeClickDistance={5}
+          // US-010 selection model: primary-mouse drag on empty pane draws a
+          // marquee (rubber-band) that multi-selects nodes + edges. Middle and
+          // right-mouse drags pan. Space-held primary drag also pans (via
+          // panActivationKeyCode below). Draw mode disables marquee + pan so the
+          // toolbar's shape gesture owns primary-drag.
+          //
+          // SelectionMode.Partial: an edge / node selects if ANY part is inside
+          // the marquee (matches the design-tool norm — strict-Full would only
+          // select fully-contained shapes, which feels finicky).
+          //
+          // selectionKeyCode=null suppresses xyflow's modifier-marquee fallback
+          // (default would be 'Shift') since selectionOnDrag already covers
+          // marquee — keeping shift free for additive multi-select via click.
+          selectionOnDrag={!drawShape}
+          // US-027: panning gated on the resolved flag. Draw mode still wins
+          // (toolbar shape gesture owns primary-drag).
+          panOnDrag={drawShape ? false : flags.enablePan ? [1, 2] : false}
+          selectionMode={SelectionMode.Partial}
+          selectionKeyCode={null}
+          multiSelectionKeyCode={drawShape ? null : ['Meta', 'Shift']}
+          panActivationKeyCode={drawShape ? null : 'Space'}
+          // US-010: lift the marquee end to a single onSelectionChange call so
+          // the parent's `selectedNodeIds` / `selectedConnectorIds` props don't
+          // churn per frame. The onNodesChange / onEdgesChange handlers above
+          // accumulate the live changes into local refs; this fires once on
+          // pointer-up.
+          onSelectionStart={onSelectionStartCb}
+          onSelectionEnd={onSelectionEndCb}
+          // Pin every edge at zIndex 0 so the connector line ALWAYS paints
+          // under nodes (only the outlet endpoint dots, drawn via
+          // <ViewportPortal> at CSS z-index 2000, sit on top). Setting via
+          // defaultEdgeOptions is preferred to a per-edge zIndex because it
+          // doesn't churn edge identity through connectorToEdge — the option
+          // propagates through xyflow's default edge merging.
+          defaultEdgeOptions={DEFAULT_EDGE_OPTIONS}
+          zoomOnDoubleClick={false}
+          onInit={(instance) => {
+            rfInstanceRef.current = instance;
+            // Seed `--rf-zoom` to the initial viewport zoom so the selection
+            // outline reads a sensible value before the first onMove fires.
+            const wrapper = wrapperRef.current;
+            if (wrapper) wrapper.style.setProperty('--rf-zoom', String(instance.getZoom()));
+            // US-008: mount-fit. Reuses the same guard the late-nodes useEffect
+            // checks (`didMountFitRef`) so whichever path fires first wins and
+            // the other no-ops — preventing double-fit when nodes are already
+            // present at onInit time.
+            if (!didMountFitRef.current && resolvedAutoFitView.onMount && nodes.length > 0) {
+              instance.fitView(FIT_VIEW_OPTIONS);
+              didMountFitRef.current = true;
+            }
+            onRfInit?.(instance);
+          }}
+          onMove={(_e, viewport) => {
+            // US-015: panning or zooming the canvas dismisses the drop-popover —
+            // the anchor's flow-space coordinates would otherwise drift away
+            // from the viewport translation. Read from the ref to avoid
+            // re-binding on every popover open/close (onMove fires every frame
+            // while the user pans/zooms).
+            if (dropPopoverRef.current) setDropPopover(null);
+            // Mirror the viewport zoom to a CSS variable so the selection
+            // outline can scale its width/offset inversely (calc(1px /
+            // var(--rf-zoom))) — the outline keeps the same VISUAL thickness
+            // regardless of zoom level. Setting via inline style avoids a
+            // React re-render every frame of pan/zoom.
+            const wrapper = wrapperRef.current;
+            if (wrapper) wrapper.style.setProperty('--rf-zoom', String(viewport.zoom));
+          }}
+          onEdgesChange={onEdgesChange}
+          onNodeDragStart={() => {
+            draggingRef.current = true;
+          }}
+          onNodeDragStop={onNodeDragStopCb}
+          onSelectionDragStart={onSelectionDragStartCb}
+          onSelectionDragStop={onSelectionDragStopCb}
+          // US-003: route React Flow's click-only events to the parent so the
+          // detail panel can be driven by explicit clicks instead of selection
+          // changes. xyflow's `onNodeClick`/`onEdgeClick` fire only for real
+          // clicks (mousedown + mouseup without crossing the drag threshold);
+          // node-drag gestures don't trigger them, so a drag no longer opens
+          // the panel as a side effect.
+          onNodeClick={handleNodeClickWithGroupGate}
+          onEdgeClick={handleEdgeClickWithGroupGate}
+          // US-018: double-click anywhere on the edge body opens the inline
+          // label editor (not just the existing label-button onDoubleClick). The
+          // per-edge `registerEditHandle` map gives us O(1) dispatch without
+          // forcing edge identity to change when editing state flips.
+          onEdgeDoubleClick={(_e, edge) => {
+            editHandlesRef.current.get(edge.id)?.();
+          }}
+          onPaneClick={handlePaneClickWithGroupExit}
+          onNodeContextMenu={
+            flags.enableContextMenu && contextEnabled
+              ? (e, node) => {
+                  // Suppress the browser's default menu and open our own at the
+                  // cursor. The id sticks in a ref (read by item callbacks); the
+                  // position state drives the trigger-position effect that
+                  // dispatches the synthetic contextmenu event.
+                  e.preventDefault();
+                  contextNodeIdRef.current = node.id;
+                  setContextOnNode(true);
+                  setContextNodeType(node.type ?? null);
+                  setContextEndpoint(null);
+                  setContextMenuPos({ x: e.clientX, y: e.clientY });
+                }
+              : undefined
+          }
+          onPaneContextMenu={
+            flags.enableContextMenu && onPasteAt
+              ? (e) => {
+                  // Right-click on empty canvas opens the same menu but with
+                  // only the pane-applicable items (Paste). The "ContextMenu"
+                  // event delivered here is either a synthetic ReactMouseEvent
+                  // (from React Flow's wrapper) OR a native MouseEvent — both
+                  // expose preventDefault + clientX/clientY.
+                  e.preventDefault();
+                  contextNodeIdRef.current = null;
+                  setContextOnNode(false);
+                  setContextNodeType(null);
+                  setContextEndpoint(null);
+                  setContextMenuPos({ x: e.clientX, y: e.clientY });
+                }
+              : undefined
+          }
+        >
+          <StoreApiBridge storeApiRef={storeApiRef} />
+          <ZoomBridge wrapperRef={wrapperRef} />
+          <Background gap={12} size={0.6} />
+          {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
             is hidden so we can render a Lucide-styled button that calls
             fitView with the documented options (padding 0.15, duration 300).
             Auto Align (Tidy) moved here from CanvasToolbar so all canvas-view
             actions live in the same place. Order: zoom-in, zoom-out (from
             <Controls>), Fit View, Auto Align. */}
-        <Controls showInteractive={false} showFitView={false}>
-          <ControlButton
-            data-testid="controls-fit-view"
-            aria-label="Fit view"
-            title="Fit view"
-            disabled={nodes.length === 0}
-            onClick={() => {
-              rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
-            }}
-          >
-            <Maximize2 className="h-3 w-3" aria-hidden="true" />
-          </ControlButton>
-          <ControlButton
-            data-testid="controls-tidy"
-            aria-label="Tidy layout (⌘⇧L)"
-            title="Tidy layout (⌘⇧L)"
-            disabled={!onTidy}
-            onClick={() => onTidy?.()}
-          >
-            <LayoutDashboard className="h-3 w-3" aria-hidden="true" />
-          </ControlButton>
-        </Controls>
-        {/* US-007: multi-select bounding-box resize overlay. Renders only when
+          <Controls showInteractive={false} showFitView={false}>
+            <ControlButton
+              data-testid="controls-fit-view"
+              aria-label="Fit view"
+              title="Fit view"
+              disabled={nodes.length === 0}
+              onClick={() => {
+                rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
+              }}
+            >
+              <Maximize2 className="h-3 w-3" aria-hidden="true" />
+            </ControlButton>
+            <ControlButton
+              data-testid="controls-tidy"
+              aria-label="Tidy layout (⌘⇧L)"
+              title="Tidy layout (⌘⇧L)"
+              disabled={!onTidy}
+              onClick={() => onTidy?.()}
+            >
+              <LayoutDashboard className="h-3 w-3" aria-hidden="true" />
+            </ControlButton>
+          </Controls>
+          {/* US-007: multi-select bounding-box resize overlay. Renders only when
             ≥ 2 selected nodes are NOT all children of the same group; the
             internal check is in `<SelectionResizeOverlay>`. We pass through
             unconditionally — empty / ineligible selections render nothing.
             US-027: gated on flags.showResizeHandles so view-mode embedders
             skip the overlay machinery entirely. */}
-        {flags.showResizeHandles ? (
-          <SelectionResizeOverlay
-            selectedNodes={selectionOverlayNodes}
-            onMultiResize={onMultiResize}
-          />
-        ) : null}
-        {(flags.showToolbar && onCreateShapeNode) ||
-        (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
-          <Panel position="top-left">
-            <div className="flex flex-col gap-2">
-              {flags.showToolbar && onCreateShapeNode ? (
-                <CanvasToolbar
-                  activeShape={drawShape}
-                  onSelectShape={setDrawShape}
-                  iconPickerOpen={iconPickerOpen ?? false}
-                  onOpenIconPicker={onOpenIconPicker}
-                  onCloseIconPicker={onCloseIconPicker}
-                  onPickIcon={onPickIcon}
-                />
-              ) : null}
-              {flags.showStyleStrip && onStyleNode && onStyleConnector ? (
-                <StyleStrip
-                  nodes={selectedNodesForStyleStrip}
-                  connectors={selectedConnectors ?? []}
-                  onStyleNode={onStyleNode}
-                  onStyleNodePreview={onStyleNodePreview}
-                  onStyleNodes={onStyleNodes}
-                  onStyleNodesPreview={onStyleNodesPreview}
-                  onStyleConnector={onStyleConnector}
-                  onStyleConnectorPreview={onStyleConnectorPreview}
-                  onRequestIconReplace={onRequestIconReplace}
-                />
-              ) : null}
-            </div>
-          </Panel>
-        ) : null}
-      </ReactFlow>
-      {ghostRect ? (
-        <div
-          data-testid="canvas-draw-ghost"
-          data-ghost-shape={drawShape ?? undefined}
-          aria-hidden
-          className={cn(
-            'pointer-events-none absolute z-10',
-            ghostShapeClass,
-            ghostTextOutline ? 'rounded-sm border border-dashed border-muted-foreground/40' : '',
-          )}
-          style={{
-            ...ghostShapeStyle,
-            left: ghostRect.left,
-            top: ghostRect.top,
-            width: ghostRect.width,
-            height: ghostRect.height,
-          }}
-        >
-          {/* US-010: illustrative shapes have no wrapper chrome — the SVG owns
+          {flags.showResizeHandles ? (
+            <SelectionResizeOverlay
+              selectedNodes={selectionOverlayNodes}
+              onMultiResize={onMultiResize}
+            />
+          ) : null}
+          {(flags.showToolbar && onCreateShapeNode) ||
+          (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
+            <Panel position="top-left">
+              <div className="flex flex-col gap-2">
+                {flags.showToolbar && onCreateShapeNode ? (
+                  <CanvasToolbar
+                    activeShape={drawShape}
+                    onSelectShape={setDrawShape}
+                    iconPickerOpen={iconPickerOpen ?? false}
+                    onOpenIconPicker={onOpenIconPicker}
+                    onCloseIconPicker={onCloseIconPicker}
+                    onPickIcon={onPickIcon}
+                  />
+                ) : null}
+                {flags.showStyleStrip && onStyleNode && onStyleConnector ? (
+                  <StyleStrip
+                    nodes={selectedNodesForStyleStrip}
+                    connectors={selectedConnectors ?? []}
+                    onStyleNode={onStyleNode}
+                    onStyleNodePreview={onStyleNodePreview}
+                    onStyleNodes={onStyleNodes}
+                    onStyleNodesPreview={onStyleNodesPreview}
+                    onStyleConnector={onStyleConnector}
+                    onStyleConnectorPreview={onStyleConnectorPreview}
+                    onRequestIconReplace={onRequestIconReplace}
+                  />
+                ) : null}
+              </div>
+            </Panel>
+          ) : null}
+        </ReactFlow>
+        {ghostRect ? (
+          <div
+            data-testid="canvas-draw-ghost"
+            data-ghost-shape={drawShape ?? undefined}
+            aria-hidden
+            className={cn(
+              'pointer-events-none absolute z-10',
+              ghostShapeClass,
+              ghostTextOutline ? 'rounded-sm border border-dashed border-muted-foreground/40' : '',
+            )}
+            style={{
+              ...ghostShapeStyle,
+              left: ghostRect.left,
+              top: ghostRect.top,
+              width: ghostRect.width,
+              height: ghostRect.height,
+            }}
+          >
+            {/* US-010: illustrative shapes have no wrapper chrome — the SVG owns
               the visuals. Render the per-shape SVG directly inside the ghost
               so the drag preview matches the committed visual byte-for-byte.
               The committed node (ShapeNodeImpl) calls `resolveIllustrativeColors`
@@ -3917,247 +3933,248 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
               `NODE_DEFAULT_BG_WHITE` (US-021 dark card surface fallback).
               US-022: dispatch through `ILLUSTRATIVE_SHAPE_RENDERERS` so adding
               a new illustrative shape only touches the registry. */}
-          {(() => {
-            const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : undefined;
-            if (!GhostRenderer) return null;
-            return (
-              <GhostRenderer
-                width={ghostRect.width}
-                height={ghostRect.height}
-                borderColor={colorTokenStyle(undefined, 'node').borderColor}
-                backgroundColor={NODE_DEFAULT_BG_WHITE}
-                borderSize={NEW_NODE_BORDER_WIDTH}
-              />
-            );
-          })()}
-        </div>
-      ) : null}
-      {flags.enableContextMenu && contextEnabled ? (
-        <ContextMenu
-          onOpenChange={(open) => {
-            if (!open) {
-              setContextMenuPos(null);
-              contextNodeIdRef.current = null;
-              setContextNodeType(null);
-              setContextEndpoint(null);
-            }
-          }}
-        >
-          <ContextMenuTrigger asChild>
-            <div
-              ref={contextTriggerRef}
-              data-testid="node-context-menu-trigger"
-              aria-hidden
-              className="pointer-events-none fixed"
-              style={{
-                left: contextMenuPos?.x ?? 0,
-                top: contextMenuPos?.y ?? 0,
-                width: 0,
-                height: 0,
-              }}
-            />
-          </ContextMenuTrigger>
-          <ContextMenuContent data-testid="node-context-menu">
-            {contextEndpoint?.pinned && onUnpinEndpoint ? (
-              <ContextMenuItem
-                data-testid="connector-endpoint-context-menu-unpin"
-                onSelect={handleUnpinPick}
-              >
-                Unpin
-              </ContextMenuItem>
-            ) : null}
-            {contextOnNode && onCopyNode ? (
-              <ContextMenuItem data-testid="node-context-menu-copy" onSelect={handleCopyPick}>
-                Copy
-                <ContextMenuShortcut>{copyShortcut}</ContextMenuShortcut>
-              </ContextMenuItem>
-            ) : null}
-            {onPasteAt ? (
-              <ContextMenuItem
-                data-testid="node-context-menu-paste"
-                disabled={!hasClipboard}
-                onSelect={handlePastePick}
-              >
-                Paste
-                <ContextMenuShortcut>{pasteShortcut}</ContextMenuShortcut>
-              </ContextMenuItem>
-            ) : null}
-            {contextOnNode &&
-            (onCopyNode || onPasteAt) &&
-            ((contextNodeType === 'iconNode' && !!onRequestIconReplace) ||
-              onReorderNode ||
-              onDeleteNode) ? (
-              <ContextMenuSeparator />
-            ) : null}
-            {contextOnNode && contextNodeType === 'iconNode' && onRequestIconReplace ? (
-              <ContextMenuItem
-                data-testid="node-context-menu-change-icon"
-                onSelect={handleChangeIconPick}
-              >
-                Change icon
-              </ContextMenuItem>
-            ) : null}
-            {contextOnNode &&
-            contextNodeType === 'iconNode' &&
-            onRequestIconReplace &&
-            (onReorderNode || onDeleteNode) ? (
-              <ContextMenuSeparator />
-            ) : null}
-            {contextOnNode && onReorderNode ? (
-              <>
-                <ContextMenuItem
-                  data-testid="node-context-menu-to-front"
-                  onSelect={() => handleReorderPick({ op: 'toFront' })}
-                >
-                  Bring to front
-                </ContextMenuItem>
-                <ContextMenuItem
-                  data-testid="node-context-menu-forward"
-                  onSelect={() => handleReorderPick({ op: 'forward' })}
-                >
-                  Bring forward
-                </ContextMenuItem>
-                <ContextMenuItem
-                  data-testid="node-context-menu-backward"
-                  onSelect={() => handleReorderPick({ op: 'backward' })}
-                >
-                  Send backward
-                </ContextMenuItem>
-                <ContextMenuItem
-                  data-testid="node-context-menu-to-back"
-                  onSelect={() => handleReorderPick({ op: 'toBack' })}
-                >
-                  Send to back
-                </ContextMenuItem>
-              </>
-            ) : null}
-            {contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? (
-              <ContextMenuSeparator />
-            ) : null}
-            {contextOnNode && onToggleNodeLock
-              ? (() => {
-                  // Label echoes the keyboard-shortcut's mixed-selection rule
-                  // (see onToggleNodeLock JSDoc): "Unlock" only when EVERY
-                  // target id is already locked; otherwise "Lock".
-                  const single = contextNodeIdRef.current;
-                  const targetIds = single ? [single] : selectedNodeIds;
-                  const label =
-                    targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id))
-                      ? 'Unlock'
-                      : 'Lock';
-                  return (
-                    <ContextMenuItem
-                      data-testid="node-context-menu-toggle-lock"
-                      onSelect={handleToggleLockPick}
-                      disabled={targetIds.length === 0}
-                    >
-                      {label}
-                    </ContextMenuItem>
-                  );
-                })()
-              : null}
-            {contextOnNode && onToggleNodeLock && onDeleteNode ? <ContextMenuSeparator /> : null}
-            {contextOnNode && onDeleteNode ? (
-              <ContextMenuItem
-                data-testid="node-context-menu-delete"
-                onSelect={handleDeletePick}
-                disabled={
-                  contextNodeIdRef.current ? lockedNodeIdSet.has(contextNodeIdRef.current) : false
-                }
-              >
-                Delete
-              </ContextMenuItem>
-            ) : null}
-          </ContextMenuContent>
-        </ContextMenu>
-      ) : null}
-      {onCreateAndConnectFromPane ? (
-        <Popover
-          open={!!dropPopover}
-          onOpenChange={(open) => {
-            // Radix-driven dismissals (outside-click, ESC inside the popover,
-            // programmatic close on commit) all funnel through here. Map the
-            // close back to clearing our state so the next drop can re-anchor.
-            if (!open) setDropPopover(null);
-          }}
-        >
-          {/* PopoverAnchor is a 0×0 fixed-position element pinned to the cursor
-              at drop time; the Popover content positions relative to it. */}
-          <PopoverAnchor asChild>
-            <div
-              data-testid="drop-popover-anchor"
-              aria-hidden
-              className="pointer-events-none fixed"
-              style={{
-                left: dropPopover?.clientX ?? 0,
-                top: dropPopover?.clientY ?? 0,
-                width: 0,
-                height: 0,
-              }}
-            />
-          </PopoverAnchor>
-          <PopoverContent
-            data-testid="drop-popover"
-            align="start"
-            side="bottom"
-            sideOffset={4}
-            className="w-auto p-1"
-            onOpenAutoFocus={(e) => {
-              // Don't pull focus into the popover — keep it on the canvas so
-              // the wrapper-level ESC handler still receives keypresses.
-              e.preventDefault();
+            {(() => {
+              const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : undefined;
+              if (!GhostRenderer) return null;
+              return (
+                <GhostRenderer
+                  width={ghostRect.width}
+                  height={ghostRect.height}
+                  borderColor={colorTokenStyle(undefined, 'node').borderColor}
+                  backgroundColor={NODE_DEFAULT_BG_WHITE}
+                  borderSize={NEW_NODE_BORDER_WIDTH}
+                />
+              );
+            })()}
+          </div>
+        ) : null}
+        {flags.enableContextMenu && contextEnabled ? (
+          <ContextMenu
+            onOpenChange={(open) => {
+              if (!open) {
+                setContextMenuPos(null);
+                contextNodeIdRef.current = null;
+                setContextNodeType(null);
+                setContextEndpoint(null);
+              }
             }}
           >
-            <div role="menu" aria-label="Create connected node" className="flex flex-col gap-0.5">
-              {TOOLBAR_SHAPES.map(({ shape, label, Icon }) => (
-                <button
-                  key={shape}
-                  type="button"
-                  role="menuitem"
-                  data-testid={`drop-popover-shape-${shape}`}
-                  onClick={() => {
-                    const dp = dropPopover;
-                    if (!dp) return;
-                    onCreateAndConnectFromPane({
-                      sourceNodeId: dp.sourceNodeId,
-                      position: { x: dp.flowX, y: dp.flowY },
-                      shape,
-                    });
-                    setDropPopover(null);
-                  }}
-                  className={cn(
-                    'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    'focus:bg-accent focus:text-accent-foreground focus:outline-none',
-                  )}
+            <ContextMenuTrigger asChild>
+              <div
+                ref={contextTriggerRef}
+                data-testid="node-context-menu-trigger"
+                aria-hidden
+                className="pointer-events-none fixed"
+                style={{
+                  left: contextMenuPos?.x ?? 0,
+                  top: contextMenuPos?.y ?? 0,
+                  width: 0,
+                  height: 0,
+                }}
+              />
+            </ContextMenuTrigger>
+            <ContextMenuContent data-testid="node-context-menu">
+              {contextEndpoint?.pinned && onUnpinEndpoint ? (
+                <ContextMenuItem
+                  data-testid="connector-endpoint-context-menu-unpin"
+                  onSelect={handleUnpinPick}
                 >
-                  <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
-                  <span>{label}</span>
-                </button>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      ) : null}
-      {shouldRenderSidebar ? (
-        <DetailPanel
-          demoId={sidebarDemoId}
-          node={sidebarNode}
-          connector={sidebarConnector}
-          adapter={adapter ?? null}
-          statusReport={statusReport}
-          onNameChange={onNameChange}
-          onDescriptionChange={onDescriptionChange}
-          onDetailChange={onDetailChange}
-          onClose={() => {
-            // US-007: the panel is selection-driven, so closing it means
-            // clearing the selection. Pane-click already routes through xyflow
-            // and fires the same callback; this path covers the Sheet's X
-            // button and any Radix-triggered dismissal.
-            onSelectionChangeRef.current?.([], []);
-          }}
-        />
-      ) : null}
-    </div>
+                  Unpin
+                </ContextMenuItem>
+              ) : null}
+              {contextOnNode && onCopyNode ? (
+                <ContextMenuItem data-testid="node-context-menu-copy" onSelect={handleCopyPick}>
+                  Copy
+                  <ContextMenuShortcut>{copyShortcut}</ContextMenuShortcut>
+                </ContextMenuItem>
+              ) : null}
+              {onPasteAt ? (
+                <ContextMenuItem
+                  data-testid="node-context-menu-paste"
+                  disabled={!hasClipboard}
+                  onSelect={handlePastePick}
+                >
+                  Paste
+                  <ContextMenuShortcut>{pasteShortcut}</ContextMenuShortcut>
+                </ContextMenuItem>
+              ) : null}
+              {contextOnNode &&
+              (onCopyNode || onPasteAt) &&
+              ((contextNodeType === 'iconNode' && !!onRequestIconReplace) ||
+                onReorderNode ||
+                onDeleteNode) ? (
+                <ContextMenuSeparator />
+              ) : null}
+              {contextOnNode && contextNodeType === 'iconNode' && onRequestIconReplace ? (
+                <ContextMenuItem
+                  data-testid="node-context-menu-change-icon"
+                  onSelect={handleChangeIconPick}
+                >
+                  Change icon
+                </ContextMenuItem>
+              ) : null}
+              {contextOnNode &&
+              contextNodeType === 'iconNode' &&
+              onRequestIconReplace &&
+              (onReorderNode || onDeleteNode) ? (
+                <ContextMenuSeparator />
+              ) : null}
+              {contextOnNode && onReorderNode ? (
+                <>
+                  <ContextMenuItem
+                    data-testid="node-context-menu-to-front"
+                    onSelect={() => handleReorderPick({ op: 'toFront' })}
+                  >
+                    Bring to front
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    data-testid="node-context-menu-forward"
+                    onSelect={() => handleReorderPick({ op: 'forward' })}
+                  >
+                    Bring forward
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    data-testid="node-context-menu-backward"
+                    onSelect={() => handleReorderPick({ op: 'backward' })}
+                  >
+                    Send backward
+                  </ContextMenuItem>
+                  <ContextMenuItem
+                    data-testid="node-context-menu-to-back"
+                    onSelect={() => handleReorderPick({ op: 'toBack' })}
+                  >
+                    Send to back
+                  </ContextMenuItem>
+                </>
+              ) : null}
+              {contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? (
+                <ContextMenuSeparator />
+              ) : null}
+              {contextOnNode && onToggleNodeLock
+                ? (() => {
+                    // Label echoes the keyboard-shortcut's mixed-selection rule
+                    // (see onToggleNodeLock JSDoc): "Unlock" only when EVERY
+                    // target id is already locked; otherwise "Lock".
+                    const single = contextNodeIdRef.current;
+                    const targetIds = single ? [single] : selectedNodeIds;
+                    const label =
+                      targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id))
+                        ? 'Unlock'
+                        : 'Lock';
+                    return (
+                      <ContextMenuItem
+                        data-testid="node-context-menu-toggle-lock"
+                        onSelect={handleToggleLockPick}
+                        disabled={targetIds.length === 0}
+                      >
+                        {label}
+                      </ContextMenuItem>
+                    );
+                  })()
+                : null}
+              {contextOnNode && onToggleNodeLock && onDeleteNode ? <ContextMenuSeparator /> : null}
+              {contextOnNode && onDeleteNode ? (
+                <ContextMenuItem
+                  data-testid="node-context-menu-delete"
+                  onSelect={handleDeletePick}
+                  disabled={
+                    contextNodeIdRef.current ? lockedNodeIdSet.has(contextNodeIdRef.current) : false
+                  }
+                >
+                  Delete
+                </ContextMenuItem>
+              ) : null}
+            </ContextMenuContent>
+          </ContextMenu>
+        ) : null}
+        {onCreateAndConnectFromPane ? (
+          <Popover
+            open={!!dropPopover}
+            onOpenChange={(open) => {
+              // Radix-driven dismissals (outside-click, ESC inside the popover,
+              // programmatic close on commit) all funnel through here. Map the
+              // close back to clearing our state so the next drop can re-anchor.
+              if (!open) setDropPopover(null);
+            }}
+          >
+            {/* PopoverAnchor is a 0×0 fixed-position element pinned to the cursor
+              at drop time; the Popover content positions relative to it. */}
+            <PopoverAnchor asChild>
+              <div
+                data-testid="drop-popover-anchor"
+                aria-hidden
+                className="pointer-events-none fixed"
+                style={{
+                  left: dropPopover?.clientX ?? 0,
+                  top: dropPopover?.clientY ?? 0,
+                  width: 0,
+                  height: 0,
+                }}
+              />
+            </PopoverAnchor>
+            <PopoverContent
+              data-testid="drop-popover"
+              align="start"
+              side="bottom"
+              sideOffset={4}
+              className="w-auto p-1"
+              onOpenAutoFocus={(e) => {
+                // Don't pull focus into the popover — keep it on the canvas so
+                // the wrapper-level ESC handler still receives keypresses.
+                e.preventDefault();
+              }}
+            >
+              <div role="menu" aria-label="Create connected node" className="flex flex-col gap-0.5">
+                {TOOLBAR_SHAPES.map(({ shape, label, Icon }) => (
+                  <button
+                    key={shape}
+                    type="button"
+                    role="menuitem"
+                    data-testid={`drop-popover-shape-${shape}`}
+                    onClick={() => {
+                      const dp = dropPopover;
+                      if (!dp) return;
+                      onCreateAndConnectFromPane({
+                        sourceNodeId: dp.sourceNodeId,
+                        position: { x: dp.flowX, y: dp.flowY },
+                        shape,
+                      });
+                      setDropPopover(null);
+                    }}
+                    className={cn(
+                      'flex items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm',
+                      'hover:bg-accent hover:text-accent-foreground',
+                      'focus:bg-accent focus:text-accent-foreground focus:outline-none',
+                    )}
+                  >
+                    <Icon className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+        ) : null}
+        {shouldRenderSidebar ? (
+          <DetailPanel
+            demoId={sidebarDemoId}
+            node={sidebarNode}
+            connector={sidebarConnector}
+            adapter={adapter ?? null}
+            statusReport={statusReport}
+            onNameChange={onNameChange}
+            onDescriptionChange={onDescriptionChange}
+            onDetailChange={onDetailChange}
+            onClose={() => {
+              // US-007: the panel is selection-driven, so closing it means
+              // clearing the selection. Pane-click already routes through xyflow
+              // and fires the same callback; this path covers the Sheet's X
+              // button and any Radix-triggered dismissal.
+              onSelectionChangeRef.current?.([], []);
+            }}
+          />
+        ) : null}
+      </div>
+    </IconRegistryProvider>
   );
 }
