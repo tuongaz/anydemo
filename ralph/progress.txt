@@ -50,6 +50,19 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
 
+## 2026-05-18 - US-005
+- Removed hardcoded `color: '#0f172a'` from button inline style in header.tsx so text inherits `--foreground` (zinc-50)
+- Added `border-border` to header element className to explicitly use the design token for the bottom border color
+- App.tsx loading state already used `bg-background text-muted-foreground` — no changes needed
+- App.tsx root div already used `bg-background text-foreground` — no changes needed
+- Files changed: apps/web/src/components/header.tsx
+- **Learnings for future iterations:**
+  - `#0f172a` is slate-900 — invisible on the dark zinc-950 background; always remove hardcoded dark/light hex colors from components
+  - `border-b` alone works via shadcn's global `* { border-color: hsl(var(--border)) }` base rule, but adding `border-border` is more explicit and matches acceptance criteria
+  - App.tsx already had correct token classes; only header.tsx needed changes
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
+
 ## 2026-05-18 - US-004
 - sheet.tsx: changed `bg-background` to `bg-card border-border` in sheetVariants base class
 - dialog.tsx: changed `bg-background` to `bg-card` and `border` to `border border-border` in DialogContent
