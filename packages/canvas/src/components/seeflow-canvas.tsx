@@ -243,11 +243,7 @@ export function resolveFlags(
   input: { mode: SeeflowCanvasMode } & Omit<CanvasFeatureOverrides, 'storageKey'>,
 ): ResolvedCanvasFlags {
   const defaults =
-    input.mode === 'edit'
-      ? EDIT_DEFAULTS
-      : input.mode === 'mini'
-        ? MINI_DEFAULTS
-        : VIEW_DEFAULTS;
+    input.mode === 'edit' ? EDIT_DEFAULTS : input.mode === 'mini' ? MINI_DEFAULTS : VIEW_DEFAULTS;
   return {
     showToolbar: input.showToolbar ?? defaults.showToolbar,
     showStyleStrip: input.showStyleStrip ?? defaults.showStyleStrip,

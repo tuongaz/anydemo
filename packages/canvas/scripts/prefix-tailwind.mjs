@@ -330,8 +330,9 @@ function transformFile(path) {
   const stripped = stripComments(src);
   const edits = [];
   STRING_LITERAL_RE.lastIndex = 0;
-  let m;
-  while ((m = STRING_LITERAL_RE.exec(stripped)) !== null) {
+  for (;;) {
+    const m = STRING_LITERAL_RE.exec(stripped);
+    if (m === null) break;
     const body = m[2];
     if (body.includes('\n')) continue;
     const tokens = body.split(/\s+/).filter(Boolean);
