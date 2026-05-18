@@ -87,3 +87,14 @@ Started: Mon 18 May 2026 11:48:07 AEST
   - Sheet side variants (border-b, border-t, border-r, border-l) set which border sides render; adding `border-border` to the base sets the color for all sides
   - Browser verification skipped (no browser MCP tools available in this session)
 ---
+
+## 2026-05-18 - US-007
+- Added explicit `text-foreground` to `<h1>` so heading uses the design token rather than implicit inheritance
+- Added `border-border` to the command bar div alongside existing `border` for explicit token usage
+- Component was already mostly correct (bg-background, bg-muted, text-muted-foreground all in place); no hardcoded colors to remove
+- Files changed: apps/web/src/components/empty-state.tsx
+- **Learnings for future iterations:**
+  - `border` alone works via shadcn global reset but adding `border-border` is preferred for explicitness
+  - Heading elements without an explicit color class inherit from the parent chain — but `text-foreground` should be added for clarity when a design token should apply
+  - Browser verification skipped (no browser MCP tools available in this session)
+---
