@@ -1,11 +1,15 @@
-import type { HtmlNodeData } from '@/lib/api';
-import { colorTokenStyle } from '@/lib/color-tokens';
-import { injectSanitizedHtml } from '@/lib/inject-sanitized-html';
-import { ensureTailwindLoaded } from '@/lib/tailwind-runtime';
-import { useHtmlContent } from '@/lib/use-html-content';
-import { LockBadge, PlaceholderCard, ResizeControls, cn, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type ReactNode, memo, useEffect } from 'react';
+import { cn } from '../lib/cn.ts';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
+import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
+import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
+import { useHtmlContent } from '../lib/use-html-content.ts';
+import type { HtmlNodeData } from '../types.ts';
+import { LockBadge } from './lock-badge.tsx';
+import { PlaceholderCard } from './placeholder-card.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type HtmlNodeRuntimeData = HtmlNodeData & {
   onResize?: (

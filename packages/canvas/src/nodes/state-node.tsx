@@ -1,16 +1,13 @@
-import type { NodeData, StatusReport } from '@/lib/api';
-import { colorTokenStyle } from '@/lib/color-tokens';
-import {
-  InlineEdit,
-  LockBadge,
-  type NodeStatus,
-  ResizeControls,
-  StatusPill,
-  cn,
-  useResizeGesture,
-} from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { cn } from '../lib/cn.ts';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
+import type { NodeData, StatusReport } from '../types.ts';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { type NodeStatus, StatusPill } from './status-pill.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type StateNodeData = NodeData & {
   /**

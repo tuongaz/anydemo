@@ -25,6 +25,7 @@ import type {
   QueueConnector,
   ShapeKind,
   ShapeNodeData,
+  StatusReport,
   StatusReportState,
 } from '@seeflow/canvas';
 
@@ -51,6 +52,7 @@ export type {
   DefaultConnector,
   Connector,
   Demo,
+  StatusReport,
   StatusReportState,
 } from '@seeflow/canvas';
 
@@ -63,17 +65,10 @@ export interface DemoSummary {
   valid: boolean;
 }
 
-// `StatusReportState` (the literal union) lives in @seeflow/canvas/types.ts as
-// of US-012; re-exported above so apps/web's existing import paths still work.
-// The `StatusReport` interface below stays here until US-026, which moves the
-// runtime types (`RunResult`, `StatusReport`) into the canvas.
-export interface StatusReport {
-  state: StatusReportState;
-  summary?: string;
-  detail?: string;
-  data?: Record<string, unknown>;
-  ts?: number;
-}
+// `StatusReportState` (the literal union, US-012) and `StatusReport` (the full
+// runtime payload, US-013) both live in @seeflow/canvas/types.ts; re-exported
+// above so apps/web's existing import paths still work. `RunResult` will move
+// next in US-026 alongside the use-node-runs hook.
 
 // US-008: extends the shared ImageNodeData with transient upload-state flags.
 // These fields are never serialized to disk — they live only in the in-memory

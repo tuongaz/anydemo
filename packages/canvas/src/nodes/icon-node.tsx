@@ -1,9 +1,13 @@
-import type { IconNodeData } from '@/lib/api';
-import { colorTokenStyle } from '@/lib/color-tokens';
-import { ICON_REGISTRY } from '@/lib/icon-registry';
-import { InlineEdit, LockBadge, ResizeControls, cn, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { cn } from '../lib/cn.ts';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
+import { ICON_REGISTRY } from '../lib/icon-registry.ts';
+import type { IconNodeData } from '../types.ts';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type IconNodeRuntimeData = IconNodeData & {
   onResize?: (

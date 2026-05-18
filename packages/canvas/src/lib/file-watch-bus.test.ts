@@ -3,7 +3,7 @@ import {
   _resetFileWatchBusForTest,
   _setEventSourceFactoryForTest,
   subscribeFileChanged,
-} from '@/lib/file-watch-bus';
+} from './file-watch-bus.ts';
 
 /** Minimal mock that records every addEventListener call so the test can
  *  invoke the file:changed handler directly. */

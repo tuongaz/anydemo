@@ -228,8 +228,8 @@
         "bun run typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Moved 6 node components (play, state, shape, image, icon, html) + their tests + connection-limit.test.ts into packages/canvas/src/nodes/. Required pulling in html-node's private dep chain (inject-sanitized-html, sanitize-html, tailwind-runtime, use-html-content, file-watch-bus + tests) into packages/canvas/src/lib/ — they were only used by html-node so the move was self-contained. Promoted `StatusReport` interface from apps/web/src/lib/api.ts into packages/canvas/src/types.ts (re-exported via api.ts ahead of US-026). Added `_uploading`/`_uploadError` transient fields to canvas's `ImageNodeRuntimeData` so the image-node renderer keeps its US-008 placeholder paths without dragging the apps/web `ImageNodeData` extension into canvas. Added happy-dom to canvas devDependencies. Updated apps/web import sites in demo-canvas.tsx, demo-view.tsx, icon-insert.ts, and icon-insert.test.ts to import from @seeflow/canvas. connection-limit.test.ts path fence rewritten to reference packages/canvas/src/nodes/*.tsx (the 5 renderers it polices now live there). The apps/web/src/components/nodes/ directory has been removed entirely."
     },
     {
       "id": "US-014",

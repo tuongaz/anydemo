@@ -1,16 +1,5 @@
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from '@/components/canvas-toolbar';
 import { EditableEdge, type EditableEdgeData } from '@/components/edges/editable-edge';
-import { HtmlNode } from '@/components/nodes/html-node';
-import { IconNode } from '@/components/nodes/icon-node';
-import { ImageNode } from '@/components/nodes/image-node';
-import { PlayNode } from '@/components/nodes/play-node';
-import {
-  SHAPE_DEFAULT_SIZE,
-  ShapeNode,
-  shapeChromeClass,
-  shapeChromeStyle,
-} from '@/components/nodes/shape-node';
-import { StateNode } from '@/components/nodes/state-node';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -34,12 +23,19 @@ import {
   ContextMenuSeparator,
   ContextMenuShortcut,
   ContextMenuTrigger,
+  HtmlNode,
   ILLUSTRATIVE_SHAPE_RENDERERS,
+  IconNode,
+  ImageNode,
   type NodeStatus,
+  PlayNode,
   Popover,
   PopoverAnchor,
   PopoverContent,
+  SHAPE_DEFAULT_SIZE,
+  ShapeNode,
   type Side,
+  StateNode,
   cn,
   computeImageDims,
   connectorToEdge,
@@ -48,6 +44,8 @@ import {
   getNodeIntersection,
   handleCanvasFileDrop,
   projectCursorToPerimeter,
+  shapeChromeClass,
+  shapeChromeStyle,
 } from '@seeflow/canvas';
 import {
   Background,

@@ -1,4 +1,4 @@
-import { sanitizeHtml } from '@/lib/sanitize-html';
+import { sanitizeHtml } from './sanitize-html.ts';
 
 /**
  * US-014: trust boundary for the htmlNode renderer. This helper is the ONE

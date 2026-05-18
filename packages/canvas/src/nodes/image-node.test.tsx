@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'bun:test';
-import { ImageNode } from '@/components/nodes/image-node';
-import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
 import { Handle, type NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import * as React from 'react';
+import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { ImageNode } from './image-node.tsx';
 
 // Hook-shim render pattern documented in icon-node.test.tsx / shape-node.test.tsx.
 // Bun runs apps/web tests without a DOM, and React Flow's <Handle> reads from a

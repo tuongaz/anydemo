@@ -8,11 +8,11 @@ import { Window } from 'happy-dom';
 const window = new Window();
 (globalThis as { DOMParser?: unknown }).DOMParser = window.DOMParser;
 
-const { HtmlNode } = await import('@/components/nodes/html-node');
-const { PlaceholderCard } = await import('@seeflow/canvas');
-const { COLOR_TOKENS } = await import('@/lib/color-tokens');
+const { HtmlNode } = await import('./html-node.tsx');
+const { PlaceholderCard } = await import('./placeholder-card.tsx');
+const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
 const { _setHtmlContentForTest, _clearHtmlContentCacheForTest } = await import(
-  '@/lib/use-html-content'
+  '../lib/use-html-content.ts'
 );
 
 import { Handle, type NodeProps } from '@xyflow/react';

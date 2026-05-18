@@ -145,11 +145,22 @@ export interface DefaultConnector extends ConnectorBase {
 export type Connector = HttpConnector | EventConnector | QueueConnector | DefaultConnector;
 
 // US-012: mirror of `StatusReportSchema['state']` in apps/studio/src/schema.ts.
-// The runtime `StatusReport` interface (which references this union) lives in
-// apps/web/src/lib/api.ts today and will move into @seeflow/canvas in US-026.
 // `apps/web/src/lib/api.ts` re-exports this type from `@seeflow/canvas` so
 // the canvas remains the single source of truth.
 export type StatusReportState = 'ok' | 'warn' | 'error' | 'pending';
+
+// US-013: runtime status payload emitted by a node's statusAction script and
+// fanned out via SSE. The canvas needs the type so play-node + state-node can
+// reference it without an `@/lib/api` import; apps/web/src/lib/api.ts now
+// re-exports this from @seeflow/canvas (same pattern as `StatusReportState`).
+// The hook that produces these values stays in apps/web until US-026.
+export interface StatusReport {
+  state: StatusReportState;
+  summary?: string;
+  detail?: string;
+  data?: Record<string, unknown>;
+  ts?: number;
+}
 
 export interface Demo {
   version: 1;

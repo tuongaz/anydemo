@@ -59,7 +59,7 @@ const clearDocument = () => {
 };
 
 const { ensureTailwindLoaded, TAILWIND_RUNTIME_MARKER, TAILWIND_RUNTIME_SRC } = await import(
-  '@/lib/tailwind-runtime'
+  './tailwind-runtime.ts'
 );
 
 describe('ensureTailwindLoaded (US-012)', () => {

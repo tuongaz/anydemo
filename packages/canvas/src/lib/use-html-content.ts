@@ -1,6 +1,6 @@
-import { subscribeFileChanged } from '@/lib/file-watch-bus';
-import { fileUrl } from '@seeflow/canvas';
 import { useEffect, useState } from 'react';
+import { fileUrl } from './file-url.ts';
+import { subscribeFileChanged } from './file-watch-bus.ts';
 
 /**
  * US-014: discriminated state of an htmlNode's content fetch. The renderer

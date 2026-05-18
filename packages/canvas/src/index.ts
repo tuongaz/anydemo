@@ -22,6 +22,7 @@ export type {
   DefaultConnector,
   Connector,
   Demo,
+  StatusReport,
   StatusReportState,
 } from './types.ts';
 

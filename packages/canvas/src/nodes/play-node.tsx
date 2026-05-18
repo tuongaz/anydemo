@@ -1,18 +1,16 @@
-import type { NodeData, StatusReport } from '@/lib/api';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import {
-  Button,
-  InlineEdit,
-  LockBadge,
-  type NodeStatus,
-  ResizeControls,
-  StatusBadge,
-  cn,
-  useResizeGesture,
-} from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { Loader2, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { cn } from '../lib/cn.ts';
+import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import type { NodeData, StatusReport } from '../types.ts';
+import { Button } from '../ui/button.tsx';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { StatusBadge } from './status-badge.tsx';
+import type { NodeStatus } from './status-pill.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type PlayNodeData = NodeData & {
   /**

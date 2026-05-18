@@ -1,8 +1,12 @@
-import type { ImageNodeData } from '@/lib/api';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import { LockBadge, ResizeControls, cn, fileUrl, useResizeGesture } from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, memo } from 'react';
+import { cn } from '../lib/cn.ts';
+import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import { fileUrl } from '../lib/file-url.ts';
+import type { ImageNodeData } from '../types.ts';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type ImageNodeRuntimeData = ImageNodeData & {
   onResize?: (
@@ -22,6 +26,13 @@ export type ImageNodeRuntimeData = ImageNodeData & {
    * builder. Absent → the placeholder still renders, but clicking is inert.
    */
   onRetryUpload?: (nodeId: string) => void;
+  /**
+   * US-008 (canvas extraction): transient upload-state flags. Mirrors the
+   * apps/web `ImageNodeData` extension — set on optimistic placement, cleared
+   * once the upload settles. Not persisted to disk.
+   */
+  _uploading?: boolean;
+  _uploadError?: string;
 } & Record<string, unknown>;
 export type ImageNodeType = Node<ImageNodeRuntimeData, 'imageNode'>;
 

@@ -8,7 +8,7 @@ import { Window } from 'happy-dom';
 const window = new Window();
 (globalThis as { DOMParser?: unknown }).DOMParser = window.DOMParser;
 
-const { sanitizeHtml } = await import('@/lib/sanitize-html');
+const { sanitizeHtml } = await import('./sanitize-html.ts');
 
 describe('sanitizeHtml (US-013) — dangerous element stripping', () => {
   it('removes <script> elements and their contents', () => {

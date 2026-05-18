@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { PlayNode } from '@/components/nodes/play-node';
-import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
-import { Button } from '@seeflow/canvas';
 import type { NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import * as React from 'react';
+import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { Button } from '../ui/button.tsx';
+import { PlayNode } from './play-node.tsx';
 
 // Mirrors the hook-shim pattern from icon-node.test.tsx — no DOM, no React
 // Flow store; we walk the returned element tree to find the play button and

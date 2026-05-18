@@ -6,7 +6,7 @@ import { Window } from 'happy-dom';
 const window = new Window();
 (globalThis as { DOMParser?: unknown }).DOMParser = window.DOMParser;
 
-const { injectSanitizedHtml } = await import('@/lib/inject-sanitized-html');
+const { injectSanitizedHtml } = await import('./inject-sanitized-html.ts');
 
 const INNER_HTML_PROP = 'dangerously' + 'SetInnerHTML';
 

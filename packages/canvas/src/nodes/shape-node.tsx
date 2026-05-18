@@ -1,13 +1,3 @@
-import type { ShapeKind, ShapeNodeData } from '@/lib/api';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '@/lib/color-tokens';
-import {
-  ILLUSTRATIVE_SHAPE_RENDERERS,
-  InlineEdit,
-  LockBadge,
-  ResizeControls,
-  cn,
-  useResizeGesture,
-} from '@seeflow/canvas';
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import {
   type CSSProperties,
@@ -16,6 +6,14 @@ import {
   memo,
   useState,
 } from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { cn } from '../lib/cn.ts';
+import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import type { ShapeKind, ShapeNodeData } from '../types.ts';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
+import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 // US-009: illustrative shapes own their visuals via inline-SVG components
 // under `apps/web/src/components/nodes/shapes/`. The wrapper's Tailwind chrome

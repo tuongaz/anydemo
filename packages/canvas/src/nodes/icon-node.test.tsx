@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
-import { ICON_FALLBACK_NAME, IconNode } from '@/components/nodes/icon-node';
-import { ICON_REGISTRY } from '@/lib/icon-registry';
-import { InlineEdit, LockBadge, ResizeControls } from '@seeflow/canvas';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { ICON_REGISTRY } from '../lib/icon-registry.ts';
+import { ICON_FALLBACK_NAME, IconNode } from './icon-node.tsx';
+import { LockBadge } from './lock-badge.tsx';
+import { ResizeControls } from './resize-controls.tsx';
 
 // Bun runs apps/web tests without a DOM, and React Flow's `<Handle>` reads
 // from a zustand provider that only exists inside a real ReactFlow mount —

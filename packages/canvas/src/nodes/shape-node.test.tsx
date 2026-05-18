@@ -1,23 +1,21 @@
 import { describe, expect, it } from 'bun:test';
-import { ShapeNode } from '@/components/nodes/shape-node';
+import { Handle, type NodeProps } from '@xyflow/react';
+import * as React from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
+import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { ResizeControls } from './resize-controls.tsx';
 import {
   SHAPE_CLASS,
   SHAPE_DEFAULT_SIZE,
+  ShapeNode,
   shapeChromeClass,
   shapeChromeStyle,
-} from '@/components/nodes/shape-node';
-import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '@/lib/color-tokens';
-import {
-  CloudShape,
-  DatabaseShape,
-  InlineEdit,
-  QueueShape,
-  ResizeControls,
-  ServerShape,
-  UserShape,
-} from '@seeflow/canvas';
-import { Handle, type NodeProps } from '@xyflow/react';
-import * as React from 'react';
+} from './shape-node.tsx';
+import { CloudShape } from './shapes/cloud.tsx';
+import { DatabaseShape } from './shapes/database.tsx';
+import { QueueShape } from './shapes/queue.tsx';
+import { ServerShape } from './shapes/server.tsx';
+import { UserShape } from './shapes/user.tsx';
 
 // US-009: the drag-create ghost in demo-canvas.tsx (`canvas-draw-ghost`) MUST
 // render with the same chrome as the committed node so the preview is

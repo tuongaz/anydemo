@@ -2,8 +2,6 @@ import { CommandPalette } from '@/components/command-palette';
 import { DemoCanvas } from '@/components/demo-canvas';
 import { DetailPanel } from '@/components/detail-panel';
 import { ExportDialog } from '@/components/export-dialog';
-import { ICON_DEFAULT_SIZE } from '@/components/nodes/icon-node';
-import { SHAPE_DEFAULT_SIZE } from '@/components/nodes/shape-node';
 import { RestartDemoButton } from '@/components/restart-demo-button';
 import { ShareMenu } from '@/components/share-menu';
 import type { ConnectorStylePatch, NodeStylePatch } from '@/components/style-strip';
@@ -42,6 +40,8 @@ import { buildNewShapeData } from '@/lib/node-defaults';
 import {
   type AutoLayoutNode,
   type CommandId,
+  ICON_DEFAULT_SIZE,
+  SHAPE_DEFAULT_SIZE,
   applyLayout,
   applyNudge,
   getNudgeDelta,

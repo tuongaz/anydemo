@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import * as React from 'react';
 import {
   type HtmlContentState,
   _clearHtmlContentCacheForTest,
   _setHtmlContentForTest,
-} from '@/lib/use-html-content';
-import * as React from 'react';
+} from './use-html-content.ts';
 
 /** Hook-shim renderer — drives `useState`'s lazy initializer once and returns
  *  whatever the hook returned. The `useEffect` shim makes the fetch path a
@@ -38,7 +38,7 @@ function callHook<T>(fn: () => T): T {
   }
 }
 
-const { useHtmlContent } = await import('@/lib/use-html-content');
+const { useHtmlContent } = await import('./use-html-content.ts');
 
 beforeEach(() => {
   _clearHtmlContentCacheForTest();

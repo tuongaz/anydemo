@@ -15,21 +15,21 @@ import { join } from 'node:path';
 // level rejection — US-004 wires it to reject text-shape endpoints (pure
 // annotations are never connectable). The text-only invariant is verified
 // positively by the US-004 runtime tests in demo-canvas.test.tsx.
-const repoRoot = join(import.meta.dir, '..', '..', '..', '..', '..');
+const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
 const noConnectionLimit = [
-  'apps/web/src/components/nodes/shape-node.tsx',
-  'apps/web/src/components/nodes/play-node.tsx',
-  'apps/web/src/components/nodes/state-node.tsx',
-  'apps/web/src/components/nodes/icon-node.tsx',
-  'apps/web/src/components/nodes/image-node.tsx',
+  'packages/canvas/src/nodes/shape-node.tsx',
+  'packages/canvas/src/nodes/play-node.tsx',
+  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/icon-node.tsx',
+  'packages/canvas/src/nodes/image-node.tsx',
   'apps/web/src/components/demo-canvas.tsx',
 ];
 const noIsValidConnection = [
-  'apps/web/src/components/nodes/shape-node.tsx',
-  'apps/web/src/components/nodes/play-node.tsx',
-  'apps/web/src/components/nodes/state-node.tsx',
-  'apps/web/src/components/nodes/icon-node.tsx',
-  'apps/web/src/components/nodes/image-node.tsx',
+  'packages/canvas/src/nodes/shape-node.tsx',
+  'packages/canvas/src/nodes/play-node.tsx',
+  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/icon-node.tsx',
+  'packages/canvas/src/nodes/image-node.tsx',
 ];
 
 describe('US-015: no per-handle connection limit', () => {
@@ -55,11 +55,11 @@ describe('US-015: no per-handle connection limit', () => {
 // the gate. Static-text fence on each renderer source is sufficient; any new
 // custom node added to this list inherits the same check.
 const nodeRenderers = [
-  'apps/web/src/components/nodes/shape-node.tsx',
-  'apps/web/src/components/nodes/play-node.tsx',
-  'apps/web/src/components/nodes/state-node.tsx',
-  'apps/web/src/components/nodes/icon-node.tsx',
-  'apps/web/src/components/nodes/image-node.tsx',
+  'packages/canvas/src/nodes/shape-node.tsx',
+  'packages/canvas/src/nodes/play-node.tsx',
+  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/icon-node.tsx',
+  'packages/canvas/src/nodes/image-node.tsx',
 ];
 
 describe('US-025: nodes forward isConnectable to every <Handle>', () => {
