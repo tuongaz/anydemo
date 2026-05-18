@@ -1,3 +1,57 @@
+// Shared canvas types — single source of truth lives in @seeflow/canvas.
+// App-specific extensions (transient upload state, runtime API types) are
+// defined below and re-exported alongside the shared types.
+import type {
+  ColorToken,
+  NodeVisual,
+  NodeDescription,
+  NodeData,
+  HttpAction,
+  ShapeKind,
+  ShapeNodeData,
+  IconNodeData,
+  HtmlNodeData,
+  DemoNode,
+  ConnectorStyle,
+  ConnectorDirection,
+  ConnectorPath,
+  EdgePinSide,
+  EdgePin,
+  ConnectorBase,
+  HttpConnector,
+  EventConnector,
+  QueueConnector,
+  DefaultConnector,
+  Connector,
+  Demo,
+  ImageNodeData as BaseImageNodeData,
+} from '@seeflow/canvas';
+
+export type {
+  ColorToken,
+  NodeVisual,
+  NodeDescription,
+  NodeData,
+  HttpAction,
+  ShapeKind,
+  ShapeNodeData,
+  IconNodeData,
+  HtmlNodeData,
+  DemoNode,
+  ConnectorStyle,
+  ConnectorDirection,
+  ConnectorPath,
+  EdgePinSide,
+  EdgePin,
+  ConnectorBase,
+  HttpConnector,
+  EventConnector,
+  QueueConnector,
+  DefaultConnector,
+  Connector,
+  Demo,
+} from '@seeflow/canvas';
+
 export interface DemoSummary {
   id: string;
   slug: string;
@@ -5,14 +59,6 @@ export interface DemoSummary {
   repoPath: string;
   lastModified: number;
   valid: boolean;
-}
-
-export interface HttpAction {
-  kind: 'http';
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  url: string;
-  body?: unknown;
-  bodySchema?: unknown;
 }
 
 // Mirror of `StatusReportSchema` in apps/studio/src/schema.ts. One record per
@@ -29,222 +75,12 @@ export interface StatusReport {
   ts?: number;
 }
 
-export type ColorToken =
-  | 'default'
-  | 'slate'
-  | 'blue'
-  | 'green'
-  | 'amber'
-  | 'red'
-  | 'purple'
-  | 'pink';
-
-// Visual fields shared by every node type (functional + decorative). All
-// optional; mirrors NodeVisualBaseShape in apps/studio/src/schema.ts.
-export interface NodeVisual {
-  width?: number;
-  height?: number;
-  borderColor?: ColorToken;
-  backgroundColor?: ColorToken;
-  borderSize?: number;
-  borderStyle?: 'solid' | 'dashed' | 'dotted';
-  fontSize?: number;
-  textColor?: ColorToken;
-  cornerRadius?: number;
-  /**
-   * US-019: when true the node is frozen — cannot be dragged, resized, or
-   * deleted by accident — and renders a lock badge in its top-right corner.
-   * Absent → unlocked default. Mirrored explicitly into IconNodeData
-   * (that variant doesn't extend NodeVisual).
-   */
-  locked?: boolean;
-}
-
-// Three-field consolidation: free-text metadata fields available on every
-// node variant. `description` is the short body text rendered on the canvas
-// under the node header (and as light-bold text in the sidebar); `detail` is
-// the long-form body rendered only in the sidebar. Both optional. Mirrors
-// `NodeDescriptionBaseShape` in apps/studio/src/schema.ts.
-export interface NodeDescription {
-  description?: string;
-  detail?: string;
-}
-
-export interface NodeData extends NodeVisual, NodeDescription {
-  name: string;
-  kind: string;
-  stateSource: { kind: 'request' | 'event' };
-  playAction?: HttpAction;
-  handlerModule?: string;
-}
-
-// US-009: `database` is the first illustrative shape — rendered via inline
-// SVG in `apps/web/src/components/nodes/shapes/database.tsx`, the wrapper
-// chrome is suppressed (SVG owns border + fill). Keep this union in sync with
-// `ShapeKindSchema` in `apps/studio/src/schema.ts`.
-export type ShapeKind =
-  | 'rectangle'
-  | 'ellipse'
-  | 'sticky'
-  | 'text'
-  | 'database'
-  | 'server'
-  | 'user'
-  | 'queue'
-  | 'cloud';
-
-export interface ShapeNodeData extends NodeVisual, NodeDescription {
-  shape: ShapeKind;
-  name?: string;
-}
-
-// Decorative image node — references a file under `<project>/.seeflow/` by
-// relative path (US-004 hard-cut from base64). Mirrors ImageNodeDataSchema in
-// apps/studio/src/schema.ts; the renderer fetches via the file-serving
-// endpoint at `GET /api/projects/:id/files/:path`.
-// US-014: optional `borderWidth` (1–8). `borderColor` and `borderStyle` come
-// via NodeVisual.
-export interface ImageNodeData extends NodeVisual, NodeDescription {
-  path: string;
-  alt?: string;
-  borderWidth?: number;
-  /**
-   * US-008: transient overlay flag set on the optimistic node placed by the
-   * OS-image drop handler before the file has finished uploading. Lives only
-   * in the in-memory nodeOverrides map — never serialized to disk (cleared
-   * before createNode is called). Leading underscore marks it private.
-   */
+// US-008: extends the shared ImageNodeData with transient upload-state flags.
+// These fields are never serialized to disk — they live only in the in-memory
+// nodeOverrides map and are cleared before createNode is called.
+export interface ImageNodeData extends BaseImageNodeData {
   _uploading?: boolean;
-  /**
-   * US-008: transient overlay flag set when the upload POST failed. The
-   * renderer shows a 'click to retry' placeholder and clicking dispatches the
-   * retry callback. Cleared on successful retry. Never serialized.
-   */
   _uploadError?: string;
-}
-
-// Decorative icon node — renders a Lucide glyph. Mirrors IconNodeDataSchema
-// in apps/studio/src/schema.ts; unboxed (no border/cornerRadius/background)
-// so it does NOT extend NodeVisual — only width/height are reused.
-export interface IconNodeData extends NodeDescription {
-  icon: string;
-  color?: ColorToken;
-  strokeWidth?: number;
-  width?: number;
-  height?: number;
-  alt?: string;
-  // US-002: optional visible caption rendered below the icon. Distinct from
-  // `alt` (screen-reader text). Empty/absent → no caption rendered.
-  name?: string;
-  /** US-019: lock state mirror — see NodeVisual.locked. */
-  locked?: boolean;
-}
-
-// Decorative htmlNode — references author-written HTML at
-// `<project>/.seeflow/<htmlPath>` (US-011 schema, US-014 renderer). The
-// renderer fetches the file via the project file-serving endpoint, sanitizes
-// the contents via `sanitizeHtml`, and injects the result. Mirrors
-// `HtmlNodeDataSchema` in `apps/studio/src/schema.ts`.
-export interface HtmlNodeData extends NodeVisual, NodeDescription {
-  htmlPath: string;
-  name?: string;
-}
-
-interface NodeBase {
-  id: string;
-  position: { x: number; y: number };
-}
-
-export type DemoNode =
-  | (NodeBase & { type: 'playNode'; data: NodeData })
-  | (NodeBase & { type: 'stateNode'; data: NodeData })
-  | (NodeBase & { type: 'shapeNode'; data: ShapeNodeData })
-  | (NodeBase & { type: 'imageNode'; data: ImageNodeData })
-  | (NodeBase & { type: 'iconNode'; data: IconNodeData })
-  | (NodeBase & { type: 'htmlNode'; data: HtmlNodeData });
-
-export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
-export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';
-/** Path geometry — 'curve' (default bezier) vs 'step' (smoothstep / zigzag). */
-export type ConnectorPath = 'curve' | 'step';
-
-/**
- * US-006: pinned endpoint position on an edge. Mirrors `EdgePinSchema` in
- * apps/studio/src/schema.ts. `side` names which of the four perimeter sides
- * of the connected node the endpoint sits on; `t` is the parameterized
- * position along that side, in [0, 1]. Top/bottom: 0 = left, 1 = right.
- * Left/right: 0 = top, 1 = bottom.
- */
-export type EdgePinSide = 'top' | 'right' | 'bottom' | 'left';
-export interface EdgePin {
-  side: EdgePinSide;
-  t: number;
-}
-
-export interface ConnectorBase {
-  id: string;
-  source: string;
-  target: string;
-  /** Handle id (e.g. 't' / 'r' / 'b' / 'l') on the source node. */
-  sourceHandle?: string;
-  /** Handle id on the target node. */
-  targetHandle?: string;
-  /**
-   * US-021: true when the source handle was chosen by the facing-handle
-   * picker (e.g. body-drop fallback). When true, the auto-handle-rerouter
-   * recomputes the side after node moves so the connector keeps facing the
-   * other end. Absent / false → user-pinned, never overridden.
-   */
-  sourceHandleAutoPicked?: boolean;
-  /** US-021: same as sourceHandleAutoPicked but for the target endpoint. */
-  targetHandleAutoPicked?: boolean;
-  /**
-   * US-006: explicit perimeter pin for the source endpoint. When set, the
-   * endpoint is anchored to `(side, t)` against the live source-node bbox
-   * and does not drift as either node moves or resizes. Absent → floating /
-   * handle-based endpoint behavior (back-compat).
-   */
-  sourcePin?: EdgePin;
-  /** US-006: same as sourcePin but for the target endpoint. */
-  targetPin?: EdgePin;
-  label?: string;
-  style?: ConnectorStyle;
-  color?: ColorToken;
-  direction?: ConnectorDirection;
-  borderSize?: number;
-  /** Path geometry — orthogonal to `style` (which is dash pattern). */
-  path?: ConnectorPath;
-  /** US-018: per-connector label font size in px. Absent → 11px default. */
-  fontSize?: number;
-}
-
-export interface HttpConnector extends ConnectorBase {
-  kind: 'http';
-  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  url?: string;
-}
-
-export interface EventConnector extends ConnectorBase {
-  kind: 'event';
-  eventName: string;
-}
-
-export interface QueueConnector extends ConnectorBase {
-  kind: 'queue';
-  queueName: string;
-}
-
-export interface DefaultConnector extends ConnectorBase {
-  kind: 'default';
-}
-
-export type Connector = HttpConnector | EventConnector | QueueConnector | DefaultConnector;
-
-export interface Demo {
-  version: 1;
-  name: string;
-  nodes: DemoNode[];
-  connectors: Connector[];
 }
 
 export interface DemoDetail {

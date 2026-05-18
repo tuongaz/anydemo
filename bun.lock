@@ -35,7 +35,7 @@
     },
     "apps/studio": {
       "name": "@tuongaz/seeflow",
-      "version": "0.1.12",
+      "version": "0.1.15",
       "bin": {
         "seeflow": "bin/seeflow",
         "seeflow-mcp": "bin/seeflow-mcp",
@@ -65,6 +65,7 @@
         "@radix-ui/react-slot": "^1.1.0",
         "@radix-ui/react-tabs": "^1.1.13",
         "@radix-ui/react-tooltip": "^1.1.4",
+        "@seeflow/canvas": "workspace:*",
         "@types/dagre": "^0.7.54",
         "@xyflow/react": "^12.3.5",
         "class-variance-authority": "^0.7.0",
@@ -94,6 +95,18 @@
         "tailwindcss": "^3.4.14",
         "typescript": "^5.6.3",
         "vite": "^5.4.10",
+      },
+    },
+    "packages/canvas": {
+      "name": "@seeflow/canvas",
+      "version": "0.0.0",
+      "devDependencies": {
+        "@types/react": "^18.3.12",
+        "typescript": "^5.6.3",
+      },
+      "peerDependencies": {
+        "lucide-react": "*",
+        "react": "*",
       },
     },
     "packages/sdk": {
@@ -438,6 +451,8 @@
     "@rollup/rollup-win32-x64-gnu": ["@rollup/rollup-win32-x64-gnu@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-DRS4G7mi9lJxqEDezIkKCaUIKCrLUUDCUaCsTPCi/rtqaC6D/jjwslMQyiDU50Ka0JKpeXeRBFBAXwArY52vBw=="],
 
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw=="],
+
+    "@seeflow/canvas": ["@seeflow/canvas@workspace:packages/canvas"],
 
     "@seeflow/cloud": ["@seeflow/cloud@workspace:apps/cloud"],
 
