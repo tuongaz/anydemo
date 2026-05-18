@@ -1,0 +1,178 @@
+{
+  "project": "SeeFlow",
+  "branchName": "ralph/ui-dark-theme-fixes",
+  "description": "Fix all UI issues found in the dark-theme audit: white node backgrounds, light-theme color tokens, wrong CSS variable values, React Flow Controls white panel, inverted tooltip, button sizing/color deviations, and status component light-theme classes.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Fix CSS token values in index.css to match design system",
+      "description": "As a developer, I need the shadcn CSS variables in index.css to match the design.html source of truth exactly, so every component that consumes them renders at the correct color.",
+      "acceptanceCriteria": [
+        "Fix --primary-foreground: change from '160 68% 60%' (light emerald) to the HSL equivalent of #052e22 (dark forest green, approx '162 89% 10%')",
+        "Fix --secondary: change from '240 3.7% 15.9%' (#27272a) to match design's #1f1f23 (approx '240 6% 13%')",
+        "Fix --muted: change from '240 3.7% 15.9%' (#27272a) to match design's #1c1c20 (approx '240 7% 12%')",
+        "--background, --foreground, --card, --popover, --border, --ring, --destructive tokens remain unchanged",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-002",
+      "title": "Add React Flow Controls dark-theme CSS overrides to index.css",
+      "description": "As a user, I want the zoom/fit/tidy toolbar in the bottom-left of the canvas to match the dark design system, not the React Flow default white background.",
+      "acceptanceCriteria": [
+        "Add CSS overrides in index.css for .react-flow__controls: background hsl(var(--card)), border 1px solid hsl(var(--border)), border-radius var(--radius), box-shadow var(--shadow-card)",
+        "Add CSS overrides for .react-flow__controls-button: background hsl(var(--secondary)), color hsl(var(--foreground)), border-bottom 1px solid hsl(var(--border))",
+        "Add hover state for .react-flow__controls-button:hover: background hsl(var(--accent))",
+        "Add disabled state for .react-flow__controls-button:disabled: opacity 0.4, cursor not-allowed",
+        "Add SVG fill override for .react-flow__controls-button svg: fill currentColor",
+        "The controls panel (zoom in, zoom out, fit view, tidy) renders with dark card background and subtle borders — no white visible",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-003",
+      "title": "Fix named color token backgrounds and borders in color-tokens.ts to dark-theme values",
+      "description": "As a user, I want colored nodes (slate, blue, green, amber, red, purple, pink) to render with dark-theme appropriate backgrounds instead of near-white (96-98% lightness) backgrounds that look like white blobs on the dark canvas.",
+      "acceptanceCriteria": [
+        "Replace all named token backgrounds from near-white (96-98% lightness) to dark tinted values (approx 10-18% lightness) that are visually distinct on the dark canvas",
+        "Replace all named token border colors from mid-tone (60-70% lightness) to appropriate saturation for dark backgrounds (approx 40-55% lightness)",
+        "Edge stroke colors remain distinct and readable on dark canvas",
+        "Suggested dark-theme mappings: slate bg hsl(215,15%,15%) border hsl(215,20%,40%), blue bg hsl(214,30%,14%) border hsl(213,70%,55%), green bg hsl(142,25%,13%) border hsl(142,50%,45%), amber bg hsl(43,30%,14%) border hsl(43,70%,50%), red bg hsl(0,25%,14%) border hsl(0,70%,55%), purple bg hsl(270,20%,15%) border hsl(270,60%,60%), pink bg hsl(330,20%,14%) border hsl(330,60%,60%)",
+        "default token remains using CSS vars (hsl(var(--border)) / hsl(var(--card)))",
+        "NODE_DEFAULT_BG_WHITE constant is unchanged in this story (addressed in US-004)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Replace hardcoded white node default background with dark surface color",
+      "description": "As a user, I want play nodes, rectangles, ellipses, and illustrative shapes (database, server, user, queue, cloud) to render with a dark background by default instead of solid white (#ffffff), matching the design system's zinc-900 surface.",
+      "acceptanceCriteria": [
+        "Change NODE_DEFAULT_BG_WHITE in color-tokens.ts from '#ffffff' to 'hsl(var(--card))' (zinc-900 #18181b)",
+        "play-node.tsx: when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
+        "shape-node.tsx rectangle and ellipse: when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
+        "shape-node.tsx illustrative shapes (database, server, user, queue, cloud): when backgroundColor is unset, background resolves to hsl(var(--card)) not white",
+        "demo-canvas.tsx draw ghost: GhostRenderer receives hsl(var(--card)) as backgroundColor (not NODE_DEFAULT_BG_WHITE literal since the value changed)",
+        "Sticky notes retain their amber default background (unaffected by this change)",
+        "Text shapes remain chromeless (unaffected)",
+        "State nodes remain unaffected (they already use colorTokenStyle default which maps to --card)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Fix status-pill and status-badge to use dark-theme colors only",
+      "description": "As a user, I want status indicators on nodes (running/done/error/idle dots and pills) to render with dark-appropriate colors, not the light-theme Tailwind 100-scale classes that appear as near-white patches.",
+      "acceptanceCriteria": [
+        "status-pill.tsx: replace bg-amber-100, bg-emerald-100, bg-rose-100 (and any other light-scale bg-*-100) with dark equivalents (e.g. bg-amber-950/50, bg-emerald-950/50, bg-rose-950/50 or CSS variable equivalents)",
+        "status-pill.tsx: replace light-scale text colors and border colors with dark-theme appropriate values that are readable on dark surface",
+        "status-badge.tsx: remove light-theme fallback classes (bg-emerald-500, bg-amber-500, bg-rose-500, bg-slate-400). Since darkMode:['class'] requires a .dark class on <html> which is not set, dark: prefixes are inactive. Replace all dual light/dark: class pairs with single dark-appropriate classes (e.g. just text-emerald-400, text-amber-400, text-rose-400, text-slate-400)",
+        "Status dots and pills remain visually distinct and readable for each state (idle/running/done/error/pending)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Fix button.tsx to match design system sizes, colors, and hover states",
+      "description": "As a user, I want all buttons across the app to match the design system specification: correct heights, correct primary button text/hover color, correct font weight for primary, and ghost button starting text color.",
+      "acceptanceCriteria": [
+        "Default button height: change from h-10 (40px) to h-9 (36px)",
+        "sm button height: change from h-9 (36px) to h-8 (32px) — closest Tailwind to design's 30px",
+        "icon button size: change from h-10 w-10 (40px) to h-9 w-9 (36px)",
+        "Default (primary) variant: change text from text-zinc-950 to text-primary-foreground (picks up the fixed --primary-foreground token from US-001)",
+        "Default (primary) variant: add font-semibold to the variant class (font-weight 600 per design)",
+        "Default (primary) variant: change hover from hover:bg-primary/90 to hover:bg-emerald-400 (closest to design's var(--emerald-hi) = #34d399)",
+        "Ghost variant: add text-muted-foreground as the base text color",
+        "Outline variant: change hover from hover:bg-muted to hover:bg-secondary so it picks up the corrected --secondary token",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Fix tooltip to use inverted (light background, dark text) styling",
+      "description": "As a user, I want tooltips to be visually distinct from the dark canvas — the design system specifies an inverse tooltip (light #fafafa background with dark #09090b text) so it pops against the dark UI.",
+      "acceptanceCriteria": [
+        "tooltip.tsx TooltipContent: change base className from 'bg-popover text-popover-foreground' to 'bg-foreground text-background' (or equivalent classes that produce a white/near-white background with dark text)",
+        "The tooltip border, if any, should be subtle or removed since the light background provides sufficient contrast",
+        "Existing animation/positioning classes are preserved",
+        "Tooltip is visually distinct — light background with dark text — when shown on the dark canvas",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Fix play-node play button to use CSS variables instead of raw Tailwind emerald",
+      "description": "As a developer, I want the Play button inside play-node to use the design system's --emerald and --emerald-hi tokens rather than raw Tailwind emerald-400/500 classes, so it stays consistent if the brand color changes.",
+      "acceptanceCriteria": [
+        "In play-node.tsx, find the Play button's hover/active/focus color classes that reference emerald-500 or dark:emerald-400",
+        "Replace raw Tailwind palette classes with CSS variable equivalents: use text-primary or a style referencing var(--emerald) / var(--emerald-hi)",
+        "Remove all dark: prefix variants from the play button (they are inactive anyway since no .dark class is on <html>)",
+        "Play button still shows correct emerald color in idle, running, error, and done states",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Fix input focus states to show emerald border color",
+      "description": "As a user, I want form inputs in dialogs to show an emerald border when focused, matching the design system's focus spec (border-color: var(--emerald)) in addition to the existing ring.",
+      "acceptanceCriteria": [
+        "In create-project-dialog.tsx: the project name input gets focus:border-ring class (maps to --ring = --emerald) in addition to the existing focus-visible:ring-2",
+        "In export-dialog.tsx: the email input, flow name input, and visibility select get focus:border-ring class",
+        "Alternatively, a global input focus style can be added to index.css targeting .rounded-md.border elements on focus to apply border-color: hsl(var(--ring))",
+        "On focus, inputs show an emerald-colored border AND the ring glow — matching design's 'border-color: var(--emerald) + box-shadow: 0 0 0 3px rgba(16,185,129,0.18)'",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Fix remaining small polish issues: header logo, resize-controls syntax, detail panel blur",
+      "description": "As a developer, I want to clean up the remaining minor deviations from the design system: hardcoded colors, incorrect CSS variable syntax, and blur value mismatch.",
+      "acceptanceCriteria": [
+        "header.tsx: change <Workflow size={20} color=\"#34d399\" strokeWidth={2} /> to use className=\"text-emerald-400\" (or style={{ color: 'var(--emerald-hi)' }}) and remove the hardcoded color prop",
+        "resize-controls.tsx: verify the inline style using 'hsl(var(--background))' is syntactically valid. If --background is an HSL triplet (it is: '240 10% 3.9%'), the hsl() wrapper is correct. If it resolves without issues leave it; if it causes rendering bugs, change to 'hsl(var(--background))'",
+        "detail-panel.tsx: find the backdrop-blur-sm class on the panel container and change to backdrop-blur-[14px] to match the design sidebar spec of blur(14px)",
+        "No regressions to existing layout or interactions",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,81 @@
+## Codebase Patterns
+- CSS tokens in index.css are in HSL triplet format (no `hsl()` wrapper) — used as `hsl(var(--token))` at usage sites
+- Branch for this PRD: `ralph/ui-dark-theme-fixes` (created from main)
+
+# Ralph Progress Log
+Started: Mon 18 May 2026 13:16:06 AEST
+---
+
+## 2026-05-18 - US-001
+- Fixed three CSS token values in `apps/web/src/index.css` to match design system
+  - `--primary-foreground`: `160 68% 60%` → `162 89% 10%` (dark forest green #052e22)
+  - `--secondary`: `240 3.7% 15.9%` → `240 6% 13%` (#1f1f23)
+  - `--muted`: `240 3.7% 15.9%` → `240 7% 12%` (#1c1c20)
+- Files changed: `apps/web/src/index.css`
+- **Learnings for future iterations:**
+  - CSS variable values are stored as bare HSL triplets (e.g. `240 6% 13%`), not wrapped in `hsl()` — `hsl()` is added at the usage site
+  - Tokens like `--accent`, `--border` still use the old `240 3.7% 15.9%` value — US-001 only fixed secondary and muted per spec
+  - Typecheck, format, and lint all pass with just a CSS-only change
+---
+
+## 2026-05-18 - US-003
+- Updated `apps/web/src/lib/color-tokens.ts` with dark-theme background and border values for all named color tokens (slate, blue, green, amber, red, purple, pink)
+  - Backgrounds changed from near-white (96-98% lightness) to dark tinted values (13-15% lightness)
+  - Borders changed from mid-tone (56-75% lightness) to appropriate dark-background values (40-60% lightness)
+  - Edge stroke colors retained (already readable on dark canvas)
+  - `default` token unchanged (uses CSS vars — adapts automatically)
+  - `NODE_DEFAULT_BG_WHITE` unchanged (addressed in US-004)
+- Files changed: `apps/web/src/lib/color-tokens.ts`
+- **Learnings for future iterations:**
+  - color-tokens.ts uses inline HSL strings (`hsl(h, s%, l%)`) — NOT CSS variable references
+  - Edge stroke values were already appropriate for dark canvas; only bg and border needed updating
+  - Manual browser verification needed to confirm dark-tinted nodes are visually distinct
+---
+
+## 2026-05-18 - US-002
+- Added React Flow Controls dark-theme CSS overrides to `apps/web/src/index.css`
+  - `.react-flow__controls`: background hsl(var(--card)), border, border-radius, box-shadow
+  - `.react-flow__controls-button`: background hsl(var(--secondary)), color hsl(var(--foreground)), border-bottom
+  - `.react-flow__controls-button:hover`: background hsl(var(--accent))
+  - `.react-flow__controls-button:disabled`: opacity 0.4, cursor not-allowed
+  - `.react-flow__controls-button svg`: fill currentColor
+- Files changed: `apps/web/src/index.css`
+- **Learnings for future iterations:**
+  - React Flow library default styles are light-theme; override with CSS selectors outside @layer to ensure specificity
+  - All `.react-flow__controls` overrides are pure CSS additions — no JSX changes needed
+  - Manual browser verification needed to confirm no white background visible on the controls panel
+---
+
+## 2026-05-18 - US-004
+- Changed `NODE_DEFAULT_BG_WHITE` in `apps/web/src/lib/color-tokens.ts` from `'#ffffff'` to `'hsl(var(--card))'`
+- All consumers (play-node.tsx, shape-node.tsx, demo-canvas.tsx) reference the constant so they pick up the new value automatically — no JSX changes needed
+- Updated misleading comments in play-node.tsx, shape-node.tsx, demo-canvas.tsx that referenced "white fill" or "#ffffff"
+- Fixed test assertions in demo-canvas.test.tsx that hardcoded `'#ffffff'` — replaced with `NODE_DEFAULT_BG_WHITE` import
+- Updated test descriptions in play-node.test.tsx and shape-node.test.tsx to remove "#ffffff" / "white" references
+- Files changed: `apps/web/src/lib/color-tokens.ts`, `apps/web/src/components/nodes/play-node.tsx`, `apps/web/src/components/nodes/shape-node.tsx`, `apps/web/src/components/demo-canvas.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`, `apps/web/src/components/nodes/shape-node.test.tsx`, `apps/web/src/components/demo-canvas.test.tsx`
+- **Learnings for future iterations:**
+  - When changing a constant value, grep for hardcoded string usages in tests — they won't reference the constant
+  - Sticky keeps amber default (color-tokens `amber.background`) — unaffected by NODE_DEFAULT_BG_WHITE
+  - Text shapes return empty style early in shapeChromeStyle — unaffected
+  - Illustrative shapes (database, server, user, queue, cloud) call `resolveIllustrativeColors` which uses the constant — single change propagates everywhere
+  - Manual browser verification needed to confirm nodes now show dark card surface instead of white
+---
+
+## 2026-05-18 - US-005
+- Replaced light-theme classes in `status-pill.tsx` with dark equivalents
+  - `running`: `bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-100` → `bg-amber-950/50 text-amber-300`
+  - `done`: `bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100` → `bg-emerald-950/50 text-emerald-300`
+  - `error`: `bg-rose-100 text-rose-900 dark:bg-rose-950/40 dark:text-rose-100` → `bg-rose-950/50 text-rose-300`
+- Replaced dual light/dark: class pairs in `status-badge.tsx` with single dark-appropriate values
+  - `ok`: `bg-emerald-500 dark:bg-emerald-400` → `bg-emerald-400`
+  - `warn`: `bg-amber-500 dark:bg-amber-400` → `bg-amber-400`
+  - `error`: `bg-rose-500 dark:bg-rose-400` → `bg-rose-400`
+  - `pending`: `bg-slate-400 dark:bg-slate-500` → `bg-slate-400` (unchanged)
+- Updated test assertions in `status-badge.test.tsx` and `play-node.test.tsx` to match new class names
+- Fixed pre-existing import order lint error in `demo-canvas.test.tsx` (biome organizeImports)
+- Files changed: `apps/web/src/components/nodes/status-pill.tsx`, `apps/web/src/components/nodes/status-badge.tsx`, `apps/web/src/components/nodes/status-badge.test.tsx`, `apps/web/src/components/nodes/play-node.test.tsx`, `apps/web/src/components/demo-canvas.test.tsx`
+- **Learnings for future iterations:**
+  - `dark:` Tailwind prefixes are inactive without `.dark` on `<html>` — always replace dual light/dark: pairs with single dark-appropriate classes
+  - When changing component styling, grep for class name strings in ALL test files (not just the component's own test)
+  - Biome import order violations from prior stories can accumulate — fix them in the same commit to keep lint green
+---
