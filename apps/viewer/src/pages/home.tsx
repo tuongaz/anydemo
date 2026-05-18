@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react';
 import { Helmet } from 'react-helmet-async';
 import { Link, useNavigate } from 'react-router-dom';
 import { FlowCard } from '../components/flow-card';
+import { HeroAnimation } from '../components/hero-animation/scenes';
 import { fetchFlows } from '../lib/viewer-api';
 import type { FlowsResponse } from '../types';
 
@@ -590,144 +591,16 @@ export function Home() {
             </div>
           </div>
 
-          {/* Hero canvas mockup */}
+          {/* Hero animation */}
           <div
-            className="mt-8 md:mt-24 relative rounded-xl border border-zinc-800/60 bg-zinc-950/50 backdrop-blur-xl shadow-2xl overflow-hidden"
-            style={{ boxShadow: '0 0 40px -10px rgba(16,185,129,0.15)' }}
+            className="mt-8 md:mt-16 rounded-xl border border-zinc-800/60 overflow-hidden"
+            style={{
+              aspectRatio: '16/9',
+              boxShadow: '0 0 60px -10px rgba(16,185,129,0.2)',
+              position: 'relative',
+            }}
           >
-            {/* Mac window header */}
-            <div className="flex items-center px-4 py-3 border-b border-zinc-800/60 bg-zinc-900/50">
-              <div className="flex gap-1.5">
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-                <div className="w-2.5 h-2.5 rounded-full bg-zinc-700" />
-              </div>
-              <div
-                className="mx-auto text-xs text-zinc-500 flex items-center gap-2"
-                style={{ fontFamily: "'JetBrains Mono', monospace" }}
-              >
-                checkout-flow.json
-                <span className="px-1.5 py-0.5 rounded bg-emerald-500/10 text-emerald-400 text-[10px] uppercase tracking-widest border border-emerald-500/20">
-                  Live
-                </span>
-              </div>
-            </div>
-
-            {/* Canvas */}
-            <BgGrid className="relative p-8 md:p-16 min-h-[300px] flex flex-col md:flex-row items-center justify-center gap-4 md:gap-12">
-              {/* Node 1: Gateway */}
-              <div className="relative w-48 bg-zinc-900 border border-zinc-800 rounded-lg p-4 shadow-lg flex flex-col gap-3 group hover:border-zinc-700 transition-colors">
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                    <div className="p-1 rounded bg-zinc-800 text-zinc-400">
-                      <Server size={14} />
-                    </div>
-                    Gateway
-                  </div>
-                  <button
-                    type="button"
-                    className="text-emerald-400 hover:text-emerald-300 opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <PlayCircle size={18} />
-                  </button>
-                </div>
-                <div
-                  className="text-xs text-zinc-500"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  POST /checkout
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 text-emerald-400 bg-emerald-400/10 px-1.5 py-0.5 rounded border border-emerald-400/20">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    200 OK
-                  </span>
-                  <span className="text-zinc-500">12ms</span>
-                </div>
-              </div>
-
-              {/* Connector HTTP */}
-              <div className="hidden md:flex flex-col items-center justify-center gap-1 text-zinc-600">
-                <span
-                  className="text-[10px] tracking-widest uppercase"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  HTTP
-                </span>
-                <div className="w-12 h-px bg-zinc-700 relative">
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 border-t border-r border-zinc-700 rotate-45" />
-                  <div
-                    className="absolute left-0 top-1/2 -translate-y-1/2 w-4 h-0.5 bg-emerald-400/50 rounded-full animate-ping"
-                    style={{ boxShadow: '0 0 8px rgba(52,211,153,0.8)' }}
-                  />
-                </div>
-              </div>
-              <div className="md:hidden w-px h-8 bg-zinc-800" />
-
-              {/* Node 2: Payment */}
-              <div className="relative w-48 bg-zinc-900 border border-amber-500/30 rounded-lg p-4 shadow-lg flex flex-col gap-3">
-                <div className="absolute -top-px -left-px -right-px h-px bg-gradient-to-r from-transparent via-amber-500/50 to-transparent" />
-                <div className="flex justify-between items-start">
-                  <div className="flex items-center gap-2 text-sm font-medium text-zinc-200">
-                    <div className="p-1 rounded bg-zinc-800 text-zinc-400">
-                      <CreditCard size={14} />
-                    </div>
-                    Payment
-                  </div>
-                  <RefreshCw size={16} className="text-amber-400 animate-spin" />
-                </div>
-                <div
-                  className="text-xs text-zinc-500"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  Stripe API
-                </div>
-                <div className="flex gap-2 text-xs">
-                  <span className="inline-flex items-center gap-1 text-amber-400 bg-amber-400/10 px-1.5 py-0.5 rounded border border-amber-400/20">
-                    Processing...
-                  </span>
-                </div>
-              </div>
-
-              {/* Connector Event */}
-              <div className="hidden md:flex flex-col items-center justify-center gap-1 text-zinc-600">
-                <span
-                  className="text-[10px] tracking-widest uppercase"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  Event
-                </span>
-                <div className="w-12 h-px bg-zinc-700 relative">
-                  <div className="absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 border-t border-r border-zinc-700 rotate-45" />
-                </div>
-              </div>
-              <div className="md:hidden w-px h-8 bg-zinc-800" />
-
-              {/* Node 3: Inventory DB */}
-              <div className="relative w-48 bg-zinc-900 border border-zinc-800 rounded-lg p-4 shadow-lg flex flex-col gap-3">
-                <div className="flex items-center gap-2 text-sm font-medium text-zinc-200 mb-1">
-                  <div className="p-1 rounded bg-zinc-800 text-zinc-400">
-                    <Database size={14} />
-                  </div>
-                  Inventory DB
-                </div>
-                <div
-                  className="text-xs text-zinc-500"
-                  style={{ fontFamily: "'JetBrains Mono', monospace" }}
-                >
-                  PostgreSQL
-                </div>
-                <div className="flex flex-col gap-1 text-xs">
-                  <div className="flex justify-between text-zinc-500">
-                    <span>Pool size</span>
-                    <span>12/50</span>
-                  </div>
-                  <div className="w-full bg-zinc-800 rounded-full h-1 mt-1">
-                    <div className="bg-zinc-400 h-1 rounded-full" style={{ width: '24%' }} />
-                  </div>
-                </div>
-              </div>
-            </BgGrid>
+            <HeroAnimation />
           </div>
         </section>
 

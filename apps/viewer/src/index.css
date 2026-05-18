@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+@keyframes sf-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 *,
 *::before,
 *::after {
