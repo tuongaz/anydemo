@@ -53,7 +53,7 @@ The plugin scans your routes and database connections, generates `seeflow.json`,
 
 ## Run with Docker
 
-Try SeeFlow without installing Bun or Node:
+Try SeeFlow without installing Bun or Node — the image is published on [Docker Hub](https://hub.docker.com/r/tuongaz/seeflow):
 
 ```bash
 docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
@@ -62,13 +62,17 @@ docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
 
 The studio scans `/workspace/.seeflow/seeflow.json` on start and auto-registers that flow if present.
 
-Runtime env vars:
+### Configuration
 
-- `SEEFLOW_PORT` — port the studio listens on (default `4321`)
-- `SEEFLOW_FLOW` — flow file path relative to the workspace (default `.seeflow/seeflow.json`)
-- `SEEFLOW_WORKSPACE` — workspace mount point inside the container (default `/workspace`)
+| Variable            | Default                 | Description                                |
+| ------------------- | ----------------------- | ------------------------------------------ |
+| `SEEFLOW_PORT`      | `4321`                  | Port the studio listens on                 |
+| `SEEFLOW_FLOW`      | `.seeflow/seeflow.json` | Flow file path relative to the workspace   |
+| `SEEFLOW_WORKSPACE` | `/workspace`            | Workspace mount point inside the container |
 
-Bake demos into a derived image so the container ships with your flow:
+### Bake demos into a derived image
+
+Ship a container that already contains your flow:
 
 ```dockerfile
 FROM tuongaz/seeflow
@@ -76,7 +80,11 @@ COPY ./my-demos /workspace
 # docker build -t my-flow . && docker run --rm -it -p 4321:4321 my-flow
 ```
 
-Published image tags: `:latest`, `:<version>` (e.g. `:0.1.16`), and `:<major>.<minor>` (e.g. `:0.1`).
+### Tags
+
+- `:latest` — newest stable release
+- `:<version>` — pinned release (e.g. `:0.1.18`)
+- `:<major>.<minor>` — latest patch on a minor line (e.g. `:0.1`)
 
 ## MCP server
 
