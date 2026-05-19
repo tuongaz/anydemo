@@ -139,8 +139,8 @@ export interface CanvasFeatureOverrides {
    * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
    * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
    * affordance and most embedders of this package should not surface the
-   * iframe-snippet dialog. Set to `true` to opt in; the item still requires
-   * `mode === 'edit'` AND a `projectId` to actually render.
+   * iframe-snippet dialog. Set to `true` to opt in (works in both `edit` and
+   * `view` modes); the item still requires a `projectId` to actually render.
    */
   enableEmbed?: boolean;
   /**

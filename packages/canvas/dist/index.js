@@ -5380,7 +5380,7 @@ function ShareMenu({
   }, [onDownloadPng, downloadingPng]);
   const showPdf = Boolean(onDownloadPdf);
   const showPng = Boolean(onDownloadPng);
-  const showEmbed = enableEmbed && mode === "edit" && typeof projectId === "string" && projectId.length > 0;
+  const showEmbed = enableEmbed && typeof projectId === "string" && projectId.length > 0;
   const showExportToCloud = mode === "edit" && Boolean(onExportToCloud);
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
   return /* @__PURE__ */ jsxs24(Fragment5, { children: [

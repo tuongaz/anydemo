@@ -1970,9 +1970,11 @@ declare function InlineEdit({ initialValue, onCommit, onExit, multiline, commitM
 type ShareMenuMode = 'edit' | 'view';
 interface ShareMenuProps {
     /**
-     * Drives view-mode visibility rules. Embed and Export-to-seeflow.dev are
-     * force-hidden when `mode === 'view'`, even if their inputs are set. Mode is
-     * required so the menu does not need to re-implement `resolveFlags`.
+     * Drives view-mode visibility rules. Export-to-seeflow.dev is force-hidden
+     * when `mode === 'view'`, even if its callback is set. Embed used to share
+     * that rule but is now gated solely by `enableEmbed` + `projectId`, so it
+     * can surface in either mode when the host opts in. Mode is required so the
+     * menu does not need to re-implement `resolveFlags`.
      */
     mode: ShareMenuMode;
     /**
@@ -2185,8 +2187,8 @@ interface CanvasFeatureOverrides {
      * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
      * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
      * affordance and most embedders of this package should not surface the
-     * iframe-snippet dialog. Set to `true` to opt in; the item still requires
-     * `mode === 'edit'` AND a `projectId` to actually render.
+     * iframe-snippet dialog. Set to `true` to opt in (works in both `edit` and
+     * `view` modes); the item still requires a `projectId` to actually render.
      */
     enableEmbed?: boolean;
     /**

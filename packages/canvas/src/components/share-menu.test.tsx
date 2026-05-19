@@ -150,7 +150,9 @@ describe('ShareMenu (US-013)', () => {
     expect(findElement(tree, testIdEquals('share-menu-export-cloud'))).not.toBeNull();
   });
 
-  it('hides the Embed item in view mode even when projectId is set', () => {
+  it('renders the Embed item in view mode when enableEmbed=true + projectId set', () => {
+    // Embed is now gated solely on `enableEmbed && projectId` so view-mode
+    // hosts can surface the iframe snippet too when they explicitly opt in.
     const tree = renderShareMenu({
       mode: 'view',
       projectId: 'demo-project',
@@ -158,8 +160,8 @@ describe('ShareMenu (US-013)', () => {
       onDownloadPdf: () => {},
       onDownloadPng: () => {},
     });
-    expect(findElement(tree, testIdEquals('share-menu-embed'))).toBeNull();
-    // Downloads still work in view mode.
+    expect(findElement(tree, testIdEquals('share-menu-embed'))).not.toBeNull();
+    // Downloads remain available in view mode alongside Embed.
     expect(findElement(tree, testIdEquals('share-menu-pdf'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('share-menu-png'))).not.toBeNull();
   });
@@ -232,9 +234,9 @@ describe('ShareMenu (US-013)', () => {
     expect(buildEmbedSnippet(buildEmbedUrl(projectId))).toContain(`/embed/${projectId}`);
   });
 
-  it('does NOT mount the EmbedDialog when Embed is hidden (view mode + projectId)', () => {
-    // Embed is force-hidden in view mode, and the dialog is only mounted when
-    // `showEmbed && projectId` — so the dialog wrapper itself should be absent.
+  it('mounts the EmbedDialog in view mode when enableEmbed=true + projectId set', () => {
+    // Pair test for the view-mode Embed-item case above — the dialog wrapper
+    // mounts whenever `showEmbed` is true, regardless of mode.
     const tree = renderShareMenu({
       mode: 'view',
       projectId: 'demo-project',
@@ -242,7 +244,8 @@ describe('ShareMenu (US-013)', () => {
       onDownloadPng: () => {},
     });
     const dialog = findElement(tree, (el) => el.type === (EmbedDialog as unknown));
-    expect(dialog).toBeNull();
+    expect(dialog).not.toBeNull();
+    expect(dialog?.props.projectId).toBe('demo-project');
   });
 
   it('selecting the Embed item calls preventDefault (keeps the menu open during state flip)', () => {

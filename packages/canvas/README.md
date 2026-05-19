@@ -120,9 +120,10 @@ the same fit-view + snapshot + jspdf pipeline for free — no setup required.
   `mode='mini'`. Override with `showShareMenu={true|false}` to force it on or
   off for a specific surface.
 - The Embed action is **opt-in** — pass `enableEmbed={true}` to surface the
-  iframe-snippet item. It also requires `mode='edit'` AND a `projectId`. The
-  default is off because Embed is a SeeFlow-studio-specific affordance; most
-  embedders of this package should keep it hidden.
+  iframe-snippet item. Works in both `mode='edit'` and `mode='view'`, but
+  still requires a `projectId`. The default is off because Embed is a
+  SeeFlow-studio-specific affordance; most embedders of this package should
+  keep it hidden.
 - An opt-in "Export to seeflow.dev" item is also gated on edit mode (view
   embedders only see PDF / PNG download).
 - Pass `onExportToCloud` to enable the "Export to seeflow.dev" item — when

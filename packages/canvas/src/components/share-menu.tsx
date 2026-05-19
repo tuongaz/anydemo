@@ -14,9 +14,11 @@ export type ShareMenuMode = 'edit' | 'view';
 
 export interface ShareMenuProps {
   /**
-   * Drives view-mode visibility rules. Embed and Export-to-seeflow.dev are
-   * force-hidden when `mode === 'view'`, even if their inputs are set. Mode is
-   * required so the menu does not need to re-implement `resolveFlags`.
+   * Drives view-mode visibility rules. Export-to-seeflow.dev is force-hidden
+   * when `mode === 'view'`, even if its callback is set. Embed used to share
+   * that rule but is now gated solely by `enableEmbed` + `projectId`, so it
+   * can surface in either mode when the host opts in. Mode is required so the
+   * menu does not need to re-implement `resolveFlags`.
    */
   mode: ShareMenuMode;
   /**
@@ -111,8 +113,7 @@ export function ShareMenu({
 
   const showPdf = Boolean(onDownloadPdf);
   const showPng = Boolean(onDownloadPng);
-  const showEmbed =
-    enableEmbed && mode === 'edit' && typeof projectId === 'string' && projectId.length > 0;
+  const showEmbed = enableEmbed && typeof projectId === 'string' && projectId.length > 0;
   const showExportToCloud = mode === 'edit' && Boolean(onExportToCloud);
 
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
