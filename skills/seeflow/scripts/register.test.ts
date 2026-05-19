@@ -127,7 +127,7 @@ describe('register.ts main()', () => {
     await mkdir(seeflowDir, { recursive: true });
     await writeFile(
       join(seeflowDir, 'seeflow.json'),
-      JSON.stringify({ version: 1, name: 'Checkout Flow', nodes: [], connectors: [] }),
+      JSON.stringify({ version: 2, name: 'Checkout Flow', nodes: [], connectors: [] }),
       'utf8',
     );
 

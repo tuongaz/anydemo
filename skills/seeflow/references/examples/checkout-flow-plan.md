@@ -37,7 +37,7 @@ Connectors (5)
   + shipping-worker  --http →   orders-db             UPDATE status=shipped
 
 Files to write:
-  + .seeflow/checkout-flow/seeflow.json
+  + .seeflow/checkout-flow/architecture.json
   + .seeflow/checkout-flow/scripts/play-checkout.ts
   + .seeflow/checkout-flow/scripts/status-orders.ts
   + .seeflow/checkout-flow/scripts/status-shipping.ts
@@ -97,7 +97,7 @@ Connectors (7) — 2 new, 5 unchanged
   (5 unchanged)
 
 Files to write:
-  ~ .seeflow/checkout-flow/seeflow.json                          (4 new nodes/connectors)
+  ~ .seeflow/checkout-flow/architecture.json                          (4 new nodes/connectors)
   + .seeflow/checkout-flow/scripts/play-refund.ts             (new)
   + .seeflow/checkout-flow/scripts/status-refunds.ts          (new)
   ~ .seeflow/checkout-flow/scripts/status-orders.ts           (reports refund linkage)

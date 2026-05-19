@@ -61,7 +61,7 @@ function demoFixture(opts: DemoFixtureOptions): unknown {
     valid: true,
     error: null,
     demo: {
-      version: 1,
+      version: 2,
       name: 'fixture',
       nodes: opts.nodes.map((n) => ({
         id: n.id,

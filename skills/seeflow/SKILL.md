@@ -25,7 +25,7 @@ Ask for clarification only when the prompt is incoherent — never ask "what is 
 - The user's full natural-language prompt.
 - The project root (`$PWD` at invocation).
 - `~/.seeflow/config.json` (optional; studio host:port, default `http://localhost:4321`).
-- Existing `<project>/.seeflow/<slug>/seeflow.json` files, if any (multi-flow per project supported).
+- Existing `<project>/.seeflow/<slug>/architecture.json` files, if any (multi-flow per project supported).
 
 ## The pipeline
 
@@ -33,7 +33,7 @@ Ask for clarification only when the prompt is incoherent — never ask "what is 
 Phase 0 — pre-flight: studio reachable?
 Phase 1 — seeflow-discoverer        → context brief (language + runtime + tests)
 Phase 2 — seeflow-node-planner      → node draft
-Phase 3 — write skeleton seeflow.json (nodes only) → register → user reviews canvas → approval
+Phase 3 — write skeleton architecture.json (nodes only) → register → user reviews canvas → approval
 Phase 4 — seeflow-play-designer  ┐
           seeflow-status-designer├ parallel → overlays
                                  ┘
@@ -176,7 +176,7 @@ Mark each complete via `TaskUpdate` immediately after it succeeds.
 
 ## Phase 1 — discover
 
-Launch `seeflow-discoverer` with the user's prompt, project root, and any existing `seeflow.json` for the matching slug. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
+Launch `seeflow-discoverer` with the user's prompt, project root, and any existing `architecture.json` for the matching slug. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
 
 Discoverer must:
 - Identify primary language + runtime (`runtimeProfile`)
@@ -242,18 +242,23 @@ Register a **skeleton** flow (nodes + connectors only, no scripts) so the user c
 Paths (used in this phase and Phase 6):
 - `repoPath = $PWD`
 - `flowDir = $PWD/.seeflow/<slug>`
-- `flowPath = .seeflow/<slug>/seeflow.json`
+- `architecturePath = .seeflow/<slug>/architecture.json`
+- `stylePath = .seeflow/<slug>/style.json` (optional)
 
-1. Build skeleton JSON from node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version`, `name`, `nodes`, `connectors`.
-2. `mkdir -p $flowDir` then write to `$flowDir/seeflow-nodes.json`.
-3. Validate:
+1. Build skeleton JSON from node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
+2. `mkdir -p $flowDir` then write to `$flowDir/architecture.json`. Optionally write `$flowDir/style.json` with per-id `position` / visual hints.
+3. Validate via the studio API:
    ```bash
-   bun skills/seeflow/scripts/validate-schema.ts "$flowDir/seeflow-nodes.json"
+   RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
+     -H 'content-type: application/json' \
+     -d "$(jq -n --slurpfile a "$flowDir/architecture.json" '{architecture: $a[0]}')")
+   echo "$RESULT" | jq -e '.ok' >/dev/null \
+     || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
    ```
    On failure: fix field-level issues in-place (no re-run of node-planner), retry.
-4. Write `$flowDir/seeflow.json` and register:
+4. Register:
    ```bash
-   bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
+   bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$architecturePath"
    ```
    Stash the returned `id`.
 5. Ask the user:
@@ -316,11 +321,16 @@ Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (si
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
-3. **Write** merged flow to `$flowDir/seeflow-draft.json`.
-4. **Validate:**
+3. **Write** merged architecture to `$flowDir/architecture.json` (data-only). Any visual hints emitted by the designers go to `$flowDir/style.json`.
+4. **Validate via the studio API:**
 
 ```bash
-bun skills/seeflow/scripts/validate-schema.ts "$flowDir/seeflow-draft.json"
+RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
+  -H 'content-type: application/json' \
+  -d "$(jq -n --slurpfile a "$flowDir/architecture.json" \
+              --slurpfile s "$flowDir/style.json" \
+              '{architecture: $a[0], style: $s[0]}')")
+echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
 ```
 
 `{"ok":true}` → continue. `{"ok":false,"issues":[…]}` → feed issues back to the relevant designer, retry. **Max 3 retries**, then surface verbatim and stop.
@@ -333,13 +343,14 @@ bun skills/seeflow/scripts/validate-schema.ts "$flowDir/seeflow-draft.json"
 
 1. `mkdir -p $flowDir/scripts $flowDir/state`
 2. Write files (overwriting the Phase 3 skeleton):
-   - `$flowDir/seeflow.json` — validated flow JSON with all actions.
+   - `$flowDir/architecture.json` — validated semantic flow JSON with all actions.
+   - `$flowDir/style.json` — keyed map of `position` + visual overrides (optional; omit when empty).
    - `$flowDir/scripts/<name>` — one file per overlay `scriptBody`. `chmod +x`.
    - `$flowDir/state/.gitignore` — `*`.
 3. Re-register:
 
 ```bash
-bun skills/seeflow/scripts/register.ts --path "$repoPath" --demo "$flowPath"
+bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$architecturePath"
 ```
 
 Prints `{id, slug}`. Use the new `id` for Phases 7 + 8.
@@ -395,22 +406,64 @@ Retry caps: Phase 5 schema → **3**. Phase 7 fix-up → **2**.
 
 ## Schema cheatsheet
 
-Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
+The on-disk format split into two files:
 
-### Flow envelope
+- **`architecture.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
+- **`style.json`** — keyed map of presentation overrides by node/connector id. Optional. Defaults apply when an entry is missing.
+
+The merged Flow over the API (`GET /api/flows/:id`) is the architecture + style baked together (positions, visual fields all merged onto each node).
+
+### `file://` substitution
+
+Any string in `architecture.json` may use `file://<relative-path>` to offload content to a separate file under `<project>/.seeflow/`. Recommended for `detail` when it exceeds ~200 chars.
+
+```json
+// architecture.json
+{ "data": { "detail": "file://details/checkout-api.md" } }
+
+// .seeflow/details/checkout-api.md
+## POST /checkout
+
+Validates the cart, reserves stock, publishes `order.created`.
+```
+
+Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card; the flow still loads.
+
+**RULE — prefer file refs for long detail.** When a node's `detail` would exceed ~200 chars, write it to `<slug>/details/<nodeId>.md` and set `"detail": "file://<slug>/details/<nodeId>.md"`. Keeps architecture.json compact for LLM consumption.
+
+### `architecture.json` envelope
 
 ```json
 {
-  "version": 1,
+  "version": 2,
   "name": "Checkout Flow",
-  "nodes": [ …NodeSchema… ],
-  "connectors": [ …ConnectorSchema… ],
+  "nodes": [ …node data only… ],
+  "connectors": [ …connector data only… ],
   "resetAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
                    "scriptPath": "<slug>/scripts/reset.ts" }
 }
 ```
 
 `resetAction` is optional — include only if the app has a "wipe state" entrypoint.
+
+### `style.json` envelope (optional)
+
+```json
+{
+  "nodes": {
+    "checkout-api": {
+      "position": { "x": 100, "y": 200 },
+      "width": 240, "height": 120,
+      "borderColor": "blue", "fontSize": 14
+    }
+  },
+  "connectors": {
+    "c1": { "sourceHandle": "r", "targetHandle": "l", "style": "dashed", "color": "blue" }
+  }
+}
+```
+
+A missing entry → defaults apply (position → `{x:0,y:0}`, no visual overrides). Empty style → file deleted on write.
 
 ### Node types
 
@@ -437,9 +490,10 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
 | `external-api` | `cloud` |
 | `trigger` | `play` |
 
-```json
+```jsonc
+// architecture.json — semantic node data only (no position, no visual fields)
 {
-  "id": "checkout-api", "type": "playNode", "position": { "x": 100, "y": 200 },
+  "id": "checkout-api", "type": "playNode",
   "data": {
     "name": "POST /checkout", "kind": "service",
     "icon": "server", // kind=service → server (see kind→icon table above)
@@ -449,16 +503,20 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
                     "input": { "items": [{"sku":"ABC","qty":1}] },
                     "timeoutMs": 30000 },
     "description": "Receives a cart, creates an order.",
-    "detail": "Validates the cart, reserves stock, and publishes an `order.created` event.\n\n**Emits:** `order.created` → Order Worker\n\n**Source:** `src/routes/checkout.ts`"
+    "detail": "file://details/checkout-api.md"
   }
 }
+
+// style.json (optional) — position + visual overrides keyed by node id
+{ "nodes": { "checkout-api": { "position": { "x": 100, "y": 200 } } } }
 ```
 
 **stateNode** — no mandatory Play; audience watches but doesn't trigger. Same `kind` values.
 
-```json
+```jsonc
+// architecture.json
 {
-  "id": "order-db", "type": "stateNode", "position": { "x": 600, "y": 200 },
+  "id": "order-db", "type": "stateNode",
   "data": {
     "name": "Orders DB", "kind": "db",
     "icon": "database",
@@ -466,9 +524,12 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
     "statusAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
                       "scriptPath": "checkout-flow/scripts/status-orders.ts",
                       "maxLifetimeMs": 600000 },
-    "detail": "Postgres table `orders`. Rows land here after `order.created` is processed.\n\n**Schema:** `id`, `status`, `total`, `created_at`\n\n**Source:** `src/db/migrations/001_orders.sql`"
+    "detail": "file://details/order-db.md"
   }
 }
+
+// style.json
+{ "nodes": { "order-db": { "position": { "x": 600, "y": 200 } } } }
 ```
 
 **shapeNode** — decorative / illustrative. No actions or live state.
@@ -485,15 +546,20 @@ Full schema: `skills/seeflow/vendored/schema.ts`. Below covers ~95% of cases.
 | `sticky` | Sticky note | Callout |
 | `text` | Plain text | Canvas label |
 
-```json
-{ "id": "customer", "type": "shapeNode", "position": { "x": 0, "y": 200 },
+```jsonc
+// architecture.json
+{ "id": "customer", "type": "shapeNode",
   "data": { "shape": "user", "name": "Customer" } }
+{ "id": "stripe", "type": "shapeNode",
+  "data": { "shape": "cloud", "name": "Stripe" } }
 
-{ "id": "stripe", "type": "shapeNode", "position": { "x": 800, "y": 200 },
-  "data": { "shape": "cloud", "name": "Stripe", "borderStyle": "dashed" } }
-
-{ "id": "boundary", "type": "shapeNode", "position": { "x": 50, "y": 50 },
-  "data": { "shape": "rectangle", "name": "Internal services", "borderStyle": "dashed" } }
+// style.json
+{
+  "nodes": {
+    "customer": { "position": { "x": 0, "y": 200 } },
+    "stripe":   { "position": { "x": 800, "y": 200 }, "borderStyle": "dashed" }
+  }
+}
 ```
 
 **iconNode** — single Lucide glyph. Decorative only.

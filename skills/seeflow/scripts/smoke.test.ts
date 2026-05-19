@@ -61,6 +61,10 @@ describe('runSmoke', () => {
         return jsonResponse({ id: SECOND_ID, slug: SECOND_SLUG });
       }
 
+      if (url.endsWith('/api/validate') && method === 'POST') {
+        return jsonResponse({ ok: true });
+      }
+
       if (url.endsWith('/api/flows') && method === 'GET') {
         listCalls += 1;
         return jsonResponse([
@@ -121,6 +125,9 @@ describe('runSmoke', () => {
       if (url.endsWith('/api/flows/register') && method === 'POST') {
         calls += 1;
         return jsonResponse({ id: 'collide-id', slug: `slug-${calls}` });
+      }
+      if (url.endsWith('/api/validate') && method === 'POST') {
+        return jsonResponse({ ok: true });
       }
       if (method === 'DELETE') return jsonResponse({ ok: true });
       return new Response('unexpected', { status: 500 });

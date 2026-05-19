@@ -2,10 +2,10 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { registerDemo } from './register';
 import { resolveStudioUrl } from './studio-config';
 import { unregisterDemo } from './unregister';
-import { validateSchemaFile } from './validate-schema';
 
 const HEALTH_TIMEOUT_MS = 1000;
 
@@ -37,13 +37,12 @@ export async function pingStudio(url: string, timeoutMs = HEALTH_TIMEOUT_MS): Pr
 
 function firstDemoFixture(): unknown {
   return {
-    version: 1,
+    version: 2,
     name: 'Smoke Flow',
     nodes: [
       {
         id: 'smoke-service',
         type: 'playNode',
-        position: { x: 0, y: 0 },
         data: {
           name: 'POST /smoke',
           kind: 'service',
@@ -64,13 +63,12 @@ function firstDemoFixture(): unknown {
 
 function secondDemoFixture(): unknown {
   return {
-    version: 1,
+    version: 2,
     name: 'Sample Flow',
     nodes: [
       {
         id: 'sample-service',
         type: 'playNode',
-        position: { x: 0, y: 0 },
         data: {
           name: 'GET /sample',
           kind: 'service',
@@ -87,6 +85,27 @@ function secondDemoFixture(): unknown {
     ],
     connectors: [],
   };
+}
+
+interface ValidateIssue {
+  scope: string;
+  path: unknown[];
+  message: string;
+  code: string;
+}
+
+async function validateViaApi(
+  url: string,
+  archPath: string,
+): Promise<{ ok: true } | { ok: false; issues: ValidateIssue[] }> {
+  const architecture = JSON.parse(readFileSync(archPath, 'utf8'));
+  const res = await globalThis.fetch(`${url}/api/validate`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ architecture }),
+  });
+  if (!res.ok) throw new Error(`POST /api/validate → ${res.status}`);
+  return (await res.json()) as { ok: true } | { ok: false; issues: ValidateIssue[] };
 }
 
 interface FlowSummary {
@@ -152,7 +171,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
     const secondPath = join(secondDir, 'seeflow.json');
     writeFileSync(secondPath, JSON.stringify(secondDemoFixture(), null, 2));
 
-    const validation = await validateSchemaFile(secondPath);
+    const validation = await validateViaApi(url, secondPath);
     if (!validation.ok) {
       return {
         ok: false,
