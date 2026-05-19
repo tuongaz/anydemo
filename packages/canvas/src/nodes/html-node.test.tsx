@@ -451,18 +451,16 @@ describe('HtmlNode fit-to-content button', () => {
   });
 
   it('is hidden when locked', () => {
-    const tree = callHtmlNode(
-      { ...userSizedData, onFitToContent: () => {}, locked: true },
-      { selected: true } as Partial<NodeProps>,
-    );
+    const tree = callHtmlNode({ ...userSizedData, onFitToContent: () => {}, locked: true }, {
+      selected: true,
+    } as Partial<NodeProps>);
     expect(findFitButton(tree)).toBeNull();
   });
 
   it('is hidden when autoSize is already true', () => {
-    const tree = callHtmlNode(
-      { autoSize: true, onFitToContent: () => {} },
-      { selected: true } as Partial<NodeProps>,
-    );
+    const tree = callHtmlNode({ autoSize: true, onFitToContent: () => {} }, {
+      selected: true,
+    } as Partial<NodeProps>);
     expect(findFitButton(tree)).toBeNull();
   });
 
@@ -472,19 +470,17 @@ describe('HtmlNode fit-to-content button', () => {
   });
 
   it('is visible when selected + unlocked + user-sized + callback wired', () => {
-    const tree = callHtmlNode(
-      { ...userSizedData, onFitToContent: () => {} },
-      { selected: true } as Partial<NodeProps>,
-    );
+    const tree = callHtmlNode({ ...userSizedData, onFitToContent: () => {} }, {
+      selected: true,
+    } as Partial<NodeProps>);
     expect(findFitButton(tree)).not.toBeNull();
   });
 
   it('click calls data.onFitToContent with the node id', () => {
     const onFit = mock(() => {});
-    const tree = callHtmlNode(
-      { ...userSizedData, onFitToContent: onFit },
-      { selected: true } as Partial<NodeProps>,
-    );
+    const tree = callHtmlNode({ ...userSizedData, onFitToContent: onFit }, {
+      selected: true,
+    } as Partial<NodeProps>);
     const btn = findFitButton(tree);
     expect(btn).not.toBeNull();
     (btn?.props as { onClick?: (e: { stopPropagation: () => void }) => void }).onClick?.({
