@@ -4,17 +4,18 @@ import { IconPickerPopover } from '../components/icon-picker-popover.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
-import type { NodeData, StatusReport } from '../types.ts';
+import type { NodeData, NodeStatus, StatusReport } from '../types.ts';
 import { Icon } from '../ui/icon.tsx';
+import { deriveVisualStatus } from './lib/visual-status.ts';
 import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
-import { type NodeStatus, StatusPill } from './status-pill.tsx';
+import { StatusIconPill } from './status-icon-pill.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type StateNodeData = NodeData & {
   /**
    * Undefined when no emit() event has landed for this node — treated as
-   * 'idle' visually (the StatusPill renders nothing for 'idle').
+   * 'idle' visually (the StatusIconPill renders nothing for 'idle').
    */
   status?: NodeStatus;
   /**
@@ -52,6 +53,7 @@ const DEFAULT_W = 200;
 
 function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNodeType>) {
   const status = data.status ?? 'idle';
+  const visualStatus = deriveVisualStatus(data.status, data.statusReport);
   const description = data.description ?? data.kind;
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -258,7 +260,11 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
           )}
         </div>
         <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
-          <StatusPill status={status} />
+          <StatusIconPill
+            visualStatus={visualStatus}
+            summary={data.statusReport?.summary}
+            data-testid="state-node-status-pill"
+          />
         </div>
       </div>
       <div

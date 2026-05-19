@@ -186,3 +186,51 @@ describe('StateNode editable header icon', () => {
     ]);
   });
 });
+
+describe('StateNode status pill (status uplift)', () => {
+  it('renders no visible pill when there is no status or statusReport', () => {
+    const tree = callStateNode({});
+    // StatusIconPill is a function component invoked with visualStatus='idle';
+    // it returns null. Either no PillElement appears in the tree, or it does
+    // but its rendered output is null. The assertion that matters: no element
+    // with a visual-status attribute survives.
+    const visualEl = findElement(
+      tree,
+      (el) => (el.props as { 'data-visual-status'?: string })['data-visual-status'] !== undefined,
+    );
+    expect(visualEl).toBeNull();
+  });
+
+  it('renders the active pill when status is running', () => {
+    const tree = callStateNode({ status: 'running' });
+    const pill = findElement(
+      tree,
+      (el) =>
+        typeof el.type === 'function' &&
+        (el.props as { visualStatus?: string }).visualStatus === 'active',
+    );
+    expect(pill).not.toBeNull();
+  });
+
+  it('renders the success pill when statusReport.state is ok', () => {
+    const tree = callStateNode({ statusReport: { state: 'ok', summary: 'All good', ts: 1 } });
+    const pill = findElement(
+      tree,
+      (el) =>
+        typeof el.type === 'function' &&
+        (el.props as { visualStatus?: string }).visualStatus === 'success',
+    );
+    expect(pill).not.toBeNull();
+  });
+
+  it('renders the error pill when statusReport.state is error', () => {
+    const tree = callStateNode({ statusReport: { state: 'error', summary: 'Down', ts: 1 } });
+    const pill = findElement(
+      tree,
+      (el) =>
+        typeof el.type === 'function' &&
+        (el.props as { visualStatus?: string }).visualStatus === 'error',
+    );
+    expect(pill).not.toBeNull();
+  });
+});

@@ -37,6 +37,7 @@ export type {
   ImageNodeData,
   NodeData,
   NodeDescription,
+  NodeStatus,
   NodeVisual,
   QueueConnector,
   RunResult,
