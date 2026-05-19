@@ -26,23 +26,29 @@ Ask for clarification only when the prompt is incoherent — never ask "what is 
 - The project root (`$PWD` at invocation).
 - `~/.seeflow/config.json` (optional; studio host:port, default `http://localhost:4321`).
 - Existing `<project>/.seeflow/<slug>/flow.json` files, if any (multi-flow per project supported).
+- `<project>/.seeflow/WIKI.md` — persistent crib sheet maintained by past `/seeflow` runs (dev setup, test patterns, fixtures, gotchas). **Always read this before invoking the discoverer** — it shortcuts most of Phase 1.
 
 ## The pipeline
 
 ```
-Phase 0 — pre-flight: studio reachable?
-Phase 1 — seeflow-discoverer        → context brief (language + runtime + tests)
-Phase 2 — seeflow-node-planner      → node draft
-Phase 3 — write skeleton flow.json (nodes only) → register → user reviews canvas → approval
-Phase 4 — seeflow-play-designer  ┐
-          seeflow-status-designer├ parallel → overlays
-                                 ┘
-Phase 5 — synthesize → validate-schema
-Phase 6 — write script files → re-register full flow
-Phase 7 — validate-end-to-end.ts → trigger APIs → verify via SSE (retry up to 2x) → print URL on success / retry-or-stop on failure
+Phase 0   — pre-flight: studio reachable?
+Phase 0.5 — read .seeflow/WIKI.md (project memory from past runs)
+Phase 1   — seeflow-discoverer        → context brief + wikiUpdates
+            → merge wikiUpdates into .seeflow/WIKI.md
+Phase 2   — seeflow-node-planner      → node draft
+Phase 3   — write skeleton flow.json + style.json (both files, nodes only)
+            → POST /api/validate → register → user reviews canvas → approval
+Phase 4   — seeflow-play-designer  ┐
+            seeflow-status-designer├ parallel → overlays
+                                   ┘
+Phase 5   — synthesize → POST /api/validate (flow + style)
+Phase 6   — write script files + flow.json + style.json → re-register full flow
+Phase 7   — validate-end-to-end.ts → trigger APIs → verify via SSE
+            (retry up to 2x) → print URL on success / retry-or-stop on failure
+            → if anything new was learned, append it to .seeflow/WIKI.md
 ```
 
-Each phase is **gated** on the previous one.
+Each phase is **gated** on the previous one. **All schema validation runs through the studio API** (`POST /api/validate`) — there is no local validator script.
 
 ---
 
@@ -156,18 +162,50 @@ Whenever two or more tasks are independent, dispatch them as concurrent sub-agen
 
 ---
 
-## After Phase 0 — list tasks
+## Phase 0.5 — read the project wiki
+
+Before launching the discoverer, **read `<project>/.seeflow/WIKI.md`** if it
+exists. This file is the persistent memory the skill maintains across runs:
+local dev setup, test patterns, fixture locations, gotchas, and a registry
+of flows already created here.
+
+```bash
+WIKI_PATH="$PWD/.seeflow/WIKI.md"
+if [ -f "$WIKI_PATH" ]; then
+  WIKI_CONTENT=$(cat "$WIKI_PATH")   # stash for discoverer launching prompt
+else
+  WIKI_CONTENT=""                      # first run in this project
+fi
+```
+
+- **File present** → pass its full content to the discoverer as
+  `wikiContext` in the launching prompt. The discoverer uses it to skip
+  re-discovering known facts and may add new ones.
+- **File absent** → pass `wikiContext: null`. Discoverer will build the
+  file from scratch via `wikiUpdates`.
+
+Format details: `references/wiki-format.md`.
+
+After the discoverer returns (end of Phase 1) merge its `wikiUpdates`
+into the file (writing the parent `.seeflow/` directory if missing). If
+later phases surface new gotchas (port mismatches, hidden env vars,
+fixture factories) append them in Phase 7 too — the merging rules in
+`references/wiki-format.md` keep the file from drifting.
+
+---
+
+## After Phase 0.5 — list tasks
 
 Create a `TaskCreate` checklist before launching any sub-agent:
 
 ```
-[ ] Phase 1 — Discover codebase (language, runtime, integration tests)
+[ ] Phase 1 — Discover codebase (lang, runtime, tests, fixtures, gotchas) + update WIKI.md
 [ ] Phase 2 — Plan nodes & connectors
-[ ] Phase 3 — Register skeleton flow (nodes only) — await user node review
+[ ] Phase 3 — Write skeleton flow.json + style.json, validate via API, register — await user node review
 [ ] Phase 4 — Design Play + Status scripts (parallel)
-[ ] Phase 5 — Synthesize & validate schema
-[ ] Phase 6 — Write script files & re-register full flow
-[ ] Phase 7 — End-to-end validation (trigger APIs, verify via SSE)
+[ ] Phase 5 — Synthesize & validate via API
+[ ] Phase 6 — Write script files + flow.json + style.json, re-register full flow
+[ ] Phase 7 — End-to-end validation (trigger APIs, verify via SSE) + WIKI.md polish
 ```
 
 Mark each complete via `TaskUpdate` immediately after it succeeds.
@@ -176,11 +214,16 @@ Mark each complete via `TaskUpdate` immediately after it succeeds.
 
 ## Phase 1 — discover
 
-Launch `seeflow-discoverer` with the user's prompt, project root, and any existing `flow.json` for the matching slug. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
+Launch `seeflow-discoverer` with the user's prompt, project root, any existing `flow.json` for the matching slug, **and the WIKI.md content stashed in Phase 0.5**. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
 
 Discoverer must:
 - Identify primary language + runtime (`runtimeProfile`)
-- Find integration/e2e tests and extract their setup pattern (ports, base URLs, payload shapes)
+- Trace **local dev setup**: how the app boots (commands, env vars, ports, docker-compose / emulator dependencies, the "is it up?" probe)
+- Find **integration / e2e / blackbox tests** and extract their setup pattern (directory, run command, base URL, test framework, before/after hooks)
+- Catalogue **fixtures, factories, mock-data helpers, seed commands**, file-drop watchers — anything that gives play-scripts a realistic payload without inventing one
+- Map **data entry paths** for each major resource (preferred API vs avoid-direct-insert)
+- Capture **gotchas** worth remembering across runs (hardcoded ports, hidden env vars, dependency ordering)
+- Emit `wikiUpdates` so the orchestrator can refresh `.seeflow/WIKI.md`
 
 Expected output (parseable JSON):
 
@@ -200,11 +243,24 @@ Expected output (parseable JSON):
     "integrationTestCommand": "bun test tests/integration",
     "setupPattern": "Tests call http://localhost:3001 with JSON payloads after starting the server"
   },
+  "wikiUpdates": {
+    "runtimeProfile": { "…": "…" },
+    "localDevSetup": "…",
+    "integrationTests": { "…": "…" },
+    "fixtures": [{ "path": "…", "describes": "…" }],
+    "factories": [{ "module": "…", "exports": ["…"] }],
+    "seedCommands": ["…"],
+    "dataEntryPaths": [{ "resource": "…", "preferred": "…", "avoid": "…" }],
+    "knownEndpoints": [{ "method": "POST", "path": "/…", "bodyShape": "{…}", "auth": "…" }],
+    "gotchas": ["…"]
+  },
   "existingFlow": null
 }
 ```
 
 On unparseable output: retry once with the validation error. If still failing, surface and stop.
+
+**At the end of Phase 1, merge `wikiUpdates` into `<project>/.seeflow/WIKI.md`** following the merging rules in `references/wiki-format.md` (replace `_Last updated:_`, append to "Flows already created", union bullets, cap ~6KB). Create the parent `.seeflow/` directory if missing.
 
 ---
 
@@ -243,25 +299,34 @@ Paths (used in this phase and Phase 6):
 - `repoPath = $PWD`
 - `flowDir = $PWD/.seeflow/<slug>`
 - `flowPath = .seeflow/<slug>/flow.json`
-- `stylePath = .seeflow/<slug>/style.json` (optional)
+- `stylePath = .seeflow/<slug>/style.json`
 
-1. Build skeleton JSON from node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
-2. `mkdir -p $flowDir` then write to `$flowDir/flow.json`. Optionally write `$flowDir/style.json` with per-id `position` / visual hints.
-3. Validate via the studio API:
+1. Build the **flow JSON** from the node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
+2. Build the **style JSON** — every functional node id (`playNode`, `stateNode`, `htmlNode`, `imageNode`, `iconNode`, `shapeNode`) MUST have at least a `position` entry. Generate positions deterministically when designers don't supply them:
+   - Layer nodes by connector graph depth from the trigger (longest-path layering), left-to-right.
+   - Default spacing: 280 px horizontal between layers, 160 px vertical between siblings.
+   - Decorative nodes (shape/icon/image) follow their nearest functional neighbour.
+   Connectors entries are optional; include them when you have non-default handles, colors, or pin positions.
+3. `mkdir -p $flowDir` then write **both** files:
+   - `$flowDir/flow.json` — semantic data.
+   - `$flowDir/style.json` — positions + visual overrides. **Always write this file**, even when the only content is `{"nodes": { "<id>": {"position": {"x":…,"y":…}}, … }}`. The studio merges it onto the flow at fetch time; without it the canvas piles every node at `(0,0)`.
+4. Validate both files via the studio API (this is the **only** validator — there is no local script):
    ```bash
    RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
      -H 'content-type: application/json' \
-     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
+     -d "$(jq -n --slurpfile a "$flowDir/flow.json" \
+                 --slurpfile s "$flowDir/style.json" \
+                 '{flow: $a[0], style: $s[0]}')")
    echo "$RESULT" | jq -e '.ok' >/dev/null \
      || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
    ```
    On failure: fix field-level issues in-place (no re-run of node-planner), retry.
-4. Register:
+5. Register:
    ```bash
    bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
    ```
    Stash the returned `id`.
-5. Ask the user:
+6. Ask the user:
    > The nodes are live at `<url>`. Does the layout look right? Any additions, removals, or renames before I write the scripts?
 
 **Wait** for response.
@@ -317,12 +382,12 @@ Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (si
 
 ---
 
-## Phase 5 — synthesize + validate schema
+## Phase 5 — synthesize + validate via API
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
-3. **Write** merged flow to `$flowDir/flow.json` (data-only). Any visual hints emitted by the designers go to `$flowDir/style.json`.
-4. **Validate via the studio API:**
+3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `$flowDir/style.json`** — add `position` entries for any spliced trigger nodes (preserve existing positions for nodes that survived). The style file is mandatory; never delete it.
+4. **Validate via the studio API** (no local validator exists — this is the only validation pass):
 
 ```bash
 RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
@@ -344,7 +409,7 @@ echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; 
 1. `mkdir -p $flowDir/scripts $flowDir/state`
 2. Write files (overwriting the Phase 3 skeleton):
    - `$flowDir/flow.json` — validated semantic flow JSON with all actions.
-   - `$flowDir/style.json` — keyed map of `position` + visual overrides (optional; omit when empty).
+   - `$flowDir/style.json` — keyed map of `position` + visual overrides. **Mandatory**, even when only positions are populated. Must contain a `position` for every functional node id.
    - `$flowDir/scripts/<name>` — one file per overlay `scriptBody`. `chmod +x`.
    - `$flowDir/state/.gitignore` — `*`.
 3. Re-register:
@@ -385,6 +450,17 @@ The script:
 
 Never re-run `register.ts` in the fix-up loop.
 
+### Polish `WIKI.md` with anything learned
+
+When Phase 6 / Phase 7 surfaced a fact the next run would want — a
+port mismatch, a fixture path you had to discover, a required env var
+the discoverer missed, a working seed command, a data-entry path you
+ended up using — append a `Gotchas` bullet or update the relevant
+section in `<project>/.seeflow/WIKI.md`. Also append the new flow to
+the "Flows already created" table with today's date and a one-line
+purpose. Follow the merging rules in `references/wiki-format.md`. If
+nothing new was learned, skip this step — empty updates are noise.
+
 ---
 
 ## Error-handling table
@@ -406,12 +482,14 @@ Retry caps: Phase 5 schema → **3**. Phase 7 fix-up → **2**.
 
 ## Schema cheatsheet
 
-The on-disk format split into two files:
+The on-disk format is split into **two files that are BOTH mandatory** for every flow:
 
 - **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
-- **`style.json`** — keyed map of presentation overrides by node/connector id. Optional. Defaults apply when an entry is missing.
+- **`style.json`** — keyed map of presentation overrides by node/connector id. **Required** for every flow this skill creates. At minimum it carries one `position` entry per functional node id so the canvas doesn't pile every node at `(0,0)`. Additional visual fields are optional per entry.
 
 The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together (positions, visual fields all merged onto each node).
+
+**RULE — never skip `style.json`.** A flow without `style.json` renders unusable. When creating a new flow, always emit both files in the same write step. When editing, refresh `style.json` to cover new node ids before re-registering.
 
 ### `file://` substitution
 
@@ -446,7 +524,7 @@ Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files 
 
 `resetAction` is optional — include only if the app has a "wipe state" entrypoint.
 
-### `style.json` envelope (optional)
+### `style.json` envelope (mandatory)
 
 ```json
 {
@@ -463,7 +541,7 @@ Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files 
 }
 ```
 
-A missing entry → defaults apply (position → `{x:0,y:0}`, no visual overrides). Empty style → file deleted on write.
+Every functional node id in `flow.json` MUST appear under `nodes` with at least a `position`. A missing connector entry → handle/style defaults apply. Do not delete `style.json` even if the only content is positions — the studio relies on it.
 
 ### Node types
 
@@ -507,7 +585,7 @@ A missing entry → defaults apply (position → `{x:0,y:0}`, no visual override
   }
 }
 
-// style.json (optional) — position + visual overrides keyed by node id
+// style.json (mandatory) — position + visual overrides keyed by node id
 { "nodes": { "checkout-api": { "position": { "x": 100, "y": 200 } } } }
 ```
 
@@ -538,7 +616,7 @@ A missing entry → defaults apply (position → `{x:0,y:0}`, no visual override
 |---|---|---|
 | `database` | Cylinder | DB label (use `stateNode` when monitoring) |
 | `server` | Server rack | On-premise server or compute |
-| `user` | Person silhouette | Human actor / customer |
+| `user` | Person silhouette | Human actor — **only when the human action is itself part of the demo** (UX click-through, support-agent workflow). Never as a generic "start" for backend / pipeline flows. |
 | `queue` | Stack | Queue label (decorative) |
 | `cloud` | Cloud outline | External SaaS |
 | `rectangle` | Box | Grouping boundary |

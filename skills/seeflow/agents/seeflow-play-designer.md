@@ -204,13 +204,20 @@ Apply these rules in order. The first rule that fits the node wins.
    stateNode like `"shipment-delivered"` gets a Play that POSTs the
    delivery webhook payload directly into the handler.
 
-4. **No natural trigger? Create one.** Quiet observer graphs (e.g. a
-   worker that only consumes from a queue with no obvious producer
-   in the demo's scope) need a synthetic source. Emit a
-   `newTriggerNodes` entry (a fixture-producer or fake-webhook node)
-   and put the Play there. Connect it to the original trigger via
-   the orchestrator's downstream splicing — your rationale should
-   say which existing node the new trigger feeds.
+4. **No natural trigger? Create one — functional, not human.** Quiet
+   observer graphs (e.g. a worker that only consumes from a queue with
+   no obvious producer in the demo's scope) need a synthetic source.
+   Emit a `newTriggerNodes` entry as a `playNode` with `kind:
+   "trigger" | "fixture" | "webhook" | "tick"` whose script does the
+   actual work (drops a file, POSTs a webhook body, fires a queue
+   message). **Do NOT inject a Human / Operator / Customer shapeNode
+   as the synthetic source** — the audience cannot click a `shapeNode`,
+   and a generic "User" before a backend pipeline adds zero information.
+   The only time a human shape belongs in the graph is when the demo's
+   subject IS the human action (UX click-through, support-agent
+   workflow). For backend, system, data-pipeline, worker, cron, and
+   webhook-driven flows, the synthetic trigger is a fixture / webhook /
+   tick playNode — never a person.
 
 5. **Idempotency is mandatory.** The validator calls every Play once
    and the user clicks again. Scripts that crash on second call, or

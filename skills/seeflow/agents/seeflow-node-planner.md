@@ -95,11 +95,19 @@ Each node entry has:
     everything that participates in the flow and may carry a statusAction
     (workers, queues, DBs, workflow engines, external APIs, caches).
   - `"shapeNode"` — illustrative node with no actions. Use ONLY for
-    actors and pure-external systems that the demo references but does
-    not monitor: a human user/customer (`shape: "user"`), an external
-    cloud platform (`shape: "cloud"`), a third-party SaaS whose health
-    is not tracked (`shape: "cloud"`). Everything with observable state
-    must be a `stateNode`, not a `shapeNode`.
+    external systems / actors the demo references but does not monitor:
+    an external cloud platform (`shape: "cloud"`), a third-party SaaS
+    whose health is not tracked (`shape: "cloud"`). Everything with
+    observable state must be a `stateNode`, not a `shapeNode`.
+
+    **Human / Operator / Customer (`shape: "user"`) is allowed ONLY when
+    the human action is itself part of the demo** — e.g. a UX flow that
+    starts with "user clicks Checkout", a support-agent workflow, a
+    consent-collection flow. Backend / system / data-pipeline / worker /
+    cron / webhook-driven flows MUST NOT add a Human shape just to give
+    the canvas a starting point. The trigger surface (endpoint, fixture,
+    webhook, scheduler) IS the start; a generic "User" node adds noise
+    without information. When in doubt: skip the human shape.
   - `"iconNode"`, `"htmlNode"`, `"imageNode"` — do NOT use at this phase.
 - **`data.name`** *(string)* — the on-canvas header. Use the spelling the
   audience would recognise (`"POST /checkout"`, `"Payments Service"`,
@@ -131,7 +139,7 @@ Each node entry has:
   |---|---|---|
   | `database` | Cylinder | DB / store (decorative only — use stateNode when you need live status) |
   | `server` | Server rack | On-premise server / compute node |
-  | `user` | Person silhouette | Human actor / customer / operator |
+  | `user` | Person silhouette | Human actor — only when the human action is part of the demo (UX click-through, support-agent workflow). Forbidden as a generic "start" for backend / pipeline flows. |
   | `queue` | Stack of items | Queue visual (decorative only) |
   | `cloud` | Cloud outline | External SaaS / third-party platform |
   | `rectangle` | Box | Generic grouping label |
@@ -302,6 +310,12 @@ exceptions, collapse it.
    - Pick the playNode based on `userIntent`: synchronous-API demos
      trigger on the endpoint; pipeline / event demos trigger on the
      fixture-producer or first publisher.
+   - **Do NOT prepend a Human / Operator / Customer shapeNode** as the
+     "start" of a backend or system flow. The endpoint / worker /
+     scheduler IS the start. A `shape: "user"` node belongs only in
+     flows whose subject is a human action (UX click-through,
+     support-agent workflow, consent capture). If the user did not ask
+     for a human-centred flow, skip the user shape entirely.
 5. **Wire connectors.** For every flow edge implied by the brief, add a
    connector, including edges from services INTO their resource nodes
    (service → DB, service → queue, service → event bus). Pick the most

@@ -26,6 +26,19 @@ The launching prompt will give you:
    `<projectRoot>/.seeflow/<slug>/flow.json` when the prompt obviously
    targets an existing flow (e.g. names the slug, or describes a scope
    that overlaps a known demo). May be `null`.
+4. **`wikiContext`** *(optional)* — the raw text of
+   `<projectRoot>/.seeflow/WIKI.md` if one exists. This is the persistent
+   crib sheet past `/seeflow` runs left behind: local dev setup, test
+   patterns, fixtures, gotchas, and the registry of flows already
+   created here. May be `null` for first-run projects.
+
+   **Treat `wikiContext` as authoritative for what it covers.** When the
+   wiki already names a port, fixture path, or seed command, trust it
+   and do NOT re-grep the codebase to "verify" — just pass it through
+   into `runtimeProfile` / `wikiUpdates`. Only re-investigate a wiki
+   claim if you find direct contradicting evidence in the code.
+   Spending time re-discovering known facts is exactly what the wiki
+   exists to prevent.
 
 ## Allowed tools
 
@@ -46,12 +59,20 @@ prefer the dedicated tools (`LS`, `Read`, `Glob`, `Grep`) when they fit.
 
 ## Workflow
 
-1. **Reconnoitre.** Start with `LS` on `projectRoot` and `Glob`/`Grep` for
+1. **Read `wikiContext` first.** If it is non-null, parse the sections —
+   runtime profile, dev setup, integration tests, fixtures, data entry
+   paths, known endpoints, gotchas. Anything covered there is a fact you
+   inherit; you only need to investigate gaps and changes since the wiki
+   was last written. Skipping known facts is the entire point of the
+   wiki — re-discovering them wastes the context window and slows the
+   run. Carry every wiki fact through to `wikiUpdates` so the file
+   doesn't lose them on the next merge.
+2. **Reconnoitre.** Start with `LS` on `projectRoot` and `Glob`/`Grep` for
    obvious entry points (`package.json`, `go.mod`, `requirements.txt`,
    `pyproject.toml`, `Cargo.toml`, `src/index.*`, `apps/*/src/*`,
    `cmd/*/main.go`, `manage.py`, `Dockerfile`, `docker-compose*`,
    `.seeflow/`). Skim the top-level README if present.
-2. **Profile the runtime.** Extract the language, package manager, dev
+3. **Profile the runtime.** Extract the language, package manager, dev
    command, test command, and default service port. Populate
    `runtimeProfile` (see schema below). Check in this order:
    - `package.json` → `scripts.dev`, `scripts.start`, `scripts.test`
@@ -62,41 +83,95 @@ prefer the dedicated tools (`LS`, `Read`, `Glob`, `Grep`) when they fit.
      service port assignments
    - `Makefile` → extract `dev`, `test`, `integration-test`, `e2e`,
      `smoke` targets
-3. **Inspect integration / blackbox / e2e tests.** This is the most
+4. **Trace local dev setup end-to-end.** This is what the wiki cares
+   most about. Reconstruct the *exact* steps a developer takes from
+   `git clone` to "the app is running locally":
+   - **Bootstrap deps** — what spins up databases, queues, search,
+     caches? `docker-compose.yml`, `docker-compose.dev.yml`,
+     `tilt.yaml`, `skaffold.yaml`, `Makefile`/`Justfile` targets like
+     `dev-up`, `db-up`, `bootstrap`, `setup`.
+   - **Required env vars** — read `.env.example`, the README, the
+     `package.json` scripts. Note which vars must be set vs which have
+     defaults.
+   - **Start command** — the canonical "run the app" command(s).
+   - **Health probe** — how to know the app is up: a `GET /health`,
+     a log line (`"Listening on"`), a port-listen check.
+   - **Tear-down** — `docker compose down`, `make clean`, etc., when
+     present.
+   Capture this as `wikiUpdates.localDevSetup` and
+   `wikiUpdates.runtimeProfile.requiredEnv`.
+5. **Inspect integration / blackbox / e2e tests.** This is the most
    valuable source for understanding how the app is actually started and
    how its APIs are called. Look for:
    - Directories named `test/`, `tests/`, `e2e/`, `integration/`,
-     `blackbox/`, `testdata/`, `__tests__/`
+     `blackbox/`, `testdata/`, `__tests__/`, `cypress/`, `playwright/`
    - Files matching `*_test.go`, `*.test.ts`, `*.spec.ts`, `*.test.py`,
-     `*_integration_test.*`, `*_e2e_test.*`
-   - `TestMain`, `beforeAll`, `setup`, `globalSetup` — these reveal how
-     services are started before tests run
-   - `supertest`, `httptest.NewServer`, `TestClient`, `requests.Session` —
-     these reveal the actual port/base-URL pattern the tests use
+     `*_integration_test.*`, `*_e2e_test.*`, `*.cy.ts`, `*.spec.tsx`
+   - `TestMain`, `beforeAll`, `setup`, `globalSetup`, `setUpClass`,
+     `pytest fixture` — these reveal how services are started before
+     tests run
+   - `supertest`, `httptest.NewServer`, `TestClient`, `requests.Session`,
+     `page.goto`, `cy.visit` — these reveal the actual port/base-URL
+     pattern the tests use
    - Helper / fixture files that seed test data (payload shapes used in
      tests become the `input` for play scripts)
+   - Test runner config (`vitest.config.ts`, `jest.config.js`,
+     `pytest.ini`, `playwright.config.ts`) — env, base URLs,
+     globalSetup files
    - Record the key file paths and the port/URL pattern in
-     `runtimeProfile.integrationTestDir` and `runtimeProfile.integrationTestCommand`
+     `runtimeProfile.integrationTestDir` /
+     `runtimeProfile.integrationTestCommand` and in
+     `wikiUpdates.integrationTests`.
    **Why this matters:** integration tests already solved "how to start
    the app and call its endpoints." Play scripts should replicate that
    pattern, not guess it.
-4. **Map the surface.** Find HTTP endpoints, queue/event topics, workflow
+6. **Catalogue fixtures, factories, mocks, and seed data.** This is the
+   second-most-valuable source — play-scripts should reuse these
+   payloads instead of inventing new ones. Look for:
+   - Fixture directories: `tests/fixtures/`, `testdata/`, `__fixtures__/`,
+     `cypress/fixtures/`, `e2e/fixtures/`
+   - Factories: `factories/`, `factory_bot`, `factory_boy`, files with
+     `make*()` / `build*()` helpers that return realistic records
+   - Seed scripts: `prisma/seed.ts`, `db/seeds/`, `manage.py
+     loaddata`, `bun run seed`, `make seed`
+   - Mock servers used in tests: `msw`, `nock`, `vcr`, `httpmock`,
+     recorded cassettes — note these so play-scripts know NOT to point
+     at the mock URL (play-scripts must hit the real running app).
+   - File-drop watchers: `chokidar.watch(...)`, `fs.watch`, S3
+     event-bridge handlers — the directory they watch is a great
+     play-script entry point.
+   Capture in `wikiUpdates.fixtures`, `wikiUpdates.factories`,
+   `wikiUpdates.seedCommands`.
+7. **Map data entry paths.** For each major resource (DB, queue, bus,
+   store, cache, external SaaS), identify the recommended way to get
+   data IN that flows through the app's validation + side-effects, vs
+   the direct-insert path that bypasses them. Capture in
+   `wikiUpdates.dataEntryPaths` so the play-designer can call the API
+   instead of writing a raw INSERT.
+8. **Map the surface.** Find HTTP endpoints, queue/event topics, workflow
    definitions (Temporal/Airflow/Argo/etc.), background workers, scheduled
    jobs, databases, external SaaS integrations, and file/object stores
-   that look relevant to `userPrompt`.
-5. **Triangulate scope.** Decide which entities the user *clearly* means
-   to show and which they *clearly* do not. When in doubt, prefer
-   inclusion in `rootEntities` and call out the ambiguity in
-   `audienceFraming` rather than silently dropping it.
-6. **Resolve the edit case.** If `existingDemo` is provided, compare its
-   nodes against the inferred scope and decide whether this run is an
-   **edit** of that demo (set `existingDemo.diffTarget: true`) or a
-   **new flow that happens to overlap** (set `diffTarget: false` and
-   treat it as new).
-7. **Return the brief.** Your **final message** must be a single fenced
-   JSON code block matching the schema below — nothing else. No prose
-   around it. The orchestrator parses your last message with
-   `JSON.parse` after stripping the fence.
+   that look relevant to `userPrompt`. List the most likely-to-be-played
+   endpoints in `wikiUpdates.knownEndpoints` with their body shape and
+   auth requirements in dev.
+9. **Capture gotchas.** Anything that would bite a future run: hardcoded
+   ports the env var doesn't override, dependencies the dev command
+   silently assumes, build artifacts that must be present before tests
+   pass, fixture quirks (truncated fields, required orderings),
+   platform-specific surprises. Surface in `wikiUpdates.gotchas`.
+10. **Triangulate scope.** Decide which entities the user *clearly* means
+    to show and which they *clearly* do not. When in doubt, prefer
+    inclusion in `rootEntities` and call out the ambiguity in
+    `audienceFraming` rather than silently dropping it.
+11. **Resolve the edit case.** If `existingDemo` is provided, compare its
+    nodes against the inferred scope and decide whether this run is an
+    **edit** of that demo (set `existingDemo.diffTarget: true`) or a
+    **new flow that happens to overlap** (set `diffTarget: false` and
+    treat it as new).
+12. **Return the brief.** Your **final message** must be a single fenced
+    JSON code block matching the schema below — nothing else. No prose
+    around it. The orchestrator parses your last message with
+    `JSON.parse` after stripping the fence.
 
 ## Output contract
 
@@ -122,9 +197,51 @@ prefer the dedicated tools (`LS`, `Read`, `Glob`, `Grep`) when they fit.
     "integrationTestCommand": "bun test tests/integration",
     "setupPattern": "Tests call http://localhost:3001 directly after starting server with bun run dev"
   },
+  "wikiUpdates": {
+    "runtimeProfile": {
+      "primaryLanguage": "typescript",
+      "packageManager": "bun",
+      "devCommand": "bun run dev",
+      "testCommand": "bun test",
+      "servicePorts": [3001],
+      "requiredEnv": ["DATABASE_URL", "STRIPE_API_KEY"]
+    },
+    "localDevSetup": "Run `docker compose up -d db` then `bun run dev`; server is up when `GET /health` returns 200.",
+    "integrationTests": {
+      "dir": "tests/integration",
+      "command": "bun test tests/integration",
+      "baseUrl": "http://localhost:3001",
+      "framework": "bun:test",
+      "setupPattern": "Start() in beforeAll spins the server in-process; fetch() against http://localhost:3001."
+    },
+    "fixtures": [
+      { "path": "tests/fixtures/orders/create-min.json", "describes": "POST /orders body" }
+    ],
+    "factories": [
+      { "module": "tests/factories/orders.ts", "exports": ["makeOrder", "makeCart"] }
+    ],
+    "seedCommands": ["bun run seed"],
+    "dataEntryPaths": [
+      { "resource": "orders DB", "preferred": "POST /api/orders", "avoid": "direct INSERT" }
+    ],
+    "knownEndpoints": [
+      { "method": "POST", "path": "/api/orders", "bodyShape": "{ cart: [...] }", "auth": "none in dev" }
+    ],
+    "gotchas": [
+      "Port 3001 hardcoded in src/server.ts; env override ignored on macOS Sonoma."
+    ]
+  },
   "existingDemo": null
 }
 ```
+
+**`wikiUpdates` semantics.** Every field is optional — emit only what
+you genuinely learned this run (including facts inherited from
+`wikiContext` that are still true). The orchestrator merges this into
+`<project>/.seeflow/WIKI.md` using the rules in
+`references/wiki-format.md`: union bullets, append flow rows, replace
+contradicted facts. The wiki is the skill's persistent memory; future
+runs read it before they read the codebase.
 
 Field-by-field:
 
@@ -170,6 +287,12 @@ Field-by-field:
     a real server with Start() in TestMain then call
     http://localhost:3001 with standard http.Client."` Use `"unknown"`
     if no integration tests were found.
+- **`wikiUpdates`** *(object, optional)* — structured facts the
+  orchestrator will merge into `<project>/.seeflow/WIKI.md`. Every
+  child field is optional; emit only what you investigated. See
+  `references/wiki-format.md` for the full shape and merging rules.
+  Re-include wiki facts you inherited via `wikiContext` so they survive
+  the merge unchanged.
 - **`existingDemo`** *(object | null)* — `null` if no `existingDemo`
   input or if the run is a new flow. Otherwise:
   `{ "slug": "<slug>", "nodeCount": <number>, "diffTarget": <boolean> }`.
@@ -240,6 +363,39 @@ existingDemo: null
     "integrationTestCommand": "bun test src/server.test.ts",
     "setupPattern": "Tests import and call Start() directly (in-process), then POST to http://localhost:3001/orders with JSON body {cart:[{sku,qty}]}. Port read from ORDER_PIPELINE_PORT env var, defaulting to 3001."
   },
+  "wikiUpdates": {
+    "runtimeProfile": {
+      "primaryLanguage": "typescript",
+      "packageManager": "bun",
+      "devCommand": "bun run dev",
+      "testCommand": "bun test",
+      "servicePorts": [3001],
+      "requiredEnv": ["ORDER_PIPELINE_PORT"]
+    },
+    "localDevSetup": "Single command: `bun run dev`. No external services; the event bus, queue, and store are in-process. App is up when stdout prints `Listening on http://localhost:3001`.",
+    "integrationTests": {
+      "dir": "src",
+      "command": "bun test src/server.test.ts",
+      "baseUrl": "http://localhost:3001",
+      "framework": "bun:test",
+      "setupPattern": "beforeAll() calls Start() in-process; tests POST against http://localhost:3001 with fetch()."
+    },
+    "fixtures": [
+      { "path": "src/server.test.ts", "describes": "POST /orders cart payload — `{cart:[{sku,qty}]}`" }
+    ],
+    "factories": [],
+    "seedCommands": [],
+    "dataEntryPaths": [
+      { "resource": "order-store", "preferred": "POST /orders (validates + emits order.created)", "avoid": "direct mutation of src/store.ts state" }
+    ],
+    "knownEndpoints": [
+      { "method": "POST", "path": "/orders", "bodyShape": "{ cart: [{ sku: string, qty: number }] }", "auth": "none in dev" },
+      { "method": "POST", "path": "/payments/charge", "bodyShape": "{ orderId: string }", "auth": "none in dev" }
+    ],
+    "gotchas": [
+      "ORDER_PIPELINE_PORT env var controls the listen port; defaults to 3001 if absent."
+    ]
+  },
   "existingDemo": null
 }
 ```
@@ -254,6 +410,8 @@ existingDemo: null
 ```
 
 The above is wrong because (a) it hedges instead of committing to a
-framing, (b) it dumps a directory instead of named entities, and (c) it
+framing, (b) it dumps a directory instead of named entities, (c) it
 omits required fields (`audienceFraming`, `outOfScope`, `codePointers`,
-`existingDemo`).
+`existingDemo`), and (d) it never investigated dev setup / tests /
+fixtures, so `wikiUpdates` is empty and the next `/seeflow` run learns
+nothing new.
