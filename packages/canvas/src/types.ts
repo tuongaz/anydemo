@@ -82,6 +82,10 @@ export interface HtmlNodeData extends NodeVisual, NodeDescription {
   htmlPath: string;
   name?: string;
   icon?: string;
+  // When true (or absent), the renderer measures content and React Flow sizes
+  // the wrapper around it (capped at 800×600 by CSS). The studio adapter
+  // enforces that autoSize:true and persisted width/height never coexist.
+  autoSize?: boolean;
 }
 
 interface NodeBase {
