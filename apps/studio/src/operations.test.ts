@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { NodePatchBodySchema, mergeNodeUpdates } from './operations.ts';
+import { NodePatchBodySchema, mergeNodeUpdates, validateImpl } from './operations.ts';
 
 describe('NodePatchBodySchema autoSize', () => {
   it('accepts autoSize: true', () => {
@@ -78,5 +78,47 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     expect(data.width).toBe(200);
     expect(data.height).toBe(100);
     expect('autoSize' in data).toBe(false);
+  });
+});
+
+describe('validateImpl', () => {
+  it('returns ok for valid architecture + style', () => {
+    const r = validateImpl({
+      architecture: {
+        version: 2,
+        name: 'T',
+        nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
+        connectors: [],
+      },
+      style: { nodes: { n: { fontSize: 14 } } },
+    });
+    expect(r).toEqual({ ok: true });
+  });
+
+  it('returns architecture-scoped issues on bad arch', () => {
+    const r = validateImpl({
+      architecture: { version: 1, name: '', nodes: [], connectors: [] },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.every((i) => i.scope === 'architecture')).toBe(true);
+  });
+
+  it('returns style-scoped issues on bad style', () => {
+    const r = validateImpl({
+      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+      style: { nodes: { x: { fontSize: -1 } } },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.issues.some((i) => i.scope === 'style')).toBe(true);
+  });
+
+  it('flags style entries with no matching architecture id', () => {
+    const r = validateImpl({
+      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+      style: { nodes: { ghost: { fontSize: 14 } } },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok)
+      expect(r.issues.find((i) => i.code === 'orphan_style_node')).toBeDefined();
   });
 });

@@ -2760,3 +2760,57 @@ describe('POST /api/projects', () => {
     expect(registry.list()).toHaveLength(0);
   });
 });
+
+describe('POST /api/validate', () => {
+  it('returns ok for valid architecture-only body', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/validate', {
+      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+  });
+
+  it('returns 200 with issues array on bad architecture', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/validate', { architecture: { version: 1 } });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      issues: Array<{ scope: string }>;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.issues.every((i) => i.scope === 'architecture')).toBe(true);
+  });
+
+  it('flags cross-file orphan style entries', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/validate', {
+      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+      style: { nodes: { ghost: { fontSize: 14 } } },
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      issues: Array<{ scope: string; code: string }>;
+    };
+    expect(body.ok).toBe(false);
+    expect(body.issues.some((i) => i.code === 'orphan_style_node')).toBe(true);
+  });
+
+  it('returns 400 for malformed JSON body', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/validate', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: '{not json',
+    });
+    expect(res.status).toBe(400);
+  });
+
+  it('returns 400 when architecture key missing', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/validate', { foo: 'bar' });
+    expect(res.status).toBe(400);
+  });
+});

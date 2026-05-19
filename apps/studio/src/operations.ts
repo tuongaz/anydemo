@@ -1157,3 +1157,83 @@ export async function deleteConnectorImpl(
     }),
   );
 }
+
+// =============================================================================
+// validateImpl — stateless schema validator. Powers POST /api/validate +
+// the validate_seeflow MCP tool. Schema-only: no file:// resolution, no
+// registry side-effects.
+// =============================================================================
+
+export interface ValidateBody {
+  architecture: unknown;
+  style?: unknown;
+}
+
+export interface ValidationIssue {
+  scope: 'architecture' | 'style' | 'cross';
+  path: (string | number)[];
+  message: string;
+  code: string;
+}
+
+export type ValidateOutcome = { ok: true } | { ok: false; issues: ValidationIssue[] };
+
+export function validateImpl(body: ValidateBody): ValidateOutcome {
+  const issues: ValidationIssue[] = [];
+
+  const archParse = ArchitectureSchema.safeParse(body.architecture);
+  if (!archParse.success) {
+    for (const i of archParse.error.issues) {
+      issues.push({
+        scope: 'architecture',
+        path: [...i.path],
+        message: i.message,
+        code: i.code,
+      });
+    }
+  }
+
+  let styleData: { nodes?: Record<string, unknown>; connectors?: Record<string, unknown> } | undefined;
+  if (body.style !== undefined) {
+    const styleParse = StyleSchema.safeParse(body.style);
+    if (!styleParse.success) {
+      for (const i of styleParse.error.issues) {
+        issues.push({
+          scope: 'style',
+          path: [...i.path],
+          message: i.message,
+          code: i.code,
+        });
+      }
+    } else {
+      styleData = styleParse.data as never;
+    }
+  }
+
+  if (archParse.success && styleData) {
+    const archNodeIds = new Set(archParse.data.nodes.map((n) => n.id));
+    const archConnIds = new Set(archParse.data.connectors.map((c) => c.id));
+    for (const id of Object.keys(styleData.nodes ?? {})) {
+      if (!archNodeIds.has(id)) {
+        issues.push({
+          scope: 'cross',
+          path: ['nodes', id],
+          message: `Style entry references unknown node id: ${id}`,
+          code: 'orphan_style_node',
+        });
+      }
+    }
+    for (const id of Object.keys(styleData.connectors ?? {})) {
+      if (!archConnIds.has(id)) {
+        issues.push({
+          scope: 'cross',
+          path: ['connectors', id],
+          message: `Style entry references unknown connector id: ${id}`,
+          code: 'orphan_style_connector',
+        });
+      }
+    }
+  }
+
+  return issues.length === 0 ? { ok: true } : { ok: false, issues };
+}

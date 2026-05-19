@@ -19,6 +19,7 @@ import {
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
+  type ValidateBody,
   addConnectorImpl,
   addNodeImpl,
   createProjectImpl,
@@ -33,6 +34,7 @@ import {
   registerFlowImpl,
   reorderNodeImpl,
   resolveFilePath,
+  validateImpl,
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
 import {
@@ -266,6 +268,23 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid validate body', issues: parsed.error.issues }, 400);
     }
     return c.json(validateDemo(parsed.data));
+  });
+
+  // POST /api/validate — stateless schema validator for the architecture +
+  // optional style files. No flow id, no registry side-effects, no file://
+  // resolution (validation is structural only). Returns 200 even on
+  // validation failure — the result is the validation report itself.
+  api.post('/validate', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+    if (!body || typeof body !== 'object' || !('architecture' in body)) {
+      return c.json({ error: 'Body must be { architecture, style? }' }, 400);
+    }
+    return c.json(validateImpl(body as ValidateBody));
   });
 
   // POST /api/diagram/propose-scope — Phase 2 helper. The skill POSTs the
