@@ -1,17 +1,17 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import { Loader2, Play } from 'lucide-react';
+import { AlertCircle, Check, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
 import { IconPickerPopover } from '../components/icon-picker-popover.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
-import type { NodeData, StatusReport } from '../types.ts';
+import type { NodeData, NodeStatus, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
+import { type VisualStatus, deriveVisualStatus } from './lib/visual-status.ts';
 import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusBadge } from './status-badge.tsx';
-import type { NodeStatus } from './status-pill.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
 export type PlayNodeData = NodeData & {
@@ -55,23 +55,123 @@ const MIN_W = 100;
 const MIN_H = 44;
 const DEFAULT_W = 200;
 
+function PlayButton({
+  visualStatus,
+  disabled,
+  buttonLabel,
+  isError,
+  onClick,
+}: {
+  visualStatus: VisualStatus;
+  disabled: boolean;
+  buttonLabel: string;
+  isError: boolean;
+  onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void;
+}) {
+  // The icon morphs by visual-status. On hover, success/error revert to Play
+  // (the click-target affordance). CSS-only via the group-hover utility.
+  return (
+    <Button
+      type="button"
+      size="sm"
+      variant="secondary"
+      disabled={disabled}
+      data-testid="play-button"
+      data-status={visualStatus === 'idle' ? 'idle' : visualStatus}
+      data-visual-status={visualStatus}
+      aria-label={buttonLabel}
+      title={buttonLabel}
+      onClick={onClick}
+      className={cn(
+        // US-018: circular play button. Hover/focus-visible flips the fill
+        // to a saturated emerald — color-codes the action.
+        'sf:group sf:relative sf:h-8 sf:w-8 sf:rounded-full sf:p-0',
+        'sf:hover:bg-primary sf:hover:text-primary-foreground',
+        'sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground',
+        // Animated states layered on top via attribute-aware utilities.
+        visualStatus === 'success' && 'sf:seeflow-play-pop',
+        visualStatus === 'error' && 'sf:inline-edit-shake',
+        // Error retains the rose border (preserved from US-018).
+        isError && 'sf:border-2 sf:border-rose-500',
+      )}
+    >
+      {visualStatus === 'active' ? (
+        <span
+          aria-hidden
+          data-testid="play-button-ring"
+          className={cn(
+            // Conic-gradient ring, clipped to a 2px-wide circular band via mask.
+            // Rotates 1.2s linear. `prefers-reduced-motion: reduce` → no class
+            // applied via @media in styles/index.css → static appearance.
+            'sf:absolute sf:inset-0 sf:rounded-full sf:seeflow-ring-spin',
+          )}
+          style={{
+            background:
+              'conic-gradient(from 0deg, var(--emerald-glow) 0deg, transparent 200deg, var(--emerald-glow) 360deg)',
+            WebkitMask:
+              'radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))',
+            mask: 'radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))',
+          }}
+        />
+      ) : null}
+      {/* Icon morph: success → Check (revealed to Play on hover via group-hover);
+          error → AlertCircle (revealed to Play on hover); else → Play. */}
+      {visualStatus === 'success' ? (
+        <>
+          <Check
+            className="sf:h-4 sf:w-4 sf:relative sf:text-emerald-300 sf:group-hover:hidden"
+            aria-hidden
+          />
+          <Play
+            className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block"
+            aria-hidden
+          />
+        </>
+      ) : visualStatus === 'error' ? (
+        <>
+          <AlertCircle
+            className="sf:h-4 sf:w-4 sf:relative sf:text-rose-300 sf:group-hover:hidden"
+            aria-hidden
+          />
+          <Play
+            className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block"
+            aria-hidden
+          />
+        </>
+      ) : (
+        <Play
+          className={cn(
+            'sf:h-4 sf:w-4 sf:relative',
+            visualStatus === 'active' && 'sf:opacity-80',
+          )}
+          aria-hidden
+        />
+      )}
+    </Button>
+  );
+}
+
 function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeType>) {
   const status = data.status;
   const action = data.playAction;
   const description = data.description ?? data.kind;
   const playable = !!action && !!data.onPlay;
+  const visualStatus = deriveVisualStatus(status, data.statusReport);
   const isRunning = status === 'running';
-  const isError = status === 'error';
+  const isError = visualStatus === 'error';
   // US-018: failed runs surface their reason as the button tooltip — replaces
   // the removed status chip. Falls back to a generic "Failed" if the SSE
   // event arrived without a message.
-  const buttonLabel = isRunning
-    ? 'Running…'
-    : isError
-      ? data.errorMessage
-        ? `Failed: ${data.errorMessage}`
-        : 'Failed'
-      : 'Play';
+  const buttonLabel =
+    visualStatus === 'active'
+      ? 'Running…'
+      : visualStatus === 'success'
+        ? 'Succeeded, run again'
+        : visualStatus === 'error'
+          ? data.errorMessage
+            ? `Failed: ${data.errorMessage}`
+            : 'Failed, run again'
+          : 'Play';
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing,
@@ -270,38 +370,16 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
           )}
         </div>
         <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
-          <Button
-            type="button"
-            size="sm"
-            variant="secondary"
-            disabled={!playable || isRunning}
-            // US-018: circular play button. On error, a thick red border
-            // wraps the circle — replaces the standalone status chip. The
-            // play glyph (or running spinner) stays visible inside.
-            // US-021: hover/focus-visible flips the fill to a saturated
-            // emerald and the icon (currentColor) to white — color-codes
-            // the action without re-rendering. `disabled:pointer-events-none`
-            // on the Button base class blocks the hover state while running
-            // or unplayable, so the rule below applies only to live targets.
-            className={cn(
-              'sf:h-8 sf:w-8 sf:rounded-full sf:p-0 sf:hover:bg-primary sf:hover:text-primary-foreground sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground',
-              isError && 'sf:border-2 sf:border-rose-500',
-            )}
-            data-testid="play-button"
-            data-status={status ?? 'idle'}
-            aria-label={buttonLabel}
-            title={buttonLabel}
+          <PlayButton
+            visualStatus={visualStatus}
+            disabled={!playable || visualStatus === 'active'}
+            buttonLabel={buttonLabel}
+            isError={isError}
             onClick={(e) => {
               e.stopPropagation();
               data.onPlay?.(id);
             }}
-          >
-            {isRunning ? (
-              <Loader2 className="sf:h-4 sf:w-4 sf:animate-spin" aria-hidden />
-            ) : (
-              <Play className="sf:h-4 sf:w-4" aria-hidden />
-            )}
-          </Button>
+          />
         </div>
       </div>
       <div

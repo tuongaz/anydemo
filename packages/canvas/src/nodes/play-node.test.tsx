@@ -99,14 +99,37 @@ function callPlayNode(data: Record<string, unknown>, overrides: Partial<NodeProp
 }
 
 function findPlayButton(tree: unknown): ReactElementLike {
-  const el = findElement(
+  // Direct hit (legacy shape — Button rendered inline by PlayNodeImpl).
+  let el = findElement(
     tree,
     (el) =>
       el.type === Button &&
       (el.props as { 'data-testid'?: string })['data-testid'] === 'play-button',
   );
-  if (!el) throw new Error('play-button not found');
-  return el;
+  if (el) return el;
+  // New shape: PlayNodeImpl renders a <PlayButton> wrapper. Find that
+  // wrapper element by its prop shape, call its function to render the
+  // Button subtree, then search inside.
+  const wrapper = findElement(
+    tree,
+    (e) =>
+      typeof e.type === 'function' &&
+      'visualStatus' in (e.props as Record<string, unknown>) &&
+      'buttonLabel' in (e.props as Record<string, unknown>),
+  );
+  if (wrapper) {
+    const rendered = renderWithHooks(() =>
+      (wrapper.type as (p: unknown) => unknown)(wrapper.props),
+    );
+    el = findElement(
+      rendered,
+      (e) =>
+        e.type === Button &&
+        (e.props as { 'data-testid'?: string })['data-testid'] === 'play-button',
+    );
+    if (el) return el;
+  }
+  throw new Error('play-button not found');
 }
 
 describe('PlayNode play button (US-021 hover affordance)', () => {
@@ -365,5 +388,73 @@ describe('PlayNode default background fill (US-021 default node background)', ()
     const container = findPlayContainer(tree);
     const style = (container.props as { style?: CSSProperties }).style ?? {};
     expect(style.backgroundColor).toBe(COLOR_TOKENS.default.background);
+  });
+});
+
+describe('PlayNode play button visual-status states (status uplift)', () => {
+  it('idle: data-visual-status="idle" and Play icon, no ring overlay', () => {
+    const tree = callPlayNode({ playAction: { kind: 'http' }, onPlay: () => {} });
+    const button = findPlayButton(tree);
+    expect((button.props as { 'data-visual-status'?: string })['data-visual-status']).toBe('idle');
+    // Ring overlay only renders for 'active'. Search button subtree.
+    const ring = findElement(
+      button,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'play-button-ring',
+    );
+    expect(ring).toBeNull();
+  });
+
+  it('active: data-visual-status="active" and ring overlay present', () => {
+    const tree = callPlayNode({
+      playAction: { kind: 'http' },
+      onPlay: () => {},
+      status: 'running',
+    });
+    const button = findPlayButton(tree);
+    expect((button.props as { 'data-visual-status'?: string })['data-visual-status']).toBe(
+      'active',
+    );
+    const ring = findElement(
+      button,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'play-button-ring',
+    );
+    expect(ring).not.toBeNull();
+  });
+
+  it('success: data-visual-status="success" with Check icon', () => {
+    const tree = callPlayNode({
+      playAction: { kind: 'http' },
+      onPlay: () => {},
+      status: 'done',
+    });
+    const button = findPlayButton(tree);
+    expect((button.props as { 'data-visual-status'?: string })['data-visual-status']).toBe(
+      'success',
+    );
+  });
+
+  it('error: data-visual-status="error" — keeps existing rose-border class', () => {
+    const tree = callPlayNode({
+      playAction: { kind: 'http' },
+      onPlay: () => {},
+      status: 'error',
+      errorMessage: 'boom',
+    });
+    const button = findPlayButton(tree);
+    expect((button.props as { 'data-visual-status'?: string })['data-visual-status']).toBe('error');
+    const className = String((button.props as { className?: string }).className ?? '');
+    expect(className).toContain('sf:border-rose-500');
+  });
+
+  it('statusReport "pending" alone (no run status) reads as active', () => {
+    const tree = callPlayNode({
+      playAction: { kind: 'http' },
+      onPlay: () => {},
+      statusReport: { state: 'pending', ts: 1 },
+    });
+    const button = findPlayButton(tree);
+    expect((button.props as { 'data-visual-status'?: string })['data-visual-status']).toBe(
+      'active',
+    );
   });
 });
