@@ -1,0 +1,85 @@
+{
+  "nodes": {
+    "client": {
+      "position": {
+        "x": 80,
+        "y": 215.5
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "api-gateway": {
+      "position": {
+        "x": 320,
+        "y": 227
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "auth-service": {
+      "position": {
+        "x": 660,
+        "y": 50
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "product-service": {
+      "position": {
+        "x": 660,
+        "y": 218
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "cart-service": {
+      "position": {
+        "x": 660,
+        "y": 413
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "order-service": {
+      "position": {
+        "x": 1000,
+        "y": 413
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "payment-service": {
+      "position": {
+        "x": 1340,
+        "y": 349
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "notification-service": {
+      "position": {
+        "x": 1680,
+        "y": 339
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "postgresql": {
+      "position": {
+        "x": 1720,
+        "y": 507
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    }
+  }
+}

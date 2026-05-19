@@ -1,0 +1,93 @@
+{
+  "version": 2,
+  "name": "Order Pipeline",
+  "nodes": [
+    {
+      "id": "post-orders",
+      "type": "playNode",
+      "data": {
+        "name": "POST /orders",
+        "kind": "service",
+        "stateSource": {
+          "kind": "request"
+        },
+        "description": "Creates order, kicks off the pipeline.",
+        "detail": "file://details/post-orders.md",
+        "playAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": [
+            "run"
+          ],
+          "scriptPath": "scripts/play.ts"
+        }
+      }
+    },
+    {
+      "id": "inventory-service",
+      "type": "stateNode",
+      "data": {
+        "name": "Inventory Service",
+        "kind": "worker",
+        "stateSource": {
+          "kind": "event"
+        },
+        "description": "Reserves stock.",
+        "detail": "file://details/inventory-service.md",
+        "icon": "a-arrow-down-icon"
+      }
+    },
+    {
+      "id": "payment-service",
+      "type": "stateNode",
+      "data": {
+        "name": "Payment Service",
+        "kind": "worker",
+        "stateSource": {
+          "kind": "event"
+        },
+        "description": "Charges card.",
+        "detail": "file://details/payment-service.md"
+      }
+    },
+    {
+      "id": "fulfillment-service",
+      "type": "stateNode",
+      "data": {
+        "name": "Fulfillment Service",
+        "kind": "worker",
+        "stateSource": {
+          "kind": "event"
+        },
+        "description": "Enqueues shipment.",
+        "detail": "file://details/fulfillment-service.md"
+      }
+    }
+  ],
+  "connectors": [
+    {
+      "id": "c1",
+      "source": "post-orders",
+      "target": "inventory-service",
+      "kind": "event",
+      "eventName": "order.created",
+      "label": "order.created"
+    },
+    {
+      "id": "c2",
+      "source": "inventory-service",
+      "target": "payment-service",
+      "kind": "event",
+      "eventName": "stock.reserved",
+      "label": "stock.reserved"
+    },
+    {
+      "id": "c3",
+      "source": "payment-service",
+      "target": "fulfillment-service",
+      "kind": "event",
+      "eventName": "payment.captured",
+      "label": "payment.captured"
+    }
+  ]
+}

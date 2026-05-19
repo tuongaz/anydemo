@@ -19,7 +19,7 @@ import { ArchitectureSchema, FlowSchema } from './schema.ts';
 import { serve } from './server.ts';
 import { createStatusRunner } from './status-runner.ts';
 
-const DEFAULT_ARCHITECTURE_PATH = '.seeflow/seeflow.json';
+const DEFAULT_ARCHITECTURE_PATH = '.seeflow/architecture.json';
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 150;
 
@@ -75,7 +75,7 @@ Options (start):
 Options (register):
   --path <dir>      Path to repo root (default: current directory)
   --flow <file>     Path to flow JSON, relative to repo root
-                    (default: .seeflow/seeflow.json)
+                    (default: .seeflow/architecture.json)
   --no-start        Fail if studio is not already running
 
 Examples:
@@ -140,7 +140,7 @@ async function seedExamples(registry: Registry) {
 
 async function seedExample(registry: Registry, exampleName: string) {
   const destDir = join(seeflowHome(), exampleName);
-  const architecturePath = '.seeflow/seeflow.json';
+  const architecturePath = '.seeflow/architecture.json';
 
   // Always sync from source so that schema changes and example updates are
   // reflected on every startup, even when the dest directory already exists.

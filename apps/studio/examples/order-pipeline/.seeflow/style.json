@@ -1,0 +1,42 @@
+{
+  "nodes": {
+    "post-orders": {
+      "position": {
+        "x": -181.96549037838943,
+        "y": 138.95644990042385
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "inventory-service": {
+      "position": {
+        "x": 66.21484197841792,
+        "y": -126.31035925520507
+      },
+      "width": 201,
+      "height": 118,
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    },
+    "payment-service": {
+      "position": {
+        "x": 469.1422114437386,
+        "y": 206.48855752663212
+      },
+      "borderSize": 1,
+      "fontSize": 15,
+      "borderColor": "green"
+    },
+    "fulfillment-service": {
+      "position": {
+        "x": 747.51321046746,
+        "y": -37.78865629343234
+      },
+      "fontSize": 15,
+      "borderColor": "green",
+      "borderSize": 1
+    }
+  }
+}

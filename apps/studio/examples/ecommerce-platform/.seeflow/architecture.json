@@ -5,26 +5,15 @@
     {
       "id": "client",
       "type": "shapeNode",
-      "position": {
-        "x": 80,
-        "y": 215.5
-      },
       "data": {
         "shape": "user",
         "name": "Customer",
-        "description": "Web / Mobile / Partner",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "description": "Web / Mobile / Partner"
       }
     },
     {
       "id": "api-gateway",
       "type": "playNode",
-      "position": {
-        "x": 320,
-        "y": 227
-      },
       "data": {
         "name": "API Gateway",
         "kind": "gateway",
@@ -32,7 +21,7 @@
           "kind": "request"
         },
         "description": "Auth, rate-limiting, routing.",
-        "detail": "## API Gateway\n\nCentral ingress for every client.\n\n- JWT validation before forwarding\n- Token-bucket rate limiting per user and IP\n- Path-based routing to downstream services\n- OpenTelemetry spans for every request\n\n### Routes\n- `POST /auth/*` → Auth Service\n- `GET /products/*` → Product Catalog\n- `POST /cart/*` → Cart Service\n- `POST /orders` → Order Service",
+        "detail": "file://details/api-gateway.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -40,19 +29,12 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        },
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        }
       }
     },
     {
       "id": "auth-service",
       "type": "stateNode",
-      "position": {
-        "x": 660,
-        "y": 50
-      },
       "data": {
         "name": "Auth Service",
         "kind": "service",
@@ -60,19 +42,12 @@
           "kind": "request"
         },
         "description": "JWT issuance + OAuth2 / OIDC.",
-        "detail": "## Auth Service\n\n- Password login (bcrypt), OAuth2 (Google, Apple), magic-link\n- Access token: 15-min TTL, RS256 signed\n- Refresh token: 30-day TTL in Redis\n\n### Events\n- `auth.login` on success\n- `auth.token_refreshed` on refresh",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "detail": "file://details/auth-service.md"
       }
     },
     {
       "id": "product-service",
       "type": "stateNode",
-      "position": {
-        "x": 660,
-        "y": 218
-      },
       "data": {
         "name": "Product Catalog",
         "kind": "service",
@@ -80,19 +55,12 @@
           "kind": "request"
         },
         "description": "SKUs, variants, pricing, full-text search.",
-        "detail": "## Product Catalog\n\nSingle source of truth for products and search.\n\n- Products, variants, tiered pricing (B2B / B2C / promo)\n- Elasticsearch full-text search with BM25 ranking\n- Faceted filtering (brand, price, rating, availability)\n\n### Events\n- `product.updated` → re-indexes search",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "detail": "file://details/product-service.md"
       }
     },
     {
       "id": "cart-service",
       "type": "playNode",
-      "position": {
-        "x": 660,
-        "y": 413
-      },
       "data": {
         "name": "Cart Service",
         "kind": "service",
@@ -100,7 +68,7 @@
           "kind": "request"
         },
         "description": "Add/remove items, apply coupons, checkout.",
-        "detail": "## Cart Service\n\nPer-user cart stored in Redis.\n\n- `addItem(sku, qty)` — validates stock, adds line item\n- `applyCoupon(code)` — validates and applies discount\n- `checkout()` — freezes cart, emits `cart.checkout`\n\n### Events Emitted\n- `cart.checkout` → Order Service",
+        "detail": "file://details/cart-service.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -108,27 +76,20 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        },
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        }
       }
     },
     {
       "id": "order-service",
       "type": "playNode",
-      "position": {
-        "x": 1000,
-        "y": 413
-      },
       "data": {
         "name": "Order Service",
         "kind": "worker",
         "stateSource": {
           "kind": "event"
         },
-        "description": "pending → confirmed → shipped → delivered.",
-        "detail": "## Order Service\n\nOwns the order record and drives the downstream pipeline.\n\n### State Machine\n```\npending → confirmed → processing → shipped → delivered\n       ↘ cancelled\n```\n\n### Triggered by\n- `cart.checkout` event\n\n### Events Emitted\n- `order.created` → Payment Service\n- `order.cancelled` → Notification Service",
+        "description": "pending \u2192 confirmed \u2192 shipped \u2192 delivered.",
+        "detail": "file://details/order-service.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -136,19 +97,12 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        },
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        }
       }
     },
     {
       "id": "payment-service",
       "type": "stateNode",
-      "position": {
-        "x": 1340,
-        "y": 349
-      },
       "data": {
         "name": "Payment Service",
         "kind": "worker",
@@ -156,19 +110,12 @@
           "kind": "event"
         },
         "description": "Stripe + PayPal gateway integration.",
-        "detail": "## Payment Service\n\nCharges the customer and records the transaction.\n\n### Triggered by\n- `order.created`\n\n### Steps\n1. Retrieve saved payment method\n2. Authorise charge via Stripe\n3. Capture funds\n4. Persist charge record\n\n### Events Emitted\n- `payment.captured` → Notification Service\n- `payment.failed` → Notification Service",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "detail": "file://details/payment-service.md"
       }
     },
     {
       "id": "notification-service",
       "type": "stateNode",
-      "position": {
-        "x": 1680,
-        "y": 339
-      },
       "data": {
         "name": "Notification Service",
         "kind": "worker",
@@ -176,26 +123,16 @@
           "kind": "event"
         },
         "description": "Email + SMS + push via AWS SES / SNS.",
-        "detail": "## Notification Service\n\nDelivers transactional messages.\n\n### Channels\n- **Email** — AWS SES with DKIM/DMARC\n- **SMS** — Twilio for OTP and shipping alerts\n- **Push** — Firebase Cloud Messaging\n\n### Triggered by\n- `payment.captured` — order confirmation\n- `payment.failed` — retry prompt\n- `order.cancelled` — refund notification",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "detail": "file://details/notification-service.md"
       }
     },
     {
       "id": "postgresql",
       "type": "shapeNode",
-      "position": {
-        "x": 1720,
-        "y": 507
-      },
       "data": {
         "shape": "database",
         "name": "PostgreSQL",
-        "description": "Orders, users, products — primary OLTP store",
-        "fontSize": 15,
-        "borderColor": "green",
-        "borderSize": 1
+        "description": "Orders, users, products \u2014 primary OLTP store"
       }
     }
   ],
