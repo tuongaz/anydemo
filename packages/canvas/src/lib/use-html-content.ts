@@ -47,10 +47,16 @@ export function _clearHtmlContentCacheForTest(): void {
  * Returns the discriminated state. `projectId` or `htmlPath` being undefined
  * keeps the hook in `loading` — the renderer treats that as "waiting on the
  * runtime data injection from demo-canvas".
+ *
+ * `fileBaseUrl` (optional) overrides the default `/api/projects` route prefix
+ * — used by embedders that serve files under a different host or path shape
+ * (e.g. the public viewer hits `https://seeflow.dev/api/flows`). A single
+ * mounted canvas has one `fileBaseUrl`, so it is not part of the cache key.
  */
 export function useHtmlContent(
   projectId: string | undefined,
   htmlPath: string | undefined,
+  fileBaseUrl?: string,
 ): HtmlContentState {
   const [state, setState] = useState<HtmlContentState>(() => {
     if (!projectId || !htmlPath) return { kind: 'loading' };
@@ -74,7 +80,7 @@ export function useHtmlContent(
 
     const run = async (): Promise<void> => {
       try {
-        const res = await fetch(fileUrl(projectId, htmlPath));
+        const res = await fetch(fileUrl(projectId, htmlPath, fileBaseUrl));
         if (cancelled) return;
         if (res.status === 404) {
           const missing: HtmlContentState = { kind: 'missing' };
@@ -117,7 +123,7 @@ export function useHtmlContent(
       cancelled = true;
       unsubscribe();
     };
-  }, [projectId, htmlPath]);
+  }, [projectId, htmlPath, fileBaseUrl]);
 
   return state;
 }

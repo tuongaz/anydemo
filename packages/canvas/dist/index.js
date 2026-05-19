@@ -387,8 +387,9 @@ function startResizeGesture(startWidth, startClientX, callbacks, target) {
 }
 
 // src/lib/file-url.ts
-function fileUrl(projectId, path) {
-  return `/api/projects/${encodeURIComponent(projectId)}/files/${encodeURI(path)}`;
+function fileUrl(projectId, path, baseUrl) {
+  const prefix = baseUrl !== void 0 ? baseUrl.replace(/\/+$/, "") : "/api/projects";
+  return `${prefix}/${encodeURIComponent(projectId)}/files/${encodeURI(path)}`;
 }
 
 // src/lib/floating-edge-geometry.ts
@@ -1697,7 +1698,7 @@ function subscribeFileChanged(projectId, listener) {
 // src/lib/use-html-content.ts
 var cache = /* @__PURE__ */ new Map();
 var cacheKey = (projectId, htmlPath) => `${projectId}::${htmlPath}`;
-function useHtmlContent(projectId, htmlPath) {
+function useHtmlContent(projectId, htmlPath, fileBaseUrl) {
   const [state, setState] = useState4(() => {
     if (!projectId || !htmlPath) return { kind: "loading" };
     return cache.get(cacheKey(projectId, htmlPath)) ?? { kind: "loading" };
@@ -1717,7 +1718,7 @@ function useHtmlContent(projectId, htmlPath) {
     }
     const run = async () => {
       try {
-        const res = await fetch(fileUrl(projectId, htmlPath));
+        const res = await fetch(fileUrl(projectId, htmlPath, fileBaseUrl));
         if (cancelled) return;
         if (res.status === 404) {
           const missing = { kind: "missing" };
@@ -1757,7 +1758,7 @@ function useHtmlContent(projectId, htmlPath) {
       cancelled = true;
       unsubscribe();
     };
-  }, [projectId, htmlPath]);
+  }, [projectId, htmlPath, fileBaseUrl]);
   return state;
 }
 
@@ -1816,21 +1817,20 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   });
   const autoSize = data.autoSize ?? true;
   const userSized = isResizing || !autoSize;
-  const containerStyle = {
+  const chromeStyle = {
     ...data.backgroundColor !== void 0 ? { backgroundColor: colorTokenStyle(data.backgroundColor, "node").backgroundColor } : {},
     ...data.borderColor !== void 0 ? { borderColor: colorTokenStyle(data.borderColor, "node").borderColor } : {},
     ...data.borderSize !== void 0 ? { borderWidth: data.borderSize } : {},
     ...data.borderStyle !== void 0 ? { borderStyle: data.borderStyle } : {},
     ...data.cornerRadius !== void 0 ? { borderRadius: data.cornerRadius } : {},
     ...data.fontSize !== void 0 ? { fontSize: `${data.fontSize}px` } : {},
-    ...colorTokenStyle(data.textColor, "text"),
-    ...userSized ? { width: data.width, height: data.height } : {}
+    ...colorTokenStyle(data.textColor, "text")
   };
   useEffect4(() => {
     ensureTailwindLoaded();
   }, []);
   const measureRef = useRef3(null);
-  const content = useHtmlContent(data.projectId, data.htmlPath);
+  const content = useHtmlContent(data.projectId, data.htmlPath, data.fileBaseUrl);
   const observerActive = autoSize && content.kind === "loaded";
   let body;
   if (content.kind === "loaded") {
@@ -1859,14 +1859,15 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
     body = /* @__PURE__ */ jsx7(PlaceholderCard, { message: "Loading\u2026" });
   }
   const placeholderFallback = !userSized && content.kind !== "loaded" ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height } : {};
-  const outerStyle = { ...containerStyle, ...placeholderFallback };
+  const outerStyle = {
+    ...userSized ? { width: data.width, height: data.height } : {},
+    ...placeholderFallback
+  };
+  const innerShrinkWraps = !userSized && content.kind === "loaded";
   return /* @__PURE__ */ jsxs3(
     "div",
     {
-      className: cn(
-        "sf:group sf:relative sf:overflow-hidden",
-        userSized ? "sf:h-full sf:w-full" : ""
-      ),
+      className: cn("sf:group sf:relative", userSized ? "sf:h-full sf:w-full" : ""),
       style: outerStyle,
       "data-testid": "html-node",
       children: [
@@ -1919,7 +1920,18 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
             className: cn(HANDLE_CLASS2, selected && "sf:opacity-100!")
           }
         ),
-        body,
+        /* @__PURE__ */ jsx7(
+          "div",
+          {
+            "data-testid": "html-node-chrome",
+            className: cn(
+              "sf:overflow-hidden",
+              innerShrinkWraps ? "sf:inline-block" : "sf:h-full sf:w-full"
+            ),
+            style: chromeStyle,
+            children: body
+          }
+        ),
         /* @__PURE__ */ jsx7(
           Handle2,
           {
@@ -2068,7 +2080,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
         ) : /* @__PURE__ */ jsx8(
           "img",
           {
-            src: data.projectId ? fileUrl(data.projectId, data.path) : "",
+            src: data.projectId ? fileUrl(data.projectId, data.path, data.fileBaseUrl) : "",
             alt: data.alt ?? "",
             className: "sf:block sf:h-full sf:w-full sf:select-none sf:object-contain sf:pointer-events-none",
             draggable: false
@@ -2105,7 +2117,7 @@ var ImageNode = memo3(ImageNodeImpl, arePropsEqual3);
 
 // src/nodes/play-node.tsx
 import { Handle as Handle4, Position as Position4 } from "@xyflow/react";
-import { Loader2, Play } from "lucide-react";
+import { AlertCircle, Check, Play } from "lucide-react";
 import { memo as memo4, useState as useState6 } from "react";
 
 // src/components/icon-picker-popover.tsx
@@ -2375,6 +2387,14 @@ var Button = React2.forwardRef(
 );
 Button.displayName = "Button";
 
+// src/nodes/lib/visual-status.ts
+function deriveVisualStatus(status, statusReport) {
+  if (status === "error" || statusReport?.state === "error") return "error";
+  if (status === "running" || statusReport?.state === "pending") return "active";
+  if (status === "done" || statusReport?.state === "ok") return "success";
+  return "idle";
+}
+
 // src/nodes/status-badge.tsx
 import { jsx as jsx13, jsxs as jsxs6 } from "react/jsx-runtime";
 var DOT_STYLES = {
@@ -2405,18 +2425,99 @@ function StatusBadge({ state, summary, "data-testid": testId }) {
 }
 
 // src/nodes/play-node.tsx
-import { jsx as jsx14, jsxs as jsxs7 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx14, jsxs as jsxs7 } from "react/jsx-runtime";
 var MIN_W4 = 100;
 var MIN_H4 = 44;
 var DEFAULT_W = 200;
+function PlayButton({
+  visualStatus,
+  disabled,
+  buttonLabel,
+  isError,
+  onClick
+}) {
+  return /* @__PURE__ */ jsxs7(
+    Button,
+    {
+      type: "button",
+      size: "sm",
+      variant: "secondary",
+      disabled,
+      "data-testid": "play-button",
+      "data-status": visualStatus === "idle" ? "idle" : visualStatus,
+      "data-visual-status": visualStatus,
+      "aria-label": buttonLabel,
+      title: buttonLabel,
+      onClick,
+      className: cn(
+        // US-018: circular play button. Hover/focus-visible flips the fill
+        // to a saturated emerald — color-codes the action.
+        "sf:group sf:relative sf:h-8 sf:w-8 sf:rounded-full sf:p-0",
+        "sf:hover:bg-primary sf:hover:text-primary-foreground",
+        "sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground",
+        // Animated states layered on top via attribute-aware utilities.
+        visualStatus === "success" && "sf:seeflow-play-pop",
+        visualStatus === "error" && "sf:inline-edit-shake",
+        // Error retains the rose border (preserved from US-018).
+        isError && "sf:border-2 sf:border-rose-500"
+      ),
+      children: [
+        visualStatus === "active" ? /* @__PURE__ */ jsx14(
+          "span",
+          {
+            "aria-hidden": true,
+            "data-testid": "play-button-ring",
+            className: cn(
+              // Conic-gradient ring, clipped to a 2px-wide circular band via mask.
+              // Rotates 1.2s linear. `prefers-reduced-motion: reduce` → no class
+              // applied via @media in styles/index.css → static appearance.
+              "sf:absolute sf:inset-0 sf:rounded-full sf:seeflow-ring-spin"
+            ),
+            style: {
+              background: "conic-gradient(from 0deg, var(--emerald-glow) 0deg, transparent 200deg, var(--emerald-glow) 360deg)",
+              WebkitMask: "radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))",
+              mask: "radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))"
+            }
+          }
+        ) : null,
+        visualStatus === "success" ? /* @__PURE__ */ jsxs7(Fragment2, { children: [
+          /* @__PURE__ */ jsx14(
+            Check,
+            {
+              className: "sf:h-4 sf:w-4 sf:relative sf:text-emerald-300 sf:group-hover:hidden",
+              "aria-hidden": true
+            }
+          ),
+          /* @__PURE__ */ jsx14(Play, { className: "sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block", "aria-hidden": true })
+        ] }) : visualStatus === "error" ? /* @__PURE__ */ jsxs7(Fragment2, { children: [
+          /* @__PURE__ */ jsx14(
+            AlertCircle,
+            {
+              className: "sf:h-4 sf:w-4 sf:relative sf:text-rose-300 sf:group-hover:hidden",
+              "aria-hidden": true
+            }
+          ),
+          /* @__PURE__ */ jsx14(Play, { className: "sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block", "aria-hidden": true })
+        ] }) : /* @__PURE__ */ jsx14(
+          Play,
+          {
+            className: cn("sf:h-4 sf:w-4 sf:relative", visualStatus === "active" && "sf:opacity-80"),
+            "aria-hidden": true
+          }
+        )
+      ]
+    }
+  );
+}
 function PlayNodeImpl({ id, data, selected, isConnectable }) {
   const status = data.status;
   const action = data.playAction;
   const description = data.description ?? data.kind;
   const playable = !!action && !!data.onPlay;
+  const visualStatus = deriveVisualStatus(status, data.statusReport);
   const isRunning = status === "running";
-  const isError = status === "error";
-  const buttonLabel = isRunning ? "Running\u2026" : isError ? data.errorMessage ? `Failed: ${data.errorMessage}` : "Failed" : "Play";
+  const isError = visualStatus === "error";
+  const buttonLabel = visualStatus === "active" ? "Running\u2026" : visualStatus === "success" ? "Succeeded, run again" : visualStatus === "error" ? data.errorMessage ? `Failed: ${data.errorMessage}` : "Failed, run again" : "Play";
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing
@@ -2596,25 +2697,16 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                 }
               ),
               /* @__PURE__ */ jsx14("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx14(
-                Button,
+                PlayButton,
                 {
-                  type: "button",
-                  size: "sm",
-                  variant: "secondary",
-                  disabled: !playable || isRunning,
-                  className: cn(
-                    "sf:h-8 sf:w-8 sf:rounded-full sf:p-0 sf:hover:bg-primary sf:hover:text-primary-foreground sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground",
-                    isError && "sf:border-2 sf:border-rose-500"
-                  ),
-                  "data-testid": "play-button",
-                  "data-status": status ?? "idle",
-                  "aria-label": buttonLabel,
-                  title: buttonLabel,
+                  visualStatus,
+                  disabled: !playable || visualStatus === "active",
+                  buttonLabel,
+                  isError,
                   onClick: (e) => {
                     e.stopPropagation();
                     data.onPlay?.(id);
-                  },
-                  children: isRunning ? /* @__PURE__ */ jsx14(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": true }) : /* @__PURE__ */ jsx14(Play, { className: "sf:h-4 sf:w-4", "aria-hidden": true })
+                  }
                 }
               ) })
             ]
@@ -3091,7 +3183,7 @@ var ILLUSTRATIVE_SHAPE_RENDERERS = {
 };
 
 // src/nodes/shape-node.tsx
-import { Fragment as Fragment2, jsx as jsx20, jsxs as jsxs13 } from "react/jsx-runtime";
+import { Fragment as Fragment3, jsx as jsx20, jsxs as jsxs13 } from "react/jsx-runtime";
 var ILLUSTRATIVE_SHAPES = new Set(
   Object.keys(ILLUSTRATIVE_SHAPE_RENDERERS)
 );
@@ -3335,7 +3427,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       }
     );
   }
-  const headerBodyContent = /* @__PURE__ */ jsxs13(Fragment2, { children: [
+  const headerBodyContent = /* @__PURE__ */ jsxs13(Fragment3, { children: [
     /* @__PURE__ */ jsx20(
       "div",
       {
@@ -3500,39 +3592,62 @@ var ShapeNode = memo5(ShapeNodeImpl, arePropsEqual5);
 import { Handle as Handle6, Position as Position6 } from "@xyflow/react";
 import { memo as memo6, useState as useState8 } from "react";
 
-// src/nodes/status-pill.tsx
-import { jsx as jsx21 } from "react/jsx-runtime";
+// src/nodes/status-icon-pill.tsx
+import { AlertTriangle, Check as Check2, Radar } from "lucide-react";
+import { jsx as jsx21, jsxs as jsxs14 } from "react/jsx-runtime";
 var STYLES = {
-  running: "sf:bg-amber-950/50 sf:text-amber-300 sf:animate-pulse",
-  done: "sf:bg-emerald-950/50 sf:text-emerald-300",
-  error: "sf:bg-rose-950/50 sf:text-rose-300"
+  // 20px tall, ~22px wide compact pill. Active gets the conic-gradient ring
+  // via .seeflow-ring-spin on a sibling overlay (added below). Success/error
+  // get a one-shot scale-pop via .seeflow-pill-pop.
+  active: "sf:border-amber-400 sf:bg-amber-950/40 sf:text-amber-300",
+  success: "sf:border-emerald-400 sf:bg-emerald-950/40 sf:text-emerald-300 sf:seeflow-pill-pop",
+  error: "sf:border-rose-400 sf:bg-rose-950/40 sf:text-rose-300 sf:seeflow-pill-pop"
 };
-function StatusPill({
-  status,
-  "data-testid": dataTestId
+function StatusIconPill({
+  visualStatus,
+  summary,
+  "data-testid": testId
 }) {
-  if (status === "idle") return null;
-  return /* @__PURE__ */ jsx21(
+  if (visualStatus === "idle") return null;
+  const Icon2 = visualStatus === "active" ? Radar : visualStatus === "success" ? Check2 : AlertTriangle;
+  return /* @__PURE__ */ jsxs14(
     "span",
     {
-      "data-status": status,
-      "data-testid": dataTestId,
+      "data-testid": testId,
+      "data-visual-status": visualStatus,
+      title: summary,
       className: cn(
-        "sf:inline-flex sf:h-4 sf:items-center sf:rounded-full sf:px-1.5 sf:py-0 sf:font-normal sf:text-[9px] sf:uppercase sf:tracking-wide",
-        STYLES[status]
+        "sf:relative sf:inline-flex sf:h-5 sf:items-center sf:justify-center sf:rounded-full sf:border-[1.5px] sf:px-1",
+        STYLES[visualStatus]
       ),
-      children: status
+      children: [
+        visualStatus === "active" ? /* @__PURE__ */ jsx21(
+          "span",
+          {
+            "aria-hidden": true,
+            "data-testid": "status-icon-pill-ring",
+            className: "sf:absolute sf:inset-0 sf:rounded-full sf:seeflow-ring-spin",
+            style: {
+              background: "conic-gradient(from 0deg, var(--amber-hi) 0deg, transparent 200deg, var(--amber-hi) 360deg)",
+              WebkitMask: "radial-gradient(circle, transparent calc(50% - 1.5px), #000 calc(50% - 1.5px))",
+              mask: "radial-gradient(circle, transparent calc(50% - 1.5px), #000 calc(50% - 1.5px))"
+            }
+          }
+        ) : null,
+        /* @__PURE__ */ jsx21(Icon2, { className: "sf:h-3 sf:w-3 sf:relative", "aria-hidden": true })
+      ]
     }
   );
 }
 
 // src/nodes/state-node.tsx
-import { jsx as jsx22, jsxs as jsxs14 } from "react/jsx-runtime";
+import { jsx as jsx22, jsxs as jsxs15 } from "react/jsx-runtime";
 var MIN_W5 = 100;
 var MIN_H5 = 44;
 var DEFAULT_W2 = 200;
 function StateNodeImpl({ id, data, selected, isConnectable }) {
   const status = data.status ?? "idle";
+  const visualStatus = deriveVisualStatus(data.status, data.statusReport);
   const description = data.description ?? data.kind;
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -3575,7 +3690,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
     if (descEditable) setEditing("description");
     else if (nameEditable) setEditing("name");
   } : void 0;
-  return /* @__PURE__ */ jsxs14(
+  return /* @__PURE__ */ jsxs15(
     "div",
     {
       className: cn(
@@ -3621,7 +3736,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsxs14(
+        /* @__PURE__ */ jsxs15(
           "div",
           {
             className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2",
@@ -3714,7 +3829,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                   )
                 }
               ),
-              /* @__PURE__ */ jsx22("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx22(StatusPill, { status }) })
+              /* @__PURE__ */ jsx22("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx22(
+                StatusIconPill,
+                {
+                  visualStatus,
+                  summary: data.statusReport?.summary,
+                  "data-testid": "state-node-status-pill"
+                }
+              ) })
             ]
           }
         ),
@@ -3789,8 +3911,11 @@ import {
   getSmoothStepPath,
   useInternalNode
 } from "@xyflow/react";
-import { useEffect as useEffect6, useState as useState9 } from "react";
-import { Fragment as Fragment3, jsx as jsx23, jsxs as jsxs15 } from "react/jsx-runtime";
+import { useEffect as useEffect6, useRef as useRef4, useState as useState9 } from "react";
+import { Fragment as Fragment4, jsx as jsx23, jsxs as jsxs16 } from "react/jsx-runtime";
+function shouldFireEdgeHandoff(prev, next) {
+  return next === "success" && prev !== "success";
+}
 var SMOOTHSTEP_BORDER_RADIUS = 8;
 var RECONNECT_ANCHOR_SHIFT = 10;
 var shiftAnchorForSide = (baseX, baseY, side) => {
@@ -3843,6 +3968,26 @@ function EditableEdge({
   const [editing, setEditing] = useState9(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
+  const sourceData = sourceNode?.data ?? {};
+  const sourceVisualStatus = deriveVisualStatus(sourceData.status, sourceData.statusReport);
+  const prevSourceVisualStatusRef = useRef4(void 0);
+  useEffect6(() => {
+    const prev = prevSourceVisualStatusRef.current;
+    prevSourceVisualStatusRef.current = sourceVisualStatus;
+    if (!shouldFireEdgeHandoff(prev, sourceVisualStatus)) return;
+    const wrapper = document.querySelector(
+      `.react-flow__edge[data-id="${CSS.escape(id)}"]`
+    );
+    if (!wrapper) return;
+    wrapper.setAttribute("data-handoff", "true");
+    const timer = window.setTimeout(() => {
+      wrapper.removeAttribute("data-handoff");
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      wrapper.removeAttribute("data-handoff");
+    };
+  }, [id, sourceVisualStatus]);
   const sourceFallback = {
     x: sourceX,
     y: sourceY,
@@ -3932,7 +4077,7 @@ function EditableEdge({
   const showEndpointDots = data?.reconnectable === true;
   const sourcePinned = data?.sourcePin !== void 0;
   const targetPinned = data?.targetPin !== void 0;
-  return /* @__PURE__ */ jsxs15(Fragment3, { children: [
+  return /* @__PURE__ */ jsxs16(Fragment4, { children: [
     /* @__PURE__ */ jsx23(
       BaseEdge,
       {
@@ -3944,7 +4089,7 @@ function EditableEdge({
         interactionWidth
       }
     ),
-    showEndpointDots ? /* @__PURE__ */ jsxs15(ViewportPortal, { children: [
+    showEndpointDots ? /* @__PURE__ */ jsxs16(ViewportPortal, { children: [
       /* @__PURE__ */ jsx23(
         "div",
         {
@@ -4028,7 +4173,7 @@ import * as React4 from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
 import * as React3 from "react";
-import { jsx as jsx24, jsxs as jsxs16 } from "react/jsx-runtime";
+import { jsx as jsx24, jsxs as jsxs17 } from "react/jsx-runtime";
 var Dialog = DialogPrimitive.Root;
 var DialogTrigger = DialogPrimitive.Trigger;
 var DialogPortal = ({
@@ -4051,9 +4196,9 @@ var DialogOverlay = React3.forwardRef(({ className, ...props }, ref) => /* @__PU
   }
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
-var DialogContent = React3.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxs16(DialogPortal, { children: [
+var DialogContent = React3.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxs17(DialogPortal, { children: [
   /* @__PURE__ */ jsx24(DialogOverlay, {}),
-  /* @__PURE__ */ jsxs16(
+  /* @__PURE__ */ jsxs17(
     DialogPrimitive.Content,
     {
       ref,
@@ -4064,7 +4209,7 @@ var DialogContent = React3.forwardRef(({ className, children, ...props }, ref) =
       ...props,
       children: [
         children,
-        /* @__PURE__ */ jsxs16(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+        /* @__PURE__ */ jsxs17(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
           /* @__PURE__ */ jsx24(X, { className: "sf:h-4 sf:w-4" }),
           /* @__PURE__ */ jsx24("span", { className: "sf:sr-only", children: "Close" })
         ] })
@@ -4112,7 +4257,7 @@ var DialogDescription = React3.forwardRef(({ className, ...props }, ref) => /* @
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 // src/ui/command.tsx
-import { jsx as jsx25, jsxs as jsxs17 } from "react/jsx-runtime";
+import { jsx as jsx25, jsxs as jsxs18 } from "react/jsx-runtime";
 var Command = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive,
   {
@@ -4128,7 +4273,7 @@ Command.displayName = CommandPrimitive.displayName;
 var CommandDialog = ({ children, ...props }) => {
   return /* @__PURE__ */ jsx25(Dialog, { ...props, children: /* @__PURE__ */ jsx25(DialogContent, { className: "sf:overflow-hidden sf:p-0 sf:shadow-lg", children: /* @__PURE__ */ jsx25(Command, { className: "sf:**:[[cmdk-group-heading]]:px-2 sf:**:[[cmdk-group-heading]]:font-medium sf:**:[[cmdk-group-heading]]:text-muted-foreground sf:[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 sf:**:[[cmdk-group]]:px-2 sf:[&_[cmdk-input-wrapper]_svg]:h-5 sf:[&_[cmdk-input-wrapper]_svg]:w-5 sf:**:[[cmdk-input]]:h-12 sf:**:[[cmdk-item]]:px-2 sf:**:[[cmdk-item]]:py-3 sf:[&_[cmdk-item]_svg]:h-5 sf:[&_[cmdk-item]_svg]:w-5", children }) }) });
 };
-var CommandInput = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs17("div", { className: "sf:flex sf:items-center sf:border-b sf:px-3", "cmdk-input-wrapper": "", children: [
+var CommandInput = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs18("div", { className: "sf:flex sf:items-center sf:border-b sf:px-3", "cmdk-input-wrapper": "", children: [
   /* @__PURE__ */ jsx25(Search, { className: "sf:mr-2 sf:h-4 sf:w-4 sf:shrink-0 sf:opacity-50" }),
   /* @__PURE__ */ jsx25(
     CommandPrimitive.Input,
@@ -4297,7 +4442,7 @@ var DropdownMenuSeparator = React6.forwardRef(({ className, ...props }, ref) => 
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 // src/ui/icon-toggle-group.tsx
-import { Fragment as Fragment4 } from "react";
+import { Fragment as Fragment5 } from "react";
 
 // src/ui/tooltip.tsx
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
@@ -4324,7 +4469,7 @@ var TooltipContent = React7.forwardRef(({ className, sideOffset = 4, ...props },
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
 // src/ui/icon-toggle-group.tsx
-import { jsx as jsx29, jsxs as jsxs18 } from "react/jsx-runtime";
+import { jsx as jsx29, jsxs as jsxs19 } from "react/jsx-runtime";
 function IconToggleGroup({
   value,
   onChange,
@@ -4343,9 +4488,9 @@ function IconToggleGroup({
       children: options.map((opt, idx) => {
         const isActive = value === opt.value;
         const Icon2 = opt.icon;
-        return /* @__PURE__ */ jsxs18(Fragment4, { children: [
+        return /* @__PURE__ */ jsxs19(Fragment5, { children: [
           idx > 0 ? /* @__PURE__ */ jsx29("div", { "aria-hidden": true, className: "sf:mx-0.5 sf:w-px sf:self-stretch sf:bg-border/70" }) : null,
-          /* @__PURE__ */ jsxs18(Tooltip, { children: [
+          /* @__PURE__ */ jsxs19(Tooltip, { children: [
             /* @__PURE__ */ jsx29(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx29(
               "button",
               {
@@ -4393,7 +4538,7 @@ import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva as cva2 } from "class-variance-authority";
 import { X as X2 } from "lucide-react";
 import * as React8 from "react";
-import { jsx as jsx31, jsxs as jsxs19 } from "react/jsx-runtime";
+import { jsx as jsx31, jsxs as jsxs20 } from "react/jsx-runtime";
 var Sheet = SheetPrimitive.Root;
 var SheetTrigger = SheetPrimitive.Trigger;
 var SheetClose = SheetPrimitive.Close;
@@ -4432,11 +4577,11 @@ var sheetVariants = cva2(
     }
   }
 );
-var SheetContent = React8.forwardRef(({ side = "right", className, children, ...props }, ref) => /* @__PURE__ */ jsxs19(SheetPortal, { children: [
+var SheetContent = React8.forwardRef(({ side = "right", className, children, ...props }, ref) => /* @__PURE__ */ jsxs20(SheetPortal, { children: [
   /* @__PURE__ */ jsx31(SheetOverlay, {}),
-  /* @__PURE__ */ jsxs19(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
+  /* @__PURE__ */ jsxs20(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
     children,
-    /* @__PURE__ */ jsxs19(SheetPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+    /* @__PURE__ */ jsxs20(SheetPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
       /* @__PURE__ */ jsx31(X2, { className: "sf:h-4 sf:w-4" }),
       /* @__PURE__ */ jsx31("span", { className: "sf:sr-only", children: "Close" })
     ] })
@@ -4484,8 +4629,8 @@ SheetDescription.displayName = SheetPrimitive.Description.displayName;
 // src/ui/slider.tsx
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as React9 from "react";
-import { jsx as jsx32, jsxs as jsxs20 } from "react/jsx-runtime";
-var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs20(
+import { jsx as jsx32, jsxs as jsxs21 } from "react/jsx-runtime";
+var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs21(
   SliderPrimitive.Root,
   {
     ref,
@@ -4559,7 +4704,7 @@ import {
   User
 } from "lucide-react";
 import { useState as useState10 } from "react";
-import { jsx as jsx34, jsxs as jsxs21 } from "react/jsx-runtime";
+import { jsx as jsx34, jsxs as jsxs22 } from "react/jsx-runtime";
 var HTML_BLOCK_DND_TYPE = "application/x-seeflow-create-html-block";
 var TOP_PRIMARY_SHAPES = [
   { shape: "rectangle", label: "Rectangle", commandId: "tool.rectangle", Icon: Square },
@@ -4626,14 +4771,14 @@ function CanvasToolbar({
       shape
     );
   };
-  return /* @__PURE__ */ jsxs21(
+  return /* @__PURE__ */ jsxs22(
     "div",
     {
       "data-testid": "canvas-toolbar",
       className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-card sf:p-1 sf:shadow-md sf:backdrop-blur",
       children: [
         TOP_PRIMARY_SHAPES.map(renderShapeButton),
-        /* @__PURE__ */ jsxs21(Popover, { open: shapePickerOpen, onOpenChange: setShapePickerOpen, children: [
+        /* @__PURE__ */ jsxs22(Popover, { open: shapePickerOpen, onOpenChange: setShapePickerOpen, children: [
           /* @__PURE__ */ jsx34(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx34(
             "button",
             {
@@ -4663,7 +4808,7 @@ function CanvasToolbar({
               children: /* @__PURE__ */ jsx34("div", { role: "menu", "aria-label": "More shapes", className: "sf:flex sf:flex-col sf:gap-0.5", children: ILLUSTRATIVE_SHAPES2.map(({ shape, label, commandId, Icon: Icon2 }) => {
                 const active = activeShape === shape;
                 const tooltip = getCommandTooltip(commandId);
-                return /* @__PURE__ */ jsxs21(
+                return /* @__PURE__ */ jsxs22(
                   "button",
                   {
                     type: "button",
@@ -4732,12 +4877,12 @@ function CanvasToolbar({
 import { FolderOpen, ImagePlus, PencilLine } from "lucide-react";
 import {
   useEffect as useEffect7,
-  useRef as useRef4,
+  useRef as useRef5,
   useState as useState11
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { jsx as jsx35, jsxs as jsxs22 } from "react/jsx-runtime";
+import { jsx as jsx35, jsxs as jsxs23 } from "react/jsx-runtime";
 function DetailPanel({
   flowId,
   node,
@@ -4779,7 +4924,7 @@ function DetailPanel({
       onOpenChange: (next) => {
         if (!next) onClose();
       },
-      children: /* @__PURE__ */ jsxs22(
+      children: /* @__PURE__ */ jsxs23(
         SheetContent,
         {
           side: "right",
@@ -4814,9 +4959,9 @@ function DetailPanel({
                 className: "sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
               }
             ),
-            inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
-                showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
+            inspectableNode ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
+                showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
                   showIconField && onIconChange ? /* @__PURE__ */ jsx35(
                     TitleIconTrigger,
                     {
@@ -4852,15 +4997,15 @@ function DetailPanel({
                   // still announces the entity to screen readers.
                   /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", className: "sf:sr-only", children: inspectableNode.id })
                 ),
-                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sf:sr-only", children: [
+                /* @__PURE__ */ jsxs23(SheetDescription, { className: "sf:sr-only", children: [
                   inspectableNode.id,
                   " \xB7 ",
                   inspectableNode.type
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs22("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-4", children: [
                 statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
-                /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+                /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
                   /* @__PURE__ */ jsx35(SectionLabel, { children: "Description" }),
                   /* @__PURE__ */ jsx35(
                     EditableField,
@@ -4876,7 +5021,7 @@ function DetailPanel({
                     }
                   )
                 ] }),
-                /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+                /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
                   /* @__PURE__ */ jsx35(SectionLabel, { children: "Detail" }),
                   /* @__PURE__ */ jsx35(
                     EditableField,
@@ -4895,8 +5040,8 @@ function DetailPanel({
                 ] }),
                 inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
-            ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
+            ] }) : connector ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
                 /* @__PURE__ */ jsx35(
                   SheetTitle,
                   {
@@ -4905,7 +5050,7 @@ function DetailPanel({
                     children: connector.label ?? "Connector"
                   }
                 ),
-                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sf:sr-only", children: [
+                /* @__PURE__ */ jsxs23(SheetDescription, { className: "sf:sr-only", children: [
                   connector.id,
                   " \xB7 ",
                   connector.kind
@@ -4934,8 +5079,8 @@ function EditableField({
   markdown = false
 }) {
   const [isEditing, setIsEditing] = useState11(false);
-  const editorRef = useRef4(null);
-  const cancelOnBlurRef = useRef4(false);
+  const editorRef = useRef5(null);
+  const cancelOnBlurRef = useRef5(false);
   useEffect7(() => {
     if (!isEditing) return;
     const el = editorRef.current;
@@ -5109,13 +5254,13 @@ function HtmlNodeSection({
       });
     }
   };
-  return /* @__PURE__ */ jsxs22(
+  return /* @__PURE__ */ jsxs23(
     "div",
     {
       className: "sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs",
       "data-testid": "detail-panel-html-node",
       children: [
-        /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+        /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
           /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[11px] sf:text-muted-foreground sf:uppercase sf:tracking-widest", children: "Path" }),
           /* @__PURE__ */ jsx35(
             "code",
@@ -5126,8 +5271,8 @@ function HtmlNodeSection({
             }
           )
         ] }),
-        canOpen || canReveal ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-wrap sf:items-center sf:gap-2", children: [
-          canOpen ? /* @__PURE__ */ jsxs22(
+        canOpen || canReveal ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-wrap sf:items-center sf:gap-2", children: [
+          canOpen ? /* @__PURE__ */ jsxs23(
             Button,
             {
               type: "button",
@@ -5146,7 +5291,7 @@ function HtmlNodeSection({
               ]
             }
           ) : null,
-          canReveal ? /* @__PURE__ */ jsxs22(
+          canReveal ? /* @__PURE__ */ jsxs23(
             Button,
             {
               type: "button",
@@ -5209,14 +5354,14 @@ function StatusSection({
   now = Date.now()
 }) {
   const entries = report.data ? Object.entries(report.data) : [];
-  return /* @__PURE__ */ jsxs22(
+  return /* @__PURE__ */ jsxs23(
     "section",
     {
       className: "sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs",
       "data-testid": "detail-panel-status",
       "data-state": report.state,
       children: [
-        /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-center sf:justify-between sf:gap-2", children: [
+        /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:items-center sf:justify-between sf:gap-2", children: [
           /* @__PURE__ */ jsx35(
             StatusBadge,
             {
@@ -5247,7 +5392,7 @@ function StatusSection({
           {
             "data-testid": "detail-panel-status-data",
             className: "sf:grid sf:grid-cols-[auto_1fr] sf:gap-x-3 sf:gap-y-1 sf:text-[11px]",
-            children: entries.map(([key, value]) => /* @__PURE__ */ jsxs22("div", { className: "contents", "data-testid": "detail-panel-status-data-row", children: [
+            children: entries.map(([key, value]) => /* @__PURE__ */ jsxs23("div", { className: "contents", "data-testid": "detail-panel-status-data-row", children: [
               /* @__PURE__ */ jsx35("dt", { className: "sf:truncate sf:font-medium sf:text-muted-foreground", children: key }),
               /* @__PURE__ */ jsx35("dd", { className: "sf:break-all sf:font-mono sf:text-foreground", children: formatStatusValue(value) })
             ] }, key))
@@ -5298,7 +5443,7 @@ function MarkdownContent({ value }) {
   );
 }
 function ConnectorSummary({ connector }) {
-  return /* @__PURE__ */ jsx35("div", { className: "sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs", children: /* @__PURE__ */ jsxs22("dl", { className: "divide-y", children: [
+  return /* @__PURE__ */ jsx35("div", { className: "sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs", children: /* @__PURE__ */ jsxs23("dl", { className: "divide-y", children: [
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Source", value: connector.source }),
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Target", value: connector.target }),
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Kind", value: connector.kind }),
@@ -5312,14 +5457,14 @@ function ConnectorSummary({ connector }) {
   ] }) });
 }
 function SummaryRow({ label, value }) {
-  return /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-start sf:gap-3 sf:py-2 sf:first:pt-0 sf:last:pb-0", children: [
+  return /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:items-start sf:gap-3 sf:py-2 sf:first:pt-0 sf:last:pb-0", children: [
     /* @__PURE__ */ jsx35("dt", { className: "sf:w-20 sf:shrink-0 sf:font-medium sf:text-muted-foreground", children: label }),
     /* @__PURE__ */ jsx35("dd", { className: "sf:flex-1 sf:break-all sf:font-mono", children: value })
   ] });
 }
 
 // src/components/embed-dialog.tsx
-import { useCallback as useCallback2, useRef as useRef5, useState as useState12 } from "react";
+import { useCallback as useCallback2, useRef as useRef6, useState as useState12 } from "react";
 
 // src/lib/build-embed-snippet.ts
 var EMBED_HOST = "https://seeflow.dev/embed";
@@ -5338,7 +5483,7 @@ var buildEmbedSnippet = (url) => {
 };
 
 // src/components/embed-dialog.tsx
-import { jsx as jsx36, jsxs as jsxs23 } from "react/jsx-runtime";
+import { jsx as jsx36, jsxs as jsxs24 } from "react/jsx-runtime";
 var TITLE = "Embed this canvas";
 var DESCRIPTION = "Paste this iframe into any page to embed the canvas.";
 var COPY_LABEL = "Copy snippet";
@@ -5349,7 +5494,7 @@ var COPIED_RESET_MS = 1500;
 function EmbedDialog({ open, onOpenChange, projectId }) {
   const snippet = buildEmbedSnippet(buildEmbedUrl(projectId));
   const [copyStatus, setCopyStatus] = useState12("idle");
-  const textareaRef = useRef5(null);
+  const textareaRef = useRef6(null);
   const handleCopy = useCallback2(async () => {
     try {
       await navigator.clipboard.writeText(snippet);
@@ -5364,8 +5509,8 @@ function EmbedDialog({ open, onOpenChange, projectId }) {
       }
     }
   }, [snippet]);
-  return /* @__PURE__ */ jsx36(Dialog, { open, onOpenChange, children: /* @__PURE__ */ jsxs23(DialogContent, { "data-testid": "embed-dialog-content", children: [
-    /* @__PURE__ */ jsxs23(DialogHeader, { children: [
+  return /* @__PURE__ */ jsx36(Dialog, { open, onOpenChange, children: /* @__PURE__ */ jsxs24(DialogContent, { "data-testid": "embed-dialog-content", children: [
+    /* @__PURE__ */ jsxs24(DialogHeader, { children: [
       /* @__PURE__ */ jsx36(DialogTitle, { children: TITLE }),
       /* @__PURE__ */ jsx36(DialogDescription, { children: DESCRIPTION })
     ] }),
@@ -5390,7 +5535,7 @@ function EmbedDialog({ open, onOpenChange, projectId }) {
         children: FALLBACK_HINT
       }
     ) : null,
-    /* @__PURE__ */ jsxs23(DialogFooter, { children: [
+    /* @__PURE__ */ jsxs24(DialogFooter, { children: [
       /* @__PURE__ */ jsx36(
         Button,
         {
@@ -5406,9 +5551,9 @@ function EmbedDialog({ open, onOpenChange, projectId }) {
 }
 
 // src/components/share-menu.tsx
-import { FileDown, Image as ImageIcon, Loader2 as Loader22, Share2, Square as Square2, Upload } from "lucide-react";
+import { FileDown, Image as ImageIcon, Loader2, Share2, Square as Square2, Upload } from "lucide-react";
 import { useCallback as useCallback3, useState as useState13 } from "react";
-import { Fragment as Fragment5, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx37, jsxs as jsxs25 } from "react/jsx-runtime";
 var SHARE_LABEL = "Share / download";
 var DOWNLOAD_PDF_LABEL = "Download PDF";
 var DOWNLOAD_PNG_LABEL = "Download PNG";
@@ -5451,8 +5596,8 @@ function ShareMenu({
   const showEmbed = enableEmbed && typeof projectId === "string" && projectId.length > 0;
   const showExportToCloud = mode === "edit" && Boolean(onExportToCloud);
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
-  return /* @__PURE__ */ jsxs24(Fragment5, { children: [
-    /* @__PURE__ */ jsxs24(DropdownMenu, { children: [
+  return /* @__PURE__ */ jsxs25(Fragment6, { children: [
+    /* @__PURE__ */ jsxs25(DropdownMenu, { children: [
       /* @__PURE__ */ jsx37(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx37(
         "button",
         {
@@ -5468,7 +5613,7 @@ function ShareMenu({
           children: /* @__PURE__ */ jsx37(Share2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
         }
       ) }),
-      /* @__PURE__ */ jsxs24(
+      /* @__PURE__ */ jsxs25(
         DropdownMenuContent,
         {
           align: "end",
@@ -5477,7 +5622,7 @@ function ShareMenu({
             e.preventDefault();
           },
           children: [
-            showPdf ? /* @__PURE__ */ jsxs24(
+            showPdf ? /* @__PURE__ */ jsxs25(
               DropdownMenuItem,
               {
                 "data-testid": "share-menu-pdf",
@@ -5487,12 +5632,12 @@ function ShareMenu({
                   handleDownloadPdf();
                 },
                 children: [
-                  downloadingPdf ? /* @__PURE__ */ jsx37(Loader22, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(FileDown, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  downloadingPdf ? /* @__PURE__ */ jsx37(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(FileDown, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
                   /* @__PURE__ */ jsx37("span", { children: DOWNLOAD_PDF_LABEL })
                 ]
               }
             ) : null,
-            showPng ? /* @__PURE__ */ jsxs24(
+            showPng ? /* @__PURE__ */ jsxs25(
               DropdownMenuItem,
               {
                 "data-testid": "share-menu-png",
@@ -5502,12 +5647,12 @@ function ShareMenu({
                   handleDownloadPng();
                 },
                 children: [
-                  downloadingPng ? /* @__PURE__ */ jsx37(Loader22, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(ImageIcon, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  downloadingPng ? /* @__PURE__ */ jsx37(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(ImageIcon, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
                   /* @__PURE__ */ jsx37("span", { children: DOWNLOAD_PNG_LABEL })
                 ]
               }
             ) : null,
-            showEmbed ? /* @__PURE__ */ jsxs24(
+            showEmbed ? /* @__PURE__ */ jsxs25(
               DropdownMenuItem,
               {
                 "data-testid": "share-menu-embed",
@@ -5521,7 +5666,7 @@ function ShareMenu({
                 ]
               }
             ) : null,
-            showExportToCloud ? /* @__PURE__ */ jsxs24(
+            showExportToCloud ? /* @__PURE__ */ jsxs25(
               DropdownMenuItem,
               {
                 "data-testid": "share-menu-export-cloud",
@@ -5543,9 +5688,9 @@ function ShareMenu({
 }
 
 // src/components/restart-demo-button.tsx
-import { Loader2 as Loader23, RefreshCw } from "lucide-react";
+import { Loader2 as Loader22, RefreshCw } from "lucide-react";
 import { useCallback as useCallback4, useState as useState14 } from "react";
-import { jsx as jsx38, jsxs as jsxs25 } from "react/jsx-runtime";
+import { jsx as jsx38, jsxs as jsxs26 } from "react/jsx-runtime";
 function RestartDemoButton({ onRestartDemo }) {
   const [pending, setPending] = useState14(false);
   const handleClick = useCallback4(() => {
@@ -5555,7 +5700,7 @@ function RestartDemoButton({ onRestartDemo }) {
       setPending(false);
     });
   }, [onRestartDemo, pending]);
-  return /* @__PURE__ */ jsxs25(Tooltip, { children: [
+  return /* @__PURE__ */ jsxs26(Tooltip, { children: [
     /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
       Button,
       {
@@ -5568,7 +5713,7 @@ function RestartDemoButton({ onRestartDemo }) {
         disabled: pending,
         onClick: handleClick,
         className: "sf:h-8 sf:w-8",
-        children: pending ? /* @__PURE__ */ jsx38(Loader23, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx38(RefreshCw, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
+        children: pending ? /* @__PURE__ */ jsx38(Loader22, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx38(RefreshCw, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
       }
     ) }),
     /* @__PURE__ */ jsx38(TooltipContent, { side: "bottom", children: "Restart demo" })
@@ -5578,7 +5723,7 @@ function RestartDemoButton({ onRestartDemo }) {
 // src/components/selection-resize-overlay.tsx
 import { useReactFlow } from "@xyflow/react";
 import {
-  useRef as useRef6,
+  useRef as useRef7,
   useState as useState15
 } from "react";
 var SELECTION_OVERLAY_PADDING = 8;
@@ -5692,8 +5837,8 @@ function SelectionResizeOverlay({
   const reactFlow = useReactFlow();
   const [dragState, setDragState] = useState15(null);
   const [previewRect, setPreviewRect] = useState15(null);
-  const shiftHeldRef = useRef6(false);
-  const liveDispatchRafRef = useRef6(null);
+  const shiftHeldRef = useRef7(false);
+  const liveDispatchRafRef = useRef7(null);
   if (!selectionEligibleForOverlay(selectedNodes)) return null;
   const unionRect = computeUnionRect(selectedNodes);
   if (!unionRect) return null;
@@ -5809,7 +5954,7 @@ function SelectionResizeOverlay({
 import {
   ArrowLeftRight,
   ArrowRight,
-  Check,
+  Check as Check3,
   Minus,
   MoveLeft,
   Squircle,
@@ -5817,7 +5962,7 @@ import {
   Type as Type2
 } from "lucide-react";
 import { useEffect as useEffect8, useState as useState16 } from "react";
-import { Fragment as Fragment6, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx39, jsxs as jsxs27 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
 var DEFAULT_BORDER_SIZE = 3;
@@ -5988,7 +6133,7 @@ function StyleStrip({
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);
     };
-    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
+    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs27(
       "div",
       {
         "data-testid": "canvas-style-strip",
@@ -6007,7 +6152,7 @@ function StyleStrip({
               onSelect: applyIconColor
             }
           ),
-          showChangeIcon ? /* @__PURE__ */ jsxs26(Tooltip, { children: [
+          showChangeIcon ? /* @__PURE__ */ jsxs27(Tooltip, { children: [
             /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
               "button",
               {
@@ -6052,7 +6197,7 @@ function StyleStrip({
     const previewImageCornerRadius = (n) => {
       for (const node of nodes) onStyleNodePreview?.(node.id, { cornerRadius: n });
     };
-    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
+    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs27(
       "div",
       {
         "data-testid": "canvas-style-strip",
@@ -6164,7 +6309,7 @@ function StyleStrip({
       }
     );
   };
-  return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
+  return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs27(
     "div",
     {
       "data-testid": "canvas-style-strip",
@@ -6177,7 +6322,7 @@ function StyleStrip({
             tooltip: "Colors",
             ariaLabel: "colors",
             renderIcon: renderColorsTrigger,
-            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+            children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
               /* @__PURE__ */ jsx39(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx39(
                 ColorSwatchGrid,
                 {
@@ -6215,7 +6360,7 @@ function StyleStrip({
               const Icon2 = (pureConnector ? CONNECTOR_STYLE_OPTIONS.find((o) => o.value === connectorStyleActive)?.icon : BORDER_STYLE_OPTIONS.find((o) => o.value === borderStyleActiveNode)?.icon) ?? LineSolidIcon;
               return /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+            children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
               /* @__PURE__ */ jsx39(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx39(
                 IconToggleGroup,
                 {
@@ -6256,7 +6401,7 @@ function StyleStrip({
             tooltip: "Text",
             ariaLabel: "text",
             renderIcon: () => /* @__PURE__ */ jsx39(Type2, { className: "sf:h-4 sf:w-4" }),
-            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+            children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
               /* @__PURE__ */ jsx39(
                 PopoverSection,
                 {
@@ -6387,8 +6532,8 @@ function SwatchButton({
 }) {
   const [open, setOpen] = useState16(false);
   const isUnset = activeToken === "default";
-  return /* @__PURE__ */ jsxs26(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs26(Tooltip, { children: [
+  return /* @__PURE__ */ jsxs27(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs27(Tooltip, { children: [
       /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
         "button",
         {
@@ -6453,7 +6598,7 @@ function SwatchButton({
               ),
               style: swatchPreviewStyle(token, previewKind),
               children: isActive ? /* @__PURE__ */ jsx39(
-                Check,
+                Check3,
                 {
                   className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
                   style: { color: "hsl(var(--foreground))" }
@@ -6501,7 +6646,7 @@ function ColorSwatchGrid({
             ),
             style: swatchPreviewStyle(token, previewKind),
             children: isActive ? /* @__PURE__ */ jsx39(
-              Check,
+              Check3,
               {
                 className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
                 style: { color: "hsl(var(--foreground))" }
@@ -6519,7 +6664,7 @@ function PopoverSection({
   testId,
   children
 }) {
-  return /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:flex-col sf:gap-1.5", "data-testid": testId, children: [
+  return /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:flex-col sf:gap-1.5", "data-testid": testId, children: [
     /* @__PURE__ */ jsx39("div", { className: "sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: label }),
     children
   ] });
@@ -6532,8 +6677,8 @@ function PopoverButton({
   children
 }) {
   const [open, setOpen] = useState16(false);
-  return /* @__PURE__ */ jsxs26(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs26(Tooltip, { children: [
+  return /* @__PURE__ */ jsxs27(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs27(Tooltip, { children: [
       /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
         "button",
         {
@@ -6572,7 +6717,7 @@ function SliderControl({
     setPicked(false);
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
-  return /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-48 sf:items-center sf:gap-3", children: [
+  return /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:w-48 sf:items-center sf:gap-3", children: [
     /* @__PURE__ */ jsx39(
       Slider,
       {
@@ -6597,7 +6742,7 @@ function SliderControl({
       {
         "data-testid": `${testId}-value`,
         className: "sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground",
-        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs26(Fragment6, { children: [
+        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs27(Fragment7, { children: [
           local,
           suffix
         ] })
@@ -6629,7 +6774,7 @@ import {
   useEffect as useEffect9,
   useImperativeHandle,
   useMemo as useMemo2,
-  useRef as useRef7,
+  useRef as useRef8,
   useState as useState18
 } from "react";
 
@@ -6732,7 +6877,7 @@ var useCanvasExport = ({
 
 // src/components/seeflow-canvas.tsx
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment7, jsx as jsx40, jsxs as jsxs27 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx40, jsxs as jsxs28 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -7190,6 +7335,7 @@ function SeeflowCanvasImpl(props, ref) {
     // parent supplies.
     adapter,
     projectId,
+    fileBaseUrl,
     nodes,
     connectors,
     selectedNodeIds,
@@ -7318,7 +7464,7 @@ function SeeflowCanvasImpl(props, ref) {
     ]
   );
   const isEditMode = mode === "edit";
-  const flagsRef = useRef7(flags);
+  const flagsRef = useRef8(flags);
   useEffect9(() => {
     flagsRef.current = flags;
   }, [flags]);
@@ -7331,12 +7477,12 @@ function SeeflowCanvasImpl(props, ref) {
   const statusByNode = runtime?.statuses;
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
   const connectorOverrides = runtime?.pendingOverrides?.connectors;
-  const wrapperRef = useRef7(null);
-  const rfInstanceRef = useRef7(null);
-  const didMountFitRef = useRef7(false);
-  const pendingFitRef = useRef7(false);
-  const signalEffectMountedRef = useRef7(false);
-  const resolvedAutoFitViewRef = useRef7(resolvedAutoFitView);
+  const wrapperRef = useRef8(null);
+  const rfInstanceRef = useRef8(null);
+  const didMountFitRef = useRef8(false);
+  const pendingFitRef = useRef8(false);
+  const signalEffectMountedRef = useRef8(false);
+  const resolvedAutoFitViewRef = useRef8(resolvedAutoFitView);
   resolvedAutoFitViewRef.current = resolvedAutoFitView;
   useEffect9(() => {
     if (didMountFitRef.current) return;
@@ -7347,10 +7493,10 @@ function SeeflowCanvasImpl(props, ref) {
     rfInstance.fitView(FIT_VIEW_OPTIONS);
     didMountFitRef.current = true;
   }, [nodes, resolvedAutoFitView.onMount]);
-  const storeApiRef = useRef7(null);
+  const storeApiRef = useRef8(null);
   const drawShape = activeShape;
   const setDrawShape = onSelectShape;
-  const editHandlesRef = useRef7(/* @__PURE__ */ new Map());
+  const editHandlesRef = useRef8(/* @__PURE__ */ new Map());
   const registerEditHandle = useCallback6((id, enter) => {
     editHandlesRef.current.set(id, enter);
     return () => {
@@ -7359,15 +7505,15 @@ function SeeflowCanvasImpl(props, ref) {
     };
   }, []);
   const [connecting, setConnecting] = useState18(false);
-  const connectingRef = useRef7(false);
+  const connectingRef = useRef8(false);
   useEffect9(() => {
     connectingRef.current = connecting;
   }, [connecting]);
-  const connectCancelledRef = useRef7(false);
-  const reconnectCancelledRef = useRef7(false);
-  const isReconnectingRef = useRef7(false);
+  const connectCancelledRef = useRef8(false);
+  const reconnectCancelledRef = useRef8(false);
+  const isReconnectingRef = useRef8(false);
   const [dropPopover, setDropPopover] = useState18(null);
-  const dropPopoverRef = useRef7(null);
+  const dropPopoverRef = useRef8(null);
   useEffect9(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
@@ -7378,8 +7524,8 @@ function SeeflowCanvasImpl(props, ref) {
     () => buildReconnectAwareConnectionLine(isReconnectingRef),
     []
   );
-  const connectSourceNodeIdRef = useRef7(null);
-  const connectTargetNodeIdRef = useRef7(null);
+  const connectSourceNodeIdRef = useRef8(null);
+  const connectTargetNodeIdRef = useRef8(null);
   const setConnectSource = useCallback6((nodeId) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
@@ -7436,10 +7582,10 @@ function SeeflowCanvasImpl(props, ref) {
   }, [connecting, setConnectTarget]);
   const [drawStart, setDrawStart] = useState18(null);
   const [drawCurrent, setDrawCurrent] = useState18(null);
-  const drawShapeRef = useRef7(null);
-  const drawStartRef = useRef7(null);
-  const drawCurrentRef = useRef7(null);
-  const drawingRef = useRef7(false);
+  const drawShapeRef = useRef8(null);
+  const drawStartRef = useRef8(null);
+  const drawCurrentRef = useRef8(null);
+  const drawingRef = useRef8(false);
   useEffect9(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
@@ -7560,9 +7706,9 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [exitDrawMode, onCreateShapeNode]
   );
-  const draggingRef = useRef7(false);
-  const resizingRef = useRef7(false);
-  const viewModePositionsRef = useRef7(/* @__PURE__ */ new Map());
+  const draggingRef = useRef8(false);
+  const resizingRef = useRef8(false);
+  const viewModePositionsRef = useRef8(/* @__PURE__ */ new Map());
   const flushPendingFit = useCallback6(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
@@ -7593,8 +7739,8 @@ function SeeflowCanvasImpl(props, ref) {
   const [contextOnNode, setContextOnNode] = useState18(false);
   const [contextNodeType, setContextNodeType] = useState18(null);
   const [contextEndpoint, setContextEndpoint] = useState18(null);
-  const contextNodeIdRef = useRef7(null);
-  const contextTriggerRef = useRef7(null);
+  const contextNodeIdRef = useRef8(null);
+  const contextTriggerRef = useRef8(null);
   useEffect9(() => {
     if (!contextMenuPos) return;
     const trigger = contextTriggerRef.current;
@@ -7711,8 +7857,11 @@ function SeeflowCanvasImpl(props, ref) {
         data: {
           ...merged.data,
           // US-004: file-backed renderers (imageNode, future htmlNode) read
-          // `projectId` to construct project-scoped file URLs.
+          // `projectId` to construct project-scoped file URLs. `fileBaseUrl`
+          // (optional) lets embedders override the URL prefix so file fetches
+          // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
+          fileBaseUrl,
           // US-008: imageNode placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every imageNode picks it up uniformly; non-imageNodes ignore it.
@@ -7780,6 +7929,7 @@ function SeeflowCanvasImpl(props, ref) {
     return [...fromServer, ...fromOverrides];
   }, [
     projectId,
+    fileBaseUrl,
     nodes,
     selectedNodeIdSet,
     runs,
@@ -7804,25 +7954,25 @@ function SeeflowCanvasImpl(props, ref) {
   useEffect9(() => {
     rfNodesRef.current = rfNodes;
   }, [rfNodes]);
-  const selectedIdSetRef = useRef7(selectedNodeIdSet);
+  const selectedIdSetRef = useRef8(selectedNodeIdSet);
   useEffect9(() => {
     selectedIdSetRef.current = selectedNodeIdSet;
   }, [selectedNodeIdSet]);
-  const onSelectionChangeRef = useRef7(onSelectionChange);
+  const onSelectionChangeRef = useRef8(onSelectionChange);
   useEffect9(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
-  const selectedConnIdSetRef = useRef7(selectedConnectorIdSet);
+  const selectedConnIdSetRef = useRef8(selectedConnectorIdSet);
   useEffect9(() => {
     selectedConnIdSetRef.current = selectedConnectorIdSet;
   }, [selectedConnectorIdSet]);
-  const rfNodesRef = useRef7(sourceNodes);
-  const marqueeActiveRef = useRef7(false);
-  const marqueeSelectedNodeIdsRef = useRef7(/* @__PURE__ */ new Set());
-  const marqueeSelectedEdgeIdsRef = useRef7(/* @__PURE__ */ new Set());
-  const additiveBaseNodeIdsRef = useRef7(/* @__PURE__ */ new Set());
-  const additiveBaseEdgeIdsRef = useRef7(/* @__PURE__ */ new Set());
-  const tentativeAdditiveBaseRef = useRef7(null);
+  const rfNodesRef = useRef8(sourceNodes);
+  const marqueeActiveRef = useRef8(false);
+  const marqueeSelectedNodeIdsRef = useRef8(/* @__PURE__ */ new Set());
+  const marqueeSelectedEdgeIdsRef = useRef8(/* @__PURE__ */ new Set());
+  const additiveBaseNodeIdsRef = useRef8(/* @__PURE__ */ new Set());
+  const additiveBaseEdgeIdsRef = useRef8(/* @__PURE__ */ new Set());
+  const tentativeAdditiveBaseRef = useRef8(null);
   const onNodesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseNodeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.nodeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -7863,7 +8013,7 @@ function SeeflowCanvasImpl(props, ref) {
     selectedIdSetRef.current = new Set(sel);
     cb(sel, [...selectedConnIdSetRef.current]);
   }, []);
-  const rfEdgesRef = useRef7([]);
+  const rfEdgesRef = useRef8([]);
   const onEdgesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseEdgeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.edgeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -8098,8 +8248,8 @@ function SeeflowCanvasImpl(props, ref) {
     );
   }, []);
   const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
-  const connectSucceededRef = useRef7(false);
-  const connectStartRef = useRef7(
+  const connectSucceededRef = useRef8(false);
+  const connectStartRef = useRef8(
     null
   );
   const onConnect = useCallback6(
@@ -8185,7 +8335,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onCreateConnector, clearConnectMarkers, isValidConnection]
   );
-  const reconnectSucceededRef = useRef7(false);
+  const reconnectSucceededRef = useRef8(false);
   const onReconnect = useCallback6(
     (oldEdge, newConnection) => {
       if (!onReconnectConnector) return;
@@ -8476,8 +8626,8 @@ function SeeflowCanvasImpl(props, ref) {
       onContextMenuCapture: onWrapperContextMenuCapture,
       onDragOver: onWrapperDragOver,
       onDrop: onWrapperDrop,
-      children: /* @__PURE__ */ jsxs27(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
-        /* @__PURE__ */ jsxs27(
+      children: /* @__PURE__ */ jsxs28(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
+        /* @__PURE__ */ jsxs28(
           ReactFlow,
           {
             nodes: rfNodes,
@@ -8582,7 +8732,7 @@ function SeeflowCanvasImpl(props, ref) {
               /* @__PURE__ */ jsx40(StoreApiBridge, { storeApiRef }),
               /* @__PURE__ */ jsx40(ZoomBridge, { wrapperRef }),
               /* @__PURE__ */ jsx40(Background, { gap: 12, size: 0.6 }),
-              flags.showControls ? /* @__PURE__ */ jsxs27(Controls, { showInteractive: false, showFitView: false, children: [
+              flags.showControls ? /* @__PURE__ */ jsxs28(Controls, { showInteractive: false, showFitView: false, children: [
                 /* @__PURE__ */ jsx40(
                   ControlButton,
                   {
@@ -8615,7 +8765,7 @@ function SeeflowCanvasImpl(props, ref) {
                   onMultiResize
                 }
               ) : null,
-              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
+              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
                 flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx40(
                   CanvasToolbar,
                   {
@@ -8642,7 +8792,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 ) : null
               ] }) }) : null,
-              flags.showShareMenu || flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(Panel, { position: "top-right", children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:items-center sf:gap-1", children: [
+              flags.showShareMenu || flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(Panel, { position: "top-right", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:items-center sf:gap-1", children: [
                 flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(RestartDemoButton, { onRestartDemo }) : null,
                 flags.showShareMenu ? /* @__PURE__ */ jsx40(
                   ShareMenu,
@@ -8695,7 +8845,7 @@ function SeeflowCanvasImpl(props, ref) {
             })()
           }
         ) : null,
-        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs27(
+        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs28(
           ContextMenu,
           {
             onOpenChange: (open) => {
@@ -8722,7 +8872,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsxs27(ContextMenuContent, { "data-testid": "node-context-menu", children: [
+              /* @__PURE__ */ jsxs28(ContextMenuContent, { "data-testid": "node-context-menu", children: [
                 contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
@@ -8731,11 +8881,11 @@ function SeeflowCanvasImpl(props, ref) {
                     children: "Unpin"
                   }
                 ) : null,
-                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs27(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
+                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs28(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
                   "Copy",
                   /* @__PURE__ */ jsx40(ContextMenuShortcut, { children: copyShortcut })
                 ] }) : null,
-                onPasteAt ? /* @__PURE__ */ jsxs27(
+                onPasteAt ? /* @__PURE__ */ jsxs28(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-paste",
@@ -8757,7 +8907,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 ) : null,
                 contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
-                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs27(Fragment7, { children: [
+                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs28(Fragment8, { children: [
                   /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
@@ -8820,7 +8970,7 @@ function SeeflowCanvasImpl(props, ref) {
             ]
           }
         ) : null,
-        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs27(
+        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs28(
           Popover,
           {
             open: !!dropPopover,
@@ -8859,7 +9009,7 @@ function SeeflowCanvasImpl(props, ref) {
                       role: "menu",
                       "aria-label": "Create connected node",
                       className: "sf:flex sf:flex-col sf:gap-0.5",
-                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs27(
+                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs28(
                         "button",
                         {
                           type: "button",
@@ -9027,7 +9177,7 @@ export {
   Slider,
   StateNode,
   StatusBadge,
-  StatusPill,
+  StatusIconPill,
   StatusSection,
   StyleStrip,
   TOOLBAR_SHAPES,
@@ -9062,6 +9212,7 @@ export {
   createDebouncer,
   createRestAdapter,
   dashFor,
+  deriveVisualStatus,
   endpointFromPin,
   endpointToPin,
   eventTargetIsOtherNode,

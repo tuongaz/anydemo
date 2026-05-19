@@ -335,6 +335,17 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * project id).
    */
   projectId?: string;
+  /**
+   * Optional override for the file-serving URL prefix used by file-backed
+   * nodes (imageNode, htmlNode). Default `/api/projects` is correct for the
+   * studio (same-origin). Embedders that serve files from a different host
+   * or route shape pass an absolute prefix here — e.g. the public viewer
+   * passes `https://seeflow.dev/api/flows` so files resolve to
+   * `https://seeflow.dev/api/flows/:id/files/:path` instead of falling back
+   * to the viewer's own origin. Threaded into each node's runtime `data`
+   * alongside `projectId`.
+   */
+  fileBaseUrl?: string;
   nodes: FlowNode[];
   connectors: Connector[];
   /** Currently selected node ids (US-019: multi-select). */
@@ -1649,6 +1660,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // parent supplies.
     adapter,
     projectId,
+    fileBaseUrl,
     nodes,
     connectors,
     selectedNodeIds,
@@ -2522,8 +2534,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         data: {
           ...merged.data,
           // US-004: file-backed renderers (imageNode, future htmlNode) read
-          // `projectId` to construct project-scoped file URLs.
+          // `projectId` to construct project-scoped file URLs. `fileBaseUrl`
+          // (optional) lets embedders override the URL prefix so file fetches
+          // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
+          fileBaseUrl,
           // US-008: imageNode placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every imageNode picks it up uniformly; non-imageNodes ignore it.
@@ -2637,6 +2652,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return [...fromServer, ...fromOverrides];
   }, [
     projectId,
+    fileBaseUrl,
     nodes,
     selectedNodeIdSet,
     runs,

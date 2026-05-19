@@ -27,6 +27,13 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
    * `htmlPath` is the only on-disk reference.
    */
   projectId?: string;
+  /**
+   * Optional override for the file-serving URL prefix. Mirrors the same field
+   * on `ImageNodeRuntimeData`. Threaded down from `<SeeflowCanvas>` so
+   * embedders (e.g. the public viewer) can point file fetches at a different
+   * host/route shape than the default `/api/projects`. Not persisted to disk.
+   */
+  fileBaseUrl?: string;
   // When wired (edit mode only), the renderer's "Fit to content" button calls
   // this. The host's handler PATCHes { autoSize: true } through the adapter,
   // which strips width/height server-side per the autoSize invariant.
@@ -86,7 +93,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   }, []);
 
   const measureRef = useRef<HTMLDivElement | null>(null);
-  const content = useHtmlContent(data.projectId, data.htmlPath);
+  const content = useHtmlContent(data.projectId, data.htmlPath, data.fileBaseUrl);
   // Observer is mounted only when auto-sizing + content is loaded. Keeping
   // the `useReactFlow()` call inside a sub-component (rather than at the top
   // of HtmlNodeImpl) lets the hook-shim renderer in tests avoid touching

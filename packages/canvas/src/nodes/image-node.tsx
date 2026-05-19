@@ -21,6 +21,13 @@ export type ImageNodeRuntimeData = ImageNodeData & {
    */
   projectId?: string;
   /**
+   * Optional override for the file-serving URL prefix. Threaded down from
+   * `<SeeflowCanvas>` so embedders (e.g. the public viewer) can point file
+   * fetches at a different host/route shape than the default `/api/projects`.
+   * Not persisted to disk.
+   */
+  fileBaseUrl?: string;
+  /**
    * US-008: click-to-retry callback dispatched when the user clicks the
    * 'Upload failed' placeholder. Injected by demo-canvas's `sourceNodes`
    * builder. Absent → the placeholder still renders, but clicking is inert.
@@ -135,7 +142,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         </button>
       ) : (
         <img
-          src={data.projectId ? fileUrl(data.projectId, data.path) : ''}
+          src={data.projectId ? fileUrl(data.projectId, data.path, data.fileBaseUrl) : ''}
           alt={data.alt ?? ''}
           // `block` strips the inline-element baseline gap that would otherwise
           // leave a thin strip below the image inside the node container.
