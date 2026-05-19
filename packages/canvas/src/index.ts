@@ -242,6 +242,9 @@ export {
 } from './components/detail-panel.tsx';
 export type { DetailPanelProps } from './components/detail-panel.tsx';
 
+export { EmbedDialog } from './components/embed-dialog.tsx';
+export type { EmbedDialogProps } from './components/embed-dialog.tsx';
+
 export {
   filterIcons,
   IconPickerBody,
@@ -254,6 +257,9 @@ export type {
 
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
+
+export { ShareMenu } from './components/share-menu.tsx';
+export type { ShareMenuMode, ShareMenuProps } from './components/share-menu.tsx';
 
 export {
   computeNewRectFromAnchorDrag,
@@ -294,6 +300,7 @@ export type {
   ClipboardShortcutDeps,
   ClipboardShortcutEventLike,
   ResolvedCanvasFlags,
+  SeeflowCanvasHandle,
   SeeflowCanvasMode,
   SeeflowCanvasProps,
 } from './components/seeflow-canvas.tsx';

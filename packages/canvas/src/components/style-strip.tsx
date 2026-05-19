@@ -355,7 +355,7 @@ export function StyleStrip({
       <TooltipProvider delayDuration={300}>
         <div
           data-testid="canvas-style-strip"
-          className="sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur"
+          className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
         >
           <SwatchButton
             testId="style-strip-icon-color"
@@ -377,14 +377,14 @@ export function StyleStrip({
                   title="Change icon"
                   onClick={onChangeIconClick}
                   className={cn(
-                    'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground',
-                    'focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1',
+                    'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground',
+                    'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
                   )}
                 >
-                  <Sticker className="sf-h-4 sf-w-4" />
+                  <Sticker className="sf:h-4 sf:w-4" />
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="right" className="sf-px-2 sf-py-1 sf-text-xs">
+              <TooltipContent side="right" className="sf:px-2 sf:py-1 sf:text-xs">
                 Change icon
               </TooltipContent>
             </Tooltip>
@@ -429,7 +429,7 @@ export function StyleStrip({
       <TooltipProvider delayDuration={300}>
         <div
           data-testid="canvas-style-strip"
-          className="sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur"
+          className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
         >
           <SwatchButton
             testId="style-strip-image-border-color"
@@ -449,7 +449,7 @@ export function StyleStrip({
               const Icon =
                 BORDER_STYLE_OPTIONS.find((o) => o.value === imageBorderStyle)?.icon ??
                 LineSolidIcon;
-              return <Icon className="sf-h-4 sf-w-4" />;
+              return <Icon className="sf:h-4 sf:w-4" />;
             }}
           >
             <IconToggleGroup<'solid' | 'dashed' | 'dotted'>
@@ -464,7 +464,7 @@ export function StyleStrip({
             tooltip="Border width"
             ariaLabel="image border width"
             renderIcon={() => (
-              <span className="sf-font-mono sf-text-[10px] sf-tabular-nums">
+              <span className="sf:font-mono sf:text-[10px] sf:tabular-nums">
                 {imageBorderWidth}
               </span>
             )}
@@ -484,7 +484,7 @@ export function StyleStrip({
             testId="style-strip-image-corner-radius"
             tooltip="Corners"
             ariaLabel="image corner radius"
-            renderIcon={() => <Squircle className="sf-h-4 sf-w-4" />}
+            renderIcon={() => <Squircle className="sf:h-4 sf:w-4" />}
           >
             <SliderControl
               value={firstImage?.data.cornerRadius}
@@ -521,7 +521,7 @@ export function StyleStrip({
       const edge = COLOR_TOKENS[borderColorActive].edge;
       return (
         <span
-          className="sf-inline-block sf-h-5 sf-w-5 sf-rounded-full sf-ring-1 sf-ring-border"
+          className="sf:inline-block sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border"
           style={{ backgroundColor: edge }}
         />
       );
@@ -530,7 +530,7 @@ export function StyleStrip({
     const fillHex = COLOR_TOKENS[backgroundActive].background;
     return (
       <span
-        className="sf-inline-block sf-h-5 sf-w-5 sf-rounded-md sf-ring-1 sf-ring-border"
+        className="sf:inline-block sf:h-5 sf:w-5 sf:rounded-md sf:ring-1 sf:ring-border"
         style={{ backgroundColor: fillHex, border: `2px solid ${borderHex}` }}
       />
     );
@@ -543,7 +543,7 @@ export function StyleStrip({
     <TooltipProvider delayDuration={300}>
       <div
         data-testid="canvas-style-strip"
-        className="sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur"
+        className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
       >
         {!isTextShape ? (
           <PopoverButton
@@ -552,7 +552,7 @@ export function StyleStrip({
             ariaLabel="colors"
             renderIcon={renderColorsTrigger}
           >
-            <div className="sf-flex sf-w-56 sf-flex-col sf-gap-3">
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
               <PopoverSection label={colorTooltip}>
                 <ColorSwatchGrid
                   testId="style-strip-border-color"
@@ -592,10 +592,10 @@ export function StyleStrip({
                   ? CONNECTOR_STYLE_OPTIONS.find((o) => o.value === connectorStyleActive)?.icon
                   : BORDER_STYLE_OPTIONS.find((o) => o.value === borderStyleActiveNode)?.icon) ??
                 LineSolidIcon;
-              return <Icon className="sf-h-4 sf-w-4" />;
+              return <Icon className="sf:h-4 sf:w-4" />;
             }}
           >
-            <div className="sf-flex sf-w-56 sf-flex-col sf-gap-3">
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
               <PopoverSection label="Style" testId="style-strip-border-style">
                 {pureConnector ? (
                   <IconToggleGroup<ConnectorStyle>
@@ -636,9 +636,9 @@ export function StyleStrip({
             testId="style-strip-text"
             tooltip="Text"
             ariaLabel="text"
-            renderIcon={() => <Type className="sf-h-4 sf-w-4" />}
+            renderIcon={() => <Type className="sf:h-4 sf:w-4" />}
           >
-            <div className="sf-flex sf-w-56 sf-flex-col sf-gap-3">
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
               <PopoverSection
                 label="Size"
                 testId={pureConnector ? 'style-strip-connector-font-size' : 'style-strip-font-size'}
@@ -685,7 +685,7 @@ export function StyleStrip({
             testId="style-strip-corner-radius"
             tooltip="Corners"
             ariaLabel="corner radius"
-            renderIcon={() => <Squircle className="sf-h-4 sf-w-4" />}
+            renderIcon={() => <Squircle className="sf:h-4 sf:w-4" />}
           >
             <SliderControl
               value={firstVisualNode?.data.cornerRadius}
@@ -708,7 +708,7 @@ export function StyleStrip({
             ariaLabel="connector path"
             renderIcon={() => {
               const Icon = PATH_OPTIONS.find((o) => o.value === pathActive)?.icon ?? PathCurveIcon;
-              return <Icon className="sf-h-4 sf-w-4" />;
+              return <Icon className="sf:h-4 sf:w-4" />;
             }}
           >
             <IconToggleGroup<ConnectorPath>
@@ -728,7 +728,7 @@ export function StyleStrip({
             renderIcon={() => {
               const Icon =
                 DIRECTION_OPTIONS.find((o) => o.value === directionActive)?.icon ?? ArrowRight;
-              return <Icon className="sf-h-4 sf-w-4" />;
+              return <Icon className="sf:h-4 sf:w-4" />;
             }}
           >
             <IconToggleGroup<ConnectorDirection>
@@ -797,8 +797,8 @@ function SwatchButton({
               aria-label={`${ariaLabel}: ${activeToken}`}
               title={tooltip}
               className={cn(
-                'sf-group sf-relative sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground',
-                'focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1',
+                'sf:group sf:relative sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground',
+                'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
               )}
             >
               {/*
@@ -807,13 +807,13 @@ function SwatchButton({
               */}
               <span
                 data-testid={innerTestId}
-                className="sf-relative sf-h-5 sf-w-5 sf-rounded-full sf-ring-1 sf-ring-border"
+                className="sf:relative sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border"
                 style={swatchTriggerFillStyle(activeToken, previewKind)}
               >
                 {isUnset ? (
                   <span
                     aria-hidden="true"
-                    className="sf-pointer-events-none sf-absolute sf-inset-0 sf-rounded-full"
+                    className="sf:pointer-events-none sf:absolute sf:inset-0 sf:rounded-full"
                     style={{
                       backgroundImage:
                         'linear-gradient(45deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%)',
@@ -826,17 +826,17 @@ function SwatchButton({
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="right" className="sf-px-2 sf-py-1 sf-text-xs">
+        <TooltipContent side="right" className="sf:px-2 sf:py-1 sf:text-xs">
           {tooltip}
         </TooltipContent>
       </Tooltip>
       <PopoverContent
         side="right"
         align="start"
-        className="sf-w-auto sf-p-2"
+        className="sf:w-auto sf:p-2"
         data-testid={`${innerTestId}-popover`}
       >
-        <div className="sf-grid sf-grid-cols-4 sf-gap-1.5">
+        <div className="sf:grid sf:grid-cols-4 sf:gap-1.5">
           {PALETTE_TOKENS.map((token) => {
             const isActive = activeToken === token;
             return (
@@ -853,16 +853,16 @@ function SwatchButton({
                 aria-pressed={isActive}
                 title={token}
                 className={cn(
-                  'sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all',
+                  'sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all',
                   isActive
-                    ? 'sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover'
-                    : 'hover:sf-scale-110',
+                    ? 'sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover'
+                    : 'sf:hover:scale-110',
                 )}
                 style={swatchPreviewStyle(token, previewKind)}
               >
                 {isActive ? (
                   <Check
-                    className="sf-h-3 sf-w-3 sf-drop-shadow-sm"
+                    className="sf:h-3 sf:w-3 sf:drop-shadow-sm"
                     style={{ color: 'hsl(var(--foreground))' }}
                   />
                 ) : null}
@@ -900,7 +900,7 @@ function ColorSwatchGrid({
       data-testid={testId}
       data-active-token={activeToken}
       data-inner-testid={innerTestId}
-      className="sf-grid sf-grid-cols-4 sf-gap-1.5"
+      className="sf:grid sf:grid-cols-4 sf:gap-1.5"
     >
       {PALETTE_TOKENS.map((token) => {
         const isActive = activeToken === token;
@@ -915,16 +915,16 @@ function ColorSwatchGrid({
             aria-pressed={isActive}
             title={token}
             className={cn(
-              'sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all',
+              'sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all',
               isActive
-                ? 'sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover'
-                : 'hover:sf-scale-110',
+                ? 'sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover'
+                : 'sf:hover:scale-110',
             )}
             style={swatchPreviewStyle(token, previewKind)}
           >
             {isActive ? (
               <Check
-                className="sf-h-3 sf-w-3 sf-drop-shadow-sm"
+                className="sf:h-3 sf:w-3 sf:drop-shadow-sm"
                 style={{ color: 'hsl(var(--foreground))' }}
               />
             ) : null}
@@ -948,8 +948,8 @@ function PopoverSection({
   children: ReactNode;
 }) {
   return (
-    <div className="sf-flex sf-flex-col sf-gap-1.5" data-testid={testId}>
-      <div className="sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground">
+    <div className="sf:flex sf:flex-col sf:gap-1.5" data-testid={testId}>
+      <div className="sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground">
         {label}
       </div>
       {children}
@@ -983,19 +983,19 @@ function PopoverButton({
               aria-label={ariaLabel}
               title={tooltip}
               className={cn(
-                'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground',
-                'focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1',
+                'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground',
+                'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
               )}
             >
               {renderIcon()}
             </button>
           </PopoverTrigger>
         </TooltipTrigger>
-        <TooltipContent side="right" className="sf-px-2 sf-py-1 sf-text-xs">
+        <TooltipContent side="right" className="sf:px-2 sf:py-1 sf:text-xs">
           {tooltip}
         </TooltipContent>
       </Tooltip>
-      <PopoverContent side="right" align="start" className="sf-w-auto sf-p-3">
+      <PopoverContent side="right" align="start" className="sf:w-auto sf:p-3">
         {children}
       </PopoverContent>
     </Popover>
@@ -1043,7 +1043,7 @@ function SliderControl({
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
   return (
-    <div className="sf-flex sf-w-48 sf-items-center sf-gap-3">
+    <div className="sf:flex sf:w-48 sf:items-center sf:gap-3">
       <Slider
         min={min}
         max={max}
@@ -1058,11 +1058,11 @@ function SliderControl({
         onValueCommit={([v]) => onCommit(v ?? min)}
         data-testid={testId}
         data-indeterminate={showPlaceholder ? 'true' : undefined}
-        className={cn('sf-flex-1', showPlaceholder && 'sf-opacity-60')}
+        className={cn('sf:flex-1', showPlaceholder && 'sf:opacity-60')}
       />
       <span
         data-testid={`${testId}-value`}
-        className="sf-w-12 sf-shrink-0 sf-text-right sf-text-xs sf-tabular-nums sf-text-muted-foreground"
+        className="sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground"
       >
         {showPlaceholder ? (
           'Mixed'

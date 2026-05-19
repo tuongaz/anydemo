@@ -304,7 +304,7 @@ export function EditableEdge({
               field="connector-label"
               onCommit={(v) => onLabelChange?.(id, v)}
               onExit={() => setEditing(false)}
-              className="sf-rounded sf-border sf-border-border/40 sf-bg-background sf-px-1.5 sf-py-0.5 sf-text-[11px] sf-text-foreground sf-shadow-sm"
+              className="sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm"
               style={fontSizeStyle}
               placeholder="Label"
             />
@@ -312,7 +312,7 @@ export function EditableEdge({
             <button
               type="button"
               className={cn(
-                'sf-rounded sf-border sf-border-border/40 sf-bg-background sf-px-1.5 sf-py-0.5 sf-text-[11px] sf-text-foreground sf-shadow-sm',
+                'sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm',
                 editable ? 'hover:bg-muted/60' : '',
               )}
               style={fontSizeStyle}
@@ -331,7 +331,7 @@ export function EditableEdge({
             <button
               type="button"
               aria-label="Add connector label"
-              className="sf-rounded-full sf-border sf-border-dashed sf-border-muted-foreground/40 sf-bg-background sf-px-1 sf-text-[10px] sf-text-muted-foreground/60 sf-opacity-0 sf-transition-opacity hover:sf-opacity-100 group-hover/canvas:sf-opacity-50"
+              className="sf:rounded-full sf:border sf:border-dashed sf:border-muted-foreground/40 sf:bg-background sf:px-1 sf:text-[10px] sf:text-muted-foreground/60 sf:opacity-0 sf:transition-opacity sf:hover:opacity-100 sf:group-hover/canvas:opacity-50"
               onDoubleClick={(e) => {
                 e.stopPropagation();
                 setEditing(true);

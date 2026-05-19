@@ -21,8 +21,8 @@ export function PlaceholderCard({
       data-testid="placeholder-card"
       data-placeholder-variant={variant}
       className={cn(
-        'sf-pointer-events-none sf-flex sf-h-full sf-w-full sf-select-none sf-items-center sf-justify-center sf-px-2 sf-text-center sf-text-xs',
-        variant === 'destructive' ? 'sf-text-destructive' : 'sf-text-muted-foreground',
+        'sf:pointer-events-none sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs',
+        variant === 'destructive' ? 'sf:text-destructive' : 'sf:text-muted-foreground',
         className,
       )}
     >

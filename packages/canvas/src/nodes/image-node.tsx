@@ -41,7 +41,7 @@ export const IMAGE_DEFAULT_SIZE = { width: 200, height: 150 } as const;
 const MIN_W = 40;
 const MIN_H = 40;
 
-const HANDLE_CLASS = 'sf-opacity-0 sf-transition-opacity';
+const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
 function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNodeType>) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
@@ -80,7 +80,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
 
   return (
     <div
-      className={cn('sf-group sf-relative sf-overflow-hidden', sized ? 'sf-h-full sf-w-full' : '')}
+      className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="image-node"
     >
@@ -99,14 +99,14 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       {data._uploading ? (
         // US-008: optimistic-placement loading state. The <img> is suppressed
@@ -115,7 +115,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         <div
           data-testid="image-node-placeholder"
           data-placeholder="loading"
-          className="sf-flex sf-h-full sf-w-full sf-select-none sf-items-center sf-justify-center sf-text-xs sf-text-muted-foreground sf-pointer-events-none"
+          className="sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground sf:pointer-events-none"
         >
           Loading…
         </div>
@@ -129,7 +129,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
           data-placeholder="failed"
           onClick={() => data.onRetryUpload?.(id)}
           title={data._uploadError}
-          className="sf-flex sf-h-full sf-w-full sf-cursor-pointer sf-select-none sf-items-center sf-justify-center sf-px-2 sf-text-center sf-text-xs sf-text-destructive"
+          className="sf:flex sf:h-full sf:w-full sf:cursor-pointer sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs sf:text-destructive"
         >
           Upload failed (click to retry)
         </button>
@@ -141,7 +141,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
           // leave a thin strip below the image inside the node container.
           // `pointer-events-none` ensures the React Flow wrapper still receives
           // drag/select gestures rather than the browser's native image drag.
-          className="sf-block sf-h-full sf-w-full sf-select-none sf-object-contain sf-pointer-events-none"
+          className="sf:block sf:h-full sf:w-full sf:select-none sf:object-contain sf:pointer-events-none"
           draggable={false}
         />
       )}
@@ -150,14 +150,14 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
     </div>
   );

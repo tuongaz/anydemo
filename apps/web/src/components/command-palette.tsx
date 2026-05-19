@@ -263,7 +263,7 @@ export function CommandPalette({ open, onOpenChange, runCommand, ctx }: CommandP
               aria-label="Search commands"
               autoComplete="off"
               spellCheck={false}
-              className="w-full bg-transparent px-4 py-3 text-sm outline-none placeholder:text-muted-foreground"
+              className="w-full bg-transparent px-4 py-3 text-sm outline-hidden placeholder:text-muted-foreground"
             />
           </div>
           <div
@@ -315,7 +315,7 @@ export function CommandPalette({ open, onOpenChange, runCommand, ctx }: CommandP
                           }}
                           onClick={() => executeAt(index)}
                           className={cn(
-                            'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm outline-none',
+                            'flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm outline-hidden',
                             row.enabled
                               ? 'cursor-pointer text-foreground hover:bg-muted'
                               : 'cursor-not-allowed text-muted-foreground/50',

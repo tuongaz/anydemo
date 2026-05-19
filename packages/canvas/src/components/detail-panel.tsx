@@ -130,7 +130,7 @@ export function DetailPanel({
     >
       <SheetContent
         side="right"
-        className="sf-overflow-y-auto sf-bg-card/94 sf-backdrop-blur-[14px] sf-border-border sm:!sf-w-[var(--detail-panel-w)] sm:!sf-max-w-[var(--detail-panel-w)]"
+        className="sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!"
         style={widthStyle}
         data-testid="detail-panel"
         onEscapeKeyDown={(e) => {
@@ -176,11 +176,11 @@ export function DetailPanel({
           aria-label="Resize detail panel"
           onPointerDown={onResizeHandlePointerDown}
           data-testid="detail-panel-resize-handle"
-          className="sf-absolute sf-inset-y-0 sf-left-0 sf-z-10 sf-hidden sf-w-1.5 sf-cursor-col-resize sf-bg-transparent sf-transition-colors hover:sf-bg-border sm:sf-block"
+          className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
         />
         {inspectableNode ? (
-          <div className="sf-flex sf-flex-col sf-gap-3">
-            <div className="sf-flex sf-flex-col sf-gap-1">
+          <div className="sf:flex sf:flex-col sf:gap-3">
+            <div className="sf:flex sf:flex-col sf:gap-1">
               {showNameField ? (
                 <SheetTitle data-testid="detail-panel-title">
                   <EditableField
@@ -191,7 +191,7 @@ export function DetailPanel({
                     ariaLabel="Name"
                     testIdBase="detail-panel-name"
                     onSave={onNameChange}
-                    textClassName="sf-text-base sf-font-semibold"
+                    textClassName="sf:text-base sf:font-semibold"
                   />
                 </SheetTitle>
               ) : (
@@ -210,7 +210,7 @@ export function DetailPanel({
               </SheetDescription>
             </div>
 
-            <div className="sf-mt-0 sf-flex sf-flex-col sf-gap-3">
+            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
               {statusReport ? <StatusSection report={statusReport} /> : null}
               {showIconField && onIconChange ? (
                 <IconRow nodeId={inspectableNode.id} icon={currentIcon} onChange={onIconChange} />
@@ -223,7 +223,7 @@ export function DetailPanel({
                 ariaLabel="Description"
                 testIdBase="detail-panel-description"
                 onSave={onDescriptionChange}
-                textClassName="sf-font-medium sf-text-muted-foreground"
+                textClassName="sf:font-medium sf:text-muted-foreground"
               />
               <EditableField
                 nodeId={inspectableNode.id}
@@ -242,8 +242,8 @@ export function DetailPanel({
             </div>
           </div>
         ) : connector ? (
-          <div className="sf-flex sf-flex-col sf-gap-3">
-            <div className="sf-flex sf-flex-col sf-gap-1">
+          <div className="sf:flex sf:flex-col sf:gap-3">
+            <div className="sf:flex sf:flex-col sf:gap-1">
               <SheetTitle data-testid="detail-panel-title">
                 {connector.label ?? 'Connector'}
               </SheetTitle>
@@ -252,7 +252,7 @@ export function DetailPanel({
               </SheetDescription>
             </div>
 
-            <div className="sf-mt-0 sf-flex sf-flex-col sf-gap-3">
+            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
               <ConnectorSummary connector={connector} />
             </div>
           </div>
@@ -328,9 +328,9 @@ export function EditableField({
         data-testid={testIdBase}
         aria-label={ariaLabel}
         className={cn(
-          'sf-w-full sf-rounded-md sf-px-2 sf-py-1.5 sf-text-sm',
-          isEmpty ? 'sf-italic sf-text-muted-foreground/50' : 'text-foreground',
-          !markdown && 'sf-whitespace-pre-wrap sf-break-words',
+          'sf:w-full sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm',
+          isEmpty ? 'sf:italic sf:text-muted-foreground/50' : 'text-foreground',
+          !markdown && 'sf:whitespace-pre-wrap sf:wrap-break-word',
           textClassName,
         )}
       >
@@ -420,7 +420,7 @@ export function EditableField({
             // visually matches the rendered button surface exactly so toggling
             // edit mode doesn't shift the row's height. Caret + IME are the
             // only edit affordance.
-            'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-rounded-md sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none',
+            'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm sf:outline-hidden',
             textClassName,
           )}
           role="textbox"
@@ -433,9 +433,9 @@ export function EditableField({
           onClick={enterEdit}
           aria-label={`Edit ${ariaLabel.toLowerCase()}`}
           className={cn(
-            'sf-block sf-w-full sf-cursor-text sf-rounded-md sf-px-2 sf-py-1.5 sf-text-left sf-text-sm sf-transition-colors hover:sf-bg-muted/50',
-            isEmpty ? 'sf-italic sf-text-muted-foreground/50' : 'text-foreground',
-            !markdown && 'sf-whitespace-pre-wrap sf-break-words',
+            'sf:block sf:w-full sf:cursor-text sf:rounded-md sf:px-2 sf:py-1.5 sf:text-left sf:text-sm sf:transition-colors sf:hover:bg-muted/50',
+            isEmpty ? 'sf:italic sf:text-muted-foreground/50' : 'text-foreground',
+            !markdown && 'sf:whitespace-pre-wrap sf:wrap-break-word',
             textClassName,
           )}
         >
@@ -462,8 +462,8 @@ export function IconRow({
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div data-testid="detail-panel-icon" className="sf-flex sf-items-center sf-gap-2 sf-px-2">
-      <span className="sf-text-xs sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground sf-w-16 sf-shrink-0">
+    <div data-testid="detail-panel-icon" className="sf:flex sf:items-center sf:gap-2 sf:px-2">
+      <span className="sf:text-xs sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground sf:w-16 sf:shrink-0">
         Icon
       </span>
       <IconPickerPopover
@@ -480,17 +480,17 @@ export function IconRow({
             aria-label="Choose icon"
             aria-pressed={open}
             className={cn(
-              'sf-inline-flex sf-h-8 sf-min-w-8 sf-items-center sf-gap-2 sf-rounded-md sf-border sf-border-input sf-bg-background sf-px-2 sf-text-sm sf-transition-colors',
-              'hover:sf-bg-muted',
+              'sf:inline-flex sf:h-8 sf:min-w-8 sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-2 sf:text-sm sf:transition-colors',
+              'sf:hover:bg-muted',
             )}
           >
             {icon ? (
               <>
                 <Icon name={icon} size={16} aria-hidden />
-                <span className="sf-font-mono sf-text-xs">{icon}</span>
+                <span className="sf:font-mono sf:text-xs">{icon}</span>
               </>
             ) : (
-              <span className="sf-text-muted-foreground sf-italic">None</span>
+              <span className="sf:text-muted-foreground sf:italic">None</span>
             )}
           </button>
         }
@@ -502,10 +502,10 @@ export function IconRow({
           variant="ghost"
           data-testid="detail-panel-icon-clear"
           aria-label="Clear icon"
-          className="sf-h-8 sf-gap-1 sf-px-2 sf-text-xs"
+          className="sf:h-8 sf:gap-1 sf:px-2 sf:text-xs"
           onClick={() => onChange(nodeId, null)}
         >
-          <X className="sf-h-3.5 sf-w-3.5" />
+          <X className="sf:h-3.5 sf:w-3.5" />
           Clear
         </Button>
       ) : null}
@@ -552,28 +552,28 @@ export function HtmlNodeSection({
 
   return (
     <div
-      className="sf-flex sf-flex-col sf-gap-2 sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs"
+      className="sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs"
       data-testid="detail-panel-html-node"
     >
-      <div className="sf-flex sf-flex-col sf-gap-1">
-        <span className="sf-font-mono sf-text-[11px] sf-text-muted-foreground sf-uppercase sf-tracking-widest">
+      <div className="sf:flex sf:flex-col sf:gap-1">
+        <span className="sf:font-mono sf:text-[11px] sf:text-muted-foreground sf:uppercase sf:tracking-widest">
           Path
         </span>
         <code
           data-testid="detail-panel-html-path"
-          className="sf-block sf-break-all sf-rounded sf-bg-muted/40 sf-px-2 sf-py-1 sf-font-mono sf-text-[11px]"
+          className="sf:block sf:break-all sf:rounded sf:bg-muted/40 sf:px-2 sf:py-1 sf:font-mono sf:text-[11px]"
         >
           {htmlPath}
         </code>
       </div>
       {canOpen || canReveal ? (
-        <div className="sf-flex sf-flex-wrap sf-items-center sf-gap-2">
+        <div className="sf:flex sf:flex-wrap sf:items-center sf:gap-2">
           {canOpen ? (
             <Button
               type="button"
               size="sm"
               variant="outline"
-              className="sf-h-7 sf-gap-1.5 sf-px-2"
+              className="sf:h-7 sf:gap-1.5 sf:px-2"
               onClick={() => {
                 void dispatch('open');
               }}
@@ -581,7 +581,7 @@ export function HtmlNodeSection({
               data-testid="detail-panel-html-open"
               aria-label="Open in editor"
             >
-              <PencilLine className="sf-h-3.5 sf-w-3.5" />
+              <PencilLine className="sf:h-3.5 sf:w-3.5" />
               Open in editor
             </Button>
           ) : null}
@@ -590,7 +590,7 @@ export function HtmlNodeSection({
               type="button"
               size="sm"
               variant="outline"
-              className="sf-h-7 sf-gap-1.5 sf-px-2"
+              className="sf:h-7 sf:gap-1.5 sf:px-2"
               onClick={() => {
                 void dispatch('reveal');
               }}
@@ -598,7 +598,7 @@ export function HtmlNodeSection({
               data-testid="detail-panel-html-reveal"
               aria-label="Reveal in Finder/Explorer"
             >
-              <FolderOpen className="sf-h-3.5 sf-w-3.5" />
+              <FolderOpen className="sf:h-3.5 sf:w-3.5" />
               Reveal
             </Button>
           ) : null}
@@ -608,7 +608,7 @@ export function HtmlNodeSection({
         <div
           data-testid="detail-panel-html-status"
           data-status={status.kind}
-          className={cn('sf-text-[11px] sf-text-destructive')}
+          className={cn('sf:text-[11px] sf:text-destructive')}
         >
           {status.message ?? ''}
         </div>
@@ -666,18 +666,18 @@ export function StatusSection({
   const entries = report.data ? Object.entries(report.data) : [];
   return (
     <section
-      className="sf-flex sf-flex-col sf-gap-2 sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs"
+      className="sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs"
       data-testid="detail-panel-status"
       data-state={report.state}
     >
-      <div className="sf-flex sf-items-center sf-justify-between sf-gap-2">
+      <div className="sf:flex sf:items-center sf:justify-between sf:gap-2">
         <StatusBadge
           state={report.state}
           summary={report.summary}
           data-testid="detail-panel-status-badge"
         />
         <span
-          className="sf-shrink-0 sf-text-[10px] sf-text-muted-foreground"
+          className="sf:shrink-0 sf:text-[10px] sf:text-muted-foreground"
           data-testid="detail-panel-status-relative-time"
         >
           {`Last updated: ${formatRelativeTime(report.ts, now)}`}
@@ -686,7 +686,7 @@ export function StatusSection({
       {report.detail ? (
         <div
           data-testid="detail-panel-status-detail"
-          className="sf-whitespace-pre-wrap sf-break-words sf-rounded sf-bg-muted/40 sf-px-2 sf-py-1 sf-text-[11px] sf-text-foreground"
+          className="sf:whitespace-pre-wrap sf:wrap-break-word sf:rounded sf:bg-muted/40 sf:px-2 sf:py-1 sf:text-[11px] sf:text-foreground"
         >
           {report.detail}
         </div>
@@ -694,12 +694,12 @@ export function StatusSection({
       {entries.length > 0 ? (
         <dl
           data-testid="detail-panel-status-data"
-          className="sf-grid sf-grid-cols-[auto_1fr] sf-gap-x-3 sf-gap-y-1 sf-text-[11px]"
+          className="sf:grid sf:grid-cols-[auto_1fr] sf:gap-x-3 sf:gap-y-1 sf:text-[11px]"
         >
           {entries.map(([key, value]) => (
             <div key={key} className="contents" data-testid="detail-panel-status-data-row">
-              <dt className="sf-truncate sf-font-medium sf-text-muted-foreground">{key}</dt>
-              <dd className="sf-break-all sf-font-mono sf-text-foreground">
+              <dt className="sf:truncate sf:font-medium sf:text-muted-foreground">{key}</dt>
+              <dd className="sf:break-all sf:font-mono sf:text-foreground">
                 {formatStatusValue(value)}
               </dd>
             </div>
@@ -716,37 +716,37 @@ function MarkdownContent({ value }: { value: string }) {
       remarkPlugins={[remarkGfm]}
       components={{
         h1: ({ children }) => (
-          <h1 className="sf-mb-1 sf-text-base sf-font-bold sf-leading-snug">{children}</h1>
+          <h1 className="sf:mb-1 sf:text-base sf:font-bold sf:leading-snug">{children}</h1>
         ),
         h2: ({ children }) => (
-          <h2 className="sf-mb-1 sf-text-sm sf-font-semibold sf-leading-snug">{children}</h2>
+          <h2 className="sf:mb-1 sf:text-sm sf:font-semibold sf:leading-snug">{children}</h2>
         ),
         h3: ({ children }) => (
-          <h3 className="sf-mb-0.5 sf-text-sm sf-font-medium sf-leading-snug">{children}</h3>
+          <h3 className="sf:mb-0.5 sf:text-sm sf:font-medium sf:leading-snug">{children}</h3>
         ),
-        p: ({ children }) => <p className="sf-mb-2 last:sf-mb-0 sf-leading-relaxed">{children}</p>,
+        p: ({ children }) => <p className="sf:mb-2 sf:last:mb-0 sf:leading-relaxed">{children}</p>,
         ul: ({ children }) => (
-          <ul className="sf-mb-2 sf-list-disc sf-pl-4 last:sf-mb-0">{children}</ul>
+          <ul className="sf:mb-2 sf:list-disc sf:pl-4 sf:last:mb-0">{children}</ul>
         ),
         ol: ({ children }) => (
-          <ol className="sf-mb-2 sf-list-decimal sf-pl-4 last:sf-mb-0">{children}</ol>
+          <ol className="sf:mb-2 sf:list-decimal sf:pl-4 sf:last:mb-0">{children}</ol>
         ),
         li: ({ children }) => <li className="mb-0.5">{children}</li>,
         code: ({ children, className }) => {
           const isBlock = className?.includes('language-');
           return isBlock ? (
-            <code className="sf-block sf-overflow-x-auto sf-rounded sf-bg-muted/60 sf-px-2 sf-py-1 sf-font-mono sf-text-xs">
+            <code className="sf:block sf:overflow-x-auto sf:rounded sf:bg-muted/60 sf:px-2 sf:py-1 sf:font-mono sf:text-xs">
               {children}
             </code>
           ) : (
-            <code className="sf-rounded sf-bg-muted/60 sf-px-1 sf-py-0.5 sf-font-mono sf-text-xs">
+            <code className="sf:rounded sf:bg-muted/60 sf:px-1 sf:py-0.5 sf:font-mono sf:text-xs">
               {children}
             </code>
           );
         },
-        pre: ({ children }) => <pre className="sf-mb-2 last:sf-mb-0">{children}</pre>,
+        pre: ({ children }) => <pre className="sf:mb-2 sf:last:mb-0">{children}</pre>,
         blockquote: ({ children }) => (
-          <blockquote className="sf-mb-2 sf-border-l-2 sf-border-muted-foreground/30 sf-pl-3 sf-italic sf-text-muted-foreground last:sf-mb-0">
+          <blockquote className="sf:mb-2 sf:border-l-2 sf:border-muted-foreground/30 sf:pl-3 sf:italic sf:text-muted-foreground sf:last:mb-0">
             {children}
           </blockquote>
         ),
@@ -755,26 +755,26 @@ function MarkdownContent({ value }: { value: string }) {
             href={href}
             target="_blank"
             rel="noreferrer"
-            className="sf-text-primary sf-underline sf-underline-offset-2"
+            className="sf:text-primary sf:underline sf:underline-offset-2"
           >
             {children}
           </a>
         ),
         strong: ({ children }) => <strong className="font-semibold">{children}</strong>,
         em: ({ children }) => <em className="italic">{children}</em>,
-        hr: () => <hr className="sf-my-2 sf-border-border" />,
+        hr: () => <hr className="sf:my-2 sf:border-border" />,
         table: ({ children }) => (
-          <div className="sf-mb-2 sf-overflow-x-auto last:sf-mb-0">
-            <table className="sf-w-full sf-border-collapse sf-text-xs">{children}</table>
+          <div className="sf:mb-2 sf:overflow-x-auto sf:last:mb-0">
+            <table className="sf:w-full sf:border-collapse sf:text-xs">{children}</table>
           </div>
         ),
         th: ({ children }) => (
-          <th className="sf-border sf-border-border sf-bg-muted/40 sf-px-2 sf-py-1 sf-text-left sf-font-medium">
+          <th className="sf:border sf:border-border sf:bg-muted/40 sf:px-2 sf:py-1 sf:text-left sf:font-medium">
             {children}
           </th>
         ),
         td: ({ children }) => (
-          <td className="sf-border sf-border-border sf-px-2 sf-py-1">{children}</td>
+          <td className="sf:border sf:border-border sf:px-2 sf:py-1">{children}</td>
         ),
       }}
     >
@@ -785,7 +785,7 @@ function MarkdownContent({ value }: { value: string }) {
 
 function ConnectorSummary({ connector }: { connector: Connector }) {
   return (
-    <div className="sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs">
+    <div className="sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs">
       <dl className="divide-y">
         <SummaryRow label="Source" value={connector.source} />
         <SummaryRow label="Target" value={connector.target} />
@@ -810,9 +810,9 @@ function ConnectorSummary({ connector }: { connector: Connector }) {
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="sf-flex sf-items-start sf-gap-3 sf-py-2 first:sf-pt-0 last:sf-pb-0">
-      <dt className="sf-w-20 sf-shrink-0 sf-font-medium sf-text-muted-foreground">{label}</dt>
-      <dd className="sf-flex-1 sf-break-all sf-font-mono">{value}</dd>
+    <div className="sf:flex sf:items-start sf:gap-3 sf:py-2 sf:first:pt-0 sf:last:pb-0">
+      <dt className="sf:w-20 sf:shrink-0 sf:font-medium sf:text-muted-foreground">{label}</dt>
+      <dd className="sf:flex-1 sf:break-all sf:font-mono">{value}</dd>
     </div>
   );
 }

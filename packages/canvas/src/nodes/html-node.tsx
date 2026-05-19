@@ -33,7 +33,7 @@ export const HTML_DEFAULT_SIZE = { width: 320, height: 200 } as const;
 const MIN_W = 80;
 const MIN_H = 40;
 
-const HANDLE_CLASS = 'sf-opacity-0 sf-transition-opacity';
+const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
 function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeType>) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
@@ -84,7 +84,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     body = (
       <div
         data-testid="html-node-content"
-        className="sf-h-full sf-w-full sf-overflow-auto"
+        className="sf:h-full sf:w-full sf:overflow-auto"
         {...injectSanitizedHtml(content.html)}
       />
     );
@@ -98,7 +98,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
 
   return (
     <div
-      className={cn('sf-group sf-relative sf-overflow-hidden', sized ? 'sf-h-full sf-w-full' : '')}
+      className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="html-node"
     >
@@ -117,14 +117,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       {body}
       <Handle
@@ -132,22 +132,22 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       {data.name !== undefined && data.name !== '' ? (
         <div
           data-testid="html-node-label"
-          className="-sf-bottom-5 sf-absolute sf-right-0 sf-left-0 sf-truncate sf-text-center sf-text-[11px] sf-text-muted-foreground"
+          className="sf:-bottom-5 sf:absolute sf:right-0 sf:left-0 sf:truncate sf:text-center sf:text-[11px] sf:text-muted-foreground"
         >
           {data.icon ? (
-            <div className="sf-flex sf-items-center sf-justify-center sf-gap-1">
+            <div className="sf:flex sf:items-center sf:justify-center sf:gap-1">
               <Icon name={data.icon} size={12} aria-hidden />
               <span className="truncate">{data.name}</span>
             </div>

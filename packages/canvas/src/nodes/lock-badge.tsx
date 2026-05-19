@@ -28,11 +28,11 @@ export function LockBadge({ className }: { className?: string }) {
       data-testid="node-lock-badge"
       aria-hidden="true"
       className={cn(
-        'sf-absolute -sf-top-2 -sf-right-2 sf-z-10 sf-inline-flex sf-h-4 sf-w-4 sf-items-center sf-justify-center sf-rounded-sm sf-bg-background/90 sf-text-muted-foreground sf-shadow-sm sf-ring-1 sf-ring-border',
+        'sf:absolute sf:-top-2 sf:-right-2 sf:z-10 sf:inline-flex sf:h-4 sf:w-4 sf:items-center sf:justify-center sf:rounded-sm sf:bg-background/90 sf:text-muted-foreground sf:shadow-sm sf:ring-1 sf:ring-border',
         className,
       )}
     >
-      <Lock className="sf-h-2.5 sf-w-2.5" strokeWidth={2.5} />
+      <Lock className="sf:h-2.5 sf:w-2.5" strokeWidth={2.5} />
     </span>
   );
 }

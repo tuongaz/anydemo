@@ -87,10 +87,10 @@ export const SHAPE_DEFAULT_SIZE: Record<ShapeKind, { width: number; height: numb
 // to a shape's chrome MUST land here so both the node and the ghost update
 // together.
 export const SHAPE_CLASS: Record<ShapeKind, string> = {
-  rectangle: 'sf-rounded-lg sf-border-[3px] sf-bg-transparent',
-  ellipse: 'sf-rounded-full sf-border-[3px] sf-bg-transparent',
-  sticky: 'sf-rounded-md sf-border-[3px] sf-shadow-md -sf-rotate-1',
-  text: 'sf-bg-transparent',
+  rectangle: 'sf:rounded-lg sf:border-[3px] sf:bg-transparent',
+  ellipse: 'sf:rounded-full sf:border-[3px] sf:bg-transparent',
+  sticky: 'sf:rounded-md sf:border-[3px] sf:shadow-md sf:-rotate-1',
+  text: 'sf:bg-transparent',
   // US-009: illustrative shapes have no wrapper chrome — the inline SVG owns
   // border + fill so the wrapper stays a transparent positioning host.
   database: '',
@@ -181,7 +181,7 @@ function resolveIllustrativeColors(data: ShapeNodeData): {
 // a connection is in progress, `.react-flow.seeflow-connecting .react-flow__handle`
 // (apps/web/src/index.css) globally forces `opacity: 1` so drop targets light
 // up across all nodes during the drag, preserving the US-014 auto-snap UX.
-const HANDLE_CLASS = 'sf-opacity-0 sf-transition-opacity';
+const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
 type EditField = 'name' | 'description' | null;
 
@@ -331,7 +331,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
     const h = data.height ?? size.height;
     const { borderColor, backgroundColor } = resolveIllustrativeColors(data);
     illustrativeOverlay = (
-      <div className="sf-pointer-events-none sf-absolute sf-inset-0">
+      <div className="sf:pointer-events-none sf:absolute sf:inset-0">
         <Renderer
           width={w}
           height={h}
@@ -367,7 +367,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           commitMode="blur-only"
           onCommit={(v) => data.onDescriptionChange?.(id, v)}
           onExit={() => setEditing(null)}
-          className="sf-relative sf-text-[22px]"
+          className="sf:relative sf:text-[22px]"
           style={descriptionFontStyle}
           placeholder="Description"
         />
@@ -375,8 +375,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         <button
           type="button"
           className={cn(
-            'sf-relative sf-block sf-whitespace-pre-wrap sf-bg-transparent sf-p-0 sf-font-medium sf-leading-tight',
-            hasDescription ? 'break-words' : 'sf-italic sf-text-muted-foreground/40',
+            'sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
+            hasDescription ? 'break-words' : 'sf:italic sf:text-muted-foreground/40',
           )}
           style={descriptionFontStyle}
         >
@@ -395,7 +395,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           // US-009: `relative` keeps the label as a positioned sibling of the
           // illustrative overlay above, so DOM order alone is enough to stack
           // it over the SVG without juggling explicit z-index values.
-          className="sf-relative sf-text-[22px]"
+          className="sf:relative sf:text-[22px]"
           style={labelFontStyle}
           placeholder={isText ? 'Text' : 'Label'}
         />
@@ -404,8 +404,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           type="button"
           className={cn(
             // US-009: `relative` — see the InlineEdit branch above.
-            'sf-relative sf-block sf-whitespace-pre-wrap sf-bg-transparent sf-p-0 sf-font-medium sf-leading-tight',
-            data.name ? 'break-words' : 'sf-text-muted-foreground/40 sf-italic',
+            'sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
+            data.name ? 'break-words' : 'sf:text-muted-foreground/40 sf:italic',
           )}
           style={labelFontStyle}
         >
@@ -421,12 +421,12 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
   const headerBodyContent = (
     <>
       <div
-        className="sf-relative sf-flex sf-shrink-0 sf-items-center sf-border-b sf-px-2 sf-py-1.5"
+        className="sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:px-2 sf:py-1.5"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="shape-node-header"
       >
         <div
-          className="sf-min-w-0 sf-flex-1 sf-whitespace-pre-wrap sf-break-words sf-text-left sf-font-semibold sf-text-[18px] sf-leading-tight"
+          className="sf:min-w-0 sf:flex-1 sf:whitespace-pre-wrap sf:wrap-break-word sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight"
           style={labelFontStyle}
         >
           {editing === 'name' && nameEditable ? (
@@ -436,7 +436,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
               commitMode="blur-only"
               onCommit={(v) => data.onNameChange?.(id, v)}
               onExit={() => setEditing(null)}
-              className="sf-text-[18px] sf-font-semibold"
+              className="sf:text-[18px] sf:font-semibold"
               style={labelFontStyle}
               placeholder="Title"
             />
@@ -444,8 +444,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
             <button
               type="button"
               className={cn(
-                'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-font-semibold sf-text-[18px] sf-leading-tight',
-                nameEditable ? 'hover:sf-opacity-80' : '',
+                'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight',
+                nameEditable ? 'sf:hover:opacity-80' : '',
               )}
               style={labelFontStyle}
             >
@@ -455,7 +455,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         </div>
       </div>
       <div
-        className="sf-relative sf-flex sf-min-h-0 sf-flex-1 sf-items-center sf-px-2 sf-py-1.5"
+        className="sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1.5"
         data-testid="shape-node-body"
       >
         {editing === 'description' && descEditable ? (
@@ -465,7 +465,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
             commitMode="blur-only"
             onCommit={(v) => data.onDescriptionChange?.(id, v)}
             onExit={() => setEditing(null)}
-            className="sf-w-full sf-text-[16px] sf-text-muted-foreground"
+            className="sf:w-full sf:text-[16px] sf:text-muted-foreground"
             style={descriptionFontStyle}
             placeholder="Description"
           />
@@ -473,9 +473,9 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           <button
             type="button"
             className={cn(
-              'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[16px] sf-leading-tight',
-              hasDescription ? 'text-muted-foreground' : 'sf-italic sf-text-muted-foreground/40',
-              descEditable ? 'hover:sf-opacity-80' : '',
+              'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[16px] sf:leading-tight',
+              hasDescription ? 'text-muted-foreground' : 'sf:italic sf:text-muted-foreground/40',
+              descEditable ? 'sf:hover:opacity-80' : '',
             )}
             style={descriptionFontStyle}
           >
@@ -498,11 +498,11 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         // the inner div's `overflow-hidden` (needed for the header bg to
         // respect the rounded corners) clips them, matching the state-node
         // pattern.
-        useHeaderLayout ? '' : 'sf-relative',
+        useHeaderLayout ? '' : 'sf:relative',
         useHeaderLayout
-          ? 'sf-flex sf-flex-col sf-overflow-hidden sf-text-left'
-          : 'sf-flex sf-items-center sf-justify-center sf-p-2 sf-text-center sf-text-[22px]',
-        sized ? 'sf-h-full sf-w-full' : '',
+          ? 'sf:flex sf:flex-col sf:overflow-hidden sf:text-left'
+          : 'sf:flex sf:items-center sf:justify-center sf:p-2 sf:text-center sf:text-[22px]',
+        sized ? 'sf:h-full sf:w-full' : '',
         shapeChromeClass(shape),
       )}
       style={style}
@@ -528,7 +528,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Top}
           id="t"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+          className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
         />
       )}
       {!isText && (
@@ -537,7 +537,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Left}
           id="l"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+          className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
         />
       )}
       {useHeaderLayout ? headerBodyContent : singleLabelContent}
@@ -547,7 +547,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Right}
           id="r"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+          className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
         />
       )}
       {!isText && (
@@ -556,7 +556,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
           position={Position.Bottom}
           id="b"
           isConnectable={isConnectable}
-          className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+          className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
         />
       )}
     </div>

@@ -79,7 +79,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
               value={name}
               onChange={(e) => setName(e.target.value)}
               data-testid="create-project-name-input"
-              className="rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
           {error ? (

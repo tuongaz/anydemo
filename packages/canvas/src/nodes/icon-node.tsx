@@ -30,7 +30,7 @@ export const ICON_FALLBACK_NAME = 'help-circle';
 const MIN_W = 24;
 const MIN_H = 24;
 
-const HANDLE_CLASS = 'sf-opacity-0 sf-transition-opacity';
+const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
 // PRD spec says `colorTokenStyle(data.color, 'node').color ?? 'currentColor'`,
 // but `colorTokenStyle(_, 'node')` returns { borderColor, backgroundColor } —
@@ -86,7 +86,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
 
   return (
     <div
-      className={cn('sf-group sf-relative', sized ? 'sf-h-full sf-w-full' : '')}
+      className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="icon-node"
       onDoubleClick={handleDoubleClick}
@@ -106,14 +106,14 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       {IconComponent ? (
         <IconComponent
@@ -121,7 +121,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
           strokeWidth={strokeWidth}
           absoluteStrokeWidth
           aria-label={data.alt}
-          className="sf-block sf-h-full sf-w-full sf-pointer-events-none sf-select-none"
+          className="sf:block sf:h-full sf:w-full sf:pointer-events-none sf:select-none"
         />
       ) : null}
       {isEditing && nameEditable ? (
@@ -129,7 +129,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         // the icon, full node width, centered). Wrapped in an absolutely
         // positioned strip so the icon's bounding box (read by React Flow
         // for layout + edge geometry) stays identical to the read state.
-        <div className="sf-absolute sf-left-0 sf-right-0 sf-top-full sf-mt-1 sf-text-center sf-text-xs sf-text-muted-foreground">
+        <div className="sf:absolute sf:left-0 sf:right-0 sf:top-full sf:mt-1 sf:text-center sf:text-xs sf:text-muted-foreground">
           <InlineEdit
             initialValue={data.name ?? ''}
             field="icon-node-label"
@@ -145,7 +145,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         // `truncate` clips overflow to an ellipsis at the node's edges.
         <span
           data-testid="icon-node-label"
-          className="sf-pointer-events-none sf-absolute sf-left-0 sf-right-0 sf-top-full sf-mt-1 sf-truncate sf-text-center sf-text-xs sf-text-muted-foreground sf-select-none"
+          className="sf:pointer-events-none sf:absolute sf:left-0 sf:right-0 sf:top-full sf:mt-1 sf:truncate sf:text-center sf:text-xs sf:text-muted-foreground sf:select-none"
         >
           {data.name}
         </span>
@@ -155,14 +155,14 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn(HANDLE_CLASS, selected && '!sf-opacity-100')}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
     </div>
   );

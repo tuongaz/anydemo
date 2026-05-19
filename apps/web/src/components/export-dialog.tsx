@@ -117,7 +117,7 @@ export function ExportDialog({
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isLoading}
                   data-testid="export-email-input"
-                  className="rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
                 <span className="text-xs text-muted-foreground">
                   We'll use this to let you manage your flows in the future.
@@ -133,7 +133,7 @@ export function ExportDialog({
                   onChange={(e) => setName(e.target.value)}
                   disabled={isLoading}
                   data-testid="export-name-input"
-                  className="rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 />
               </label>
 
@@ -144,7 +144,7 @@ export function ExportDialog({
                   onChange={(e) => setVisibility(e.target.value as Visibility)}
                   disabled={isLoading}
                   data-testid="export-visibility-select"
-                  className="rounded-md border bg-background px-3 py-2 text-sm outline-none ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <option value="public">Public — anyone can discover it</option>
                   <option value="link">Anyone with the link</option>
@@ -223,7 +223,7 @@ export function ExportDialog({
                   readOnly
                   value={state.shareUrl}
                   data-testid="export-share-url"
-                  className="min-w-0 flex-1 rounded-md border bg-muted px-3 py-2 text-sm outline-none"
+                  className="min-w-0 flex-1 rounded-md border bg-muted px-3 py-2 text-sm outline-hidden"
                 />
                 <Button
                   type="button"

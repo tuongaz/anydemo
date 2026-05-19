@@ -1867,6 +1867,19 @@ declare function StatusSection({ report, now, }: {
     now?: number;
 }): react_jsx_runtime.JSX.Element;
 
+interface EmbedDialogProps {
+    open: boolean;
+    onOpenChange: (open: boolean) => void;
+    projectId: string;
+}
+/**
+ * Modal that surfaces the iframe snippet for embedding a canvas. Mounts via
+ * the canvas portal container (inherited from `src/ui/dialog.tsx`) so it lands
+ * inside `.seeflow-canvas-root` and inherits the scoped CSS. ShareMenu (US-013)
+ * owns the open state.
+ */
+declare function EmbedDialog({ open, onOpenChange, projectId }: EmbedDialogProps): react_jsx_runtime.JSX.Element;
+
 declare function filterIcons(names: readonly string[], query: string): string[];
 interface IconPickerPopoverProps {
     open: boolean;
@@ -1928,6 +1941,57 @@ interface InlineEditProps {
  *   • Escape cancels both pending and exit-time commits.
  */
 declare function InlineEdit({ initialValue, onCommit, onExit, multiline, commitMode, required, field, className, style, placeholder, }: InlineEditProps): react_jsx_runtime.JSX.Element;
+
+type ShareMenuMode = 'edit' | 'view';
+interface ShareMenuProps {
+    /**
+     * Drives view-mode visibility rules. Embed and Export-to-seeflow.dev are
+     * force-hidden when `mode === 'view'`, even if their inputs are set. Mode is
+     * required so the menu does not need to re-implement `resolveFlags`.
+     */
+    mode: ShareMenuMode;
+    /**
+     * Stable identifier the Embed dialog uses to construct the iframe URL. When
+     * absent, the Embed menu item is hidden even in edit mode.
+     */
+    projectId?: string;
+    /**
+     * Download the current canvas as a PDF. When omitted, the "Download PDF"
+     * menu item is hidden. Works in both `edit` and `view` modes.
+     */
+    onDownloadPdf?: () => Promise<unknown> | unknown;
+    /**
+     * Download the current canvas as a PNG. When omitted, the "Download PNG"
+     * menu item is hidden. Works in both `edit` and `view` modes.
+     */
+    onDownloadPng?: () => Promise<unknown> | unknown;
+    /**
+     * Open the host's export-to-cloud dialog. Edit-mode-only opt-in: rendered
+     * only when this callback is set AND `mode === 'edit'`.
+     */
+    onExportToCloud?: () => void;
+    /**
+     * Controlled `open` state for the inner EmbedDialog. When provided, the menu
+     * defers entirely to the host for embed-state ownership (used by
+     * SeeflowCanvas's imperative `openEmbedDialog()` handle in US-014). When
+     * absent the menu falls back to its own internal state.
+     */
+    embedOpen?: boolean;
+    /**
+     * Controlled `onOpenChange` for the inner EmbedDialog. Pairs with
+     * `embedOpen`; called both when the user clicks the Embed menu item and when
+     * the dialog dismisses (outside-click / ESC / Close). Falls back to internal
+     * state when absent.
+     */
+    onEmbedOpenChange?: (open: boolean) => void;
+}
+/**
+ * Top-right share affordance for SeeflowCanvas. Surfaces Download PDF /
+ * Download PNG / Embed / Export to seeflow.dev — each item gated on its own
+ * input AND the mode-visibility rules from the design doc. The whole trigger
+ * disappears when nothing is renderable.
+ */
+declare function ShareMenu({ mode, projectId, onDownloadPdf, onDownloadPng, onExportToCloud, embedOpen: embedOpenProp, onEmbedOpenChange, }: ShareMenuProps): react_jsx_runtime.JSX.Element | null;
 
 /**
  * US-007: multi-select bounding-box resize overlay.
@@ -2072,6 +2136,14 @@ interface CanvasFeatureOverrides {
      * `edit` and `view`, OFF for `mini` (thumbnails want no chrome).
      */
     showControls?: boolean;
+    /**
+     * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG / Embed /
+     * Export to seeflow.dev). Default ON for `edit` and `view` (downloads and
+     * embed are useful for both edit and read-only consumers), OFF for `mini`
+     * (thumbnails want no chrome). The menu's own internal rules still filter
+     * items by mode + the presence of each callback / `projectId`.
+     */
+    showShareMenu?: boolean;
     enableKeyboard?: boolean;
     enableContextMenu?: boolean;
     enableDragDrop?: boolean;
@@ -2105,6 +2177,7 @@ interface ResolvedCanvasFlags {
     showStatusBadges: boolean;
     showResizeHandles: boolean;
     showControls: boolean;
+    showShareMenu: boolean;
     enableKeyboard: boolean;
     enableContextMenu: boolean;
     enableDragDrop: boolean;
@@ -2576,6 +2649,39 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
      * → only built-in lucide icons resolve.
      */
     customIcons?: Record<string, ComponentType<LucideProps>>;
+    /**
+     * US-014: opt-in callback that wires the "Export to seeflow.dev" item in
+     * the canvas's built-in ShareMenu. Edit-mode-only (the ShareMenu enforces
+     * the visibility rule internally) so view embedders never see the cloud
+     * upload affordance. Absent → the item is hidden.
+     */
+    onExportToCloud?: () => void;
+}
+/**
+ * US-014: imperative handle exposed through `forwardRef`. Lets a host call the
+ * canvas's export actions and open the embed dialog without owning the
+ * underlying state — useful for command palettes / keyboard shortcuts /
+ * external menus where the in-canvas ShareMenu chrome is not the entry point.
+ */
+interface SeeflowCanvasHandle {
+    /** Capture the viewport and save a PDF. Errors surface inline in the canvas. */
+    exportPdf(): Promise<void>;
+    /** Capture the viewport and save a PNG. Errors surface inline in the canvas. */
+    exportPng(): Promise<void>;
+    /**
+     * Open the embed-snippet dialog programmatically. No-op when the canvas is
+     * not rendering its ShareMenu chrome (e.g. mini mode or
+     * `showShareMenu: false`) since the dialog is mounted through the menu.
+     */
+    openEmbedDialog(): void;
+    /**
+     * Capture the current viewport as a PNG data URL without triggering a
+     * download. Resolves to `undefined` when the canvas is not fully mounted.
+     * Hosts use this to feed a preview thumbnail into their own
+     * "Export to seeflow.dev" dialog while keeping the capture path
+     * (fit-view + snapshot + restore) co-located with the canvas.
+     */
+    capturePreview(): Promise<string | undefined>;
 }
 /**
  * US-027: discriminated union — `adapter` is required in edit mode, optional
@@ -2738,6 +2844,12 @@ interface ClipboardShortcutDeps {
     onPasteSelection?: () => void;
 }
 declare function handleClipboardShortcut(deps: ClipboardShortcutDeps): boolean;
-declare function SeeflowCanvas(props: SeeflowCanvasProps): react_jsx_runtime.JSX.Element;
+/**
+ * US-014: ref-aware wrapper. Hosts use `useRef<SeeflowCanvasHandle>()` +
+ * `ref={canvasRef}` to call `exportPdf` / `exportPng` / `openEmbedDialog`
+ * from a command palette or keyboard shortcut without owning the underlying
+ * state.
+ */
+declare const SeeflowCanvas: React.ForwardRefExoticComponent<SeeflowCanvasProps & React.RefAttributes<SeeflowCanvasHandle>>;
 
-export { type AutoLayoutEdge, type AutoLayoutNode, type AutoLayoutOptions, BG_FALLBACK, BORDER_FALLBACK, Button, type ButtonProps, COLOR_TOKENS, COMMANDS, type CanvasAdapter, type CanvasDropDispatchArgs, type CanvasFeatureOverrides, type CanvasRuntime, CanvasToolbar, type CanvasToolbarProps, type ClipboardChord, type ClipboardChordInput, type ClipboardShortcutDeps, type ClipboardShortcutEventLike, CloudShape, type ColorToken, Command, type CommandCategory, type CommandContext, type CommandDef, CommandDialog, CommandEmpty, CommandGroup, type CommandId, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, type Connector, type ConnectorBase, type ConnectorCreateInput, type ConnectorDirection, type ConnectorPatch, type ConnectorPath, type ConnectorStyle, type ConnectorStylePatch, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger, DEFAULT_STORAGE_PREFIX, DEFAULT_STROKE_WIDTH, DETAIL_PANEL_WIDTH_DEFAULT, DETAIL_PANEL_WIDTH_KEY, DETAIL_PANEL_WIDTH_MAX, DETAIL_PANEL_WIDTH_MIN, DatabaseShape, type Debouncer, type DebouncerOptions, type DefaultConnector, type Demo, type DemoNode, type DerivedEdge, DetailPanel, type DetailPanelProps, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, type EdgeColorStyle, type EdgePin, type EdgePinSide, EditableEdge, type EditableEdgeData, type EditableEdgeType, EditableField, type Endpoint, type EndpointInput, type EventConnector, type FloatingRect, HTML_BLOCK_DND_TYPE, HTML_DEFAULT_SIZE, type HandleCanvasFileDropArgs, HtmlNode, type HtmlNodeData, type HtmlNodeRuntimeData, HtmlNodeSection, type HtmlNodeType, type HttpAction, type HttpConnector, ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, ICON_NAMES, ICON_RECENTS_STORAGE_KEY, ICON_REGISTRY, ILLUSTRATIVE_SHAPE_RENDERERS, IMAGE_DEFAULT_SIZE, IMAGE_DROP_EXTS, IMAGE_DROP_MAX_LONGEST_SIDE, IMAGE_DROP_SVG_FALLBACK, IS_MAC, Icon, type IconInsertPayload, type IconInsertRfInstance, type IconInsertViewport, IconNode, type IconNodeData, type IconNodeRuntimeData, type IconNodeType, IconPickerBody, type IconPickerBodyProps, IconPickerPopover, type IconPickerPopoverProps, type IconProps, IconRegistryProvider, type IconRegistryProviderProps, type IconRegistryValue, IconToggleGroup, type IconToggleGroupProps, type IconToggleOption, type ImageDataDefaults, ImageNode, type ImageNodeData, type ImageNodeRuntimeData, type ImageNodeType, InlineEdit, type InlineEditProps, type LastUsedStyle, type LayoutDirection, LineDashedIcon, LineDottedIcon, LineSolidIcon, LockBadge, type ModifierEvent, type MultiResizeUpdate, NEW_NODE_BORDER_WIDTH, NEW_NODE_FONT_SIZE, NODE_DEFAULT_BG_WHITE, type NodeColorStyle, type NodeCreateInput, type NodeData, type NodeDescription, type NodeHeaderColorStyle, type NodeKind, type NodePatch, type NodeStatus, type NodeStylePatch, type NodeVisual, type NudgeDelta, type OverlayInputNode, PathCurveIcon, PathStepIcon, type Pin, PlaceholderCard, PlayNode, type PlayNodeData, type PlayNodeResult, type PlayNodeType, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, type QueueConnector, QueueShape, type Rect, type ReorderOp, ResizeControls, type ResizeControlsProps, type ResizeGestureCallbacks, type ResolvedCanvasFlags, type RestAdapterOptions, type RunResult, SELECTION_OVERLAY_PADDING, SHAPE_CLASS, SHAPE_DEFAULT_SIZE, type ScalableNode, type ScaleNodesOptions, SeeflowCanvas, type SeeflowCanvasMode, type SeeflowCanvasProps, SelectionResizeOverlay, type SelectionResizeOverlayProps, ServerShape, type ShapeDataDefaults, type ShapeKind, ShapeNode, type ShapeNodeData, type ShapeNodeRuntimeData, type ShapeNodeType, type ShapePartProps, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, type ShortcutParts, type Side, Slider, StateNode, type StateNodeData, type StateNodeType, StatusBadge, type StatusBadgeProps, StatusPill, type StatusReport, type StatusReportState, StatusSection, StyleStrip, type StyleStripProps, TOOLBAR_SHAPES, Tabs, TabsContent, TabsList, TabsTrigger, type TextColorStyle, type ToolShortcutResult, type ToolbarShapeEntry, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, type UpdateNodePositionResult, type UploadImageResult, UserShape, type XY, type ZoomAction, applyLayout, applyNudge, buildIconInsertPayload, buildNewImageData, buildNewShapeData, buttonVariants, clampDetailPanelWidth, clampImageDims, classifyHandleDropFailure, classifyReconnectBodyDrop, cn, colorTokenStyle, computeIconInsertPosition, computeImageDims, computeNewRectFromAnchorDrag, computeSelectionResizeUpdates, computeUnionRect, computeUnmovedLockPin, connectorToEdge, createDebouncer, createRestAdapter, dashFor, endpointFromPin, endpointToPin, eventTargetIsOtherNode, extractImageFile, fileUrl, filterIcons, formatRelativeTime, formatShortcut, getCommandTooltip, getLastUsedStyle, getNodeIntersection, getNudgeDelta, getRecents, getStoredDetailPanelWidth, getZoomChord, handleCanvasFileDrop, handleClipboardShortcut, isAcceptableImageFile, projectCursorToPerimeter, pushRecent, rememberConnectorStyle, rememberNodeStyle, resolveClipboardChord, resolveEdgeEndpoints, resolveFlags, resolveToolShortcut, scaleNodesWithinRect, scheduleRaf, selectionEligibleForOverlay, setStoredDetailPanelWidth, shapeChromeClass, shapeChromeStyle, startResizeGesture, styleForKind, useIconRegistry, useResizeGesture };
+export { type AutoLayoutEdge, type AutoLayoutNode, type AutoLayoutOptions, BG_FALLBACK, BORDER_FALLBACK, Button, type ButtonProps, COLOR_TOKENS, COMMANDS, type CanvasAdapter, type CanvasDropDispatchArgs, type CanvasFeatureOverrides, type CanvasRuntime, CanvasToolbar, type CanvasToolbarProps, type ClipboardChord, type ClipboardChordInput, type ClipboardShortcutDeps, type ClipboardShortcutEventLike, CloudShape, type ColorToken, Command, type CommandCategory, type CommandContext, type CommandDef, CommandDialog, CommandEmpty, CommandGroup, type CommandId, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, type Connector, type ConnectorBase, type ConnectorCreateInput, type ConnectorDirection, type ConnectorPatch, type ConnectorPath, type ConnectorStyle, type ConnectorStylePatch, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger, DEFAULT_STORAGE_PREFIX, DEFAULT_STROKE_WIDTH, DETAIL_PANEL_WIDTH_DEFAULT, DETAIL_PANEL_WIDTH_KEY, DETAIL_PANEL_WIDTH_MAX, DETAIL_PANEL_WIDTH_MIN, DatabaseShape, type Debouncer, type DebouncerOptions, type DefaultConnector, type Demo, type DemoNode, type DerivedEdge, DetailPanel, type DetailPanelProps, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, type EdgeColorStyle, type EdgePin, type EdgePinSide, EditableEdge, type EditableEdgeData, type EditableEdgeType, EditableField, EmbedDialog, type EmbedDialogProps, type Endpoint, type EndpointInput, type EventConnector, type FloatingRect, HTML_BLOCK_DND_TYPE, HTML_DEFAULT_SIZE, type HandleCanvasFileDropArgs, HtmlNode, type HtmlNodeData, type HtmlNodeRuntimeData, HtmlNodeSection, type HtmlNodeType, type HttpAction, type HttpConnector, ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, ICON_NAMES, ICON_RECENTS_STORAGE_KEY, ICON_REGISTRY, ILLUSTRATIVE_SHAPE_RENDERERS, IMAGE_DEFAULT_SIZE, IMAGE_DROP_EXTS, IMAGE_DROP_MAX_LONGEST_SIDE, IMAGE_DROP_SVG_FALLBACK, IS_MAC, Icon, type IconInsertPayload, type IconInsertRfInstance, type IconInsertViewport, IconNode, type IconNodeData, type IconNodeRuntimeData, type IconNodeType, IconPickerBody, type IconPickerBodyProps, IconPickerPopover, type IconPickerPopoverProps, type IconProps, IconRegistryProvider, type IconRegistryProviderProps, type IconRegistryValue, IconToggleGroup, type IconToggleGroupProps, type IconToggleOption, type ImageDataDefaults, ImageNode, type ImageNodeData, type ImageNodeRuntimeData, type ImageNodeType, InlineEdit, type InlineEditProps, type LastUsedStyle, type LayoutDirection, LineDashedIcon, LineDottedIcon, LineSolidIcon, LockBadge, type ModifierEvent, type MultiResizeUpdate, NEW_NODE_BORDER_WIDTH, NEW_NODE_FONT_SIZE, NODE_DEFAULT_BG_WHITE, type NodeColorStyle, type NodeCreateInput, type NodeData, type NodeDescription, type NodeHeaderColorStyle, type NodeKind, type NodePatch, type NodeStatus, type NodeStylePatch, type NodeVisual, type NudgeDelta, type OverlayInputNode, PathCurveIcon, PathStepIcon, type Pin, PlaceholderCard, PlayNode, type PlayNodeData, type PlayNodeResult, type PlayNodeType, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, type QueueConnector, QueueShape, type Rect, type ReorderOp, ResizeControls, type ResizeControlsProps, type ResizeGestureCallbacks, type ResolvedCanvasFlags, type RestAdapterOptions, type RunResult, SELECTION_OVERLAY_PADDING, SHAPE_CLASS, SHAPE_DEFAULT_SIZE, type ScalableNode, type ScaleNodesOptions, SeeflowCanvas, type SeeflowCanvasHandle, type SeeflowCanvasMode, type SeeflowCanvasProps, SelectionResizeOverlay, type SelectionResizeOverlayProps, ServerShape, type ShapeDataDefaults, type ShapeKind, ShapeNode, type ShapeNodeData, type ShapeNodeRuntimeData, type ShapeNodeType, type ShapePartProps, ShareMenu, type ShareMenuMode, type ShareMenuProps, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, type ShortcutParts, type Side, Slider, StateNode, type StateNodeData, type StateNodeType, StatusBadge, type StatusBadgeProps, StatusPill, type StatusReport, type StatusReportState, StatusSection, StyleStrip, type StyleStripProps, TOOLBAR_SHAPES, Tabs, TabsContent, TabsList, TabsTrigger, type TextColorStyle, type ToolShortcutResult, type ToolbarShapeEntry, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, type UpdateNodePositionResult, type UploadImageResult, UserShape, type XY, type ZoomAction, applyLayout, applyNudge, buildIconInsertPayload, buildNewImageData, buildNewShapeData, buttonVariants, clampDetailPanelWidth, clampImageDims, classifyHandleDropFailure, classifyReconnectBodyDrop, cn, colorTokenStyle, computeIconInsertPosition, computeImageDims, computeNewRectFromAnchorDrag, computeSelectionResizeUpdates, computeUnionRect, computeUnmovedLockPin, connectorToEdge, createDebouncer, createRestAdapter, dashFor, endpointFromPin, endpointToPin, eventTargetIsOtherNode, extractImageFile, fileUrl, filterIcons, formatRelativeTime, formatShortcut, getCommandTooltip, getLastUsedStyle, getNodeIntersection, getNudgeDelta, getRecents, getStoredDetailPanelWidth, getZoomChord, handleCanvasFileDrop, handleClipboardShortcut, isAcceptableImageFile, projectCursorToPerimeter, pushRecent, rememberConnectorStyle, rememberNodeStyle, resolveClipboardChord, resolveEdgeEndpoints, resolveFlags, resolveToolShortcut, scaleNodesWithinRect, scheduleRaf, selectionEligibleForOverlay, setStoredDetailPanelWidth, shapeChromeClass, shapeChromeStyle, startResizeGesture, styleForKind, useIconRegistry, useResizeGesture };
