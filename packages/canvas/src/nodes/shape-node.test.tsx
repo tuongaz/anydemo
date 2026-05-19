@@ -1145,11 +1145,7 @@ describe('ShapeNode sticky fold', () => {
     // surface that mirrors a sticky's chrome) can reuse the exact derivation
     // without duplicating the fallback rule.
     expect(stickyFoldShade({})).toBe(COLOR_TOKENS.amber.headerBackground);
-    expect(stickyFoldShade({ backgroundColor: 'blue' })).toBe(
-      COLOR_TOKENS.blue.headerBackground,
-    );
-    expect(stickyFoldShade({ backgroundColor: 'pink' })).toBe(
-      COLOR_TOKENS.pink.headerBackground,
-    );
+    expect(stickyFoldShade({ backgroundColor: 'blue' })).toBe(COLOR_TOKENS.blue.headerBackground);
+    expect(stickyFoldShade({ backgroundColor: 'pink' })).toBe(COLOR_TOKENS.pink.headerBackground);
   });
 });

@@ -3249,8 +3249,10 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         width: STICKY_FOLD_SIZE,
         height: STICKY_FOLD_SIZE,
         viewBox: `0 0 ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE}`,
-        "aria-hidden": true,
+        role: "img",
+        "aria-label": "Folded paper corner",
         children: [
+          /* @__PURE__ */ jsx20("title", { children: "Folded paper corner" }),
           /* @__PURE__ */ jsx20(
             "path",
             {

@@ -186,9 +186,7 @@ export const STICKY_FOLD_SIZE = 20;
 // keeps the fold themed across every token (default / amber / blue / …)
 // without bespoke per-token tables. Sticky's render-time default is amber, so
 // an unset `backgroundColor` falls through to amber's headerBackground.
-export function stickyFoldShade(
-  data: Pick<ShapeNodeData, 'backgroundColor'>,
-): string | undefined {
+export function stickyFoldShade(data: Pick<ShapeNodeData, 'backgroundColor'>): string | undefined {
   const token = data.backgroundColor ?? 'amber';
   return colorTokenStyle(token, 'node-header').backgroundColor;
 }
@@ -377,8 +375,10 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         width={STICKY_FOLD_SIZE}
         height={STICKY_FOLD_SIZE}
         viewBox={`0 0 ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE}`}
-        aria-hidden
+        role="img"
+        aria-label="Folded paper corner"
       >
+        <title>Folded paper corner</title>
         <path
           d={`M 0 0 L ${STICKY_FOLD_SIZE} 0 L ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE} Z`}
           fill={stickyFoldShade(data)}
