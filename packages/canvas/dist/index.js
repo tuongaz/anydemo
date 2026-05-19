@@ -4928,7 +4928,7 @@ function DetailPanel({
         SheetContent,
         {
           side: "right",
-          className: "sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!",
+          className: "sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:shadow-[-12px_0_40px_-12px_rgba(0,0,0,0.6)] sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!",
           style: widthStyle,
           "data-testid": "detail-panel",
           onEscapeKeyDown: (e) => {
@@ -4960,7 +4960,8 @@ function DetailPanel({
               }
             ),
             inspectableNode ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:gap-2 sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-4 sf:pt-5", children: [
+                /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-[0.18em] sf:text-muted-foreground/70", children: "Node" }),
                 showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
                   showIconField && onIconChange ? /* @__PURE__ */ jsx35(
                     TitleIconTrigger,
@@ -5003,45 +5004,40 @@ function DetailPanel({
                   inspectableNode.type
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs23("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-3", children: [
                 statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
-                /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
-                  /* @__PURE__ */ jsx35(SectionLabel, { children: "Description" }),
-                  /* @__PURE__ */ jsx35(
-                    EditableField,
-                    {
-                      nodeId: inspectableNode.id,
-                      value: description,
-                      placeholder: "Short description shown on the node body",
-                      multiline: true,
-                      ariaLabel: "Description",
-                      testIdBase: "detail-panel-description",
-                      onSave: onDescriptionChange,
-                      textClassName: "sf:font-medium sf:text-muted-foreground"
-                    }
-                  )
-                ] }),
-                /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
-                  /* @__PURE__ */ jsx35(SectionLabel, { children: "Detail" }),
-                  /* @__PURE__ */ jsx35(
-                    EditableField,
-                    {
-                      nodeId: inspectableNode.id,
-                      value: detail,
-                      placeholder: "Long-form notes, context, anything\u2026",
-                      multiline: true,
-                      ariaLabel: "Detail",
-                      testIdBase: "detail-panel-detail",
-                      onSave: onDetailChange,
-                      markdown: true,
-                      textClassName: "sf:text-foreground/85"
-                    }
-                  )
-                ] }),
+                /* @__PURE__ */ jsx35(
+                  EditableField,
+                  {
+                    nodeId: inspectableNode.id,
+                    value: description,
+                    placeholder: "Short description shown on the node body",
+                    multiline: true,
+                    ariaLabel: "Description",
+                    testIdBase: "detail-panel-description",
+                    onSave: onDescriptionChange,
+                    textClassName: "sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground"
+                  }
+                ),
+                /* @__PURE__ */ jsx35(
+                  EditableField,
+                  {
+                    nodeId: inspectableNode.id,
+                    value: detail,
+                    placeholder: "Long-form notes, context, anything\u2026",
+                    multiline: true,
+                    ariaLabel: "Detail",
+                    testIdBase: "detail-panel-detail",
+                    onSave: onDetailChange,
+                    markdown: true,
+                    textClassName: "sf:text-sm sf:leading-relaxed sf:text-foreground/90"
+                  }
+                ),
                 inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
             ] }) : connector ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
+              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:gap-2 sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-4 sf:pt-5", children: [
+                /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-[0.18em] sf:text-muted-foreground/70", children: "Connector" }),
                 /* @__PURE__ */ jsx35(
                   SheetTitle,
                   {
@@ -5063,9 +5059,6 @@ function DetailPanel({
       )
     }
   );
-}
-function SectionLabel({ children }) {
-  return /* @__PURE__ */ jsx35("span", { className: "sf:px-2 sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-widest sf:text-muted-foreground/80", children });
 }
 function EditableField({
   nodeId,
