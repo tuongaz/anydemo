@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { FlowSchema, HtmlNodeDataSchema, StatusReportSchema } from './schema.ts';
+import {
+  ArchitectureSchema,
+  FlowSchema,
+  HtmlNodeDataSchema,
+  StatusReportSchema,
+  StyleSchema,
+} from './schema.ts';
 
 const fixturePath = (name: string) => new URL(`../test/fixtures/${name}`, import.meta.url).pathname;
 
@@ -15,7 +21,7 @@ describe('FlowSchema', () => {
         `expected valid fixture to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`,
       );
     }
-    expect(result.data.version).toBe(1);
+    expect(result.data.version).toBe(2);
     expect(result.data.name).toBe('Checkout flow');
     expect(result.data.nodes).toHaveLength(2);
     expect(result.data.connectors).toHaveLength(1);
@@ -63,7 +69,7 @@ describe('FlowSchema', () => {
 
   it('parses connectors of all three kinds: http, event, queue', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'all-kinds',
       nodes: [
         {
@@ -139,7 +145,7 @@ describe('FlowSchema', () => {
 
   it('rejects a connector with an unknown discriminator kind', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-kind',
       nodes: [
         {
@@ -176,7 +182,7 @@ describe('FlowSchema', () => {
         | 'queue'
         | 'cloud',
     ) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'shape-demo',
       nodes: [
         {
@@ -214,7 +220,7 @@ describe('FlowSchema', () => {
 
   it('accepts a shapeNode with shape=database and no label (US-009 illustrative)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'db-shape',
       nodes: [
         {
@@ -239,7 +245,7 @@ describe('FlowSchema', () => {
 
   it('accepts a shapeNode without an optional label', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'no-label-shape',
       nodes: [
         {
@@ -257,7 +263,7 @@ describe('FlowSchema', () => {
 
   it('rejects a shapeNode with an unknown shape variant', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-shape',
       nodes: [
         {
@@ -275,7 +281,7 @@ describe('FlowSchema', () => {
 
   it('accepts node visual fields (width/height/borderColor/backgroundColor) on every node type', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'visual-fields',
       nodes: [
         {
@@ -333,7 +339,7 @@ describe('FlowSchema', () => {
 
   it('round-trips locked on every node kind (US-019)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'lockable',
       nodes: [
         {
@@ -398,7 +404,7 @@ describe('FlowSchema', () => {
 
   it('accepts nodes that omit the new visual fields entirely (backwards compatible)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'no-visual-fields',
       nodes: [
         {
@@ -415,7 +421,7 @@ describe('FlowSchema', () => {
 
   it('rejects width/height that are zero or negative', () => {
     const demo = (width: number, height: number) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-size',
       nodes: [
         {
@@ -440,7 +446,7 @@ describe('FlowSchema', () => {
 
   it('rejects an invalid color token (only enum values allowed)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-color',
       nodes: [
         {
@@ -468,7 +474,7 @@ describe('FlowSchema', () => {
 
   it('round-trips a default connector with no semantic payload', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'default-conn',
       nodes: [
         {
@@ -499,7 +505,7 @@ describe('FlowSchema', () => {
 
   it('accepts connector visual fields (style/color/direction) on every kind', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'visual-connectors',
       nodes: [
         {
@@ -555,7 +561,7 @@ describe('FlowSchema', () => {
 
   it('round-trips optional sourceHandle/targetHandle on connectors (US-013)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'connector-handles',
       nodes: [
         {
@@ -594,7 +600,7 @@ describe('FlowSchema', () => {
 
   it('parses connectors authored without handle ids (back-compat for US-013)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'no-handles',
       nodes: [
         {
@@ -624,7 +630,7 @@ describe('FlowSchema', () => {
 
   it('round-trips optional sourcePin/targetPin on connectors (US-006)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'connector-pins',
       nodes: [
         {
@@ -663,7 +669,7 @@ describe('FlowSchema', () => {
 
   it('parses connectors authored without sourcePin/targetPin (back-compat for US-006)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'no-pins',
       nodes: [
         {
@@ -693,7 +699,7 @@ describe('FlowSchema', () => {
 
   it('rejects a pin with an unknown side (US-006)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-pin-side',
       nodes: [
         {
@@ -724,7 +730,7 @@ describe('FlowSchema', () => {
 
   it('rejects a pin with t outside [0, 1] (US-006)', () => {
     const make = (t: unknown) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-pin-t',
       nodes: [
         {
@@ -758,7 +764,7 @@ describe('FlowSchema', () => {
 
   it('rejects an invalid connector style value', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-style',
       nodes: [
         {
@@ -781,7 +787,7 @@ describe('FlowSchema', () => {
 
   it('rejects an invalid connector direction value', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-dir',
       nodes: [
         {
@@ -804,7 +810,7 @@ describe('FlowSchema', () => {
 
   it('rejects an invalid connector color token', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-color',
       nodes: [
         {
@@ -827,7 +833,7 @@ describe('FlowSchema', () => {
 
   it('accepts a positive borderSize on nodes and connectors, rejects 0/negative', () => {
     const make = (nodeBorderSize: unknown, connBorderSize: unknown) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'border-size',
       nodes: [
         {
@@ -876,7 +882,7 @@ describe('FlowSchema', () => {
 
   it('accepts cornerRadius=12 and cornerRadius=0 on a node, rejects negative values (US-001)', () => {
     const make = (cornerRadius: unknown) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'corner-radius',
       nodes: [
         {
@@ -923,7 +929,7 @@ describe('FlowSchema', () => {
   // no absolute paths, no `..` traversal, no leading slash.
   it('parses a demo containing one imageNode with data.path (US-004)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'image-demo',
       nodes: [
         {
@@ -956,7 +962,7 @@ describe('FlowSchema', () => {
     // result is that the schema rejects the legacy payload, with no compat
     // layer.
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'legacy-image',
       nodes: [
         {
@@ -973,7 +979,7 @@ describe('FlowSchema', () => {
 
   it('rejects an imageNode whose path is absolute (US-004)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-image-abs',
       nodes: [
         {
@@ -990,7 +996,7 @@ describe('FlowSchema', () => {
 
   it('rejects an imageNode whose path uses `..` traversal (US-004)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-image-traversal',
       nodes: [
         {
@@ -1010,7 +1016,7 @@ describe('FlowSchema', () => {
   // the new field's accept/reject behavior alongside back-compat for unset fields.
   it('round-trips an image node with borderColor / borderWidth / borderStyle (US-014)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'styled-image',
       nodes: [
         {
@@ -1040,7 +1046,7 @@ describe('FlowSchema', () => {
 
   it('accepts an image node with no border fields (US-014 back-compat)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'plain-image',
       nodes: [
         {
@@ -1066,7 +1072,7 @@ describe('FlowSchema', () => {
   it('rejects an image node with borderWidth outside the 1–8 range (US-014)', () => {
     const basePath = 'assets/pixel.png';
     const tooSmall = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-w',
       nodes: [
         {
@@ -1089,7 +1095,7 @@ describe('FlowSchema', () => {
 
   it('accepts a connector pointing at an imageNode id (US-002)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'image-conn',
       nodes: [
         {
@@ -1120,7 +1126,7 @@ describe('FlowSchema', () => {
   // change can't add a hidden node-type whitelist.
   it('accepts a connector pointing at an iconNode id as source AND target (US-023)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'icon-conn',
       nodes: [
         {
@@ -1160,7 +1166,7 @@ describe('FlowSchema', () => {
 
   it('parses a demo with a top-level resetAction (US-003 / US-008 script-shape)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'reset-demo',
       nodes: [
         {
@@ -1189,7 +1195,7 @@ describe('FlowSchema', () => {
 
   it('parses a demo without resetAction (back-compat for US-003)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'no-reset',
       nodes: [
         {
@@ -1210,7 +1216,7 @@ describe('FlowSchema', () => {
 
   it('parses an iconNode with only the required icon field (US-008)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'icon-demo',
       nodes: [
         {
@@ -1235,7 +1241,7 @@ describe('FlowSchema', () => {
 
   it('parses an iconNode with every optional field set (US-008)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'icon-full',
       nodes: [
         {
@@ -1275,7 +1281,7 @@ describe('FlowSchema', () => {
     // through the schema (consumers can treat empty + absent the same way at
     // render time without needing a coercion step).
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'icon-empty-label',
       nodes: [
         {
@@ -1298,7 +1304,7 @@ describe('FlowSchema', () => {
 
   it('rejects an iconNode with an empty icon string (US-008)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-icon',
       nodes: [
         {
@@ -1315,7 +1321,7 @@ describe('FlowSchema', () => {
 
   it('rejects an iconNode strokeWidth outside [0.5, 4] (US-008)', () => {
     const make = (strokeWidth: number) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-stroke',
       nodes: [
         {
@@ -1335,7 +1341,7 @@ describe('FlowSchema', () => {
 
   it('rejects an iconNode with non-positive width or height (US-008)', () => {
     const make = (width: number, height: number) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'bad-icon-size',
       nodes: [
         {
@@ -1355,7 +1361,7 @@ describe('FlowSchema', () => {
 
   it('round-trips optional connector fontSize (US-018)', () => {
     const demo = {
-      version: 1 as const,
+      version: 2 as const,
       name: 'connector-fontsize',
       nodes: [
         {
@@ -1384,7 +1390,7 @@ describe('FlowSchema', () => {
 
   it('rejects non-positive connector fontSize (US-018)', () => {
     const make = (size: number) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'connector-fontsize-bad',
       nodes: [
         {
@@ -1412,7 +1418,7 @@ describe('FlowSchema', () => {
   it('demos without group nodes round-trip unchanged', () => {
     // Demos without group nodes produce a deep-equal result with no injected keys.
     const raw = {
-      version: 1,
+      version: 2,
       name: 'Legacy Flow',
       nodes: [
         {
@@ -1455,7 +1461,7 @@ describe('FlowSchema', () => {
       stateSource: { kind: 'event' as const },
     };
     const baseDemo = (data: Record<string, unknown>) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'minimal',
       nodes: [{ id: 'n1', type: 'stateNode' as const, position: { x: 0, y: 0 }, data }],
       connectors: [],
@@ -1473,7 +1479,7 @@ describe('FlowSchema', () => {
   // alongside `name`. Both string-typed, both optional, both no length cap.
   describe('description / detail metadata', () => {
     const makeDemoWithNode = (node: Record<string, unknown>) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'meta-demo',
       nodes: [node],
       connectors: [],
@@ -1618,7 +1624,7 @@ describe('FlowSchema', () => {
   describe('htmlNode (US-011 illustrative-shapes-htmlnode)', () => {
     it('parses a minimal htmlNode with only the required htmlPath', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'html-demo',
         nodes: [
           {
@@ -1642,7 +1648,7 @@ describe('FlowSchema', () => {
 
     it('round-trips an htmlNode with label + every NodeVisualBaseShape field', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'html-styled',
         nodes: [
           {
@@ -1687,7 +1693,7 @@ describe('FlowSchema', () => {
 
     it('round-trips description / detail on an htmlNode', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'html-meta',
         nodes: [
           {
@@ -1713,7 +1719,7 @@ describe('FlowSchema', () => {
 
     it('rejects an htmlNode whose htmlPath is absolute', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'bad-abs',
         nodes: [
           {
@@ -1734,7 +1740,7 @@ describe('FlowSchema', () => {
 
     it('rejects an htmlNode whose htmlPath uses `..` traversal', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'bad-traversal',
         nodes: [
           {
@@ -1755,7 +1761,7 @@ describe('FlowSchema', () => {
 
     it('rejects an htmlNode whose htmlPath uses a Windows drive-letter root', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'bad-drive',
         nodes: [
           {
@@ -1772,7 +1778,7 @@ describe('FlowSchema', () => {
 
     it('rejects an htmlNode with an empty htmlPath', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'empty-path',
         nodes: [
           {
@@ -1792,7 +1798,7 @@ describe('FlowSchema', () => {
       // missing files render a placeholder (US-014) instead of breaking the
       // entire demo at parse time.
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'missing-on-disk',
         nodes: [
           {
@@ -1809,7 +1815,7 @@ describe('FlowSchema', () => {
 
     it('accepts an htmlNode as a connector endpoint (source AND target)', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'html-conn',
         nodes: [
           {
@@ -1843,7 +1849,7 @@ describe('FlowSchema', () => {
   // legacy HttpAction schema has been removed.
   describe('script-based playAction + statusAction (US-001)', () => {
     const makeDemoWithPlayAction = (playAction: unknown) => ({
-      version: 1 as const,
+      version: 2 as const,
       name: 'script-demo',
       nodes: [
         {
@@ -1952,7 +1958,7 @@ describe('FlowSchema', () => {
 
     it('parses a valid statusAction on a playNode', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'status-demo',
         nodes: [
           {
@@ -1993,7 +1999,7 @@ describe('FlowSchema', () => {
 
     it('parses a valid statusAction on a stateNode (no playAction required)', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'state-status-demo',
         nodes: [
           {
@@ -2025,7 +2031,7 @@ describe('FlowSchema', () => {
 
     it('rejects a statusAction with maxLifetimeMs above 3_600_000', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'bad-lifetime',
         nodes: [
           {
@@ -2052,7 +2058,7 @@ describe('FlowSchema', () => {
 
     it('accepts a statusAction with maxLifetimeMs at the upper bound (3_600_000)', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'lifetime-boundary',
         nodes: [
           {
@@ -2079,7 +2085,7 @@ describe('FlowSchema', () => {
 
     it('rejects a statusAction with zero or negative maxLifetimeMs', () => {
       const buildDemo = (maxLifetimeMs: number) => ({
-        version: 1 as const,
+        version: 2 as const,
         name: 'lifetime-bound',
         nodes: [
           {
@@ -2139,7 +2145,7 @@ describe('FlowSchema', () => {
 
     it('resetAction on the demo uses the script action shape (US-008)', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'reset-demo',
         nodes: [
           {
@@ -2171,7 +2177,7 @@ describe('FlowSchema', () => {
 
     it('rejects a legacy HTTP-shaped resetAction (US-008 cut)', () => {
       const demo = {
-        version: 1 as const,
+        version: 2 as const,
         name: 'reset-demo',
         nodes: [
           {
@@ -2228,6 +2234,190 @@ describe('HtmlNodeDataSchema autoSize', () => {
 
   it('rejects non-boolean autoSize', () => {
     const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html', autoSize: 'yes' });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe('ArchitectureSchema', () => {
+  it('accepts a minimal architecture with one play node', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'Test Flow',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'playNode',
+          data: {
+            name: 'POST /x',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+          },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects visual fields on node.data', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'Test',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'playNode',
+          data: {
+            name: 'X',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
+            fontSize: 15,
+          },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects node.position at the root', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'Test',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'playNode',
+          position: { x: 0, y: 0 },
+          data: {
+            name: 'X',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
+          },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects visual fields on connectors', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'Test',
+      nodes: [
+        {
+          id: 'a',
+          type: 'playNode',
+          data: {
+            name: 'A',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
+          },
+        },
+        {
+          id: 'b',
+          type: 'stateNode',
+          data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
+        },
+      ],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', color: 'blue' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('enforces connector source/target referential integrity', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'T',
+      nodes: [],
+      connectors: [{ id: 'c', source: 'missing', target: 'also-missing', kind: 'default' }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('keeps label, eventName on connectors', () => {
+    const result = ArchitectureSchema.safeParse({
+      version: 2,
+      name: 'T',
+      nodes: [
+        {
+          id: 'a',
+          type: 'playNode',
+          data: {
+            name: 'A',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
+          },
+        },
+        {
+          id: 'b',
+          type: 'stateNode',
+          data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
+        },
+      ],
+      connectors: [{ id: 'c', source: 'a', target: 'b', kind: 'event', eventName: 'evt', label: 'hi' }],
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('StyleSchema', () => {
+  it('accepts an empty style object', () => {
+    expect(StyleSchema.safeParse({}).success).toBe(true);
+  });
+
+  it('accepts position + visual fields on a node entry', () => {
+    const r = StyleSchema.safeParse({
+      nodes: {
+        n1: { position: { x: 1, y: 2 }, width: 100, height: 50, borderColor: 'blue', fontSize: 14, locked: false },
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts iconNode-specific color/strokeWidth and htmlNode autoSize', () => {
+    const r = StyleSchema.safeParse({
+      nodes: {
+        i1: { color: 'red', strokeWidth: 2 },
+        h1: { autoSize: true },
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('accepts connector handles, pins, and visual fields', () => {
+    const r = StyleSchema.safeParse({
+      connectors: {
+        c1: {
+          sourceHandle: 'r',
+          targetHandle: 'l',
+          sourceHandleAutoPicked: true,
+          sourcePin: { side: 'right', t: 0.5 },
+          style: 'dashed',
+          color: 'blue',
+          direction: 'forward',
+          borderSize: 1,
+          path: 'curve',
+          fontSize: 11,
+        },
+      },
+    });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects unknown keys on a node entry', () => {
+    const r = StyleSchema.safeParse({ nodes: { n1: { fontSize: 14, bogus: 1 } } });
+    expect(r.success).toBe(false);
+  });
+
+  it('rejects unknown keys on the root', () => {
+    const r = StyleSchema.safeParse({ nodes: {}, extra: true });
     expect(r.success).toBe(false);
   });
 });

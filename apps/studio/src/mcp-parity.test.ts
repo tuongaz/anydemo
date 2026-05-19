@@ -18,7 +18,7 @@ import { createApp } from './server.ts';
 // file self-contained (test files shouldn't cross-import from each other —
 // re-running mcp.test.ts in isolation should still work).
 const VALID_DEMO_TWO_NODES = {
-  version: 1,
+  version: 2,
   name: 'Parity Two Nodes',
   nodes: [
     {
@@ -54,7 +54,7 @@ const VALID_DEMO_WITH_CONN = {
 };
 
 const VALID_DEMO_THREE_NODES = {
-  version: 1,
+  version: 2,
   name: 'Parity Three Nodes',
   nodes: [
     {

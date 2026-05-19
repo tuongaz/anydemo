@@ -17,7 +17,7 @@ import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
 
 const VALID_DEMO = {
-  version: 1,
+  version: 2,
   name: 'Checkout Flow',
   nodes: [
     {
@@ -90,7 +90,7 @@ describe('POST /api/flows/register', () => {
   it('writes .seeflow/sdk/emit.ts when the demo declares an event-bound state node', async () => {
     const { app } = buildApp();
     const eventDemo = {
-      version: 1,
+      version: 2,
       name: 'Event Flow',
       nodes: [
         {
@@ -252,7 +252,7 @@ describe('POST /api/flows/validate', () => {
   it('flags tier-mismatch when tier=real but no playable nodes exist', async () => {
     const { app } = buildApp();
     const staticOnly = {
-      version: 1,
+      version: 2,
       name: 'Static only',
       nodes: [
         {
@@ -274,7 +274,7 @@ describe('POST /api/flows/validate', () => {
   it('flags cap issue when node count exceeds 30', async () => {
     const { app } = buildApp();
     const bigDemo = {
-      version: 1,
+      version: 2,
       name: 'Too big',
       nodes: Array.from({ length: 31 }, (_, i) => ({
         id: `n${i}`,
@@ -772,7 +772,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app } = buildPlayApp({ stdout: '{}' });
     // Build a demo whose node is a shapeNode (no playAction by definition).
     const demo = {
-      version: 1,
+      version: 2,
       name: 'Shape only',
       nodes: [
         {
@@ -1192,7 +1192,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const text = readFileSync(demoFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
     // Top-level "version" line should be indented with 2 spaces.
-    expect(text).toMatch(/^\{\n {2}"version": 1,/);
+    expect(text).toMatch(/^\{\n {2}"version": 2,/);
   });
 
   it('returns 404 for unknown flowId', async () => {
@@ -1242,7 +1242,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
 
 describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
   const VALID_DEMO_THREE_NODES = {
-    version: 1,
+    version: 2,
     name: 'Three Nodes',
     nodes: [
       {
@@ -1530,7 +1530,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
 
     const text = readFileSync(demoFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
-    expect(text).toMatch(/^\{\n {2}"version": 1,/);
+    expect(text).toMatch(/^\{\n {2}"version": 2,/);
   });
 
   // Three-field consolidation: description (short body) + detail (long form)
@@ -1820,7 +1820,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
 describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
   const VALID_DEMO_TWO_NODES = {
-    version: 1,
+    version: 2,
     name: 'Two Nodes',
     nodes: [
       {
@@ -2061,7 +2061,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
 
 describe('PATCH /api/flows/:id/connectors/:connId', () => {
   const VALID_DEMO_WITH_CONN = {
-    version: 1,
+    version: 2,
     name: 'Two Nodes',
     nodes: [
       {
@@ -2340,7 +2340,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
 
 describe('POST /api/flows/:id/connectors', () => {
   const VALID_DEMO_TWO_NODES = {
-    version: 1,
+    version: 2,
     name: 'Two Nodes',
     nodes: [
       {
@@ -2486,7 +2486,7 @@ describe('POST /api/flows/:id/connectors', () => {
   it('accepts a connector pointing AT an iconNode (US-023)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
-      version: 1,
+      version: 2,
       name: 'Icon target',
       nodes: [
         {
@@ -2526,7 +2526,7 @@ describe('POST /api/flows/:id/connectors', () => {
   it('accepts a connector pointing FROM an iconNode (US-023)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
-      version: 1,
+      version: 2,
       name: 'Icon source',
       nodes: [
         {
@@ -2564,7 +2564,7 @@ describe('POST /api/flows/:id/connectors', () => {
   it('accepts a connector between two iconNodes (US-023)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
-      version: 1,
+      version: 2,
       name: 'Icon-to-icon',
       nodes: [
         {
@@ -2601,7 +2601,7 @@ describe('POST /api/flows/:id/connectors', () => {
 
 describe('DELETE /api/flows/:id/connectors/:connId', () => {
   const VALID_DEMO_WITH_TWO_CONNS = {
-    version: 1,
+    version: 2,
     name: 'Two Nodes',
     nodes: [
       {
@@ -2716,7 +2716,7 @@ describe('POST /api/projects', () => {
     // Pre-create the expected project path.
     const projectPath = join(projectBaseDir, 'existing-project');
     mkdirSync(join(projectPath, '.seeflow'), { recursive: true });
-    const existingDemo = { version: 1, name: 'Existing Project', nodes: [], connectors: [] };
+    const existingDemo = { version: 2, name: 'Existing Project', nodes: [], connectors: [] };
     writeFileSync(join(projectPath, '.seeflow', 'seeflow.json'), JSON.stringify(existingDemo));
     const beforeBytes = readFileSync(join(projectPath, '.seeflow', 'seeflow.json'), 'utf-8');
 
@@ -2755,7 +2755,7 @@ describe('POST /api/projects', () => {
     const written = JSON.parse(
       readFileSync(join(projectBaseDir, 'fresh-project', '.seeflow', 'seeflow.json'), 'utf-8'),
     );
-    expect(written).toEqual({ version: 1, name: 'Fresh Project', nodes: [], connectors: [] });
+    expect(written).toEqual({ version: 2, name: 'Fresh Project', nodes: [], connectors: [] });
   });
 
   it('rejects empty name with 400', async () => {

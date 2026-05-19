@@ -6,7 +6,7 @@ import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
 
 const VALID_DEMO = {
-  version: 1,
+  version: 2,
   name: 'Checkout Flow',
   nodes: [
     {
@@ -279,7 +279,7 @@ describe('seeflow_create_project', () => {
 // Multi-node fixture for delete-cascade and reorder coverage. Nodes a/b/c
 // chained via connectors a→b and b→c.
 const VALID_DEMO_THREE_NODES = {
-  version: 1,
+  version: 2,
   name: 'Three Nodes',
   nodes: [
     {
@@ -686,7 +686,7 @@ describe('seeflow_patch_node', () => {
     // doesn't recognize. FlowSchema strips it on parse but the patch handler
     // mutates the raw parsed JSON so the on-disk file retains the field.
     const repoPath = tmpRepoWithDemo({
-      version: 1,
+      version: 2,
       name: 'Forward Compat',
       nodes: [
         {
@@ -730,7 +730,7 @@ describe('seeflow_patch_node', () => {
 // ---------- Connector CRUD tools (US-005) ----------
 
 const VALID_DEMO_TWO_NODES = {
-  version: 1,
+  version: 2,
   name: 'Two Nodes',
   nodes: [
     {

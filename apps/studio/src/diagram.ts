@@ -137,7 +137,7 @@ export interface AssembleStats {
 
 export interface AssembleResult {
   demo: {
-    version: 1;
+    version: 2;
     name: string;
     nodes: Array<Record<string, unknown>>;
     connectors: Array<Record<string, unknown>>;
@@ -177,7 +177,7 @@ export const assembleDemo = (req: AssembleRequest): AssembleResult => {
 
   return {
     demo: {
-      version: 1,
+      version: 2,
       name: req.wiring.name ?? 'Untitled diagram',
       nodes: positionedNodes,
       connectors,

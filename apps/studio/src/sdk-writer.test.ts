@@ -6,7 +6,7 @@ import type { Flow } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 
 const REQUEST_DEMO: Flow = {
-  version: 1,
+  version: 2,
   name: 'Request only',
   nodes: [
     {

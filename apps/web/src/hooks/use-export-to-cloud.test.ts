@@ -5,7 +5,7 @@ import { strFromU8, unzipSync } from 'fflate';
 
 const realFetch = globalThis.fetch;
 
-const emptyDemo: Flow = { version: 1, name: 'Test', nodes: [], connectors: [] };
+const emptyDemo: Flow = { version: 2, name: 'Test', nodes: [], connectors: [] };
 
 function makeDetail(flow: Flow | null = emptyDemo): FlowDetail {
   return {
@@ -117,7 +117,7 @@ describe('exportToCloud', () => {
   it('fetches imageNode files and includes them under files/ in the zip', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71]);
     const demo: Flow = {
-      version: 1,
+      version: 2,
       name: 'Img Flow',
       nodes: [
         { id: 'n1', type: 'imageNode', position: { x: 0, y: 0 }, data: { path: 'assets/img.png' } },
@@ -155,7 +155,7 @@ describe('exportToCloud', () => {
   it('fetches htmlNode files and includes them under files/ in the zip', async () => {
     const htmlBytes = new Uint8Array([60, 104, 116, 109, 108, 62]);
     const demo: Flow = {
-      version: 1,
+      version: 2,
       name: 'Html Flow',
       nodes: [
         {
@@ -194,7 +194,7 @@ describe('exportToCloud', () => {
 
   it('deduplicates file paths when multiple nodes reference the same file', async () => {
     const demo: Flow = {
-      version: 1,
+      version: 2,
       name: 'Dup Flow',
       nodes: [
         {
@@ -231,7 +231,7 @@ describe('exportToCloud', () => {
 
   it('skips files that return a non-ok status', async () => {
     const demo: Flow = {
-      version: 1,
+      version: 2,
       name: 'Missing Flow',
       nodes: [
         {

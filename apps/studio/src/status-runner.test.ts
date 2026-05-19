@@ -100,7 +100,7 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
 
   const nodeId = opts.nodeId ?? 'status-node';
   const demo = {
-    version: 1,
+    version: 2,
     name: 'Test demo',
     nodes: [
       {
@@ -325,7 +325,7 @@ describe('createStatusRunner', () => {
     mkdirSync(join(cwd, '.seeflow', 'scripts'), { recursive: true });
     writeFileSync(join(cwd, '.seeflow', 'scripts', 'status.ts'), '// stub');
     const demo = {
-      version: 1,
+      version: 2,
       name: 'Lifetime test',
       nodes: [
         {

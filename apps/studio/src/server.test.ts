@@ -69,7 +69,7 @@ describe('GET /api/projects/:id/files/:path', () => {
   const buildFixture = () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-files-repo-'));
     mkdirSync(join(repoDir, '.seeflow', 'assets'), { recursive: true });
-    writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":1}');
+    writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":2}');
     writeFileSync(join(repoDir, '.seeflow', 'assets', 'hello.txt'), 'hi there');
     writeFileSync(join(repoDir, '.seeflow', 'blocks-card.html'), '<p>hi</p>');
     // A secret file just outside .seeflow to verify traversal defense.
@@ -144,7 +144,7 @@ const buildShelloutFixture = (opts?: {
 }): ShelloutFixture => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-shellout-repo-'));
   mkdirSync(join(repoDir, '.seeflow', 'blocks'), { recursive: true });
-  writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":1}');
+  writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":2}');
   writeFileSync(join(repoDir, '.seeflow', 'blocks', 'card.html'), '<p>hi</p>');
   writeFileSync(join(repoDir, 'secret.txt'), 'never expose me');
 
@@ -371,7 +371,7 @@ describe('POST /api/projects/:id/files/upload', () => {
   const buildUploadFixture = () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-upload-repo-'));
     mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-    writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":1}');
+    writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), '{"version":2}');
 
     const registry = createRegistry({
       path: join(mkdtempSync(join(tmpdir(), 'seeflow-upload-reg-')), 'registry.json'),

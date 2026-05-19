@@ -9,7 +9,7 @@ import { createApp } from './server.ts';
 const CLI_PATH = join(dirname(fileURLToPath(import.meta.url)), 'cli.ts');
 
 const VALID_DEMO = {
-  version: 1,
+  version: 2,
   name: 'Checkout',
   nodes: [
     {

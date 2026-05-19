@@ -686,7 +686,7 @@ export async function createProjectImpl(
     return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: false } };
   }
 
-  const scaffold: Flow = { version: 1, name, nodes: [], connectors: [] };
+  const scaffold: Flow = { version: 2, name, nodes: [], connectors: [] };
 
   try {
     mkdirSync(join(folderPath, '.seeflow'), { recursive: true });

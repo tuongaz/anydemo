@@ -398,7 +398,7 @@ const ConnectorSchema = z.discriminatedUnion('kind', [
 
 export const FlowSchema = z
   .object({
-    version: z.literal(1),
+    version: z.literal(2),
     name: z.string().min(1),
     nodes: z.array(NodeSchema),
     connectors: z.array(ConnectorSchema),
@@ -452,3 +452,247 @@ export type StatusAction = z.infer<typeof StatusActionSchema>;
 export type StatusReport = z.infer<typeof StatusReportSchema>;
 export type ResetAction = z.infer<typeof ResetActionSchema>;
 export type StateSource = z.infer<typeof StateSourceSchema>;
+
+// =============================================================================
+// Architecture schema — pure semantic data, every visual/layout field stripped.
+// What lives on disk in <project>/.seeflow/architecture.json after the split.
+// =============================================================================
+
+const ArchitectureNodeDataBaseShape = {
+  name: z.string().min(1),
+  kind: z.string().min(1),
+  stateSource: StateSourceSchema,
+  handlerModule: z.string().optional(),
+  icon: z.string().optional(),
+  ...NodeDescriptionBaseShape,
+};
+
+const ArchitecturePlayNodeDataSchema = z
+  .object({
+    ...ArchitectureNodeDataBaseShape,
+    playAction: PlayActionSchema,
+    statusAction: StatusActionSchema.optional(),
+  })
+  .strict();
+
+const ArchitectureStateNodeDataSchema = z
+  .object({
+    ...ArchitectureNodeDataBaseShape,
+    playAction: PlayActionSchema.optional(),
+    statusAction: StatusActionSchema.optional(),
+  })
+  .strict();
+
+const ArchitectureShapeNodeDataSchema = z
+  .object({
+    shape: ShapeKindSchema,
+    name: z.string().optional(),
+    ...NodeDescriptionBaseShape,
+  })
+  .strict();
+
+const ArchitectureImageNodeDataSchema = z
+  .object({
+    path: z.string().min(1).refine(isCleanRelativePath, {
+      message: 'path must be a relative path under .seeflow/ (no absolute / traversal)',
+    }),
+    alt: z.string().optional(),
+    ...NodeDescriptionBaseShape,
+  })
+  .strict();
+
+const ArchitectureIconNodeDataSchema = z
+  .object({
+    icon: z.string().min(1),
+    alt: z.string().optional(),
+    name: z.string().optional(),
+    ...NodeDescriptionBaseShape,
+  })
+  .strict();
+
+const ArchitectureHtmlNodeDataSchema = z
+  .object({
+    htmlPath: z.string().min(1).refine(isCleanRelativePath, {
+      message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
+    }),
+    name: z.string().optional(),
+    icon: z.string().optional(),
+    ...NodeDescriptionBaseShape,
+  })
+  .strict();
+
+const ArchitectureNodeBaseShape = {
+  id: z.string().min(1),
+};
+
+const ArchitectureNodeSchema = z.discriminatedUnion('type', [
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('playNode'),
+      data: ArchitecturePlayNodeDataSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('stateNode'),
+      data: ArchitectureStateNodeDataSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('shapeNode'),
+      data: ArchitectureShapeNodeDataSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('imageNode'),
+      data: ArchitectureImageNodeDataSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('iconNode'),
+      data: ArchitectureIconNodeDataSchema,
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureNodeBaseShape,
+      type: z.literal('htmlNode'),
+      data: ArchitectureHtmlNodeDataSchema,
+    })
+    .strict(),
+]);
+
+const ArchitectureConnectorBaseShape = {
+  id: z.string().min(1),
+  source: z.string().min(1),
+  target: z.string().min(1),
+  label: z.string().optional(),
+};
+
+const ArchitectureConnectorSchema = z.discriminatedUnion('kind', [
+  z
+    .object({
+      ...ArchitectureConnectorBaseShape,
+      kind: z.literal('http'),
+      method: HttpMethodSchema.optional(),
+      url: z.string().min(1).optional(),
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureConnectorBaseShape,
+      kind: z.literal('event'),
+      eventName: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureConnectorBaseShape,
+      kind: z.literal('queue'),
+      queueName: z.string().min(1),
+    })
+    .strict(),
+  z
+    .object({
+      ...ArchitectureConnectorBaseShape,
+      kind: z.literal('default'),
+    })
+    .strict(),
+]);
+
+export const ArchitectureSchema = z
+  .object({
+    version: z.literal(2),
+    name: z.string().min(1),
+    resetAction: ResetActionSchema.optional(),
+    nodes: z.array(ArchitectureNodeSchema),
+    connectors: z.array(ArchitectureConnectorSchema),
+  })
+  .strict()
+  .superRefine((arch, ctx) => {
+    const ids = new Set(arch.nodes.map((n) => n.id));
+    arch.connectors.forEach((c, idx) => {
+      if (!ids.has(c.source)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['connectors', idx, 'source'],
+          message: `Connector ${c.id} references unknown source node: ${c.source}`,
+        });
+      }
+      if (!ids.has(c.target)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['connectors', idx, 'target'],
+          message: `Connector ${c.id} references unknown target node: ${c.target}`,
+        });
+      }
+    });
+  });
+
+export type Architecture = z.infer<typeof ArchitectureSchema>;
+export type ArchitectureNode = z.infer<typeof ArchitectureNodeSchema>;
+export type ArchitectureConnector = z.infer<typeof ArchitectureConnectorSchema>;
+
+// =============================================================================
+// Style schema — keyed map of presentation overrides, side-table by id.
+// What lives on disk in <project>/.seeflow/style.json (optional file).
+// =============================================================================
+
+const NodeStyleSchema = z
+  .object({
+    position: PositionSchema.optional(),
+    width: z.number().positive().optional(),
+    height: z.number().positive().optional(),
+    borderColor: ColorTokenSchema.optional(),
+    backgroundColor: ColorTokenSchema.optional(),
+    borderSize: z.number().positive().optional(),
+    borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
+    fontSize: z.number().positive().optional(),
+    textColor: ColorTokenSchema.optional(),
+    cornerRadius: z.number().min(0).optional(),
+    locked: z.boolean().optional(),
+    // imageNode-specific
+    borderWidth: z.number().min(1).max(8).optional(),
+    // iconNode-specific
+    color: ColorTokenSchema.optional(),
+    strokeWidth: z.number().min(0.5).max(4).optional(),
+    // htmlNode-specific
+    autoSize: z.boolean().optional(),
+  })
+  .strict();
+
+const ConnectorStyleEntrySchema = z
+  .object({
+    sourceHandle: SourceHandleIdSchema.optional(),
+    targetHandle: TargetHandleIdSchema.optional(),
+    sourceHandleAutoPicked: z.boolean().optional(),
+    targetHandleAutoPicked: z.boolean().optional(),
+    sourcePin: EdgePinSchema.optional(),
+    targetPin: EdgePinSchema.optional(),
+    style: ConnectorStyleSchema.optional(),
+    color: ColorTokenSchema.optional(),
+    direction: ConnectorDirectionSchema.optional(),
+    borderSize: z.number().positive().optional(),
+    path: ConnectorPathSchema.optional(),
+    fontSize: z.number().positive().optional(),
+  })
+  .strict();
+
+export const StyleSchema = z
+  .object({
+    nodes: z.record(z.string(), NodeStyleSchema).optional(),
+    connectors: z.record(z.string(), ConnectorStyleEntrySchema).optional(),
+  })
+  .strict();
+
+export type Style = z.infer<typeof StyleSchema>;
+export type NodeStyle = z.infer<typeof NodeStyleSchema>;
+export type ConnectorStyleEntry = z.infer<typeof ConnectorStyleEntrySchema>;

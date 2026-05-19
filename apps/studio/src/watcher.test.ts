@@ -7,7 +7,7 @@ import { createRegistry } from './registry.ts';
 import { createWatcher } from './watcher.ts';
 
 const VALID_DEMO = {
-  version: 1,
+  version: 2,
   name: 'Watch Me',
   nodes: [
     {
@@ -153,7 +153,7 @@ describe('createWatcher', () => {
   // `htmlPath` on its data (Zod strips the key from the parsed Flow, but
   // collectReferencedPaths reads the raw JSON pre-strip).
   const demoWithHtmlPath = (htmlPath: string) => ({
-    version: 1,
+    version: 2,
     name: 'Watch Files',
     nodes: [
       {
@@ -173,7 +173,7 @@ describe('createWatcher', () => {
   });
 
   const demoWithImagePath = (imgPath: string) => ({
-    version: 1,
+    version: 2,
     name: 'Watch Files',
     nodes: [
       {
