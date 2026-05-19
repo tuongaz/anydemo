@@ -5,7 +5,7 @@ import { resolveStudioUrl } from './studio-config';
 
 export interface RegisterArgs {
   repoPath: string;
-  architecturePath: string;
+  flowPath: string;
   name?: string;
   url?: string;
 }
@@ -21,7 +21,7 @@ export async function registerDemo(args: RegisterArgs): Promise<RegisterResult> 
   const url = args.url ?? resolveStudioUrl();
   const payload: Record<string, unknown> = {
     repoPath: args.repoPath,
-    architecturePath: args.architecturePath,
+    flowPath: args.flowPath,
   };
   if (typeof args.name === 'string' && args.name.length > 0) payload.name = args.name;
 
@@ -53,13 +53,8 @@ function flagValue(argv: string[], name: string): string | undefined {
   return undefined;
 }
 
-function readNameFromArchitectureFile(
-  repoPath: string,
-  architecturePath: string,
-): string | undefined {
-  const fullPath = isAbsolute(architecturePath)
-    ? architecturePath
-    : join(repoPath, architecturePath);
+function readNameFromFlowFile(repoPath: string, flowPath: string): string | undefined {
+  const fullPath = isAbsolute(flowPath) ? flowPath : join(repoPath, flowPath);
   if (!existsSync(fullPath)) return undefined;
   try {
     const raw = readFileSync(fullPath, 'utf8');
@@ -78,10 +73,10 @@ export async function main(argv: string[]): Promise<number> {
     return 1;
   }
   const repoPath = resolve(repoPathArg);
-  const architecturePath = demoPathArg;
-  const name = readNameFromArchitectureFile(repoPath, architecturePath);
+  const flowPath = demoPathArg;
+  const name = readNameFromFlowFile(repoPath, flowPath);
 
-  const result = await registerDemo({ repoPath, architecturePath, name });
+  const result = await registerDemo({ repoPath, flowPath, name });
   if (!result.ok) {
     const text =
       typeof result.body === 'string' ? result.body : JSON.stringify(result.body ?? null);

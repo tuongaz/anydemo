@@ -3,7 +3,7 @@ set -e
 
 # Env defaults — keep in sync with the Dockerfile's ENV block.
 SEEFLOW_WORKSPACE="${SEEFLOW_WORKSPACE:-/workspace}"
-SEEFLOW_FLOW="${SEEFLOW_FLOW:-.seeflow/seeflow.json}"
+SEEFLOW_FLOW="${SEEFLOW_FLOW:-.seeflow/flow.json}"
 SEEFLOW_PORT="${SEEFLOW_PORT:-4321}"
 
 # Escape hatch: any non-`start` first arg runs as a one-shot CLI call.

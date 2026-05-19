@@ -90,7 +90,7 @@ describe('exportToCloud', () => {
     expect(requests[1]?.headers?.['content-type']).toBe('application/zip');
   });
 
-  it('includes seeflow.json in the zip', async () => {
+  it('includes flow.json in the zip', async () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
@@ -107,9 +107,9 @@ describe('exportToCloud', () => {
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
-    expect('seeflow.json' in entries).toBe(true);
-    const seeflowEntry = entries['seeflow.json'];
-    if (!seeflowEntry) throw new Error('seeflow.json missing from zip');
+    expect('flow.json' in entries).toBe(true);
+    const seeflowEntry = entries['flow.json'];
+    if (!seeflowEntry) throw new Error('flow.json missing from zip');
     const parsed = JSON.parse(strFromU8(seeflowEntry));
     expect(parsed.name).toBe('Test');
   });
@@ -260,7 +260,7 @@ describe('exportToCloud', () => {
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
-    expect('seeflow.json' in entries).toBe(true);
+    expect('flow.json' in entries).toBe(true);
     expect('files/assets/missing.png' in entries).toBe(false);
   });
 
@@ -343,7 +343,7 @@ describe('exportToCloud', () => {
     ).rejects.toThrow('missing url');
   });
 
-  it("visibility 'link' produces seeflow.private.json in zip instead of seeflow.json", async () => {
+  it("visibility 'link' produces flow.private.json in zip instead of flow.json", async () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
@@ -360,8 +360,8 @@ describe('exportToCloud', () => {
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
-    expect('seeflow.private.json' in entries).toBe(true);
-    expect('seeflow.json' in entries).toBe(false);
+    expect('flow.private.json' in entries).toBe(true);
+    expect('flow.json' in entries).toBe(false);
   });
 
   it('name appears in cloud API URL query params', async () => {

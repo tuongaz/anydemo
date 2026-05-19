@@ -25,7 +25,7 @@ The launching prompt will give you:
    `codePointers[]`, `existingDemo`).
 2. **(optional) `editTarget`** — when `contextBrief.existingDemo.diffTarget`
    is `true`, the orchestrator also passes the parsed contents of the
-   existing `seeflow.json`. Use it to keep stable node ids/slugs for entities
+   existing `flow.json`. Use it to keep stable node ids/slugs for entities
    that survive the edit.
 
 ## Output contract

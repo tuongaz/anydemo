@@ -96,13 +96,13 @@ interface ValidateIssue {
 
 async function validateViaApi(
   url: string,
-  archPath: string,
+  flowPath: string,
 ): Promise<{ ok: true } | { ok: false; issues: ValidateIssue[] }> {
-  const architecture = JSON.parse(readFileSync(archPath, 'utf8'));
+  const flow = JSON.parse(readFileSync(flowPath, 'utf8'));
   const res = await globalThis.fetch(`${url}/api/validate`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ architecture }),
+    body: JSON.stringify({ flow }),
   });
   if (!res.ok) throw new Error(`POST /api/validate → ${res.status}`);
   return (await res.json()) as { ok: true } | { ok: false; issues: ValidateIssue[] };
@@ -140,12 +140,12 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
     // Write the first demo fixture inline.
     const firstDir = join(tmpRepo, '.seeflow');
     mkdirSync(firstDir, { recursive: true });
-    writeFileSync(join(firstDir, 'seeflow.json'), JSON.stringify(firstDemoFixture(), null, 2));
+    writeFileSync(join(firstDir, 'flow.json'), JSON.stringify(firstDemoFixture(), null, 2));
 
-    // 1. Register the first demo at .seeflow/seeflow.json.
+    // 1. Register the first demo at .seeflow/flow.json.
     const firstReg = await registerDemo({
       repoPath: tmpRepo,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
       url,
     });
     if (!firstReg.ok) {
@@ -165,10 +165,10 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
     }
     firstId = firstBody.id;
 
-    // 2. Write a SECOND demo at .seeflow/sample/seeflow.json — validate via vendored schema.
+    // 2. Write a SECOND demo at .seeflow/sample/flow.json — validate via vendored schema.
     const secondDir = join(tmpRepo, '.seeflow', 'sample');
     mkdirSync(secondDir, { recursive: true });
-    const secondPath = join(secondDir, 'seeflow.json');
+    const secondPath = join(secondDir, 'flow.json');
     writeFileSync(secondPath, JSON.stringify(secondDemoFixture(), null, 2));
 
     const validation = await validateViaApi(url, secondPath);
@@ -182,7 +182,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
 
     const secondReg = await registerDemo({
       repoPath: tmpRepo,
-      architecturePath: '.seeflow/sample/seeflow.json',
+      flowPath: '.seeflow/sample/flow.json',
       url,
     });
     if (!secondReg.ok) {
@@ -237,11 +237,11 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
       };
     }
 
-    // 4. Re-register the SECOND demo: same repoPath + same architecturePath. Its id and
+    // 4. Re-register the SECOND demo: same repoPath + same flowPath. Its id and
     //    slug must be stable, and the FIRST demo's id must NOT change.
     const reReg = await registerDemo({
       repoPath: tmpRepo,
-      architecturePath: '.seeflow/sample/seeflow.json',
+      flowPath: '.seeflow/sample/flow.json',
       url,
     });
     if (!reReg.ok) {

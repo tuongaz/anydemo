@@ -27,7 +27,7 @@ const VALID_DEMO = {
 const tmpRepo = (demo: unknown = VALID_DEMO) => {
   const dir = mkdtempSync(join(tmpdir(), 'watcher-repo-'));
   mkdirSync(join(dir, '.seeflow'));
-  writeFileSync(join(dir, '.seeflow', 'seeflow.json'), JSON.stringify(demo));
+  writeFileSync(join(dir, '.seeflow', 'flow.json'), JSON.stringify(demo));
   return dir;
 };
 
@@ -45,7 +45,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -65,7 +65,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -77,7 +77,7 @@ describe('createWatcher', () => {
 
     // Force a write that should land after the watcher is up.
     await wait(50);
-    writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), '{ not: json }');
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), '{ not: json }');
     await wait(150);
 
     const last = received.at(-1);
@@ -86,7 +86,7 @@ describe('createWatcher', () => {
     expect((last?.payload as { error: string }).error).toContain('Invalid JSON');
 
     // Repair the file. Should flip back to valid:true and broadcast a new event.
-    writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(150);
 
     const finalEvent = received.at(-1);
@@ -100,7 +100,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -109,7 +109,7 @@ describe('createWatcher', () => {
     const good = watcher.snapshot(entry.id);
     expect(good?.valid).toBe(true);
 
-    writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), 'oops');
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), 'oops');
     const reparsed = watcher.reparse(entry.id);
     expect(reparsed?.valid).toBe(false);
     expect(reparsed?.flow?.name).toBe('Watch Me');
@@ -123,7 +123,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -131,7 +131,7 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     const snap = watcher.snapshot(entry.id);
     expect(snap?.valid).toBe(false);
-    expect(snap?.error).toContain('Architecture schema validation failed');
+    expect(snap?.error).toContain('Flow schema validation failed');
     expect(snap?.error).toContain('name');
     watcher.closeAll();
   });
@@ -142,7 +142,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -158,7 +158,7 @@ describe('createWatcher', () => {
     watcher.unwatch(entry.id);
     expect(watcher.snapshot(entry.id)).toBeNull();
 
-    writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(80);
     expect(count).toBe(0);
     watcher.closeAll();
@@ -219,7 +219,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -252,7 +252,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -280,7 +280,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -291,7 +291,7 @@ describe('createWatcher', () => {
     mkdirSync(join(repoPath, '.seeflow', 'blocks'));
     writeFileSync(join(repoPath, '.seeflow', 'blocks', 'h1.html'), '<div>v1</div>');
     writeFileSync(
-      join(repoPath, '.seeflow', 'seeflow.json'),
+      join(repoPath, '.seeflow', 'flow.json'),
       JSON.stringify(demoWithHtmlPath('blocks/h1.html')),
     );
     await wait(120);
@@ -310,7 +310,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -323,8 +323,8 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     expect(watcher.referencedPaths(entry.id)).toEqual(['blocks/h1.html']);
 
-    // Drop the referencing node from the demo via a write to seeflow.json.
-    writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), JSON.stringify(VALID_DEMO));
+    // Drop the referencing node from the demo via a write to flow.json.
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(120);
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
@@ -378,7 +378,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });

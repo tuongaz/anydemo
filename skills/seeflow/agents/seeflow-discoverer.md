@@ -23,7 +23,7 @@ The launching prompt will give you:
 2. **`projectRoot`** — absolute path to the user's project (the `pwd` at
    skill invocation).
 3. **`existingDemo`** *(optional)* — the parsed contents of
-   `<projectRoot>/.seeflow/<slug>/architecture.json` when the prompt obviously
+   `<projectRoot>/.seeflow/<slug>/flow.json` when the prompt obviously
    targets an existing flow (e.g. names the slug, or describes a scope
    that overlaps a known demo). May be `null`.
 

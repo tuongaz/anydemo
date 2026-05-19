@@ -57,7 +57,7 @@ function demoFixture(opts: DemoFixtureOptions): unknown {
     id: 'demo-1',
     slug: 'fixture',
     name: 'fixture',
-    filePath: '/tmp/fixture/.seeflow/seeflow.json',
+    filePath: '/tmp/fixture/.seeflow/flow.json',
     valid: true,
     error: null,
     demo: {

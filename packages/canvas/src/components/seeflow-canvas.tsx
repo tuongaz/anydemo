@@ -3299,7 +3299,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // must never be a connection endpoint. xyflow already prevents drag-start
   // from a text node — US-003 removed every <Handle> on the text variant —
   // but `isValidConnection` is the defensive net for any path that bypasses
-  // the no-handles invariant: a malformed seeflow.json that seeded an edge into
+  // the no-handles invariant: a malformed flow.json that seeded an edge into
   // a text node, or a future feature exposing a text-type source. Returning
   // false here also makes xyflow flash the candidate handle red during a
   // drag (the `connectionState.isValid === false` branch in onConnectEnd)

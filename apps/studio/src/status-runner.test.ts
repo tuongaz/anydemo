@@ -80,7 +80,7 @@ function makeFakeRegistry(entries: FlowEntry[]): Registry {
     getById: (id) => map.get(id),
     getBySlug: () => undefined,
     getByRepoPath: () => undefined,
-    getByRepoPathAndArchitecturePath: () => undefined,
+    getByRepoPathAndFlowPath: () => undefined,
     upsert() {
       throw new Error('not implemented in fake');
     },
@@ -126,8 +126,8 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
     ],
     connectors: [],
   };
-  const architecturePath = join(cwd, '.seeflow', 'seeflow.json');
-  writeFileSync(architecturePath, JSON.stringify(demo, null, 2));
+  const flowPath = join(cwd, '.seeflow', 'flow.json');
+  writeFileSync(flowPath, JSON.stringify(demo, null, 2));
   return {
     cwd,
     nodeId,
@@ -136,7 +136,7 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
       slug: 'demo-a',
       name: 'Test demo',
       repoPath: cwd,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
       lastModified: Date.now(),
       valid: true,
     } satisfies FlowEntry,
@@ -346,13 +346,13 @@ describe('createStatusRunner', () => {
       ],
       connectors: [],
     };
-    writeFileSync(join(cwd, '.seeflow', 'seeflow.json'), JSON.stringify(demo));
+    writeFileSync(join(cwd, '.seeflow', 'flow.json'), JSON.stringify(demo));
     const entry: FlowEntry = {
       id: 'demoA',
       slug: 'demo-a',
       name: 'Lifetime test',
       repoPath: cwd,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
       lastModified: Date.now(),
       valid: true,
     };
@@ -437,7 +437,7 @@ describe('createStatusRunner', () => {
         getById: () => entry,
         getBySlug: () => undefined,
         getByRepoPath: () => undefined,
-        getByRepoPathAndArchitecturePath: () => undefined,
+        getByRepoPathAndFlowPath: () => undefined,
         upsert: () => {
           throw new Error('nope');
         },

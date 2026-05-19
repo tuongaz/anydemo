@@ -1,6 +1,6 @@
 import dagre from 'dagre';
 import { z } from 'zod';
-import { FlowSchema } from './schema.ts';
+import { ResolvedFlowSchema } from './schema.ts';
 
 // Pure-compute helpers backing the three diagram-pipeline endpoints. No file
 // I/O lives here — the skill writes responses to disk on the user's machine.
@@ -364,7 +364,7 @@ export const validateDemo = (req: ValidateRequest): ValidateReport => {
   const issues: ValidateIssue[] = [];
   const warnings: ValidateIssue[] = [];
 
-  const parsed = FlowSchema.safeParse(req.demo);
+  const parsed = ResolvedFlowSchema.safeParse(req.demo);
   if (!parsed.success) {
     for (const issue of parsed.error.issues) {
       issues.push({

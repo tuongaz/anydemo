@@ -25,7 +25,7 @@ import { isAbsolute, join, resolve, sep } from 'node:path';
 import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
 import type { FlowEntry, Registry } from './registry.ts';
-import { type Flow, type StatusAction, StatusReportSchema } from './schema.ts';
+import { type ResolvedFlow, type StatusAction, StatusReportSchema } from './schema.ts';
 import { readMergedFlow } from './watcher.ts';
 
 export interface StatusRunner {
@@ -141,10 +141,10 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
-async function loadDemo(entry: FlowEntry): Promise<Flow | undefined> {
-  const fullPath = isAbsolute(entry.architecturePath)
-    ? entry.architecturePath
-    : join(entry.repoPath, entry.architecturePath);
+async function loadDemo(entry: FlowEntry): Promise<ResolvedFlow | undefined> {
+  const fullPath = isAbsolute(entry.flowPath)
+    ? entry.flowPath
+    : join(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return undefined;
   const result = readMergedFlow(fullPath);
   return result.flow ?? undefined;
@@ -155,7 +155,7 @@ interface StatusNode {
   action: StatusAction;
 }
 
-function collectStatusNodes(demo: Flow): StatusNode[] {
+function collectStatusNodes(demo: ResolvedFlow): StatusNode[] {
   const out: StatusNode[] = [];
   for (const node of demo.nodes) {
     if (node.type !== 'playNode' && node.type !== 'stateNode') continue;

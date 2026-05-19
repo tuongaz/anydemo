@@ -71,7 +71,7 @@ surfaces, e.g. `GET /admin/stats`.
 - `src/store.ts`
 
 Each `why` should one-line the role that file plays in the demo. Extra
-pointers (e.g. `package.json`, `.seeflow/architecture.json`) are acceptable.
+pointers (e.g. `package.json`, `.seeflow/flow.json`) are acceptable.
 
 `userIntent` should commit to an end-to-end flow framing rather than
 hedge ("maybe", "if that's what they meant"). `audienceFraming` should

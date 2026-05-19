@@ -1,19 +1,19 @@
-import type { Architecture, Flow, Style } from './schema.ts';
+import type { Flow, ResolvedFlow, Style } from './schema.ts';
 
 /**
- * Merge architecture.json (semantic data) and the optional style.json
- * (presentation overrides) into the merged Flow shape consumed by the API,
- * the canvas, and the rest of the studio.
+ * Merge flow.json (semantic data) and the optional style.json (presentation
+ * overrides) into the merged ResolvedFlow shape consumed by the API, the
+ * canvas, and the rest of the studio.
  *
- * Style entries with no matching architecture id are silently dropped — the
- * write path strips dangling entries after delete, but a stale file on disk
+ * Style entries with no matching flow id are silently dropped — the write
+ * path strips dangling entries after delete, but a stale file on disk
  * shouldn't break the read path.
  */
-export function mergeArchitectureAndStyle(arch: Architecture, style: Style): Flow {
+export function mergeFlowAndStyle(flow: Flow, style: Style): ResolvedFlow {
   const nodeStyles = style.nodes ?? {};
   const connectorStyles = style.connectors ?? {};
 
-  const mergedNodes = arch.nodes.map((node) => {
+  const mergedNodes = flow.nodes.map((node) => {
     const s = nodeStyles[node.id] ?? {};
     const { position, ...visual } = s;
     return {
@@ -23,23 +23,23 @@ export function mergeArchitectureAndStyle(arch: Architecture, style: Style): Flo
     };
   });
 
-  const mergedConnectors = arch.connectors.map((conn) => {
+  const mergedConnectors = flow.connectors.map((conn) => {
     const s = connectorStyles[conn.id] ?? {};
     return { ...conn, ...s };
   });
 
   return {
-    version: arch.version,
-    name: arch.name,
-    ...(arch.resetAction ? { resetAction: arch.resetAction } : {}),
+    version: flow.version,
+    name: flow.name,
+    ...(flow.resetAction ? { resetAction: flow.resetAction } : {}),
     nodes: mergedNodes,
     connectors: mergedConnectors,
-  } as Flow;
+  } as ResolvedFlow;
 }
 
-// Fields that live in a node's `data` block on architecture.json. Every other
-// data field is visual and routes to style.json.
-const NODE_DATA_ARCH_KEYS = new Set([
+// Fields that live in a node's `data` block on flow.json. Every other data
+// field is visual and routes to style.json.
+const NODE_DATA_FLOW_KEYS = new Set([
   'name',
   'kind',
   'stateSource',
@@ -72,7 +72,7 @@ const NODE_STYLE_KEYS = new Set([
   'autoSize',
 ]);
 
-const CONNECTOR_ARCH_KEYS = new Set([
+const CONNECTOR_FLOW_KEYS = new Set([
   'id',
   'source',
   'target',
@@ -100,28 +100,28 @@ const CONNECTOR_STYLE_KEYS = new Set([
 ]);
 
 /**
- * Split a merged Flow back into (architecture, style) for atomic write. The
- * inverse of mergeArchitectureAndStyle: position and every visual field on
- * each node moves to `style.nodes[id]`; handles, pins, and visual fields on
- * each connector move to `style.connectors[id]`. Architecture keeps every
- * semantic data field — the routing tables above are the source of truth.
+ * Split a merged ResolvedFlow back into (flow, style) for atomic write. The
+ * inverse of mergeFlowAndStyle: position and every visual field on each node
+ * moves to `style.nodes[id]`; handles, pins, and visual fields on each
+ * connector move to `style.connectors[id]`. Flow keeps every semantic data
+ * field — the routing tables above are the source of truth.
  *
  * Style entries that end up empty are omitted from the output so the file
  * stays compact (matches the design's "delete style.json when {}" rule).
  */
-export function splitFlow(flow: {
+export function splitFlow(resolved: {
   version: number;
   name: string;
   resetAction?: unknown;
   nodes: Array<Record<string, unknown>>;
   connectors: Array<Record<string, unknown>>;
-}): { architecture: Record<string, unknown>; style: Record<string, unknown> } {
-  const archNodes: Array<Record<string, unknown>> = [];
+}): { flow: Record<string, unknown>; style: Record<string, unknown> } {
+  const flowNodes: Array<Record<string, unknown>> = [];
   const styleNodes: Record<string, Record<string, unknown>> = {};
 
-  for (const node of flow.nodes) {
+  for (const node of resolved.nodes) {
     const id = node.id as string;
-    const archNode: Record<string, unknown> = { id, type: node.type };
+    const flowNode: Record<string, unknown> = { id, type: node.type };
     const styleEntry: Record<string, unknown> = {};
 
     if (node.position && typeof node.position === 'object') {
@@ -129,62 +129,62 @@ export function splitFlow(flow: {
     }
 
     const data = (node.data ?? {}) as Record<string, unknown>;
-    const archData: Record<string, unknown> = {};
+    const flowData: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       if (v === undefined) continue;
-      if (NODE_DATA_ARCH_KEYS.has(k)) {
-        archData[k] = v;
+      if (NODE_DATA_FLOW_KEYS.has(k)) {
+        flowData[k] = v;
       } else if (NODE_STYLE_KEYS.has(k)) {
         styleEntry[k] = v;
       } else {
-        // Unknown forward-compat key — keep on architecture side so the
-        // schema's strict() will catch typos but extension is possible by
-        // updating the routing tables here.
-        archData[k] = v;
+        // Unknown forward-compat key — keep on flow side so the schema's
+        // strict() will catch typos but extension is possible by updating
+        // the routing tables here.
+        flowData[k] = v;
       }
     }
-    archNode.data = archData;
-    archNodes.push(archNode);
+    flowNode.data = flowData;
+    flowNodes.push(flowNode);
 
     if (Object.keys(styleEntry).length > 0) {
       styleNodes[id] = styleEntry;
     }
   }
 
-  const archConnectors: Array<Record<string, unknown>> = [];
+  const flowConnectors: Array<Record<string, unknown>> = [];
   const styleConnectors: Record<string, Record<string, unknown>> = {};
 
-  for (const conn of flow.connectors) {
+  for (const conn of resolved.connectors) {
     const id = conn.id as string;
-    const archConn: Record<string, unknown> = {};
+    const flowConn: Record<string, unknown> = {};
     const styleEntry: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(conn)) {
       if (v === undefined) continue;
-      if (CONNECTOR_ARCH_KEYS.has(k)) {
-        archConn[k] = v;
+      if (CONNECTOR_FLOW_KEYS.has(k)) {
+        flowConn[k] = v;
       } else if (CONNECTOR_STYLE_KEYS.has(k)) {
         styleEntry[k] = v;
       } else {
-        archConn[k] = v;
+        flowConn[k] = v;
       }
     }
-    archConnectors.push(archConn);
+    flowConnectors.push(flowConn);
     if (Object.keys(styleEntry).length > 0) {
       styleConnectors[id] = styleEntry;
     }
   }
 
-  const architecture: Record<string, unknown> = {
-    version: flow.version,
-    name: flow.name,
-    nodes: archNodes,
-    connectors: archConnectors,
+  const flow: Record<string, unknown> = {
+    version: resolved.version,
+    name: resolved.name,
+    nodes: flowNodes,
+    connectors: flowConnectors,
   };
-  if (flow.resetAction !== undefined) architecture.resetAction = flow.resetAction;
+  if (resolved.resetAction !== undefined) flow.resetAction = resolved.resetAction;
 
   const style: Record<string, unknown> = {};
   if (Object.keys(styleNodes).length > 0) style.nodes = styleNodes;
   if (Object.keys(styleConnectors).length > 0) style.connectors = styleConnectors;
 
-  return { architecture, style };
+  return { flow, style };
 }

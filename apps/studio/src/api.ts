@@ -47,7 +47,7 @@ import {
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
-import { FlowSchema } from './schema.ts';
+import { ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
 import { readMergedFlow } from './watcher.ts';
@@ -270,10 +270,10 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(validateDemo(parsed.data));
   });
 
-  // POST /api/validate — stateless schema validator for the architecture +
-  // optional style files. No flow id, no registry side-effects, no file://
-  // resolution (validation is structural only). Returns 200 even on
-  // validation failure — the result is the validation report itself.
+  // POST /api/validate — stateless schema validator for the flow + optional
+  // style files. No flow id, no registry side-effects, no file:// resolution
+  // (validation is structural only). Returns 200 even on validation failure —
+  // the result is the validation report itself.
   api.post('/validate', async (c) => {
     let body: unknown;
     try {
@@ -281,8 +281,8 @@ export function createApi(options: ApiOptions): Hono {
     } catch {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
-    if (!body || typeof body !== 'object' || !('architecture' in body)) {
-      return c.json({ error: 'Body must be { architecture, style? }' }, 400);
+    if (!body || typeof body !== 'object' || !('flow' in body)) {
+      return c.json({ error: 'Body must be { flow, style? }' }, 400);
     }
     return c.json(validateImpl(body as ValidateBody));
   });
@@ -307,7 +307,7 @@ export function createApi(options: ApiOptions): Hono {
   // POST /api/diagram/assemble — Phase 7a. The skill POSTs wiring + layout
   // and gets back the assembled demo (IDs normalized, dupes dropped, dangling
   // connectors removed, positions snapped to a 24px grid). Pure compute; the
-  // skill writes the response to $TARGET/.seeflow/seeflow.json. No schema
+  // skill writes the response to $TARGET/.seeflow/flow.json. No schema
   // validation here — call /demos/validate for that.
   api.post('/diagram/assemble', async (c) => {
     let body: unknown;
@@ -325,13 +325,13 @@ export function createApi(options: ApiOptions): Hono {
 
   // POST /api/projects — UI-driven "Create new project" flow (US-020). Two
   // branches based on whether the target folder already has a SeeFlow
-  // project set up at `<folderPath>/.seeflow/seeflow.json`:
+  // project set up at `<folderPath>/.seeflow/flow.json`:
   //   1. Existing setup: read + validate the on-disk demo and register it
   //      as-is (no overwrite, no scaffolding). The user-supplied `name`
   //      becomes the registry display name; the on-disk demo's `name` is
   //      preserved on disk.
   //   2. Fresh scaffold: mkdir -p the folder + .seeflow/, write a default
-  //      scaffold seeflow.json keyed off `name`, and run the same SDK-emit
+  //      scaffold flow.json keyed off `name`, and run the same SDK-emit
   //      helper write the CLI register flow uses (a no-op for an empty
   //      scaffold, but kept for parity).
   api.post('/projects', async (c) => {
@@ -587,7 +587,7 @@ export function createApi(options: ApiOptions): Hono {
 
     // Always re-read from disk so the user's most recent edit (validated or
     // not yet observed by the watcher) drives the actual fetch.
-    const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
     if (!existsSync(fullPath)) {
       return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
@@ -655,7 +655,7 @@ export function createApi(options: ApiOptions): Hono {
     if (!entry) return c.json({ error: 'unknown demo' }, 404);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
-    const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
     if (!existsSync(fullPath)) {
       return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
@@ -713,7 +713,7 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true, calledResetAction });
   });
 
-  // PATCH a single node's position back into the on-disk seeflow.json. This is
+  // PATCH a single node's position back into the on-disk flow.json. This is
   // the second (and only other) place the studio mutates user files — the
   // first being the SDK helper write in `register`. Atomic write via tempfile
   // + rename keeps editor diffs clean and avoids corruption mid-write.
@@ -797,7 +797,7 @@ export function createApi(options: ApiOptions): Hono {
   // the high-frequency drag fast-path above) flows through here. The mutation
   // is performed against the raw parsed JSON (so unknown v2 fields the schema
   // doesn't yet recognize survive round-trips) and the WHOLE resulting demo
-  // is re-validated through FlowSchema before commit, preventing partial
+  // is re-validated through ResolvedFlowSchema before commit, preventing partial
   // writes from breaking invariants like the connector→node superRefine.
   api.patch('/flows/:id/nodes/:nodeId', async (c) => {
     const id = c.req.param('id');
@@ -834,7 +834,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // POST a new node into the demo. Body is the node payload (id auto-generated
-  // server-side if absent). Atomicity + final-FlowSchema validation match the
+  // server-side if absent). Atomicity + final-ResolvedFlowSchema validation match the
   // PATCH path above, so a malformed node never produces a half-written file.
   api.post('/flows/:id/nodes', async (c) => {
     const id = c.req.param('id');
@@ -867,7 +867,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // DELETE a node and cascade-remove every connector with source === nodeId or
-  // target === nodeId in the same atomic write. Final-FlowSchema validation
+  // target === nodeId in the same atomic write. Final-ResolvedFlowSchema validation
   // is still run after the mutation — connector cascade closure means it
   // should always pass, but the check makes the failure mode honest if the
   // file had a pre-existing schema violation we'd otherwise paper over.
@@ -897,7 +897,7 @@ export function createApi(options: ApiOptions): Hono {
   // PATCH a single connector — partial update of label/style/color/direction
   // and (optionally) kind + per-kind payload fields. When `kind` changes,
   // stale kind-specific fields are dropped before the merge. The whole demo
-  // is re-validated through FlowSchema before commit so the discriminated
+  // is re-validated through ResolvedFlowSchema before commit so the discriminated
   // union catches missing-required-fields (e.g. kind='event' without
   // eventName) and the superRefine still gates source/target referential
   // integrity.
@@ -938,7 +938,7 @@ export function createApi(options: ApiOptions): Hono {
   // POST a new connector. Body is the connector payload; `id` is auto-generated
   // server-side if absent and `kind` defaults to 'default' (the no-semantics
   // user-drawn variant). Source/target referential integrity is enforced by
-  // FlowSchema's superRefine on the post-mutation parse.
+  // ResolvedFlowSchema's superRefine on the post-mutation parse.
   api.post('/flows/:id/connectors', async (c) => {
     const id = c.req.param('id');
 

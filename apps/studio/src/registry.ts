@@ -7,7 +7,7 @@ export interface FlowEntry {
   slug: string;
   name: string;
   repoPath: string;
-  architecturePath: string;
+  flowPath: string;
   lastModified: number;
   valid: boolean;
 }
@@ -15,7 +15,7 @@ export interface FlowEntry {
 export interface RegisterInput {
   name: string;
   repoPath: string;
-  architecturePath: string;
+  flowPath: string;
   valid?: boolean;
   lastModified?: number;
 }
@@ -25,10 +25,7 @@ export interface Registry {
   getById(id: string): FlowEntry | undefined;
   getBySlug(slug: string): FlowEntry | undefined;
   getByRepoPath(repoPath: string): FlowEntry | undefined;
-  getByRepoPathAndArchitecturePath(
-    repoPath: string,
-    architecturePath: string,
-  ): FlowEntry | undefined;
+  getByRepoPathAndFlowPath(repoPath: string, flowPath: string): FlowEntry | undefined;
   upsert(input: RegisterInput): FlowEntry;
   remove(id: string): boolean;
 }
@@ -60,7 +57,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
             typeof e.slug === 'string' &&
             typeof e.repoPath === 'string'
           ) {
-            if (typeof e.architecturePath !== 'string') {
+            if (typeof e.flowPath !== 'string') {
               console.warn(
                 `[registry] ignoring legacy entry ${e.id} (${e.slug}) — pre-split format, please re-register`,
               );
@@ -87,12 +84,9 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     return undefined;
   };
 
-  const findByRepoPathAndArchitecturePath = (
-    repoPath: string,
-    architecturePath: string,
-  ): FlowEntry | undefined => {
+  const findByRepoPathAndFlowPath = (repoPath: string, flowPath: string): FlowEntry | undefined => {
     for (const e of entries.values()) {
-      if (e.repoPath === repoPath && e.architecturePath === architecturePath) return e;
+      if (e.repoPath === repoPath && e.flowPath === flowPath) return e;
     }
     return undefined;
   };
@@ -110,16 +104,16 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     getById: (id) => entries.get(id),
     getBySlug: (slug) => [...entries.values()].find((e) => e.slug === slug),
     getByRepoPath: findByRepoPath,
-    getByRepoPathAndArchitecturePath: findByRepoPathAndArchitecturePath,
+    getByRepoPathAndFlowPath: findByRepoPathAndFlowPath,
     upsert(input) {
       const lastModified = input.lastModified ?? Date.now();
       const valid = input.valid ?? true;
-      const existing = findByRepoPathAndArchitecturePath(input.repoPath, input.architecturePath);
+      const existing = findByRepoPathAndFlowPath(input.repoPath, input.flowPath);
       if (existing) {
         const updated: FlowEntry = {
           ...existing,
           name: input.name,
-          architecturePath: input.architecturePath,
+          flowPath: input.flowPath,
           lastModified,
           valid,
         };
@@ -134,7 +128,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
         slug,
         name: input.name,
         repoPath: input.repoPath,
-        architecturePath: input.architecturePath,
+        flowPath: input.flowPath,
         lastModified,
         valid,
       };

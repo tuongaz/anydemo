@@ -12,7 +12,6 @@ const REQUEST_DEMO: Flow = {
     {
       id: 'api-checkout',
       type: 'playNode',
-      position: { x: 0, y: 0 },
       data: {
         name: 'POST /checkout',
         kind: 'service',
@@ -32,7 +31,6 @@ const EVENT_DEMO: Flow = {
     {
       id: 'worker',
       type: 'stateNode',
-      position: { x: 200, y: 0 },
       data: {
         name: 'Worker',
         kind: 'worker',

@@ -396,7 +396,7 @@ const ConnectorSchema = z.discriminatedUnion('kind', [
   DefaultConnectorSchema,
 ]);
 
-export const FlowSchema = z
+export const ResolvedFlowSchema = z
   .object({
     version: z.literal(2),
     name: z.string().min(1),
@@ -408,9 +408,9 @@ export const FlowSchema = z
     // script (US-008), so the script sees no stragglers.
     resetAction: ResetActionSchema.optional(),
   })
-  .superRefine((flow, ctx) => {
-    const nodeIds = new Set(flow.nodes.map((n) => n.id));
-    flow.connectors.forEach((c, idx) => {
+  .superRefine((resolved, ctx) => {
+    const nodeIds = new Set(resolved.nodes.map((n) => n.id));
+    resolved.connectors.forEach((c, idx) => {
       if (!nodeIds.has(c.source)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -428,8 +428,8 @@ export const FlowSchema = z
     });
   });
 
-export type Flow = z.infer<typeof FlowSchema>;
-export type FlowNode = z.infer<typeof NodeSchema>;
+export type ResolvedFlow = z.infer<typeof ResolvedFlowSchema>;
+export type ResolvedFlowNode = z.infer<typeof NodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
 export type IconNode = z.infer<typeof IconNodeSchema>;
@@ -454,11 +454,11 @@ export type ResetAction = z.infer<typeof ResetActionSchema>;
 export type StateSource = z.infer<typeof StateSourceSchema>;
 
 // =============================================================================
-// Architecture schema — pure semantic data, every visual/layout field stripped.
-// What lives on disk in <project>/.seeflow/architecture.json after the split.
+// Flow schema — pure semantic data, every visual/layout field stripped.
+// What lives on disk in <project>/.seeflow/flow.json after the split.
 // =============================================================================
 
-const ArchitectureNodeDataBaseShape = {
+const FlowNodeDataBaseShape = {
   name: z.string().min(1),
   kind: z.string().min(1),
   stateSource: StateSourceSchema,
@@ -467,23 +467,23 @@ const ArchitectureNodeDataBaseShape = {
   ...NodeDescriptionBaseShape,
 };
 
-const ArchitecturePlayNodeDataSchema = z
+const FlowPlayNodeDataSchema = z
   .object({
-    ...ArchitectureNodeDataBaseShape,
+    ...FlowNodeDataBaseShape,
     playAction: PlayActionSchema,
     statusAction: StatusActionSchema.optional(),
   })
   .strict();
 
-const ArchitectureStateNodeDataSchema = z
+const FlowStateNodeDataSchema = z
   .object({
-    ...ArchitectureNodeDataBaseShape,
+    ...FlowNodeDataBaseShape,
     playAction: PlayActionSchema.optional(),
     statusAction: StatusActionSchema.optional(),
   })
   .strict();
 
-const ArchitectureShapeNodeDataSchema = z
+const FlowShapeNodeDataSchema = z
   .object({
     shape: ShapeKindSchema,
     name: z.string().optional(),
@@ -491,7 +491,7 @@ const ArchitectureShapeNodeDataSchema = z
   })
   .strict();
 
-const ArchitectureImageNodeDataSchema = z
+const FlowImageNodeDataSchema = z
   .object({
     path: z.string().min(1).refine(isCleanRelativePath, {
       message: 'path must be a relative path under .seeflow/ (no absolute / traversal)',
@@ -501,7 +501,7 @@ const ArchitectureImageNodeDataSchema = z
   })
   .strict();
 
-const ArchitectureIconNodeDataSchema = z
+const FlowIconNodeDataSchema = z
   .object({
     icon: z.string().min(1),
     alt: z.string().optional(),
@@ -510,7 +510,7 @@ const ArchitectureIconNodeDataSchema = z
   })
   .strict();
 
-const ArchitectureHtmlNodeDataSchema = z
+const FlowHtmlNodeDataSchema = z
   .object({
     htmlPath: z.string().min(1).refine(isCleanRelativePath, {
       message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
@@ -521,66 +521,66 @@ const ArchitectureHtmlNodeDataSchema = z
   })
   .strict();
 
-const ArchitectureNodeBaseShape = {
+const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
 
-const ArchitectureNodeSchema = z.discriminatedUnion('type', [
+const FlowNodeSchema = z.discriminatedUnion('type', [
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('playNode'),
-      data: ArchitecturePlayNodeDataSchema,
+      data: FlowPlayNodeDataSchema,
     })
     .strict(),
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('stateNode'),
-      data: ArchitectureStateNodeDataSchema,
+      data: FlowStateNodeDataSchema,
     })
     .strict(),
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('shapeNode'),
-      data: ArchitectureShapeNodeDataSchema,
+      data: FlowShapeNodeDataSchema,
     })
     .strict(),
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('imageNode'),
-      data: ArchitectureImageNodeDataSchema,
+      data: FlowImageNodeDataSchema,
     })
     .strict(),
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('iconNode'),
-      data: ArchitectureIconNodeDataSchema,
+      data: FlowIconNodeDataSchema,
     })
     .strict(),
   z
     .object({
-      ...ArchitectureNodeBaseShape,
+      ...FlowNodeBaseShape,
       type: z.literal('htmlNode'),
-      data: ArchitectureHtmlNodeDataSchema,
+      data: FlowHtmlNodeDataSchema,
     })
     .strict(),
 ]);
 
-const ArchitectureConnectorBaseShape = {
+const FlowConnectorBaseShape = {
   id: z.string().min(1),
   source: z.string().min(1),
   target: z.string().min(1),
   label: z.string().optional(),
 };
 
-const ArchitectureConnectorSchema = z.discriminatedUnion('kind', [
+const FlowConnectorSchema = z.discriminatedUnion('kind', [
   z
     .object({
-      ...ArchitectureConnectorBaseShape,
+      ...FlowConnectorBaseShape,
       kind: z.literal('http'),
       method: HttpMethodSchema.optional(),
       url: z.string().min(1).optional(),
@@ -588,38 +588,38 @@ const ArchitectureConnectorSchema = z.discriminatedUnion('kind', [
     .strict(),
   z
     .object({
-      ...ArchitectureConnectorBaseShape,
+      ...FlowConnectorBaseShape,
       kind: z.literal('event'),
       eventName: z.string().min(1),
     })
     .strict(),
   z
     .object({
-      ...ArchitectureConnectorBaseShape,
+      ...FlowConnectorBaseShape,
       kind: z.literal('queue'),
       queueName: z.string().min(1),
     })
     .strict(),
   z
     .object({
-      ...ArchitectureConnectorBaseShape,
+      ...FlowConnectorBaseShape,
       kind: z.literal('default'),
     })
     .strict(),
 ]);
 
-export const ArchitectureSchema = z
+export const FlowSchema = z
   .object({
     version: z.literal(2),
     name: z.string().min(1),
     resetAction: ResetActionSchema.optional(),
-    nodes: z.array(ArchitectureNodeSchema),
-    connectors: z.array(ArchitectureConnectorSchema),
+    nodes: z.array(FlowNodeSchema),
+    connectors: z.array(FlowConnectorSchema),
   })
   .strict()
-  .superRefine((arch, ctx) => {
-    const ids = new Set(arch.nodes.map((n) => n.id));
-    arch.connectors.forEach((c, idx) => {
+  .superRefine((flow, ctx) => {
+    const ids = new Set(flow.nodes.map((n) => n.id));
+    flow.connectors.forEach((c, idx) => {
       if (!ids.has(c.source)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -637,9 +637,9 @@ export const ArchitectureSchema = z
     });
   });
 
-export type Architecture = z.infer<typeof ArchitectureSchema>;
-export type ArchitectureNode = z.infer<typeof ArchitectureNodeSchema>;
-export type ArchitectureConnector = z.infer<typeof ArchitectureConnectorSchema>;
+export type Flow = z.infer<typeof FlowSchema>;
+export type FlowNode = z.infer<typeof FlowNodeSchema>;
+export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
 
 // =============================================================================
 // Style schema — keyed map of presentation overrides, side-table by id.

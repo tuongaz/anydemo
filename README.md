@@ -23,7 +23,7 @@ npx tuongaz/seeflow start
 # then open http://localhost:4321
 ```
 
-Requires Bun ≥ 1.3 (or Node with npx). The studio scans `$(pwd)/.seeflow/seeflow.json` on start and auto-registers that flow if present. Flows you create from the UI, plus the studio's registry, persist under `$(pwd)/.seeflow/` across restarts.
+Requires Bun ≥ 1.3 (or Node with npx). The studio scans `$(pwd)/.seeflow/flow.json` on start and auto-registers that flow if present. Flows you create from the UI, plus the studio's registry, persist under `$(pwd)/.seeflow/` across restarts.
 
 <details>
 <summary>Prefer Docker? (not recommended)</summary>
@@ -34,7 +34,7 @@ Requires Bun ≥ 1.3 (or Node with npx). The studio scans `$(pwd)/.seeflow/seefl
 docker run --rm -it -p 4321:4321 -v $(pwd):/workspace tuongaz/seeflow
 ```
 
-The image ships with a pre-registered **Order Pipeline** demo so you can see the canvas immediately, and the studio scans `/workspace/.seeflow/seeflow.json` on start.
+The image ships with a pre-registered **Order Pipeline** demo so you can see the canvas immediately, and the studio scans `/workspace/.seeflow/flow.json` on start.
 
 </details>
 
@@ -65,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/tuongaz/seeflow/main/install.sh | b
 /seeflow show me the shopping cart feature
 ```
 
-The plugin scans your routes and database connections, generates `seeflow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
+The plugin scans your routes and database connections, generates `flow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
 
 ## Docker reference
 
@@ -78,7 +78,7 @@ The image is published on [Docker Hub](https://hub.docker.com/r/tuongaz/seeflow)
 | Variable            | Default                 | Description                                |
 | ------------------- | ----------------------- | ------------------------------------------ |
 | `SEEFLOW_PORT`      | `4321`                  | Port the studio listens on                 |
-| `SEEFLOW_FLOW`      | `.seeflow/seeflow.json` | Flow file path relative to the workspace   |
+| `SEEFLOW_FLOW`      | `.seeflow/flow.json` | Flow file path relative to the workspace   |
 | `SEEFLOW_WORKSPACE` | `/workspace`            | Workspace mount point inside the container |
 
 ### Bake demos into a derived image

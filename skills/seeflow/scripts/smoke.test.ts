@@ -51,7 +51,7 @@ describe('runSmoke', () => {
       if (url.endsWith('/api/flows/register') && method === 'POST') {
         const body = JSON.parse((init?.body as string) ?? '{}') as {
           repoPath: string;
-          architecturePath: string;
+          flowPath: string;
         };
         lastRegisteredRepoPath = body.repoPath;
         registerCalls += 1;

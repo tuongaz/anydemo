@@ -25,7 +25,7 @@ Ask for clarification only when the prompt is incoherent — never ask "what is 
 - The user's full natural-language prompt.
 - The project root (`$PWD` at invocation).
 - `~/.seeflow/config.json` (optional; studio host:port, default `http://localhost:4321`).
-- Existing `<project>/.seeflow/<slug>/architecture.json` files, if any (multi-flow per project supported).
+- Existing `<project>/.seeflow/<slug>/flow.json` files, if any (multi-flow per project supported).
 
 ## The pipeline
 
@@ -33,7 +33,7 @@ Ask for clarification only when the prompt is incoherent — never ask "what is 
 Phase 0 — pre-flight: studio reachable?
 Phase 1 — seeflow-discoverer        → context brief (language + runtime + tests)
 Phase 2 — seeflow-node-planner      → node draft
-Phase 3 — write skeleton architecture.json (nodes only) → register → user reviews canvas → approval
+Phase 3 — write skeleton flow.json (nodes only) → register → user reviews canvas → approval
 Phase 4 — seeflow-play-designer  ┐
           seeflow-status-designer├ parallel → overlays
                                  ┘
@@ -176,7 +176,7 @@ Mark each complete via `TaskUpdate` immediately after it succeeds.
 
 ## Phase 1 — discover
 
-Launch `seeflow-discoverer` with the user's prompt, project root, and any existing `architecture.json` for the matching slug. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
+Launch `seeflow-discoverer` with the user's prompt, project root, and any existing `flow.json` for the matching slug. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
 
 Discoverer must:
 - Identify primary language + runtime (`runtimeProfile`)
@@ -242,23 +242,23 @@ Register a **skeleton** flow (nodes + connectors only, no scripts) so the user c
 Paths (used in this phase and Phase 6):
 - `repoPath = $PWD`
 - `flowDir = $PWD/.seeflow/<slug>`
-- `architecturePath = .seeflow/<slug>/architecture.json`
+- `flowPath = .seeflow/<slug>/flow.json`
 - `stylePath = .seeflow/<slug>/style.json` (optional)
 
 1. Build skeleton JSON from node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
-2. `mkdir -p $flowDir` then write to `$flowDir/architecture.json`. Optionally write `$flowDir/style.json` with per-id `position` / visual hints.
+2. `mkdir -p $flowDir` then write to `$flowDir/flow.json`. Optionally write `$flowDir/style.json` with per-id `position` / visual hints.
 3. Validate via the studio API:
    ```bash
    RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
      -H 'content-type: application/json' \
-     -d "$(jq -n --slurpfile a "$flowDir/architecture.json" '{architecture: $a[0]}')")
+     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
    echo "$RESULT" | jq -e '.ok' >/dev/null \
      || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
    ```
    On failure: fix field-level issues in-place (no re-run of node-planner), retry.
 4. Register:
    ```bash
-   bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$architecturePath"
+   bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
    ```
    Stash the returned `id`.
 5. Ask the user:
@@ -321,15 +321,15 @@ Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (si
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
-3. **Write** merged architecture to `$flowDir/architecture.json` (data-only). Any visual hints emitted by the designers go to `$flowDir/style.json`.
+3. **Write** merged flow to `$flowDir/flow.json` (data-only). Any visual hints emitted by the designers go to `$flowDir/style.json`.
 4. **Validate via the studio API:**
 
 ```bash
 RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
   -H 'content-type: application/json' \
-  -d "$(jq -n --slurpfile a "$flowDir/architecture.json" \
+  -d "$(jq -n --slurpfile a "$flowDir/flow.json" \
               --slurpfile s "$flowDir/style.json" \
-              '{architecture: $a[0], style: $s[0]}')")
+              '{flow: $a[0], style: $s[0]}')")
 echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
 ```
 
@@ -343,14 +343,14 @@ echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; 
 
 1. `mkdir -p $flowDir/scripts $flowDir/state`
 2. Write files (overwriting the Phase 3 skeleton):
-   - `$flowDir/architecture.json` — validated semantic flow JSON with all actions.
+   - `$flowDir/flow.json` — validated semantic flow JSON with all actions.
    - `$flowDir/style.json` — keyed map of `position` + visual overrides (optional; omit when empty).
    - `$flowDir/scripts/<name>` — one file per overlay `scriptBody`. `chmod +x`.
    - `$flowDir/state/.gitignore` — `*`.
 3. Re-register:
 
 ```bash
-bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$architecturePath"
+bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
 ```
 
 Prints `{id, slug}`. Use the new `id` for Phases 7 + 8.
@@ -408,17 +408,17 @@ Retry caps: Phase 5 schema → **3**. Phase 7 fix-up → **2**.
 
 The on-disk format split into two files:
 
-- **`architecture.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
+- **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
 - **`style.json`** — keyed map of presentation overrides by node/connector id. Optional. Defaults apply when an entry is missing.
 
-The merged Flow over the API (`GET /api/flows/:id`) is the architecture + style baked together (positions, visual fields all merged onto each node).
+The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together (positions, visual fields all merged onto each node).
 
 ### `file://` substitution
 
-Any string in `architecture.json` may use `file://<relative-path>` to offload content to a separate file under `<project>/.seeflow/`. Recommended for `detail` when it exceeds ~200 chars.
+Any string in `flow.json` may use `file://<relative-path>` to offload content to a separate file under `<project>/.seeflow/`. Recommended for `detail` when it exceeds ~200 chars.
 
 ```json
-// architecture.json
+// flow.json
 { "data": { "detail": "file://details/checkout-api.md" } }
 
 // .seeflow/details/checkout-api.md
@@ -429,9 +429,9 @@ Validates the cart, reserves stock, publishes `order.created`.
 
 Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card; the flow still loads.
 
-**RULE — prefer file refs for long detail.** When a node's `detail` would exceed ~200 chars, write it to `<slug>/details/<nodeId>.md` and set `"detail": "file://<slug>/details/<nodeId>.md"`. Keeps architecture.json compact for LLM consumption.
+**RULE — prefer file refs for long detail.** When a node's `detail` would exceed ~200 chars, write it to `<slug>/details/<nodeId>.md` and set `"detail": "file://<slug>/details/<nodeId>.md"`. Keeps flow.json compact for LLM consumption.
 
-### `architecture.json` envelope
+### `flow.json` envelope
 
 ```json
 {
@@ -491,7 +491,7 @@ A missing entry → defaults apply (position → `{x:0,y:0}`, no visual override
 | `trigger` | `play` |
 
 ```jsonc
-// architecture.json — semantic node data only (no position, no visual fields)
+// flow.json — semantic node data only (no position, no visual fields)
 {
   "id": "checkout-api", "type": "playNode",
   "data": {
@@ -514,7 +514,7 @@ A missing entry → defaults apply (position → `{x:0,y:0}`, no visual override
 **stateNode** — no mandatory Play; audience watches but doesn't trigger. Same `kind` values.
 
 ```jsonc
-// architecture.json
+// flow.json
 {
   "id": "order-db", "type": "stateNode",
   "data": {
@@ -547,7 +547,7 @@ A missing entry → defaults apply (position → `{x:0,y:0}`, no visual override
 | `text` | Plain text | Canvas label |
 
 ```jsonc
-// architecture.json
+// flow.json
 { "id": "customer", "type": "shapeNode",
   "data": { "shape": "user", "name": "Customer" } }
 { "id": "stripe", "type": "shapeNode",
@@ -671,7 +671,7 @@ Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
 | Endpoint | Method | Phase | Body |
 |---|---|---|---|
 | `/health` | GET | 0 | — |
-| `/api/flows/register` | POST | 3, 6 | `{name, repoPath, architecturePath}` |
+| `/api/flows/register` | POST | 3, 6 | `{name, repoPath, flowPath}` |
 | `/api/flows/:id` | GET | 7 | — |
 | `/api/flows/:id/play/:nodeId` | POST | 7 | — |
 | `/api/events?flowId=:id` | GET (SSE) | 7 | — |

@@ -33,7 +33,7 @@ The launching prompt will give you:
    retype existing nodes.
 3. **(optional) `editTarget`** — when `contextBrief.existingDemo.diffTarget`
    is `true`, the orchestrator passes the parsed contents of the
-   existing `seeflow.json`. Reuse existing `scriptPath`s for nodes whose
+   existing `flow.json`. Reuse existing `scriptPath`s for nodes whose
    underlying entity persists across the edit.
 
 You do **not** see the play-designer's output. You and the

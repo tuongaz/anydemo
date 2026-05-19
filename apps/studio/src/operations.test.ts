@@ -82,9 +82,9 @@ describe('mergeNodeUpdates autoSize invariant', () => {
 });
 
 describe('validateImpl', () => {
-  it('returns ok for valid architecture + style', () => {
+  it('returns ok for valid flow + style', () => {
     const r = validateImpl({
-      architecture: {
+      flow: {
         version: 2,
         name: 'T',
         nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
@@ -95,26 +95,26 @@ describe('validateImpl', () => {
     expect(r).toEqual({ ok: true });
   });
 
-  it('returns architecture-scoped issues on bad arch', () => {
+  it('returns flow-scoped issues on bad flow', () => {
     const r = validateImpl({
-      architecture: { version: 1, name: '', nodes: [], connectors: [] },
+      flow: { version: 1, name: '', nodes: [], connectors: [] },
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.issues.every((i) => i.scope === 'architecture')).toBe(true);
+    if (!r.ok) expect(r.issues.every((i) => i.scope === 'flow')).toBe(true);
   });
 
   it('returns style-scoped issues on bad style', () => {
     const r = validateImpl({
-      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+      flow: { version: 2, name: 'T', nodes: [], connectors: [] },
       style: { nodes: { x: { fontSize: -1 } } },
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.issues.some((i) => i.scope === 'style')).toBe(true);
   });
 
-  it('flags style entries with no matching architecture id', () => {
+  it('flags style entries with no matching flow id', () => {
     const r = validateImpl({
-      architecture: { version: 2, name: 'T', nodes: [], connectors: [] },
+      flow: { version: 2, name: 'T', nodes: [], connectors: [] },
       style: { nodes: { ghost: { fontSize: 14 } } },
     });
     expect(r.ok).toBe(false);

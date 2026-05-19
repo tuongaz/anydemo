@@ -35,7 +35,7 @@ const tmpRegistry = () => {
 const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-mcp-repo-'));
   mkdirSync(join(repoDir, '.seeflow'));
-  writeFileSync(join(repoDir, '.seeflow', 'seeflow.json'), JSON.stringify(demo));
+  writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(demo));
   return repoDir;
 };
 
@@ -133,9 +133,7 @@ describe('POST /mcp tools/list', () => {
     const register = byName.get('seeflow_register_flow');
     expect(register?.inputSchema?.type).toBe('object');
     const registerProps = register?.inputSchema?.properties as Record<string, unknown>;
-    expect(Object.keys(registerProps)).toEqual(
-      expect.arrayContaining(['repoPath', 'architecturePath']),
-    );
+    expect(Object.keys(registerProps)).toEqual(expect.arrayContaining(['repoPath', 'flowPath']));
 
     const createProject = byName.get('seeflow_create_project');
     const cpProps = createProject?.inputSchema?.properties as Record<string, unknown>;
@@ -155,7 +153,7 @@ describe('seeflow_list_flows', () => {
     const repoPath = tmpRepoWithDemo();
     await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
 
     const envelope = await callTool(app, 'seeflow_list_flows');
@@ -172,7 +170,7 @@ describe('seeflow_get_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const registerEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const reg = expectOk(registerEnvelope) as { id: string };
 
@@ -202,7 +200,7 @@ describe('seeflow_register_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const body = expectOk(envelope) as {
       id: string;
@@ -218,7 +216,7 @@ describe('seeflow_register_flow', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath: '/this/path/does/not/exist',
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const text = expectError(envelope);
     expect(text).toContain('Flow file not found');
@@ -232,7 +230,7 @@ describe('seeflow_delete_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const regEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     const reg = expectOk(regEnvelope) as { id: string; slug: string };
     expect(registry.list()).toHaveLength(1);
@@ -246,7 +244,7 @@ describe('seeflow_delete_flow', () => {
     const second = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath: repoPath2,
-        architecturePath: '.seeflow/seeflow.json',
+        flowPath: '.seeflow/flow.json',
       }),
     ) as { slug: string };
     const bySlugEnvelope = await callTool(app, 'seeflow_delete_flow', { flowId: second.slug });
@@ -262,16 +260,14 @@ describe('seeflow_delete_flow', () => {
 });
 
 describe('seeflow_create_project', () => {
-  it('scaffolds a new project folder and writes .seeflow/seeflow.json', async () => {
+  it('scaffolds a new project folder and writes .seeflow/flow.json', async () => {
     const projectBaseDir = tmpEmptyFolder();
     const { app, registry } = buildApp({ projectBaseDir });
     const envelope = await callTool(app, 'seeflow_create_project', { name: 'Brand New Flow' });
     const body = expectOk(envelope) as { id: string; slug: string; scaffolded: boolean };
     expect(body.scaffolded).toBe(true);
     expect(body.slug).toBe('brand-new-flow');
-    expect(
-      existsSync(join(projectBaseDir, 'brand-new-flow', '.seeflow', 'architecture.json')),
-    ).toBe(true);
+    expect(existsSync(join(projectBaseDir, 'brand-new-flow', '.seeflow', 'flow.json'))).toBe(true);
     expect(registry.list()).toHaveLength(1);
   });
 });
@@ -333,12 +329,12 @@ const registerFixture = async (
   const repoPath = tmpRepoWithDemo(demo);
   const envelope = await callTool(app, 'seeflow_register_flow', {
     repoPath,
-    architecturePath: '.seeflow/seeflow.json',
+    flowPath: '.seeflow/flow.json',
   });
   const reg = expectOk(envelope) as RegisterResult;
   return {
     repoPath,
-    demoFile: join(repoPath, '.seeflow', 'seeflow.json'),
+    demoFile: join(repoPath, '.seeflow', 'flow.json'),
     styleFile: join(repoPath, '.seeflow', 'style.json'),
     reg,
   };
@@ -372,7 +368,7 @@ describe('seeflow_add_node', () => {
     const { demoFile, reg } = await registerFixture(app);
     const before = readFileSync(demoFile, 'utf8');
 
-    // shapeNode without required `shape` — FlowSchema rejects the post-merge.
+    // shapeNode without required `shape` — ResolvedFlowSchema rejects the post-merge.
     const envelope = await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
       node: { type: 'shapeNode', position: { x: 0, y: 0 }, data: {} },
@@ -663,12 +659,12 @@ describe('seeflow_patch_node', () => {
     expect(expectError(envelope)).toBe('Unknown nodeId: missing');
   });
 
-  it('returns Flow failed schema validation when the post-merge demo violates FlowSchema', async () => {
+  it('returns Flow failed schema validation when the post-merge demo violates ResolvedFlowSchema', async () => {
     const { app } = buildApp();
     const { demoFile, reg } = await registerFixture(app);
     const before = readFileSync(demoFile, 'utf8');
 
-    // Empty name on a functional playNode trips FlowSchema after merge.
+    // Empty name on a functional playNode trips ResolvedFlowSchema after merge.
     const envelope = await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
       nodeId: 'api-checkout',
@@ -678,9 +674,9 @@ describe('seeflow_patch_node', () => {
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
   });
 
-  it('rejects unknown forward-compat fields on the architecture node (strict schema)', async () => {
+  it('rejects unknown forward-compat fields on the flow node (strict schema)', async () => {
     const { app } = buildApp();
-    // ArchitectureSchema is strict — unknown fields at the node root are
+    // FlowSchema is strict — unknown fields at the node root are
     // rejected on register so the user gets a useful schema error.
     const repoPath = tmpRepoWithDemo({
       version: 2,
@@ -702,7 +698,7 @@ describe('seeflow_patch_node', () => {
     });
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      architecturePath: '.seeflow/seeflow.json',
+      flowPath: '.seeflow/flow.json',
     });
     expect(expectError(envelope)).toContain('chema validation');
   });
@@ -929,7 +925,7 @@ describe('seeflow_patch_connector', () => {
     const { app } = buildApp();
     const { repoPath, styleFile, reg } = await registerFixture(app, demo);
     // Seed style.json with handle ids on the connector — those live in style.json
-    // post-split, not on the architecture file's connector entry.
+    // post-split, not on the flow file's connector entry.
     writeFileSync(
       styleFile,
       JSON.stringify({ connectors: { 'a-to-b': { sourceHandle: 'r', targetHandle: 't' } } }),

@@ -18,7 +18,7 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
-import { mergeArchitectureAndStyle, splitFlow } from './merge.ts';
+import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import { seeflowHome } from './paths.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
@@ -26,19 +26,21 @@ import {
   EdgePinSchema,
   type Flow,
   FlowSchema,
+  type ResolvedFlow,
+  ResolvedFlowSchema,
   SourceHandleIdSchema,
+  StyleSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
-import { ArchitectureSchema, StyleSchema } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
-const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/architecture.json';
+const DEFAULT_FLOW_RELATIVE_PATH = '.seeflow/flow.json';
 
 export const RegisterBodySchema = z.object({
   name: z.string().min(1).optional(),
   repoPath: z.string().min(1),
-  architecturePath: z.string().min(1),
+  flowPath: z.string().min(1),
 });
 export type RegisterBody = z.infer<typeof RegisterBodySchema>;
 
@@ -68,7 +70,7 @@ export type ReorderBody = z.infer<typeof ReorderBodySchema>;
 
 // Partial node update body. Top-level `position` lands on node.position; every
 // other key lands inside node.data. Final validity is enforced by re-parsing
-// the whole demo through FlowSchema after the merge — this body schema just
+// the whole demo through ResolvedFlowSchema after the merge — this body schema just
 // rejects unknown top-level keys to catch typos.
 export const NodePatchBodySchema = z
   .object({
@@ -89,7 +91,7 @@ export const NodePatchBodySchema = z
     // that autoSize:true never coexists with persisted width/height.
     autoSize: z.boolean().optional(),
     shape: z.enum(['rectangle', 'ellipse', 'sticky', 'text']).optional(),
-    // iconNode-only: stroke color token. Lands at data.color; FlowSchema's
+    // iconNode-only: stroke color token. Lands at data.color; ResolvedFlowSchema's
     // post-merge reparse gates that this is only valid on an iconNode.
     color: ColorTokenSchema.optional(),
     // iconNode-only: glyph stroke width. Lands at data.strokeWidth; the
@@ -156,7 +158,7 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     if (updates[key] === undefined) continue;
     // Empty string on the two free-text metadata fields is the documented
     // clear-on-serialize signal — strip the key instead of writing "" to disk
-    // so seeflow.json stays compact and round-tripping a cleared node doesn't
+    // so flow.json stays compact and round-tripping a cleared node doesn't
     // reintroduce the field.
     if ((key === 'description' || key === 'detail') && updates[key] === '') {
       if (key in data) {
@@ -237,7 +239,7 @@ export interface FlowGetResponse {
   slug: string;
   name: string;
   filePath: string;
-  flow: Flow | null;
+  flow: ResolvedFlow | null;
   valid: boolean;
   error: string | null;
 }
@@ -326,7 +328,7 @@ export type PatchNodeOutcome =
 
 // Partial connector update body. Strict at the top level so client typos
 // surface as 400. Per-kind invariants (e.g. kind='event' requires eventName)
-// are enforced post-merge by re-parsing the whole demo through FlowSchema.
+// are enforced post-merge by re-parsing the whole demo through ResolvedFlowSchema.
 const ConnectorKindSchema = z.enum(['http', 'event', 'queue', 'default']);
 export const ConnectorPatchBodySchema = z
   .object({
@@ -344,7 +346,7 @@ export const ConnectorPatchBodySchema = z
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
     url: z.string().optional(),
     // Reconnect: drag an edge endpoint onto another node's handle. The
-    // post-merge FlowSchema parse rejects dangling references, so we don't
+    // post-merge ResolvedFlowSchema parse rejects dangling references, so we don't
     // need a referential check here.
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
@@ -378,7 +380,7 @@ export type ConnectorPatchBody = z.infer<typeof ConnectorPatchBodySchema>;
 // Kind-specific connector fields. When `kind` changes via PATCH, these are
 // dropped first so the resulting connector doesn't carry phantom payloads
 // from the previous kind (e.g. an event→default change leaving eventName
-// behind, which FlowSchema would silently strip on parse but leave on disk).
+// behind, which ResolvedFlowSchema would silently strip on parse but leave on disk).
 const CONNECTOR_KIND_FIELDS = ['method', 'url', 'eventName', 'queueName'] as const;
 
 export const mergeConnectorUpdates = (
@@ -429,8 +431,8 @@ export type DeleteConnectorOutcome =
   | { kind: 'unknownConnector' }
   | { kind: 'writeFailed'; message: string };
 
-export const resolveFilePath = (repoPath: string, architecturePath: string): string =>
-  isAbsolute(architecturePath) ? architecturePath : join(repoPath, architecturePath);
+export const resolveFilePath = (repoPath: string, flowPath: string): string =>
+  isAbsolute(flowPath) ? flowPath : join(repoPath, flowPath);
 
 // Per-demo serialization: read-modify-write of the demo file isn't atomic
 // across multiple PATCHes, so two concurrent drags would race (later writer's
@@ -472,25 +474,25 @@ export const writeFileAtomic = (filePath: string, content: string): void => {
 };
 
 /**
- * Read architecture.json + optional style.json, return the raw parsed JSON
- * so operations can mutate the merged-flow shape without losing forward-compat
- * fields. Returns null if the architecture file is missing or invalid JSON.
+ * Read flow.json + optional style.json, return the raw parsed JSON so
+ * operations can mutate the merged-flow shape without losing forward-compat
+ * fields. Returns null if the flow file is missing or invalid JSON.
  */
 type ReadRawResult =
-  | { kind: 'ok'; rawArch: Record<string, unknown>; rawStyle: Record<string, unknown> }
+  | { kind: 'ok'; rawFlow: Record<string, unknown>; rawStyle: Record<string, unknown> }
   | { kind: 'badJson'; message: string };
 
-function readRawArchAndStyle(archPath: string): ReadRawResult {
-  let rawArch: unknown;
+function readRawFlowAndStyle(flowPath: string): ReadRawResult {
+  let rawFlow: unknown;
   try {
-    rawArch = JSON.parse(readFileSync(archPath, 'utf8'));
+    rawFlow = JSON.parse(readFileSync(flowPath, 'utf8'));
   } catch (err) {
     return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
   }
-  if (!rawArch || typeof rawArch !== 'object' || Array.isArray(rawArch)) {
-    return { kind: 'badJson', message: 'architecture.json is not an object' };
+  if (!rawFlow || typeof rawFlow !== 'object' || Array.isArray(rawFlow)) {
+    return { kind: 'badJson', message: 'flow.json is not an object' };
   }
-  const stylePath = join(dirname(archPath), 'style.json');
+  const stylePath = join(dirname(flowPath), 'style.json');
   let rawStyle: Record<string, unknown> = {};
   if (existsSync(stylePath)) {
     try {
@@ -506,12 +508,12 @@ function readRawArchAndStyle(archPath: string): ReadRawResult {
       };
     }
   }
-  return { kind: 'ok', rawArch: rawArch as Record<string, unknown>, rawStyle };
+  return { kind: 'ok', rawFlow: rawFlow as Record<string, unknown>, rawStyle };
 }
 
 /**
  * Mutate-in-place helper: read both files into a merged Flow shape, hand it
- * to the mutator, then split back into architecture + style and atomically
+ * to the mutator, then split back into flow + style and atomically
  * write both. The mutator returns either { kind: 'ok' } or a discriminated
  * outcome for early-exits (e.g. unknownNode). On schema-validation failure,
  * neither file is written.
@@ -532,18 +534,18 @@ type MutateMergedFlowResult<E> =
   | E;
 
 export async function mutateMergedFlow<E extends { kind: string }>(
-  archPath: string,
+  flowPath: string,
   mutator: MutateMergedFlowMutator<E>,
 ): Promise<MutateMergedFlowResult<E>> {
-  const read = readRawArchAndStyle(archPath);
+  const read = readRawFlowAndStyle(flowPath);
   if (read.kind === 'badJson') return { kind: 'badJson', message: read.message };
 
-  const archParse = ArchitectureSchema.safeParse(read.rawArch);
-  if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
+  const flowParse = FlowSchema.safeParse(read.rawFlow);
+  if (!flowParse.success) return { kind: 'badSchema', issues: flowParse.error.issues };
   const styleParse = StyleSchema.safeParse(read.rawStyle);
   if (!styleParse.success) return { kind: 'badSchema', issues: styleParse.error.issues };
 
-  const merged = mergeArchitectureAndStyle(archParse.data, styleParse.data) as unknown as {
+  const merged = mergeFlowAndStyle(flowParse.data, styleParse.data) as unknown as {
     version: number;
     name: string;
     resetAction?: unknown;
@@ -554,27 +556,27 @@ export async function mutateMergedFlow<E extends { kind: string }>(
   const outcome = mutator(merged);
   if (outcome.kind !== 'ok') return outcome;
 
-  // Final FlowSchema parse so per-kind invariants (event needs eventName, etc.)
+  // Final ResolvedFlowSchema parse so per-kind invariants (event needs eventName, etc.)
   // surface honestly instead of being silently papered over.
-  const finalParse = FlowSchema.safeParse(merged);
+  const finalParse = ResolvedFlowSchema.safeParse(merged);
   if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
-  const { architecture, style } = splitFlow(merged);
+  const { flow, style } = splitFlow(merged);
   // Re-validate the post-split files to catch the rare case where a forward-
   // compat field landed in the wrong bucket. Style validation is a no-op for
-  // empty maps; architecture revalidation rejects unknown keys via strict().
-  const archCheck = ArchitectureSchema.safeParse(architecture);
-  if (!archCheck.success) return { kind: 'badSchema', issues: archCheck.error.issues };
+  // empty maps; flow revalidation rejects unknown keys via strict().
+  const flowCheck = FlowSchema.safeParse(flow);
+  if (!flowCheck.success) return { kind: 'badSchema', issues: flowCheck.error.issues };
   const styleCheck = StyleSchema.safeParse(style);
   if (!styleCheck.success) return { kind: 'badSchema', issues: styleCheck.error.issues };
 
-  const stylePath = join(dirname(archPath), 'style.json');
+  const stylePath = join(dirname(flowPath), 'style.json');
   const styleIsEmpty =
     (!style.nodes || Object.keys(style.nodes as Record<string, unknown>).length === 0) &&
     (!style.connectors || Object.keys(style.connectors as Record<string, unknown>).length === 0);
 
   try {
-    writeFileAtomic(archPath, `${JSON.stringify(architecture, null, 2)}\n`);
+    writeFileAtomic(flowPath, `${JSON.stringify(flow, null, 2)}\n`);
   } catch (err) {
     return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
   }
@@ -644,7 +646,7 @@ export const reorderNodes = (
 
 export function listDemosImpl(deps: OperationsDeps): ListFlowsOutcome {
   const data = deps.registry.list().map((e) => {
-    const fullPath = resolveFilePath(e.repoPath, e.architecturePath);
+    const fullPath = resolveFilePath(e.repoPath, e.flowPath);
     const fileExists = existsSync(fullPath);
     return {
       id: e.id,
@@ -663,7 +665,7 @@ export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise
   const entry = registry.getById(flowId);
   if (!entry) return { kind: 'notFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   const snap = watcher?.snapshot(flowId) ?? watcher?.reparse(flowId) ?? null;
 
   const buildResponse = (s: FlowSnapshot): FlowGetResponse => ({
@@ -700,8 +702,8 @@ export async function registerFlowImpl(
   body: RegisterBody,
 ): Promise<RegisterFlowOutcome> {
   const { registry, watcher } = deps;
-  const { repoPath, architecturePath } = body;
-  const fullPath = resolveFilePath(repoPath, architecturePath);
+  const { repoPath, flowPath } = body;
+  const fullPath = resolveFilePath(repoPath, flowPath);
 
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
@@ -712,14 +714,14 @@ export async function registerFlowImpl(
     }
     // Schema validation failed — surface the issues as a bad-schema outcome
     // by re-running parse to get ZodIssue[].
-    let rawArch: unknown;
+    let rawFlow: unknown;
     try {
-      rawArch = JSON.parse(readFileSync(fullPath, 'utf8'));
+      rawFlow = JSON.parse(readFileSync(fullPath, 'utf8'));
     } catch (err) {
       return { kind: 'badJson', detail: String(err) };
     }
-    const archParse = ArchitectureSchema.safeParse(rawArch);
-    if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
+    const flowParse = FlowSchema.safeParse(rawFlow);
+    if (!flowParse.success) return { kind: 'badSchema', issues: flowParse.error.issues };
     return { kind: 'badJson', detail: merged.error };
   }
   if (!merged.flow) return { kind: 'badJson', detail: merged.error ?? 'unknown error' };
@@ -728,7 +730,7 @@ export async function registerFlowImpl(
   const entry = registry.upsert({
     name: body.name ?? merged.flow.name,
     repoPath,
-    architecturePath,
+    flowPath,
     valid: true,
     lastModified,
   });
@@ -771,7 +773,7 @@ export async function createProjectImpl(
   const baseDir = deps.projectBaseDir ?? seeflowHome();
   const folderPath = join(baseDir, slugify(name));
 
-  const demoFullPath = join(folderPath, DEFAULT_ARCHITECTURE_RELATIVE_PATH);
+  const demoFullPath = join(folderPath, DEFAULT_FLOW_RELATIVE_PATH);
 
   if (existsSync(demoFullPath)) {
     let raw: unknown;
@@ -780,14 +782,14 @@ export async function createProjectImpl(
     } catch (err) {
       return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
     }
-    const archParse = ArchitectureSchema.safeParse(raw);
-    if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
+    const flowParse = FlowSchema.safeParse(raw);
+    if (!flowParse.success) return { kind: 'badSchema', issues: flowParse.error.issues };
 
     const lastModified = statSync(demoFullPath).mtimeMs;
     const entry = registry.upsert({
       name,
       repoPath: folderPath,
-      architecturePath: DEFAULT_ARCHITECTURE_RELATIVE_PATH,
+      flowPath: DEFAULT_FLOW_RELATIVE_PATH,
       valid: true,
       lastModified,
     });
@@ -795,7 +797,7 @@ export async function createProjectImpl(
     return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: false } };
   }
 
-  // Architecture-only scaffold: empty nodes/connectors, no style.json needed.
+  // Flow-only scaffold: empty nodes/connectors, no style.json needed.
   const scaffold: Flow = { version: 2, name, nodes: [], connectors: [] };
 
   try {
@@ -818,7 +820,7 @@ export async function createProjectImpl(
   const entry = registry.upsert({
     name,
     repoPath: folderPath,
-    architecturePath: DEFAULT_ARCHITECTURE_RELATIVE_PATH,
+    flowPath: DEFAULT_FLOW_RELATIVE_PATH,
     valid: true,
     lastModified,
   });
@@ -826,7 +828,7 @@ export async function createProjectImpl(
   return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: true } };
 }
 
-// Append a new node to the demo. Auto-generates an id when absent; FlowSchema
+// Append a new node to the demo. Auto-generates an id when absent; ResolvedFlowSchema
 // is re-run on the post-mutation raw object before commit so a malformed
 // payload never produces a half-written file.
 export async function addNodeImpl(
@@ -842,7 +844,7 @@ export async function addNodeImpl(
     newNode.id = `node-${crypto.randomUUID()}`;
   }
   const newId = newNode.id as string;
-  // Default position so the post-merge FlowSchema parse passes. Position lives
+  // Default position so the post-merge ResolvedFlowSchema parse passes. Position lives
   // on style.json after the split — callers who care set it explicitly.
   if (!newNode.position || typeof newNode.position !== 'object') {
     newNode.position = { x: 0, y: 0 };
@@ -876,7 +878,7 @@ export async function addNodeImpl(
     }
   }
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   const result = await withFlowWriteLock(flowId, () =>
@@ -912,11 +914,11 @@ const buildHtmlNodeStarter = (nodeId: string): string =>
 `;
 
 // Remove a node and cascade-delete every connector touching it in a single
-// atomic write. Final FlowSchema parse stays in place so a pre-existing
+// atomic write. Final ResolvedFlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 // US-016: when the removed node is an htmlNode whose data.htmlPath matches the
 // studio-managed shape `blocks/<id>.html`, the companion file is removed AFTER
-// the seeflow.json write succeeds. Hand-edited paths are left alone (symmetric
+// the flow.json write succeeds. Hand-edited paths are left alone (symmetric
 // with US-015's "client-supplied htmlPath wins, no starter file written").
 export async function deleteNodeImpl(
   deps: OperationsDeps,
@@ -926,7 +928,7 @@ export async function deleteNodeImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   let managedHtmlAbsPath: string | undefined;
@@ -992,7 +994,7 @@ export async function moveNodeImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   const result = await withFlowWriteLock(flowId, () =>
@@ -1015,7 +1017,7 @@ export async function moveNodeImpl(
 
 // Apply a partial PATCH body to a single node. Mutation runs against the
 // raw parsed JSON (so unknown forward-compat fields survive a round-trip),
-// and the whole demo is re-validated through FlowSchema before commit so
+// and the whole demo is re-validated through ResolvedFlowSchema before commit so
 // partial writes can't break invariants like the connector→node superRefine.
 export async function patchNodeImpl(
   deps: OperationsDeps,
@@ -1026,7 +1028,7 @@ export async function patchNodeImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   return withFlowWriteLock(flowId, () =>
@@ -1051,7 +1053,7 @@ export async function reorderNodeImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   const result = await withFlowWriteLock(flowId, () =>
@@ -1070,7 +1072,7 @@ export async function reorderNodeImpl(
 
 // Append a new connector to demo.connectors. `id` is auto-generated when
 // absent and `kind` defaults to 'default' (the no-semantics user-drawn
-// variant). Source/target referential integrity is enforced by FlowSchema's
+// variant). Source/target referential integrity is enforced by ResolvedFlowSchema's
 // superRefine on the post-mutation parse.
 export async function addConnectorImpl(
   deps: OperationsDeps,
@@ -1089,7 +1091,7 @@ export async function addConnectorImpl(
   }
   const newId = newConn.id as string;
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   const result = await withFlowWriteLock(flowId, () =>
@@ -1108,7 +1110,7 @@ export async function addConnectorImpl(
 // When `kind` changes, the previous kind's payload fields are dropped first
 // so the connector doesn't carry phantom data; explicit `null` in the patch
 // clears the field on disk (used by reconnect-to-body to drop a pinned
-// handle id). The whole demo is re-validated through FlowSchema before
+// handle id). The whole demo is re-validated through ResolvedFlowSchema before
 // commit so the discriminated union catches missing-required-fields
 // (e.g. kind='event' without eventName) and the superRefine gates
 // source/target referential integrity + handle role invariants.
@@ -1121,7 +1123,7 @@ export async function patchConnectorImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   return withFlowWriteLock(flowId, () =>
@@ -1135,7 +1137,7 @@ export async function patchConnectorImpl(
 }
 
 // Remove a connector by id. No cascade — node deletion is what cascades,
-// not connector deletion. Final FlowSchema parse still runs so a pre-existing
+// not connector deletion. Final ResolvedFlowSchema parse still runs so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 export async function deleteConnectorImpl(
   deps: OperationsDeps,
@@ -1145,7 +1147,7 @@ export async function deleteConnectorImpl(
   const entry = deps.registry.getById(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   return withFlowWriteLock(flowId, () =>
@@ -1165,12 +1167,12 @@ export async function deleteConnectorImpl(
 // =============================================================================
 
 export interface ValidateBody {
-  architecture: unknown;
+  flow: unknown;
   style?: unknown;
 }
 
 export interface ValidationIssue {
-  scope: 'architecture' | 'style' | 'cross';
+  scope: 'flow' | 'style' | 'cross';
   path: (string | number)[];
   message: string;
   code: string;
@@ -1181,11 +1183,11 @@ export type ValidateOutcome = { ok: true } | { ok: false; issues: ValidationIssu
 export function validateImpl(body: ValidateBody): ValidateOutcome {
   const issues: ValidationIssue[] = [];
 
-  const archParse = ArchitectureSchema.safeParse(body.architecture);
-  if (!archParse.success) {
-    for (const i of archParse.error.issues) {
+  const flowParse = FlowSchema.safeParse(body.flow);
+  if (!flowParse.success) {
+    for (const i of flowParse.error.issues) {
       issues.push({
-        scope: 'architecture',
+        scope: 'flow',
         path: [...i.path],
         message: i.message,
         code: i.code,
@@ -1212,11 +1214,11 @@ export function validateImpl(body: ValidateBody): ValidateOutcome {
     }
   }
 
-  if (archParse.success && styleData) {
-    const archNodeIds = new Set(archParse.data.nodes.map((n) => n.id));
-    const archConnIds = new Set(archParse.data.connectors.map((c) => c.id));
+  if (flowParse.success && styleData) {
+    const flowNodeIds = new Set(flowParse.data.nodes.map((n) => n.id));
+    const flowConnIds = new Set(flowParse.data.connectors.map((c) => c.id));
     for (const id of Object.keys(styleData.nodes ?? {})) {
-      if (!archNodeIds.has(id)) {
+      if (!flowNodeIds.has(id)) {
         issues.push({
           scope: 'cross',
           path: ['nodes', id],
@@ -1226,7 +1228,7 @@ export function validateImpl(body: ValidateBody): ValidateOutcome {
       }
     }
     for (const id of Object.keys(styleData.connectors ?? {})) {
-      if (!archConnIds.has(id)) {
+      if (!flowConnIds.has(id)) {
         issues.push({
           scope: 'cross',
           path: ['connectors', id],

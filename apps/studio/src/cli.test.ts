@@ -66,32 +66,32 @@ const runCli = async (
 };
 
 describe('seeflow CLI register integration', () => {
-  it('two registers from the same repo with different architecturePath produce two distinct studio entries', async () => {
+  it('two registers from the same repo with different flowPath produce two distinct studio entries', async () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-repo-'));
       mkdirSync(join(repoDir, '.seeflow', 'checkout'), { recursive: true });
       mkdirSync(join(repoDir, '.seeflow', 'refund'), { recursive: true });
       writeFileSync(
-        join(repoDir, '.seeflow', 'checkout', 'seeflow.json'),
+        join(repoDir, '.seeflow', 'checkout', 'flow.json'),
         JSON.stringify({ ...VALID_DEMO, name: 'Checkout' }),
       );
       writeFileSync(
-        join(repoDir, '.seeflow', 'refund', 'seeflow.json'),
+        join(repoDir, '.seeflow', 'refund', 'flow.json'),
         JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
       );
 
       const baseEnv = { SEEFLOW_STUDIO_URL: studio.url };
 
       const first = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/checkout/seeflow.json'],
+        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/checkout/flow.json'],
         baseEnv,
       );
       expect(first.code).toBe(0);
       expect(first.stdout).toContain('Registered "Checkout"');
 
       const second = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/refund/seeflow.json'],
+        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/refund/flow.json'],
         baseEnv,
       );
       expect(second.code).toBe(0);

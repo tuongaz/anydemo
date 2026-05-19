@@ -98,7 +98,7 @@ const DemoNodeIdBaseSchema = z.object({
 });
 
 // add_node input: { flowId, node: <node payload> }. The inner `node` object is
-// loose here (additionalProperties=true via passthrough) because FlowSchema
+// loose here (additionalProperties=true via passthrough) because ResolvedFlowSchema
 // runs the full validation server-side after the new node is merged in.
 const AddNodeInputSchema = z.object({
   flowId: z.string().min(1),
@@ -139,7 +139,7 @@ const PatchNodeInputSchema = NodePatchBodySchema.extend({
 
 // add_connector input: { flowId, connector: <connector payload> }. The inner
 // `connector` object is loose (additionalProperties=true via z.record) because
-// FlowSchema runs the full validation server-side after the new connector is
+// ResolvedFlowSchema runs the full validation server-side after the new connector is
 // merged in (post-mutation parse catches dangling source/target refs and
 // kind-discriminator violations).
 const AddConnectorInputSchema = z.object({
@@ -174,25 +174,25 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'validate_seeflow',
     description:
-      'Validate an architecture.json (and optional style.json) against the ' +
-      'SeeFlow schemas. Stateless: no flow id, no file:// resolution, no ' +
-      'registry side-effects. Returns { ok: true } or { ok: false, issues }.',
+      'Validate a flow.json (and optional style.json) against the SeeFlow ' +
+      'schemas. Stateless: no flow id, no file:// resolution, no registry ' +
+      'side-effects. Returns { ok: true } or { ok: false, issues }.',
     inputSchema: {
       type: 'object',
       properties: {
-        architecture: { type: 'object' },
+        flow: { type: 'object' },
         style: { type: 'object' },
       },
-      required: ['architecture'],
+      required: ['flow'],
       additionalProperties: false,
     },
     handler: async (args) => {
       const body = args as Record<string, unknown> | undefined;
-      if (!body || !('architecture' in body)) {
-        return errorResult('Body must include `architecture`');
+      if (!body || !('flow' in body)) {
+        return errorResult('Body must include `flow`');
       }
       const result = validateImpl({
-        architecture: body.architecture,
+        flow: body.flow,
         style: body.style as unknown,
       });
       return okResult(result);

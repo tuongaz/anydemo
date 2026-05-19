@@ -32,7 +32,7 @@ export async function exportToCloud(
     }
   }
 
-  const demoKey = visibility === 'link' ? 'seeflow.private.json' : 'seeflow.json';
+  const demoKey = visibility === 'link' ? 'flow.private.json' : 'flow.json';
 
   const zipEntries: Record<string, Uint8Array> = {
     [demoKey]: strToU8(JSON.stringify(demo)),

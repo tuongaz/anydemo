@@ -81,11 +81,11 @@ async function handleGetFlows(event: APIGatewayProxyEventV2): Promise<APIGateway
     Math.max(1, Number.parseInt(event.queryStringParameters?.limit ?? '12', 10) || 12),
   );
 
-  // List all objects and filter to seeflow.json keys (public flows only)
+  // List all objects and filter to flow.json keys (public flows only)
   const listed = await s3.send(new ListObjectsV2Command({ Bucket: BUCKET }));
 
   const objects = (listed.Contents ?? [])
-    .filter((o) => o.Key?.endsWith('/seeflow.json'))
+    .filter((o) => o.Key?.endsWith('/flow.json'))
     .sort((a, b) => (b.LastModified?.getTime() ?? 0) - (a.LastModified?.getTime() ?? 0));
 
   const total = objects.length;
@@ -94,9 +94,9 @@ async function handleGetFlows(event: APIGatewayProxyEventV2): Promise<APIGateway
 
   const flows = await Promise.all(
     slice.map(async (obj) => {
-      const uuid = obj.Key?.replace('/seeflow.json', '');
+      const uuid = obj.Key?.replace('/flow.json', '');
       const [demoRes, metaRes] = await Promise.all([
-        s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${uuid}/seeflow.json` })),
+        s3.send(new GetObjectCommand({ Bucket: BUCKET, Key: `${uuid}/flow.json` })),
         s3
           .send(new GetObjectCommand({ Bucket: BUCKET, Key: `${uuid}/metadata.json` }))
           .catch(() => null),
@@ -132,7 +132,7 @@ async function handleGetFlow(event: APIGatewayProxyEventV2): Promise<APIGatewayP
 
   try {
     const result = await s3.send(
-      new GetObjectCommand({ Bucket: BUCKET, Key: `${uuid}/seeflow.json` }),
+      new GetObjectCommand({ Bucket: BUCKET, Key: `${uuid}/flow.json` }),
     );
     const body = await result.Body?.transformToString('utf-8');
     return {
