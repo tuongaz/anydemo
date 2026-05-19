@@ -1,24 +1,28 @@
-// Codemod: prefix Tailwind utility classes inside string literals with `sf-`.
+// Codemod: prepend the Tailwind v4 namespace prefix `sf:` to utility classes
+// inside string literals.
 //
 // Walks .ts/.tsx files matching the glob given on argv[2]. Strips line and
-// block comments before scanning so unbalanced quotes inside prose
-// can't make a string literal swallow the next comment. Then rewrites every
-// matched-quote string literal whose tokens look like Tailwind utilities.
+// block comments before scanning so unbalanced quotes inside prose can't make a
+// string literal swallow the next comment. Then rewrites every matched-quote
+// string literal whose tokens look like Tailwind utilities.
+//
+// Tailwind v4 with `@import "tailwindcss" prefix(sf);` emits class names in
+// PREFIX-FIRST ordering: `sf:hover:bg-card`, `sf:data-[state=open]:animate-in`,
+// `sf:-mx-1`, `sf:!opacity-100`. The whole token (variants + base, including
+// any `-` / `!` modifiers) is preserved verbatim; only `sf:` is prepended.
+//
+// The script is idempotent: tokens already starting with `sf:` are returned
+// unchanged. Legacy v3 leftovers (`sf-flex`, `hover:sf-bg-card`, `!sf-flex`,
+// `-sf-mx-4`) are normalised by stripping the `sf-` splice and then prepending
+// the v4 `sf:` prefix.
 //
 // To be considered Tailwind, a string must have at least 2 whitespace-separated
 // tokens AND every token must either be in TAILWIND_PLAIN_WORDS or start with a
 // known Tailwind utility prefix (TAILWIND_PREFIXES). This rejects single-token
 // import paths, prose, and hyphenated proper nouns.
 
-import { readFileSync, writeFileSync } from 'node:fs';
-import { globSync } from 'node:fs';
+import { globSync, readFileSync, writeFileSync } from 'node:fs';
 import { argv } from 'node:process';
-
-const TARGET = argv[2];
-if (!TARGET) {
-  console.error('Usage: bun packages/canvas/scripts/prefix-tailwind.mjs <glob>');
-  process.exit(1);
-}
 
 const KNOWN_NON_TAILWIND = new Set([
   'seeflow-canvas-root',
@@ -229,39 +233,45 @@ const PREFIX_PATTERN = new RegExp(
   `^(?:${TAILWIND_PREFIXES.map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})(?:-|$|\\[)`,
 );
 
-function isTailwindToken(token) {
-  if (!token || token.startsWith('sf-')) return false;
-  if (KNOWN_NON_TAILWIND.has(token)) return false;
+// Strip any v3 legacy `sf-` splice from a token's base, leaving the underlying
+// utility intact. Variants (`hover:`, `data-[state=*]:`, ...) and the `!` /
+// `-` modifier signs are preserved.
+export function stripLegacySfDash(token) {
   const colonIdx = token.lastIndexOf(':');
+  const variants = colonIdx === -1 ? '' : token.slice(0, colonIdx + 1);
   let base = colonIdx === -1 ? token : token.slice(colonIdx + 1);
+  if (base.startsWith('!sf-')) base = `!${base.slice(4)}`;
+  else if (base.startsWith('-sf-')) base = `-${base.slice(4)}`;
+  else if (base.startsWith('sf-')) base = base.slice(3);
+  return variants + base;
+}
+
+export function isTailwindToken(token) {
+  if (!token) return false;
+  if (KNOWN_NON_TAILWIND.has(token)) return false;
+  // Normalise: strip v4 `sf:` prefix and any v3 `sf-` splice so we can inspect
+  // the underlying utility base.
+  let normalized = token.startsWith('sf:') ? token.slice(3) : token;
+  normalized = stripLegacySfDash(normalized);
+  const colonIdx = normalized.lastIndexOf(':');
+  let base = colonIdx === -1 ? normalized : normalized.slice(colonIdx + 1);
   if (base.startsWith('-')) base = base.slice(1);
   if (base.startsWith('!')) base = base.slice(1);
   if (!base) return false;
   if (TAILWIND_PLAIN_WORDS.has(base)) return true;
-  if (base.includes('[')) {
-    return PREFIX_PATTERN.test(base);
-  }
   return PREFIX_PATTERN.test(base);
 }
 
-// Splice `sf-` into the base of a Tailwind token, preserving leading
-// `-` (negative margin/padding) and `!` (important modifier) signs.
-function prefixBase(base) {
-  if (base.startsWith('!')) return `!sf-${base.slice(1)}`;
-  if (base.startsWith('-')) return `-sf-${base.slice(1)}`;
-  return `sf-${base}`;
-}
-
-function prefixToken(token) {
+// Prepend the v4 `sf:` namespace prefix to a token. Idempotent: tokens already
+// starting with `sf:` are returned unchanged. Legacy v3 `sf-` splices are
+// normalised before the prefix is prepended.
+export function prefixToken(token) {
+  if (token.startsWith('sf:')) return token;
   if (!isTailwindToken(token)) return token;
-  const colonIdx = token.lastIndexOf(':');
-  if (colonIdx === -1) return prefixBase(token);
-  const variants = token.slice(0, colonIdx);
-  const base = token.slice(colonIdx + 1);
-  return `${variants}:${prefixBase(base)}`;
+  return `sf:${stripLegacySfDash(token)}`;
 }
 
-function prefixString(s) {
+export function prefixString(s) {
   return s
     .split(/(\s+)/)
     .map((part) => (/^\s+$/.test(part) ? part : prefixToken(part)))
@@ -270,7 +280,7 @@ function prefixString(s) {
 
 // Replace line/block comments with whitespace of matching length so source
 // offsets are preserved when we later splice edits into the original.
-function stripComments(src) {
+export function stripComments(src) {
   let i = 0;
   const out = [];
   while (i < src.length) {
@@ -325,8 +335,7 @@ function stripComments(src) {
 
 const STRING_LITERAL_RE = /(['"`])((?:\\.|(?!\1)[^\\])*)\1/g;
 
-function transformFile(path) {
-  const src = readFileSync(path, 'utf8');
+export function transformSource(src) {
   const stripped = stripComments(src);
   const edits = [];
   STRING_LITERAL_RE.lastIndex = 0;
@@ -343,22 +352,36 @@ function transformFile(path) {
     const replaced = prefixString(body);
     if (replaced !== body) edits.push({ start, end, replaced });
   }
-  if (edits.length === 0) return false;
+  if (edits.length === 0) return src;
   edits.sort((a, b) => b.start - a.start);
   let out = src;
   for (const e of edits) {
     out = out.slice(0, e.start) + e.replaced + out.slice(e.end);
   }
+  return out;
+}
+
+export function transformFile(path) {
+  const src = readFileSync(path, 'utf8');
+  const out = transformSource(src);
+  if (out === src) return false;
   writeFileSync(path, out);
   return true;
 }
 
-const files = globSync(TARGET);
-let changed = 0;
-for (const f of files) {
-  if (transformFile(f)) {
-    console.log(`  prefixed: ${f}`);
-    changed++;
+if (import.meta.main) {
+  const TARGET = argv[2];
+  if (!TARGET) {
+    console.error('Usage: bun packages/canvas/scripts/prefix-tailwind.mjs <glob>');
+    process.exit(1);
   }
+  const files = globSync(TARGET);
+  let changed = 0;
+  for (const f of files) {
+    if (transformFile(f)) {
+      console.log(`  prefixed: ${f}`);
+      changed++;
+    }
+  }
+  console.log(`done — ${changed}/${files.length} files modified`);
 }
-console.log(`done — ${changed}/${files.length} files modified`);
