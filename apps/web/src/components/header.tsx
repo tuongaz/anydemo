@@ -17,24 +17,13 @@ export function Header({
   onProjectUnregistered,
 }: HeaderProps) {
   return (
-    <header className="relative flex h-12 shrink-0 items-center justify-between bg-background/80 px-4 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border/60 after:to-transparent">
+    <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/85 px-5 backdrop-blur-md shadow-[0_4px_12px_-6px_rgba(0,0,0,0.6)]">
       <button
         type="button"
         onClick={() => navigate('/')}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontWeight: 700,
-          fontSize: 16,
-          letterSpacing: '-0.02em',
-          background: 'none',
-          border: 'none',
-          cursor: 'pointer',
-          padding: 0,
-        }}
+        className="-ml-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-base font-bold tracking-tight transition-colors hover:bg-muted/60"
       >
-        <Workflow size={20} strokeWidth={2} className="text-emerald-400" />
+        <Workflow size={18} strokeWidth={2.25} className="text-emerald-400" />
         SeeFlow
       </button>
       <div className="flex items-center gap-3">
