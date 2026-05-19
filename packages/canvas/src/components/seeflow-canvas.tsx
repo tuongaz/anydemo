@@ -3659,7 +3659,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
       <div
         data-testid="seeflow-canvas"
         ref={wrapperRef}
-        className="seeflow-canvas-root relative h-full w-full"
+        className="seeflow-canvas-root sf-relative sf-h-full sf-w-full"
         style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
         // US-010: capture-phase listener fires before xyflow's pane handlers.
         // Snapshots the additive base + shift state for a pending marquee so
@@ -3701,6 +3701,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
             edgeTypes={edgeTypes}
             proOptions={{ hideAttribution: true }}
             fitView
+            minZoom={mode === 'mini' ? 0.05 : 0.5}
             // US-027: nodes remain draggable in view mode so the canvas feels
             // alive (local-state-only repositioning). commitDraggedNodes above
             // gates the actual PATCH dispatch.

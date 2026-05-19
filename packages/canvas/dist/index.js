@@ -7717,7 +7717,7 @@ function SeeflowCanvas(props) {
     {
       "data-testid": "seeflow-canvas",
       ref: wrapperRef,
-      className: "seeflow-canvas-root relative h-full w-full",
+      className: "seeflow-canvas-root sf-relative sf-h-full sf-w-full",
       style: wrapperCursor ? { cursor: wrapperCursor } : void 0,
       onPointerDownCapture: onWrapperPointerDownCapture,
       onPointerDown: (e) => {
@@ -7751,6 +7751,7 @@ function SeeflowCanvas(props) {
             edgeTypes,
             proOptions: { hideAttribution: true },
             fitView: true,
+            minZoom: mode === "mini" ? 0.05 : 0.5,
             nodesDraggable: (isEditMode ? !!onNodePositionChange : true) && !drawShape && flags.enableNodeMove,
             nodesConnectable: isEditMode && !!onCreateConnector && !drawShape,
             deleteKeyCode: isEditMode ? ["Backspace", "Delete"] : null,
