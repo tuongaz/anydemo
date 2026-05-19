@@ -1,6 +1,6 @@
 ---
 name: seeflow
-description: Use when the user asks to create, generate, or scaffold a SeeFlow flow from a natural-language prompt — "create a flow", "show how X works", "diagram our checkout system", "add a flow to this repo". Orchestrates four sub-agents and bun scripts to write a registered, validated flow under <project>/.seeflow/<slug>/.
+description: This skill should be used when the user asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", "show how X works", "diagram our system", or "add a flow to this repo". Orchestrates four sub-agents and bun scripts to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
 ---
 
 # seeflow
@@ -20,23 +20,23 @@ In any project, just run:
 
 Ask for clarification only when the prompt is incoherent — never ask "what is your codebase?".
 
-## Inputs you have
+## Inputs
 
-- The user's full natural-language prompt.
-- The project root (`$PWD` at invocation).
+- User's full natural-language prompt.
+- Project root (`$PWD` at invocation).
 - `~/.seeflow/config.json` (optional; studio host:port, default `http://localhost:4321`).
 - Existing `<project>/.seeflow/<slug>/flow.json` files, if any (multi-flow per project supported).
-- `<project>/.seeflow/WIKI.md` — persistent crib sheet maintained by past `/seeflow` runs (dev setup, test patterns, fixtures, gotchas). **Always read this before invoking the discoverer** — it shortcuts most of Phase 1.
+- `<project>/.seeflow/WIKI.md` — persistent crib sheet from past `/seeflow` runs. **Always read this before invoking the discoverer**; it shortcuts most of Phase 1. Format: `references/wiki-format.md`.
 
-## The pipeline
+## Pipeline
 
 ```
 Phase 0   — pre-flight: studio reachable?
-Phase 0.5 — read .seeflow/WIKI.md (project memory from past runs)
+Phase 0.5 — read .seeflow/WIKI.md
 Phase 1   — seeflow-discoverer        → context brief + wikiUpdates
             → merge wikiUpdates into .seeflow/WIKI.md
 Phase 2   — seeflow-node-planner      → node draft
-Phase 3   — write skeleton flow.json + style.json (both files, nodes only)
+Phase 3   — write skeleton flow.json + style.json (nodes only)
             → POST /api/validate → register → user reviews canvas → approval
 Phase 4   — seeflow-play-designer  ┐
             seeflow-status-designer├ parallel → overlays
@@ -50,94 +50,15 @@ Phase 7   — validate-end-to-end.ts → trigger APIs → verify via SSE
 
 Each phase is **gated** on the previous one. **All schema validation runs through the studio API** (`POST /api/validate`) — there is no local validator script.
 
----
+## Core rules
 
-## Core rule — no mocks, ever
+Three rules every flow must honour. Full text + examples in `references/core-rules.md`:
 
-**NEVER mock a service, fake a response, or simulate what a real service returns.**
+1. **No mocks, ever.** Scripts trigger real services or read real state. Never simulate. If a required service isn't running, stop and ask.
+2. **See the bigger picture before inserting data.** Use the system's natural data-entry path (API, file-drop, producer, seed command, webhook) instead of direct INSERTs.
+3. **Match the project's primary language.** Use `runtimeProfile.primaryLanguage` as the interpreter for every script.
 
-Scripts have exactly two purposes:
-
-1. **Trigger a real service** — call a real endpoint, drop a real file, publish a real event. Only invented content allowed is *input data* (fixture body, sample file); the service receiving it must be real.
-2. **Read real resource state** — query a real DB, poll a real queue depth, call a real health endpoint. Never fabricate state.
-
-If a required service is not running, **stop and ask the user**. A flow with one honest gap is better than one that silently lies.
-
----
-
-## Core rule — see the bigger picture before inserting data
-
-Before writing a play script that INSERTs into a DB, publishes to a queue, or writes to a store, check whether the system already has a natural data-entry path. Direct inserts bypass validation and the code paths the flow is meant to show.
-
-**Check these patterns first (ask the discoverer):**
-
-| Pattern | What to look for | Use instead |
-|---|---|---|
-| **API endpoint** | REST/gRPC/GraphQL endpoint that accepts the data | Call it |
-| **File-drop processor** | File watcher / S3-event listener | Drop a fixture file into the watched path |
-| **Event/message producer** | Publisher service or CLI that writes to the queue | Trigger the producer |
-| **Seed / fixture command** | `make seed`, `bun run seed`, ORM factory | Run the seed command |
-| **Webhook receiver** | `/webhooks/stripe`, `/events/github` | POST a synthetic webhook body |
-| **Admin / backoffice API** | Internal endpoint for creating records | Use it |
-| **File-based import** | CSV/JSON/NDJSON import endpoint or CLI | Drop a fixture or call the import endpoint |
-
-**Examples:**
-
-- Order pipeline needs an order in the DB → call `POST /api/orders`; the API validates, emits events, writes the row.
-- Data-warehouse pipeline needs staging rows → drop a CSV into the watched S3 bucket; the file-processor picks it up.
-- Notification system needs a queue message → call `POST /api/notify`; the producer publishes on your behalf.
-- Recommendation engine needs user-event data → fire a `track` event at the analytics endpoint.
-
-If no higher-level path exists, document the reason in `rationale` and resort to a direct INSERT/PUBLISH.
-
----
-
-## Core rule — match the project's primary language
-
-Use `runtimeProfile.primaryLanguage` from Phase 1 as the interpreter for every script. The project already has types, helpers, and clients in that language — reuse them.
-
-| `primaryLanguage` | `interpreter` | `args` |
-|---|---|---|
-| `typescript` / `javascript` | `bun` | `["run"]` |
-| `go` | `go` | `["run"]` |
-| `python` | `python3` | `["-u"]` |
-| `ruby` | `ruby` | `[]` |
-| `java` / `kotlin` | `kotlinc` or `java` | depends on build tool |
-| `rust` | `cargo` | `["script"]` (if available) |
-
-**Examples:**
-
-*TypeScript:*
-```typescript
-// .seeflow/checkout-flow/scripts/play-checkout.ts
-import type { CartPayload } from "../../src/types";
-const input: CartPayload = JSON.parse(await Bun.stdin.text());
-const res = await fetch("http://localhost:3001/checkout", {
-  method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(input),
-});
-console.log(await res.json());
-```
-
-*Go:*
-```go
-// .seeflow/order-flow/scripts/play-order.go
-package main
-import ("encoding/json"; "fmt"; "net/http"; "bytes"; "os")
-func main() {
-    var payload map[string]any
-    json.NewDecoder(os.Stdin).Decode(&payload)
-    body, _ := json.Marshal(payload)
-    res, _ := http.Post("http://localhost:8080/orders", "application/json", bytes.NewReader(body))
-    var out any; json.NewDecoder(res.Body).Decode(&out); fmt.Println(out)
-}
-```
-
-**Fallback:** Use `bash`/`python3` only when the project runtime can't execute scripts directly. Note the reason in `rationale`.
-
----
-
-## Phase 0 — pre-flight (studio reachable)
+## Phase 0 — pre-flight
 
 Resolve `$STUDIO_URL`: `SEEFLOW_STUDIO_URL` env var → `~/.seeflow/config.json` port → `http://localhost:4321`. Probe:
 
@@ -145,8 +66,8 @@ Resolve `$STUDIO_URL`: `SEEFLOW_STUDIO_URL` env var → `~/.seeflow/config.json`
 curl --max-time 0.5 -fsS "$STUDIO_URL/health"
 ```
 
-- **200** → continue to Phase 1.
-- **Anything else** → ask the user to start the studio natively in another terminal:
+- **200** → continue to Phase 0.5.
+- **Anything else** → ask the user to start the studio in another terminal:
 
   ```bash
   npx tuongaz/seeflow start
@@ -154,115 +75,30 @@ curl --max-time 0.5 -fsS "$STUDIO_URL/health"
 
   Wait for confirmation, re-probe once. If still unreachable, surface the error and stop. Never start the studio yourself.
 
----
-
-## General rule — parallelise sub-agents
-
-Whenever two or more tasks are independent, dispatch them as concurrent sub-agents in a single message. Serial execution is the exception, not the default.
-
----
-
 ## Phase 0.5 — read the project wiki
 
-Before launching the discoverer, **read `<project>/.seeflow/WIKI.md`** if it
-exists. This file is the persistent memory the skill maintains across runs:
-local dev setup, test patterns, fixture locations, gotchas, and a registry
-of flows already created here.
-
-```bash
-WIKI_PATH="$PWD/.seeflow/WIKI.md"
-if [ -f "$WIKI_PATH" ]; then
-  WIKI_CONTENT=$(cat "$WIKI_PATH")   # stash for discoverer launching prompt
-else
-  WIKI_CONTENT=""                      # first run in this project
-fi
-```
-
-- **File present** → pass its full content to the discoverer as
-  `wikiContext` in the launching prompt. The discoverer uses it to skip
-  re-discovering known facts and may add new ones.
-- **File absent** → pass `wikiContext: null`. Discoverer will build the
-  file from scratch via `wikiUpdates`.
-
-Format details: `references/wiki-format.md`.
-
-After the discoverer returns (end of Phase 1) merge its `wikiUpdates`
-into the file (writing the parent `.seeflow/` directory if missing). If
-later phases surface new gotchas (port mismatches, hidden env vars,
-fixture factories) append them in Phase 7 too — the merging rules in
-`references/wiki-format.md` keep the file from drifting.
-
----
-
-## After Phase 0.5 — list tasks
-
-Create a `TaskCreate` checklist before launching any sub-agent:
-
-```
-[ ] Phase 1 — Discover codebase (lang, runtime, tests, fixtures, gotchas) + update WIKI.md
-[ ] Phase 2 — Plan nodes & connectors
-[ ] Phase 3 — Write skeleton flow.json + style.json, validate via API, register — await user node review
-[ ] Phase 4 — Design Play + Status scripts (parallel)
-[ ] Phase 5 — Synthesize & validate via API
-[ ] Phase 6 — Write script files + flow.json + style.json, re-register full flow
-[ ] Phase 7 — End-to-end validation (trigger APIs, verify via SSE) + WIKI.md polish
-```
-
-Mark each complete via `TaskUpdate` immediately after it succeeds.
-
----
+Read `<project>/.seeflow/WIKI.md` if it exists; stash its contents to pass into the discoverer as `wikiContext`. If absent, pass `wikiContext: null` (the discoverer will build the file from scratch via `wikiUpdates`). Format and merging rules: `references/wiki-format.md`.
 
 ## Phase 1 — discover
 
-Launch `seeflow-discoverer` with the user's prompt, project root, any existing `flow.json` for the matching slug, **and the WIKI.md content stashed in Phase 0.5**. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
+Create a `TaskCreate` checklist for Phases 1-7 before launching any sub-agent. Mark each complete via `TaskUpdate` immediately after it succeeds.
+
+Launch `seeflow-discoverer` with the user's prompt, project root, any existing `flow.json` for the matching slug, and the stashed wiki content. Tools: `Read, Grep, Glob, LS, Bash` (read-only).
 
 Discoverer must:
 - Identify primary language + runtime (`runtimeProfile`)
-- Trace **local dev setup**: how the app boots (commands, env vars, ports, docker-compose / emulator dependencies, the "is it up?" probe)
-- Find **integration / e2e / blackbox tests** and extract their setup pattern (directory, run command, base URL, test framework, before/after hooks)
-- Catalogue **fixtures, factories, mock-data helpers, seed commands**, file-drop watchers — anything that gives play-scripts a realistic payload without inventing one
+- Trace **local dev setup**: how the app boots, ports, docker-compose dependencies, the "is it up?" probe
+- Find **integration / e2e tests** and extract their setup pattern
+- Catalogue **fixtures, factories, mock-data helpers, seed commands, file-drop watchers** — anything that gives play-scripts a realistic payload without inventing one
 - Map **data entry paths** for each major resource (preferred API vs avoid-direct-insert)
-- Capture **gotchas** worth remembering across runs (hardcoded ports, hidden env vars, dependency ordering)
+- Capture **gotchas** worth remembering across runs
 - Emit `wikiUpdates` so the orchestrator can refresh `.seeflow/WIKI.md`
 
-Expected output (parseable JSON):
-
-```json
-{
-  "userIntent": "…",
-  "audienceFraming": "…",
-  "scope": { "rootEntities": ["…"], "outOfScope": ["…"] },
-  "codePointers": [{ "path": "…", "why": "…" }],
-  "runtimeProfile": {
-    "primaryLanguage": "typescript",
-    "packageManager": "bun",
-    "devCommand": "bun run dev",
-    "testCommand": "bun test",
-    "servicePort": 3001,
-    "integrationTestDir": "tests/integration",
-    "integrationTestCommand": "bun test tests/integration",
-    "setupPattern": "Tests call http://localhost:3001 with JSON payloads after starting the server"
-  },
-  "wikiUpdates": {
-    "runtimeProfile": { "…": "…" },
-    "localDevSetup": "…",
-    "integrationTests": { "…": "…" },
-    "fixtures": [{ "path": "…", "describes": "…" }],
-    "factories": [{ "module": "…", "exports": ["…"] }],
-    "seedCommands": ["…"],
-    "dataEntryPaths": [{ "resource": "…", "preferred": "…", "avoid": "…" }],
-    "knownEndpoints": [{ "method": "POST", "path": "/…", "bodyShape": "{…}", "auth": "…" }],
-    "gotchas": ["…"]
-  },
-  "existingFlow": null
-}
-```
+Output schema and field list: `references/wiki-format.md` (the `wikiUpdates` contract section).
 
 On unparseable output: retry once with the validation error. If still failing, surface and stop.
 
-**At the end of Phase 1, merge `wikiUpdates` into `<project>/.seeflow/WIKI.md`** following the merging rules in `references/wiki-format.md` (replace `_Last updated:_`, append to "Flows already created", union bullets, cap ~6KB). Create the parent `.seeflow/` directory if missing.
-
----
+**At the end of Phase 1, merge `wikiUpdates` into `<project>/.seeflow/WIKI.md`** following the merging rules in `references/wiki-format.md`. Create the parent `.seeflow/` directory if missing.
 
 ## Phase 2 — plan nodes
 
@@ -274,9 +110,9 @@ Launch `seeflow-node-planner` with the context brief. No tools — pure reasonin
   - **Split** if the node has distinct responsibilities.
   - **Duplicate** a shared resource to break hub-and-spoke patterns.
 
-**Duplication for clarity** — the "one node per service" default can be overridden when showing the same resource twice improves readability (e.g. a shared DB placed next to each service that uses it). Use same `kind` + `name`; unique `id` with a descriptive suffix (`"orders-db-read"`, `"orders-db-write"`).
+**Duplication for clarity** — the "one node per service" default can be overridden when showing the same resource twice improves readability (e.g. a shared DB next to each service that uses it). Use same `kind` + `name`; unique `id` with a descriptive suffix (`"orders-db-read"`, `"orders-db-write"`).
 
-Expected output:
+Output shape:
 
 ```json
 {
@@ -289,28 +125,20 @@ Expected output:
 
 Retry budget: one retry on unparseable output, then surface and stop.
 
----
-
 ## Phase 3 — node review checkpoint
 
 Register a **skeleton** flow (nodes + connectors only, no scripts) so the user can review the canvas before any scripts are written.
 
-Paths (used in this phase and Phase 6):
+Paths:
 - `repoPath = $PWD`
 - `flowDir = $PWD/.seeflow/<slug>`
 - `flowPath = .seeflow/<slug>/flow.json`
 - `stylePath = .seeflow/<slug>/style.json`
 
-1. Build the **flow JSON** from the node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
-2. Build the **style JSON** — every functional node id (`playNode`, `stateNode`, `htmlNode`, `imageNode`, `iconNode`, `shapeNode`) MUST have at least a `position` entry. Generate positions deterministically when designers don't supply them:
-   - Layer nodes by connector graph depth from the trigger (longest-path layering), left-to-right.
-   - Default spacing: 280 px horizontal between layers, 160 px vertical between siblings.
-   - Decorative nodes (shape/icon/image) follow their nearest functional neighbour.
-   Connectors entries are optional; include them when you have non-default handles, colors, or pin positions.
-3. `mkdir -p $flowDir` then write **both** files:
-   - `$flowDir/flow.json` — semantic data.
-   - `$flowDir/style.json` — positions + visual overrides. **Always write this file**, even when the only content is `{"nodes": { "<id>": {"position": {"x":…,"y":…}}, … }}`. The studio merges it onto the flow at fetch time; without it the canvas piles every node at `(0,0)`.
-4. Validate both files via the studio API (this is the **only** validator — there is no local script):
+1. Build **`flow.json`** from the node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
+2. Build **`style.json`** — every functional node id MUST have at least a `position` entry. Generate positions deterministically per `references/schema.md`.
+3. `mkdir -p $flowDir` then write **both** files. The style file is mandatory — never skip it.
+4. Validate via the studio API (the **only** validator):
    ```bash
    RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
      -H 'content-type: application/json' \
@@ -325,15 +153,16 @@ Paths (used in this phase and Phase 6):
    ```bash
    bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
    ```
-   Stash the returned `id`.
-6. Ask the user:
-   > The nodes are live at `<url>`. Does the layout look right? Any additions, removals, or renames before I write the scripts?
+   Stash the returned `id` and `slug`. The canvas URL is `$STUDIO_URL/d/<slug>`.
+6. Open the canvas in the user's browser, then ask for review:
+   ```bash
+   URL="$STUDIO_URL/d/<slug>"
+   (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
+   ```
+   Then prompt:
+   > Opened the canvas at `<url>`. Does the layout look right? Any additions, removals, or renames before I write the scripts?
 
-**Wait** for response.
-- **Approved** → Phase 4.
-- **Changes requested** → re-run node-planner with feedback, repeat Phase 3.
-
----
+**Wait** for response. **Approved** → Phase 4. **Changes requested** → re-run node-planner with feedback, repeat Phase 3.
 
 ## Phase 4 — design Play + Status (parallel)
 
@@ -380,14 +209,14 @@ Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (si
 
 `newTriggerNodes` may inject synthetic source nodes (file-drop, webhook receiver) when no natural trigger exists.
 
----
+Full agent prompts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
-## Phase 5 — synthesize + validate via API
+## Phase 5 — synthesize + validate
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
 3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `$flowDir/style.json`** — add `position` entries for any spliced trigger nodes (preserve existing positions for nodes that survived). The style file is mandatory; never delete it.
-4. **Validate via the studio API** (no local validator exists — this is the only validation pass):
+4. **Validate via the studio API** (no local validator exists):
 
 ```bash
 RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
@@ -402,14 +231,12 @@ echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; 
 
 5. Proceed to Phase 6 — node layout was approved in Phase 3.
 
----
-
-## Phase 6 — write script files + re-register full flow
+## Phase 6 — write script files + re-register
 
 1. `mkdir -p $flowDir/scripts $flowDir/state`
 2. Write files (overwriting the Phase 3 skeleton):
    - `$flowDir/flow.json` — validated semantic flow JSON with all actions.
-   - `$flowDir/style.json` — keyed map of `position` + visual overrides. **Mandatory**, even when only positions are populated. Must contain a `position` for every functional node id.
+   - `$flowDir/style.json` — keyed map of `position` + visual overrides. **Mandatory**, even when only positions are populated.
    - `$flowDir/scripts/<name>` — one file per overlay `scriptBody`. `chmod +x`.
    - `$flowDir/state/.gitignore` — `*`.
 3. Re-register:
@@ -418,11 +245,9 @@ echo "$RESULT" | jq -e '.ok' >/dev/null || { echo "$RESULT" | jq '.issues' >&2; 
 bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
 ```
 
-Prints `{id, slug}`. Use the new `id` for Phases 7 + 8.
+Prints `{id, slug}`. Use the new `id` for Phase 7.
 
 On 400: show body, ask "fix-and-retry / stop". On other 4xx/5xx: show body, stop.
-
----
 
 ## Phase 7 — end-to-end validation
 
@@ -452,307 +277,15 @@ Never re-run `register.ts` in the fix-up loop.
 
 ### Polish `WIKI.md` with anything learned
 
-When Phase 6 / Phase 7 surfaced a fact the next run would want — a
-port mismatch, a fixture path you had to discover, a required env var
-the discoverer missed, a working seed command, a data-entry path you
-ended up using — append a `Gotchas` bullet or update the relevant
-section in `<project>/.seeflow/WIKI.md`. Also append the new flow to
-the "Flows already created" table with today's date and a one-line
-purpose. Follow the merging rules in `references/wiki-format.md`. If
-nothing new was learned, skip this step — empty updates are noise.
+When Phases 6-7 surfaced a fact the next run would want — a port mismatch, a fixture path you had to discover, a required env var the discoverer missed, a working seed command, a data-entry path you ended up using — append a `Gotchas` bullet or update the relevant section in `<project>/.seeflow/WIKI.md`. Also append the new flow to the "Flows already created" table with today's date and a one-line purpose. Follow `references/wiki-format.md`. If nothing new was learned, skip — empty updates are noise.
 
----
+## Operations
 
-## Error-handling table
-
-| Failure | Response |
+| Topic | File |
 |---|---|
-| Studio `/health` fails | Ask the user to run `npx tuongaz/seeflow start` in another terminal, then re-probe once. No silent retry, no self-start. |
-| Sub-agent unparseable output | Retry once with parse error; if still failing, surface and stop. |
-| Schema validation fails (Phase 5) | Feed Zod issues back to relevant designer. Max 3 retries. |
-| Register 400 (Phase 6) | Show body; ask "fix-and-retry / stop". |
-| Register 4xx/5xx other | Show body; stop. |
-| Play `{error: "…"}` (Phase 7) | Edit scripts in-place; re-run Phase 7 (max 2 retries). Do NOT re-register. |
-| Status SSE timeout 10s | Mark `no status received`; include in fix-up or ask retry/stop. |
-| Validation >2 min | `ok:false`; treat as failure → fix-up path. |
-
-Retry caps: Phase 5 schema → **3**. Phase 7 fix-up → **2**.
-
----
-
-## Schema cheatsheet
-
-The on-disk format is split into **two files that are BOTH mandatory** for every flow:
-
-- **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
-- **`style.json`** — keyed map of presentation overrides by node/connector id. **Required** for every flow this skill creates. At minimum it carries one `position` entry per functional node id so the canvas doesn't pile every node at `(0,0)`. Additional visual fields are optional per entry.
-
-The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together (positions, visual fields all merged onto each node).
-
-**RULE — never skip `style.json`.** A flow without `style.json` renders unusable. When creating a new flow, always emit both files in the same write step. When editing, refresh `style.json` to cover new node ids before re-registering.
-
-### `file://` substitution
-
-Any string in `flow.json` may use `file://<relative-path>` to offload content to a separate file under `<project>/.seeflow/`. Recommended for `detail` when it exceeds ~200 chars.
-
-```json
-// flow.json
-{ "data": { "detail": "file://details/checkout-api.md" } }
-
-// .seeflow/details/checkout-api.md
-## POST /checkout
-
-Validates the cart, reserves stock, publishes `order.created`.
-```
-
-Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card; the flow still loads.
-
-**RULE — prefer file refs for long detail.** When a node's `detail` would exceed ~200 chars, write it to `<slug>/details/<nodeId>.md` and set `"detail": "file://<slug>/details/<nodeId>.md"`. Keeps flow.json compact for LLM consumption.
-
-### `flow.json` envelope
-
-```json
-{
-  "version": 2,
-  "name": "Checkout Flow",
-  "nodes": [ …node data only… ],
-  "connectors": [ …connector data only… ],
-  "resetAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                   "scriptPath": "<slug>/scripts/reset.ts" }
-}
-```
-
-`resetAction` is optional — include only if the app has a "wipe state" entrypoint.
-
-### `style.json` envelope (mandatory)
-
-```json
-{
-  "nodes": {
-    "checkout-api": {
-      "position": { "x": 100, "y": 200 },
-      "width": 240, "height": 120,
-      "borderColor": "blue", "fontSize": 14
-    }
-  },
-  "connectors": {
-    "c1": { "sourceHandle": "r", "targetHandle": "l", "style": "dashed", "color": "blue" }
-  }
-}
-```
-
-Every functional node id in `flow.json` MUST appear under `nodes` with at least a `position`. A missing connector entry → handle/style defaults apply. Do not delete `style.json` even if the only content is positions — the studio relies on it.
-
-### Node types
-
-**playNode** — has a clickable Play button. Required: `name`, `kind`, `stateSource`, `playAction`. Optional: `statusAction`, `description` (≤ 15 words), `detail`.
-
-**RULE — detail on important nodes:** Every `playNode` and `stateNode` that carries meaningful behaviour MUST include a `detail` field. `detail` renders as **markdown** — use it to explain what the node does, what it emits, why it matters, sample payloads, links to source files, or anything an audience member would ask. Decorative `shapeNode`/`iconNode` entries are exempt.
-
-**RULE — icon on important nodes:** Every `playNode` and `stateNode` SHOULD include an `icon` field — a kebab-case Lucide icon name that visually echoes the kind. Renders left of the name. Decorative; not a status indicator.
-
-`kind`: `service`, `endpoint`, `worker`, `workflow`, `queue`, `topic`, `bus`, `db`, `store`, `cache`, `scheduler`, `external-api`, `trigger`.
-
-| `kind` | suggested `icon` |
-|---|---|
-| `service` | `server` |
-| `endpoint` | `plug` |
-| `worker` | `cog` |
-| `workflow` | `git-branch` |
-| `queue` | `list-ordered` |
-| `topic` / `bus` | `radio-tower` |
-| `db` | `database` |
-| `store` | `archive` |
-| `cache` | `zap` |
-| `scheduler` | `clock` |
-| `external-api` | `cloud` |
-| `trigger` | `play` |
-
-```jsonc
-// flow.json — semantic node data only (no position, no visual fields)
-{
-  "id": "checkout-api", "type": "playNode",
-  "data": {
-    "name": "POST /checkout", "kind": "service",
-    "icon": "server", // kind=service → server (see kind→icon table above)
-    "stateSource": { "kind": "request" },
-    "playAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                    "scriptPath": "checkout-flow/scripts/play-checkout.ts",
-                    "input": { "items": [{"sku":"ABC","qty":1}] },
-                    "timeoutMs": 30000 },
-    "description": "Receives a cart, creates an order.",
-    "detail": "file://details/checkout-api.md"
-  }
-}
-
-// style.json (mandatory) — position + visual overrides keyed by node id
-{ "nodes": { "checkout-api": { "position": { "x": 100, "y": 200 } } } }
-```
-
-**stateNode** — no mandatory Play; audience watches but doesn't trigger. Same `kind` values.
-
-```jsonc
-// flow.json
-{
-  "id": "order-db", "type": "stateNode",
-  "data": {
-    "name": "Orders DB", "kind": "db",
-    "icon": "database",
-    "stateSource": { "kind": "event" },
-    "statusAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                      "scriptPath": "checkout-flow/scripts/status-orders.ts",
-                      "maxLifetimeMs": 600000 },
-    "detail": "file://details/order-db.md"
-  }
-}
-
-// style.json
-{ "nodes": { "order-db": { "position": { "x": 600, "y": 200 } } } }
-```
-
-**shapeNode** — decorative / illustrative. No actions or live state.
-
-| `shape` | Renders as | Best for |
-|---|---|---|
-| `database` | Cylinder | DB label (use `stateNode` when monitoring) |
-| `server` | Server rack | On-premise server or compute |
-| `user` | Person silhouette | Human actor — **only when the human action is itself part of the demo** (UX click-through, support-agent workflow). Never as a generic "start" for backend / pipeline flows. |
-| `queue` | Stack | Queue label (decorative) |
-| `cloud` | Cloud outline | External SaaS |
-| `rectangle` | Box | Grouping boundary |
-| `ellipse` | Oval | Annotation |
-| `sticky` | Sticky note | Callout |
-| `text` | Plain text | Canvas label |
-
-```jsonc
-// flow.json
-{ "id": "customer", "type": "shapeNode",
-  "data": { "shape": "user", "name": "Customer" } }
-{ "id": "stripe", "type": "shapeNode",
-  "data": { "shape": "cloud", "name": "Stripe" } }
-
-// style.json
-{
-  "nodes": {
-    "customer": { "position": { "x": 0, "y": 200 } },
-    "stripe":   { "position": { "x": 800, "y": 200 }, "borderStyle": "dashed" }
-  }
-}
-```
-
-**iconNode** — single Lucide glyph. Decorative only.
-
-```json
-{ "id": "user-icon", "type": "iconNode", "position": { "x": 0, "y": 200 },
-  "data": { "icon": "User", "name": "Customer", "width": 64, "height": 64 } }
-```
-
-**htmlNode** — escape-hatch for content no curated node covers: legends, data tables, rich annotations, custom UI widgets. Renderer fetches the HTML file, injects Tailwind Play CDN (utility classes work), then **sanitises before painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:` URLs).
-
-**Required fields:**
-- `htmlPath` — relative path under `.seeflow/`. No leading `/`, no `..`. E.g. `checkout-flow/legend.html`.
-
-**Optional styling fields (same as shapeNode):**
-`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`, `icon`
-
-**Default size:** 320 × 200 px. Set `width`/`height` to override.
-
-```json
-{ "id": "legend", "type": "htmlNode", "position": { "x": 50, "y": 600 },
-  "data": {
-    "htmlPath": "checkout-flow/legend.html",
-    "width": 400, "height": 120,
-    "backgroundColor": "slate",
-    "cornerRadius": 8,
-    "name": "Legend"
-  }
-}
-```
-
-**HTML file** — write to `$flowDir/<name>.html`. Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Use inline styles for anything Tailwind can't cover. See `references/examples/html-node-example.html`.
-
-**When NOT to use:** If a `shapeNode` with a label, an `iconNode`, or a `stateNode` covers the content, prefer those — they participate in theming and status updates automatically.
-
-**imageNode** — decorative image under `.seeflow/`.
-
-```json
-{ "id": "logo", "type": "imageNode", "position": { "x": 0, "y": 0 },
-  "data": { "path": "checkout-flow/logo.png", "alt": "Stripe logo" } }
-```
-
-### Connectors
-
-Required: `id`, `source`, `target`, `kind`.
-
-```json
-{ "id": "c1", "kind": "http",    "source": "checkout-api", "target": "payments",
-  "method": "POST", "url": "/charge", "label": "POST /charge" }
-{ "id": "c2", "kind": "event",   "source": "checkout-api", "target": "shipping-worker",
-  "eventName": "order.created" }
-{ "id": "c3", "kind": "queue",   "source": "checkout-api", "target": "fulfil-queue",
-  "queueName": "fulfilment-jobs" }
-{ "id": "c4", "kind": "default", "source": "user-icon",    "target": "checkout-api",
-  "label": "clicks checkout" }
-```
-
-Optional visual fields (all kinds): `style` (`solid|dashed|dotted`), `direction` (`forward|backward|both|none`), `path` (`curve|step`), `color`, `borderSize`, `fontSize`, `label`, `sourceHandle`/`targetHandle` (`r|b` / `t|l`).
-
-### `stateSource`
-
-```json
-{ "kind": "request" }   // triggered by an explicit click/call
-{ "kind": "event" }     // fires reactively (consumer, worker, DB, watcher)
-```
-
-### `playAction` / `statusAction` / `resetAction`
-
-```json
-{ "kind": "script", "interpreter": "bun", "args": ["run"],
-  "scriptPath": "<slug>/scripts/<file>.ts", "input": {…optional…},
-  "timeoutMs": 30000 }
-```
-
-- `scriptPath` — relative under `.seeflow/`. No leading slash, no `..`.
-- `interpreter` — must match `runtimeProfile.primaryLanguage`. Values: `bun`, `go`, `python3`, `node`, `bash`.
-- `input` (playAction) — JSON-serialised, piped to stdin.
-- `timeoutMs` (playAction; max 600 000) — **be generous:**
-  - Simple HTTP call → 15 000 ms.
-  - Go / Rust (compile on first run) → 60 000–120 000 ms.
-  - Java / Kotlin (JVM startup) → 120 000 ms minimum.
-  - DB seeding / migrations → 60 000 ms minimum.
-- `maxLifetimeMs` (statusAction; max 3 600 000) — default 600 000; bump to 1 800 000 for long async flows.
-
-### `StatusReport` (stdout line shape)
-
-```json
-{ "state": "ok|warn|error|pending", "summary": "…(≤120)…",
-  "detail": "…(≤2000)…", "data": {…free…}, "ts": 1700000000000 }
-```
-
-Malformed lines are silently dropped. Emit one full JSON object per line.
-
----
-
-## Sub-agent reference
-
-| Agent | Tools | Used for |
-|---|---|---|
-| `seeflow-discoverer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1: explore codebase, return context brief |
-| `seeflow-node-planner` | none (pure reasoning) | Phase 2: pick nodes + connectors |
-| `seeflow-play-designer` | `Read, Grep, Glob, LS` | Phase 4: design playActions + script bodies |
-| `seeflow-status-designer` | `Read, Grep, Glob, LS` | Phase 4: design statusActions + script bodies |
-
-Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
-
-## Studio API touchpoints
-
-| Endpoint | Method | Phase | Body |
-|---|---|---|---|
-| `/health` | GET | 0 | — |
-| `/api/flows/register` | POST | 3, 6 | `{name, repoPath, flowPath}` |
-| `/api/flows/:id` | GET | 7 | — |
-| `/api/flows/:id/play/:nodeId` | POST | 7 | — |
-| `/api/events?flowId=:id` | GET (SSE) | 7 | — |
-| `/api/flows/:id` | DELETE | rollback only | — |
-
-Never invent endpoints. Surface anything outside this table to the user.
+| Error handling table, retry caps, studio API endpoints, sub-agent table | `references/operations.md` |
+| `flow.json` + `style.json` schema, node types, connectors, actions, `StatusReport` | `references/schema.md` |
+| Core rules — no mocks, bigger picture, match language | `references/core-rules.md` |
+| `WIKI.md` format, lifecycle, merging rules, `wikiUpdates` contract | `references/wiki-format.md` |
+| Phase 4 plan-presentation template (`+/~/-` diff convention) | `references/plan-format.md` |
+| Sub-agent prompts and worked examples | `agents/seeflow-discoverer.md`, `agents/seeflow-node-planner.md`, `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md` |
