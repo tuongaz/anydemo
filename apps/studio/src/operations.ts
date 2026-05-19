@@ -168,6 +168,28 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     data[key] = updates[key];
     touchedData = true;
   }
+
+  // htmlNode-only invariant enforcement:
+  //   autoSize === true ⊻ (width and height set).
+  // autoSize: true is the dominant signal — it strips width/height even if
+  // the same patch tried to write them. Writing width/height implicitly
+  // flips autoSize to false.
+  if (node.type === 'htmlNode') {
+    if (updates.autoSize === true) {
+      if ('width' in data) {
+        delete data.width;
+        touchedData = true;
+      }
+      if ('height' in data) {
+        delete data.height;
+        touchedData = true;
+      }
+    } else if (updates.width !== undefined || updates.height !== undefined) {
+      data.autoSize = false;
+      touchedData = true;
+    }
+  }
+
   if (touchedData) {
     node.data = data;
   }
