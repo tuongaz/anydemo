@@ -7,11 +7,9 @@ import { ResizeControls } from './resize-controls.tsx';
 import {
   SHAPE_CLASS,
   SHAPE_DEFAULT_SIZE,
-  STICKY_FOLD_SIZE,
   ShapeNode,
   shapeChromeClass,
   shapeChromeStyle,
-  stickyFoldShade,
 } from './shape-node.tsx';
 import { CloudShape } from './shapes/cloud.tsx';
 import { DatabaseShape } from './shapes/database.tsx';
@@ -37,7 +35,7 @@ describe('shape-node chrome helpers', () => {
       // The ghost is the only consumer outside ShapeNode that reads this
       // class; if a future change removes the tilt the ghost drops it too,
       // and the WYSIWYG promise breaks unless this test is updated.
-      expect(SHAPE_CLASS.sticky).toContain('-rotate-1');
+      expect(SHAPE_CLASS.sticky).toContain('-rotate-2');
       expect(SHAPE_CLASS.sticky).toContain('shadow-md');
     });
   });
@@ -1083,69 +1081,13 @@ describe('DatabaseShape (US-009)', () => {
   });
 });
 
-// Sticky note dog-ear: a 20×20 SVG overlay in the top-right corner that
-// visually folds the paper. The fill shade is themed from the same ColorToken
-// the sticky's background uses (reusing the token's `headerBackground` —
-// already a slightly-darker variant of the body shade) so the fold themes
-// across every token without bespoke pairs.
-describe('ShapeNode sticky fold', () => {
-  function findFold(tree: unknown): ReactElementLike | undefined {
-    return findAll(
+describe('ShapeNode sticky', () => {
+  it('sticky shape does not render a dog-ear overlay (chrome is just tilt + shadow)', () => {
+    const tree = callShapeNode({ shape: 'sticky' });
+    const fold = findAll(
       tree,
       (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'sticky-fold',
     )[0];
-  }
-
-  it('sticky shape renders a [data-testid="sticky-fold"] SVG overlay', () => {
-    const tree = callShapeNode({ shape: 'sticky' });
-    const fold = findFold(tree);
-    expect(fold).toBeDefined();
-    expect(fold?.type).toBe('svg');
-    // Fixed 20×20 size — the fold does NOT scale with node size (a real
-    // dog-ear reads the same regardless of paper size). If a future change
-    // ties the fold to data.width/height, this assertion catches it.
-    expect((fold?.props as { width?: number }).width).toBe(STICKY_FOLD_SIZE);
-    expect((fold?.props as { height?: number }).height).toBe(STICKY_FOLD_SIZE);
-  });
-
-  it('non-sticky shapes (rectangle, ellipse, text, database) do NOT render the fold', () => {
-    for (const shape of ['rectangle', 'ellipse', 'text', 'database'] as const) {
-      const tree = callShapeNode({ shape });
-      expect(findFold(tree)).toBeUndefined();
-    }
-  });
-
-  it('fold fill shade comes from the sticky backgroundColor token (blue → blue headerBackground)', () => {
-    const tree = callShapeNode({ shape: 'sticky', backgroundColor: 'blue' });
-    const fold = findFold(tree);
-    const children = (fold?.props as { children?: unknown[] }).children as Array<{
-      type: string;
-      props: { fill?: string };
-    }>;
-    const path = children.find((c) => c.type === 'path');
-    expect(path?.props.fill).toBe(COLOR_TOKENS.blue.headerBackground);
-  });
-
-  it('fold fill shade falls back to amber when backgroundColor is unset (matches sticky default)', () => {
-    // shapeChromeStyle already defaults sticky's body to amber; the fold must
-    // mirror that so the underside reads as a darker shade of the visible body
-    // (never a contrasting color).
-    const tree = callShapeNode({ shape: 'sticky' });
-    const fold = findFold(tree);
-    const children = (fold?.props as { children?: unknown[] }).children as Array<{
-      type: string;
-      props: { fill?: string };
-    }>;
-    const path = children.find((c) => c.type === 'path');
-    expect(path?.props.fill).toBe(COLOR_TOKENS.amber.headerBackground);
-  });
-
-  it('stickyFoldShade(data) resolves the same shade the SVG uses', () => {
-    // Helper is exported so the drag-create ghost (and any future preview
-    // surface that mirrors a sticky's chrome) can reuse the exact derivation
-    // without duplicating the fallback rule.
-    expect(stickyFoldShade({})).toBe(COLOR_TOKENS.amber.headerBackground);
-    expect(stickyFoldShade({ backgroundColor: 'blue' })).toBe(COLOR_TOKENS.blue.headerBackground);
-    expect(stickyFoldShade({ backgroundColor: 'pink' })).toBe(COLOR_TOKENS.pink.headerBackground);
+    expect(fold).toBeUndefined();
   });
 });

@@ -89,7 +89,7 @@ export const SHAPE_DEFAULT_SIZE: Record<ShapeKind, { width: number; height: numb
 export const SHAPE_CLASS: Record<ShapeKind, string> = {
   rectangle: 'sf:rounded-lg sf:border-[3px] sf:bg-transparent',
   ellipse: 'sf:rounded-full sf:border-[3px] sf:bg-transparent',
-  sticky: 'sf:rounded-md sf:border-[3px] sf:shadow-md sf:-rotate-1',
+  sticky: 'sf:rounded-md sf:border-[3px] sf:shadow-md sf:-rotate-2',
   text: 'sf:bg-transparent',
   // US-009: illustrative shapes have no wrapper chrome — the inline SVG owns
   // border + fill so the wrapper stays a transparent positioning host.
@@ -174,21 +174,6 @@ function resolveIllustrativeColors(data: ShapeNodeData): {
         ? colorTokenStyle(data.backgroundColor, 'node').backgroundColor
         : NODE_DEFAULT_BG_WHITE,
   };
-}
-
-// Sticky note dog-ear: 20×20 SVG overlay at the top-right that paints a
-// folded-paper corner. Fixed pixel size — a real folded paper corner reads the
-// same regardless of paper size, so resizing the sticky doesn't grow the fold.
-export const STICKY_FOLD_SIZE = 20;
-
-// Resolve the "underside" shade of the fold from the same ColorToken the
-// sticky's background uses. Reusing `node-header`'s slightly-darker variant
-// keeps the fold themed across every token (default / amber / blue / …)
-// without bespoke per-token tables. Sticky's render-time default is amber, so
-// an unset `backgroundColor` falls through to amber's headerBackground.
-export function stickyFoldShade(data: Pick<ShapeNodeData, 'backgroundColor'>): string | undefined {
-  const token = data.backgroundColor ?? 'amber';
-  return colorTokenStyle(token, 'node-header').backgroundColor;
 }
 
 // Handles stay hidden by default and only render on the active (selected) node
@@ -359,42 +344,6 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
     );
   }
 
-  // Sticky note dog-ear: fixed 20×20 SVG overlay anchored at the top-right.
-  // The filled triangle covers the wrapper's corner — visually replacing it
-  // with a "folded paper" wedge — while the diagonal stroke acts as the
-  // crease shadow. The overlay sits above the border (which terminates
-  // naturally underneath the triangle's fill) and below the label/handles
-  // because it renders before them in DOM order; pointer-events:none keeps
-  // hit-targets on the label intact.
-  let stickyFoldOverlay: ReactNode = null;
-  if (shape === 'sticky') {
-    stickyFoldOverlay = (
-      <svg
-        data-testid="sticky-fold"
-        className="sf:pointer-events-none sf:absolute sf:top-0 sf:right-0"
-        width={STICKY_FOLD_SIZE}
-        height={STICKY_FOLD_SIZE}
-        viewBox={`0 0 ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE}`}
-        role="img"
-        aria-label="Folded paper corner"
-      >
-        <title>Folded paper corner</title>
-        <path
-          d={`M 0 0 L ${STICKY_FOLD_SIZE} 0 L ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE} Z`}
-          fill={stickyFoldShade(data)}
-        />
-        <line
-          x1={0}
-          y1={0}
-          x2={STICKY_FOLD_SIZE}
-          y2={STICKY_FOLD_SIZE}
-          stroke="rgb(0 0 0 / 0.18)"
-          strokeWidth={1}
-        />
-      </svg>
-    );
-  }
-
   const description = data.description ?? '';
   const hasDescription = description !== '';
   const descriptionFontStyle: CSSProperties = {
@@ -562,7 +511,6 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
       onDoubleClick={handleWrapperDoubleClick}
     >
       {illustrativeOverlay}
-      {stickyFoldOverlay}
       <ResizeControls
         visible={!!selected && !!data.onResize && !isEditing && !data.locked}
         cornerVariant="visible"

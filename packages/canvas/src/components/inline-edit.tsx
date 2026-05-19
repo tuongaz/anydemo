@@ -88,7 +88,13 @@ export function InlineEdit({
     }
     const debouncer = debouncerRef.current;
     return () => {
-      debouncer.cancel();
+      // Flush (not cancel) so any in-flight debounced commit fires before the
+      // editor unmounts. Without this, a parent re-render that swaps the
+      // conditional branch hosting the InlineEdit (e.g. data.onDescriptionChange
+      // briefly becomes undefined, the node renderer falls back to the static
+      // label) would lose the user's last keystrokes before the 400 ms
+      // commit timer elapses. Cancel paths (Escape) explicitly cancel above.
+      debouncer.flush();
     };
     // initialValue is captured at mount on purpose — see component docstring.
   }, []);
