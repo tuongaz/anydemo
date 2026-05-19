@@ -69,7 +69,7 @@ const SheetContent = React.forwardRef<
       {children}
       <SheetPrimitive.Close className="sf-absolute sf-right-4 sf-top-4 sf-rounded-sm sf-opacity-70 sf-ring-offset-background sf-transition-opacity hover:sf-opacity-100 focus:sf-outline-none focus:sf-ring-2 focus:sf-ring-ring focus:sf-ring-offset-2 disabled:sf-pointer-events-none">
         <X className="sf-h-4 sf-w-4" />
-        <span className="sr-only">Close</span>
+        <span className="sf-sr-only">Close</span>
       </SheetPrimitive.Close>
     </SheetPrimitive.Content>
   </SheetPortal>

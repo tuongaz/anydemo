@@ -37,6 +37,7 @@ import {
 } from 'react';
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
+import { type AutoLayoutNode, applyLayout } from '../lib/auto-layout.ts';
 import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
@@ -3030,6 +3031,57 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
 
+  // Local-only Tidy fallback for non-edit modes. View-mode embedders don't
+  // own an adapter and typically don't wire `onTidy`, so the Controls cluster
+  // would otherwise render the button disabled. Apply the layout against the
+  // live rfNodes/rfEdges and update `rfNodes` in place — same philosophy as
+  // view-mode local drags (US-027): the move is visual-only, not persisted.
+  // Anchors the laid-out cluster to its current top-left so the canvas doesn't
+  // teleport on click, mirroring the host's onTidy convention in apps/web.
+  const internalTidy = useCallback(() => {
+    const inst = rfInstanceRef.current;
+    const current = rfNodesRef.current;
+    if (current.length < 2) return;
+    const layoutNodes: AutoLayoutNode[] = current.map((n) => {
+      const measured = inst?.getInternalNode(n.id)?.measured;
+      const dataAny = n.data as { width?: number; height?: number };
+      const width = measured?.width ?? dataAny.width ?? 200;
+      const height = measured?.height ?? dataAny.height ?? 120;
+      return { id: n.id, width, height, position: n.position };
+    });
+    const layoutEdges = rfEdgesRef.current.map((e) => ({ source: e.source, target: e.target }));
+    const next = applyLayout(layoutNodes, layoutEdges);
+
+    let prevMinX = Number.POSITIVE_INFINITY;
+    let prevMinY = Number.POSITIVE_INFINITY;
+    let nextMinX = Number.POSITIVE_INFINITY;
+    let nextMinY = Number.POSITIVE_INFINITY;
+    for (const ln of layoutNodes) {
+      if (ln.position.x < prevMinX) prevMinX = ln.position.x;
+      if (ln.position.y < prevMinY) prevMinY = ln.position.y;
+      const np = next.get(ln.id);
+      if (!np) continue;
+      if (np.x < nextMinX) nextMinX = np.x;
+      if (np.y < nextMinY) nextMinY = np.y;
+    }
+    const offsetX =
+      Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
+    const offsetY =
+      Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
+
+    setRfNodes((prev) =>
+      prev.map((n) => {
+        const np = next.get(n.id);
+        if (!np) return n;
+        return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
+      }),
+    );
+  }, []);
+  // Non-edit modes (view) fall back to `internalTidy` when the host hasn't
+  // wired `onTidy`. Edit mode preserves the legacy `disabled={!onTidy}` shape
+  // ("no demo loaded" → disabled) so existing studio behavior is unchanged.
+  const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : undefined);
+
   // `connectSucceededRef` lets onConnectEnd skip the body-drop fallback when
   // onConnect already fired (precise handle drop). Same pattern as
   // `reconnectSucceededRef` below.
@@ -3953,8 +4005,8 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
                   data-testid="controls-tidy"
                   aria-label="Tidy layout (⌘⇧L)"
                   title="Tidy layout (⌘⇧L)"
-                  disabled={!onTidy}
-                  onClick={() => onTidy?.()}
+                  disabled={!effectiveTidy}
+                  onClick={() => effectiveTidy?.()}
                 >
                   <LayoutDashboard className="sf-h-3 sf-w-3" aria-hidden="true" />
                 </ControlButton>

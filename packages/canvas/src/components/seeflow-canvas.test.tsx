@@ -1842,6 +1842,26 @@ describe('SeeflowCanvas', () => {
       expect(btn?.props.disabled).toBe(false);
     });
 
+    it('view mode: Auto Align is enabled without an onTidy callback (local-only fallback)', () => {
+      // View-mode embedders typically don't wire onTidy (no adapter to persist
+      // through). The canvas falls back to a local-only applyLayout against
+      // rfNodes so the button stays useful — same philosophy as view-mode
+      // local node drags (US-027).
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+      });
+      const btn = findByTestId(tree, 'controls-tidy');
+      expect(btn).not.toBeNull();
+      expect(btn?.props.disabled).toBe(false);
+      // The button's onClick is wired to a function (the internal fallback),
+      // not undefined — clicking must not throw.
+      const onClick = btn?.props.onClick as (() => void) | undefined;
+      expect(typeof onClick).toBe('function');
+      expect(() => onClick?.()).not.toThrow();
+    });
+
     it('clicking Auto Align fires the onTidy prop', () => {
       let tidyCalls = 0;
       const tree = callSeeflowCanvas({
