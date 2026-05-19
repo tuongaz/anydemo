@@ -26,10 +26,7 @@ import type { ConnectorPath, EdgePin, NodeStatus, StatusReport } from '../types.
  * node's previous and next visual status. Rising edge into 'success' only —
  * staying in success or moving out of it does not pulse.
  */
-export function shouldFireEdgeHandoff(
-  prev: string | undefined,
-  next: string,
-): boolean {
+export function shouldFireEdgeHandoff(prev: string | undefined, next: string): boolean {
   return next === 'success' && prev !== 'success';
 }
 

@@ -122,10 +122,7 @@ function PlayButton({
             className="sf:h-4 sf:w-4 sf:relative sf:text-emerald-300 sf:group-hover:hidden"
             aria-hidden
           />
-          <Play
-            className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block"
-            aria-hidden
-          />
+          <Play className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block" aria-hidden />
         </>
       ) : visualStatus === 'error' ? (
         <>
@@ -133,17 +130,11 @@ function PlayButton({
             className="sf:h-4 sf:w-4 sf:relative sf:text-rose-300 sf:group-hover:hidden"
             aria-hidden
           />
-          <Play
-            className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block"
-            aria-hidden
-          />
+          <Play className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block" aria-hidden />
         </>
       ) : (
         <Play
-          className={cn(
-            'sf:h-4 sf:w-4 sf:relative',
-            visualStatus === 'active' && 'sf:opacity-80',
-          )}
+          className={cn('sf:h-4 sf:w-4 sf:relative', visualStatus === 'active' && 'sf:opacity-80')}
           aria-hidden
         />
       )}
