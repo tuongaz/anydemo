@@ -133,9 +133,20 @@ func main() {
 
 ## Phase 0 — pre-flight (studio reachable)
 
-Resolve `$STUDIO_URL`: `SEEFLOW_STUDIO_URL` env var → `~/.seeflow/config.json` port → `http://localhost:4321`. Then follow **`references/start-studio.md`** — it probes `/health`, offers a Docker auto-start (with user approval, shows the exact command), and falls back to the CLI path on Docker failure or refusal.
+Resolve `$STUDIO_URL`: `SEEFLOW_STUDIO_URL` env var → `~/.seeflow/config.json` port → `http://localhost:4321`. Probe:
 
-On success: continue to Phase 1.
+```bash
+curl --max-time 0.5 -fsS "$STUDIO_URL/health"
+```
+
+- **200** → continue to Phase 1.
+- **Anything else** → ask the user to start the studio natively in another terminal:
+
+  ```bash
+  npx tuongaz/seeflow start
+  ```
+
+  Wait for confirmation, re-probe once. If still unreachable, surface the error and stop. Never start the studio yourself.
 
 ---
 
@@ -369,7 +380,7 @@ Never re-run `register.ts` in the fix-up loop.
 
 | Failure | Response |
 |---|---|
-| Studio `/health` fails | Follow `references/start-studio.md`: ask user about Docker auto-start, fall back to CLI on Docker refusal/failure. No silent retry. |
+| Studio `/health` fails | Ask the user to run `npx tuongaz/seeflow start` in another terminal, then re-probe once. No silent retry, no self-start. |
 | Sub-agent unparseable output | Retry once with parse error; if still failing, surface and stop. |
 | Schema validation fails (Phase 5) | Feed Zod issues back to relevant designer. Max 3 retries. |
 | Register 400 (Phase 6) | Show body; ask "fix-and-retry / stop". |
