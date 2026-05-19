@@ -2608,7 +2608,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsxs7(
           "div",
           {
-            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:bg-muted/30 sf:px-2 sf:py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-2 sf:py-2",
             "data-testid": "node-header",
             children: [
               data.icon ? iconEditable && data.onIconChange ? /* @__PURE__ */ jsx14(
@@ -3431,7 +3431,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     /* @__PURE__ */ jsx20(
       "div",
       {
-        className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:px-2 sf:py-1.5",
+        className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-2 sf:py-1.5",
         style: colorTokenStyle(data.backgroundColor, "node-header"),
         "data-testid": "shape-node-header",
         children: /* @__PURE__ */ jsx20(
@@ -3739,7 +3739,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsxs15(
           "div",
           {
-            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-2 sf:py-2",
             style: colorTokenStyle(data.backgroundColor, "node-header"),
             "data-testid": "node-header",
             children: [
