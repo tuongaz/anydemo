@@ -79,6 +79,7 @@ interface HtmlNodeData extends NodeVisual, NodeDescription {
     htmlPath: string;
     name?: string;
     icon?: string;
+    autoSize?: boolean;
 }
 interface NodeBase {
     id: string;

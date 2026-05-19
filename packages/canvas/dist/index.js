@@ -1787,7 +1787,8 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing
   });
-  const sized = data.width !== void 0 || data.height !== void 0;
+  const autoSize = data.autoSize ?? true;
+  const userSized = isResizing || !autoSize;
   const containerStyle = {
     ...data.backgroundColor !== void 0 ? { backgroundColor: colorTokenStyle(data.backgroundColor, "node").backgroundColor } : {},
     ...data.borderColor !== void 0 ? { borderColor: colorTokenStyle(data.borderColor, "node").borderColor } : {},
@@ -1796,7 +1797,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
     ...data.cornerRadius !== void 0 ? { borderRadius: data.cornerRadius } : {},
     ...data.fontSize !== void 0 ? { fontSize: `${data.fontSize}px` } : {},
     ...colorTokenStyle(data.textColor, "text"),
-    ...sized ? {} : { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height }
+    ...userSized ? { width: data.width, height: data.height } : {}
   };
   useEffect4(() => {
     ensureTailwindLoaded();
@@ -1804,11 +1805,19 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   const content = useHtmlContent(data.projectId, data.htmlPath);
   let body;
   if (content.kind === "loaded") {
-    body = /* @__PURE__ */ jsx7(
+    body = userSized ? /* @__PURE__ */ jsx7(
       "div",
       {
         "data-testid": "html-node-content",
         className: "sf:h-full sf:w-full sf:overflow-auto",
+        ...injectSanitizedHtml(content.html)
+      }
+    ) : /* @__PURE__ */ jsx7(
+      "div",
+      {
+        "data-testid": "html-node-content",
+        className: "sf:inline-block",
+        style: { maxWidth: 800, maxHeight: 600, overflow: "auto" },
         ...injectSanitizedHtml(content.html)
       }
     );
@@ -1819,11 +1828,16 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   } else {
     body = /* @__PURE__ */ jsx7(PlaceholderCard, { message: "Loading\u2026" });
   }
+  const placeholderFallback = !userSized && content.kind !== "loaded" ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height } : {};
+  const outerStyle = { ...containerStyle, ...placeholderFallback };
   return /* @__PURE__ */ jsxs3(
     "div",
     {
-      className: cn("sf:group sf:relative sf:overflow-hidden", sized ? "sf:h-full sf:w-full" : ""),
-      style: containerStyle,
+      className: cn(
+        "sf:group sf:relative sf:overflow-hidden",
+        userSized ? "sf:h-full sf:w-full" : ""
+      ),
+      style: outerStyle,
       "data-testid": "html-node",
       children: [
         /* @__PURE__ */ jsx7(
@@ -7276,6 +7290,7 @@ function SeeflowCanvasImpl(props, ref) {
   );
   const draggingRef = useRef6(false);
   const resizingRef = useRef6(false);
+  const viewModePositionsRef = useRef6(/* @__PURE__ */ new Map());
   const flushPendingFit = useCallback6(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
@@ -7416,10 +7431,11 @@ function SeeflowCanvasImpl(props, ref) {
   const selectedNodesForStyleStrip = selectedNodes ?? [];
   const sourceNodes = useMemo2(() => {
     const buildNode = (merged) => {
+      const viewOverridePos = !isEditMode ? viewModePositionsRef.current.get(merged.id) : void 0;
       const node = {
         id: merged.id,
         type: merged.type,
-        position: merged.position,
+        position: viewOverridePos ?? merged.position,
         data: {
           ...merged.data,
           // US-004: file-backed renderers (imageNode, future htmlNode) read
@@ -8075,7 +8091,13 @@ function SeeflowCanvasImpl(props, ref) {
   const commitDraggedNodes = useCallback6(
     (draggedNodes) => {
       if (draggedNodes.length === 0) return;
-      if (!isEditMode) return;
+      if (!isEditMode) {
+        const map = viewModePositionsRef.current;
+        for (const n of draggedNodes) {
+          map.set(n.id, { x: n.position.x, y: n.position.y });
+        }
+        return;
+      }
       if (draggedNodes.length === 1) {
         const moved = draggedNodes[0];
         if (moved && onNodePositionChange) {
