@@ -4928,7 +4928,7 @@ function DetailPanel({
         SheetContent,
         {
           side: "right",
-          className: "sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:shadow-[-12px_0_40px_-12px_rgba(0,0,0,0.6)] sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!",
+          className: "sf:w-full! sf:max-w-full! sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:shadow-[-12px_0_40px_-12px_rgba(0,0,0,0.6)] sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!",
           style: widthStyle,
           "data-testid": "detail-panel",
           onEscapeKeyDown: (e) => {
@@ -4960,8 +4960,7 @@ function DetailPanel({
               }
             ),
             inspectableNode ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:gap-2 sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-4 sf:pt-5", children: [
-                /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-[0.18em] sf:text-muted-foreground/70", children: "Node" }),
+              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12", children: [
                 showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
                   showIconField && onIconChange ? /* @__PURE__ */ jsx35(
                     TitleIconTrigger,
@@ -5036,8 +5035,7 @@ function DetailPanel({
                 inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
             ] }) : connector ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
-              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:gap-2 sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-4 sf:pt-5", children: [
-                /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-[0.18em] sf:text-muted-foreground/70", children: "Connector" }),
+              /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12", children: [
                 /* @__PURE__ */ jsx35(
                   SheetTitle,
                   {
