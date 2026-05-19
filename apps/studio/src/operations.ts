@@ -7,7 +7,15 @@
 // Helpers extracted in US-003: node lifecycle (add/delete/move/reorder).
 // Future stories add patch_node + connector helpers alongside these.
 
-import { existsSync, mkdirSync, renameSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  renameSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { seeflowHome } from './paths.ts';
@@ -20,10 +28,12 @@ import {
   SourceHandleIdSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
+import { mergeArchitectureAndStyle, splitFlow } from './merge.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
+import { ArchitectureSchema, StyleSchema } from './schema.ts';
 
-const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/seeflow.json';
+const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/architecture.json';
 
 export const RegisterBodySchema = z.object({
   name: z.string().min(1).optional(),
@@ -461,6 +471,127 @@ export const writeFileAtomic = (filePath: string, content: string): void => {
   }
 };
 
+/**
+ * Read architecture.json + optional style.json, return the raw parsed JSON
+ * so operations can mutate the merged-flow shape without losing forward-compat
+ * fields. Returns null if the architecture file is missing or invalid JSON.
+ */
+type ReadRawResult =
+  | { kind: 'ok'; rawArch: Record<string, unknown>; rawStyle: Record<string, unknown> }
+  | { kind: 'badJson'; message: string };
+
+function readRawArchAndStyle(archPath: string): ReadRawResult {
+  let rawArch: unknown;
+  try {
+    rawArch = JSON.parse(readFileSync(archPath, 'utf8'));
+  } catch (err) {
+    return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
+  }
+  if (!rawArch || typeof rawArch !== 'object' || Array.isArray(rawArch)) {
+    return { kind: 'badJson', message: 'architecture.json is not an object' };
+  }
+  const stylePath = join(dirname(archPath), 'style.json');
+  let rawStyle: Record<string, unknown> = {};
+  if (existsSync(stylePath)) {
+    try {
+      const parsed = JSON.parse(readFileSync(stylePath, 'utf8'));
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+        return { kind: 'badJson', message: 'style.json is not an object' };
+      }
+      rawStyle = parsed as Record<string, unknown>;
+    } catch (err) {
+      return {
+        kind: 'badJson',
+        message: `style.json: ${err instanceof Error ? err.message : String(err)}`,
+      };
+    }
+  }
+  return { kind: 'ok', rawArch: rawArch as Record<string, unknown>, rawStyle };
+}
+
+/**
+ * Mutate-in-place helper: read both files into a merged Flow shape, hand it
+ * to the mutator, then split back into architecture + style and atomically
+ * write both. The mutator returns either { kind: 'ok' } or a discriminated
+ * outcome for early-exits (e.g. unknownNode). On schema-validation failure,
+ * neither file is written.
+ */
+type MutateMergedFlowMutator<E> = (flow: {
+  version: number;
+  name: string;
+  resetAction?: unknown;
+  nodes: Array<Record<string, unknown>>;
+  connectors: Array<Record<string, unknown>>;
+}) => { kind: 'ok' } | E;
+
+type MutateMergedFlowResult<E> =
+  | { kind: 'ok' }
+  | { kind: 'badJson'; message: string }
+  | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'writeFailed'; message: string }
+  | E;
+
+export async function mutateMergedFlow<E extends { kind: string }>(
+  archPath: string,
+  mutator: MutateMergedFlowMutator<E>,
+): Promise<MutateMergedFlowResult<E>> {
+  const read = readRawArchAndStyle(archPath);
+  if (read.kind === 'badJson') return { kind: 'badJson', message: read.message };
+
+  const archParse = ArchitectureSchema.safeParse(read.rawArch);
+  if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
+  const styleParse = StyleSchema.safeParse(read.rawStyle);
+  if (!styleParse.success) return { kind: 'badSchema', issues: styleParse.error.issues };
+
+  const merged = mergeArchitectureAndStyle(archParse.data, styleParse.data) as unknown as {
+    version: number;
+    name: string;
+    resetAction?: unknown;
+    nodes: Array<Record<string, unknown>>;
+    connectors: Array<Record<string, unknown>>;
+  };
+
+  const outcome = mutator(merged);
+  if (outcome.kind !== 'ok') return outcome;
+
+  // Final FlowSchema parse so per-kind invariants (event needs eventName, etc.)
+  // surface honestly instead of being silently papered over.
+  const finalParse = FlowSchema.safeParse(merged);
+  if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
+
+  const { architecture, style } = splitFlow(merged);
+  // Re-validate the post-split files to catch the rare case where a forward-
+  // compat field landed in the wrong bucket. Style validation is a no-op for
+  // empty maps; architecture revalidation rejects unknown keys via strict().
+  const archCheck = ArchitectureSchema.safeParse(architecture);
+  if (!archCheck.success) return { kind: 'badSchema', issues: archCheck.error.issues };
+  const styleCheck = StyleSchema.safeParse(style);
+  if (!styleCheck.success) return { kind: 'badSchema', issues: styleCheck.error.issues };
+
+  const stylePath = join(dirname(archPath), 'style.json');
+  const styleIsEmpty =
+    (!style.nodes || Object.keys(style.nodes as Record<string, unknown>).length === 0) &&
+    (!style.connectors || Object.keys(style.connectors as Record<string, unknown>).length === 0);
+
+  try {
+    writeFileAtomic(archPath, `${JSON.stringify(architecture, null, 2)}\n`);
+  } catch (err) {
+    return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+  }
+
+  try {
+    if (styleIsEmpty) {
+      if (existsSync(stylePath)) unlinkSync(stylePath);
+    } else {
+      writeFileAtomic(stylePath, `${JSON.stringify(style, null, 2)}\n`);
+    }
+  } catch (err) {
+    return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+  }
+
+  return { kind: 'ok' };
+}
+
 export const reorderNodes = (
   nodes: Array<Record<string, unknown>>,
   fromIdx: number,
@@ -574,21 +705,28 @@ export async function registerFlowImpl(
 
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  let demo: unknown;
-  try {
-    demo = await Bun.file(fullPath).json();
-  } catch (err) {
-    // REST uses String(err) here (preserves "SyntaxError: ..." prefix) —
-    // keep byte-identical so api.test.ts assertions stay green.
-    return { kind: 'badJson', detail: String(err) };
+  const merged = readMergedFlow(fullPath);
+  if (merged.error && merged.flow === null) {
+    if (merged.error.startsWith('Invalid JSON')) {
+      return { kind: 'badJson', detail: merged.error };
+    }
+    // Schema validation failed — surface the issues as a bad-schema outcome
+    // by re-running parse to get ZodIssue[].
+    let rawArch: unknown;
+    try {
+      rawArch = JSON.parse(readFileSync(fullPath, 'utf8'));
+    } catch (err) {
+      return { kind: 'badJson', detail: String(err) };
+    }
+    const archParse = ArchitectureSchema.safeParse(rawArch);
+    if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
+    return { kind: 'badJson', detail: merged.error };
   }
-
-  const demoParse = FlowSchema.safeParse(demo);
-  if (!demoParse.success) return { kind: 'badSchema', issues: demoParse.error.issues };
+  if (!merged.flow) return { kind: 'badJson', detail: merged.error ?? 'unknown error' };
 
   const lastModified = statSync(fullPath).mtimeMs;
   const entry = registry.upsert({
-    name: body.name ?? demoParse.data.name,
+    name: body.name ?? merged.flow.name,
     repoPath,
     architecturePath,
     valid: true,
@@ -599,7 +737,7 @@ export async function registerFlowImpl(
 
   let sdkResult: { outcome: 'written' | 'present' | 'skipped'; filePath: string | null };
   try {
-    sdkResult = writeSdkEmitIfNeeded(repoPath, demoParse.data);
+    sdkResult = writeSdkEmitIfNeeded(repoPath, merged.flow);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return { kind: 'sdkWriteFailed', id: entry.id, slug: entry.slug, message };
@@ -642,8 +780,8 @@ export async function createProjectImpl(
     } catch (err) {
       return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
     }
-    const demoParse = FlowSchema.safeParse(raw);
-    if (!demoParse.success) return { kind: 'badSchema', issues: demoParse.error.issues };
+    const archParse = ArchitectureSchema.safeParse(raw);
+    if (!archParse.success) return { kind: 'badSchema', issues: archParse.error.issues };
 
     const lastModified = statSync(demoFullPath).mtimeMs;
     const entry = registry.upsert({
@@ -657,6 +795,7 @@ export async function createProjectImpl(
     return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: false } };
   }
 
+  // Architecture-only scaffold: empty nodes/connectors, no style.json needed.
   const scaffold: Flow = { version: 2, name, nodes: [], connectors: [] };
 
   try {
@@ -703,6 +842,11 @@ export async function addNodeImpl(
     newNode.id = `node-${crypto.randomUUID()}`;
   }
   const newId = newNode.id as string;
+  // Default position so the post-merge FlowSchema parse passes. Position lives
+  // on style.json after the split — callers who care set it explicitly.
+  if (!newNode.position || typeof newNode.position !== 'object') {
+    newNode.position = { x: 0, y: 0 };
+  }
 
   // US-015: for htmlNode without a client-supplied htmlPath, allocate the
   // studio-managed `blocks/<id>.html` path and queue a starter-file write.
@@ -735,44 +879,20 @@ export async function addNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { nodes: Array<Record<string, unknown>> };
-    obj.nodes.push(newNode);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    if (starterFile) {
-      try {
-        mkdirSync(dirname(starterFile.absPath), { recursive: true });
-        writeFileAtomic(starterFile.absPath, starterFile.content);
-      } catch (err) {
-        return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+  const result = await withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'writeFailed'; message: string }>(fullPath, (flow) => {
+      flow.nodes.push(newNode);
+      if (starterFile) {
+        try {
+          mkdirSync(dirname(starterFile.absPath), { recursive: true });
+          writeFileAtomic(starterFile.absPath, starterFile.content);
+        } catch (err) {
+          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+        }
       }
-    }
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
+      return { kind: 'ok' };
+    }),
+  );
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId, node: newNode } };
   return result;
@@ -809,59 +929,35 @@ export async function deleteNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok'; managedHtmlAbsPath?: string }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownNode' }
-    | { kind: 'writeFailed'; message: string };
+  let managedHtmlAbsPath: string | undefined;
 
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
+  const result = await withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
+      const idx = flow.nodes.findIndex((n) => n.id === nodeId);
+      if (idx < 0) return { kind: 'unknownNode' };
+      const removed = flow.nodes[idx];
+      managedHtmlAbsPath = managedHtmlNodePath(entry.repoPath, nodeId, removed);
+      flow.nodes.splice(idx, 1);
+      flow.connectors = flow.connectors.filter(
+        (cn) => cn.source !== nodeId && cn.target !== nodeId,
+      );
+      return { kind: 'ok' };
+    }),
+  );
+
+  if (result.kind === 'ok' && managedHtmlAbsPath) {
     try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as {
-      nodes: Array<Record<string, unknown>>;
-      connectors: Array<{ source: string; target: string }>;
-    };
-    const idx = obj.nodes.findIndex((n) => n.id === nodeId);
-    if (idx < 0) return { kind: 'unknownNode' };
-    const removed = obj.nodes[idx];
-    const managedHtmlAbsPath = managedHtmlNodePath(entry.repoPath, nodeId, removed);
-    obj.nodes.splice(idx, 1);
-    obj.connectors = obj.connectors.filter((cn) => cn.source !== nodeId && cn.target !== nodeId);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return managedHtmlAbsPath ? { kind: 'ok', managedHtmlAbsPath } : { kind: 'ok' };
-  });
-
-  if (result.kind === 'ok' && result.managedHtmlAbsPath) {
-    try {
-      unlinkSync(result.managedHtmlAbsPath);
+      unlinkSync(managedHtmlAbsPath);
     } catch (err) {
       const code = (err as NodeJS.ErrnoException | undefined)?.code;
       if (code !== 'ENOENT') {
         console.warn(
-          `[operations] failed to remove managed htmlNode file ${result.managedHtmlAbsPath}: ${
+          `[operations] failed to remove managed htmlNode file ${managedHtmlAbsPath}: ${
             err instanceof Error ? err.message : String(err)
           }`,
         );
       }
     }
-    return { kind: 'ok' };
   }
 
   return result;
@@ -899,41 +995,18 @@ export async function moveNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownNode' }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as {
-      nodes: Array<{ id: string; position: { x: number; y: number } }>;
-    };
-    const onDiskNode = obj.nodes.find((n) => n.id === nodeId);
-    if (!onDiskNode) return { kind: 'unknownNode' };
-    onDiskNode.position = { x: position.x, y: position.y };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(obj, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
+  const result = await withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
+      const node = flow.nodes.find((n) => n.id === nodeId) as
+        | { id: string; position?: { x: number; y: number } }
+        | undefined;
+      if (!node) return { kind: 'unknownNode' };
+      node.position = { x: position.x, y: position.y };
+      return { kind: 'ok' };
+    }),
+  );
 
   if (result.kind === 'ok') {
-    // Eagerly refresh snapshot so a subsequent GET /api/flows/:id (e.g. export)
-    // returns the updated position without waiting for the 100ms FSWatcher debounce.
     deps.watcher?.reparse(flowId);
     return { kind: 'ok', data: { position: { x: position.x, y: position.y } } };
   }
@@ -956,41 +1029,14 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownNode' }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { nodes: Array<Record<string, unknown>> };
-    const onDiskNode = obj.nodes.find((n) => n.id === nodeId);
-    if (!onDiskNode) return { kind: 'unknownNode' };
-
-    mergeNodeUpdates(onDiskNode, updates);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
-
-  return result;
+  return withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return { kind: 'unknownNode' };
+      mergeNodeUpdates(node, updates);
+      return { kind: 'ok' };
+    }),
+  );
 }
 
 // Reorder a node within demo.nodes[] (changes paint order in the canvas).
@@ -1008,42 +1054,18 @@ export async function reorderNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownNode' }
-    | { kind: 'writeFailed'; message: string };
+  const result = await withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownNode' } | { kind: 'noop' }>(fullPath, (flow) => {
+      const fromIdx = flow.nodes.findIndex((n) => n.id === nodeId);
+      if (fromIdx < 0) return { kind: 'unknownNode' };
+      const moved = reorderNodes(flow.nodes, fromIdx, body);
+      if (!moved) return { kind: 'noop' };
+      return { kind: 'ok' };
+    }),
+  );
 
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { nodes: Array<Record<string, unknown>> };
-    const fromIdx = obj.nodes.findIndex((n) => n.id === nodeId);
-    if (fromIdx < 0) return { kind: 'unknownNode' };
-
-    const moved = reorderNodes(obj.nodes, fromIdx, body);
-    if (!moved) return { kind: 'ok' };
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
-
-  return result;
+  if (result.kind === 'noop') return { kind: 'ok' };
+  return result as ReorderNodeOutcome;
 }
 
 // Append a new connector to demo.connectors. `id` is auto-generated when
@@ -1070,35 +1092,12 @@ export async function addConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { connectors: Array<Record<string, unknown>> };
-    obj.connectors.push(newConn);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
+  const result = await withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<never>(fullPath, (flow) => {
+      flow.connectors.push(newConn);
+      return { kind: 'ok' };
+    }),
+  );
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId } };
   return result;
@@ -1125,41 +1124,14 @@ export async function patchConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownConnector' }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { connectors: Array<Record<string, unknown>> };
-    const onDiskConn = obj.connectors.find((cn) => cn.id === connectorId);
-    if (!onDiskConn) return { kind: 'unknownConnector' };
-
-    mergeConnectorUpdates(onDiskConn, updates);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
-
-  return result;
+  return withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownConnector' }>(fullPath, (flow) => {
+      const conn = flow.connectors.find((cn) => cn.id === connectorId);
+      if (!conn) return { kind: 'unknownConnector' };
+      mergeConnectorUpdates(conn, updates);
+      return { kind: 'ok' };
+    }),
+  );
 }
 
 // Remove a connector by id. No cascade — node deletion is what cascades,
@@ -1176,38 +1148,12 @@ export async function deleteConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  type Inner =
-    | { kind: 'ok' }
-    | { kind: 'badJson'; message: string }
-    | { kind: 'badSchema'; issues: ZodIssue[] }
-    | { kind: 'unknownConnector' }
-    | { kind: 'writeFailed'; message: string };
-
-  const result = await withFlowWriteLock<Inner>(flowId, async () => {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
-    }
-    const demoParsed = FlowSchema.safeParse(raw);
-    if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
-
-    const obj = raw as { connectors: Array<{ id: string }> };
-    const idx = obj.connectors.findIndex((cn) => cn.id === connectorId);
-    if (idx < 0) return { kind: 'unknownConnector' };
-    obj.connectors.splice(idx, 1);
-
-    const finalParse = FlowSchema.safeParse(raw);
-    if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
-
-    try {
-      writeFileAtomic(fullPath, `${JSON.stringify(raw, null, 2)}\n`);
-    } catch (err) {
-      return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-    }
-    return { kind: 'ok' };
-  });
-
-  return result;
+  return withFlowWriteLock(flowId, () =>
+    mutateMergedFlow<{ kind: 'unknownConnector' }>(fullPath, (flow) => {
+      const idx = flow.connectors.findIndex((cn) => cn.id === connectorId);
+      if (idx < 0) return { kind: 'unknownConnector' };
+      flow.connectors.splice(idx, 1);
+      return { kind: 'ok' };
+    }),
+  );
 }

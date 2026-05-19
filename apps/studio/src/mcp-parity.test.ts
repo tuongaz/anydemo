@@ -24,7 +24,6 @@ const VALID_DEMO_TWO_NODES = {
     {
       id: 'a',
       type: 'playNode',
-      position: { x: 0, y: 0 },
       data: {
         name: 'A',
         kind: 'service',
@@ -35,7 +34,6 @@ const VALID_DEMO_TWO_NODES = {
     {
       id: 'b',
       type: 'playNode',
-      position: { x: 200, y: 0 },
       data: {
         name: 'B',
         kind: 'service',
@@ -60,7 +58,6 @@ const VALID_DEMO_THREE_NODES = {
     {
       id: 'a',
       type: 'playNode',
-      position: { x: 0, y: 0 },
       data: {
         name: 'A',
         kind: 'service',
@@ -71,7 +68,6 @@ const VALID_DEMO_THREE_NODES = {
     {
       id: 'b',
       type: 'playNode',
-      position: { x: 200, y: 0 },
       data: {
         name: 'B',
         kind: 'service',
@@ -82,7 +78,6 @@ const VALID_DEMO_THREE_NODES = {
     {
       id: 'c',
       type: 'playNode',
-      position: { x: 400, y: 0 },
       data: {
         name: 'C',
         kind: 'service',
@@ -163,7 +158,7 @@ const buildProjectFixture = (name: string): ProjectFixture => {
     app,
     registry,
     projectBaseDir,
-    demoFile: join(projectBaseDir, slug, '.seeflow', 'seeflow.json'),
+    demoFile: join(projectBaseDir, slug, '.seeflow', 'architecture.json'),
   };
 };
 
@@ -238,8 +233,7 @@ const SCENARIOS: ParityScenario[] = [
       const newNode = {
         id: 'parity-new',
         type: 'shapeNode',
-        position: { x: 100, y: 100 },
-        data: { shape: 'rectangle', name: 'New' },
+          data: { shape: 'rectangle', name: 'New' },
       };
       return {
         demoFile: fix.demoFile,

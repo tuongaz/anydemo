@@ -15,7 +15,7 @@ import {
   writeConfig,
   writePid,
 } from './runtime.ts';
-import { FlowSchema } from './schema.ts';
+import { ArchitectureSchema, FlowSchema } from './schema.ts';
 import { serve } from './server.ts';
 import { createStatusRunner } from './status-runner.ts';
 
@@ -160,7 +160,7 @@ async function seedExample(registry: Registry, exampleName: string) {
     return;
   }
 
-  const parsed = FlowSchema.safeParse(demo);
+  const parsed = ArchitectureSchema.safeParse(demo);
   if (!parsed.success) return;
 
   registry.upsert({ name: parsed.data.name, repoPath: destDir, architecturePath });
@@ -238,7 +238,7 @@ async function runRegister() {
     process.exit(1);
   }
 
-  const parsed = FlowSchema.safeParse(demo);
+  const parsed = ArchitectureSchema.safeParse(demo);
   if (!parsed.success) {
     console.error(`${fullPath} failed schema validation:`);
     for (const issue of parsed.error.issues) {

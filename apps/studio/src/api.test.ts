@@ -95,8 +95,7 @@ describe('POST /api/flows/register', () => {
         {
           id: 'queue-orders',
           type: 'stateNode',
-          position: { x: 0, y: 0 },
-          data: {
+              data: {
             name: 'orders.created',
             kind: 'queue',
             stateSource: { kind: 'event' },
@@ -225,7 +224,14 @@ describe('POST /api/flows/register', () => {
 describe('POST /api/flows/validate', () => {
   it('returns ok:true with zero issues for a valid static demo', async () => {
     const { app } = buildApp();
-    const res = await post(app, '/api/flows/validate', { demo: VALID_DEMO, tier: 'static' });
+    // /api/flows/validate predates the architecture/style split — it validates
+    // against the merged Flow shape (position required), so we synthesize one
+    // here from the architecture-only VALID_DEMO fixture.
+    const validateBody = {
+      ...VALID_DEMO,
+      nodes: VALID_DEMO.nodes.map((n) => ({ ...n, position: { x: 0, y: 0 } })),
+    };
+    const res = await post(app, '/api/flows/validate', { demo: validateBody, tier: 'static' });
     expect(res.status).toBe(200);
     const json = (await res.json()) as {
       ok: boolean;
@@ -257,8 +263,7 @@ describe('POST /api/flows/validate', () => {
         {
           id: 'box',
           type: 'shapeNode',
-          position: { x: 0, y: 0 },
-          data: { shape: 'rectangle' },
+              data: { shape: 'rectangle' },
         },
       ],
       connectors: [],
@@ -278,8 +283,7 @@ describe('POST /api/flows/validate', () => {
       nodes: Array.from({ length: 31 }, (_, i) => ({
         id: `n${i}`,
         type: 'shapeNode',
-        position: { x: 0, y: 0 },
-        data: { shape: 'rectangle' as const },
+          data: { shape: 'rectangle' as const },
       })),
       connectors: [],
     };
@@ -777,8 +781,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         {
           id: 'shape-only',
           type: 'shapeNode',
-          position: { x: 0, y: 0 },
-          data: { shape: 'rectangle' },
+              data: { shape: 'rectangle' },
         },
       ],
       connectors: [],
@@ -1161,7 +1164,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
       await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
       x: 250,
@@ -1172,10 +1175,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     expect(body.ok).toBe(true);
     expect(body.position).toEqual({ x: 250, y: 320 });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      nodes: Array<{ id: string; position: { x: number; y: number } }>;
+    const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      nodes: Record<string, { position: { x: number; y: number } }>;
     };
-    expect(onDisk.nodes[0]?.position).toEqual({ x: 250, y: 320 });
+    expect(style.nodes['api-checkout']?.position).toEqual({ x: 250, y: 320 });
   });
 
   it('preserves 2-space indent and trailing newline (clean editor diffs)', async () => {
@@ -1233,9 +1236,9 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const dir = join(repoPath, '.seeflow');
     await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, { x: 99, y: 99 });
 
-    const files = readdirSync(dir);
-    // Only seeflow.json should remain — temp files must be renamed/cleaned up.
-    expect(files).toEqual(['seeflow.json']);
+    const files = readdirSync(dir).sort();
+    // Only seeflow.json + style.json should remain — temp files must be renamed/cleaned up.
+    expect(files).toEqual(['seeflow.json', 'style.json']);
   });
 });
 
@@ -1247,20 +1250,17 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
       {
         id: 'a',
         type: 'shapeNode',
-        position: { x: 0, y: 0 },
-        data: { shape: 'rectangle' },
+          data: { shape: 'rectangle' },
       },
       {
         id: 'b',
         type: 'shapeNode',
-        position: { x: 100, y: 0 },
-        data: { shape: 'rectangle' },
+          data: { shape: 'rectangle' },
       },
       {
         id: 'c',
         type: 'shapeNode',
-        position: { x: 200, y: 0 },
-        data: { shape: 'rectangle' },
+          data: { shape: 'rectangle' },
       },
     ],
     connectors: [],
@@ -1393,6 +1393,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       name: 'POST /checkout (renamed)',
@@ -1404,29 +1405,23 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      nodes: Array<{
-        id: string;
-        position: { x: number; y: number };
-        data: {
-          name: string;
-          borderColor?: string;
-          backgroundColor?: string;
-          width?: number;
-          height?: number;
-          playAction: { kind: string };
-        };
-      }>;
+    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { name: string; playAction: { kind: string } } }>;
     };
-    const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
+    const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      nodes: Record<
+        string,
+        { borderColor?: string; backgroundColor?: string; width?: number; height?: number }
+      >;
+    };
+    const node = arch.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.name).toBe('POST /checkout (renamed)');
-    expect(node?.data.borderColor).toBe('blue');
-    expect(node?.data.backgroundColor).toBe('amber');
-    expect(node?.data.width).toBe(240);
-    expect(node?.data.height).toBe(120);
-    // Untouched fields are preserved.
     expect(node?.data.playAction.kind).toBe('script');
-    expect(node?.position).toEqual({ x: 0, y: 0 });
+    const styleEntry = style.nodes['api-checkout'];
+    expect(styleEntry?.borderColor).toBe('blue');
+    expect(styleEntry?.backgroundColor).toBe('amber');
+    expect(styleEntry?.width).toBe(240);
+    expect(styleEntry?.height).toBe(120);
   });
 
   it('updates node.position when included in the patch body', async () => {
@@ -1436,16 +1431,16 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
       await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       position: { x: 42, y: 84 },
     });
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      nodes: Array<{ id: string; position: { x: number; y: number } }>;
+    const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      nodes: Record<string, { position: { x: number; y: number } }>;
     };
-    expect(onDisk.nodes[0]?.position).toEqual({ x: 42, y: 84 });
+    expect(style.nodes['api-checkout']?.position).toEqual({ x: 42, y: 84 });
   });
 
   it('returns 400 with issues when the patched demo would fail schema validation', async () => {
@@ -1634,7 +1629,6 @@ describe('POST /api/flows/:id/nodes', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       type: 'shapeNode',
-      position: { x: 100, y: 200 },
       data: { shape: 'rectangle', name: 'Note A' },
     });
     expect(res.status).toBe(200);
@@ -1660,7 +1654,6 @@ describe('POST /api/flows/:id/nodes', () => {
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'sticky-note-1',
       type: 'shapeNode',
-      position: { x: 0, y: 0 },
       data: { shape: 'sticky' },
     });
     expect(res.status).toBe(200);
@@ -1681,7 +1674,6 @@ describe('POST /api/flows/:id/nodes', () => {
     // type 'shapeNode' but missing required `shape`.
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       type: 'shapeNode',
-      position: { x: 0, y: 0 },
       data: {},
     });
     expect(res.status).toBe(400);
@@ -1695,7 +1687,6 @@ describe('POST /api/flows/:id/nodes', () => {
     const { app } = buildApp();
     const res = await post(app, '/api/flows/nope/nodes', {
       type: 'shapeNode',
-      position: { x: 0, y: 0 },
       data: { shape: 'rectangle' },
     });
     expect(res.status).toBe(404);
@@ -1714,8 +1705,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-        position: { x: 50, y: 60 },
-        data: {},
+          data: {},
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -1753,8 +1743,7 @@ describe('POST /api/flows/:id/nodes', () => {
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         id: 'hero-block',
         type: 'htmlNode',
-        position: { x: 0, y: 0 },
-        data: {},
+          data: {},
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
@@ -1774,8 +1763,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-        position: { x: 0, y: 0 },
-        data: { htmlPath: 'custom/hero.html' },
+          data: { htmlPath: 'custom/hero.html' },
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
@@ -1801,8 +1789,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-        position: { x: 0, y: 0 },
-        data: { name: 'Pricing card', width: 280, height: 160 },
+          data: { name: 'Pricing card', width: 280, height: 160 },
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -1825,8 +1812,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       {
         id: 'a',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -1836,8 +1822,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       {
         id: 'b',
         type: 'playNode',
-        position: { x: 200, y: 0 },
-        data: {
+          data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -1881,8 +1866,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         {
           id: 'c',
           type: 'playNode',
-          position: { x: 400, y: 0 },
-          data: {
+              data: {
             name: 'C',
             kind: 'service',
             stateSource: { kind: 'request' },
@@ -1941,8 +1925,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-          position: { x: 0, y: 0 },
-          data: {},
+              data: {},
         })
       ).json()) as { id: string; node: { data: { htmlPath: string } } };
       const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
@@ -1978,8 +1961,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-          position: { x: 0, y: 0 },
-          data: { htmlPath: 'custom/hero.html' },
+              data: { htmlPath: 'custom/hero.html' },
         })
       ).json()) as { id: string; node: { data: { htmlPath: string } } };
       expect(created.node.data.htmlPath).toBe('custom/hero.html');
@@ -2002,8 +1984,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-          position: { x: 0, y: 0 },
-          data: {},
+              data: {},
         })
       ).json()) as { id: string };
       const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
@@ -2034,15 +2015,13 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const first = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-          position: { x: 0, y: 0 },
-          data: {},
+              data: {},
         })
       ).json()) as { id: string };
       const second = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-          position: { x: 80, y: 80 },
-          data: {},
+              data: {},
         })
       ).json()) as { id: string };
       const firstFile = join(repoPath, '.seeflow', 'blocks', `${first.id}.html`);
@@ -2066,8 +2045,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       {
         id: 'a',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2077,8 +2055,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       {
         id: 'b',
         type: 'playNode',
-        position: { x: 200, y: 0 },
-        data: {
+          data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2104,6 +2081,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       label: 'renamed',
       style: 'dashed',
@@ -2113,22 +2091,19 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{
-        id: string;
-        kind: string;
-        label?: string;
-        style?: string;
-        color?: string;
-        direction?: string;
-      }>;
+    const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      connectors: Array<{ id: string; kind: string; label?: string }>;
     };
-    const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
+    const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      connectors: Record<string, { style?: string; color?: string; direction?: string }>;
+    };
+    const conn = arch.connectors.find((c) => c.id === 'a-to-b');
     expect(conn?.label).toBe('renamed');
-    expect(conn?.style).toBe('dashed');
-    expect(conn?.color).toBe('blue');
-    expect(conn?.direction).toBe('both');
     expect(conn?.kind).toBe('default');
+    const styleEntry = style.connectors['a-to-b'];
+    expect(styleEntry?.style).toBe('dashed');
+    expect(styleEntry?.color).toBe('blue');
+    expect(styleEntry?.direction).toBe('both');
   });
 
   it('changes kind and clears stale kind-specific fields from the previous kind', async () => {
@@ -2205,18 +2180,18 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       sourceHandle: 'r',
       targetHandle: 't',
     });
     expect(res.status).toBe(200);
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; sourceHandle?: string; targetHandle?: string }>;
+    const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      connectors: Record<string, { sourceHandle?: string; targetHandle?: string }>;
     };
-    const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.sourceHandle).toBe('r');
-    expect(conn?.targetHandle).toBe('t');
+    const entry = style.connectors['a-to-b'];
+    expect(entry?.sourceHandle).toBe('r');
+    expect(entry?.targetHandle).toBe('t');
   });
 
   it("rejects an invalid sourceHandle ('top-bogus') with a 400", async () => {
@@ -2296,31 +2271,31 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
     ).json()) as { id: string };
-    const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
+    const styleFile = join(repoPath, '.seeflow', 'style.json');
 
     const setRes = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       sourcePin: { side: 'right', t: 0.25 },
       targetPin: { side: 'left', t: 0.75 },
     });
     expect(setRes.status).toBe(200);
-    let onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<Record<string, unknown>>;
+    let style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      connectors: Record<string, Record<string, unknown>>;
     };
-    let conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.sourcePin).toEqual({ side: 'right', t: 0.25 });
-    expect(conn?.targetPin).toEqual({ side: 'left', t: 0.75 });
+    let entry = style.connectors['a-to-b'];
+    expect(entry?.sourcePin).toEqual({ side: 'right', t: 0.25 });
+    expect(entry?.targetPin).toEqual({ side: 'left', t: 0.75 });
 
     // Clear only the source pin; target pin must survive.
     const clearRes = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       sourcePin: null,
     });
     expect(clearRes.status).toBe(200);
-    onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<Record<string, unknown>>;
+    style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
+      connectors: Record<string, Record<string, unknown>>;
     };
-    conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.sourcePin).toBeUndefined();
-    expect(conn?.targetPin).toEqual({ side: 'left', t: 0.75 });
+    entry = style.connectors['a-to-b'];
+    expect(entry?.sourcePin).toBeUndefined();
+    expect(entry?.targetPin).toEqual({ side: 'left', t: 0.75 });
   });
 
   it('rejects a sourcePin with an out-of-range t (US-007)', async () => {
@@ -2345,8 +2320,7 @@ describe('POST /api/flows/:id/connectors', () => {
       {
         id: 'a',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2356,8 +2330,7 @@ describe('POST /api/flows/:id/connectors', () => {
       {
         id: 'b',
         type: 'playNode',
-        position: { x: 200, y: 0 },
-        data: {
+          data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2491,14 +2464,12 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'svc',
           type: 'stateNode',
-          position: { x: 0, y: 0 },
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+              data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
         },
         {
           id: 'icon-1',
           type: 'iconNode',
-          position: { x: 200, y: 0 },
-          data: { icon: 'shopping-cart' },
+              data: { icon: 'shopping-cart' },
         },
       ],
       connectors: [],
@@ -2531,14 +2502,12 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'icon-1',
           type: 'iconNode',
-          position: { x: 0, y: 0 },
-          data: { icon: 'shopping-cart' },
+              data: { icon: 'shopping-cart' },
         },
         {
           id: 'svc',
           type: 'stateNode',
-          position: { x: 200, y: 0 },
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+              data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
         },
       ],
       connectors: [],
@@ -2569,14 +2538,12 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'icon-a',
           type: 'iconNode',
-          position: { x: 0, y: 0 },
-          data: { icon: 'circle' },
+              data: { icon: 'circle' },
         },
         {
           id: 'icon-b',
           type: 'iconNode',
-          position: { x: 200, y: 0 },
-          data: { icon: 'square' },
+              data: { icon: 'square' },
         },
       ],
       connectors: [],
@@ -2606,8 +2573,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       {
         id: 'a',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2617,8 +2583,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       {
         id: 'b',
         type: 'playNode',
-        position: { x: 200, y: 0 },
-        data: {
+          data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2716,8 +2681,8 @@ describe('POST /api/projects', () => {
     const projectPath = join(projectBaseDir, 'existing-project');
     mkdirSync(join(projectPath, '.seeflow'), { recursive: true });
     const existingDemo = { version: 2, name: 'Existing Project', nodes: [], connectors: [] };
-    writeFileSync(join(projectPath, '.seeflow', 'seeflow.json'), JSON.stringify(existingDemo));
-    const beforeBytes = readFileSync(join(projectPath, '.seeflow', 'seeflow.json'), 'utf-8');
+    writeFileSync(join(projectPath, '.seeflow', 'architecture.json'), JSON.stringify(existingDemo));
+    const beforeBytes = readFileSync(join(projectPath, '.seeflow', 'architecture.json'), 'utf-8');
 
     const res = await post(app, '/api/projects', { name: 'Existing Project' });
 
@@ -2728,8 +2693,10 @@ describe('POST /api/projects', () => {
     expect(body.scaffolded).toBe(false);
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0]?.repoPath).toBe(projectPath);
-    // Existing seeflow.json content is untouched (no overwrite, no scaffold).
-    expect(readFileSync(join(projectPath, '.seeflow', 'seeflow.json'), 'utf-8')).toBe(beforeBytes);
+    // Existing architecture.json content is untouched (no overwrite, no scaffold).
+    expect(readFileSync(join(projectPath, '.seeflow', 'architecture.json'), 'utf-8')).toBe(
+      beforeBytes,
+    );
   });
 
   it('scaffolds a fresh project (folder + .seeflow/seeflow.json) when the target has no setup', async () => {
@@ -2752,7 +2719,10 @@ describe('POST /api/projects', () => {
     expect(registry.list()).toHaveLength(1);
 
     const written = JSON.parse(
-      readFileSync(join(projectBaseDir, 'fresh-project', '.seeflow', 'seeflow.json'), 'utf-8'),
+      readFileSync(
+        join(projectBaseDir, 'fresh-project', '.seeflow', 'architecture.json'),
+        'utf-8',
+      ),
     );
     expect(written).toEqual({ version: 2, name: 'Fresh Project', nodes: [], connectors: [] });
   });
@@ -2774,10 +2744,13 @@ describe('POST /api/projects', () => {
       disableWatcher: true,
       projectBaseDir,
     });
-    // Pre-create an invalid seeflow.json at the expected path.
+    // Pre-create an invalid architecture.json at the expected path.
     const projectPath = join(projectBaseDir, 'bad');
     mkdirSync(join(projectPath, '.seeflow'), { recursive: true });
-    writeFileSync(join(projectPath, '.seeflow', 'seeflow.json'), JSON.stringify({ version: 1 }));
+    writeFileSync(
+      join(projectPath, '.seeflow', 'architecture.json'),
+      JSON.stringify({ version: 1 }),
+    );
 
     const res = await post(app, '/api/projects', { name: 'Bad' });
     expect(res.status).toBe(400);

@@ -25,7 +25,8 @@ import { isAbsolute, join, resolve, sep } from 'node:path';
 import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
 import type { FlowEntry, Registry } from './registry.ts';
-import { type Flow, FlowSchema, type StatusAction, StatusReportSchema } from './schema.ts';
+import { type Flow, type StatusAction, StatusReportSchema } from './schema.ts';
+import { readMergedFlow } from './watcher.ts';
 
 export interface StatusRunner {
   /** Kill the current batch for `flowId` and respawn from the on-disk demo. */
@@ -145,13 +146,8 @@ async function loadDemo(entry: FlowEntry): Promise<Flow | undefined> {
     ? entry.architecturePath
     : join(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return undefined;
-  try {
-    const raw = await Bun.file(fullPath).json();
-    const parsed = FlowSchema.safeParse(raw);
-    return parsed.success ? parsed.data : undefined;
-  } catch {
-    return undefined;
-  }
+  const result = readMergedFlow(fullPath);
+  return result.flow ?? undefined;
 }
 
 interface StatusNode {

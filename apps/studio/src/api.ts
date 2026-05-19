@@ -46,6 +46,7 @@ import {
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
 import { FlowSchema } from './schema.ts';
+import { readMergedFlow } from './watcher.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
 import type { FlowWatcher } from './watcher.ts';
@@ -571,23 +572,14 @@ export function createApi(options: ApiOptions): Hono {
     if (!existsSync(fullPath)) {
       return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return c.json(
-        {
-          error: `Flow file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-        },
-        400,
-      );
-    }
-    const parsed = FlowSchema.safeParse(raw);
-    if (!parsed.success) {
-      return c.json({ error: 'Flow failed schema validation', issues: parsed.error.issues }, 400);
+    const merged = readMergedFlow(fullPath);
+    if (!merged.flow) {
+      const error = merged.error ?? 'Flow read failed';
+      const status = error.startsWith('Invalid JSON in') ? 400 : 400;
+      return c.json({ error }, status);
     }
 
-    const node = parsed.data.nodes.find((n) => n.id === nodeId);
+    const node = merged.flow.nodes.find((n) => n.id === nodeId);
     if (!node) return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
     if (
       node.type === 'shapeNode' ||
@@ -648,20 +640,9 @@ export function createApi(options: ApiOptions): Hono {
     if (!existsSync(fullPath)) {
       return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
-    let raw: unknown;
-    try {
-      raw = await Bun.file(fullPath).json();
-    } catch (err) {
-      return c.json(
-        {
-          error: `Flow file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-        },
-        400,
-      );
-    }
-    const parsed = FlowSchema.safeParse(raw);
-    if (!parsed.success) {
-      return c.json({ error: 'Flow failed schema validation', issues: parsed.error.issues }, 400);
+    const merged = readMergedFlow(fullPath);
+    if (!merged.flow) {
+      return c.json({ error: merged.error ?? 'Flow read failed' }, 400);
     }
 
     // 1. Stop every play + status script in parallel. await BOTH before
@@ -672,7 +653,7 @@ export function createApi(options: ApiOptions): Hono {
     await Promise.all(stopPromises);
 
     // 2. Run resetAction (if declared).
-    const resetAction = parsed.data.resetAction;
+    const resetAction = merged.flow.resetAction;
     let calledResetAction = false;
     let resetActionError: string | undefined;
 
