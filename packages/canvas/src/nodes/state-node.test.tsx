@@ -124,3 +124,65 @@ describe('StateNode header icon (US-006)', () => {
     expect(findHeaderIcon(tree)).toBeNull();
   });
 });
+
+// The header's icon trigger is mounted as the `anchor` prop of an
+// IconPickerPopover (function-typed element in the tree). The popover itself
+// is never rendered by the hook-shim, so `findElement` won't see the button
+// via child traversal — it lives off the popover's `anchor` prop instead.
+function findHeaderPopover(tree: unknown): ReactElementLike | null {
+  const header = findHeader(tree);
+  return findElement(
+    header,
+    (el) =>
+      typeof el.type === 'function' &&
+      typeof (el.props as { onPick?: unknown }).onPick === 'function',
+  );
+}
+
+describe('StateNode editable header icon', () => {
+  it('wraps the icon in a popover trigger button when selected + onIconChange wired + not locked', () => {
+    const tree = callStateNode({ icon: 'server', onIconChange: () => {} }, { selected: true });
+    const popover = findHeaderPopover(tree);
+    expect(popover).not.toBeNull();
+    const anchor = (popover?.props as { anchor?: unknown }).anchor;
+    if (!isElement(anchor)) throw new Error('expected popover anchor element');
+    expect(anchor.props['data-testid']).toBe('state-node-icon-trigger');
+    expect(anchor.type).toBe('button');
+    const icon = findElement(anchor, (el) => el.type === Icon);
+    expect(icon).not.toBeNull();
+    expect((icon?.props as { name?: string }).name).toBe('server');
+  });
+
+  it('falls back to a static Icon when the node is not selected', () => {
+    const tree = callStateNode({ icon: 'server', onIconChange: () => {} });
+    expect(findHeaderPopover(tree)).toBeNull();
+    // Icon still renders, just without the popover wrapper.
+    expect(findHeaderIcon(tree)).not.toBeNull();
+  });
+
+  it('falls back to a static Icon when the node is locked even if selected', () => {
+    const tree = callStateNode(
+      { icon: 'server', onIconChange: () => {}, locked: true },
+      { selected: true },
+    );
+    expect(findHeaderPopover(tree)).toBeNull();
+    expect(findHeaderIcon(tree)).not.toBeNull();
+  });
+
+  it('forwards picked names (and null) through onIconChange', () => {
+    const calls: Array<[string, string | null]> = [];
+    const tree = callStateNode(
+      { icon: 'server', onIconChange: (id: string, icon: string | null) => calls.push([id, icon]) },
+      { selected: true },
+    );
+    const popover = findHeaderPopover(tree);
+    expect(popover).not.toBeNull();
+    const onPick = (popover?.props as { onPick: (name: string | null) => void }).onPick;
+    onPick('database');
+    onPick(null);
+    expect(calls).toEqual([
+      ['s1', 'database'],
+      ['s1', null],
+    ]);
+  });
+});

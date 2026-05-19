@@ -1,4 +1,4 @@
-import { FolderOpen, PencilLine, X } from 'lucide-react';
+import { FolderOpen, ImagePlus, PencilLine } from 'lucide-react';
 import {
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
@@ -24,6 +24,10 @@ import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
+
+// Local alias to keep the title-row JSX tidy. The trigger always renders as a
+// small popover anchor, regardless of whether the node has an icon set yet.
+type IconChangeHandler = (nodeId: string, icon: string | null) => void;
 
 export interface DetailPanelProps {
   demoId: string | null;
@@ -92,15 +96,14 @@ export function DetailPanel({
   const description = inspectableNode?.data.description ?? '';
   const detail = inspectableNode?.data.detail ?? '';
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
-  // US-008: Icon row is opt-in (via onIconChange) and only meaningful for the
-  // three node types whose data schema carries an optional `icon` field:
-  // playNode, stateNode, htmlNode. Other node types (shape, image, icon, …)
-  // either have no icon concept or own a required `icon` already.
+  // Icon trigger sits inline with the title (left of the name). It's only
+  // meaningful for playNode + stateNode — the node types whose header renders
+  // an icon next to the name. htmlNode previously rendered an icon in its
+  // bottom-center label; that affordance was removed alongside the standalone
+  // sidebar Icon row, so the trigger no longer surfaces for htmlNode either.
   const supportsIconField =
     inspectableNode !== null &&
-    (inspectableNode.type === 'playNode' ||
-      inspectableNode.type === 'stateNode' ||
-      inspectableNode.type === 'htmlNode');
+    (inspectableNode.type === 'playNode' || inspectableNode.type === 'stateNode');
   const showIconField = supportsIconField && typeof onIconChange === 'function';
   const currentIcon =
     showIconField && 'icon' in inspectableNode.data
@@ -183,16 +186,27 @@ export function DetailPanel({
             <div className="sf:flex sf:flex-col sf:gap-1">
               {showNameField ? (
                 <SheetTitle data-testid="detail-panel-title">
-                  <EditableField
-                    nodeId={inspectableNode.id}
-                    value={nodeName}
-                    placeholder="Name"
-                    multiline={false}
-                    ariaLabel="Name"
-                    testIdBase="detail-panel-name"
-                    onSave={onNameChange}
-                    textClassName="sf:text-base sf:font-semibold"
-                  />
+                  <div className="sf:flex sf:items-center sf:gap-2">
+                    {showIconField && onIconChange ? (
+                      <TitleIconTrigger
+                        nodeId={inspectableNode.id}
+                        icon={currentIcon}
+                        onChange={onIconChange}
+                      />
+                    ) : null}
+                    <div className="sf:min-w-0 sf:flex-1">
+                      <EditableField
+                        nodeId={inspectableNode.id}
+                        value={nodeName}
+                        placeholder="Name"
+                        multiline={false}
+                        ariaLabel="Name"
+                        testIdBase="detail-panel-name"
+                        onSave={onNameChange}
+                        textClassName="sf:text-base sf:font-semibold"
+                      />
+                    </div>
+                  </div>
                 </SheetTitle>
               ) : (
                 // Radix requires a SheetTitle for a11y; keep it sr-only for
@@ -212,9 +226,6 @@ export function DetailPanel({
 
             <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
               {statusReport ? <StatusSection report={statusReport} /> : null}
-              {showIconField && onIconChange ? (
-                <IconRow nodeId={inspectableNode.id} icon={currentIcon} onChange={onIconChange} />
-              ) : null}
               <EditableField
                 nodeId={inspectableNode.id}
                 value={description}
@@ -446,70 +457,53 @@ export function EditableField({
   );
 }
 
-// US-008: Icon row for the DetailPanel — a labeled row with a popover trigger
-// that opens the existing IconPickerPopover, plus a Clear button to emit null
-// when the user wants to drop the field. Render gating happens at the parent
-// (DetailPanel) — this component assumes it's only mounted for nodes that
-// support an `icon` field and when an `onChange` is wired.
-export function IconRow({
+// Title-row icon trigger. Sits inline with the node name in the SheetTitle and
+// opens the IconPickerPopover. When the node has an icon set the trigger shows
+// it; when unset, a faint dashed placeholder with an ImagePlus glyph signals
+// "click to add". The picker's first tile emits `null` to clear, so a separate
+// Clear button is no longer needed — both pick and remove flow through onPick.
+// Render gating happens at the parent (DetailPanel) — this component assumes
+// it's only mounted when an `onChange` is wired.
+export function TitleIconTrigger({
   nodeId,
   icon,
   onChange,
 }: {
   nodeId: string;
   icon: string | null;
-  onChange: (nodeId: string, icon: string | null) => void;
+  onChange: IconChangeHandler;
 }) {
   const [open, setOpen] = useState(false);
   return (
-    <div data-testid="detail-panel-icon" className="sf:flex sf:items-center sf:gap-2 sf:px-2">
-      <span className="sf:text-xs sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground sf:w-16 sf:shrink-0">
-        Icon
-      </span>
-      <IconPickerPopover
-        open={open}
-        onOpenChange={setOpen}
-        onPick={(name) => {
-          onChange(nodeId, name);
-          setOpen(false);
-        }}
-        anchor={
-          <button
-            type="button"
-            data-testid="detail-panel-icon-trigger"
-            aria-label="Choose icon"
-            aria-pressed={open}
-            className={cn(
-              'sf:inline-flex sf:h-8 sf:min-w-8 sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-2 sf:text-sm sf:transition-colors',
-              'sf:hover:bg-muted',
-            )}
-          >
-            {icon ? (
-              <>
-                <Icon name={icon} size={16} aria-hidden />
-                <span className="sf:font-mono sf:text-xs">{icon}</span>
-              </>
-            ) : (
-              <span className="sf:text-muted-foreground sf:italic">None</span>
-            )}
-          </button>
-        }
-      />
-      {icon ? (
-        <Button
+    <IconPickerPopover
+      open={open}
+      onOpenChange={setOpen}
+      onPick={(name) => {
+        onChange(nodeId, name);
+        setOpen(false);
+      }}
+      anchor={
+        <button
           type="button"
-          size="sm"
-          variant="ghost"
-          data-testid="detail-panel-icon-clear"
-          aria-label="Clear icon"
-          className="sf:h-8 sf:gap-1 sf:px-2 sf:text-xs"
-          onClick={() => onChange(nodeId, null)}
+          data-testid="detail-panel-icon-trigger"
+          aria-label={icon ? 'Change icon' : 'Add icon'}
+          aria-pressed={open}
+          className={cn(
+            'sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:rounded-md sf:text-foreground sf:transition-colors',
+            icon
+              ? 'sf:hover:bg-muted'
+              : 'sf:border sf:border-dashed sf:border-muted-foreground/40 sf:text-muted-foreground/60 sf:hover:border-muted-foreground sf:hover:text-foreground',
+            'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
+          )}
         >
-          <X className="sf:h-3.5 sf:w-3.5" />
-          Clear
-        </Button>
-      ) : null}
-    </div>
+          {icon ? (
+            <Icon name={icon} size={16} aria-hidden />
+          ) : (
+            <ImagePlus className="sf:h-4 sf:w-4" aria-hidden />
+          )}
+        </button>
+      }
+    />
   );
 }
 

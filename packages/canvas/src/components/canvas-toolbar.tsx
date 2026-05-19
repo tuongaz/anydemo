@@ -247,7 +247,14 @@ export function CanvasToolbar({
               <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />
             </button>
           }
-          onPick={onPickIcon}
+          // Toolbar inserts a new iconNode — "no icon" has no meaning here, so
+          // the picker hides the synthetic No-icon tile. With `clearable=false`
+          // the picker only ever emits real names; the guard below is a
+          // type narrowing for the widened `(name: string | null)` signature.
+          clearable={false}
+          onPick={(name) => {
+            if (name !== null) onPickIcon(name);
+          }}
         />
       ) : null}
       <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />

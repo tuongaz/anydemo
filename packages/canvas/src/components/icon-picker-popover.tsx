@@ -1,3 +1,4 @@
+import { Ban } from 'lucide-react';
 import { type ChangeEvent, type ReactNode, useEffect, useMemo, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { getRecents } from '../lib/icon-recents.ts';
@@ -21,10 +22,25 @@ export interface IconPickerPopoverProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   anchor: ReactNode;
-  onPick: (name: string) => void;
+  // `null` is emitted by the synthetic "No icon" tile when `clearable` is on
+  // — consumers pass `null` through to clear the icon field on the underlying
+  // node. When `clearable` is off (insert-icon-node use case) the tile is
+  // hidden and only real names can be picked, so consumers may narrow the
+  // handler to `(name: string) => void` if they prefer.
+  onPick: (name: string | null) => void;
+  // Whether the picker shows the synthetic "No icon" tile in the All-icons
+  // grid. Defaults to `true` — turn off when the picker is used to insert a
+  // new node (where "no icon" is meaningless).
+  clearable?: boolean;
 }
 
-export function IconPickerPopover({ open, onOpenChange, anchor, onPick }: IconPickerPopoverProps) {
+export function IconPickerPopover({
+  open,
+  onOpenChange,
+  anchor,
+  onPick,
+  clearable = true,
+}: IconPickerPopoverProps) {
   const [query, setQuery] = useState('');
   // Recents are read at open time so a same-session push elsewhere becomes
   // visible the next time the picker opens. We deliberately do NOT subscribe
@@ -46,7 +62,13 @@ export function IconPickerPopover({ open, onOpenChange, anchor, onPick }: IconPi
         className="sf:w-[340px] sf:p-0"
         data-testid="icon-picker-popover"
       >
-        <IconPickerBody query={query} onQueryChange={setQuery} recents={recents} onPick={onPick} />
+        <IconPickerBody
+          query={query}
+          onQueryChange={setQuery}
+          recents={recents}
+          onPick={onPick}
+          clearable={clearable}
+        />
       </PopoverContent>
     </Popover>
   );
@@ -56,15 +78,29 @@ export interface IconPickerBodyProps {
   query: string;
   onQueryChange: (q: string) => void;
   recents: string[];
-  onPick: (name: string) => void;
+  onPick: (name: string | null) => void;
+  // See IconPickerPopoverProps.clearable. Defaults to `true`.
+  clearable?: boolean;
 }
 
 // Body is exported so unit tests can render it without standing up the Radix
 // Popover (which needs a real DOM + portal). The wrapper is a thin shell —
 // all picker behavior lives here.
-export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPickerBodyProps) {
+export function IconPickerBody({
+  query,
+  onQueryChange,
+  recents,
+  onPick,
+  clearable = true,
+}: IconPickerBodyProps) {
   const filtered = useMemo(() => filterIcons(ICON_NAMES, query), [query]);
   const showRecents = query.trim() === '' && recents.length > 0;
+  // The synthetic "No icon" tile sits above the virtualized grid and only
+  // appears when (a) the picker is in a clearable context (editing an icon
+  // field, not inserting a new node) AND (b) the user hasn't started
+  // searching — once a query is typed the grid stays a pure icon-name match
+  // list.
+  const showNoIconTile = clearable && query.trim() === '';
 
   // Hand-rolled vertical windowing: with ~5000 names the naive grid kills
   // scroll perf, and @tanstack/react-virtual isn't in deps. Compute the row
@@ -115,6 +151,14 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
         <div className="sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground">
           All icons
         </div>
+        {showNoIconTile ? (
+          <div
+            className="sf:mb-1 sf:grid sf:gap-1"
+            style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
+          >
+            {renderNoIconTile(onPick)}
+          </div>
+        ) : null}
         {filtered.length === 0 ? (
           <div
             className="sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground"
@@ -157,7 +201,7 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
 // Inline tile renderer (a function, not a component) so the rendered tree
 // resolves to a plain <button> placeholder when IconPickerBody is called as
 // a function in the apps/web hook-shim test pattern.
-function renderTile(name: string, onPick: (name: string) => void, testId: string) {
+function renderTile(name: string, onPick: (name: string | null) => void, testId: string) {
   const Icon = ICON_REGISTRY[name];
   return (
     <button
@@ -175,6 +219,28 @@ function renderTile(name: string, onPick: (name: string) => void, testId: string
       )}
     >
       {Icon ? <Icon className="sf:h-4 sf:w-4" aria-hidden="true" /> : null}
+    </button>
+  );
+}
+
+// Synthetic "No icon" tile. Emits `null` so the picker can be used to clear
+// the icon field as well as set it — replaces the old standalone Clear button.
+function renderNoIconTile(onPick: (name: string | null) => void) {
+  return (
+    <button
+      key="icon-picker-tile-none"
+      type="button"
+      title="No icon"
+      aria-label="No icon"
+      data-testid="icon-picker-tile-none"
+      onClick={() => onPick(null)}
+      className={cn(
+        'sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+        'sf:hover:bg-accent sf:hover:text-accent-foreground',
+        'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
+      )}
+    >
+      <Ban className="sf:h-4 sf:w-4" aria-hidden="true" />
     </button>
   );
 }

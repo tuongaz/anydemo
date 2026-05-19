@@ -1,5 +1,6 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
+import { IconPickerPopover } from '../components/icon-picker-popover.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
@@ -30,6 +31,13 @@ export type StateNodeData = NodeData & {
   setResizing?: (on: boolean) => void;
   onNameChange?: (nodeId: string, name: string) => void;
   onDescriptionChange?: (nodeId: string, description: string) => void;
+  /**
+   * When wired (only in edit mode, only for selected + unlocked nodes), the
+   * icon in the header becomes a popover trigger. The picker emits `null` for
+   * the "No icon" tile, which clears the field on disk. Mirrors the same
+   * read-only gate used by onNameChange / onDescriptionChange.
+   */
+  onIconChange?: (nodeId: string, icon: string | null) => void;
 } & Record<string, unknown>;
 export type StateNodeType = Node<StateNodeData, 'stateNode'>;
 
@@ -50,8 +58,15 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
     setResizing: data.setResizing,
   });
   const [editing, setEditing] = useState<EditField>(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState(false);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
+  // Icon becomes a popover trigger only when (a) the node is selected so the
+  // affordance is scoped to the user's current focus, (b) onIconChange is
+  // wired (edit mode, supported type), (c) the node isn't locked, and (d) an
+  // icon is already present — adding an icon when there is none is the
+  // sidebar's job, so the on-node trigger never appears in the empty state.
+  const iconEditable = !!data.onIconChange && !!selected && !data.locked && !!data.icon;
   // When data.width/height are unset, we own sizing — pin a default width so a
   // long label/description wraps inside the node instead of stretching it.
   // `isResizing` is NOT in this check: on mousedown of the resize handle with
@@ -157,13 +172,62 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         data-testid="node-header"
       >
         {data.icon ? (
-          <Icon
-            name={data.icon}
-            size={16}
-            className="shrink-0"
-            style={colorTokenStyle(data.textColor, 'text')}
-            aria-hidden
-          />
+          iconEditable && data.onIconChange ? (
+            <IconPickerPopover
+              open={iconPickerOpen}
+              onOpenChange={setIconPickerOpen}
+              onPick={(name) => {
+                data.onIconChange?.(id, name);
+                setIconPickerOpen(false);
+              }}
+              anchor={
+                <button
+                  type="button"
+                  data-testid="state-node-icon-trigger"
+                  aria-label="Change icon"
+                  aria-pressed={iconPickerOpen}
+                  className={cn(
+                    // Hit area matches the icon's intrinsic 16px so the header
+                    // doesn't reflow when selection toggles the button wrapper
+                    // around the icon. Hover/focus surfaces a subtle ring +
+                    // cursor change to advertise interactivity.
+                    'sf:inline-flex sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-sm sf:bg-transparent sf:p-0 sf:transition-shadow',
+                    'sf:hover:ring-2 sf:hover:ring-ring/40 sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring',
+                  )}
+                  onClick={(e) => {
+                    // Stop the click from reaching the wrapper's double-click
+                    // router and React Flow's node-click handler.
+                    e.stopPropagation();
+                  }}
+                  onMouseDown={(e) => {
+                    // React Flow uses pointerdown to initiate drag; halt
+                    // here so click-to-open doesn't also drag the node.
+                    e.stopPropagation();
+                  }}
+                  onDoubleClick={(e) => {
+                    // Don't let the icon dblclick fall through to the header
+                    // double-click → name-edit path.
+                    e.stopPropagation();
+                  }}
+                >
+                  <Icon
+                    name={data.icon}
+                    size={16}
+                    style={colorTokenStyle(data.textColor, 'text')}
+                    aria-hidden
+                  />
+                </button>
+              }
+            />
+          ) : (
+            <Icon
+              name={data.icon}
+              size={16}
+              className="shrink-0"
+              style={colorTokenStyle(data.textColor, 'text')}
+              aria-hidden
+            />
+          )
         ) : null}
         <div
           className="sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight"

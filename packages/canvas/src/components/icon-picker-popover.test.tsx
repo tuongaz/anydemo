@@ -197,4 +197,33 @@ describe('IconPickerBody', () => {
     const allList = findElement(tree, testIdEquals('icon-picker-all'));
     expect(allList).toBeNull();
   });
+
+  it('renders the No-icon tile when the query is empty', () => {
+    const tree = callBody({ query: '' });
+    const tile = findElement(tree, testIdEquals('icon-picker-tile-none'));
+    expect(tile).not.toBeNull();
+  });
+
+  it('hides the No-icon tile when the user is searching', () => {
+    const tree = callBody({ query: 'shopping' });
+    const tile = findElement(tree, testIdEquals('icon-picker-tile-none'));
+    expect(tile).toBeNull();
+  });
+
+  it('clicking the No-icon tile calls onPick with null', () => {
+    const onPick = mock((_value: string | null) => {});
+    const tree = callBody({ query: '', onPick });
+    const tile = findElement(tree, testIdEquals('icon-picker-tile-none'));
+    if (!tile) throw new Error('No-icon tile not found');
+    const onClick = tile.props.onClick as () => void;
+    onClick();
+    expect(onPick).toHaveBeenCalledTimes(1);
+    expect(onPick).toHaveBeenCalledWith(null);
+  });
+
+  it('hides the No-icon tile when clearable=false (insert-icon-node mode)', () => {
+    const tree = callBody({ query: '', clearable: false });
+    const tile = findElement(tree, testIdEquals('icon-picker-tile-none'));
+    expect(tile).toBeNull();
+  });
 });

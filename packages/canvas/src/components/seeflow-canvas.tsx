@@ -2538,6 +2538,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             if (merged.type === 'imageNode' || merged.type === 'iconNode') return undefined;
             return onNodeDescriptionChange;
           })(),
+          onIconChange: (() => {
+            // Same edit-mode + node-type gate as the inline-edit callbacks.
+            // Only playNode + stateNode render the header icon trigger — every
+            // other node type either has no `icon` field on its data schema
+            // (state-source nodes) or owns the icon presentation differently
+            // (iconNode, imageNode). htmlNode previously carried an icon but
+            // its caption affordance was removed; the field stays on disk
+            // for any pre-existing flows, but the canvas no longer offers a
+            // way to edit it.
+            if (!isEditMode) return undefined;
+            if (merged.type !== 'playNode' && merged.type !== 'stateNode') return undefined;
+            return onIconChange;
+          })(),
           // US-015: inject autoEditOnMount on the freshly drop-popover-created
           // node so it opens in label-edit mode. The flag is consumed once at
           // mount by the node component (lazy useState initializer); leaving
@@ -2599,6 +2612,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     nodeOverrides,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onIconChange,
     onRetryImageUpload,
     pendingEditNodeId,
     isEditMode,

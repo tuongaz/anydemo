@@ -7,7 +7,6 @@ import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
 import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
 import { useHtmlContent } from '../lib/use-html-content.ts';
 import type { HtmlNodeData } from '../types.ts';
-import { Icon } from '../ui/icon.tsx';
 import { LockBadge } from './lock-badge.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
 import { ResizeControls } from './resize-controls.tsx';
@@ -185,14 +184,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
           data-testid="html-node-label"
           className="sf:-bottom-5 sf:absolute sf:right-0 sf:left-0 sf:truncate sf:text-center sf:text-[11px] sf:text-muted-foreground"
         >
-          {data.icon ? (
-            <div className="sf:flex sf:items-center sf:justify-center sf:gap-1">
-              <Icon name={data.icon} size={12} aria-hidden />
-              <span className="truncate">{data.name}</span>
-            </div>
-          ) : (
-            data.name
-          )}
+          {data.name}
         </div>
       ) : null}
     </div>

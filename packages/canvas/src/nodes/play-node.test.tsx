@@ -283,6 +283,68 @@ describe('PlayNode header icon (US-005)', () => {
   });
 });
 
+// Like StateNode, the on-node icon trigger sits in the `anchor` prop of an
+// unrendered IconPickerPopover, not as a child of the header subtree.
+function findHeaderPopover(tree: unknown): ReactElementLike | null {
+  const header = findHeader(tree);
+  return findElement(
+    header,
+    (el) =>
+      typeof el.type === 'function' &&
+      typeof (el.props as { onPick?: unknown }).onPick === 'function',
+  );
+}
+
+describe('PlayNode editable header icon', () => {
+  it('wraps the icon in a popover trigger button when selected + onIconChange wired + not locked', () => {
+    const tree = callPlayNode({ icon: 'database', onIconChange: () => {} }, { selected: true });
+    const popover = findHeaderPopover(tree);
+    expect(popover).not.toBeNull();
+    const anchor = (popover?.props as { anchor?: unknown }).anchor;
+    if (!isElement(anchor)) throw new Error('expected popover anchor element');
+    expect(anchor.props['data-testid']).toBe('play-node-icon-trigger');
+    expect(anchor.type).toBe('button');
+    const icon = findElement(anchor, (el) => el.type === Icon);
+    expect(icon).not.toBeNull();
+    expect((icon?.props as { name?: string }).name).toBe('database');
+  });
+
+  it('falls back to a static Icon when the node is not selected', () => {
+    const tree = callPlayNode({ icon: 'database', onIconChange: () => {} });
+    expect(findHeaderPopover(tree)).toBeNull();
+    expect(findHeaderIcon(tree)).not.toBeNull();
+  });
+
+  it('falls back to a static Icon when the node is locked even if selected', () => {
+    const tree = callPlayNode(
+      { icon: 'database', onIconChange: () => {}, locked: true },
+      { selected: true },
+    );
+    expect(findHeaderPopover(tree)).toBeNull();
+    expect(findHeaderIcon(tree)).not.toBeNull();
+  });
+
+  it('forwards picked names (and null) through onIconChange', () => {
+    const calls: Array<[string, string | null]> = [];
+    const tree = callPlayNode(
+      {
+        icon: 'database',
+        onIconChange: (id: string, icon: string | null) => calls.push([id, icon]),
+      },
+      { selected: true },
+    );
+    const popover = findHeaderPopover(tree);
+    expect(popover).not.toBeNull();
+    const onPick = (popover?.props as { onPick: (name: string | null) => void }).onPick;
+    onPick('server');
+    onPick(null);
+    expect(calls).toEqual([
+      ['p1', 'server'],
+      ['p1', null],
+    ]);
+  });
+});
+
 describe('PlayNode default background fill (US-021 default node background)', () => {
   it('renders NODE_DEFAULT_BG_WHITE when backgroundColor is unset', () => {
     const tree = callPlayNode({});

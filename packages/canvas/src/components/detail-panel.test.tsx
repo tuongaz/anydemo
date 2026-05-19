@@ -23,9 +23,8 @@ const mockWindow = {
 };
 (globalThis as unknown as { window: typeof mockWindow }).window = mockWindow;
 
-const { DetailPanel, EditableField, IconRow, StatusSection, formatRelativeTime } = await import(
-  './detail-panel.tsx'
-);
+const { DetailPanel, EditableField, TitleIconTrigger, StatusSection, formatRelativeTime } =
+  await import('./detail-panel.tsx');
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
 // without a DOM, so we shim React's internal hook dispatcher and call the
@@ -237,11 +236,12 @@ describe('DetailPanel', () => {
         onNameChange: () => {},
         onDescriptionChange: () => {},
         onDetailChange: () => {},
+        // No onIconChange → TitleIconTrigger is hidden, so no svg should
+        // appear in the rest tree. With a trigger present, the placeholder
+        // ImagePlus glyph would be a legitimate svg child — see the icon
+        // trigger tests below for that path.
       }),
     );
-    // Any svg elements would be icon affordances. The three editable fields
-    // are pencil-free, the HtmlNodeSection (htmlNode-only) is not rendered
-    // for this playNode, so the tree should have zero svg children.
     const svgs = findAll(tree, (el) => el.type === 'svg');
     expect(svgs.length).toBe(0);
   });
@@ -396,8 +396,8 @@ describe('formatRelativeTime', () => {
   });
 });
 
-describe('DetailPanel icon row (US-008)', () => {
-  it('icon row is hidden when onIconChange is undefined', () => {
+describe('DetailPanel icon trigger', () => {
+  it('icon trigger is hidden when onIconChange is undefined', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         demoId: 'd1',
@@ -407,15 +407,13 @@ describe('DetailPanel icon row (US-008)', () => {
         onNameChange: () => {},
         onDescriptionChange: () => {},
         onDetailChange: () => {},
-        // onIconChange omitted → row hidden.
+        // onIconChange omitted → trigger hidden.
       }),
     );
-    // IconRow is a function-component reference in the tree; absent when the
-    // callback isn't wired.
-    expect(findAll(tree, (el) => el.type === IconRow).length).toBe(0);
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
-  it('icon row is hidden for unsupported node types even with onIconChange', () => {
+  it('icon trigger is hidden for unsupported node types even with onIconChange', () => {
     const shapeNode = {
       id: 's1',
       type: 'shapeNode',
@@ -431,110 +429,132 @@ describe('DetailPanel icon row (US-008)', () => {
         onIconChange: () => {},
       }),
     );
-    expect(findAll(tree, (el) => el.type === IconRow).length).toBe(0);
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
-  it('icon row is visible for a playNode when onIconChange is provided', () => {
-    const tree = renderWithHooks(() =>
-      DetailPanel({
-        demoId: 'd1',
-        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
-        connector: null,
-        onClose: () => {},
-        onIconChange: () => {},
-      }),
-    );
-    const rows = findAll(tree, (el) => el.type === IconRow);
-    expect(rows.length).toBe(1);
-    // Current icon flows through as the row's `icon` prop so the trigger can
-    // render the current selection.
-    expect((rows[0]?.props as { icon?: string | null }).icon).toBe('database');
-  });
-
-  it('icon row is also visible for stateNode and htmlNode', () => {
-    const stateNode = {
-      id: 's1',
-      type: 'stateNode',
-      position: { x: 0, y: 0 },
-      data: { name: 's', kind: 'service', status: 'idle' },
-    } as unknown as DemoNode;
+  it('icon trigger is hidden for htmlNode (icon support stripped)', () => {
     const htmlNode = {
       id: 'h1',
       type: 'htmlNode',
       position: { x: 0, y: 0 },
       data: { name: 'h', htmlPath: 'blocks/a.html' },
     } as unknown as DemoNode;
-    for (const node of [stateNode, htmlNode]) {
-      const tree = renderWithHooks(() =>
-        DetailPanel({
-          demoId: 'd1',
-          node,
-          connector: null,
-          onClose: () => {},
-          onIconChange: () => {},
-        }),
-      );
-      expect(findAll(tree, (el) => el.type === IconRow).length).toBe(1);
-    }
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: htmlNode,
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
-  it('IconRow with a non-null icon renders a Clear button that emits null', () => {
+  it('icon trigger is visible for a playNode when onIconChange is provided', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    const triggers = findAll(tree, (el) => el.type === TitleIconTrigger);
+    expect(triggers.length).toBe(1);
+    // Current icon flows through as the trigger's `icon` prop.
+    expect((triggers[0]?.props as { icon?: string | null }).icon).toBe('database');
+  });
+
+  it('icon trigger is also visible for stateNode', () => {
+    const stateNode = {
+      id: 's1',
+      type: 'stateNode',
+      position: { x: 0, y: 0 },
+      data: { name: 's', kind: 'service', status: 'idle' },
+    } as unknown as DemoNode;
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: stateNode,
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(1);
+  });
+
+  it('TitleIconTrigger forwards a picked name to onChange via the IconPickerPopover onPick handler', () => {
     const calls: Array<[string, string | null]> = [];
     const tree = renderWithHooks(() =>
-      IconRow({
+      TitleIconTrigger({
         nodeId: 'n1',
-        icon: 'database',
+        icon: null,
         onChange: (id, icon) => calls.push([id, icon]),
       }),
     );
-    // Root wrapper has the row-level testid.
-    expect(findByTestId(tree, 'detail-panel-icon')).not.toBeNull();
-    // Clear button is a direct child of the row when icon is set.
-    const clear = findByTestId(tree, 'detail-panel-icon-clear');
-    expect(clear).not.toBeNull();
-    const onClick = (clear?.props as { onClick?: () => void }).onClick;
-    onClick?.();
-    expect(calls).toEqual([['n1', null]]);
-  });
-
-  it('IconRow with no icon hides the Clear button', () => {
-    const tree = renderWithHooks(() =>
-      IconRow({
-        nodeId: 'n1',
-        icon: null,
-        onChange: () => {},
-      }),
-    );
-    expect(findByTestId(tree, 'detail-panel-icon')).not.toBeNull();
-    expect(findByTestId(tree, 'detail-panel-icon-clear')).toBeNull();
-  });
-
-  it('IconRow forwards a picked name to onChange via the IconPickerPopover onPick handler', () => {
-    const calls: Array<[string, string | null]> = [];
-    const tree = renderWithHooks(() =>
-      IconRow({
-        nodeId: 'n1',
-        icon: null,
-        onChange: (id, icon) => calls.push([id, icon]),
-      }),
-    );
-    // The IconRow renders an IconPickerPopover element with onPick + anchor.
-    // The trigger button is in the `anchor` prop (not children), so we route
-    // through the popover's onPick to assert the picked-name pathway.
+    // The trigger renders an IconPickerPopover with onPick + anchor; route
+    // through onPick to assert the picked-name pathway. Pass `null` to also
+    // assert the remove-icon path.
     const popovers = findAll(tree, (el) => typeof el.type === 'function');
     const picker = popovers.find(
       (el) => typeof (el.props as { onPick?: unknown }).onPick === 'function',
     );
     expect(picker).not.toBeUndefined();
-    const onPick = (picker?.props as { onPick: (name: string) => void }).onPick;
+    const onPick = (picker?.props as { onPick: (name: string | null) => void }).onPick;
     onPick('server');
-    expect(calls).toEqual([['n1', 'server']]);
+    onPick(null);
+    expect(calls).toEqual([
+      ['n1', 'server'],
+      ['n1', null],
+    ]);
     // The anchor prop is a single React element with the trigger testid.
     const anchor = (picker?.props as { anchor?: ReactElementLike }).anchor;
     expect(isElement(anchor)).toBe(true);
     if (isElement(anchor)) {
       expect(anchor.props['data-testid']).toBe('detail-panel-icon-trigger');
     }
+  });
+
+  it('TitleIconTrigger placeholder anchor advertises "Add icon" to assistive tech', () => {
+    const tree = renderWithHooks(() =>
+      TitleIconTrigger({
+        nodeId: 'n1',
+        icon: null,
+        onChange: () => {},
+      }),
+    );
+    const popovers = findAll(tree, (el) => typeof el.type === 'function');
+    const picker = popovers.find(
+      (el) => typeof (el.props as { onPick?: unknown }).onPick === 'function',
+    );
+    const anchor = (picker?.props as { anchor?: ReactElementLike }).anchor;
+    expect(isElement(anchor)).toBe(true);
+    if (!isElement(anchor)) return;
+    expect(anchor.props['aria-label']).toBe('Add icon');
+  });
+
+  it('TitleIconTrigger set-icon anchor advertises "Change icon" to assistive tech', () => {
+    const tree = renderWithHooks(() =>
+      TitleIconTrigger({
+        nodeId: 'n1',
+        icon: 'database',
+        onChange: () => {},
+      }),
+    );
+    const popovers = findAll(tree, (el) => typeof el.type === 'function');
+    const picker = popovers.find(
+      (el) => typeof (el.props as { onPick?: unknown }).onPick === 'function',
+    );
+    const anchor = (picker?.props as { anchor?: ReactElementLike }).anchor;
+    expect(isElement(anchor)).toBe(true);
+    if (!isElement(anchor)) return;
+    expect(anchor.props['aria-label']).toBe('Change icon');
   });
 });
 
