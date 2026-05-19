@@ -26,6 +26,10 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
    * `htmlPath` is the only on-disk reference.
    */
   projectId?: string;
+  // When wired (edit mode only), the renderer's "Fit to content" button calls
+  // this. The host's handler PATCHes { autoSize: true } through the adapter,
+  // which strips width/height server-side per the autoSize invariant.
+  onFitToContent?: (nodeId: string) => void;
 } & Record<string, unknown>;
 export type HtmlNodeType = Node<HtmlNodeRuntimeData, 'htmlNode'>;
 
