@@ -10,7 +10,6 @@ WORKDIR /src
 # workspace's package.json present (per `workspaces: ["apps/*", "packages/*"]`
 # in the root package.json) to resolve the workspace graph from the lockfile.
 COPY package.json bun.lock ./
-COPY apps/cloud/package.json apps/cloud/package.json
 COPY apps/studio/package.json apps/studio/package.json
 COPY apps/web/package.json apps/web/package.json
 COPY packages/canvas/package.json packages/canvas/package.json
