@@ -49,7 +49,16 @@ jobs:
           git add packages/canvas/dist
           if git diff --cached --quiet; then
             echo "packages/canvas/dist unchanged, skipping commit"
-          else
-            git commit -m "build: rebuild canvas dist [skip ci]"
-            git push
+            exit 0
           fi
+          git commit -m "build: rebuild canvas dist [skip ci]"
+          for attempt in 1 2 3 4 5; do
+            if git push; then
+              echo "pushed on attempt $attempt"
+              exit 0
+            fi
+            echo "push failed on attempt $attempt, rebasing onto origin/main and retrying"
+            git pull --rebase origin main
+          done
+          echo "push failed after 5 attempts"
+          exit 1
