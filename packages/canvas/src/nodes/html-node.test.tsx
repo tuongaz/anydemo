@@ -292,11 +292,11 @@ describe('HtmlNode wrapper style (US-014)', () => {
     expect(style.borderRadius).toBe(8);
   });
 
-  it('falls back to default width/height when no resize / dims have been set', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
+  it('falls back to default width/height during auto-size placeholder phase (content not loaded)', () => {
+    // No _setHtmlContentForTest — cache empty → content.kind stays 'loading'.
+    // In auto-size mode the measuring container isn't present, so React Flow
+    // has nothing to size to; the renderer pins HTML_DEFAULT_SIZE so the
+    // placeholder card has a sensible bounding box.
     const style = getContainerStyle(callHtmlNode());
     expect(style.width).toBe(320);
     expect(style.height).toBe(200);
@@ -381,5 +381,45 @@ describe('HtmlNode caption icon (US-007)', () => {
     // Legacy structure: the label div's children is the raw name string,
     // not a flex-wrapper div with a nested span.
     expect((label.props as { children?: unknown }).children).toBe('Welcome card');
+  });
+});
+
+describe('HtmlNode autoSize', () => {
+  beforeEach(() => {
+    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
+      kind: 'loaded',
+      html: '<p>hello</p>',
+    });
+  });
+
+  it('defaults to auto-size when data.autoSize is undefined and renders the measuring container', () => {
+    const tree = callHtmlNode();
+    const measure = findContent(tree);
+    expect(measure).not.toBeNull();
+    const style = (measure?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.maxWidth).toBe(800);
+    expect(style.maxHeight).toBe(600);
+    expect(style.overflow).toBe('auto');
+  });
+
+  it('renders measuring container when autoSize: true is explicit', () => {
+    const tree = callHtmlNode({ autoSize: true });
+    const measure = findContent(tree);
+    expect(measure).not.toBeNull();
+    const style = (measure?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.maxWidth).toBe(800);
+    expect(style.maxHeight).toBe(600);
+  });
+
+  it('renders user-sized layout when autoSize: false with width/height', () => {
+    const tree = callHtmlNode({ autoSize: false, width: 480, height: 320 });
+    const body = findContent(tree);
+    expect(body).not.toBeNull();
+    const innerStyle = (body?.props as { style?: CSSProperties }).style ?? {};
+    // In user-sized mode the inner has no maxWidth cap — outer owns dims.
+    expect(innerStyle.maxWidth).toBeUndefined();
+    const outerStyle = getContainerStyle(tree);
+    expect(outerStyle.width).toBe(480);
+    expect(outerStyle.height).toBe(320);
   });
 });

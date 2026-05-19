@@ -40,12 +40,12 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing,
   });
-  // Once user-resized (or pre-sized via authoring), the React Flow wrapper
-  // owns dimensions and the inner fills via h-full w-full. Before any resize,
-  // we pin the default size so the wrapper auto-sizes to it. `isResizing` is
-  // NOT in this check: see state-node.tsx for the full rationale
-  // (precreated-node click-shrink fix).
-  const sized = data.width !== undefined || data.height !== undefined;
+  // autoSize defaults to true (field absent → auto-size is the default for
+  // new htmlNodes per the studio adapter invariant). `isResizing` temporarily
+  // forces user-sized layout so the drag has dimensions to grab against from
+  // the first frame, before the autoSize: false write echoes back from disk.
+  const autoSize = data.autoSize ?? true;
+  const userSized = isResizing || !autoSize;
 
   // US-014: htmlNode defaults to a transparent / borderless wrapper so author
   // HTML can paint edge-to-edge. Only fields the author has SET land in the
@@ -63,7 +63,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
-    ...(sized ? {} : { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height }),
+    ...(userSized ? { width: data.width, height: data.height } : {}),
   };
 
   // US-012: load Tailwind Play CDN at mount so author HTML's utility classes
@@ -81,10 +81,22 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     // every site that mounts untrusted author HTML threads through that
     // helper. The sanitizer drops <script>, <style>, <iframe>, on*=
     // attributes, and javascript: URLs before the HTML is returned.
-    body = (
+    //
+    // Auto-size branch uses an inline-block measuring container so React
+    // Flow's wrapper shrink-wraps the content's natural dimensions (capped
+    // at 800×600). User-sized branch fills the outer (which carries explicit
+    // width/height) and scrolls inside.
+    body = userSized ? (
       <div
         data-testid="html-node-content"
         className="sf:h-full sf:w-full sf:overflow-auto"
+        {...injectSanitizedHtml(content.html)}
+      />
+    ) : (
+      <div
+        data-testid="html-node-content"
+        className="sf:inline-block"
+        style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
         {...injectSanitizedHtml(content.html)}
       />
     );
@@ -96,10 +108,23 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     body = <PlaceholderCard message="Loading…" />;
   }
 
+  // While auto-size content hasn't loaded yet, the measuring container isn't
+  // present, so React Flow has nothing to size to. Fall back to
+  // HTML_DEFAULT_SIZE for the placeholder card's bounding box.
+  const placeholderFallback =
+    !userSized && content.kind !== 'loaded'
+      ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height }
+      : {};
+
+  const outerStyle: CSSProperties = { ...containerStyle, ...placeholderFallback };
+
   return (
     <div
-      className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
-      style={containerStyle}
+      className={cn(
+        'sf:group sf:relative sf:overflow-hidden',
+        userSized ? 'sf:h-full sf:w-full' : '',
+      )}
+      style={outerStyle}
       data-testid="html-node"
     >
       <ResizeControls
