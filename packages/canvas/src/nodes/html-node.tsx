@@ -1,4 +1,5 @@
 import { Handle, type Node, type NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
+import { Maximize2 } from 'lucide-react';
 import { type CSSProperties, type ReactNode, type RefObject, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
@@ -7,6 +8,7 @@ import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
 import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
 import { useHtmlContent } from '../lib/use-html-content.ts';
 import type { HtmlNodeData } from '../types.ts';
+import { Icon } from '../ui/icon.tsx';
 import { LockBadge } from './lock-badge.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
 import { ResizeControls } from './resize-controls.tsx';
@@ -150,6 +152,25 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         onResizeEnd={onResizeEnd}
       />
       {data.locked ? <LockBadge /> : null}
+      {selected &&
+      !data.locked &&
+      !autoSize &&
+      !isResizing &&
+      typeof data.onFitToContent === 'function' ? (
+        <button
+          type="button"
+          data-testid="html-node-fit-to-content"
+          title="Fit to content"
+          aria-label="Fit to content"
+          className="sf:absolute sf:top-1 sf:right-1 sf:z-10 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onFitToContent?.(id);
+          }}
+        >
+          <Maximize2 size={12} aria-hidden />
+        </button>
+      ) : null}
       <Handle
         type="target"
         position={Position.Top}
@@ -184,7 +205,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
           data-testid="html-node-label"
           className="sf:-bottom-5 sf:absolute sf:right-0 sf:left-0 sf:truncate sf:text-center sf:text-[11px] sf:text-muted-foreground"
         >
-          {data.name}
+          {data.icon ? (
+            <div className="sf:flex sf:items-center sf:justify-center sf:gap-1">
+              <Icon name={data.icon} size={12} aria-hidden />
+              <span className="truncate">{data.name}</span>
+            </div>
+          ) : (
+            data.name
+          )}
         </div>
       ) : null}
     </div>

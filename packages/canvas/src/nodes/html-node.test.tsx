@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Window } from 'happy-dom';
 
 // Install a happy-dom DOMParser globally BEFORE the sanitizer + renderer are
@@ -10,6 +10,7 @@ const window = new Window();
 
 const { HtmlNode } = await import('./html-node.tsx');
 const { PlaceholderCard } = await import('./placeholder-card.tsx');
+const { Icon } = await import('../ui/icon.tsx');
 const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
 const { _setHtmlContentForTest, _clearHtmlContentCacheForTest } = await import(
   '../lib/use-html-content.ts'
@@ -348,9 +349,7 @@ function findLabel(tree: unknown): ReactElementLike | null {
   });
 }
 
-// htmlNode no longer renders an icon in its bottom caption. The field stays on
-// the on-disk schema (no migration) but the canvas ignores it for this type.
-describe('HtmlNode caption (no icon)', () => {
+describe('HtmlNode caption icon (US-007)', () => {
   beforeEach(() => {
     _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
       kind: 'loaded',
@@ -358,15 +357,30 @@ describe('HtmlNode caption (no icon)', () => {
     });
   });
 
-  it('renders the caption as a plain string regardless of data.icon', () => {
-    const treeWithIcon = callHtmlNode({ name: 'Welcome card', icon: 'sparkles' });
-    expect((findLabel(treeWithIcon)?.props as { children?: unknown }).children).toBe(
-      'Welcome card',
-    );
-    const treeWithoutIcon = callHtmlNode({ name: 'Welcome card' });
-    expect((findLabel(treeWithoutIcon)?.props as { children?: unknown }).children).toBe(
-      'Welcome card',
-    );
+  it('renders an Icon inline with the caption when data.icon is set', () => {
+    const tree = callHtmlNode({ name: 'Welcome card', icon: 'sparkles' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    const icon = findElement(label, (el) => el.type === Icon);
+    if (!icon) throw new Error('expected Icon in html-node-label');
+    expect((icon.props as { name?: string }).name).toBe('sparkles');
+    expect((icon.props as { size?: number }).size).toBe(12);
+  });
+
+  it('does not render an Icon in the caption when data.icon is undefined', () => {
+    const tree = callHtmlNode({ name: 'Welcome card' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    expect(findElement(label, (el) => el.type === Icon)).toBeNull();
+  });
+
+  it('renders the caption with no flex/span wrappers when data.icon is undefined', () => {
+    const tree = callHtmlNode({ name: 'Welcome card' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    // Legacy structure: the label div's children is the raw name string,
+    // not a flex-wrapper div with a nested span.
+    expect((label.props as { children?: unknown }).children).toBe('Welcome card');
   });
 });
 
@@ -407,5 +421,76 @@ describe('HtmlNode autoSize', () => {
     const outerStyle = getContainerStyle(tree);
     expect(outerStyle.width).toBe(480);
     expect(outerStyle.height).toBe(320);
+  });
+});
+
+describe('HtmlNode fit-to-content button', () => {
+  beforeEach(() => {
+    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
+      kind: 'loaded',
+      html: '<p>x</p>',
+    });
+  });
+
+  const userSizedData = {
+    autoSize: false,
+    width: 480,
+    height: 320,
+  };
+
+  function findFitButton(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'html-node-fit-to-content';
+    });
+  }
+
+  it('is hidden when not selected', () => {
+    const tree = callHtmlNode({ ...userSizedData, onFitToContent: () => {} });
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is hidden when locked', () => {
+    const tree = callHtmlNode(
+      { ...userSizedData, onFitToContent: () => {}, locked: true },
+      { selected: true } as Partial<NodeProps>,
+    );
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is hidden when autoSize is already true', () => {
+    const tree = callHtmlNode(
+      { autoSize: true, onFitToContent: () => {} },
+      { selected: true } as Partial<NodeProps>,
+    );
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is hidden when onFitToContent is not wired (view/mini mode)', () => {
+    const tree = callHtmlNode(userSizedData, { selected: true } as Partial<NodeProps>);
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is visible when selected + unlocked + user-sized + callback wired', () => {
+    const tree = callHtmlNode(
+      { ...userSizedData, onFitToContent: () => {} },
+      { selected: true } as Partial<NodeProps>,
+    );
+    expect(findFitButton(tree)).not.toBeNull();
+  });
+
+  it('click calls data.onFitToContent with the node id', () => {
+    const onFit = mock(() => {});
+    const tree = callHtmlNode(
+      { ...userSizedData, onFitToContent: onFit },
+      { selected: true } as Partial<NodeProps>,
+    );
+    const btn = findFitButton(tree);
+    expect(btn).not.toBeNull();
+    (btn?.props as { onClick?: (e: { stopPropagation: () => void }) => void }).onClick?.({
+      stopPropagation: () => {},
+    });
+    expect(onFit).toHaveBeenCalledTimes(1);
+    expect(onFit).toHaveBeenCalledWith('h1');
   });
 });
