@@ -236,6 +236,13 @@ export const HtmlNodeDataSchema = z.object({
   // Decorative caption glyph. Lucide icon name (kebab-case) resolved by the
   // canvas <Icon> primitive; rendered inline with the caption when set.
   icon: z.string().optional(),
+  // When true (or absent), the renderer measures the HTML content and React
+  // Flow sizes the wrapper around it (capped at 800×600 by the renderer's
+  // measuring container styles). The studio adapter (`mergeNodeUpdates`)
+  // enforces the invariant that `autoSize === true` and persisted
+  // `width`/`height` never coexist: writing width/height flips autoSize to
+  // false; writing autoSize: true strips width/height.
+  autoSize: z.boolean().optional(),
   ...NodeVisualBaseShape,
   ...NodeDescriptionBaseShape,
 });

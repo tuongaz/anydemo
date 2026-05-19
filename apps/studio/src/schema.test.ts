@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { DemoSchema, StatusReportSchema } from './schema.ts';
+import { DemoSchema, HtmlNodeDataSchema, StatusReportSchema } from './schema.ts';
 
 const fixturePath = (name: string) => new URL(`../test/fixtures/${name}`, import.meta.url).pathname;
 
@@ -2195,5 +2195,39 @@ describe('DemoSchema', () => {
       const result = DemoSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
+  });
+});
+
+describe('HtmlNodeDataSchema autoSize', () => {
+  it('parses with autoSize: true and no width/height', () => {
+    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html', autoSize: true });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.autoSize).toBe(true);
+  });
+
+  it('parses with autoSize: false plus width/height', () => {
+    const r = HtmlNodeDataSchema.safeParse({
+      htmlPath: 'snip.html',
+      autoSize: false,
+      width: 480,
+      height: 320,
+    });
+    expect(r.success).toBe(true);
+    if (r.success) {
+      expect(r.data.autoSize).toBe(false);
+      expect(r.data.width).toBe(480);
+      expect(r.data.height).toBe(320);
+    }
+  });
+
+  it('parses with autoSize absent (field is optional)', () => {
+    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html' });
+    expect(r.success).toBe(true);
+    if (r.success) expect(r.data.autoSize).toBeUndefined();
+  });
+
+  it('rejects non-boolean autoSize', () => {
+    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html', autoSize: 'yes' });
+    expect(r.success).toBe(false);
   });
 });
