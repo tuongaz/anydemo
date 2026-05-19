@@ -731,6 +731,14 @@ export interface SeeflowCanvasHandle {
    * `showShareMenu: false`) since the dialog is mounted through the menu.
    */
   openEmbedDialog(): void;
+  /**
+   * Capture the current viewport as a PNG data URL without triggering a
+   * download. Resolves to `undefined` when the canvas is not fully mounted.
+   * Hosts use this to feed a preview thumbnail into their own
+   * "Export to seeflow.dev" dialog while keeping the capture path
+   * (fit-view + snapshot + restore) co-located with the canvas.
+   */
+  capturePreview(): Promise<string | undefined>;
 }
 
 /**
@@ -3626,8 +3634,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       exportPdf: exportApi.exportPdf,
       exportPng: exportApi.exportPng,
       openEmbedDialog: () => setShareEmbedDialogOpen(true),
+      capturePreview: exportApi.capturePreview,
     }),
-    [exportApi.exportPdf, exportApi.exportPng],
+    [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview],
   );
   useEffect(() => {
     // US-027: Space-held pan is a keyboard affordance — gate on the same flag

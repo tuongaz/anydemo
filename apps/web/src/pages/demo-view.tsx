@@ -1,7 +1,6 @@
 import { CommandPalette } from '@/components/command-palette';
 import { ExportDialog } from '@/components/export-dialog';
 import { RestartDemoButton } from '@/components/restart-demo-button';
-import { ShareMenu } from '@/components/share-menu';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -18,7 +17,6 @@ import type {
   ShapeKind,
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
-import { captureViewportPng, downloadDataUrl } from '@/lib/export-png';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import {
   type AutoLayoutNode,
@@ -30,6 +28,7 @@ import {
   type ReorderOp,
   SHAPE_DEFAULT_SIZE,
   SeeflowCanvas,
+  type SeeflowCanvasHandle,
   applyLayout,
   applyNudge,
   buildNewShapeData,
@@ -45,7 +44,6 @@ import {
   resolveToolShortcut,
 } from '@seeflow/canvas';
 import type { ReactFlowInstance } from '@xyflow/react';
-import { jsPDF } from 'jspdf';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Position = { x: number; y: number };
@@ -57,17 +55,6 @@ const isEditableElement = (el: Element | null): boolean => {
   if (!el) return false;
   if (EDITABLE_TAGS.has(el.tagName)) return true;
   return el instanceof HTMLElement && el.isContentEditable;
-};
-
-/**
- * Sanitize a string for use as a download filename. Replaces filesystem-unsafe
- * characters (slashes, control chars, etc.) with underscores and trims to a
- * reasonable length so the resulting `<demo-name>.svg` works across platforms.
- */
-const sanitizeFileName = (name: string): string => {
-  // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control chars from a filename is the intent
-  const cleaned = name.replace(/[\\/:*?"<>|\x00-\x1f]+/g, '_').trim();
-  return cleaned.length > 0 ? cleaned.slice(0, 80) : 'demo';
 };
 
 /**
@@ -190,12 +177,16 @@ export function DemoView({
   const onDeleteSelectionRef = useRef<((nodeIds: string[], connIds: string[]) => void) | null>(
     null,
   );
-  // Bridges for `runCommand` (defined above the export/session helpers) so
-  // the new palette entries can invoke them without re-ordering the file.
-  // Same pattern as `onDeleteSelectionRef` above.
-  const onExportPdfRef = useRef<(() => Promise<void>) | null>(null);
-  const onExportPngRef = useRef<(() => Promise<void>) | null>(null);
+  // Bridge for `runCommand` (defined above the session helper) so the new
+  // palette entry can invoke it without re-ordering the file. Same pattern as
+  // `onDeleteSelectionRef` above.
   const onRestartDemoRef = useRef<(() => Promise<unknown>) | null>(null);
+  // US-015: imperative handle on the in-canvas ShareMenu / export workflow.
+  // The canvas owns capture (fit-view + snapshot + restore) and dispatches
+  // PDF/PNG downloads internally; the studio reaches in through this ref for
+  // command-palette entries and the "Export to seeflow.dev" dialog's preview
+  // thumbnail.
+  const canvasRef = useRef<SeeflowCanvasHandle>(null);
   // Generalized optimistic overrides for nodes + connectors. Set on user
   // edits BEFORE firing the API call; pruned on the next demo:reload echo
   // (server caught up); dropped on API failure (revert to server state).
@@ -2587,16 +2578,15 @@ export function DemoView({
           setPaletteOpen(true);
           return;
         case 'export.pdf': {
-          // The export functions are declared after `runCommand` in source
-          // order, but JS closures resolve at call time — the callback can
-          // only fire once the component has rendered, by which point both
-          // identifiers are defined. Same pattern applies to export.png and
-          // session.reset below.
-          onExportPdfRef.current?.();
+          // US-015: the canvas owns export — `canvasRef` is populated once
+          // <SeeflowCanvas> mounts. The ref object itself is stable across
+          // renders so reading `.current` at call time is enough; no bridge
+          // ref or useEffect needed. Same applies to export.png below.
+          canvasRef.current?.exportPdf();
           return;
         }
         case 'export.png': {
-          onExportPngRef.current?.();
+          canvasRef.current?.exportPng();
           return;
         }
         case 'session.reset': {
@@ -2637,80 +2627,14 @@ export function DemoView({
     return () => window.removeEventListener('keydown', handler);
   }, [runCommand]);
 
-  // US-022: capture the React Flow viewport as a PNG. Shared `captureViewportPng`
-  // helper handles the html-to-image call + chrome filter so PNG and PDF render
-  // exactly the same content. The orchestration (fitView so the whole graph is
-  // in frame, snapshot/restore the prior viewport, surface failures via
-  // editError) stays here because it touches UI state owned by this view.
-  const captureViewportFramed = useCallback(async () => {
-    const rf = rfInstanceRef.current;
-    if (!rf) return null;
-    const viewportEl = document.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewportEl) return null;
-    const prev = rf.getViewport();
-    try {
-      await rf.fitView({ duration: 0, padding: 0.1 });
-      // Wait one frame so the new transform is reflected in the DOM before
-      // html-to-image samples computed styles.
-      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-      return await captureViewportPng(viewportEl);
-    } finally {
-      rf.setViewport(prev, { duration: 0 });
-    }
-  }, []);
+  // US-015: PDF / PNG capture + download are owned by `<SeeflowCanvas>` (see
+  // `useCanvasExport` in @seeflow/canvas). The studio reaches in through
+  // `canvasRef` for the command-palette entries above; the in-canvas
+  // ShareMenu handles user-driven clicks directly.
 
-  const exportFileName = useCallback(
-    (ext: 'pdf' | 'png'): string => {
-      const demoName = detail?.demo?.name ?? detail?.name ?? slug ?? 'demo';
-      return `${sanitizeFileName(demoName)}.${ext}`;
-    },
-    [detail, slug],
-  );
-
-  // US-022: download the canvas as a PNG (replaces the prior SVG export).
-  const onExportPng = useCallback(async (): Promise<void> => {
-    setEditError(null);
-    try {
-      const captured = await captureViewportFramed();
-      if (!captured) return;
-      downloadDataUrl(captured.dataUrl, exportFileName('png'));
-    } catch (err) {
-      setEditError(err instanceof Error ? err.message : String(err));
-    }
-  }, [captureViewportFramed, exportFileName]);
-
-  // US-022: download the canvas as a PDF. Embeds the same captured PNG into a
-  // jsPDF document sized to the captured aspect ratio (landscape if wider than
-  // tall) so PDF + PNG share one capture path.
-  const onExportPdf = useCallback(async (): Promise<void> => {
-    setEditError(null);
-    try {
-      const captured = await captureViewportFramed();
-      if (!captured) return;
-      const orientation: 'landscape' | 'portrait' =
-        captured.width > captured.height ? 'landscape' : 'portrait';
-      const doc = new jsPDF({
-        orientation,
-        unit: 'px',
-        format: [captured.width, captured.height],
-        hotfixes: ['px_scaling'],
-      });
-      doc.addImage(captured.dataUrl, 'PNG', 0, 0, captured.width, captured.height);
-      doc.save(exportFileName('pdf'));
-    } catch (err) {
-      setEditError(err instanceof Error ? err.message : String(err));
-    }
-  }, [captureViewportFramed, exportFileName]);
-
-  // Keep the dispatcher's refs pointed at the latest closures so the palette
-  // entries route to the current implementations without rebuilding
+  // Keep the dispatcher's ref pointed at the latest closure so the palette
+  // entry routes to the current implementation without rebuilding
   // `runCommand` on every render.
-  useEffect(() => {
-    onExportPdfRef.current = onExportPdf;
-  }, [onExportPdf]);
-  useEffect(() => {
-    onExportPngRef.current = onExportPng;
-  }, [onExportPng]);
   useEffect(() => {
     onRestartDemoRef.current = onRestartDemo ?? null;
   }, [onRestartDemo]);
@@ -3037,20 +2961,19 @@ export function DemoView({
         </div>
       ) : null}
 
-      <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1">
-        {onRestartDemo ? <RestartDemoButton onRestartDemo={onRestartDemo} /> : null}
-        <ShareMenu
-          onDownloadPdf={demoId ? onExportPdf : undefined}
-          onDownloadPng={demoId ? onExportPng : undefined}
-          onExportToCloud={demoId ? () => setExportDialogOpen(true) : undefined}
-        />
-      </div>
+      {onRestartDemo ? (
+        <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1">
+          <RestartDemoButton onRestartDemo={onRestartDemo} />
+        </div>
+      ) : null}
 
       {demo && adapter ? (
         <SeeflowCanvas
+          ref={canvasRef}
           mode="edit"
           adapter={adapter}
           projectId={demoId ?? undefined}
+          onExportToCloud={demoId ? () => setExportDialogOpen(true) : undefined}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
           selectedNodeIds={selectedIds}
@@ -3160,10 +3083,7 @@ export function DemoView({
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
           projectId={demoId}
-          onCapturePreview={async () => {
-            const captured = await captureViewportFramed();
-            return captured?.dataUrl;
-          }}
+          onCapturePreview={() => canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)}
         />
       ) : null}
     </div>

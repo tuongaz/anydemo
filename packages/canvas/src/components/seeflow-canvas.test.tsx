@@ -3053,13 +3053,14 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     return findElement(tree, (el) => el.type === (ShareMenu as unknown));
   }
 
-  it('exposes exportPdf, exportPng, openEmbedDialog on the ref handle after mount', () => {
+  it('exposes exportPdf, exportPng, openEmbedDialog, capturePreview on the ref handle after mount', () => {
     const handle: { current: SeeflowCanvasHandle | null } = { current: null };
     callSeeflowCanvas({}, { ref: handle });
     expect(handle.current).not.toBeNull();
     expect(typeof handle.current?.exportPdf).toBe('function');
     expect(typeof handle.current?.exportPng).toBe('function');
     expect(typeof handle.current?.openEmbedDialog).toBe('function');
+    expect(typeof handle.current?.capturePreview).toBe('function');
   });
 
   it('renders the ShareMenu in edit mode by default', () => {

@@ -616,7 +616,7 @@ function InlineEdit({
       style,
       className: cn(
         "nodrag nopan nowheel block w-full bg-transparent p-0 text-inherit outline-none",
-        "sf-whitespace-pre-wrap sf-break-words",
+        "sf:whitespace-pre-wrap sf:wrap-break-word",
         empty2 && placeholder ? "inline-edit-empty" : "",
         shake ? "inline-edit-shake" : "",
         className
@@ -635,10 +635,10 @@ function LockBadge({ className }) {
       "data-testid": "node-lock-badge",
       "aria-hidden": "true",
       className: cn(
-        "sf-absolute -sf-top-2 -sf-right-2 sf-z-10 sf-inline-flex sf-h-4 sf-w-4 sf-items-center sf-justify-center sf-rounded-sm sf-bg-background/90 sf-text-muted-foreground sf-shadow-sm sf-ring-1 sf-ring-border",
+        "sf:absolute sf:-top-2 sf:-right-2 sf:z-10 sf:inline-flex sf:h-4 sf:w-4 sf:items-center sf:justify-center sf:rounded-sm sf:bg-background/90 sf:text-muted-foreground sf:shadow-sm sf:ring-1 sf:ring-border",
         className
       ),
-      children: /* @__PURE__ */ jsx2(Lock, { className: "sf-h-2.5 sf-w-2.5", strokeWidth: 2.5 })
+      children: /* @__PURE__ */ jsx2(Lock, { className: "sf:h-2.5 sf:w-2.5", strokeWidth: 2.5 })
     }
   );
 }
@@ -802,7 +802,7 @@ var ICON_DEFAULT_SIZE = { width: 48, height: 48 };
 var ICON_FALLBACK_NAME2 = "help-circle";
 var MIN_W = 24;
 var MIN_H = 24;
-var HANDLE_CLASS = "sf-opacity-0 sf-transition-opacity";
+var HANDLE_CLASS = "sf:opacity-0 sf:transition-opacity";
 function resolveIconColor(token) {
   return colorTokenStyle(token, "text").color ?? "currentColor";
 }
@@ -836,7 +836,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
   return /* @__PURE__ */ jsxs2(
     "div",
     {
-      className: cn("sf-group sf-relative", sized ? "sf-h-full sf-w-full" : ""),
+      className: cn("sf:group sf:relative", sized ? "sf:h-full sf:w-full" : ""),
       style: containerStyle,
       "data-testid": "icon-node",
       onDoubleClick: handleDoubleClick,
@@ -861,7 +861,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             position: Position.Top,
             id: "t",
             isConnectable,
-            className: cn(HANDLE_CLASS, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx4(
@@ -871,7 +871,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             position: Position.Left,
             id: "l",
             isConnectable,
-            className: cn(HANDLE_CLASS, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS, selected && "sf:opacity-100!")
           }
         ),
         IconComponent ? /* @__PURE__ */ jsx4(
@@ -881,7 +881,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             strokeWidth,
             absoluteStrokeWidth: true,
             "aria-label": data.alt,
-            className: "sf-block sf-h-full sf-w-full sf-pointer-events-none sf-select-none"
+            className: "sf:block sf:h-full sf:w-full sf:pointer-events-none sf:select-none"
           }
         ) : null,
         isEditing && nameEditable ? (
@@ -889,7 +889,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
           // the icon, full node width, centered). Wrapped in an absolutely
           // positioned strip so the icon's bounding box (read by React Flow
           // for layout + edge geometry) stays identical to the read state.
-          /* @__PURE__ */ jsx4("div", { className: "sf-absolute sf-left-0 sf-right-0 sf-top-full sf-mt-1 sf-text-center sf-text-xs sf-text-muted-foreground", children: /* @__PURE__ */ jsx4(
+          /* @__PURE__ */ jsx4("div", { className: "sf:absolute sf:left-0 sf:right-0 sf:top-full sf:mt-1 sf:text-center sf:text-xs sf:text-muted-foreground", children: /* @__PURE__ */ jsx4(
             InlineEdit,
             {
               initialValue: data.name ?? "",
@@ -908,7 +908,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             "span",
             {
               "data-testid": "icon-node-label",
-              className: "sf-pointer-events-none sf-absolute sf-left-0 sf-right-0 sf-top-full sf-mt-1 sf-truncate sf-text-center sf-text-xs sf-text-muted-foreground sf-select-none",
+              className: "sf:pointer-events-none sf:absolute sf:left-0 sf:right-0 sf:top-full sf:mt-1 sf:truncate sf:text-center sf:text-xs sf:text-muted-foreground sf:select-none",
               children: data.name
             }
           )
@@ -920,7 +920,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             position: Position.Right,
             id: "r",
             isConnectable,
-            className: cn(HANDLE_CLASS, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx4(
@@ -930,7 +930,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
             position: Position.Bottom,
             id: "b",
             isConnectable,
-            className: cn(HANDLE_CLASS, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS, selected && "sf:opacity-100!")
           }
         )
       ]
@@ -1764,8 +1764,8 @@ function PlaceholderCard({
       "data-testid": "placeholder-card",
       "data-placeholder-variant": variant,
       className: cn(
-        "sf-pointer-events-none sf-flex sf-h-full sf-w-full sf-select-none sf-items-center sf-justify-center sf-px-2 sf-text-center sf-text-xs",
-        variant === "destructive" ? "sf-text-destructive" : "sf-text-muted-foreground",
+        "sf:pointer-events-none sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs",
+        variant === "destructive" ? "sf:text-destructive" : "sf:text-muted-foreground",
         className
       ),
       children: message
@@ -1778,7 +1778,7 @@ import { jsx as jsx7, jsxs as jsxs3 } from "react/jsx-runtime";
 var HTML_DEFAULT_SIZE = { width: 320, height: 200 };
 var MIN_W2 = 80;
 var MIN_H2 = 40;
-var HANDLE_CLASS2 = "sf-opacity-0 sf-transition-opacity";
+var HANDLE_CLASS2 = "sf:opacity-0 sf:transition-opacity";
 function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -1805,7 +1805,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
       "div",
       {
         "data-testid": "html-node-content",
-        className: "sf-h-full sf-w-full sf-overflow-auto",
+        className: "sf:h-full sf:w-full sf:overflow-auto",
         ...injectSanitizedHtml(content.html)
       }
     );
@@ -1819,7 +1819,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   return /* @__PURE__ */ jsxs3(
     "div",
     {
-      className: cn("sf-group sf-relative sf-overflow-hidden", sized ? "sf-h-full sf-w-full" : ""),
+      className: cn("sf:group sf:relative sf:overflow-hidden", sized ? "sf:h-full sf:w-full" : ""),
       style: containerStyle,
       "data-testid": "html-node",
       children: [
@@ -1843,7 +1843,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
             position: Position2.Top,
             id: "t",
             isConnectable,
-            className: cn(HANDLE_CLASS2, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS2, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx7(
@@ -1853,7 +1853,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
             position: Position2.Left,
             id: "l",
             isConnectable,
-            className: cn(HANDLE_CLASS2, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS2, selected && "sf:opacity-100!")
           }
         ),
         body,
@@ -1864,7 +1864,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
             position: Position2.Right,
             id: "r",
             isConnectable,
-            className: cn(HANDLE_CLASS2, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS2, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx7(
@@ -1874,15 +1874,15 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
             position: Position2.Bottom,
             id: "b",
             isConnectable,
-            className: cn(HANDLE_CLASS2, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS2, selected && "sf:opacity-100!")
           }
         ),
         data.name !== void 0 && data.name !== "" ? /* @__PURE__ */ jsx7(
           "div",
           {
             "data-testid": "html-node-label",
-            className: "-sf-bottom-5 sf-absolute sf-right-0 sf-left-0 sf-truncate sf-text-center sf-text-[11px] sf-text-muted-foreground",
-            children: data.icon ? /* @__PURE__ */ jsxs3("div", { className: "sf-flex sf-items-center sf-justify-center sf-gap-1", children: [
+            className: "sf:-bottom-5 sf:absolute sf:right-0 sf:left-0 sf:truncate sf:text-center sf:text-[11px] sf:text-muted-foreground",
+            children: data.icon ? /* @__PURE__ */ jsxs3("div", { className: "sf:flex sf:items-center sf:justify-center sf:gap-1", children: [
               /* @__PURE__ */ jsx7(Icon, { name: data.icon, size: 12, "aria-hidden": true }),
               /* @__PURE__ */ jsx7("span", { className: "truncate", children: data.name })
             ] }) : data.name
@@ -1904,7 +1904,7 @@ import { jsx as jsx8, jsxs as jsxs4 } from "react/jsx-runtime";
 var IMAGE_DEFAULT_SIZE = { width: 200, height: 150 };
 var MIN_W3 = 40;
 var MIN_H3 = 40;
-var HANDLE_CLASS3 = "sf-opacity-0 sf-transition-opacity";
+var HANDLE_CLASS3 = "sf:opacity-0 sf:transition-opacity";
 function ImageNodeImpl({ id, data, selected, isConnectable }) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -1922,7 +1922,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
   return /* @__PURE__ */ jsxs4(
     "div",
     {
-      className: cn("sf-group sf-relative sf-overflow-hidden", sized ? "sf-h-full sf-w-full" : ""),
+      className: cn("sf:group sf:relative sf:overflow-hidden", sized ? "sf:h-full sf:w-full" : ""),
       style: containerStyle,
       "data-testid": "image-node",
       children: [
@@ -1946,7 +1946,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
             position: Position3.Top,
             id: "t",
             isConnectable,
-            className: cn(HANDLE_CLASS3, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS3, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx8(
@@ -1956,7 +1956,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
             position: Position3.Left,
             id: "l",
             isConnectable,
-            className: cn(HANDLE_CLASS3, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS3, selected && "sf:opacity-100!")
           }
         ),
         data._uploading ? (
@@ -1968,7 +1968,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
             {
               "data-testid": "image-node-placeholder",
               "data-placeholder": "loading",
-              className: "sf-flex sf-h-full sf-w-full sf-select-none sf-items-center sf-justify-center sf-text-xs sf-text-muted-foreground sf-pointer-events-none",
+              className: "sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground sf:pointer-events-none",
               children: "Loading\u2026"
             }
           )
@@ -1984,7 +1984,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
               "data-placeholder": "failed",
               onClick: () => data.onRetryUpload?.(id),
               title: data._uploadError,
-              className: "sf-flex sf-h-full sf-w-full sf-cursor-pointer sf-select-none sf-items-center sf-justify-center sf-px-2 sf-text-center sf-text-xs sf-text-destructive",
+              className: "sf:flex sf:h-full sf:w-full sf:cursor-pointer sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs sf:text-destructive",
               children: "Upload failed (click to retry)"
             }
           )
@@ -1993,7 +1993,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
           {
             src: data.projectId ? fileUrl(data.projectId, data.path) : "",
             alt: data.alt ?? "",
-            className: "sf-block sf-h-full sf-w-full sf-select-none sf-object-contain sf-pointer-events-none",
+            className: "sf:block sf:h-full sf:w-full sf:select-none sf:object-contain sf:pointer-events-none",
             draggable: false
           }
         ),
@@ -2004,7 +2004,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
             position: Position3.Right,
             id: "r",
             isConnectable,
-            className: cn(HANDLE_CLASS3, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS3, selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx8(
@@ -2014,7 +2014,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
             position: Position3.Bottom,
             id: "b",
             isConnectable,
-            className: cn(HANDLE_CLASS3, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS3, selected && "sf:opacity-100!")
           }
         )
       ]
@@ -2037,22 +2037,22 @@ import { cva } from "class-variance-authority";
 import * as React from "react";
 import { jsx as jsx9 } from "react/jsx-runtime";
 var buttonVariants = cva(
-  "sf-inline-flex sf-items-center sf-justify-center sf-whitespace-nowrap sf-rounded-md sf-text-sm sf-font-medium sf-ring-offset-background sf-transition-colors focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-2 disabled:sf-pointer-events-none disabled:sf-opacity-50",
+  "sf:inline-flex sf:items-center sf:justify-center sf:whitespace-nowrap sf:rounded-md sf:text-sm sf:font-medium sf:ring-offset-background sf:transition-colors sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2 sf:disabled:pointer-events-none sf:disabled:opacity-50",
   {
     variants: {
       variant: {
-        default: "sf-bg-primary sf-text-primary-foreground sf-font-semibold hover:sf-bg-emerald-400",
-        destructive: "sf-bg-destructive sf-text-destructive-foreground hover:sf-bg-destructive/90",
-        outline: "sf-border sf-border-input sf-bg-background hover:sf-bg-secondary hover:sf-text-foreground",
-        secondary: "sf-bg-secondary sf-text-secondary-foreground hover:sf-bg-secondary/80",
-        ghost: "sf-text-muted-foreground hover:sf-bg-muted hover:sf-text-foreground",
-        link: "sf-text-primary sf-underline-offset-4 hover:sf-underline"
+        default: "sf:bg-primary sf:text-primary-foreground sf:font-semibold sf:hover:bg-emerald-400",
+        destructive: "sf:bg-destructive sf:text-destructive-foreground sf:hover:bg-destructive/90",
+        outline: "sf:border sf:border-input sf:bg-background sf:hover:bg-secondary sf:hover:text-foreground",
+        secondary: "sf:bg-secondary sf:text-secondary-foreground sf:hover:bg-secondary/80",
+        ghost: "sf:text-muted-foreground sf:hover:bg-muted sf:hover:text-foreground",
+        link: "sf:text-primary sf:underline-offset-4 sf:hover:underline"
       },
       size: {
-        default: "sf-h-9 sf-px-4 sf-py-2",
-        sm: "sf-h-8 sf-rounded-md sf-px-3",
-        lg: "sf-h-11 sf-rounded-md sf-px-8",
-        icon: "sf-h-9 sf-w-9"
+        default: "sf:h-9 sf:px-4 sf:py-2",
+        sm: "sf:h-8 sf:rounded-md sf:px-3",
+        lg: "sf:h-11 sf:rounded-md sf:px-8",
+        icon: "sf:h-9 sf:w-9"
       }
     },
     defaultVariants: {
@@ -2072,10 +2072,10 @@ Button.displayName = "Button";
 // src/nodes/status-badge.tsx
 import { jsx as jsx10, jsxs as jsxs5 } from "react/jsx-runtime";
 var DOT_STYLES = {
-  ok: "sf-bg-emerald-400",
-  warn: "sf-bg-amber-400",
-  error: "sf-bg-rose-400",
-  pending: "sf-bg-slate-400"
+  ok: "sf:bg-emerald-400",
+  warn: "sf:bg-amber-400",
+  error: "sf:bg-rose-400",
+  pending: "sf:bg-slate-400"
 };
 function StatusBadge({ state, summary, "data-testid": testId }) {
   return /* @__PURE__ */ jsxs5(
@@ -2083,16 +2083,16 @@ function StatusBadge({ state, summary, "data-testid": testId }) {
     {
       "data-testid": testId,
       "data-state": state,
-      className: "sf-inline-flex sf-max-w-full sf-items-center sf-gap-1.5 sf-text-[11px] sf-leading-tight sf-text-muted-foreground",
+      className: "sf:inline-flex sf:max-w-full sf:items-center sf:gap-1.5 sf:text-[11px] sf:leading-tight sf:text-muted-foreground",
       children: [
         /* @__PURE__ */ jsx10(
           "span",
           {
             "aria-hidden": true,
-            className: cn("sf-h-2 sf-w-2 sf-shrink-0 sf-rounded-full", DOT_STYLES[state])
+            className: cn("sf:h-2 sf:w-2 sf:shrink-0 sf:rounded-full", DOT_STYLES[state])
           }
         ),
-        summary ? /* @__PURE__ */ jsx10("span", { className: "sf-min-w-0 sf-flex-1 sf-truncate", title: summary, children: summary }) : null
+        summary ? /* @__PURE__ */ jsx10("span", { className: "sf:min-w-0 sf:flex-1 sf:truncate", title: summary, children: summary }) : null
       ]
     }
   );
@@ -2154,8 +2154,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
     "div",
     {
       className: cn(
-        "sf-group sf-flex sf-flex-col sf-justify-center sf-overflow-hidden sf-rounded-lg sf-border-[3px] sf-shadow-sm sf-transition-shadow",
-        sized ? "sf-h-full sf-w-full" : "",
+        "sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:shadow-sm sf:transition-shadow",
+        sized ? "sf:h-full sf:w-full" : "",
         isRunning ? "seeflow-node-pulse" : ""
       ),
       style: containerStyle,
@@ -2183,7 +2183,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             position: Position4.Top,
             id: "t",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx11(
@@ -2193,13 +2193,13 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             position: Position4.Left,
             id: "l",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsxs6(
           "div",
           {
-            className: "sf-flex sf-shrink-0 sf-items-center sf-justify-between sf-gap-2 sf-border-b sf-bg-muted/30 sf-px-2 sf-py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:bg-muted/30 sf:px-2 sf:py-2",
             "data-testid": "node-header",
             children: [
               data.icon ? /* @__PURE__ */ jsx11(
@@ -2215,7 +2215,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
               /* @__PURE__ */ jsx11(
                 "div",
                 {
-                  className: "sf-min-w-0 sf-flex-1 sf-text-[18px] sf-font-semibold sf-leading-tight",
+                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
                   style: labelFontStyle,
                   children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx11(
                     InlineEdit,
@@ -2226,7 +2226,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                       commitMode: "blur-only",
                       onCommit: (v) => data.onNameChange?.(id, v),
                       onExit: () => setEditing(null),
-                      className: "sf-text-[18px] sf-font-semibold",
+                      className: "sf:text-[18px] sf:font-semibold",
                       style: labelFontStyle
                     }
                   ) : /* @__PURE__ */ jsx11(
@@ -2234,8 +2234,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                     {
                       type: "button",
                       className: cn(
-                        "sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-font-semibold sf-leading-tight",
-                        nameEditable ? "hover:sf-opacity-80" : ""
+                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight",
+                        nameEditable ? "sf:hover:opacity-80" : ""
                       ),
                       style: labelFontStyle,
                       children: data.name
@@ -2243,7 +2243,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                   )
                 }
               ),
-              /* @__PURE__ */ jsx11("div", { className: "sf-flex sf-shrink-0 sf-items-center sf-gap-1", children: /* @__PURE__ */ jsx11(
+              /* @__PURE__ */ jsx11("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx11(
                 Button,
                 {
                   type: "button",
@@ -2251,8 +2251,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                   variant: "secondary",
                   disabled: !playable || isRunning,
                   className: cn(
-                    "sf-h-8 sf-w-8 sf-rounded-full sf-p-0 hover:sf-bg-primary hover:sf-text-primary-foreground focus-visible:sf-bg-primary focus-visible:sf-text-primary-foreground",
-                    isError && "sf-border-2 sf-border-rose-500"
+                    "sf:h-8 sf:w-8 sf:rounded-full sf:p-0 sf:hover:bg-primary sf:hover:text-primary-foreground sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground",
+                    isError && "sf:border-2 sf:border-rose-500"
                   ),
                   "data-testid": "play-button",
                   "data-status": status ?? "idle",
@@ -2262,7 +2262,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                     e.stopPropagation();
                     data.onPlay?.(id);
                   },
-                  children: isRunning ? /* @__PURE__ */ jsx11(Loader2, { className: "sf-h-4 sf-w-4 sf-animate-spin", "aria-hidden": true }) : /* @__PURE__ */ jsx11(Play, { className: "sf-h-4 sf-w-4", "aria-hidden": true })
+                  children: isRunning ? /* @__PURE__ */ jsx11(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": true }) : /* @__PURE__ */ jsx11(Play, { className: "sf:h-4 sf:w-4", "aria-hidden": true })
                 }
               ) })
             ]
@@ -2271,7 +2271,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsx11(
           "div",
           {
-            className: "sf-flex sf-min-h-0 sf-flex-1 sf-items-center sf-px-2 sf-py-1",
+            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
             children: editing === "description" && descEditable ? /* @__PURE__ */ jsx11(
@@ -2282,7 +2282,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                 multiline: true,
                 onCommit: (v) => data.onDescriptionChange?.(id, v),
                 onExit: () => setEditing(null),
-                className: "sf-w-full sf-text-[18px] sf-text-muted-foreground",
+                className: "sf:w-full sf:text-[18px] sf:text-muted-foreground",
                 style: descriptionFontStyle,
                 placeholder: data.kind
               }
@@ -2291,8 +2291,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
               {
                 type: "button",
                 className: cn(
-                  "sf-block sf-w-full sf-whitespace-normal sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-text-muted-foreground",
-                  descEditable ? "hover:sf-opacity-80" : ""
+                  "sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:text-muted-foreground",
+                  descEditable ? "sf:hover:opacity-80" : ""
                 ),
                 style: descriptionFontStyle,
                 children: description
@@ -2303,7 +2303,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         data.statusReport && /* @__PURE__ */ jsx11(
           "div",
           {
-            className: "sf-flex sf-items-center sf-px-2 sf-pb-1",
+            className: "sf:flex sf:items-center sf:px-2 sf:pb-1",
             "data-testid": "play-node-status-badge",
             children: /* @__PURE__ */ jsx11(
               StatusBadge,
@@ -2322,7 +2322,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             position: Position4.Right,
             id: "r",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx11(
@@ -2332,7 +2332,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             position: Position4.Bottom,
             id: "b",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         )
       ]
@@ -2767,10 +2767,10 @@ var SHAPE_DEFAULT_SIZE = {
   cloud: { width: 180, height: 120 }
 };
 var SHAPE_CLASS = {
-  rectangle: "sf-rounded-lg sf-border-[3px] sf-bg-transparent",
-  ellipse: "sf-rounded-full sf-border-[3px] sf-bg-transparent",
-  sticky: "sf-rounded-md sf-border-[3px] sf-shadow-md -sf-rotate-1",
-  text: "sf-bg-transparent",
+  rectangle: "sf:rounded-lg sf:border-[3px] sf:bg-transparent",
+  ellipse: "sf:rounded-full sf:border-[3px] sf:bg-transparent",
+  sticky: "sf:rounded-md sf:border-[3px] sf:shadow-md sf:-rotate-1",
+  text: "sf:bg-transparent",
   // US-009: illustrative shapes have no wrapper chrome — the inline SVG owns
   // border + fill so the wrapper stays a transparent positioning host.
   database: "",
@@ -2809,7 +2809,7 @@ function resolveIllustrativeColors(data) {
     backgroundColor: data.backgroundColor !== void 0 ? colorTokenStyle(data.backgroundColor, "node").backgroundColor : NODE_DEFAULT_BG_WHITE
   };
 }
-var HANDLE_CLASS4 = "sf-opacity-0 sf-transition-opacity";
+var HANDLE_CLASS4 = "sf:opacity-0 sf:transition-opacity";
 function ShapeNodeImpl({ id, data, selected, isConnectable }) {
   const shape = data.shape;
   const size = SHAPE_DEFAULT_SIZE[shape];
@@ -2871,7 +2871,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     const w = data.width ?? size.width;
     const h = data.height ?? size.height;
     const { borderColor, backgroundColor } = resolveIllustrativeColors(data);
-    illustrativeOverlay = /* @__PURE__ */ jsx17("div", { className: "sf-pointer-events-none sf-absolute sf-inset-0", children: /* @__PURE__ */ jsx17(
+    illustrativeOverlay = /* @__PURE__ */ jsx17("div", { className: "sf:pointer-events-none sf:absolute sf:inset-0", children: /* @__PURE__ */ jsx17(
       Renderer,
       {
         width: w,
@@ -2899,7 +2899,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         commitMode: "blur-only",
         onCommit: (v) => data.onDescriptionChange?.(id, v),
         onExit: () => setEditing(null),
-        className: "sf-relative sf-text-[22px]",
+        className: "sf:relative sf:text-[22px]",
         style: descriptionFontStyle,
         placeholder: "Description"
       }
@@ -2908,8 +2908,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       {
         type: "button",
         className: cn(
-          "sf-relative sf-block sf-whitespace-pre-wrap sf-bg-transparent sf-p-0 sf-font-medium sf-leading-tight",
-          hasDescription ? "break-words" : "sf-italic sf-text-muted-foreground/40"
+          "sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight",
+          hasDescription ? "break-words" : "sf:italic sf:text-muted-foreground/40"
         ),
         style: descriptionFontStyle,
         children: hasDescription ? description : ""
@@ -2924,7 +2924,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         commitMode: "blur-only",
         onCommit: (v) => data.onNameChange?.(id, v),
         onExit: () => setEditing(null),
-        className: "sf-relative sf-text-[22px]",
+        className: "sf:relative sf:text-[22px]",
         style: labelFontStyle,
         placeholder: isText ? "Text" : "Label"
       }
@@ -2934,8 +2934,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         type: "button",
         className: cn(
           // US-009: `relative` — see the InlineEdit branch above.
-          "sf-relative sf-block sf-whitespace-pre-wrap sf-bg-transparent sf-p-0 sf-font-medium sf-leading-tight",
-          data.name ? "break-words" : "sf-text-muted-foreground/40 sf-italic"
+          "sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight",
+          data.name ? "break-words" : "sf:text-muted-foreground/40 sf:italic"
         ),
         style: labelFontStyle,
         children: data.name ?? (isText && nameEditable ? "Text" : "")
@@ -2946,13 +2946,13 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     /* @__PURE__ */ jsx17(
       "div",
       {
-        className: "sf-relative sf-flex sf-shrink-0 sf-items-center sf-border-b sf-px-2 sf-py-1.5",
+        className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:px-2 sf:py-1.5",
         style: colorTokenStyle(data.backgroundColor, "node-header"),
         "data-testid": "shape-node-header",
         children: /* @__PURE__ */ jsx17(
           "div",
           {
-            className: "sf-min-w-0 sf-flex-1 sf-whitespace-pre-wrap sf-break-words sf-text-left sf-font-semibold sf-text-[18px] sf-leading-tight",
+            className: "sf:min-w-0 sf:flex-1 sf:whitespace-pre-wrap sf:wrap-break-word sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight",
             style: labelFontStyle,
             children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx17(
               InlineEdit,
@@ -2962,7 +2962,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
                 commitMode: "blur-only",
                 onCommit: (v) => data.onNameChange?.(id, v),
                 onExit: () => setEditing(null),
-                className: "sf-text-[18px] sf-font-semibold",
+                className: "sf:text-[18px] sf:font-semibold",
                 style: labelFontStyle,
                 placeholder: "Title"
               }
@@ -2971,8 +2971,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
               {
                 type: "button",
                 className: cn(
-                  "sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-font-semibold sf-text-[18px] sf-leading-tight",
-                  nameEditable ? "hover:sf-opacity-80" : ""
+                  "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight",
+                  nameEditable ? "sf:hover:opacity-80" : ""
                 ),
                 style: labelFontStyle,
                 children: data.name
@@ -2985,7 +2985,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     /* @__PURE__ */ jsx17(
       "div",
       {
-        className: "sf-relative sf-flex sf-min-h-0 sf-flex-1 sf-items-center sf-px-2 sf-py-1.5",
+        className: "sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1.5",
         "data-testid": "shape-node-body",
         children: editing === "description" && descEditable ? /* @__PURE__ */ jsx17(
           InlineEdit,
@@ -2995,7 +2995,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             commitMode: "blur-only",
             onCommit: (v) => data.onDescriptionChange?.(id, v),
             onExit: () => setEditing(null),
-            className: "sf-w-full sf-text-[16px] sf-text-muted-foreground",
+            className: "sf:w-full sf:text-[16px] sf:text-muted-foreground",
             style: descriptionFontStyle,
             placeholder: "Description"
           }
@@ -3004,9 +3004,9 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
           {
             type: "button",
             className: cn(
-              "sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[16px] sf-leading-tight",
-              hasDescription ? "text-muted-foreground" : "sf-italic sf-text-muted-foreground/40",
-              descEditable ? "hover:sf-opacity-80" : ""
+              "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[16px] sf:leading-tight",
+              hasDescription ? "text-muted-foreground" : "sf:italic sf:text-muted-foreground/40",
+              descEditable ? "sf:hover:opacity-80" : ""
             ),
             style: descriptionFontStyle,
             children: hasDescription ? description : descEditable ? "Double-click to add description" : ""
@@ -3028,9 +3028,9 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         // the inner div's `overflow-hidden` (needed for the header bg to
         // respect the rounded corners) clips them, matching the state-node
         // pattern.
-        useHeaderLayout ? "" : "sf-relative",
-        useHeaderLayout ? "sf-flex sf-flex-col sf-overflow-hidden sf-text-left" : "sf-flex sf-items-center sf-justify-center sf-p-2 sf-text-center sf-text-[22px]",
-        sized ? "sf-h-full sf-w-full" : "",
+        useHeaderLayout ? "" : "sf:relative",
+        useHeaderLayout ? "sf:flex sf:flex-col sf:overflow-hidden sf:text-left" : "sf:flex sf:items-center sf:justify-center sf:p-2 sf:text-center sf:text-[22px]",
+        sized ? "sf:h-full sf:w-full" : "",
         shapeChromeClass(shape)
       ),
       style,
@@ -3059,7 +3059,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             position: Position5.Top,
             id: "t",
             isConnectable,
-            className: cn(HANDLE_CLASS4, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         ),
         !isText && /* @__PURE__ */ jsx17(
@@ -3069,7 +3069,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             position: Position5.Left,
             id: "l",
             isConnectable,
-            className: cn(HANDLE_CLASS4, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         ),
         useHeaderLayout ? headerBodyContent : singleLabelContent,
@@ -3080,7 +3080,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             position: Position5.Right,
             id: "r",
             isConnectable,
-            className: cn(HANDLE_CLASS4, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         ),
         !isText && /* @__PURE__ */ jsx17(
@@ -3090,7 +3090,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             position: Position5.Bottom,
             id: "b",
             isConnectable,
-            className: cn(HANDLE_CLASS4, selected && "!sf-opacity-100")
+            className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         )
       ]
@@ -3109,9 +3109,9 @@ import { memo as memo6, useState as useState7 } from "react";
 // src/nodes/status-pill.tsx
 import { jsx as jsx18 } from "react/jsx-runtime";
 var STYLES = {
-  running: "sf-bg-amber-950/50 sf-text-amber-300 sf-animate-pulse",
-  done: "sf-bg-emerald-950/50 sf-text-emerald-300",
-  error: "sf-bg-rose-950/50 sf-text-rose-300"
+  running: "sf:bg-amber-950/50 sf:text-amber-300 sf:animate-pulse",
+  done: "sf:bg-emerald-950/50 sf:text-emerald-300",
+  error: "sf:bg-rose-950/50 sf:text-rose-300"
 };
 function StatusPill({
   status,
@@ -3124,7 +3124,7 @@ function StatusPill({
       "data-status": status,
       "data-testid": dataTestId,
       className: cn(
-        "sf-inline-flex sf-h-4 sf-items-center sf-rounded-full sf-px-1.5 sf-py-0 sf-font-normal sf-text-[9px] sf-uppercase sf-tracking-wide",
+        "sf:inline-flex sf:h-4 sf:items-center sf:rounded-full sf:px-1.5 sf:py-0 sf:font-normal sf:text-[9px] sf:uppercase sf:tracking-wide",
         STYLES[status]
       ),
       children: status
@@ -3183,8 +3183,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
     "div",
     {
       className: cn(
-        "sf-group sf-flex sf-flex-col sf-justify-center sf-overflow-hidden sf-rounded-lg sf-border-[3px] sf-border-dashed sf-shadow-sm sf-transition-shadow",
-        sized ? "sf-h-full sf-w-full" : "",
+        "sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:border-dashed sf:shadow-sm sf:transition-shadow",
+        sized ? "sf:h-full sf:w-full" : "",
         status === "running" ? "seeflow-node-pulse" : ""
       ),
       style: containerStyle,
@@ -3212,7 +3212,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             position: Position6.Top,
             id: "t",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx19(
@@ -3222,13 +3222,13 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             position: Position6.Left,
             id: "l",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsxs13(
           "div",
           {
-            className: "sf-flex sf-shrink-0 sf-items-center sf-justify-between sf-gap-2 sf-border-b sf-px-2 sf-py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2",
             style: colorTokenStyle(data.backgroundColor, "node-header"),
             "data-testid": "node-header",
             children: [
@@ -3245,7 +3245,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
               /* @__PURE__ */ jsx19(
                 "div",
                 {
-                  className: "sf-min-w-0 sf-flex-1 sf-text-[18px] sf-font-semibold sf-leading-tight",
+                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
                   style: labelFontStyle,
                   children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx19(
                     InlineEdit,
@@ -3256,7 +3256,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                       commitMode: "blur-only",
                       onCommit: (v) => data.onNameChange?.(id, v),
                       onExit: () => setEditing(null),
-                      className: "sf-text-[18px] sf-font-semibold",
+                      className: "sf:text-[18px] sf:font-semibold",
                       style: labelFontStyle
                     }
                   ) : /* @__PURE__ */ jsx19(
@@ -3264,8 +3264,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                     {
                       type: "button",
                       className: cn(
-                        "sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-font-semibold sf-leading-tight",
-                        nameEditable ? "hover:sf-opacity-80" : ""
+                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight",
+                        nameEditable ? "sf:hover:opacity-80" : ""
                       ),
                       style: labelFontStyle,
                       children: data.name
@@ -3273,14 +3273,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                   )
                 }
               ),
-              /* @__PURE__ */ jsx19("div", { className: "sf-flex sf-shrink-0 sf-items-center sf-gap-1", children: /* @__PURE__ */ jsx19(StatusPill, { status }) })
+              /* @__PURE__ */ jsx19("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx19(StatusPill, { status }) })
             ]
           }
         ),
         /* @__PURE__ */ jsx19(
           "div",
           {
-            className: "sf-flex sf-min-h-0 sf-flex-1 sf-items-center sf-px-2 sf-py-1",
+            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
             children: editing === "description" && descEditable ? /* @__PURE__ */ jsx19(
@@ -3291,7 +3291,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                 multiline: true,
                 onCommit: (v) => data.onDescriptionChange?.(id, v),
                 onExit: () => setEditing(null),
-                className: "sf-w-full sf-text-[18px] sf-text-muted-foreground",
+                className: "sf:w-full sf:text-[18px] sf:text-muted-foreground",
                 style: descriptionFontStyle,
                 placeholder: data.kind
               }
@@ -3300,8 +3300,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
               {
                 type: "button",
                 className: cn(
-                  "sf-block sf-w-full sf-whitespace-normal sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-text-muted-foreground",
-                  descEditable ? "hover:sf-opacity-80" : ""
+                  "sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:text-muted-foreground",
+                  descEditable ? "sf:hover:opacity-80" : ""
                 ),
                 style: descriptionFontStyle,
                 children: description
@@ -3316,7 +3316,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             position: Position6.Right,
             id: "r",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
         /* @__PURE__ */ jsx19(
@@ -3326,7 +3326,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             position: Position6.Bottom,
             id: "b",
             isConnectable,
-            className: cn("sf-opacity-0 sf-transition-opacity", selected && "!sf-opacity-100")
+            className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         )
       ]
@@ -3541,7 +3541,7 @@ function EditableEdge({
             field: "connector-label",
             onCommit: (v) => onLabelChange?.(id, v),
             onExit: () => setEditing(false),
-            className: "sf-rounded sf-border sf-border-border/40 sf-bg-background sf-px-1.5 sf-py-0.5 sf-text-[11px] sf-text-foreground sf-shadow-sm",
+            className: "sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm",
             style: fontSizeStyle,
             placeholder: "Label"
           }
@@ -3550,7 +3550,7 @@ function EditableEdge({
           {
             type: "button",
             className: cn(
-              "sf-rounded sf-border sf-border-border/40 sf-bg-background sf-px-1.5 sf-py-0.5 sf-text-[11px] sf-text-foreground sf-shadow-sm",
+              "sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm",
               editable ? "hover:bg-muted/60" : ""
             ),
             style: fontSizeStyle,
@@ -3565,7 +3565,7 @@ function EditableEdge({
           {
             type: "button",
             "aria-label": "Add connector label",
-            className: "sf-rounded-full sf-border sf-border-dashed sf-border-muted-foreground/40 sf-bg-background sf-px-1 sf-text-[10px] sf-text-muted-foreground/60 sf-opacity-0 sf-transition-opacity hover:sf-opacity-100 group-hover/canvas:sf-opacity-50",
+            className: "sf:rounded-full sf:border sf:border-dashed sf:border-muted-foreground/40 sf:bg-background sf:px-1 sf:text-[10px] sf:text-muted-foreground/60 sf:opacity-0 sf:transition-opacity sf:hover:opacity-100 sf:group-hover/canvas:opacity-50",
             onDoubleClick: (e) => {
               e.stopPropagation();
               setEditing(true);
@@ -3619,7 +3619,7 @@ var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PU
   {
     ref,
     className: cn(
-      "sf-fixed sf-inset-0 sf-z-50 sf-bg-black/80 data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0",
+      "sf:fixed sf:inset-0 sf:z-50 sf:bg-black/80 sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0",
       className
     ),
     ...props
@@ -3633,14 +3633,14 @@ var DialogContent = React2.forwardRef(({ className, children, ...props }, ref) =
     {
       ref,
       className: cn(
-        "sf-fixed sf-left-[50%] sf-top-[50%] sf-z-50 sf-grid sf-w-full sf-max-w-lg sf-translate-x-[-50%] sf-translate-y-[-50%] sf-gap-4 sf-border sf-border-border sf-bg-card sf-p-6 sf-shadow-lg sf-duration-200 data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95 data-[state=closed]:sf-slide-out-to-left-1/2 data-[state=closed]:sf-slide-out-to-top-[48%] data-[state=open]:sf-slide-in-from-left-1/2 data-[state=open]:sf-slide-in-from-top-[48%] sm:sf-rounded-lg",
+        "sf:fixed sf:left-[50%] sf:top-[50%] sf:z-50 sf:grid sf:w-full sf:max-w-lg sf:translate-x-[-50%] sf:translate-y-[-50%] sf:gap-4 sf:border sf:border-border sf:bg-card sf:p-6 sf:shadow-lg sf:duration-200 sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[state=closed]:slide-out-to-left-1/2 sf:data-[state=closed]:slide-out-to-top-[48%] sf:data-[state=open]:slide-in-from-left-1/2 sf:data-[state=open]:slide-in-from-top-[48%] sf:sm:rounded-lg",
         className
       ),
       ...props,
       children: [
         children,
-        /* @__PURE__ */ jsxs15(DialogPrimitive.Close, { className: "sf-absolute sf-right-4 sf-top-4 sf-rounded-sm sf-opacity-70 sf-ring-offset-background sf-transition-opacity hover:sf-opacity-100 focus:sf-outline-none focus:sf-ring-2 focus:sf-ring-ring focus:sf-ring-offset-2 disabled:sf-pointer-events-none", children: [
-          /* @__PURE__ */ jsx22(X, { className: "sf-h-4 sf-w-4" }),
+        /* @__PURE__ */ jsxs15(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+          /* @__PURE__ */ jsx22(X, { className: "sf:h-4 sf:w-4" }),
           /* @__PURE__ */ jsx22("span", { className: "sr-only", children: "Close" })
         ] })
       ]
@@ -3651,7 +3651,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
 var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx22(
   "div",
   {
-    className: cn("sf-flex sf-flex-col sf-space-y-1.5 sf-text-center sm:sf-text-left", className),
+    className: cn("sf:flex sf:flex-col sf:space-y-1.5 sf:text-center sf:sm:text-left", className),
     ...props
   }
 );
@@ -3660,7 +3660,7 @@ var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx22(
   "div",
   {
     className: cn(
-      "sf-flex sf-flex-col-reverse sm:sf-flex-row sm:sf-justify-end sm:sf-space-x-2",
+      "sf:flex sf:flex-col-reverse sf:sm:flex-row sf:sm:justify-end sf:sm:space-x-2",
       className
     ),
     ...props
@@ -3671,7 +3671,7 @@ var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE
   DialogPrimitive.Title,
   {
     ref,
-    className: cn("sf-text-lg sf-font-semibold sf-leading-none sf-tracking-tight", className),
+    className: cn("sf:text-lg sf:font-semibold sf:leading-none sf:tracking-tight", className),
     ...props
   }
 ));
@@ -3680,7 +3680,7 @@ var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @
   DialogPrimitive.Description,
   {
     ref,
-    className: cn("sf-text-sm sf-text-muted-foreground", className),
+    className: cn("sf:text-sm sf:text-muted-foreground", className),
     ...props
   }
 ));
@@ -3693,7 +3693,7 @@ var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ *
   {
     ref,
     className: cn(
-      "sf-flex sf-h-full sf-w-full sf-flex-col sf-overflow-hidden sf-rounded-md sf-bg-card sf-text-foreground",
+      "sf:flex sf:h-full sf:w-full sf:flex-col sf:overflow-hidden sf:rounded-md sf:bg-card sf:text-foreground",
       className
     ),
     ...props
@@ -3701,16 +3701,16 @@ var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ *
 ));
 Command.displayName = CommandPrimitive.displayName;
 var CommandDialog = ({ children, ...props }) => {
-  return /* @__PURE__ */ jsx23(Dialog, { ...props, children: /* @__PURE__ */ jsx23(DialogContent, { className: "sf-overflow-hidden sf-p-0 sf-shadow-lg", children: /* @__PURE__ */ jsx23(Command, { className: "[&_[cmdk-group-heading]]:sf-px-2 [&_[cmdk-group-heading]]:sf-font-medium [&_[cmdk-group-heading]]:sf-text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:sf-pt-0 [&_[cmdk-group]]:sf-px-2 [&_[cmdk-input-wrapper]_svg]:sf-h-5 [&_[cmdk-input-wrapper]_svg]:sf-w-5 [&_[cmdk-input]]:sf-h-12 [&_[cmdk-item]]:sf-px-2 [&_[cmdk-item]]:sf-py-3 [&_[cmdk-item]_svg]:sf-h-5 [&_[cmdk-item]_svg]:sf-w-5", children }) }) });
+  return /* @__PURE__ */ jsx23(Dialog, { ...props, children: /* @__PURE__ */ jsx23(DialogContent, { className: "sf:overflow-hidden sf:p-0 sf:shadow-lg", children: /* @__PURE__ */ jsx23(Command, { className: "sf:**:[[cmdk-group-heading]]:px-2 sf:**:[[cmdk-group-heading]]:font-medium sf:**:[[cmdk-group-heading]]:text-muted-foreground sf:[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 sf:**:[[cmdk-group]]:px-2 sf:[&_[cmdk-input-wrapper]_svg]:h-5 sf:[&_[cmdk-input-wrapper]_svg]:w-5 sf:**:[[cmdk-input]]:h-12 sf:**:[[cmdk-item]]:px-2 sf:**:[[cmdk-item]]:py-3 sf:[&_[cmdk-item]_svg]:h-5 sf:[&_[cmdk-item]_svg]:w-5", children }) }) });
 };
-var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs16("div", { className: "sf-flex sf-items-center sf-border-b sf-px-3", "cmdk-input-wrapper": "", children: [
-  /* @__PURE__ */ jsx23(Search, { className: "sf-mr-2 sf-h-4 sf-w-4 sf-shrink-0 sf-opacity-50" }),
+var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs16("div", { className: "sf:flex sf:items-center sf:border-b sf:px-3", "cmdk-input-wrapper": "", children: [
+  /* @__PURE__ */ jsx23(Search, { className: "sf:mr-2 sf:h-4 sf:w-4 sf:shrink-0 sf:opacity-50" }),
   /* @__PURE__ */ jsx23(
     CommandPrimitive.Input,
     {
       ref,
       className: cn(
-        "sf-flex sf-h-11 sf-w-full sf-rounded-md sf-bg-transparent sf-py-3 sf-text-sm sf-outline-none placeholder:sf-text-muted-foreground disabled:sf-cursor-not-allowed disabled:sf-opacity-50",
+        "sf:flex sf:h-11 sf:w-full sf:rounded-md sf:bg-transparent sf:py-3 sf:text-sm sf:outline-hidden sf:placeholder:text-muted-foreground sf:disabled:cursor-not-allowed sf:disabled:opacity-50",
         className
       ),
       ...props
@@ -3722,19 +3722,19 @@ var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
   CommandPrimitive.List,
   {
     ref,
-    className: cn("sf-max-h-[300px] sf-overflow-y-auto sf-overflow-x-hidden", className),
+    className: cn("sf:max-h-[300px] sf:overflow-y-auto sf:overflow-x-hidden", className),
     ...props
   }
 ));
 CommandList.displayName = CommandPrimitive.List.displayName;
-var CommandEmpty = React3.forwardRef((props, ref) => /* @__PURE__ */ jsx23(CommandPrimitive.Empty, { ref, className: "sf-py-6 sf-text-center sf-text-sm", ...props }));
+var CommandEmpty = React3.forwardRef((props, ref) => /* @__PURE__ */ jsx23(CommandPrimitive.Empty, { ref, className: "sf:py-6 sf:text-center sf:text-sm", ...props }));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
 var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
   CommandPrimitive.Group,
   {
     ref,
     className: cn(
-      "sf-overflow-hidden sf-p-1 sf-text-foreground [&_[cmdk-group-heading]]:sf-px-2 [&_[cmdk-group-heading]]:sf-py-1.5 [&_[cmdk-group-heading]]:sf-text-xs [&_[cmdk-group-heading]]:sf-font-medium [&_[cmdk-group-heading]]:sf-text-muted-foreground",
+      "sf:overflow-hidden sf:p-1 sf:text-foreground sf:**:[[cmdk-group-heading]]:px-2 sf:**:[[cmdk-group-heading]]:py-1.5 sf:**:[[cmdk-group-heading]]:text-xs sf:**:[[cmdk-group-heading]]:font-medium sf:**:[[cmdk-group-heading]]:text-muted-foreground",
       className
     ),
     ...props
@@ -3745,7 +3745,7 @@ var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @_
   CommandPrimitive.Separator,
   {
     ref,
-    className: cn("-sf-mx-1 sf-h-px sf-bg-border", className),
+    className: cn("sf:-mx-1 sf:h-px sf:bg-border", className),
     ...props
   }
 ));
@@ -3755,7 +3755,7 @@ var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
   {
     ref,
     className: cn(
-      "sf-relative sf-flex sf-cursor-default sf-select-none sf-items-center sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none aria-selected:sf-bg-muted aria-selected:sf-text-foreground data-[disabled='true']:sf-pointer-events-none data-[disabled='true']:sf-opacity-50",
+      "sf:relative sf:flex sf:cursor-default sf:select-none sf:items-center sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-sm sf:outline-hidden sf:aria-selected:bg-muted sf:aria-selected:text-foreground sf:data-[disabled='true']:pointer-events-none sf:data-[disabled='true']:opacity-50",
       className
     ),
     ...props
@@ -3766,7 +3766,7 @@ var CommandShortcut = ({ className, ...props }) => {
   return /* @__PURE__ */ jsx23(
     "span",
     {
-      className: cn("sf-ml-auto sf-text-xs sf-tracking-widest sf-text-muted-foreground", className),
+      className: cn("sf:ml-auto sf:text-xs sf:tracking-widest sf:text-muted-foreground", className),
       ...props
     }
   );
@@ -3786,7 +3786,7 @@ var ContextMenuContent = React4.forwardRef(({ className, ...props }, ref) => {
     {
       ref,
       className: cn(
-        "sf-z-50 sf-min-w-[10rem] sf-overflow-hidden sf-rounded-md sf-border sf-bg-popover sf-p-1 sf-text-popover-foreground sf-shadow-md data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95",
+        "sf:z-50 sf:min-w-40 sf:overflow-hidden sf:rounded-md sf:border sf:bg-popover sf:p-1 sf:text-popover-foreground sf:shadow-md sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95",
         className
       ),
       ...props
@@ -3799,7 +3799,7 @@ var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__
   {
     ref,
     className: cn(
-      "sf-relative sf-flex sf-cursor-default sf-select-none sf-items-center sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none data-[disabled]:sf-pointer-events-none data-[highlighted]:sf-bg-accent data-[highlighted]:sf-text-accent-foreground data-[disabled]:sf-opacity-50",
+      "sf:relative sf:flex sf:cursor-default sf:select-none sf:items-center sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-sm sf:outline-hidden sf:data-disabled:pointer-events-none sf:data-highlighted:bg-accent sf:data-highlighted:text-accent-foreground sf:data-disabled:opacity-50",
       className
     ),
     ...props
@@ -3810,7 +3810,7 @@ var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /
   ContextMenuPrimitive.Separator,
   {
     ref,
-    className: cn("-sf-mx-1 sf-my-1 sf-h-px sf-bg-border", className),
+    className: cn("sf:-mx-1 sf:my-1 sf:h-px sf:bg-border", className),
     ...props
   }
 ));
@@ -3819,7 +3819,7 @@ var ContextMenuShortcut = ({ className, ...props }) => /* @__PURE__ */ jsx24(
   "span",
   {
     className: cn(
-      "sf-ml-auto sf-pl-4 sf-text-xs sf-tracking-widest sf-text-muted-foreground",
+      "sf:ml-auto sf:pl-4 sf:text-xs sf:tracking-widest sf:text-muted-foreground",
       className
     ),
     ...props
@@ -3841,7 +3841,7 @@ var DropdownMenuContent = React5.forwardRef(({ className, sideOffset = 4, ...pro
       ref,
       sideOffset,
       className: cn(
-        "sf-z-50 sf-min-w-[10rem] sf-overflow-hidden sf-rounded-md sf-border sf-bg-popover sf-p-1 sf-text-popover-foreground sf-shadow-md data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95 data-[side=bottom]:sf-slide-in-from-top-2 data-[side=left]:sf-slide-in-from-right-2 data-[side=right]:sf-slide-in-from-left-2 data-[side=top]:sf-slide-in-from-bottom-2",
+        "sf:z-50 sf:min-w-40 sf:overflow-hidden sf:rounded-md sf:border sf:bg-popover sf:p-1 sf:text-popover-foreground sf:shadow-md sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[side=bottom]:slide-in-from-top-2 sf:data-[side=left]:slide-in-from-right-2 sf:data-[side=right]:slide-in-from-left-2 sf:data-[side=top]:slide-in-from-bottom-2",
         className
       ),
       ...props
@@ -3854,7 +3854,7 @@ var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @_
   {
     ref,
     className: cn(
-      "sf-relative sf-flex sf-cursor-default sf-select-none sf-items-center sf-gap-2 sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none data-[disabled]:sf-pointer-events-none data-[highlighted]:sf-bg-accent data-[highlighted]:sf-text-accent-foreground data-[disabled]:sf-opacity-50",
+      "sf:relative sf:flex sf:cursor-default sf:select-none sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-sm sf:outline-hidden sf:data-disabled:pointer-events-none sf:data-highlighted:bg-accent sf:data-highlighted:text-accent-foreground sf:data-disabled:opacity-50",
       className
     ),
     ...props
@@ -3865,7 +3865,7 @@ var DropdownMenuSeparator = React5.forwardRef(({ className, ...props }, ref) => 
   DropdownMenuPrimitive.Separator,
   {
     ref,
-    className: cn("-sf-mx-1 sf-my-1 sf-h-px sf-bg-border", className),
+    className: cn("sf:-mx-1 sf:my-1 sf:h-px sf:bg-border", className),
     ...props
   }
 ));
@@ -3889,7 +3889,7 @@ var TooltipContent = React6.forwardRef(({ className, sideOffset = 4, ...props },
       ref,
       sideOffset,
       className: cn(
-        "sf-z-50 sf-overflow-hidden sf-rounded-md sf-bg-foreground sf-px-3 sf-py-1.5 sf-text-sm sf-text-background sf-shadow-md sf-animate-in sf-fade-in-0 sf-zoom-in-95 data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=closed]:sf-zoom-out-95 data-[side=bottom]:sf-slide-in-from-top-2 data-[side=left]:sf-slide-in-from-right-2 data-[side=right]:sf-slide-in-from-left-2 data-[side=top]:sf-slide-in-from-bottom-2",
+        "sf:z-50 sf:overflow-hidden sf:rounded-md sf:bg-foreground sf:px-3 sf:py-1.5 sf:text-sm sf:text-background sf:shadow-md sf:animate-in sf:fade-in-0 sf:zoom-in-95 sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=closed]:zoom-out-95 sf:data-[side=bottom]:slide-in-from-top-2 sf:data-[side=left]:slide-in-from-right-2 sf:data-[side=right]:slide-in-from-left-2 sf:data-[side=top]:slide-in-from-bottom-2",
         className
       ),
       ...props
@@ -3912,14 +3912,14 @@ function IconToggleGroup({
     {
       "aria-label": ariaLabel,
       className: cn(
-        "sf-inline-flex sf-h-9 sf-items-stretch sf-overflow-hidden sf-rounded-md sf-border sf-border-input sf-bg-background sf-p-0.5",
+        "sf:inline-flex sf:h-9 sf:items-stretch sf:overflow-hidden sf:rounded-md sf:border sf:border-input sf:bg-background sf:p-0.5",
         className
       ),
       children: options.map((opt, idx) => {
         const isActive = value === opt.value;
         const Icon2 = opt.icon;
         return /* @__PURE__ */ jsxs17(Fragment4, { children: [
-          idx > 0 ? /* @__PURE__ */ jsx27("div", { "aria-hidden": true, className: "sf-mx-0.5 sf-w-px sf-self-stretch sf-bg-border/70" }) : null,
+          idx > 0 ? /* @__PURE__ */ jsx27("div", { "aria-hidden": true, className: "sf:mx-0.5 sf:w-px sf:self-stretch sf:bg-border/70" }) : null,
           /* @__PURE__ */ jsxs17(Tooltip, { children: [
             /* @__PURE__ */ jsx27(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx27(
               "button",
@@ -3931,13 +3931,13 @@ function IconToggleGroup({
                 "data-testid": opt.testId,
                 onClick: () => onChange(opt.value),
                 className: cn(
-                  "sf-flex sf-flex-1 sf-items-center sf-justify-center sf-rounded sf-px-2 sf-transition-colors focus-visible:sf-outline-none focus-visible:sf-ring-1 focus-visible:sf-ring-ring",
-                  isActive ? "sf-bg-secondary sf-text-secondary-foreground sf-shadow-sm" : "sf-text-muted-foreground hover:sf-bg-accent hover:sf-text-accent-foreground"
+                  "sf:flex sf:flex-1 sf:items-center sf:justify-center sf:rounded sf:px-2 sf:transition-colors sf:focus-visible:outline-hidden sf:focus-visible:ring-1 sf:focus-visible:ring-ring",
+                  isActive ? "sf:bg-secondary sf:text-secondary-foreground sf:shadow-sm" : "sf:text-muted-foreground sf:hover:bg-accent sf:hover:text-accent-foreground"
                 ),
-                children: /* @__PURE__ */ jsx27(Icon2, { className: "sf-h-4 sf-w-4" })
+                children: /* @__PURE__ */ jsx27(Icon2, { className: "sf:h-4 sf:w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx27(TooltipContent, { side: "top", className: "sf-px-2 sf-py-1 sf-text-xs", children: opt.label })
+            /* @__PURE__ */ jsx27(TooltipContent, { side: "top", className: "sf:px-2 sf:py-1 sf:text-xs", children: opt.label })
           ] })
         ] }, opt.value);
       })
@@ -3979,7 +3979,7 @@ var PopoverContent = React7.forwardRef(({ className, align = "center", sideOffse
       align,
       sideOffset,
       className: cn(
-        "sf-z-50 sf-w-72 sf-rounded-md sf-border sf-bg-popover sf-p-4 sf-text-popover-foreground sf-shadow-md sf-outline-none data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95 data-[side=bottom]:sf-slide-in-from-top-2 data-[side=left]:sf-slide-in-from-right-2 data-[side=right]:sf-slide-in-from-left-2 data-[side=top]:sf-slide-in-from-bottom-2",
+        "sf:z-50 sf:w-72 sf:rounded-md sf:border sf:bg-popover sf:p-4 sf:text-popover-foreground sf:shadow-md sf:outline-hidden sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[side=bottom]:slide-in-from-top-2 sf:data-[side=left]:slide-in-from-right-2 sf:data-[side=right]:slide-in-from-left-2 sf:data-[side=top]:slide-in-from-bottom-2",
         className
       ),
       ...props
@@ -4008,7 +4008,7 @@ var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PUR
   SheetPrimitive.Overlay,
   {
     className: cn(
-      "sf-fixed sf-inset-0 sf-z-50 sf-bg-black/80 data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0",
+      "sf:fixed sf:inset-0 sf:z-50 sf:bg-black/80 sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0",
       className
     ),
     ...props,
@@ -4017,14 +4017,14 @@ var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PUR
 ));
 SheetOverlay.displayName = SheetPrimitive.Overlay.displayName;
 var sheetVariants = cva2(
-  "sf-fixed sf-z-50 sf-gap-4 sf-bg-card sf-border-border sf-p-6 sf-shadow-lg sf-transition sf-ease-in-out data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-duration-300 data-[state=open]:sf-duration-500",
+  "sf:fixed sf:z-50 sf:gap-4 sf:bg-card sf:border-border sf:p-6 sf:shadow-lg sf:transition sf:ease-in-out sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:duration-300 sf:data-[state=open]:duration-500",
   {
     variants: {
       side: {
-        top: "sf-inset-x-0 sf-top-0 sf-border-b data-[state=closed]:sf-slide-out-to-top data-[state=open]:sf-slide-in-from-top",
-        bottom: "sf-inset-x-0 sf-bottom-0 sf-border-t data-[state=closed]:sf-slide-out-to-bottom data-[state=open]:sf-slide-in-from-bottom",
-        left: "sf-inset-y-0 sf-left-0 sf-h-full sf-w-3/4 sf-border-r data-[state=closed]:sf-slide-out-to-left data-[state=open]:sf-slide-in-from-left sm:sf-max-w-sm",
-        right: "sf-inset-y-0 sf-right-0 sf-h-full sf-w-3/4 sf-border-l data-[state=closed]:sf-slide-out-to-right data-[state=open]:sf-slide-in-from-right sm:sf-max-w-sm"
+        top: "sf:inset-x-0 sf:top-0 sf:border-b sf:data-[state=closed]:slide-out-to-top sf:data-[state=open]:slide-in-from-top",
+        bottom: "sf:inset-x-0 sf:bottom-0 sf:border-t sf:data-[state=closed]:slide-out-to-bottom sf:data-[state=open]:slide-in-from-bottom",
+        left: "sf:inset-y-0 sf:left-0 sf:h-full sf:w-3/4 sf:border-r sf:data-[state=closed]:slide-out-to-left sf:data-[state=open]:slide-in-from-left sf:sm:max-w-sm",
+        right: "sf:inset-y-0 sf:right-0 sf:h-full sf:w-3/4 sf:border-l sf:data-[state=closed]:slide-out-to-right sf:data-[state=open]:slide-in-from-right sf:sm:max-w-sm"
       }
     },
     defaultVariants: {
@@ -4036,9 +4036,9 @@ var SheetContent = React8.forwardRef(({ side = "right", className, children, ...
   /* @__PURE__ */ jsx30(SheetOverlay, {}),
   /* @__PURE__ */ jsxs18(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
     children,
-    /* @__PURE__ */ jsxs18(SheetPrimitive.Close, { className: "sf-absolute sf-right-4 sf-top-4 sf-rounded-sm sf-opacity-70 sf-ring-offset-background sf-transition-opacity hover:sf-opacity-100 focus:sf-outline-none focus:sf-ring-2 focus:sf-ring-ring focus:sf-ring-offset-2 disabled:sf-pointer-events-none", children: [
-      /* @__PURE__ */ jsx30(X2, { className: "sf-h-4 sf-w-4" }),
-      /* @__PURE__ */ jsx30("span", { className: "sr-only", children: "Close" })
+    /* @__PURE__ */ jsxs18(SheetPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+      /* @__PURE__ */ jsx30(X2, { className: "sf:h-4 sf:w-4" }),
+      /* @__PURE__ */ jsx30("span", { className: "sf:sr-only", children: "Close" })
     ] })
   ] })
 ] }));
@@ -4046,7 +4046,7 @@ SheetContent.displayName = SheetPrimitive.Content.displayName;
 var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx30(
   "div",
   {
-    className: cn("sf-flex sf-flex-col sf-space-y-2 sf-text-center sm:sf-text-left", className),
+    className: cn("sf:flex sf:flex-col sf:space-y-2 sf:text-center sf:sm:text-left", className),
     ...props
   }
 );
@@ -4055,7 +4055,7 @@ var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx30(
   "div",
   {
     className: cn(
-      "sf-flex sf-flex-col-reverse sm:sf-flex-row sm:sf-justify-end sm:sf-space-x-2",
+      "sf:flex sf:flex-col-reverse sf:sm:flex-row sf:sm:justify-end sf:sm:space-x-2",
       className
     ),
     ...props
@@ -4066,7 +4066,7 @@ var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE_
   SheetPrimitive.Title,
   {
     ref,
-    className: cn("sf-text-lg sf-font-semibold sf-text-foreground", className),
+    className: cn("sf:text-lg sf:font-semibold sf:text-foreground", className),
     ...props
   }
 ));
@@ -4075,7 +4075,7 @@ var SheetDescription = React8.forwardRef(({ className, ...props }, ref) => /* @_
   SheetPrimitive.Description,
   {
     ref,
-    className: cn("sf-text-sm sf-text-muted-foreground", className),
+    className: cn("sf:text-sm sf:text-muted-foreground", className),
     ...props
   }
 ));
@@ -4090,13 +4090,13 @@ var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */
   {
     ref,
     className: cn(
-      "sf-relative sf-flex sf-w-full sf-touch-none sf-select-none sf-items-center",
+      "sf:relative sf:flex sf:w-full sf:touch-none sf:select-none sf:items-center",
       className
     ),
     ...props,
     children: [
-      /* @__PURE__ */ jsx31(SliderPrimitive.Track, { className: "sf-relative sf-h-1.5 sf-w-full sf-grow sf-overflow-hidden sf-rounded-full sf-bg-secondary", children: /* @__PURE__ */ jsx31(SliderPrimitive.Range, { className: "sf-absolute sf-h-full sf-bg-primary" }) }),
-      /* @__PURE__ */ jsx31(SliderPrimitive.Thumb, { className: "sf-block sf-h-4 sf-w-4 sf-rounded-full sf-border sf-border-primary/60 sf-bg-background sf-shadow-sm sf-transition-colors hover:sf-border-primary focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring disabled:sf-pointer-events-none disabled:sf-opacity-50" })
+      /* @__PURE__ */ jsx31(SliderPrimitive.Track, { className: "sf:relative sf:h-1.5 sf:w-full sf:grow sf:overflow-hidden sf:rounded-full sf:bg-secondary", children: /* @__PURE__ */ jsx31(SliderPrimitive.Range, { className: "sf:absolute sf:h-full sf:bg-primary" }) }),
+      /* @__PURE__ */ jsx31(SliderPrimitive.Thumb, { className: "sf:block sf:h-4 sf:w-4 sf:rounded-full sf:border sf:border-primary/60 sf:bg-background sf:shadow-sm sf:transition-colors sf:hover:border-primary sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:disabled:pointer-events-none sf:disabled:opacity-50" })
     ]
   }
 ));
@@ -4112,7 +4112,7 @@ var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__
   {
     ref,
     className: cn(
-      "sf-inline-flex sf-h-9 sf-items-center sf-justify-center sf-rounded-md sf-bg-muted sf-p-1 sf-text-muted-foreground",
+      "sf:inline-flex sf:h-9 sf:items-center sf:justify-center sf:rounded-md sf:bg-muted sf:p-1 sf:text-muted-foreground",
       className
     ),
     ...props
@@ -4124,7 +4124,7 @@ var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PUR
   {
     ref,
     className: cn(
-      "sf-inline-flex sf-items-center sf-justify-center sf-whitespace-nowrap sf-rounded-sm sf-px-3 sf-py-1 sf-text-xs sf-font-medium sf-ring-offset-background sf-transition-all focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-2 disabled:sf-pointer-events-none disabled:sf-opacity-50 data-[state=active]:sf-bg-background data-[state=active]:sf-text-foreground data-[state=active]:sf-shadow-sm",
+      "sf:inline-flex sf:items-center sf:justify-center sf:whitespace-nowrap sf:rounded-sm sf:px-3 sf:py-1 sf:text-xs sf:font-medium sf:ring-offset-background sf:transition-all sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2 sf:disabled:pointer-events-none sf:disabled:opacity-50 sf:data-[state=active]:bg-background sf:data-[state=active]:text-foreground sf:data-[state=active]:shadow-sm",
       className
     ),
     ...props
@@ -4136,7 +4136,7 @@ var TabsContent = React10.forwardRef(({ className, ...props }, ref) => /* @__PUR
   {
     ref,
     className: cn(
-      "sf-mt-2 sf-ring-offset-background focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-2",
+      "sf:mt-2 sf:ring-offset-background sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2",
       className
     ),
     ...props
@@ -4186,7 +4186,7 @@ function IconPickerPopover({ open, onOpenChange, anchor, onPick }) {
         align: "start",
         side: "bottom",
         sideOffset: 6,
-        className: "sf-w-[340px] sf-p-0",
+        className: "sf:w-[340px] sf:p-0",
         "data-testid": "icon-picker-popover",
         children: /* @__PURE__ */ jsx33(IconPickerBody, { query, onQueryChange: setQuery, recents, onPick })
       }
@@ -4205,8 +4205,8 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
   const startIndex = startRow * COLS;
   const endIndex = Math.min(filtered.length, endRow * COLS);
   const visible = filtered.slice(startIndex, endIndex);
-  return /* @__PURE__ */ jsxs20("div", { className: "sf-flex sf-w-full sf-flex-col", children: [
-    /* @__PURE__ */ jsx33("div", { className: "sf-border-b sf-border-border sf-p-2", children: /* @__PURE__ */ jsx33(
+  return /* @__PURE__ */ jsxs20("div", { className: "sf:flex sf:w-full sf:flex-col", children: [
+    /* @__PURE__ */ jsx33("div", { className: "sf:border-b sf:border-border sf:p-2", children: /* @__PURE__ */ jsx33(
       "input",
       {
         type: "text",
@@ -4215,30 +4215,30 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
         "aria-label": "Search icons",
         "data-testid": "icon-picker-search",
         className: cn(
-          "sf-flex sf-h-8 sf-w-full sf-rounded-md sf-border sf-border-input sf-bg-background sf-px-3 sf-text-sm",
+          "sf:flex sf:h-8 sf:w-full sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-3 sf:text-sm",
           "placeholder:text-muted-foreground",
-          "focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1"
+          "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
         ),
         onChange: (e) => onQueryChange(e.target.value)
       }
     ) }),
-    showRecents ? /* @__PURE__ */ jsxs20("div", { className: "sf-border-b sf-border-border sf-p-2", "data-testid": "icon-picker-recents", children: [
-      /* @__PURE__ */ jsx33("div", { className: "sf-mb-1 sf-px-1 sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground", children: "Recent" }),
+    showRecents ? /* @__PURE__ */ jsxs20("div", { className: "sf:border-b sf:border-border sf:p-2", "data-testid": "icon-picker-recents", children: [
+      /* @__PURE__ */ jsx33("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "Recent" }),
       /* @__PURE__ */ jsx33(
         "div",
         {
-          className: "sf-grid sf-gap-1",
+          className: "sf:grid sf:gap-1",
           style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
           children: recents.map((name) => renderTile(name, onPick, `icon-picker-recent-${name}`))
         }
       )
     ] }) : null,
-    /* @__PURE__ */ jsxs20("div", { className: "sf-p-2", children: [
-      /* @__PURE__ */ jsx33("div", { className: "sf-mb-1 sf-px-1 sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground", children: "All icons" }),
+    /* @__PURE__ */ jsxs20("div", { className: "sf:p-2", children: [
+      /* @__PURE__ */ jsx33("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "All icons" }),
       filtered.length === 0 ? /* @__PURE__ */ jsx33(
         "div",
         {
-          className: "sf-flex sf-items-center sf-justify-center sf-text-xs sf-text-muted-foreground",
+          className: "sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground",
           style: { height: LIST_HEIGHT },
           "data-testid": "icon-picker-empty",
           children: "No icons match."
@@ -4262,7 +4262,7 @@ function IconPickerBody({ query, onQueryChange, recents, onPick }) {
               children: /* @__PURE__ */ jsx33(
                 "div",
                 {
-                  className: "sf-grid sf-gap-1",
+                  className: "sf:grid sf:gap-1",
                   style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
                   children: visible.map((name) => renderTile(name, onPick, `icon-picker-tile-${name}`))
                 }
@@ -4286,11 +4286,11 @@ function renderTile(name, onPick, testId) {
       "data-icon-name": name,
       onClick: () => onPick(name),
       className: cn(
-        "sf-inline-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors",
-        "hover:sf-bg-accent hover:sf-text-accent-foreground",
-        "focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1"
+        "sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+        "sf:hover:bg-accent sf:hover:text-accent-foreground",
+        "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
       ),
-      children: Icon2 ? /* @__PURE__ */ jsx33(Icon2, { className: "sf-h-4 sf-w-4", "aria-hidden": "true" }) : null
+      children: Icon2 ? /* @__PURE__ */ jsx33(Icon2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }) : null
     },
     testId
   );
@@ -4356,10 +4356,10 @@ function CanvasToolbar({
         title: tooltip,
         onClick: () => onSelectShape(active ? null : shape),
         className: cn(
-          "sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors",
-          active ? "sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30" : "hover:sf-bg-muted"
+          "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+          active ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
         ),
-        children: /* @__PURE__ */ jsx34(Icon2, { className: "sf-h-4 sf-w-4" })
+        children: /* @__PURE__ */ jsx34(Icon2, { className: "sf:h-4 sf:w-4" })
       },
       shape
     );
@@ -4368,7 +4368,7 @@ function CanvasToolbar({
     "div",
     {
       "data-testid": "canvas-toolbar",
-      className: "sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-card sf-p-1 sf-shadow-md sf-backdrop-blur",
+      className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-card sf:p-1 sf:shadow-md sf:backdrop-blur",
       children: [
         TOP_PRIMARY_SHAPES.map(renderShapeButton),
         /* @__PURE__ */ jsxs21(Popover, { open: shapePickerOpen, onOpenChange: setShapePickerOpen, children: [
@@ -4381,10 +4381,10 @@ function CanvasToolbar({
               "aria-pressed": shapePickerOpen || illustrativeActive,
               title: SHAPE_PICKER_LABEL,
               className: cn(
-                "sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors",
-                shapePickerOpen || illustrativeActive ? "sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30" : "hover:sf-bg-muted"
+                "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+                shapePickerOpen || illustrativeActive ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
               ),
-              children: /* @__PURE__ */ jsx34(Shapes, { className: "sf-h-4 sf-w-4", "aria-hidden": "true" })
+              children: /* @__PURE__ */ jsx34(Shapes, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
             }
           ) }),
           /* @__PURE__ */ jsx34(
@@ -4393,12 +4393,12 @@ function CanvasToolbar({
               align: "start",
               side: "right",
               sideOffset: 6,
-              className: "sf-w-auto sf-p-1",
+              className: "sf:w-auto sf:p-1",
               "data-testid": "shape-picker-popover",
               onOpenAutoFocus: (e) => {
                 e.preventDefault();
               },
-              children: /* @__PURE__ */ jsx34("div", { role: "menu", "aria-label": "More shapes", className: "sf-flex sf-flex-col sf-gap-0.5", children: ILLUSTRATIVE_SHAPES2.map(({ shape, label, commandId, Icon: Icon2 }) => {
+              children: /* @__PURE__ */ jsx34("div", { role: "menu", "aria-label": "More shapes", className: "sf:flex sf:flex-col sf:gap-0.5", children: ILLUSTRATIVE_SHAPES2.map(({ shape, label, commandId, Icon: Icon2 }) => {
                 const active = activeShape === shape;
                 const tooltip = getCommandTooltip(commandId);
                 return /* @__PURE__ */ jsxs21(
@@ -4416,11 +4416,11 @@ function CanvasToolbar({
                       setShapePickerOpen(false);
                     },
                     className: cn(
-                      "sf-flex sf-items-center sf-gap-2 sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-left sf-text-sm",
-                      active ? "sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30" : "hover:sf-bg-muted focus:sf-bg-muted focus:sf-outline-none"
+                      "sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm",
+                      active ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden"
                     ),
                     children: [
-                      /* @__PURE__ */ jsx34(Icon2, { className: "sf-h-4 sf-w-4 sf-text-muted-foreground", "aria-hidden": "true" }),
+                      /* @__PURE__ */ jsx34(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
                       /* @__PURE__ */ jsx34("span", { children: label })
                     ]
                   },
@@ -4447,16 +4447,16 @@ function CanvasToolbar({
                 "aria-pressed": iconPickerOpen ?? false,
                 title: INSERT_ICON_LABEL,
                 className: cn(
-                  "sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors",
-                  iconPickerOpen ? "sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30" : "hover:sf-bg-muted"
+                  "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+                  iconPickerOpen ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
                 ),
-                children: /* @__PURE__ */ jsx34(Sticker, { className: "sf-h-4 sf-w-4", "aria-hidden": "true" })
+                children: /* @__PURE__ */ jsx34(Sticker, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
               }
             ),
             onPick: onPickIcon
           }
         ) : null,
-        /* @__PURE__ */ jsx34("div", { className: "sf-my-1 sf-h-px sf-w-6 sf-bg-border", "aria-hidden": "true" }),
+        /* @__PURE__ */ jsx34("div", { className: "sf:my-1 sf:h-px sf:w-6 sf:bg-border", "aria-hidden": "true" }),
         SECONDARY_PRIMARY_SHAPES.map(renderShapeButton)
       ]
     }
@@ -4518,7 +4518,7 @@ function DetailPanel({
         SheetContent,
         {
           side: "right",
-          className: "sf-overflow-y-auto sf-bg-card/94 sf-backdrop-blur-[14px] sf-border-border sm:!sf-w-[var(--detail-panel-w)] sm:!sf-max-w-[var(--detail-panel-w)]",
+          className: "sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!",
           style: widthStyle,
           "data-testid": "detail-panel",
           onEscapeKeyDown: (e) => {
@@ -4546,11 +4546,11 @@ function DetailPanel({
                 "aria-label": "Resize detail panel",
                 onPointerDown: onResizeHandlePointerDown,
                 "data-testid": "detail-panel-resize-handle",
-                className: "sf-absolute sf-inset-y-0 sf-left-0 sf-z-10 sf-hidden sf-w-1.5 sf-cursor-col-resize sf-bg-transparent sf-transition-colors hover:sf-bg-border sm:sf-block"
+                className: "sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
               }
             ),
-            inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-col sf-gap-3", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-col sf-gap-1", children: [
+            inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
                 showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsx35(
                   EditableField,
                   {
@@ -4561,7 +4561,7 @@ function DetailPanel({
                     ariaLabel: "Name",
                     testIdBase: "detail-panel-name",
                     onSave: onNameChange,
-                    textClassName: "sf-text-base sf-font-semibold"
+                    textClassName: "sf:text-base sf:font-semibold"
                   }
                 ) }) : (
                   // Radix requires a SheetTitle for a11y; keep it sr-only for
@@ -4575,7 +4575,7 @@ function DetailPanel({
                   inspectableNode.type
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs22("div", { className: "sf-mt-0 sf-flex sf-flex-col sf-gap-3", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-3", children: [
                 statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
                 showIconField && onIconChange ? /* @__PURE__ */ jsx35(IconRow, { nodeId: inspectableNode.id, icon: currentIcon, onChange: onIconChange }) : null,
                 /* @__PURE__ */ jsx35(
@@ -4588,7 +4588,7 @@ function DetailPanel({
                     ariaLabel: "Description",
                     testIdBase: "detail-panel-description",
                     onSave: onDescriptionChange,
-                    textClassName: "sf-font-medium sf-text-muted-foreground"
+                    textClassName: "sf:font-medium sf:text-muted-foreground"
                   }
                 ),
                 /* @__PURE__ */ jsx35(
@@ -4606,8 +4606,8 @@ function DetailPanel({
                 ),
                 inspectableNode.type === "htmlNode" && demoId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
-            ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-col sf-gap-3", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-col sf-gap-1", children: [
+            ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
                 /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: connector.label ?? "Connector" }),
                 /* @__PURE__ */ jsxs22(SheetDescription, { className: "sr-only", children: [
                   connector.id,
@@ -4615,7 +4615,7 @@ function DetailPanel({
                   connector.kind
                 ] })
               ] }),
-              /* @__PURE__ */ jsx35("div", { className: "sf-mt-0 sf-flex sf-flex-col sf-gap-3", children: /* @__PURE__ */ jsx35(ConnectorSummary, { connector }) })
+              /* @__PURE__ */ jsx35("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-3", children: /* @__PURE__ */ jsx35(ConnectorSummary, { connector }) })
             ] }) : null
           ]
         }
@@ -4660,9 +4660,9 @@ function EditableField({
         "data-testid": testIdBase,
         "aria-label": ariaLabel,
         className: cn(
-          "sf-w-full sf-rounded-md sf-px-2 sf-py-1.5 sf-text-sm",
-          isEmpty ? "sf-italic sf-text-muted-foreground/50" : "text-foreground",
-          !markdown && "sf-whitespace-pre-wrap sf-break-words",
+          "sf:w-full sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm",
+          isEmpty ? "sf:italic sf:text-muted-foreground/50" : "text-foreground",
+          !markdown && "sf:whitespace-pre-wrap sf:wrap-break-word",
           textClassName
         ),
         children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx35(MarkdownContent, { value }) : value
@@ -4731,7 +4731,7 @@ function EditableField({
         // visually matches the rendered button surface exactly so toggling
         // edit mode doesn't shift the row's height. Caret + IME are the
         // only edit affordance.
-        "sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-rounded-md sf-px-2 sf-py-1.5 sf-text-sm sf-outline-none",
+        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm sf:outline-hidden",
         textClassName
       ),
       role: "textbox",
@@ -4745,9 +4745,9 @@ function EditableField({
       onClick: enterEdit,
       "aria-label": `Edit ${ariaLabel.toLowerCase()}`,
       className: cn(
-        "sf-block sf-w-full sf-cursor-text sf-rounded-md sf-px-2 sf-py-1.5 sf-text-left sf-text-sm sf-transition-colors hover:sf-bg-muted/50",
-        isEmpty ? "sf-italic sf-text-muted-foreground/50" : "text-foreground",
-        !markdown && "sf-whitespace-pre-wrap sf-break-words",
+        "sf:block sf:w-full sf:cursor-text sf:rounded-md sf:px-2 sf:py-1.5 sf:text-left sf:text-sm sf:transition-colors sf:hover:bg-muted/50",
+        isEmpty ? "sf:italic sf:text-muted-foreground/50" : "text-foreground",
+        !markdown && "sf:whitespace-pre-wrap sf:wrap-break-word",
         textClassName
       ),
       children: isEmpty ? placeholder : markdown ? /* @__PURE__ */ jsx35(MarkdownContent, { value }) : value
@@ -4760,8 +4760,8 @@ function IconRow({
   onChange
 }) {
   const [open, setOpen] = useState11(false);
-  return /* @__PURE__ */ jsxs22("div", { "data-testid": "detail-panel-icon", className: "sf-flex sf-items-center sf-gap-2 sf-px-2", children: [
-    /* @__PURE__ */ jsx35("span", { className: "sf-text-xs sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground sf-w-16 sf-shrink-0", children: "Icon" }),
+  return /* @__PURE__ */ jsxs22("div", { "data-testid": "detail-panel-icon", className: "sf:flex sf:items-center sf:gap-2 sf:px-2", children: [
+    /* @__PURE__ */ jsx35("span", { className: "sf:text-xs sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground sf:w-16 sf:shrink-0", children: "Icon" }),
     /* @__PURE__ */ jsx35(
       IconPickerPopover,
       {
@@ -4779,13 +4779,13 @@ function IconRow({
             "aria-label": "Choose icon",
             "aria-pressed": open,
             className: cn(
-              "sf-inline-flex sf-h-8 sf-min-w-8 sf-items-center sf-gap-2 sf-rounded-md sf-border sf-border-input sf-bg-background sf-px-2 sf-text-sm sf-transition-colors",
-              "hover:sf-bg-muted"
+              "sf:inline-flex sf:h-8 sf:min-w-8 sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-2 sf:text-sm sf:transition-colors",
+              "sf:hover:bg-muted"
             ),
             children: icon ? /* @__PURE__ */ jsxs22(Fragment5, { children: [
               /* @__PURE__ */ jsx35(Icon, { name: icon, size: 16, "aria-hidden": true }),
-              /* @__PURE__ */ jsx35("span", { className: "sf-font-mono sf-text-xs", children: icon })
-            ] }) : /* @__PURE__ */ jsx35("span", { className: "sf-text-muted-foreground sf-italic", children: "None" })
+              /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-xs", children: icon })
+            ] }) : /* @__PURE__ */ jsx35("span", { className: "sf:text-muted-foreground sf:italic", children: "None" })
           }
         )
       }
@@ -4798,10 +4798,10 @@ function IconRow({
         variant: "ghost",
         "data-testid": "detail-panel-icon-clear",
         "aria-label": "Clear icon",
-        className: "sf-h-8 sf-gap-1 sf-px-2 sf-text-xs",
+        className: "sf:h-8 sf:gap-1 sf:px-2 sf:text-xs",
         onClick: () => onChange(nodeId, null),
         children: [
-          /* @__PURE__ */ jsx35(X3, { className: "sf-h-3.5 sf-w-3.5" }),
+          /* @__PURE__ */ jsx35(X3, { className: "sf:h-3.5 sf:w-3.5" }),
           "Clear"
         ]
       }
@@ -4834,28 +4834,28 @@ function HtmlNodeSection({
   return /* @__PURE__ */ jsxs22(
     "div",
     {
-      className: "sf-flex sf-flex-col sf-gap-2 sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs",
+      className: "sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs",
       "data-testid": "detail-panel-html-node",
       children: [
-        /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-col sf-gap-1", children: [
-          /* @__PURE__ */ jsx35("span", { className: "sf-font-mono sf-text-[11px] sf-text-muted-foreground sf-uppercase sf-tracking-widest", children: "Path" }),
+        /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+          /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-[11px] sf:text-muted-foreground sf:uppercase sf:tracking-widest", children: "Path" }),
           /* @__PURE__ */ jsx35(
             "code",
             {
               "data-testid": "detail-panel-html-path",
-              className: "sf-block sf-break-all sf-rounded sf-bg-muted/40 sf-px-2 sf-py-1 sf-font-mono sf-text-[11px]",
+              className: "sf:block sf:break-all sf:rounded sf:bg-muted/40 sf:px-2 sf:py-1 sf:font-mono sf:text-[11px]",
               children: htmlPath
             }
           )
         ] }),
-        canOpen || canReveal ? /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-flex-wrap sf-items-center sf-gap-2", children: [
+        canOpen || canReveal ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-wrap sf:items-center sf:gap-2", children: [
           canOpen ? /* @__PURE__ */ jsxs22(
             Button,
             {
               type: "button",
               size: "sm",
               variant: "outline",
-              className: "sf-h-7 sf-gap-1.5 sf-px-2",
+              className: "sf:h-7 sf:gap-1.5 sf:px-2",
               onClick: () => {
                 void dispatch("open");
               },
@@ -4863,7 +4863,7 @@ function HtmlNodeSection({
               "data-testid": "detail-panel-html-open",
               "aria-label": "Open in editor",
               children: [
-                /* @__PURE__ */ jsx35(PencilLine, { className: "sf-h-3.5 sf-w-3.5" }),
+                /* @__PURE__ */ jsx35(PencilLine, { className: "sf:h-3.5 sf:w-3.5" }),
                 "Open in editor"
               ]
             }
@@ -4874,7 +4874,7 @@ function HtmlNodeSection({
               type: "button",
               size: "sm",
               variant: "outline",
-              className: "sf-h-7 sf-gap-1.5 sf-px-2",
+              className: "sf:h-7 sf:gap-1.5 sf:px-2",
               onClick: () => {
                 void dispatch("reveal");
               },
@@ -4882,7 +4882,7 @@ function HtmlNodeSection({
               "data-testid": "detail-panel-html-reveal",
               "aria-label": "Reveal in Finder/Explorer",
               children: [
-                /* @__PURE__ */ jsx35(FolderOpen, { className: "sf-h-3.5 sf-w-3.5" }),
+                /* @__PURE__ */ jsx35(FolderOpen, { className: "sf:h-3.5 sf:w-3.5" }),
                 "Reveal"
               ]
             }
@@ -4893,7 +4893,7 @@ function HtmlNodeSection({
           {
             "data-testid": "detail-panel-html-status",
             "data-status": status.kind,
-            className: cn("sf-text-[11px] sf-text-destructive"),
+            className: cn("sf:text-[11px] sf:text-destructive"),
             children: status.message ?? ""
           }
         ) : null
@@ -4934,11 +4934,11 @@ function StatusSection({
   return /* @__PURE__ */ jsxs22(
     "section",
     {
-      className: "sf-flex sf-flex-col sf-gap-2 sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs",
+      className: "sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs",
       "data-testid": "detail-panel-status",
       "data-state": report.state,
       children: [
-        /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-items-center sf-justify-between sf-gap-2", children: [
+        /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-center sf:justify-between sf:gap-2", children: [
           /* @__PURE__ */ jsx35(
             StatusBadge,
             {
@@ -4950,7 +4950,7 @@ function StatusSection({
           /* @__PURE__ */ jsx35(
             "span",
             {
-              className: "sf-shrink-0 sf-text-[10px] sf-text-muted-foreground",
+              className: "sf:shrink-0 sf:text-[10px] sf:text-muted-foreground",
               "data-testid": "detail-panel-status-relative-time",
               children: `Last updated: ${formatRelativeTime(report.ts, now)}`
             }
@@ -4960,7 +4960,7 @@ function StatusSection({
           "div",
           {
             "data-testid": "detail-panel-status-detail",
-            className: "sf-whitespace-pre-wrap sf-break-words sf-rounded sf-bg-muted/40 sf-px-2 sf-py-1 sf-text-[11px] sf-text-foreground",
+            className: "sf:whitespace-pre-wrap sf:wrap-break-word sf:rounded sf:bg-muted/40 sf:px-2 sf:py-1 sf:text-[11px] sf:text-foreground",
             children: report.detail
           }
         ) : null,
@@ -4968,10 +4968,10 @@ function StatusSection({
           "dl",
           {
             "data-testid": "detail-panel-status-data",
-            className: "sf-grid sf-grid-cols-[auto_1fr] sf-gap-x-3 sf-gap-y-1 sf-text-[11px]",
+            className: "sf:grid sf:grid-cols-[auto_1fr] sf:gap-x-3 sf:gap-y-1 sf:text-[11px]",
             children: entries.map(([key, value]) => /* @__PURE__ */ jsxs22("div", { className: "contents", "data-testid": "detail-panel-status-data-row", children: [
-              /* @__PURE__ */ jsx35("dt", { className: "sf-truncate sf-font-medium sf-text-muted-foreground", children: key }),
-              /* @__PURE__ */ jsx35("dd", { className: "sf-break-all sf-font-mono sf-text-foreground", children: formatStatusValue(value) })
+              /* @__PURE__ */ jsx35("dt", { className: "sf:truncate sf:font-medium sf:text-muted-foreground", children: key }),
+              /* @__PURE__ */ jsx35("dd", { className: "sf:break-all sf:font-mono sf:text-foreground", children: formatStatusValue(value) })
             ] }, key))
           }
         ) : null
@@ -4985,42 +4985,42 @@ function MarkdownContent({ value }) {
     {
       remarkPlugins: [remarkGfm],
       components: {
-        h1: ({ children }) => /* @__PURE__ */ jsx35("h1", { className: "sf-mb-1 sf-text-base sf-font-bold sf-leading-snug", children }),
-        h2: ({ children }) => /* @__PURE__ */ jsx35("h2", { className: "sf-mb-1 sf-text-sm sf-font-semibold sf-leading-snug", children }),
-        h3: ({ children }) => /* @__PURE__ */ jsx35("h3", { className: "sf-mb-0.5 sf-text-sm sf-font-medium sf-leading-snug", children }),
-        p: ({ children }) => /* @__PURE__ */ jsx35("p", { className: "sf-mb-2 last:sf-mb-0 sf-leading-relaxed", children }),
-        ul: ({ children }) => /* @__PURE__ */ jsx35("ul", { className: "sf-mb-2 sf-list-disc sf-pl-4 last:sf-mb-0", children }),
-        ol: ({ children }) => /* @__PURE__ */ jsx35("ol", { className: "sf-mb-2 sf-list-decimal sf-pl-4 last:sf-mb-0", children }),
+        h1: ({ children }) => /* @__PURE__ */ jsx35("h1", { className: "sf:mb-1 sf:text-base sf:font-bold sf:leading-snug", children }),
+        h2: ({ children }) => /* @__PURE__ */ jsx35("h2", { className: "sf:mb-1 sf:text-sm sf:font-semibold sf:leading-snug", children }),
+        h3: ({ children }) => /* @__PURE__ */ jsx35("h3", { className: "sf:mb-0.5 sf:text-sm sf:font-medium sf:leading-snug", children }),
+        p: ({ children }) => /* @__PURE__ */ jsx35("p", { className: "sf:mb-2 sf:last:mb-0 sf:leading-relaxed", children }),
+        ul: ({ children }) => /* @__PURE__ */ jsx35("ul", { className: "sf:mb-2 sf:list-disc sf:pl-4 sf:last:mb-0", children }),
+        ol: ({ children }) => /* @__PURE__ */ jsx35("ol", { className: "sf:mb-2 sf:list-decimal sf:pl-4 sf:last:mb-0", children }),
         li: ({ children }) => /* @__PURE__ */ jsx35("li", { className: "mb-0.5", children }),
         code: ({ children, className }) => {
           const isBlock = className?.includes("language-");
-          return isBlock ? /* @__PURE__ */ jsx35("code", { className: "sf-block sf-overflow-x-auto sf-rounded sf-bg-muted/60 sf-px-2 sf-py-1 sf-font-mono sf-text-xs", children }) : /* @__PURE__ */ jsx35("code", { className: "sf-rounded sf-bg-muted/60 sf-px-1 sf-py-0.5 sf-font-mono sf-text-xs", children });
+          return isBlock ? /* @__PURE__ */ jsx35("code", { className: "sf:block sf:overflow-x-auto sf:rounded sf:bg-muted/60 sf:px-2 sf:py-1 sf:font-mono sf:text-xs", children }) : /* @__PURE__ */ jsx35("code", { className: "sf:rounded sf:bg-muted/60 sf:px-1 sf:py-0.5 sf:font-mono sf:text-xs", children });
         },
-        pre: ({ children }) => /* @__PURE__ */ jsx35("pre", { className: "sf-mb-2 last:sf-mb-0", children }),
-        blockquote: ({ children }) => /* @__PURE__ */ jsx35("blockquote", { className: "sf-mb-2 sf-border-l-2 sf-border-muted-foreground/30 sf-pl-3 sf-italic sf-text-muted-foreground last:sf-mb-0", children }),
+        pre: ({ children }) => /* @__PURE__ */ jsx35("pre", { className: "sf:mb-2 sf:last:mb-0", children }),
+        blockquote: ({ children }) => /* @__PURE__ */ jsx35("blockquote", { className: "sf:mb-2 sf:border-l-2 sf:border-muted-foreground/30 sf:pl-3 sf:italic sf:text-muted-foreground sf:last:mb-0", children }),
         a: ({ href, children }) => /* @__PURE__ */ jsx35(
           "a",
           {
             href,
             target: "_blank",
             rel: "noreferrer",
-            className: "sf-text-primary sf-underline sf-underline-offset-2",
+            className: "sf:text-primary sf:underline sf:underline-offset-2",
             children
           }
         ),
         strong: ({ children }) => /* @__PURE__ */ jsx35("strong", { className: "font-semibold", children }),
         em: ({ children }) => /* @__PURE__ */ jsx35("em", { className: "italic", children }),
-        hr: () => /* @__PURE__ */ jsx35("hr", { className: "sf-my-2 sf-border-border" }),
-        table: ({ children }) => /* @__PURE__ */ jsx35("div", { className: "sf-mb-2 sf-overflow-x-auto last:sf-mb-0", children: /* @__PURE__ */ jsx35("table", { className: "sf-w-full sf-border-collapse sf-text-xs", children }) }),
-        th: ({ children }) => /* @__PURE__ */ jsx35("th", { className: "sf-border sf-border-border sf-bg-muted/40 sf-px-2 sf-py-1 sf-text-left sf-font-medium", children }),
-        td: ({ children }) => /* @__PURE__ */ jsx35("td", { className: "sf-border sf-border-border sf-px-2 sf-py-1", children })
+        hr: () => /* @__PURE__ */ jsx35("hr", { className: "sf:my-2 sf:border-border" }),
+        table: ({ children }) => /* @__PURE__ */ jsx35("div", { className: "sf:mb-2 sf:overflow-x-auto sf:last:mb-0", children: /* @__PURE__ */ jsx35("table", { className: "sf:w-full sf:border-collapse sf:text-xs", children }) }),
+        th: ({ children }) => /* @__PURE__ */ jsx35("th", { className: "sf:border sf:border-border sf:bg-muted/40 sf:px-2 sf:py-1 sf:text-left sf:font-medium", children }),
+        td: ({ children }) => /* @__PURE__ */ jsx35("td", { className: "sf:border sf:border-border sf:px-2 sf:py-1", children })
       },
       children: value
     }
   );
 }
 function ConnectorSummary({ connector }) {
-  return /* @__PURE__ */ jsx35("div", { className: "sf-rounded-md sf-border sf-bg-card sf-px-3 sf-py-2 sf-text-xs", children: /* @__PURE__ */ jsxs22("dl", { className: "divide-y", children: [
+  return /* @__PURE__ */ jsx35("div", { className: "sf:rounded-md sf:border sf:bg-card sf:px-3 sf:py-2 sf:text-xs", children: /* @__PURE__ */ jsxs22("dl", { className: "divide-y", children: [
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Source", value: connector.source }),
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Target", value: connector.target }),
     /* @__PURE__ */ jsx35(SummaryRow, { label: "Kind", value: connector.kind }),
@@ -5034,17 +5034,240 @@ function ConnectorSummary({ connector }) {
   ] }) });
 }
 function SummaryRow({ label, value }) {
-  return /* @__PURE__ */ jsxs22("div", { className: "sf-flex sf-items-start sf-gap-3 sf-py-2 first:sf-pt-0 last:sf-pb-0", children: [
-    /* @__PURE__ */ jsx35("dt", { className: "sf-w-20 sf-shrink-0 sf-font-medium sf-text-muted-foreground", children: label }),
-    /* @__PURE__ */ jsx35("dd", { className: "sf-flex-1 sf-break-all sf-font-mono", children: value })
+  return /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-start sf:gap-3 sf:py-2 sf:first:pt-0 sf:last:pb-0", children: [
+    /* @__PURE__ */ jsx35("dt", { className: "sf:w-20 sf:shrink-0 sf:font-medium sf:text-muted-foreground", children: label }),
+    /* @__PURE__ */ jsx35("dd", { className: "sf:flex-1 sf:break-all sf:font-mono", children: value })
+  ] });
+}
+
+// src/components/embed-dialog.tsx
+import { useCallback as useCallback2, useRef as useRef4, useState as useState12 } from "react";
+
+// src/lib/build-embed-snippet.ts
+var EMBED_HOST = "https://seeflow.dev/embed";
+var buildEmbedUrl = (projectId) => `${EMBED_HOST}/${encodeURIComponent(projectId)}`;
+var escapeHtmlAttribute = (value) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+var buildEmbedSnippet = (url) => {
+  const safeUrl = escapeHtmlAttribute(url);
+  return [
+    `<iframe src="${safeUrl}"`,
+    `  width="100%"`,
+    `  height="600"`,
+    `  style="border:0"`,
+    `  allow="fullscreen"`,
+    `  loading="lazy"></iframe>`
+  ].join("\n");
+};
+
+// src/components/embed-dialog.tsx
+import { jsx as jsx36, jsxs as jsxs23 } from "react/jsx-runtime";
+var TITLE = "Embed this canvas";
+var DESCRIPTION = "Paste this iframe into any page to embed the canvas.";
+var COPY_LABEL = "Copy snippet";
+var COPIED_LABEL = "Copied!";
+var FALLBACK_HINT = "Press \u2318C to copy";
+var CLOSE_LABEL = "Close";
+var COPIED_RESET_MS = 1500;
+function EmbedDialog({ open, onOpenChange, projectId }) {
+  const snippet = buildEmbedSnippet(buildEmbedUrl(projectId));
+  const [copyStatus, setCopyStatus] = useState12("idle");
+  const textareaRef = useRef4(null);
+  const handleCopy = useCallback2(async () => {
+    try {
+      await navigator.clipboard.writeText(snippet);
+      setCopyStatus("copied");
+      setTimeout(() => setCopyStatus("idle"), COPIED_RESET_MS);
+    } catch {
+      setCopyStatus("fallback");
+      const ta = textareaRef.current;
+      if (ta) {
+        ta.focus();
+        ta.select();
+      }
+    }
+  }, [snippet]);
+  return /* @__PURE__ */ jsx36(Dialog, { open, onOpenChange, children: /* @__PURE__ */ jsxs23(DialogContent, { "data-testid": "embed-dialog-content", children: [
+    /* @__PURE__ */ jsxs23(DialogHeader, { children: [
+      /* @__PURE__ */ jsx36(DialogTitle, { children: TITLE }),
+      /* @__PURE__ */ jsx36(DialogDescription, { children: DESCRIPTION })
+    ] }),
+    /* @__PURE__ */ jsx36(
+      "textarea",
+      {
+        ref: textareaRef,
+        "data-testid": "embed-dialog-snippet",
+        readOnly: true,
+        rows: 7,
+        value: snippet,
+        spellCheck: false,
+        onFocus: (e) => e.currentTarget.select(),
+        className: "sf:w-full sf:resize-none sf:rounded-md sf:border sf:border-border sf:bg-background sf:p-3 sf:font-mono sf:text-xs sf:leading-relaxed sf:text-foreground sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring"
+      }
+    ),
+    copyStatus === "fallback" ? /* @__PURE__ */ jsx36(
+      "p",
+      {
+        "data-testid": "embed-dialog-fallback-hint",
+        className: "sf:text-xs sf:text-muted-foreground",
+        children: FALLBACK_HINT
+      }
+    ) : null,
+    /* @__PURE__ */ jsxs23(DialogFooter, { children: [
+      /* @__PURE__ */ jsx36(
+        Button,
+        {
+          variant: "outline",
+          "data-testid": "embed-dialog-close",
+          onClick: () => onOpenChange(false),
+          children: CLOSE_LABEL
+        }
+      ),
+      /* @__PURE__ */ jsx36(Button, { "data-testid": "embed-dialog-copy", onClick: handleCopy, children: copyStatus === "copied" ? COPIED_LABEL : COPY_LABEL })
+    ] })
+  ] }) });
+}
+
+// src/components/share-menu.tsx
+import { FileDown, Image as ImageIcon, Loader2 as Loader22, Share2, Square as Square2, Upload } from "lucide-react";
+import { useCallback as useCallback3, useState as useState13 } from "react";
+import { Fragment as Fragment6, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
+var SHARE_LABEL = "Share / download";
+var DOWNLOAD_PDF_LABEL = "Download PDF";
+var DOWNLOAD_PNG_LABEL = "Download PNG";
+var EMBED_LABEL = "Embed";
+var EXPORT_TO_CLOUD_LABEL = "Export to seeflow.dev";
+function ShareMenu({
+  mode,
+  projectId,
+  onDownloadPdf,
+  onDownloadPng,
+  onExportToCloud,
+  embedOpen: embedOpenProp,
+  onEmbedOpenChange
+}) {
+  const [downloadingPdf, setDownloadingPdf] = useState13(false);
+  const [downloadingPng, setDownloadingPng] = useState13(false);
+  const [internalEmbedOpen, setInternalEmbedOpen] = useState13(false);
+  const embedControlled = embedOpenProp !== void 0;
+  const embedOpen = embedControlled ? embedOpenProp : internalEmbedOpen;
+  const setEmbedOpen = useCallback3(
+    (next) => {
+      if (!embedControlled) setInternalEmbedOpen(next);
+      onEmbedOpenChange?.(next);
+    },
+    [embedControlled, onEmbedOpenChange]
+  );
+  const handleDownloadPdf = useCallback3(() => {
+    if (!onDownloadPdf || downloadingPdf) return;
+    setDownloadingPdf(true);
+    Promise.resolve(onDownloadPdf()).finally(() => setDownloadingPdf(false));
+  }, [onDownloadPdf, downloadingPdf]);
+  const handleDownloadPng = useCallback3(() => {
+    if (!onDownloadPng || downloadingPng) return;
+    setDownloadingPng(true);
+    Promise.resolve(onDownloadPng()).finally(() => setDownloadingPng(false));
+  }, [onDownloadPng, downloadingPng]);
+  const showPdf = Boolean(onDownloadPdf);
+  const showPng = Boolean(onDownloadPng);
+  const showEmbed = mode === "edit" && typeof projectId === "string" && projectId.length > 0;
+  const showExportToCloud = mode === "edit" && Boolean(onExportToCloud);
+  if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
+  return /* @__PURE__ */ jsxs24(Fragment6, { children: [
+    /* @__PURE__ */ jsxs24(DropdownMenu, { children: [
+      /* @__PURE__ */ jsx37(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx37(
+        "button",
+        {
+          type: "button",
+          "data-testid": "share-menu-trigger",
+          "aria-label": SHARE_LABEL,
+          title: SHARE_LABEL,
+          className: cn(
+            "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-border sf:bg-background/95 sf:text-muted-foreground sf:shadow-md sf:backdrop-blur-sm sf:transition-colors",
+            "sf:hover:bg-accent sf:hover:text-accent-foreground",
+            "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring"
+          ),
+          children: /* @__PURE__ */ jsx37(Share2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
+        }
+      ) }),
+      /* @__PURE__ */ jsxs24(
+        DropdownMenuContent,
+        {
+          align: "end",
+          "data-testid": "share-menu-content",
+          onCloseAutoFocus: (e) => {
+            e.preventDefault();
+          },
+          children: [
+            showPdf ? /* @__PURE__ */ jsxs24(
+              DropdownMenuItem,
+              {
+                "data-testid": "share-menu-pdf",
+                disabled: downloadingPdf,
+                onSelect: (e) => {
+                  e.preventDefault();
+                  handleDownloadPdf();
+                },
+                children: [
+                  downloadingPdf ? /* @__PURE__ */ jsx37(Loader22, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(FileDown, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  /* @__PURE__ */ jsx37("span", { children: DOWNLOAD_PDF_LABEL })
+                ]
+              }
+            ) : null,
+            showPng ? /* @__PURE__ */ jsxs24(
+              DropdownMenuItem,
+              {
+                "data-testid": "share-menu-png",
+                disabled: downloadingPng,
+                onSelect: (e) => {
+                  e.preventDefault();
+                  handleDownloadPng();
+                },
+                children: [
+                  downloadingPng ? /* @__PURE__ */ jsx37(Loader22, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx37(ImageIcon, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  /* @__PURE__ */ jsx37("span", { children: DOWNLOAD_PNG_LABEL })
+                ]
+              }
+            ) : null,
+            showEmbed ? /* @__PURE__ */ jsxs24(
+              DropdownMenuItem,
+              {
+                "data-testid": "share-menu-embed",
+                onSelect: (e) => {
+                  e.preventDefault();
+                  setEmbedOpen(true);
+                },
+                children: [
+                  /* @__PURE__ */ jsx37(Square2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  /* @__PURE__ */ jsx37("span", { children: EMBED_LABEL })
+                ]
+              }
+            ) : null,
+            showExportToCloud ? /* @__PURE__ */ jsxs24(
+              DropdownMenuItem,
+              {
+                "data-testid": "share-menu-export-cloud",
+                onSelect: () => {
+                  onExportToCloud?.();
+                },
+                children: [
+                  /* @__PURE__ */ jsx37(Upload, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }),
+                  /* @__PURE__ */ jsx37("span", { children: EXPORT_TO_CLOUD_LABEL })
+                ]
+              }
+            ) : null
+          ]
+        }
+      )
+    ] }),
+    showEmbed && projectId ? /* @__PURE__ */ jsx37(EmbedDialog, { open: embedOpen, onOpenChange: setEmbedOpen, projectId }) : null
   ] });
 }
 
 // src/components/selection-resize-overlay.tsx
 import { useReactFlow } from "@xyflow/react";
 import {
-  useRef as useRef4,
-  useState as useState12
+  useRef as useRef5,
+  useState as useState14
 } from "react";
 var SELECTION_OVERLAY_PADDING = 8;
 function computeUnionRect(nodes) {
@@ -5155,10 +5378,10 @@ function SelectionResizeOverlay({
   paddingPx = SELECTION_OVERLAY_PADDING
 }) {
   const reactFlow = useReactFlow();
-  const [dragState, setDragState] = useState12(null);
-  const [previewRect, setPreviewRect] = useState12(null);
-  const shiftHeldRef = useRef4(false);
-  const liveDispatchRafRef = useRef4(null);
+  const [dragState, setDragState] = useState14(null);
+  const [previewRect, setPreviewRect] = useState14(null);
+  const shiftHeldRef = useRef5(false);
+  const liveDispatchRafRef = useRef5(null);
   if (!selectionEligibleForOverlay(selectedNodes)) return null;
   const unionRect = computeUnionRect(selectedNodes);
   if (!unionRect) return null;
@@ -5281,8 +5504,8 @@ import {
   Sticker as Sticker2,
   Type as Type2
 } from "lucide-react";
-import { useEffect as useEffect8, useState as useState13 } from "react";
-import { Fragment as Fragment6, jsx as jsx36, jsxs as jsxs23 } from "react/jsx-runtime";
+import { useEffect as useEffect8, useState as useState15 } from "react";
+import { Fragment as Fragment7, jsx as jsx38, jsxs as jsxs25 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
 var DEFAULT_BORDER_SIZE = 3;
@@ -5453,13 +5676,13 @@ function StyleStrip({
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);
     };
-    return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+    return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
       "div",
       {
         "data-testid": "canvas-style-strip",
-        className: "sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur",
+        className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx36(
+          /* @__PURE__ */ jsx38(
             SwatchButton,
             {
               testId: "style-strip-icon-color",
@@ -5472,8 +5695,8 @@ function StyleStrip({
               onSelect: applyIconColor
             }
           ),
-          showChangeIcon ? /* @__PURE__ */ jsxs23(Tooltip, { children: [
-            /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
+          showChangeIcon ? /* @__PURE__ */ jsxs25(Tooltip, { children: [
+            /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
               "button",
               {
                 type: "button",
@@ -5482,13 +5705,13 @@ function StyleStrip({
                 title: "Change icon",
                 onClick: onChangeIconClick,
                 className: cn(
-                  "sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground",
-                  "focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1"
+                  "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground",
+                  "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
                 ),
-                children: /* @__PURE__ */ jsx36(Sticker2, { className: "sf-h-4 sf-w-4" })
+                children: /* @__PURE__ */ jsx38(Sticker2, { className: "sf:h-4 sf:w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "sf-px-2 sf-py-1 sf-text-xs", children: "Change icon" })
+            /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: "Change icon" })
           ] }) : null
         ]
       }
@@ -5517,13 +5740,13 @@ function StyleStrip({
     const previewImageCornerRadius = (n) => {
       for (const node of nodes) onStyleNodePreview?.(node.id, { cornerRadius: n });
     };
-    return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+    return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
       "div",
       {
         "data-testid": "canvas-style-strip",
-        className: "sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur",
+        className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx36(
+          /* @__PURE__ */ jsx38(
             SwatchButton,
             {
               testId: "style-strip-image-border-color",
@@ -5536,7 +5759,7 @@ function StyleStrip({
               onSelect: applyImageBorderColor
             }
           ),
-          /* @__PURE__ */ jsx36(
+          /* @__PURE__ */ jsx38(
             PopoverButton,
             {
               testId: "style-strip-image-border-style",
@@ -5544,9 +5767,9 @@ function StyleStrip({
               ariaLabel: "image border style",
               renderIcon: () => {
                 const Icon2 = BORDER_STYLE_OPTIONS.find((o) => o.value === imageBorderStyle)?.icon ?? LineSolidIcon;
-                return /* @__PURE__ */ jsx36(Icon2, { className: "sf-h-4 sf-w-4" });
+                return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
               },
-              children: /* @__PURE__ */ jsx36(
+              children: /* @__PURE__ */ jsx38(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5557,14 +5780,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx36(
+          /* @__PURE__ */ jsx38(
             PopoverButton,
             {
               testId: "style-strip-image-border-width",
               tooltip: "Border width",
               ariaLabel: "image border width",
-              renderIcon: () => /* @__PURE__ */ jsx36("span", { className: "sf-font-mono sf-text-[10px] sf-tabular-nums", children: imageBorderWidth }),
-              children: /* @__PURE__ */ jsx36(
+              renderIcon: () => /* @__PURE__ */ jsx38("span", { className: "sf:font-mono sf:text-[10px] sf:tabular-nums", children: imageBorderWidth }),
+              children: /* @__PURE__ */ jsx38(
                 SliderControl,
                 {
                   value: firstImage?.data.borderWidth,
@@ -5579,14 +5802,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx36(
+          /* @__PURE__ */ jsx38(
             PopoverButton,
             {
               testId: "style-strip-image-corner-radius",
               tooltip: "Corners",
               ariaLabel: "image corner radius",
-              renderIcon: () => /* @__PURE__ */ jsx36(Squircle, { className: "sf-h-4 sf-w-4" }),
-              children: /* @__PURE__ */ jsx36(
+              renderIcon: () => /* @__PURE__ */ jsx38(Squircle, { className: "sf:h-4 sf:w-4" }),
+              children: /* @__PURE__ */ jsx38(
                 SliderControl,
                 {
                   value: firstImage?.data.cornerRadius,
@@ -5611,39 +5834,39 @@ function StyleStrip({
   const renderColorsTrigger = () => {
     if (pureConnector) {
       const edge = COLOR_TOKENS[borderColorActive].edge;
-      return /* @__PURE__ */ jsx36(
+      return /* @__PURE__ */ jsx38(
         "span",
         {
-          className: "sf-inline-block sf-h-5 sf-w-5 sf-rounded-full sf-ring-1 sf-ring-border",
+          className: "sf:inline-block sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border",
           style: { backgroundColor: edge }
         }
       );
     }
     const borderHex = COLOR_TOKENS[borderColorActive].border;
     const fillHex = COLOR_TOKENS[backgroundActive].background;
-    return /* @__PURE__ */ jsx36(
+    return /* @__PURE__ */ jsx38(
       "span",
       {
-        className: "sf-inline-block sf-h-5 sf-w-5 sf-rounded-md sf-ring-1 sf-ring-border",
+        className: "sf:inline-block sf:h-5 sf:w-5 sf:rounded-md sf:ring-1 sf:ring-border",
         style: { backgroundColor: fillHex, border: `2px solid ${borderHex}` }
       }
     );
   };
-  return /* @__PURE__ */ jsx36(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs23(
+  return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
     "div",
     {
       "data-testid": "canvas-style-strip",
-      className: "sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-background/95 sf-p-1 sf-shadow-md sf-backdrop-blur",
+      className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
       children: [
-        !isTextShape ? /* @__PURE__ */ jsx36(
+        !isTextShape ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-colors",
             tooltip: "Colors",
             ariaLabel: "colors",
             renderIcon: renderColorsTrigger,
-            children: /* @__PURE__ */ jsxs23("div", { className: "sf-flex sf-w-56 sf-flex-col sf-gap-3", children: [
-              /* @__PURE__ */ jsx36(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx36(
+            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx38(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx38(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-border-color",
@@ -5655,7 +5878,7 @@ function StyleStrip({
                   onSelect: applyBorderColor
                 }
               ) }),
-              showFillSection ? /* @__PURE__ */ jsx36(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx36(
+              showFillSection ? /* @__PURE__ */ jsx38(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx38(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-fill",
@@ -5670,7 +5893,7 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        showBorderSection ? /* @__PURE__ */ jsx36(
+        showBorderSection ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-border",
@@ -5678,10 +5901,10 @@ function StyleStrip({
             ariaLabel: pureConnector ? "connector" : "border",
             renderIcon: () => {
               const Icon2 = (pureConnector ? CONNECTOR_STYLE_OPTIONS.find((o) => o.value === connectorStyleActive)?.icon : BORDER_STYLE_OPTIONS.find((o) => o.value === borderStyleActiveNode)?.icon) ?? LineSolidIcon;
-              return /* @__PURE__ */ jsx36(Icon2, { className: "sf-h-4 sf-w-4" });
+              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsxs23("div", { className: "sf-flex sf-w-56 sf-flex-col sf-gap-3", children: [
-              /* @__PURE__ */ jsx36(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx36(
+            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx38(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx38(
                 IconToggleGroup,
                 {
                   ariaLabel: "Connector style",
@@ -5689,7 +5912,7 @@ function StyleStrip({
                   onChange: (s) => applyBorderStyle(s),
                   options: CONNECTOR_STYLE_OPTIONS
                 }
-              ) : /* @__PURE__ */ jsx36(
+              ) : /* @__PURE__ */ jsx38(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5698,7 +5921,7 @@ function StyleStrip({
                   options: BORDER_STYLE_OPTIONS
                 }
               ) }),
-              /* @__PURE__ */ jsx36(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx36(
+              /* @__PURE__ */ jsx38(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx38(
                 SliderControl,
                 {
                   value: widthCurrent,
@@ -5714,20 +5937,20 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes || pureConnector ? /* @__PURE__ */ jsx36(
+        hasNodes || pureConnector ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-text",
             tooltip: "Text",
             ariaLabel: "text",
-            renderIcon: () => /* @__PURE__ */ jsx36(Type2, { className: "sf-h-4 sf-w-4" }),
-            children: /* @__PURE__ */ jsxs23("div", { className: "sf-flex sf-w-56 sf-flex-col sf-gap-3", children: [
-              /* @__PURE__ */ jsx36(
+            renderIcon: () => /* @__PURE__ */ jsx38(Type2, { className: "sf:h-4 sf:w-4" }),
+            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx38(
                 PopoverSection,
                 {
                   label: "Size",
                   testId: pureConnector ? "style-strip-connector-font-size" : "style-strip-font-size",
-                  children: /* @__PURE__ */ jsx36(
+                  children: /* @__PURE__ */ jsx38(
                     SliderControl,
                     {
                       value: pureConnector ? firstConnector?.fontSize : firstVisualNode?.data.fontSize,
@@ -5743,7 +5966,7 @@ function StyleStrip({
                   )
                 }
               ),
-              showTextColorSection ? /* @__PURE__ */ jsx36(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx36(
+              showTextColorSection ? /* @__PURE__ */ jsx38(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx38(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-text-color",
@@ -5758,14 +5981,14 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes && !isTextShape ? /* @__PURE__ */ jsx36(
+        hasNodes && !isTextShape ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-corner-radius",
             tooltip: "Corners",
             ariaLabel: "corner radius",
-            renderIcon: () => /* @__PURE__ */ jsx36(Squircle, { className: "sf-h-4 sf-w-4" }),
-            children: /* @__PURE__ */ jsx36(
+            renderIcon: () => /* @__PURE__ */ jsx38(Squircle, { className: "sf:h-4 sf:w-4" }),
+            children: /* @__PURE__ */ jsx38(
               SliderControl,
               {
                 value: firstVisualNode?.data.cornerRadius,
@@ -5781,7 +6004,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx36(
+        pureConnector ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-path",
@@ -5789,9 +6012,9 @@ function StyleStrip({
             ariaLabel: "connector path",
             renderIcon: () => {
               const Icon2 = PATH_OPTIONS.find((o) => o.value === pathActive)?.icon ?? PathCurveIcon;
-              return /* @__PURE__ */ jsx36(Icon2, { className: "sf-h-4 sf-w-4" });
+              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsx36(
+            children: /* @__PURE__ */ jsx38(
               IconToggleGroup,
               {
                 ariaLabel: "Connector path",
@@ -5802,7 +6025,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx36(
+        pureConnector ? /* @__PURE__ */ jsx38(
           PopoverButton,
           {
             testId: "style-strip-direction",
@@ -5810,9 +6033,9 @@ function StyleStrip({
             ariaLabel: "direction",
             renderIcon: () => {
               const Icon2 = DIRECTION_OPTIONS.find((o) => o.value === directionActive)?.icon ?? ArrowRight;
-              return /* @__PURE__ */ jsx36(Icon2, { className: "sf-h-4 sf-w-4" });
+              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsx36(
+            children: /* @__PURE__ */ jsx38(
               IconToggleGroup,
               {
                 ariaLabel: "Connector direction",
@@ -5850,11 +6073,11 @@ function SwatchButton({
   innerTestId,
   onSelect
 }) {
-  const [open, setOpen] = useState13(false);
+  const [open, setOpen] = useState15(false);
   const isUnset = activeToken === "default";
-  return /* @__PURE__ */ jsxs23(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs23(Tooltip, { children: [
-      /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
+  return /* @__PURE__ */ jsxs25(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs25(Tooltip, { children: [
+      /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
         "button",
         {
           type: "button",
@@ -5863,20 +6086,20 @@ function SwatchButton({
           "aria-label": `${ariaLabel}: ${activeToken}`,
           title: tooltip,
           className: cn(
-            "sf-group sf-relative sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground",
-            "focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1"
+            "sf:group sf:relative sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground",
+            "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
           ),
-          children: /* @__PURE__ */ jsx36(
+          children: /* @__PURE__ */ jsx38(
             "span",
             {
               "data-testid": innerTestId,
-              className: "sf-relative sf-h-5 sf-w-5 sf-rounded-full sf-ring-1 sf-ring-border",
+              className: "sf:relative sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border",
               style: swatchTriggerFillStyle(activeToken, previewKind),
-              children: isUnset ? /* @__PURE__ */ jsx36(
+              children: isUnset ? /* @__PURE__ */ jsx38(
                 "span",
                 {
                   "aria-hidden": "true",
-                  className: "sf-pointer-events-none sf-absolute sf-inset-0 sf-rounded-full",
+                  className: "sf:pointer-events-none sf:absolute sf:inset-0 sf:rounded-full",
                   style: {
                     backgroundImage: "linear-gradient(45deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%)",
                     color: "hsl(var(--muted-foreground))",
@@ -5888,18 +6111,18 @@ function SwatchButton({
           )
         }
       ) }) }),
-      /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "sf-px-2 sf-py-1 sf-text-xs", children: tooltip })
+      /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx36(
+    /* @__PURE__ */ jsx38(
       PopoverContent,
       {
         side: "right",
         align: "start",
-        className: "sf-w-auto sf-p-2",
+        className: "sf:w-auto sf:p-2",
         "data-testid": `${innerTestId}-popover`,
-        children: /* @__PURE__ */ jsx36("div", { className: "sf-grid sf-grid-cols-4 sf-gap-1.5", children: PALETTE_TOKENS.map((token) => {
+        children: /* @__PURE__ */ jsx38("div", { className: "sf:grid sf:grid-cols-4 sf:gap-1.5", children: PALETTE_TOKENS.map((token) => {
           const isActive = activeToken === token;
-          return /* @__PURE__ */ jsx36(
+          return /* @__PURE__ */ jsx38(
             "button",
             {
               type: "button",
@@ -5913,14 +6136,14 @@ function SwatchButton({
               "aria-pressed": isActive,
               title: token,
               className: cn(
-                "sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all",
-                isActive ? "sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover" : "hover:sf-scale-110"
+                "sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all",
+                isActive ? "sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover" : "sf:hover:scale-110"
               ),
               style: swatchPreviewStyle(token, previewKind),
-              children: isActive ? /* @__PURE__ */ jsx36(
+              children: isActive ? /* @__PURE__ */ jsx38(
                 Check,
                 {
-                  className: "sf-h-3 sf-w-3 sf-drop-shadow-sm",
+                  className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
                   style: { color: "hsl(var(--foreground))" }
                 }
               ) : null
@@ -5941,16 +6164,16 @@ function ColorSwatchGrid({
   ariaLabel,
   onSelect
 }) {
-  return /* @__PURE__ */ jsx36(
+  return /* @__PURE__ */ jsx38(
     "div",
     {
       "data-testid": testId,
       "data-active-token": activeToken,
       "data-inner-testid": innerTestId,
-      className: "sf-grid sf-grid-cols-4 sf-gap-1.5",
+      className: "sf:grid sf:grid-cols-4 sf:gap-1.5",
       children: PALETTE_TOKENS.map((token) => {
         const isActive = activeToken === token;
-        return /* @__PURE__ */ jsx36(
+        return /* @__PURE__ */ jsx38(
           "button",
           {
             type: "button",
@@ -5961,14 +6184,14 @@ function ColorSwatchGrid({
             "aria-pressed": isActive,
             title: token,
             className: cn(
-              "sf-relative sf-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-full sf-border-2 sf-transition-all",
-              isActive ? "sf-ring-2 sf-ring-ring sf-ring-offset-2 sf-ring-offset-popover" : "hover:sf-scale-110"
+              "sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all",
+              isActive ? "sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover" : "sf:hover:scale-110"
             ),
             style: swatchPreviewStyle(token, previewKind),
-            children: isActive ? /* @__PURE__ */ jsx36(
+            children: isActive ? /* @__PURE__ */ jsx38(
               Check,
               {
-                className: "sf-h-3 sf-w-3 sf-drop-shadow-sm",
+                className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
                 style: { color: "hsl(var(--foreground))" }
               }
             ) : null
@@ -5984,8 +6207,8 @@ function PopoverSection({
   testId,
   children
 }) {
-  return /* @__PURE__ */ jsxs23("div", { className: "sf-flex sf-flex-col sf-gap-1.5", "data-testid": testId, children: [
-    /* @__PURE__ */ jsx36("div", { className: "sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground", children: label }),
+  return /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:flex-col sf:gap-1.5", "data-testid": testId, children: [
+    /* @__PURE__ */ jsx38("div", { className: "sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: label }),
     children
   ] });
 }
@@ -5996,10 +6219,10 @@ function PopoverButton({
   renderIcon,
   children
 }) {
-  const [open, setOpen] = useState13(false);
-  return /* @__PURE__ */ jsxs23(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs23(Tooltip, { children: [
-      /* @__PURE__ */ jsx36(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx36(
+  const [open, setOpen] = useState15(false);
+  return /* @__PURE__ */ jsxs25(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs25(Tooltip, { children: [
+      /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
         "button",
         {
           type: "button",
@@ -6007,15 +6230,15 @@ function PopoverButton({
           "aria-label": ariaLabel,
           title: tooltip,
           className: cn(
-            "sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors hover:sf-bg-accent hover:sf-text-accent-foreground",
-            "focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1"
+            "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground",
+            "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
           ),
           children: renderIcon()
         }
       ) }) }),
-      /* @__PURE__ */ jsx36(TooltipContent, { side: "right", className: "sf-px-2 sf-py-1 sf-text-xs", children: tooltip })
+      /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx36(PopoverContent, { side: "right", align: "start", className: "sf-w-auto sf-p-3", children })
+    /* @__PURE__ */ jsx38(PopoverContent, { side: "right", align: "start", className: "sf:w-auto sf:p-3", children })
   ] });
 }
 function SliderControl({
@@ -6030,15 +6253,15 @@ function SliderControl({
   testId
 }) {
   const upstream = value ?? defaultValue;
-  const [local, setLocal] = useState13(upstream);
-  const [picked, setPicked] = useState13(false);
+  const [local, setLocal] = useState15(upstream);
+  const [picked, setPicked] = useState15(false);
   useEffect8(() => {
     setLocal(upstream);
     setPicked(false);
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
-  return /* @__PURE__ */ jsxs23("div", { className: "sf-flex sf-w-48 sf-items-center sf-gap-3", children: [
-    /* @__PURE__ */ jsx36(
+  return /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-48 sf:items-center sf:gap-3", children: [
+    /* @__PURE__ */ jsx38(
       Slider,
       {
         min,
@@ -6054,15 +6277,15 @@ function SliderControl({
         onValueCommit: ([v]) => onCommit(v ?? min),
         "data-testid": testId,
         "data-indeterminate": showPlaceholder ? "true" : void 0,
-        className: cn("sf-flex-1", showPlaceholder && "sf-opacity-60")
+        className: cn("sf:flex-1", showPlaceholder && "sf:opacity-60")
       }
     ),
-    /* @__PURE__ */ jsx36(
+    /* @__PURE__ */ jsx38(
       "span",
       {
         "data-testid": `${testId}-value`,
-        className: "sf-w-12 sf-shrink-0 sf-text-right sf-text-xs sf-tabular-nums sf-text-muted-foreground",
-        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs23(Fragment6, { children: [
+        className: "sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground",
+        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs25(Fragment7, { children: [
           local,
           suffix
         ] })
@@ -6089,14 +6312,115 @@ import {
 } from "@xyflow/react";
 import { LayoutDashboard, Maximize2 } from "lucide-react";
 import {
-  useCallback as useCallback2,
+  forwardRef as forwardRef11,
+  useCallback as useCallback5,
   useEffect as useEffect9,
+  useImperativeHandle,
   useMemo as useMemo2,
-  useRef as useRef5,
-  useState as useState14
+  useRef as useRef6,
+  useState as useState17
 } from "react";
+
+// src/hooks/use-canvas-export.ts
+import { useCallback as useCallback4, useState as useState16 } from "react";
+
+// src/lib/export-image.ts
+import { toPng } from "html-to-image";
+var viewportExportFilter = (node) => {
+  if (!(node instanceof Element)) return true;
+  if (node.classList.contains("react-flow__minimap")) return false;
+  if (node.classList.contains("react-flow__controls")) return false;
+  if (node.classList.contains("react-flow__panel")) return false;
+  return true;
+};
+var captureViewportPng = async (element) => {
+  const dataUrl = await toPng(element, {
+    cacheBust: true,
+    filter: viewportExportFilter
+  });
+  const dims = await new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    img.onerror = () => reject(new Error("Failed to decode captured image"));
+    img.src = dataUrl;
+  });
+  return { dataUrl, ...dims };
+};
+var downloadDataUrl = (dataUrl, filename) => {
+  const link = document.createElement("a");
+  link.href = dataUrl;
+  link.download = filename;
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+};
+
+// src/hooks/use-canvas-export.ts
+var sanitizeFileName = (name) => {
+  const cleaned = name.replace(/[^A-Za-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "");
+  return cleaned.length > 0 ? cleaned.slice(0, 80) : "canvas";
+};
+var exportFileName = (projectId, ext) => `${sanitizeFileName(projectId ?? "canvas")}.${ext}`;
+var useCanvasExport = ({
+  projectId,
+  getReactFlow
+}) => {
+  const [lastError, setLastError] = useState16(null);
+  const clearError = useCallback4(() => setLastError(null), []);
+  const captureViewportFramed = useCallback4(async () => {
+    const rf = getReactFlow();
+    if (!rf) return null;
+    const viewportEl = document.querySelector(".react-flow__viewport");
+    if (!viewportEl) return null;
+    const prev = rf.getViewport();
+    try {
+      await rf.fitView({ duration: 0, padding: 0.1 });
+      await new Promise((resolve) => requestAnimationFrame(() => resolve()));
+      return await captureViewportPng(viewportEl);
+    } finally {
+      rf.setViewport(prev, { duration: 0 });
+    }
+  }, [getReactFlow]);
+  const exportPng = useCallback4(async () => {
+    setLastError(null);
+    try {
+      const captured = await captureViewportFramed();
+      if (!captured) return;
+      downloadDataUrl(captured.dataUrl, exportFileName(projectId, "png"));
+    } catch (err) {
+      setLastError(err instanceof Error ? err.message : String(err));
+    }
+  }, [captureViewportFramed, projectId]);
+  const exportPdf = useCallback4(async () => {
+    setLastError(null);
+    try {
+      const captured = await captureViewportFramed();
+      if (!captured) return;
+      const { jsPDF } = await import("jspdf");
+      const orientation = captured.width > captured.height ? "landscape" : "portrait";
+      const doc = new jsPDF({
+        orientation,
+        unit: "px",
+        format: [captured.width, captured.height],
+        hotfixes: ["px_scaling"]
+      });
+      doc.addImage(captured.dataUrl, "PNG", 0, 0, captured.width, captured.height);
+      doc.save(exportFileName(projectId, "pdf"));
+    } catch (err) {
+      setLastError(err instanceof Error ? err.message : String(err));
+    }
+  }, [captureViewportFramed, projectId]);
+  const capturePreview = useCallback4(async () => {
+    const captured = await captureViewportFramed();
+    return captured?.dataUrl;
+  }, [captureViewportFramed]);
+  return { exportPdf, exportPng, capturePreview, lastError, clearError };
+};
+
+// src/components/seeflow-canvas.tsx
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment7, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -6104,6 +6428,7 @@ var EDIT_DEFAULTS = {
   showStatusBadges: true,
   showResizeHandles: true,
   showControls: true,
+  showShareMenu: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
@@ -6124,6 +6449,9 @@ var VIEW_DEFAULTS = {
   // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
   // fit-view buttons — they're navigation aids, not editing affordances.
   showControls: true,
+  // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
+  // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
+  showShareMenu: true,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -6147,6 +6475,7 @@ var MINI_DEFAULTS = {
   showStatusBadges: false,
   showResizeHandles: false,
   showControls: false,
+  showShareMenu: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -6165,6 +6494,7 @@ function resolveFlags(input) {
     showStatusBadges: input.showStatusBadges ?? defaults.showStatusBadges,
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
+    showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
@@ -6463,7 +6793,7 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
     const orientedMarkerEnd = fixedNodeIsSource ? reconnectingEdge?.markerEnd : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
-    return /* @__PURE__ */ jsx37(
+    return /* @__PURE__ */ jsx39(
       "path",
       {
         d: path,
@@ -6527,7 +6857,7 @@ function handleClipboardShortcut(deps) {
 var statusFor = (runs, id) => runs?.[id]?.status ?? "idle";
 var dataStatusFor = (runs, id) => runs?.[id]?.status;
 var dataErrorMessageFor = (runs, id) => runs?.[id]?.status === "error" ? runs[id]?.error : void 0;
-function SeeflowCanvas(props) {
+function SeeflowCanvasImpl(props, ref) {
   const {
     mode,
     // US-007: `adapter` is forwarded to the built-in DetailPanel so its
@@ -6601,12 +6931,14 @@ function SeeflowCanvas(props) {
     autoFitView,
     autoFitViewSignal,
     customIcons,
+    onExportToCloud,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
     showStatusBadges,
     showResizeHandles,
     showControls,
+    showShareMenu,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
@@ -6625,6 +6957,7 @@ function SeeflowCanvas(props) {
       showStatusBadges,
       showResizeHandles,
       showControls,
+      showShareMenu,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -6642,6 +6975,7 @@ function SeeflowCanvas(props) {
       showStatusBadges,
       showResizeHandles,
       showControls,
+      showShareMenu,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -6653,7 +6987,7 @@ function SeeflowCanvas(props) {
     ]
   );
   const isEditMode = mode === "edit";
-  const flagsRef = useRef5(flags);
+  const flagsRef = useRef6(flags);
   useEffect9(() => {
     flagsRef.current = flags;
   }, [flags]);
@@ -6666,12 +7000,12 @@ function SeeflowCanvas(props) {
   const statusByNode = runtime?.statuses;
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
   const connectorOverrides = runtime?.pendingOverrides?.connectors;
-  const wrapperRef = useRef5(null);
-  const rfInstanceRef = useRef5(null);
-  const didMountFitRef = useRef5(false);
-  const pendingFitRef = useRef5(false);
-  const signalEffectMountedRef = useRef5(false);
-  const resolvedAutoFitViewRef = useRef5(resolvedAutoFitView);
+  const wrapperRef = useRef6(null);
+  const rfInstanceRef = useRef6(null);
+  const didMountFitRef = useRef6(false);
+  const pendingFitRef = useRef6(false);
+  const signalEffectMountedRef = useRef6(false);
+  const resolvedAutoFitViewRef = useRef6(resolvedAutoFitView);
   resolvedAutoFitViewRef.current = resolvedAutoFitView;
   useEffect9(() => {
     if (didMountFitRef.current) return;
@@ -6682,40 +7016,40 @@ function SeeflowCanvas(props) {
     rfInstance.fitView(FIT_VIEW_OPTIONS);
     didMountFitRef.current = true;
   }, [nodes, resolvedAutoFitView.onMount]);
-  const storeApiRef = useRef5(null);
+  const storeApiRef = useRef6(null);
   const drawShape = activeShape;
   const setDrawShape = onSelectShape;
-  const editHandlesRef = useRef5(/* @__PURE__ */ new Map());
-  const registerEditHandle = useCallback2((id, enter) => {
+  const editHandlesRef = useRef6(/* @__PURE__ */ new Map());
+  const registerEditHandle = useCallback5((id, enter) => {
     editHandlesRef.current.set(id, enter);
     return () => {
       const current = editHandlesRef.current.get(id);
       if (current === enter) editHandlesRef.current.delete(id);
     };
   }, []);
-  const [connecting, setConnecting] = useState14(false);
-  const connectingRef = useRef5(false);
+  const [connecting, setConnecting] = useState17(false);
+  const connectingRef = useRef6(false);
   useEffect9(() => {
     connectingRef.current = connecting;
   }, [connecting]);
-  const connectCancelledRef = useRef5(false);
-  const reconnectCancelledRef = useRef5(false);
-  const isReconnectingRef = useRef5(false);
-  const [dropPopover, setDropPopover] = useState14(null);
-  const dropPopoverRef = useRef5(null);
+  const connectCancelledRef = useRef6(false);
+  const reconnectCancelledRef = useRef6(false);
+  const isReconnectingRef = useRef6(false);
+  const [dropPopover, setDropPopover] = useState17(null);
+  const dropPopoverRef = useRef6(null);
   useEffect9(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
-  const closeDropPopover = useCallback2(() => {
+  const closeDropPopover = useCallback5(() => {
     setDropPopover(null);
   }, []);
   const connectionLineComponent = useMemo2(
     () => buildReconnectAwareConnectionLine(isReconnectingRef),
     []
   );
-  const connectSourceNodeIdRef = useRef5(null);
-  const connectTargetNodeIdRef = useRef5(null);
-  const setConnectSource = useCallback2((nodeId) => {
+  const connectSourceNodeIdRef = useRef6(null);
+  const connectTargetNodeIdRef = useRef6(null);
+  const setConnectSource = useCallback5((nodeId) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
       connectSourceNodeIdRef.current = nodeId;
@@ -6732,7 +7066,7 @@ function SeeflowCanvas(props) {
     }
     connectSourceNodeIdRef.current = nodeId;
   }, []);
-  const setConnectTarget = useCallback2((nodeId) => {
+  const setConnectTarget = useCallback5((nodeId) => {
     const wrapper = wrapperRef.current;
     const prev = connectTargetNodeIdRef.current;
     if (prev === nodeId) return;
@@ -6746,7 +7080,7 @@ function SeeflowCanvas(props) {
     }
     connectTargetNodeIdRef.current = nodeId;
   }, []);
-  const clearConnectMarkers = useCallback2(() => {
+  const clearConnectMarkers = useCallback5(() => {
     setConnectSource(null);
     setConnectTarget(null);
   }, [setConnectSource, setConnectTarget]);
@@ -6769,16 +7103,16 @@ function SeeflowCanvas(props) {
       document.removeEventListener("pointermove", onMove);
     };
   }, [connecting, setConnectTarget]);
-  const [drawStart, setDrawStart] = useState14(null);
-  const [drawCurrent, setDrawCurrent] = useState14(null);
-  const drawShapeRef = useRef5(null);
-  const drawStartRef = useRef5(null);
-  const drawCurrentRef = useRef5(null);
-  const drawingRef = useRef5(false);
+  const [drawStart, setDrawStart] = useState17(null);
+  const [drawCurrent, setDrawCurrent] = useState17(null);
+  const drawShapeRef = useRef6(null);
+  const drawStartRef = useRef6(null);
+  const drawCurrentRef = useRef6(null);
+  const drawingRef = useRef6(false);
   useEffect9(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
-  const exitDrawMode = useCallback2(() => {
+  const exitDrawMode = useCallback5(() => {
     setDrawShape(null);
     setDrawStart(null);
     setDrawCurrent(null);
@@ -6841,7 +7175,7 @@ function SeeflowCanvas(props) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
-  const onPointerDown = useCallback2((e) => {
+  const onPointerDown = useCallback5((e) => {
     if (!drawShapeRef.current) return;
     const target = e.target;
     if (!target?.classList.contains("react-flow__pane")) return;
@@ -6858,13 +7192,13 @@ function SeeflowCanvas(props) {
     e.preventDefault();
     e.stopPropagation();
   }, []);
-  const onPointerMove = useCallback2((e) => {
+  const onPointerMove = useCallback5((e) => {
     if (!drawingRef.current) return;
     const client = { x: e.clientX, y: e.clientY };
     drawCurrentRef.current = client;
     setDrawCurrent(client);
   }, []);
-  const onPointerUp = useCallback2(
+  const onPointerUp = useCallback5(
     (e) => {
       if (!drawingRef.current) return;
       drawingRef.current = false;
@@ -6895,15 +7229,15 @@ function SeeflowCanvas(props) {
     },
     [exitDrawMode, onCreateShapeNode]
   );
-  const draggingRef = useRef5(false);
-  const resizingRef = useRef5(false);
-  const flushPendingFit = useCallback2(() => {
+  const draggingRef = useRef6(false);
+  const resizingRef = useRef6(false);
+  const flushPendingFit = useCallback5(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
     pendingFitRef.current = false;
     rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, []);
-  const setResizing = useCallback2(
+  const setResizing = useCallback5(
     (on) => {
       resizingRef.current = on;
       if (!on) flushPendingFit();
@@ -6923,12 +7257,12 @@ function SeeflowCanvas(props) {
     rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, [autoFitViewSignal]);
   const contextEnabled = !!onReorderNode || !!onDeleteNode || !!onCopyNode || !!onPasteAt || !!onUnpinEndpoint;
-  const [contextMenuPos, setContextMenuPos] = useState14(null);
-  const [contextOnNode, setContextOnNode] = useState14(false);
-  const [contextNodeType, setContextNodeType] = useState14(null);
-  const [contextEndpoint, setContextEndpoint] = useState14(null);
-  const contextNodeIdRef = useRef5(null);
-  const contextTriggerRef = useRef5(null);
+  const [contextMenuPos, setContextMenuPos] = useState17(null);
+  const [contextOnNode, setContextOnNode] = useState17(false);
+  const [contextNodeType, setContextNodeType] = useState17(null);
+  const [contextEndpoint, setContextEndpoint] = useState17(null);
+  const contextNodeIdRef = useRef6(null);
+  const contextTriggerRef = useRef6(null);
   useEffect9(() => {
     if (!contextMenuPos) return;
     const trigger = contextTriggerRef.current;
@@ -6943,7 +7277,7 @@ function SeeflowCanvas(props) {
     });
     trigger.dispatchEvent(evt);
   }, [contextMenuPos]);
-  const handleReorderPick = useCallback2(
+  const handleReorderPick = useCallback5(
     (op) => {
       const id = contextNodeIdRef.current;
       if (!id || !onReorderNode) return;
@@ -6951,29 +7285,29 @@ function SeeflowCanvas(props) {
     },
     [onReorderNode]
   );
-  const handleDeletePick = useCallback2(() => {
+  const handleDeletePick = useCallback5(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onDeleteNode) return;
     onDeleteNode(id);
   }, [onDeleteNode]);
-  const handleCopyPick = useCallback2(() => {
+  const handleCopyPick = useCallback5(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onCopyNode) return;
     onCopyNode(id);
   }, [onCopyNode]);
-  const handleChangeIconPick = useCallback2(() => {
+  const handleChangeIconPick = useCallback5(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onRequestIconReplace) return;
     onRequestIconReplace(id);
   }, [onRequestIconReplace]);
-  const handleToggleLockPick = useCallback2(() => {
+  const handleToggleLockPick = useCallback5(() => {
     if (!onToggleNodeLock) return;
     const single = contextNodeIdRef.current;
     const ids = single ? [single] : [...selectedNodeIds];
     if (ids.length === 0) return;
     onToggleNodeLock(ids);
   }, [onToggleNodeLock, selectedNodeIds]);
-  const handleEndpointContextMenu = useCallback2(
+  const handleEndpointContextMenu = useCallback5(
     (connId, kind, pinned, clientX, clientY) => {
       if (!flagsRef.current.enableContextMenu) return;
       contextNodeIdRef.current = null;
@@ -6984,12 +7318,12 @@ function SeeflowCanvas(props) {
     },
     []
   );
-  const handleUnpinPick = useCallback2(() => {
+  const handleUnpinPick = useCallback5(() => {
     const ep = contextEndpoint;
     if (!ep || !onUnpinEndpoint) return;
     onUnpinEndpoint(ep.connectorId, ep.kind);
   }, [contextEndpoint, onUnpinEndpoint]);
-  const handlePastePick = useCallback2(() => {
+  const handlePastePick = useCallback5(() => {
     if (!onPasteAt) return;
     const pos = contextMenuPos;
     const rfInstance = rfInstanceRef.current;
@@ -7118,7 +7452,7 @@ function SeeflowCanvas(props) {
     pendingEditNodeId,
     isEditMode
   ]);
-  const [rfNodes, setRfNodes] = useState14(sourceNodes);
+  const [rfNodes, setRfNodes] = useState17(sourceNodes);
   useEffect9(() => {
     if (draggingRef.current || resizingRef.current) return;
     setRfNodes(sourceNodes);
@@ -7126,26 +7460,26 @@ function SeeflowCanvas(props) {
   useEffect9(() => {
     rfNodesRef.current = rfNodes;
   }, [rfNodes]);
-  const selectedIdSetRef = useRef5(selectedNodeIdSet);
+  const selectedIdSetRef = useRef6(selectedNodeIdSet);
   useEffect9(() => {
     selectedIdSetRef.current = selectedNodeIdSet;
   }, [selectedNodeIdSet]);
-  const onSelectionChangeRef = useRef5(onSelectionChange);
+  const onSelectionChangeRef = useRef6(onSelectionChange);
   useEffect9(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
-  const selectedConnIdSetRef = useRef5(selectedConnectorIdSet);
+  const selectedConnIdSetRef = useRef6(selectedConnectorIdSet);
   useEffect9(() => {
     selectedConnIdSetRef.current = selectedConnectorIdSet;
   }, [selectedConnectorIdSet]);
-  const rfNodesRef = useRef5(sourceNodes);
-  const marqueeActiveRef = useRef5(false);
-  const marqueeSelectedNodeIdsRef = useRef5(/* @__PURE__ */ new Set());
-  const marqueeSelectedEdgeIdsRef = useRef5(/* @__PURE__ */ new Set());
-  const additiveBaseNodeIdsRef = useRef5(/* @__PURE__ */ new Set());
-  const additiveBaseEdgeIdsRef = useRef5(/* @__PURE__ */ new Set());
-  const tentativeAdditiveBaseRef = useRef5(null);
-  const onNodesChange = useCallback2((changes) => {
+  const rfNodesRef = useRef6(sourceNodes);
+  const marqueeActiveRef = useRef6(false);
+  const marqueeSelectedNodeIdsRef = useRef6(/* @__PURE__ */ new Set());
+  const marqueeSelectedEdgeIdsRef = useRef6(/* @__PURE__ */ new Set());
+  const additiveBaseNodeIdsRef = useRef6(/* @__PURE__ */ new Set());
+  const additiveBaseEdgeIdsRef = useRef6(/* @__PURE__ */ new Set());
+  const tentativeAdditiveBaseRef = useRef6(null);
+  const onNodesChange = useCallback5((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseNodeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.nodeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
       if (c.type !== "select") return true;
@@ -7185,8 +7519,8 @@ function SeeflowCanvas(props) {
     selectedIdSetRef.current = new Set(sel);
     cb(sel, [...selectedConnIdSetRef.current]);
   }, []);
-  const rfEdgesRef = useRef5([]);
-  const onEdgesChange = useCallback2((changes) => {
+  const rfEdgesRef = useRef6([]);
+  const onEdgesChange = useCallback5((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseEdgeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.edgeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
       if (c.type !== "select") return true;
@@ -7217,7 +7551,7 @@ function SeeflowCanvas(props) {
     selectedConnIdSetRef.current = new Set(sel);
     cb([...selectedIdSetRef.current], sel);
   }, []);
-  const onSelectionStartCb = useCallback2((event) => {
+  const onSelectionStartCb = useCallback5((event) => {
     marqueeActiveRef.current = true;
     const tentative = tentativeAdditiveBaseRef.current;
     const additive = tentative?.shift ?? (event.shiftKey || event.metaKey || event.ctrlKey);
@@ -7226,7 +7560,7 @@ function SeeflowCanvas(props) {
     marqueeSelectedNodeIdsRef.current = new Set(additiveBaseNodeIdsRef.current);
     marqueeSelectedEdgeIdsRef.current = new Set(additiveBaseEdgeIdsRef.current);
   }, []);
-  const onSelectionEndCb = useCallback2(() => {
+  const onSelectionEndCb = useCallback5(() => {
     marqueeActiveRef.current = false;
     tentativeAdditiveBaseRef.current = null;
     const cb = onSelectionChangeRef.current;
@@ -7248,7 +7582,7 @@ function SeeflowCanvas(props) {
     selectedConnIdSetRef.current = new Set(finalEdgeIds);
     cb(finalNodeIds, [...finalEdgeIds]);
   }, []);
-  const onWrapperPointerDownCapture = useCallback2((e) => {
+  const onWrapperPointerDownCapture = useCallback5((e) => {
     tentativeAdditiveBaseRef.current = null;
     if (drawShapeRef.current) return;
     if (e.button !== 0) return;
@@ -7260,7 +7594,7 @@ function SeeflowCanvas(props) {
       edgeIds: new Set(selectedConnIdSetRef.current)
     };
   }, []);
-  const onWrapperContextMenuCapture = useCallback2((e) => {
+  const onWrapperContextMenuCapture = useCallback5((e) => {
     if (!flagsRef.current.enableContextMenu) return;
     const sel = selectedIdSetRef.current;
     if (sel.size < 2) return;
@@ -7275,7 +7609,7 @@ function SeeflowCanvas(props) {
     setContextEndpoint(null);
     setContextMenuPos({ x: e.clientX, y: e.clientY });
   }, []);
-  const onWrapperDragOver = useCallback2(
+  const onWrapperDragOver = useCallback5(
     (e) => {
       const dt = e.dataTransfer;
       if (!dt) return;
@@ -7293,7 +7627,7 @@ function SeeflowCanvas(props) {
     },
     [onCreateImageFromFile, onCreateHtmlNode, flags.enableImageDrop, flags.enableDragDrop]
   );
-  const onWrapperDrop = useCallback2(
+  const onWrapperDrop = useCallback5(
     (e) => {
       const dataTransfer = e.dataTransfer;
       const types = dataTransfer?.types ? Array.from(dataTransfer.types) : [];
@@ -7384,11 +7718,47 @@ function SeeflowCanvas(props) {
   useEffect9(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
-  const connectSucceededRef = useRef5(false);
-  const connectStartRef = useRef5(
+  const internalTidy = useCallback5(() => {
+    const inst = rfInstanceRef.current;
+    const current = rfNodesRef.current;
+    if (current.length < 2) return;
+    const layoutNodes = current.map((n) => {
+      const measured = inst?.getInternalNode(n.id)?.measured;
+      const dataAny = n.data;
+      const width = measured?.width ?? dataAny.width ?? 200;
+      const height = measured?.height ?? dataAny.height ?? 120;
+      return { id: n.id, width, height, position: n.position };
+    });
+    const layoutEdges = rfEdgesRef.current.map((e) => ({ source: e.source, target: e.target }));
+    const next = applyLayout(layoutNodes, layoutEdges);
+    let prevMinX = Number.POSITIVE_INFINITY;
+    let prevMinY = Number.POSITIVE_INFINITY;
+    let nextMinX = Number.POSITIVE_INFINITY;
+    let nextMinY = Number.POSITIVE_INFINITY;
+    for (const ln of layoutNodes) {
+      if (ln.position.x < prevMinX) prevMinX = ln.position.x;
+      if (ln.position.y < prevMinY) prevMinY = ln.position.y;
+      const np = next.get(ln.id);
+      if (!np) continue;
+      if (np.x < nextMinX) nextMinX = np.x;
+      if (np.y < nextMinY) nextMinY = np.y;
+    }
+    const offsetX = Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
+    const offsetY = Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
+    setRfNodes(
+      (prev) => prev.map((n) => {
+        const np = next.get(n.id);
+        if (!np) return n;
+        return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
+      })
+    );
+  }, []);
+  const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
+  const connectSucceededRef = useRef6(false);
+  const connectStartRef = useRef6(
     null
   );
-  const onConnect = useCallback2(
+  const onConnect = useCallback5(
     (conn) => {
       if (!isEditMode) return;
       if (!onCreateConnector) return;
@@ -7404,7 +7774,7 @@ function SeeflowCanvas(props) {
     },
     [onCreateConnector, isEditMode]
   );
-  const isValidConnection = useCallback2((conn) => {
+  const isValidConnection = useCallback5((conn) => {
     const isTextShape = (id) => {
       if (!id) return false;
       const node = rfNodesRef.current.find((n) => n.id === id);
@@ -7413,7 +7783,7 @@ function SeeflowCanvas(props) {
     };
     return !isTextShape(conn.source) && !isTextShape(conn.target);
   }, []);
-  const onConnectEndCb = useCallback2(
+  const onConnectEndCb = useCallback5(
     (e, connectionState) => {
       setConnecting(false);
       clearConnectMarkers();
@@ -7471,8 +7841,8 @@ function SeeflowCanvas(props) {
     },
     [onCreateConnector, clearConnectMarkers, isValidConnection]
   );
-  const reconnectSucceededRef = useRef5(false);
-  const onReconnect = useCallback2(
+  const reconnectSucceededRef = useRef6(false);
+  const onReconnect = useCallback5(
     (oldEdge, newConnection) => {
       if (!onReconnectConnector) return;
       const { source, target, sourceHandle, targetHandle } = newConnection;
@@ -7519,7 +7889,7 @@ function SeeflowCanvas(props) {
     },
     [onReconnectConnector]
   );
-  const onReconnectEndCb = useCallback2(
+  const onReconnectEndCb = useCallback5(
     (e, oldEdge, handleType, connectionState) => {
       setConnecting(false);
       clearConnectMarkers();
@@ -7614,8 +7984,23 @@ function SeeflowCanvas(props) {
   const ghostShapeClass = drawShape ? shapeChromeClass(drawShape) : "";
   const ghostShapeStyle = drawShape ? shapeChromeStyle(drawShape) : void 0;
   const ghostTextOutline = drawShape === "text";
-  const [spaceHeld, setSpaceHeld] = useState14(false);
-  const [spaceDragging, setSpaceDragging] = useState14(false);
+  const [spaceHeld, setSpaceHeld] = useState17(false);
+  const [spaceDragging, setSpaceDragging] = useState17(false);
+  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState17(false);
+  const exportApi = useCanvasExport({
+    projectId,
+    getReactFlow: () => rfInstanceRef.current
+  });
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportPdf: exportApi.exportPdf,
+      exportPng: exportApi.exportPng,
+      openEmbedDialog: () => setShareEmbedDialogOpen(true),
+      capturePreview: exportApi.capturePreview
+    }),
+    [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview]
+  );
   useEffect9(() => {
     if (!flags.enableKeyboard) return;
     const isEditable = (el) => {
@@ -7642,7 +8027,7 @@ function SeeflowCanvas(props) {
       window.removeEventListener("keyup", onKeyUp);
     };
   }, [flags.enableKeyboard]);
-  const commitDraggedNodes = useCallback2(
+  const commitDraggedNodes = useCallback5(
     (draggedNodes) => {
       if (draggedNodes.length === 0) return;
       if (!isEditMode) return;
@@ -7666,7 +8051,7 @@ function SeeflowCanvas(props) {
     },
     [onNodePositionChange, onNodePositionsChange, isEditMode]
   );
-  const onNodeDragStopCb = useCallback2(
+  const onNodeDragStopCb = useCallback5(
     (_e, _node, draggedNodes) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
@@ -7674,10 +8059,10 @@ function SeeflowCanvas(props) {
     },
     [commitDraggedNodes, flushPendingFit]
   );
-  const onSelectionDragStartCb = useCallback2(() => {
+  const onSelectionDragStartCb = useCallback5(() => {
     draggingRef.current = true;
   }, []);
-  const onSelectionDragStopCb = useCallback2(
+  const onSelectionDragStopCb = useCallback5(
     (_e, draggedNodes) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
@@ -7685,20 +8070,20 @@ function SeeflowCanvas(props) {
     },
     [commitDraggedNodes, flushPendingFit]
   );
-  const handleNodeClickWithGroupGate = useCallback2(
+  const handleNodeClickWithGroupGate = useCallback5(
     (_e, node) => {
       onNodeClick?.(node.id);
     },
     [onNodeClick]
   );
-  const handlePaneClickWithGroupExit = useCallback2(
+  const handlePaneClickWithGroupExit = useCallback5(
     (e) => {
       onPaneClick?.();
       void e;
     },
     [onPaneClick]
   );
-  const handleEdgeClickWithGroupGate = useCallback2(
+  const handleEdgeClickWithGroupGate = useCallback5(
     (_e, edge) => {
       onConnectorClick?.(edge.id);
     },
@@ -7712,12 +8097,12 @@ function SeeflowCanvas(props) {
   const sidebarDemoId = projectId ?? null;
   const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
   const iconRegistryValue = useMemo2(() => ({ custom: customIcons ?? {} }), [customIcons]);
-  return /* @__PURE__ */ jsx37(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx37(
+  return /* @__PURE__ */ jsx39(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx39(
     "div",
     {
       "data-testid": "seeflow-canvas",
       ref: wrapperRef,
-      className: "seeflow-canvas-root sf-relative sf-h-full sf-w-full",
+      className: "seeflow-canvas-root sf:relative sf:h-full sf:w-full",
       style: wrapperCursor ? { cursor: wrapperCursor } : void 0,
       onPointerDownCapture: onWrapperPointerDownCapture,
       onPointerDown: (e) => {
@@ -7740,8 +8125,8 @@ function SeeflowCanvas(props) {
       onContextMenuCapture: onWrapperContextMenuCapture,
       onDragOver: onWrapperDragOver,
       onDrop: onWrapperDrop,
-      children: /* @__PURE__ */ jsxs24(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
-        /* @__PURE__ */ jsxs24(
+      children: /* @__PURE__ */ jsxs26(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
+        /* @__PURE__ */ jsxs26(
           ReactFlow,
           {
             nodes: rfNodes,
@@ -7843,11 +8228,11 @@ function SeeflowCanvas(props) {
               setContextMenuPos({ x: e.clientX, y: e.clientY });
             } : void 0,
             children: [
-              /* @__PURE__ */ jsx37(StoreApiBridge, { storeApiRef }),
-              /* @__PURE__ */ jsx37(ZoomBridge, { wrapperRef }),
-              /* @__PURE__ */ jsx37(Background, { gap: 12, size: 0.6 }),
-              flags.showControls ? /* @__PURE__ */ jsxs24(Controls, { showInteractive: false, showFitView: false, children: [
-                /* @__PURE__ */ jsx37(
+              /* @__PURE__ */ jsx39(StoreApiBridge, { storeApiRef }),
+              /* @__PURE__ */ jsx39(ZoomBridge, { wrapperRef }),
+              /* @__PURE__ */ jsx39(Background, { gap: 12, size: 0.6 }),
+              flags.showControls ? /* @__PURE__ */ jsxs26(Controls, { showInteractive: false, showFitView: false, children: [
+                /* @__PURE__ */ jsx39(
                   ControlButton,
                   {
                     "data-testid": "controls-fit-view",
@@ -7857,30 +8242,30 @@ function SeeflowCanvas(props) {
                     onClick: () => {
                       rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
                     },
-                    children: /* @__PURE__ */ jsx37(Maximize2, { className: "sf-h-3 sf-w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx39(Maximize2, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 ),
-                /* @__PURE__ */ jsx37(
+                /* @__PURE__ */ jsx39(
                   ControlButton,
                   {
                     "data-testid": "controls-tidy",
                     "aria-label": "Tidy layout (\u2318\u21E7L)",
                     title: "Tidy layout (\u2318\u21E7L)",
-                    disabled: !onTidy,
-                    onClick: () => onTidy?.(),
-                    children: /* @__PURE__ */ jsx37(LayoutDashboard, { className: "sf-h-3 sf-w-3", "aria-hidden": "true" })
+                    disabled: !effectiveTidy,
+                    onClick: () => effectiveTidy?.(),
+                    children: /* @__PURE__ */ jsx39(LayoutDashboard, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 )
               ] }) : null,
-              flags.showResizeHandles ? /* @__PURE__ */ jsx37(
+              flags.showResizeHandles ? /* @__PURE__ */ jsx39(
                 SelectionResizeOverlay,
                 {
                   selectedNodes: selectionOverlayNodes,
                   onMultiResize
                 }
               ) : null,
-              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx37(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs24("div", { className: "sf-flex sf-flex-col sf-gap-2", children: [
-                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx37(
+              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
+                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx39(
                   CanvasToolbar,
                   {
                     activeShape: drawShape,
@@ -7891,7 +8276,7 @@ function SeeflowCanvas(props) {
                     onPickIcon
                   }
                 ) : null,
-                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx37(
+                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(
                   StyleStrip,
                   {
                     nodes: selectedNodesForStyleStrip,
@@ -7905,20 +8290,32 @@ function SeeflowCanvas(props) {
                     onRequestIconReplace
                   }
                 ) : null
-              ] }) }) : null
+              ] }) }) : null,
+              flags.showShareMenu ? /* @__PURE__ */ jsx39(Panel, { position: "top-right", children: /* @__PURE__ */ jsx39(
+                ShareMenu,
+                {
+                  mode: mode === "mini" ? "view" : mode,
+                  projectId,
+                  onDownloadPdf: exportApi.exportPdf,
+                  onDownloadPng: exportApi.exportPng,
+                  onExportToCloud,
+                  embedOpen: shareEmbedDialogOpen,
+                  onEmbedOpenChange: setShareEmbedDialogOpen
+                }
+              ) }) : null
             ]
           }
         ),
-        ghostRect ? /* @__PURE__ */ jsx37(
+        ghostRect ? /* @__PURE__ */ jsx39(
           "div",
           {
             "data-testid": "canvas-draw-ghost",
             "data-ghost-shape": drawShape ?? void 0,
             "aria-hidden": true,
             className: cn(
-              "sf-pointer-events-none sf-absolute sf-z-10",
+              "sf:pointer-events-none sf:absolute sf:z-10",
               ghostShapeClass,
-              ghostTextOutline ? "sf-rounded-sm sf-border sf-border-dashed sf-border-muted-foreground/40" : ""
+              ghostTextOutline ? "sf:rounded-sm sf:border sf:border-dashed sf:border-muted-foreground/40" : ""
             ),
             style: {
               ...ghostShapeStyle,
@@ -7930,7 +8327,7 @@ function SeeflowCanvas(props) {
             children: (() => {
               const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : void 0;
               if (!GhostRenderer) return null;
-              return /* @__PURE__ */ jsx37(
+              return /* @__PURE__ */ jsx39(
                 GhostRenderer,
                 {
                   width: ghostRect.width,
@@ -7943,7 +8340,7 @@ function SeeflowCanvas(props) {
             })()
           }
         ) : null,
-        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs24(
+        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs26(
           ContextMenu,
           {
             onOpenChange: (open) => {
@@ -7955,13 +8352,13 @@ function SeeflowCanvas(props) {
               }
             },
             children: [
-              /* @__PURE__ */ jsx37(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx37(
+              /* @__PURE__ */ jsx39(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
                 "div",
                 {
                   ref: contextTriggerRef,
                   "data-testid": "node-context-menu-trigger",
                   "aria-hidden": true,
-                  className: "sf-pointer-events-none sf-fixed",
+                  className: "sf:pointer-events-none sf:fixed",
                   style: {
                     left: contextMenuPos?.x ?? 0,
                     top: contextMenuPos?.y ?? 0,
@@ -7970,8 +8367,8 @@ function SeeflowCanvas(props) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsxs24(ContextMenuContent, { "data-testid": "node-context-menu", children: [
-                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx37(
+              /* @__PURE__ */ jsxs26(ContextMenuContent, { "data-testid": "node-context-menu", children: [
+                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx39(
                   ContextMenuItem,
                   {
                     "data-testid": "connector-endpoint-context-menu-unpin",
@@ -7979,11 +8376,11 @@ function SeeflowCanvas(props) {
                     children: "Unpin"
                   }
                 ) : null,
-                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs24(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
+                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs26(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
                   "Copy",
-                  /* @__PURE__ */ jsx37(ContextMenuShortcut, { children: copyShortcut })
+                  /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: copyShortcut })
                 ] }) : null,
-                onPasteAt ? /* @__PURE__ */ jsxs24(
+                onPasteAt ? /* @__PURE__ */ jsxs26(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-paste",
@@ -7991,12 +8388,12 @@ function SeeflowCanvas(props) {
                     onSelect: handlePastePick,
                     children: [
                       "Paste",
-                      /* @__PURE__ */ jsx37(ContextMenuShortcut, { children: pasteShortcut })
+                      /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: pasteShortcut })
                     ]
                   }
                 ) : null,
-                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx37(
+                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx39(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-change-icon",
@@ -8004,9 +8401,9 @@ function SeeflowCanvas(props) {
                     children: "Change icon"
                   }
                 ) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
-                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs24(Fragment7, { children: [
-                  /* @__PURE__ */ jsx37(
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
+                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs26(Fragment8, { children: [
+                  /* @__PURE__ */ jsx39(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-front",
@@ -8014,7 +8411,7 @@ function SeeflowCanvas(props) {
                       children: "Bring to front"
                     }
                   ),
-                  /* @__PURE__ */ jsx37(
+                  /* @__PURE__ */ jsx39(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-forward",
@@ -8022,7 +8419,7 @@ function SeeflowCanvas(props) {
                       children: "Bring forward"
                     }
                   ),
-                  /* @__PURE__ */ jsx37(
+                  /* @__PURE__ */ jsx39(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-backward",
@@ -8030,7 +8427,7 @@ function SeeflowCanvas(props) {
                       children: "Send backward"
                     }
                   ),
-                  /* @__PURE__ */ jsx37(
+                  /* @__PURE__ */ jsx39(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-back",
@@ -8039,12 +8436,12 @@ function SeeflowCanvas(props) {
                     }
                   )
                 ] }) : null,
-                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
+                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
                 contextOnNode && onToggleNodeLock ? (() => {
                   const single = contextNodeIdRef.current;
                   const targetIds = single ? [single] : selectedNodeIds;
                   const label = targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id)) ? "Unlock" : "Lock";
-                  return /* @__PURE__ */ jsx37(
+                  return /* @__PURE__ */ jsx39(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-toggle-lock",
@@ -8054,8 +8451,8 @@ function SeeflowCanvas(props) {
                     }
                   );
                 })() : null,
-                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx37(ContextMenuSeparator, {}) : null,
-                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx37(
+                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
+                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx39(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-delete",
@@ -8068,7 +8465,7 @@ function SeeflowCanvas(props) {
             ]
           }
         ) : null,
-        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs24(
+        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs26(
           Popover,
           {
             open: !!dropPopover,
@@ -8076,12 +8473,12 @@ function SeeflowCanvas(props) {
               if (!open) setDropPopover(null);
             },
             children: [
-              /* @__PURE__ */ jsx37(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx37(
+              /* @__PURE__ */ jsx39(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx39(
                 "div",
                 {
                   "data-testid": "drop-popover-anchor",
                   "aria-hidden": true,
-                  className: "sf-pointer-events-none sf-fixed",
+                  className: "sf:pointer-events-none sf:fixed",
                   style: {
                     left: dropPopover?.clientX ?? 0,
                     top: dropPopover?.clientY ?? 0,
@@ -8090,24 +8487,24 @@ function SeeflowCanvas(props) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsx37(
+              /* @__PURE__ */ jsx39(
                 PopoverContent,
                 {
                   "data-testid": "drop-popover",
                   align: "start",
                   side: "bottom",
                   sideOffset: 4,
-                  className: "sf-w-auto sf-p-1",
+                  className: "sf:w-auto sf:p-1",
                   onOpenAutoFocus: (e) => {
                     e.preventDefault();
                   },
-                  children: /* @__PURE__ */ jsx37(
+                  children: /* @__PURE__ */ jsx39(
                     "div",
                     {
                       role: "menu",
                       "aria-label": "Create connected node",
-                      className: "sf-flex sf-flex-col sf-gap-0.5",
-                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs24(
+                      className: "sf:flex sf:flex-col sf:gap-0.5",
+                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs26(
                         "button",
                         {
                           type: "button",
@@ -8124,13 +8521,13 @@ function SeeflowCanvas(props) {
                             setDropPopover(null);
                           },
                           className: cn(
-                            "sf-flex sf-items-center sf-gap-2 sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-left sf-text-sm",
-                            "hover:sf-bg-accent hover:sf-text-accent-foreground",
-                            "focus:sf-bg-accent focus:sf-text-accent-foreground focus:sf-outline-none"
+                            "sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm",
+                            "sf:hover:bg-accent sf:hover:text-accent-foreground",
+                            "sf:focus:bg-accent sf:focus:text-accent-foreground sf:focus:outline-hidden"
                           ),
                           children: [
-                            /* @__PURE__ */ jsx37(Icon2, { className: "sf-h-4 sf-w-4 sf-text-muted-foreground", "aria-hidden": "true" }),
-                            /* @__PURE__ */ jsx37("span", { children: label })
+                            /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
+                            /* @__PURE__ */ jsx39("span", { children: label })
                           ]
                         },
                         shape
@@ -8142,7 +8539,7 @@ function SeeflowCanvas(props) {
             ]
           }
         ) : null,
-        shouldRenderSidebar ? /* @__PURE__ */ jsx37(
+        shouldRenderSidebar ? /* @__PURE__ */ jsx39(
           DetailPanel,
           {
             demoId: sidebarDemoId,
@@ -8163,6 +8560,7 @@ function SeeflowCanvas(props) {
     }
   ) });
 }
+var SeeflowCanvas = forwardRef11(SeeflowCanvasImpl);
 export {
   BG_FALLBACK,
   BORDER_FALLBACK,
@@ -8211,6 +8609,7 @@ export {
   DropdownMenuTrigger,
   EditableEdge,
   EditableField,
+  EmbedDialog,
   HTML_BLOCK_DND_TYPE,
   HTML_DEFAULT_SIZE,
   HtmlNode,
@@ -8258,6 +8657,7 @@ export {
   SelectionResizeOverlay,
   ServerShape,
   ShapeNode,
+  ShareMenu,
   Sheet,
   SheetClose,
   SheetContent,
