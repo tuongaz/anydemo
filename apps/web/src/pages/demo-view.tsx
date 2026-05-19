@@ -3015,7 +3015,7 @@ export function DemoView({
           mode="edit"
           adapter={adapter}
           projectId={demoId ?? undefined}
-          enableEmbed={true}
+          enableEmbed={false}
           onExportToCloud={demoId ? () => setExportDialogOpen(true) : undefined}
           onRestartDemo={onRestartDemo}
           nodes={visibleNodes ?? demo.nodes}
