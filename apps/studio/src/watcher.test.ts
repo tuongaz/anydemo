@@ -13,7 +13,6 @@ const VALID_DEMO = {
     {
       id: 'a',
       type: 'playNode',
-      position: { x: 0, y: 0 },
       data: {
         name: 'A',
         kind: 'svc',
@@ -116,7 +115,7 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     const snap = watcher.snapshot(entry.id);
     expect(snap?.valid).toBe(false);
-    expect(snap?.error).toContain('Schema validation failed');
+    expect(snap?.error).toContain('Architecture schema validation failed');
     expect(snap?.error).toContain('name');
     watcher.closeAll();
   });
@@ -159,8 +158,7 @@ describe('createWatcher', () => {
       {
         id: 'h1',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'A',
           kind: 'svc',
           stateSource: { kind: 'request' },
@@ -179,8 +177,7 @@ describe('createWatcher', () => {
       {
         id: 'img1',
         type: 'playNode',
-        position: { x: 0, y: 0 },
-        data: {
+          data: {
           name: 'I',
           kind: 'svc',
           stateSource: { kind: 'request' },
@@ -310,8 +307,7 @@ describe('createWatcher', () => {
         {
           id: 'abs',
           type: 'playNode',
-          position: { x: 0, y: 0 },
-          data: {
+              data: {
             name: 'A',
             kind: 'svc',
             stateSource: { kind: 'request' },
@@ -322,8 +318,7 @@ describe('createWatcher', () => {
         {
           id: 'trav',
           type: 'playNode',
-          position: { x: 0, y: 0 },
-          data: {
+              data: {
             name: 'B',
             kind: 'svc',
             stateSource: { kind: 'request' },
@@ -334,8 +329,7 @@ describe('createWatcher', () => {
         {
           id: 'data',
           type: 'playNode',
-          position: { x: 0, y: 0 },
-          data: {
+              data: {
             name: 'C',
             kind: 'svc',
             stateSource: { kind: 'request' },

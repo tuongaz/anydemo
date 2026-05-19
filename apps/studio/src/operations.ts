@@ -21,7 +21,7 @@ import {
   TargetHandleIdSchema,
 } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
-import type { FlowSnapshot, FlowWatcher } from './watcher.ts';
+import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
 const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/seeflow.json';
 
@@ -551,42 +551,13 @@ export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise
   // callers without a long-lived watcher still get a current snapshot.
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  let raw: unknown;
-  try {
-    raw = await Bun.file(fullPath).json();
-  } catch (err) {
-    return {
-      kind: 'ok',
-      data: buildResponse({
-        flow: null,
-        valid: false,
-        error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
-        filePath: fullPath,
-        parsedAt: Date.now(),
-      }),
-    };
-  }
-  const parsed = FlowSchema.safeParse(raw);
-  if (!parsed.success) {
-    return {
-      kind: 'ok',
-      data: buildResponse({
-        flow: null,
-        valid: false,
-        error: parsed.error.issues
-          .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-          .join('; '),
-        filePath: fullPath,
-        parsedAt: Date.now(),
-      }),
-    };
-  }
+  const result = readMergedFlow(fullPath);
   return {
     kind: 'ok',
     data: buildResponse({
-      flow: parsed.data,
-      valid: true,
-      error: null,
+      flow: result.flow,
+      valid: result.valid,
+      error: result.error,
       filePath: fullPath,
       parsedAt: Date.now(),
     }),

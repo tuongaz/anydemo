@@ -1,8 +1,15 @@
 import { type FSWatcher, existsSync, readFileSync, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { EventBus } from './events.ts';
+import { resolveFileRefs } from './file-ref.ts';
+import { mergeArchitectureAndStyle } from './merge.ts';
 import type { Registry } from './registry.ts';
-import { type Flow, FlowSchema } from './schema.ts';
+import {
+  type Architecture,
+  ArchitectureSchema,
+  type Flow,
+  StyleSchema,
+} from './schema.ts';
 
 const DEFAULT_DEBOUNCE_MS = 100;
 
@@ -83,11 +90,10 @@ const isCleanRelativePath = (p: string): boolean => {
 };
 
 /**
- * Walk raw demo JSON (pre-schema-parse) collecting referenced file paths:
- * `nodes[].data.htmlPath` (htmlNode) and `nodes[].data.path` (imageNode after
- * US-004). Operates on the raw JSON so the watcher works before those fields
- * are formally declared in the schema — Zod's default-strip would drop them
- * during validation, but the file watcher still needs to know about them.
+ * Walk raw architecture JSON (pre-schema-parse) collecting referenced file
+ * paths: `nodes[].data.htmlPath` (htmlNode) and `nodes[].data.path`
+ * (imageNode). Operates on the raw JSON so the watcher works before those
+ * fields are formally validated.
  */
 const collectReferencedPaths = (raw: unknown): string[] => {
   if (!raw || typeof raw !== 'object') return [];
@@ -107,6 +113,93 @@ const collectReferencedPaths = (raw: unknown): string[] => {
   }
   return [...out];
 };
+
+/**
+ * Read architecture.json + optional style.json, resolve file:// refs in the
+ * architecture, validate both, and merge into a Flow. Shared by the watcher
+ * and by sync read fallbacks (getFlowImpl) so they produce identical results.
+ */
+export interface ReadMergedFlowResult {
+  flow: Flow | null;
+  valid: boolean;
+  error: string | null;
+  /** Sorted relative paths under `<seeflowRoot>` resolved via file://. */
+  fileRefs: string[];
+  /** Architecture file paths referenced via htmlPath / imageNode.path. */
+  staticRefs: string[];
+}
+
+export function readMergedFlow(archPath: string): ReadMergedFlowResult {
+  const empty: ReadMergedFlowResult = {
+    flow: null,
+    valid: false,
+    error: null,
+    fileRefs: [],
+    staticRefs: [],
+  };
+  if (!existsSync(archPath)) {
+    return { ...empty, error: `Architecture file not found: ${archPath}` };
+  }
+
+  const seeflowRoot = dirname(archPath);
+  const stylePath = join(seeflowRoot, 'style.json');
+
+  let rawArch: unknown;
+  try {
+    rawArch = JSON.parse(readFileSync(archPath, 'utf8'));
+  } catch (err) {
+    return {
+      ...empty,
+      error: `Invalid JSON in architecture.json: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const { resolved, refs } = resolveFileRefs(rawArch, seeflowRoot);
+  const staticRefs = collectReferencedPaths(rawArch);
+
+  const archParse = ArchitectureSchema.safeParse(resolved);
+  if (!archParse.success) {
+    const message = archParse.error.issues
+      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+      .join('; ');
+    return {
+      ...empty,
+      error: `Architecture schema validation failed: ${message}`,
+      fileRefs: refs,
+      staticRefs,
+    };
+  }
+
+  let rawStyle: unknown = {};
+  if (existsSync(stylePath)) {
+    try {
+      rawStyle = JSON.parse(readFileSync(stylePath, 'utf8'));
+    } catch (err) {
+      return {
+        ...empty,
+        error: `Invalid JSON in style.json: ${err instanceof Error ? err.message : String(err)}`,
+        fileRefs: refs,
+        staticRefs,
+      };
+    }
+  }
+
+  const styleParse = StyleSchema.safeParse(rawStyle);
+  if (!styleParse.success) {
+    const message = styleParse.error.issues
+      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+      .join('; ');
+    return {
+      ...empty,
+      error: `Style schema validation failed: ${message}`,
+      fileRefs: refs,
+      staticRefs,
+    };
+  }
+
+  const flow = mergeArchitectureAndStyle(archParse.data as Architecture, styleParse.data);
+  return { flow, valid: true, error: null, fileRefs: refs, staticRefs };
+}
 
 const closeFileWatchers = (handle: WatchHandle): void => {
   for (const entry of handle.fileWatchers.values()) {
@@ -216,60 +309,23 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
 
     const previous = snapshots.get(flowId) ?? null;
     const parsedAt = Date.now();
-    const fail = (error: string): FlowSnapshot => ({
-      flow: previous?.flow ?? null,
-      valid: false,
-      error,
-      filePath,
-      parsedAt,
-    });
+    const result = readMergedFlow(filePath);
 
-    let next: FlowSnapshot;
-    let raw: unknown = null;
-    let rawOk = false;
-
-    if (!existsSync(filePath)) {
-      next = fail(`Flow file not found: ${filePath}`);
-    } else {
-      let parseError: string | null = null;
-      try {
-        raw = JSON.parse(readFileSync(filePath, 'utf8'));
-        rawOk = true;
-      } catch (err) {
-        parseError = `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`;
-      }
-
-      if (!rawOk) {
-        next = fail(parseError ?? 'Invalid JSON');
-      } else {
-        const parsed = FlowSchema.safeParse(raw);
-        if (!parsed.success) {
-          const message = parsed.error.issues
-            .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
-            .join('; ');
-          next = fail(`Schema validation failed: ${message}`);
-        } else {
-          next = { flow: parsed.data, valid: true, error: null, filePath, parsedAt };
-        }
-      }
-    }
+    const next: FlowSnapshot = result.valid
+      ? { flow: result.flow, valid: true, error: null, filePath, parsedAt }
+      : { flow: previous?.flow ?? null, valid: false, error: result.error, filePath, parsedAt };
 
     snapshots.set(flowId, next);
 
-    // Recompute the referenced-files watch set whenever raw JSON parsed
-    // cleanly (regardless of schema validity). Schema errors shouldn't drop
-    // the watch set — the user is mid-edit and the referenced files are
-    // still valid targets.
-    if (rawOk) {
-      const handle = handles.get(flowId);
-      if (handle) {
-        reconcileFileWatchers(
-          flowId,
-          handle,
-          join(entry.repoPath, '.seeflow'),
-          collectReferencedPaths(raw),
-        );
-      }
+    // Reconcile the referenced-file watch set: htmlPath/imageNode.path from
+    // architecture + any file:// targets that resolved cleanly. Schema errors
+    // shouldn't drop the watch set — the user is mid-edit and the referenced
+    // files are still valid targets, so this reconciles whenever the JSON
+    // parsed (even if schema validation failed).
+    const handle = handles.get(flowId);
+    if (handle) {
+      const allRefs = [...result.fileRefs, ...result.staticRefs];
+      reconcileFileWatchers(flowId, handle, dirname(filePath), allRefs);
     }
 
     return next;
@@ -309,9 +365,9 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     let fsWatcher: FSWatcher;
     try {
       fsWatcher = watch(dir, { persistent: true }, (_event, changed) => {
-        // Only react to the demo file (or to events with no filename, which
-        // some platforms emit for rename-on-save patterns).
-        if (changed && changed !== base) return;
+        // React to architecture.json, style.json, or rename-on-save events
+        // (some platforms emit those with no filename).
+        if (changed && changed !== base && changed !== 'style.json') return;
         const handle = handles.get(flowId);
         if (!handle) return;
         if (handle.debounceTimer) clearTimeout(handle.debounceTimer);
@@ -322,7 +378,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
         }, debounceMs);
       });
     } catch (err) {
-      console.error(`[watcher] failed to watch ${dir} for demo ${flowId}:`, err);
+      console.error(`[watcher] failed to watch ${dir} for flow ${flowId}:`, err);
       const snap = reparse(flowId);
       if (snap) broadcastReload(flowId, snap);
       return;

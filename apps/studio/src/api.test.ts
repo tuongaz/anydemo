@@ -23,7 +23,6 @@ const VALID_DEMO = {
     {
       id: 'api-checkout',
       type: 'playNode',
-      position: { x: 0, y: 0 },
       data: {
         name: 'POST /checkout',
         kind: 'service',
