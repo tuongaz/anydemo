@@ -85,8 +85,16 @@ function renderShareMenu(
   props: Partial<ShareMenuProps> & Pick<ShareMenuProps, 'mode'>,
   useStateOverrides?: unknown[],
 ): unknown {
+  // `enableEmbed` is required on the production prop type but tests opt-in
+  // per-case to keep each scenario explicit. Default to `false` (the new
+  // SeeflowCanvas default) so tests that don't care about Embed get the
+  // safe shape; tests that exercise the Embed path override to `true`.
   return renderWithHooks(
-    () => (ShareMenu as unknown as (p: ShareMenuProps) => unknown)({ ...props }),
+    () =>
+      (ShareMenu as unknown as (p: ShareMenuProps) => unknown)({
+        enableEmbed: false,
+        ...props,
+      }),
     { useStateOverrides },
   );
 }
@@ -118,6 +126,7 @@ describe('ShareMenu (US-013)', () => {
     const tree = renderShareMenu({
       mode: 'edit',
       projectId: 'demo-project',
+      enableEmbed: true,
       onDownloadPdf: () => {},
       onDownloadPng: () => {},
     });
@@ -129,6 +138,7 @@ describe('ShareMenu (US-013)', () => {
   it('hides the Embed item when projectId is undefined (edit mode, all callbacks set)', () => {
     const tree = renderShareMenu({
       mode: 'edit',
+      enableEmbed: true,
       onDownloadPdf: () => {},
       onDownloadPng: () => {},
       onExportToCloud: () => {},
@@ -144,6 +154,7 @@ describe('ShareMenu (US-013)', () => {
     const tree = renderShareMenu({
       mode: 'view',
       projectId: 'demo-project',
+      enableEmbed: true,
       onDownloadPdf: () => {},
       onDownloadPng: () => {},
     });
@@ -151,6 +162,34 @@ describe('ShareMenu (US-013)', () => {
     // Downloads still work in view mode.
     expect(findElement(tree, testIdEquals('share-menu-pdf'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('share-menu-png'))).not.toBeNull();
+  });
+
+  it('hides the Embed item when enableEmbed is false (edit mode + projectId set)', () => {
+    // Embed defaults to opt-in: even with edit mode + projectId wired, the
+    // host must explicitly pass `enableEmbed: true` for the item to surface.
+    const tree = renderShareMenu({
+      mode: 'edit',
+      projectId: 'demo-project',
+      enableEmbed: false,
+      onDownloadPng: () => {},
+    });
+    expect(findElement(tree, testIdEquals('share-menu-embed'))).toBeNull();
+    // The trigger + PNG download remain — only Embed is gated by the new flag.
+    expect(findElement(tree, testIdEquals('share-menu-trigger'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('share-menu-png'))).not.toBeNull();
+  });
+
+  it('does NOT mount the EmbedDialog when enableEmbed is false', () => {
+    // `showEmbed` also gates the dialog mount (line 198 of share-menu.tsx), so
+    // a disabled Embed should keep the dialog wrapper out of the tree entirely.
+    const tree = renderShareMenu({
+      mode: 'edit',
+      projectId: 'demo-project',
+      enableEmbed: false,
+      onDownloadPng: () => {},
+    });
+    const dialog = findElement(tree, (el) => el.type === (EmbedDialog as unknown));
+    expect(dialog).toBeNull();
   });
 
   it('hides Export to seeflow.dev in view mode even when the callback is set', () => {
@@ -181,11 +220,10 @@ describe('ShareMenu (US-013)', () => {
     // is the structural proxy for PRD criterion (h): "clicking Embed opens the
     // EmbedDialog (assert that a node with the snippet text exists)".
     const projectId = 'demo-project';
-    const tree = renderShareMenu({ mode: 'edit', projectId, onDownloadPng: () => {} }, [
-      false,
-      false,
-      true,
-    ]);
+    const tree = renderShareMenu(
+      { mode: 'edit', projectId, enableEmbed: true, onDownloadPng: () => {} },
+      [false, false, true],
+    );
     const dialog = findElement(tree, (el) => el.type === (EmbedDialog as unknown));
     expect(dialog).not.toBeNull();
     expect(dialog?.props.open).toBe(true);
@@ -200,6 +238,7 @@ describe('ShareMenu (US-013)', () => {
     const tree = renderShareMenu({
       mode: 'view',
       projectId: 'demo-project',
+      enableEmbed: true,
       onDownloadPng: () => {},
     });
     const dialog = findElement(tree, (el) => el.type === (EmbedDialog as unknown));
@@ -211,6 +250,7 @@ describe('ShareMenu (US-013)', () => {
     const tree = renderShareMenu({
       mode: 'edit',
       projectId: 'demo-project',
+      enableEmbed: true,
       onDownloadPng: () => {},
     });
     const embedItem = findElement(tree, testIdEquals('share-menu-embed'));

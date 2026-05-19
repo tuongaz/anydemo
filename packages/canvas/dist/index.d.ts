@@ -1981,6 +1981,13 @@ interface ShareMenuProps {
      */
     projectId?: string;
     /**
+     * Master enable flag for the Embed menu item + inner EmbedDialog. When
+     * false, the item is hidden and the dialog is not mounted regardless of
+     * `mode` / `projectId`. The host always resolves this through
+     * `resolveFlags`, so the prop is required.
+     */
+    enableEmbed: boolean;
+    /**
      * Download the current canvas as a PDF. When omitted, the "Download PDF"
      * menu item is hidden. Works in both `edit` and `view` modes.
      */
@@ -2016,7 +2023,7 @@ interface ShareMenuProps {
  * input AND the mode-visibility rules from the design doc. The whole trigger
  * disappears when nothing is renderable.
  */
-declare function ShareMenu({ mode, projectId, onDownloadPdf, onDownloadPng, onExportToCloud, embedOpen: embedOpenProp, onEmbedOpenChange, }: ShareMenuProps): react_jsx_runtime.JSX.Element | null;
+declare function ShareMenu({ mode, projectId, enableEmbed, onDownloadPdf, onDownloadPng, onExportToCloud, embedOpen: embedOpenProp, onEmbedOpenChange, }: ShareMenuProps): react_jsx_runtime.JSX.Element | null;
 
 interface RestartDemoButtonProps {
     onRestartDemo: () => Promise<unknown>;
@@ -2175,6 +2182,14 @@ interface CanvasFeatureOverrides {
      */
     showShareMenu?: boolean;
     /**
+     * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
+     * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
+     * affordance and most embedders of this package should not surface the
+     * iframe-snippet dialog. Set to `true` to opt in; the item still requires
+     * `mode === 'edit'` AND a `projectId` to actually render.
+     */
+    enableEmbed?: boolean;
+    /**
      * Gates the top-right Restart-demo button (rendered next to ShareMenu).
      * Default ON for `edit`, OFF for `view` and `mini` — restart is a host-side
      * runtime action and embedders should not be able to mutate demo state.
@@ -2225,6 +2240,7 @@ interface ResolvedCanvasFlags {
     enablePan: boolean;
     enableSelection: boolean;
     enableNodeMove: boolean;
+    enableEmbed: boolean;
 }
 /**
  * US-027: resolve the effective flag set from the canvas mode + caller
@@ -2723,8 +2739,9 @@ interface SeeflowCanvasHandle {
     exportPng(): Promise<void>;
     /**
      * Open the embed-snippet dialog programmatically. No-op when the canvas is
-     * not rendering its ShareMenu chrome (e.g. mini mode or
-     * `showShareMenu: false`) since the dialog is mounted through the menu.
+     * not rendering its ShareMenu chrome (mini mode or `showShareMenu: false`)
+     * OR when `enableEmbed` is false (Embed defaults to opt-in) — in either
+     * case the dialog is not mounted, so toggling state has nothing to render.
      */
     openEmbedDialog(): void;
     /**

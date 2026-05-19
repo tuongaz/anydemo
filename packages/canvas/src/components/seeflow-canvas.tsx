@@ -136,6 +136,14 @@ export interface CanvasFeatureOverrides {
    */
   showShareMenu?: boolean;
   /**
+   * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
+   * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
+   * affordance and most embedders of this package should not surface the
+   * iframe-snippet dialog. Set to `true` to opt in; the item still requires
+   * `mode === 'edit'` AND a `projectId` to actually render.
+   */
+  enableEmbed?: boolean;
+  /**
    * Gates the top-right Restart-demo button (rendered next to ShareMenu).
    * Default ON for `edit`, OFF for `view` and `mini` — restart is a host-side
    * runtime action and embedders should not be able to mutate demo state.
@@ -187,6 +195,7 @@ export interface ResolvedCanvasFlags {
   enablePan: boolean;
   enableSelection: boolean;
   enableNodeMove: boolean;
+  enableEmbed: boolean;
 }
 
 const EDIT_DEFAULTS: ResolvedCanvasFlags = {
@@ -206,6 +215,8 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   enablePan: true,
   enableSelection: true,
   enableNodeMove: true,
+  // Embed is a SeeFlow-studio-specific affordance — opt-in even in edit mode.
+  enableEmbed: false,
 };
 
 const VIEW_DEFAULTS: ResolvedCanvasFlags = {
@@ -237,6 +248,8 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // inspector) and nudge nodes locally without persisting.
   enableSelection: true,
   enableNodeMove: true,
+  // Embed is edit-mode-only inside ShareMenu, so view never surfaces it.
+  enableEmbed: false,
 };
 
 /**
@@ -264,6 +277,7 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   enablePan: false,
   enableSelection: false,
   enableNodeMove: false,
+  enableEmbed: false,
 };
 
 /**
@@ -295,6 +309,7 @@ export function resolveFlags(
     enablePan: input.enablePan ?? defaults.enablePan,
     enableSelection: input.enableSelection ?? defaults.enableSelection,
     enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove,
+    enableEmbed: input.enableEmbed ?? defaults.enableEmbed,
   };
 }
 
@@ -756,8 +771,9 @@ export interface SeeflowCanvasHandle {
   exportPng(): Promise<void>;
   /**
    * Open the embed-snippet dialog programmatically. No-op when the canvas is
-   * not rendering its ShareMenu chrome (e.g. mini mode or
-   * `showShareMenu: false`) since the dialog is mounted through the menu.
+   * not rendering its ShareMenu chrome (mini mode or `showShareMenu: false`)
+   * OR when `enableEmbed` is false (Embed defaults to opt-in) — in either
+   * case the dialog is not mounted, so toggling state has nothing to render.
    */
   openEmbedDialog(): void;
   /**
@@ -1710,6 +1726,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     enablePan,
     enableSelection,
     enableNodeMove,
+    enableEmbed,
   } = props;
   // US-027: collapse mode + feature overrides into the concrete flag set every
   // gate below reads from. `isEditMode` is the discriminator-derived boolean
@@ -1737,6 +1754,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         enablePan,
         enableSelection,
         enableNodeMove,
+        enableEmbed,
       }),
     [
       mode,
@@ -1756,6 +1774,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       enablePan,
       enableSelection,
       enableNodeMove,
+      enableEmbed,
     ],
   );
   const isEditMode = mode === 'edit';
@@ -2489,9 +2508,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // the ref is never written in edit mode but the guard is also load-
       // bearing if mode flips mid-life (an entry from a previous view-mode
       // session must not leak into edit-mode rendering).
-      const viewOverridePos = !isEditMode
-        ? viewModePositionsRef.current.get(merged.id)
-        : undefined;
+      const viewOverridePos = !isEditMode ? viewModePositionsRef.current.get(merged.id) : undefined;
       const node: Node = {
         id: merged.id,
         type: merged.type,
@@ -4234,6 +4251,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     <ShareMenu
                       mode={mode === 'mini' ? 'view' : mode}
                       projectId={projectId}
+                      enableEmbed={flags.enableEmbed}
                       onDownloadPdf={exportApi.exportPdf}
                       onDownloadPng={exportApi.exportPng}
                       onExportToCloud={onExportToCloud}

@@ -5349,6 +5349,7 @@ var EXPORT_TO_CLOUD_LABEL = "Export to seeflow.dev";
 function ShareMenu({
   mode,
   projectId,
+  enableEmbed,
   onDownloadPdf,
   onDownloadPng,
   onExportToCloud,
@@ -5379,7 +5380,7 @@ function ShareMenu({
   }, [onDownloadPng, downloadingPng]);
   const showPdf = Boolean(onDownloadPdf);
   const showPng = Boolean(onDownloadPng);
-  const showEmbed = mode === "edit" && typeof projectId === "string" && projectId.length > 0;
+  const showEmbed = enableEmbed && mode === "edit" && typeof projectId === "string" && projectId.length > 0;
   const showExportToCloud = mode === "edit" && Boolean(onExportToCloud);
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
   return /* @__PURE__ */ jsxs24(Fragment5, { children: [
@@ -6680,7 +6681,9 @@ var EDIT_DEFAULTS = {
   enableZoom: true,
   enablePan: true,
   enableSelection: true,
-  enableNodeMove: true
+  enableNodeMove: true,
+  // Embed is a SeeFlow-studio-specific affordance — opt-in even in edit mode.
+  enableEmbed: false
 };
 var VIEW_DEFAULTS = {
   showToolbar: false,
@@ -6710,7 +6713,9 @@ var VIEW_DEFAULTS = {
   // click a node to mirror selection up to the host (e.g. open their own
   // inspector) and nudge nodes locally without persisting.
   enableSelection: true,
-  enableNodeMove: true
+  enableNodeMove: true,
+  // Embed is edit-mode-only inside ShareMenu, so view never surfaces it.
+  enableEmbed: false
 };
 var MINI_DEFAULTS = {
   showToolbar: false,
@@ -6730,7 +6735,8 @@ var MINI_DEFAULTS = {
   enableZoom: false,
   enablePan: false,
   enableSelection: false,
-  enableNodeMove: false
+  enableNodeMove: false,
+  enableEmbed: false
 };
 function resolveFlags(input) {
   const defaults = input.mode === "edit" ? EDIT_DEFAULTS : input.mode === "mini" ? MINI_DEFAULTS : VIEW_DEFAULTS;
@@ -6750,7 +6756,8 @@ function resolveFlags(input) {
     enableZoom: input.enableZoom ?? defaults.enableZoom,
     enablePan: input.enablePan ?? defaults.enablePan,
     enableSelection: input.enableSelection ?? defaults.enableSelection,
-    enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove
+    enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove,
+    enableEmbed: input.enableEmbed ?? defaults.enableEmbed
   };
 }
 var MIN_DRAW_SIZE = 40;
@@ -7197,7 +7204,8 @@ function SeeflowCanvasImpl(props, ref) {
     enableZoom,
     enablePan,
     enableSelection,
-    enableNodeMove
+    enableNodeMove,
+    enableEmbed
   } = props;
   const flags = useMemo2(
     () => resolveFlags({
@@ -7217,7 +7225,8 @@ function SeeflowCanvasImpl(props, ref) {
       enableZoom,
       enablePan,
       enableSelection,
-      enableNodeMove
+      enableNodeMove,
+      enableEmbed
     }),
     [
       mode,
@@ -7236,7 +7245,8 @@ function SeeflowCanvasImpl(props, ref) {
       enableZoom,
       enablePan,
       enableSelection,
-      enableNodeMove
+      enableNodeMove,
+      enableEmbed
     ]
   );
   const isEditMode = mode === "edit";
@@ -8570,6 +8580,7 @@ function SeeflowCanvasImpl(props, ref) {
                   {
                     mode: mode === "mini" ? "view" : mode,
                     projectId,
+                    enableEmbed: flags.enableEmbed,
                     onDownloadPdf: exportApi.exportPdf,
                     onDownloadPng: exportApi.exportPng,
                     onExportToCloud,

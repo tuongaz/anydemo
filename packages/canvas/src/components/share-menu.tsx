@@ -25,6 +25,13 @@ export interface ShareMenuProps {
    */
   projectId?: string;
   /**
+   * Master enable flag for the Embed menu item + inner EmbedDialog. When
+   * false, the item is hidden and the dialog is not mounted regardless of
+   * `mode` / `projectId`. The host always resolves this through
+   * `resolveFlags`, so the prop is required.
+   */
+  enableEmbed: boolean;
+  /**
    * Download the current canvas as a PDF. When omitted, the "Download PDF"
    * menu item is hidden. Works in both `edit` and `view` modes.
    */
@@ -70,6 +77,7 @@ const EXPORT_TO_CLOUD_LABEL = 'Export to seeflow.dev';
 export function ShareMenu({
   mode,
   projectId,
+  enableEmbed,
   onDownloadPdf,
   onDownloadPng,
   onExportToCloud,
@@ -103,7 +111,8 @@ export function ShareMenu({
 
   const showPdf = Boolean(onDownloadPdf);
   const showPng = Boolean(onDownloadPng);
-  const showEmbed = mode === 'edit' && typeof projectId === 'string' && projectId.length > 0;
+  const showEmbed =
+    enableEmbed && mode === 'edit' && typeof projectId === 'string' && projectId.length > 0;
   const showExportToCloud = mode === 'edit' && Boolean(onExportToCloud);
 
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;

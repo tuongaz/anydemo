@@ -2934,6 +2934,9 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: true,
       enableSelection: true,
       enableNodeMove: true,
+      // Embed defaults OFF in every mode — it's a SeeFlow-studio-specific
+      // affordance, so embedders of @seeflow/canvas opt in explicitly.
+      enableEmbed: false,
     });
   });
 
@@ -2959,6 +2962,7 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: true,
       enableSelection: true,
       enableNodeMove: true,
+      enableEmbed: false,
     });
   });
 
@@ -2985,6 +2989,7 @@ describe('US-027: resolveFlags helper', () => {
       enablePan: false,
       enableSelection: false,
       enableNodeMove: false,
+      enableEmbed: false,
     });
   });
 
@@ -3045,6 +3050,18 @@ describe('US-027: resolveFlags helper', () => {
 
   it('respects explicit true even in view mode (override wins over preset)', () => {
     expect(resolveFlags({ mode: 'view', showToolbar: true }).showToolbar).toBe(true);
+  });
+
+  it('lets an edit-mode consumer opt in to the ShareMenu Embed item via enableEmbed', () => {
+    // Embed is off by default in every mode; the studio (and other hosts that
+    // want the iframe-snippet surface) flip it on explicitly. Without the
+    // override the flag stays false so most embedders never surface Embed.
+    expect(resolveFlags({ mode: 'edit' }).enableEmbed).toBe(false);
+    expect(resolveFlags({ mode: 'edit', enableEmbed: true }).enableEmbed).toBe(true);
+    // Override is honored regardless of mode (the menu's mode+projectId gate
+    // is what stops a view-mode embed surface from rendering at the end).
+    expect(resolveFlags({ mode: 'view', enableEmbed: true }).enableEmbed).toBe(true);
+    expect(resolveFlags({ mode: 'mini', enableEmbed: true }).enableEmbed).toBe(true);
   });
 });
 
