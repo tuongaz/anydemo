@@ -989,6 +989,13 @@ interface NodePatch {
     cornerRadius?: number;
     width?: number;
     height?: number;
+    /**
+     * htmlNode-only: when true, the renderer measures content and React Flow
+     * sizes the wrapper around it. The studio adapter strips width/height when
+     * autoSize:true is patched, and flips autoSize:false when width/height is
+     * patched, per the autoSize invariant.
+     */
+    autoSize?: boolean;
     shape?: ShapeKind;
     /** iconNode-only: stroke color token. Lands at data.color. */
     color?: ColorToken;
@@ -1178,6 +1185,7 @@ type HtmlNodeRuntimeData = HtmlNodeData & {
      * `htmlPath` is the only on-disk reference.
      */
     projectId?: string;
+    onFitToContent?: (nodeId: string) => void;
 } & Record<string, unknown>;
 type HtmlNodeType = Node<HtmlNodeRuntimeData, 'htmlNode'>;
 declare const HTML_DEFAULT_SIZE: {
@@ -1308,6 +1316,13 @@ type PlayNodeData = NodeData & {
     setResizing?: (on: boolean) => void;
     onNameChange?: (nodeId: string, name: string) => void;
     onDescriptionChange?: (nodeId: string, description: string) => void;
+    /**
+     * When wired (edit mode + supported type), the header icon becomes a
+     * popover trigger. The picker emits `null` for the "No icon" tile to
+     * clear the field on disk. Mirrors the read-only gate used by
+     * onNameChange / onDescriptionChange.
+     */
+    onIconChange?: (nodeId: string, icon: string | null) => void;
 } & Record<string, unknown>;
 type PlayNodeType = Node<PlayNodeData, 'playNode'>;
 declare function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeType>): react_jsx_runtime.JSX.Element;
@@ -1446,6 +1461,13 @@ type StateNodeData = NodeData & {
     setResizing?: (on: boolean) => void;
     onNameChange?: (nodeId: string, name: string) => void;
     onDescriptionChange?: (nodeId: string, description: string) => void;
+    /**
+     * When wired (only in edit mode, only for selected + unlocked nodes), the
+     * icon in the header becomes a popover trigger. The picker emits `null` for
+     * the "No icon" tile, which clears the field on disk. Mirrors the same
+     * read-only gate used by onNameChange / onDescriptionChange.
+     */
+    onIconChange?: (nodeId: string, icon: string | null) => void;
 } & Record<string, unknown>;
 type StateNodeType = Node<StateNodeData, 'stateNode'>;
 declare function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNodeType>): react_jsx_runtime.JSX.Element;
@@ -1886,16 +1908,18 @@ interface IconPickerPopoverProps {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     anchor: ReactNode;
-    onPick: (name: string) => void;
+    onPick: (name: string | null) => void;
+    clearable?: boolean;
 }
-declare function IconPickerPopover({ open, onOpenChange, anchor, onPick }: IconPickerPopoverProps): react_jsx_runtime.JSX.Element;
+declare function IconPickerPopover({ open, onOpenChange, anchor, onPick, clearable, }: IconPickerPopoverProps): react_jsx_runtime.JSX.Element;
 interface IconPickerBodyProps {
     query: string;
     onQueryChange: (q: string) => void;
     recents: string[];
-    onPick: (name: string) => void;
+    onPick: (name: string | null) => void;
+    clearable?: boolean;
 }
-declare function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPickerBodyProps): react_jsx_runtime.JSX.Element;
+declare function IconPickerBody({ query, onQueryChange, recents, onPick, clearable, }: IconPickerBodyProps): react_jsx_runtime.JSX.Element;
 
 interface InlineEditProps {
     initialValue: string;
@@ -2284,6 +2308,13 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
         x: number;
         y: number;
     }) => void;
+    /**
+     * htmlNode-only: invoked when the user clicks the "Fit to content" button
+     * on a user-sized htmlNode. The host's handler typically PATCHes
+     * { autoSize: true } through the adapter; the studio's mergeNodeUpdates
+     * then strips width/height to maintain the autoSize invariant.
+     */
+    onHtmlNodeFitToContent?: (nodeId: string) => void;
     /**
      * US-007: atomic multi-select bounding-box resize. Fired once per resize-stop
      * with EVERY scaled node's final position (and, for sized nodes, width/

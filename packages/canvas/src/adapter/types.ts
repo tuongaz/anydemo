@@ -50,6 +50,13 @@ export interface NodePatch {
   cornerRadius?: number;
   width?: number;
   height?: number;
+  /**
+   * htmlNode-only: when true, the renderer measures content and React Flow
+   * sizes the wrapper around it. The studio adapter strips width/height when
+   * autoSize:true is patched, and flips autoSize:false when width/height is
+   * patched, per the autoSize invariant.
+   */
+  autoSize?: boolean;
   shape?: ShapeKind;
   /** iconNode-only: stroke color token. Lands at data.color. */
   color?: ColorToken;

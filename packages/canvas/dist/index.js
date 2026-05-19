@@ -1554,8 +1554,34 @@ var createRestAdapter = (options) => {
 };
 
 // src/nodes/html-node.tsx
-import { Handle as Handle2, Position as Position2 } from "@xyflow/react";
-import { memo as memo2, useEffect as useEffect4 } from "react";
+import { Handle as Handle2, Position as Position2, useUpdateNodeInternals } from "@xyflow/react";
+import { Maximize2 } from "lucide-react";
+import { memo as memo2, useEffect as useEffect4, useRef as useRef3 } from "react";
+
+// src/lib/debounced-resize-observer.ts
+function debouncedResizeObserver(el, delayMs, onSettle) {
+  let timer = null;
+  let cleaned = false;
+  const observer = new ResizeObserver(() => {
+    if (cleaned) return;
+    if (timer !== null) clearTimeout(timer);
+    timer = setTimeout(() => {
+      timer = null;
+      if (cleaned) return;
+      onSettle();
+    }, delayMs);
+  });
+  observer.observe(el);
+  return () => {
+    if (cleaned) return;
+    cleaned = true;
+    if (timer !== null) {
+      clearTimeout(timer);
+      timer = null;
+    }
+    observer.disconnect();
+  };
+}
 
 // src/lib/sanitize-html.ts
 var DANGEROUS_TAGS = /* @__PURE__ */ new Set(["SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "LINK"]);
@@ -1802,7 +1828,9 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   useEffect4(() => {
     ensureTailwindLoaded();
   }, []);
+  const measureRef = useRef3(null);
   const content = useHtmlContent(data.projectId, data.htmlPath);
+  const observerActive = autoSize && content.kind === "loaded";
   let body;
   if (content.kind === "loaded") {
     body = userSized ? /* @__PURE__ */ jsx7(
@@ -1815,6 +1843,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
     ) : /* @__PURE__ */ jsx7(
       "div",
       {
+        ref: measureRef,
         "data-testid": "html-node-content",
         className: "sf:inline-block",
         style: { maxWidth: 800, maxHeight: 600, overflow: "auto" },
@@ -1840,6 +1869,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
       style: outerStyle,
       "data-testid": "html-node",
       children: [
+        observerActive ? /* @__PURE__ */ jsx7(AutoSizeObserver, { nodeId: id, measureRef }) : null,
         /* @__PURE__ */ jsx7(
           ResizeControls,
           {
@@ -1853,6 +1883,21 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
           }
         ),
         data.locked ? /* @__PURE__ */ jsx7(LockBadge, {}) : null,
+        selected && !data.locked && !autoSize && !isResizing && typeof data.onFitToContent === "function" ? /* @__PURE__ */ jsx7(
+          "button",
+          {
+            type: "button",
+            "data-testid": "html-node-fit-to-content",
+            title: "Fit to content",
+            "aria-label": "Fit to content",
+            className: "sf:absolute sf:top-1 sf:right-1 sf:z-10 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100",
+            onClick: (e) => {
+              e.stopPropagation();
+              data.onFitToContent?.(id);
+            },
+            children: /* @__PURE__ */ jsx7(Maximize2, { size: 12, "aria-hidden": true })
+          }
+        ) : null,
         /* @__PURE__ */ jsx7(
           Handle2,
           {
@@ -1908,6 +1953,20 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
       ]
     }
   );
+}
+function AutoSizeObserver({
+  nodeId,
+  measureRef
+}) {
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect4(() => {
+    const el = measureRef.current;
+    if (el === null) return;
+    return debouncedResizeObserver(el, 150, () => {
+      updateNodeInternals(nodeId);
+    });
+  }, [nodeId, updateNodeInternals, measureRef]);
+  return null;
 }
 function arePropsEqual2(prev, next) {
   return prev.selected === next.selected && prev.data === next.data && prev.width === next.width && prev.height === next.height;
@@ -2046,13 +2105,242 @@ var ImageNode = memo3(ImageNodeImpl, arePropsEqual3);
 // src/nodes/play-node.tsx
 import { Handle as Handle4, Position as Position4 } from "@xyflow/react";
 import { Loader2, Play } from "lucide-react";
-import { memo as memo4, useState as useState5 } from "react";
+import { memo as memo4, useState as useState6 } from "react";
+
+// src/components/icon-picker-popover.tsx
+import { Ban } from "lucide-react";
+import { useEffect as useEffect5, useMemo, useState as useState5 } from "react";
+
+// src/ui/popover.tsx
+import * as PopoverPrimitive from "@radix-ui/react-popover";
+import * as React from "react";
+
+// src/components/canvas-portal-container.tsx
+import { createContext as createContext2, useContext as useContext2 } from "react";
+import { jsx as jsx9 } from "react/jsx-runtime";
+var PortalContainerContext = createContext2(null);
+function CanvasPortalContainerProvider({
+  containerRef,
+  children
+}) {
+  return /* @__PURE__ */ jsx9(PortalContainerContext.Provider, { value: containerRef.current, children });
+}
+function useCanvasPortalContainer() {
+  return useContext2(PortalContainerContext) ?? void 0;
+}
+
+// src/ui/popover.tsx
+import { jsx as jsx10 } from "react/jsx-runtime";
+var Popover = PopoverPrimitive.Root;
+var PopoverTrigger = PopoverPrimitive.Trigger;
+var PopoverAnchor = PopoverPrimitive.Anchor;
+var PopoverContent = React.forwardRef(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
+  const portalContainer = useCanvasPortalContainer();
+  return /* @__PURE__ */ jsx10(PopoverPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx10(
+    PopoverPrimitive.Content,
+    {
+      ref,
+      align,
+      sideOffset,
+      className: cn(
+        "sf:z-50 sf:w-72 sf:rounded-md sf:border sf:bg-popover sf:p-4 sf:text-popover-foreground sf:shadow-md sf:outline-hidden sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[side=bottom]:slide-in-from-top-2 sf:data-[side=left]:slide-in-from-right-2 sf:data-[side=right]:slide-in-from-left-2 sf:data-[side=top]:slide-in-from-bottom-2",
+        className
+      ),
+      ...props
+    }
+  ) });
+});
+PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+
+// src/components/icon-picker-popover.tsx
+import { jsx as jsx11, jsxs as jsxs5 } from "react/jsx-runtime";
+var COLS = 8;
+var ROW_HEIGHT = 32;
+var LIST_HEIGHT = 256;
+var OVERSCAN = 2;
+function filterIcons(names, query) {
+  const q = query.trim().toLowerCase();
+  if (q === "") return names.slice();
+  return names.filter((name) => name.toLowerCase().includes(q));
+}
+function IconPickerPopover({
+  open,
+  onOpenChange,
+  anchor,
+  onPick,
+  clearable = true
+}) {
+  const [query, setQuery] = useState5("");
+  const recents = useMemo(() => open ? getRecents() : [], [open]);
+  useEffect5(() => {
+    if (!open) setQuery("");
+  }, [open]);
+  return /* @__PURE__ */ jsxs5(Popover, { open, onOpenChange, children: [
+    /* @__PURE__ */ jsx11(PopoverTrigger, { asChild: true, children: anchor }),
+    /* @__PURE__ */ jsx11(
+      PopoverContent,
+      {
+        align: "start",
+        side: "bottom",
+        sideOffset: 6,
+        className: "sf:w-[340px] sf:p-0",
+        "data-testid": "icon-picker-popover",
+        children: /* @__PURE__ */ jsx11(
+          IconPickerBody,
+          {
+            query,
+            onQueryChange: setQuery,
+            recents,
+            onPick,
+            clearable
+          }
+        )
+      }
+    )
+  ] });
+}
+function IconPickerBody({
+  query,
+  onQueryChange,
+  recents,
+  onPick,
+  clearable = true
+}) {
+  const filtered = useMemo(() => filterIcons(ICON_NAMES, query), [query]);
+  const showRecents = query.trim() === "" && recents.length > 0;
+  const showNoIconTile = clearable && query.trim() === "";
+  const [scrollTop, setScrollTop] = useState5(0);
+  const totalRows = Math.max(1, Math.ceil(filtered.length / COLS));
+  const totalHeight = totalRows * ROW_HEIGHT;
+  const visibleRowCount = Math.ceil(LIST_HEIGHT / ROW_HEIGHT) + OVERSCAN * 2;
+  const startRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
+  const endRow = Math.min(totalRows, startRow + visibleRowCount);
+  const startIndex = startRow * COLS;
+  const endIndex = Math.min(filtered.length, endRow * COLS);
+  const visible = filtered.slice(startIndex, endIndex);
+  return /* @__PURE__ */ jsxs5("div", { className: "sf:flex sf:w-full sf:flex-col", children: [
+    /* @__PURE__ */ jsx11("div", { className: "sf:border-b sf:border-border sf:p-2", children: /* @__PURE__ */ jsx11(
+      "input",
+      {
+        type: "text",
+        value: query,
+        placeholder: "Search icons\u2026",
+        "aria-label": "Search icons",
+        "data-testid": "icon-picker-search",
+        className: cn(
+          "sf:flex sf:h-8 sf:w-full sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-3 sf:text-sm",
+          "placeholder:text-muted-foreground",
+          "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
+        ),
+        onChange: (e) => onQueryChange(e.target.value)
+      }
+    ) }),
+    showRecents ? /* @__PURE__ */ jsxs5("div", { className: "sf:border-b sf:border-border sf:p-2", "data-testid": "icon-picker-recents", children: [
+      /* @__PURE__ */ jsx11("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "Recent" }),
+      /* @__PURE__ */ jsx11(
+        "div",
+        {
+          className: "sf:grid sf:gap-1",
+          style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
+          children: recents.map((name) => renderTile(name, onPick, `icon-picker-recent-${name}`))
+        }
+      )
+    ] }) : null,
+    /* @__PURE__ */ jsxs5("div", { className: "sf:p-2", children: [
+      /* @__PURE__ */ jsx11("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "All icons" }),
+      showNoIconTile ? /* @__PURE__ */ jsx11(
+        "div",
+        {
+          className: "sf:mb-1 sf:grid sf:gap-1",
+          style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
+          children: renderNoIconTile(onPick)
+        }
+      ) : null,
+      filtered.length === 0 ? /* @__PURE__ */ jsx11(
+        "div",
+        {
+          className: "sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground",
+          style: { height: LIST_HEIGHT },
+          "data-testid": "icon-picker-empty",
+          children: "No icons match."
+        }
+      ) : /* @__PURE__ */ jsx11(
+        "div",
+        {
+          "data-testid": "icon-picker-all",
+          className: "overflow-y-auto",
+          style: { height: LIST_HEIGHT },
+          onScroll: (e) => setScrollTop(e.currentTarget.scrollTop),
+          children: /* @__PURE__ */ jsx11("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx11(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                top: startRow * ROW_HEIGHT,
+                left: 0,
+                right: 0
+              },
+              children: /* @__PURE__ */ jsx11(
+                "div",
+                {
+                  className: "sf:grid sf:gap-1",
+                  style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
+                  children: visible.map((name) => renderTile(name, onPick, `icon-picker-tile-${name}`))
+                }
+              )
+            }
+          ) })
+        }
+      )
+    ] })
+  ] });
+}
+function renderTile(name, onPick, testId) {
+  const Icon2 = ICON_REGISTRY[name];
+  return /* @__PURE__ */ jsx11(
+    "button",
+    {
+      type: "button",
+      title: name,
+      "aria-label": name,
+      "data-testid": testId,
+      "data-icon-name": name,
+      onClick: () => onPick(name),
+      className: cn(
+        "sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+        "sf:hover:bg-accent sf:hover:text-accent-foreground",
+        "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
+      ),
+      children: Icon2 ? /* @__PURE__ */ jsx11(Icon2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }) : null
+    },
+    testId
+  );
+}
+function renderNoIconTile(onPick) {
+  return /* @__PURE__ */ jsx11(
+    "button",
+    {
+      type: "button",
+      title: "No icon",
+      "aria-label": "No icon",
+      "data-testid": "icon-picker-tile-none",
+      onClick: () => onPick(null),
+      className: cn(
+        "sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
+        "sf:hover:bg-accent sf:hover:text-accent-foreground",
+        "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
+      ),
+      children: /* @__PURE__ */ jsx11(Ban, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
+    },
+    "icon-picker-tile-none"
+  );
+}
 
 // src/ui/button.tsx
 import { Slot } from "@radix-ui/react-slot";
 import { cva } from "class-variance-authority";
-import * as React from "react";
-import { jsx as jsx9 } from "react/jsx-runtime";
+import * as React2 from "react";
+import { jsx as jsx12 } from "react/jsx-runtime";
 var buttonVariants = cva(
   "sf:inline-flex sf:items-center sf:justify-center sf:whitespace-nowrap sf:rounded-md sf:text-sm sf:font-medium sf:ring-offset-background sf:transition-colors sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2 sf:disabled:pointer-events-none sf:disabled:opacity-50",
   {
@@ -2078,16 +2366,16 @@ var buttonVariants = cva(
     }
   }
 );
-var Button = React.forwardRef(
+var Button = React2.forwardRef(
   ({ className, variant, size, asChild = false, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return /* @__PURE__ */ jsx9(Comp, { className: cn(buttonVariants({ variant, size, className })), ref, ...props });
+    return /* @__PURE__ */ jsx12(Comp, { className: cn(buttonVariants({ variant, size, className })), ref, ...props });
   }
 );
 Button.displayName = "Button";
 
 // src/nodes/status-badge.tsx
-import { jsx as jsx10, jsxs as jsxs5 } from "react/jsx-runtime";
+import { jsx as jsx13, jsxs as jsxs6 } from "react/jsx-runtime";
 var DOT_STYLES = {
   ok: "sf:bg-emerald-400",
   warn: "sf:bg-amber-400",
@@ -2095,28 +2383,28 @@ var DOT_STYLES = {
   pending: "sf:bg-slate-400"
 };
 function StatusBadge({ state, summary, "data-testid": testId }) {
-  return /* @__PURE__ */ jsxs5(
+  return /* @__PURE__ */ jsxs6(
     "span",
     {
       "data-testid": testId,
       "data-state": state,
       className: "sf:inline-flex sf:max-w-full sf:items-center sf:gap-1.5 sf:text-[11px] sf:leading-tight sf:text-muted-foreground",
       children: [
-        /* @__PURE__ */ jsx10(
+        /* @__PURE__ */ jsx13(
           "span",
           {
             "aria-hidden": true,
             className: cn("sf:h-2 sf:w-2 sf:shrink-0 sf:rounded-full", DOT_STYLES[state])
           }
         ),
-        summary ? /* @__PURE__ */ jsx10("span", { className: "sf:min-w-0 sf:flex-1 sf:truncate", title: summary, children: summary }) : null
+        summary ? /* @__PURE__ */ jsx13("span", { className: "sf:min-w-0 sf:flex-1 sf:truncate", title: summary, children: summary }) : null
       ]
     }
   );
 }
 
 // src/nodes/play-node.tsx
-import { jsx as jsx11, jsxs as jsxs6 } from "react/jsx-runtime";
+import { jsx as jsx14, jsxs as jsxs7 } from "react/jsx-runtime";
 var MIN_W4 = 100;
 var MIN_H4 = 44;
 var DEFAULT_W = 200;
@@ -2132,9 +2420,11 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState5(null);
+  const [editing, setEditing] = useState6(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState6(false);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
+  const iconEditable = !!data.onIconChange && !!selected && !data.locked && !!data.icon;
   const sized = data.width !== void 0 || data.height !== void 0;
   const labelFontStyle = {
     ...data.fontSize !== void 0 ? { fontSize: `${data.fontSize}px` } : {},
@@ -2167,7 +2457,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
     if (descEditable) setEditing("description");
     else if (nameEditable) setEditing("name");
   } : void 0;
-  return /* @__PURE__ */ jsxs6(
+  return /* @__PURE__ */ jsxs7(
     "div",
     {
       className: cn(
@@ -2180,7 +2470,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
       "data-testid": "play-node",
       onDoubleClick: handleWrapperDoubleClick,
       children: [
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           ResizeControls,
           {
             visible: !!selected && !!data.onResize && !data.locked,
@@ -2192,8 +2482,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             onResizeEnd
           }
         ),
-        data.locked ? /* @__PURE__ */ jsx11(LockBadge, {}) : null,
-        /* @__PURE__ */ jsx11(
+        data.locked ? /* @__PURE__ */ jsx14(LockBadge, {}) : null,
+        /* @__PURE__ */ jsx14(
           Handle4,
           {
             type: "target",
@@ -2203,7 +2493,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           Handle4,
           {
             type: "target",
@@ -2213,13 +2503,57 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsxs6(
+        /* @__PURE__ */ jsxs7(
           "div",
           {
             className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:bg-muted/30 sf:px-2 sf:py-2",
             "data-testid": "node-header",
             children: [
-              data.icon ? /* @__PURE__ */ jsx11(
+              data.icon ? iconEditable && data.onIconChange ? /* @__PURE__ */ jsx14(
+                IconPickerPopover,
+                {
+                  open: iconPickerOpen,
+                  onOpenChange: setIconPickerOpen,
+                  onPick: (name) => {
+                    data.onIconChange?.(id, name);
+                    setIconPickerOpen(false);
+                  },
+                  anchor: /* @__PURE__ */ jsx14(
+                    "button",
+                    {
+                      type: "button",
+                      "data-testid": "play-node-icon-trigger",
+                      "aria-label": "Change icon",
+                      "aria-pressed": iconPickerOpen,
+                      className: cn(
+                        // Hit area matches the icon's intrinsic 16px so the header
+                        // doesn't reflow when selection toggles the button wrapper
+                        // around the icon. Hover/focus surfaces a subtle ring.
+                        "sf:inline-flex sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-sm sf:bg-transparent sf:p-0 sf:transition-shadow",
+                        "sf:hover:ring-2 sf:hover:ring-ring/40 sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring"
+                      ),
+                      onClick: (e) => {
+                        e.stopPropagation();
+                      },
+                      onMouseDown: (e) => {
+                        e.stopPropagation();
+                      },
+                      onDoubleClick: (e) => {
+                        e.stopPropagation();
+                      },
+                      children: /* @__PURE__ */ jsx14(
+                        Icon,
+                        {
+                          name: data.icon,
+                          size: 16,
+                          style: colorTokenStyle(data.textColor, "text"),
+                          "aria-hidden": true
+                        }
+                      )
+                    }
+                  )
+                }
+              ) : /* @__PURE__ */ jsx14(
                 Icon,
                 {
                   name: data.icon,
@@ -2229,12 +2563,12 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                   "aria-hidden": true
                 }
               ) : null,
-              /* @__PURE__ */ jsx11(
+              /* @__PURE__ */ jsx14(
                 "div",
                 {
                   className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
                   style: labelFontStyle,
-                  children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx11(
+                  children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx14(
                     InlineEdit,
                     {
                       initialValue: data.name,
@@ -2246,7 +2580,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                       className: "sf:text-[18px] sf:font-semibold",
                       style: labelFontStyle
                     }
-                  ) : /* @__PURE__ */ jsx11(
+                  ) : /* @__PURE__ */ jsx14(
                     "button",
                     {
                       type: "button",
@@ -2260,7 +2594,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                   )
                 }
               ),
-              /* @__PURE__ */ jsx11("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx11(
+              /* @__PURE__ */ jsx14("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx14(
                 Button,
                 {
                   type: "button",
@@ -2279,19 +2613,19 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                     e.stopPropagation();
                     data.onPlay?.(id);
                   },
-                  children: isRunning ? /* @__PURE__ */ jsx11(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": true }) : /* @__PURE__ */ jsx11(Play, { className: "sf:h-4 sf:w-4", "aria-hidden": true })
+                  children: isRunning ? /* @__PURE__ */ jsx14(Loader2, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": true }) : /* @__PURE__ */ jsx14(Play, { className: "sf:h-4 sf:w-4", "aria-hidden": true })
                 }
               ) })
             ]
           }
         ),
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           "div",
           {
             className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
-            children: editing === "description" && descEditable ? /* @__PURE__ */ jsx11(
+            children: editing === "description" && descEditable ? /* @__PURE__ */ jsx14(
               InlineEdit,
               {
                 initialValue: data.description ?? "",
@@ -2303,7 +2637,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                 style: descriptionFontStyle,
                 placeholder: data.kind
               }
-            ) : /* @__PURE__ */ jsx11(
+            ) : /* @__PURE__ */ jsx14(
               "button",
               {
                 type: "button",
@@ -2317,12 +2651,12 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             )
           }
         ),
-        data.statusReport && /* @__PURE__ */ jsx11(
+        data.statusReport && /* @__PURE__ */ jsx14(
           "div",
           {
             className: "sf:flex sf:items-center sf:px-2 sf:pb-1",
             "data-testid": "play-node-status-badge",
-            children: /* @__PURE__ */ jsx11(
+            children: /* @__PURE__ */ jsx14(
               StatusBadge,
               {
                 state: data.statusReport.state,
@@ -2332,7 +2666,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             )
           }
         ),
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           Handle4,
           {
             type: "source",
@@ -2342,7 +2676,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsx11(
+        /* @__PURE__ */ jsx14(
           Handle4,
           {
             type: "source",
@@ -2365,7 +2699,7 @@ var PlayNode = memo4(PlayNodeImpl, arePropsEqual4);
 import { Handle as Handle5, Position as Position5 } from "@xyflow/react";
 import {
   memo as memo5,
-  useState as useState6
+  useState as useState7
 } from "react";
 
 // src/nodes/shapes/types.ts
@@ -2379,7 +2713,7 @@ function dashFor(style) {
 }
 
 // src/nodes/shapes/cloud.tsx
-import { jsx as jsx12, jsxs as jsxs7 } from "react/jsx-runtime";
+import { jsx as jsx15, jsxs as jsxs8 } from "react/jsx-runtime";
 var SIDE_MARGIN = 5;
 function CloudShape({
   width,
@@ -2412,7 +2746,7 @@ function CloudShape({
     `L ${xLeft} ${height}`,
     "Z"
   ].join(" ");
-  return /* @__PURE__ */ jsxs7(
+  return /* @__PURE__ */ jsxs8(
     "svg",
     {
       width: "100%",
@@ -2423,15 +2757,15 @@ function CloudShape({
       "aria-label": "Cloud",
       "data-testid": "cloud-shape",
       children: [
-        /* @__PURE__ */ jsx12("title", { children: "Cloud" }),
-        /* @__PURE__ */ jsx12("path", { d, fill, stroke, strokeWidth, strokeDasharray: dash })
+        /* @__PURE__ */ jsx15("title", { children: "Cloud" }),
+        /* @__PURE__ */ jsx15("path", { d, fill, stroke, strokeWidth, strokeDasharray: dash })
       ]
     }
   );
 }
 
 // src/nodes/shapes/database.tsx
-import { jsx as jsx13, jsxs as jsxs8 } from "react/jsx-runtime";
+import { jsx as jsx16, jsxs as jsxs9 } from "react/jsx-runtime";
 function DatabaseShape({
   width,
   height,
@@ -2448,7 +2782,7 @@ function DatabaseShape({
   const strokeWidth = borderSize ?? DEFAULT_STROKE_WIDTH;
   const dash = dashFor(borderStyle);
   const bottomArcPath = `M 0 ${height - ry} A ${rx} ${ry} 0 0 0 ${width} ${height - ry}`;
-  return /* @__PURE__ */ jsxs8(
+  return /* @__PURE__ */ jsxs9(
     "svg",
     {
       width: "100%",
@@ -2459,9 +2793,9 @@ function DatabaseShape({
       "aria-label": "Database",
       "data-testid": "database-shape",
       children: [
-        /* @__PURE__ */ jsx13("title", { children: "Database" }),
-        /* @__PURE__ */ jsx13("rect", { x: 0, y: ry, width, height: Math.max(0, height - 2 * ry), fill }),
-        /* @__PURE__ */ jsx13(
+        /* @__PURE__ */ jsx16("title", { children: "Database" }),
+        /* @__PURE__ */ jsx16("rect", { x: 0, y: ry, width, height: Math.max(0, height - 2 * ry), fill }),
+        /* @__PURE__ */ jsx16(
           "line",
           {
             x1: 0,
@@ -2473,7 +2807,7 @@ function DatabaseShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx13(
+        /* @__PURE__ */ jsx16(
           "line",
           {
             x1: width,
@@ -2485,7 +2819,7 @@ function DatabaseShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx13(
+        /* @__PURE__ */ jsx16(
           "path",
           {
             d: bottomArcPath,
@@ -2495,7 +2829,7 @@ function DatabaseShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx13(
+        /* @__PURE__ */ jsx16(
           "ellipse",
           {
             cx,
@@ -2514,7 +2848,7 @@ function DatabaseShape({
 }
 
 // src/nodes/shapes/queue.tsx
-import { jsx as jsx14, jsxs as jsxs9 } from "react/jsx-runtime";
+import { jsx as jsx17, jsxs as jsxs10 } from "react/jsx-runtime";
 function QueueShape({
   width,
   height,
@@ -2531,7 +2865,7 @@ function QueueShape({
   const d1 = width * 0.25;
   const d2 = width * 0.5;
   const d3 = width * 0.75;
-  return /* @__PURE__ */ jsxs9(
+  return /* @__PURE__ */ jsxs10(
     "svg",
     {
       width: "100%",
@@ -2542,8 +2876,8 @@ function QueueShape({
       "aria-label": "Queue",
       "data-testid": "queue-shape",
       children: [
-        /* @__PURE__ */ jsx14("title", { children: "Queue" }),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx17("title", { children: "Queue" }),
+        /* @__PURE__ */ jsx17(
           "rect",
           {
             x: 0,
@@ -2558,7 +2892,7 @@ function QueueShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx17(
           "line",
           {
             x1: d1,
@@ -2570,7 +2904,7 @@ function QueueShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx17(
           "line",
           {
             x1: d2,
@@ -2582,7 +2916,7 @@ function QueueShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx14(
+        /* @__PURE__ */ jsx17(
           "line",
           {
             x1: d3,
@@ -2600,7 +2934,7 @@ function QueueShape({
 }
 
 // src/nodes/shapes/server.tsx
-import { jsx as jsx15, jsxs as jsxs10 } from "react/jsx-runtime";
+import { jsx as jsx18, jsxs as jsxs11 } from "react/jsx-runtime";
 var BAY_COUNT = 3;
 function ServerShape({
   width,
@@ -2618,7 +2952,7 @@ function ServerShape({
   const ledR = Math.max(3, Math.min(6, bayH * 0.18));
   const ledCX = width - Math.max(10, ledR * 3);
   const cornerR = Math.min(8, Math.min(width, height) * 0.06);
-  return /* @__PURE__ */ jsxs10(
+  return /* @__PURE__ */ jsxs11(
     "svg",
     {
       width: "100%",
@@ -2629,8 +2963,8 @@ function ServerShape({
       "aria-label": "Server",
       "data-testid": "server-shape",
       children: [
-        /* @__PURE__ */ jsx15("title", { children: "Server" }),
-        /* @__PURE__ */ jsx15(
+        /* @__PURE__ */ jsx18("title", { children: "Server" }),
+        /* @__PURE__ */ jsx18(
           "rect",
           {
             x: 0,
@@ -2645,7 +2979,7 @@ function ServerShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx15(
+        /* @__PURE__ */ jsx18(
           "line",
           {
             x1: 0,
@@ -2657,7 +2991,7 @@ function ServerShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx15(
+        /* @__PURE__ */ jsx18(
           "line",
           {
             x1: 0,
@@ -2669,16 +3003,16 @@ function ServerShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx15("circle", { cx: ledCX, cy: bayH / 2, r: ledR, fill: stroke }),
-        /* @__PURE__ */ jsx15("circle", { cx: ledCX, cy: bayH + bayH / 2, r: ledR, fill: stroke }),
-        /* @__PURE__ */ jsx15("circle", { cx: ledCX, cy: bayH * 2 + bayH / 2, r: ledR, fill: stroke })
+        /* @__PURE__ */ jsx18("circle", { cx: ledCX, cy: bayH / 2, r: ledR, fill: stroke }),
+        /* @__PURE__ */ jsx18("circle", { cx: ledCX, cy: bayH + bayH / 2, r: ledR, fill: stroke }),
+        /* @__PURE__ */ jsx18("circle", { cx: ledCX, cy: bayH * 2 + bayH / 2, r: ledR, fill: stroke })
       ]
     }
   );
 }
 
 // src/nodes/shapes/user.tsx
-import { jsx as jsx16, jsxs as jsxs11 } from "react/jsx-runtime";
+import { jsx as jsx19, jsxs as jsxs12 } from "react/jsx-runtime";
 function UserShape({
   width,
   height,
@@ -2707,7 +3041,7 @@ function UserShape({
     `L ${bodyRight} ${height}`,
     "Z"
   ].join(" ");
-  return /* @__PURE__ */ jsxs11(
+  return /* @__PURE__ */ jsxs12(
     "svg",
     {
       width: "100%",
@@ -2718,8 +3052,8 @@ function UserShape({
       "aria-label": "User",
       "data-testid": "user-shape",
       children: [
-        /* @__PURE__ */ jsx16("title", { children: "User" }),
-        /* @__PURE__ */ jsx16(
+        /* @__PURE__ */ jsx19("title", { children: "User" }),
+        /* @__PURE__ */ jsx19(
           "circle",
           {
             cx: width / 2,
@@ -2731,7 +3065,7 @@ function UserShape({
             strokeDasharray: dash
           }
         ),
-        /* @__PURE__ */ jsx16(
+        /* @__PURE__ */ jsx19(
           "path",
           {
             d: bodyPath,
@@ -2756,7 +3090,7 @@ var ILLUSTRATIVE_SHAPE_RENDERERS = {
 };
 
 // src/nodes/shape-node.tsx
-import { Fragment as Fragment2, jsx as jsx17, jsxs as jsxs12 } from "react/jsx-runtime";
+import { Fragment as Fragment2, jsx as jsx20, jsxs as jsxs13 } from "react/jsx-runtime";
 var ILLUSTRATIVE_SHAPES = new Set(
   Object.keys(ILLUSTRATIVE_SHAPE_RENDERERS)
 );
@@ -2834,7 +3168,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState6(() => {
+  const [editing, setEditing] = useState7(() => {
     if (!data.autoEditOnMount) return null;
     const startsAsDescription = data.shape === "ellipse" || data.shape === "sticky" || data.shape === "rectangle" && (data.name === void 0 || data.name === "");
     return startsAsDescription ? "description" : "name";
@@ -2888,7 +3222,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     const w = data.width ?? size.width;
     const h = data.height ?? size.height;
     const { borderColor, backgroundColor } = resolveIllustrativeColors(data);
-    illustrativeOverlay = /* @__PURE__ */ jsx17("div", { className: "sf:pointer-events-none sf:absolute sf:inset-0", children: /* @__PURE__ */ jsx17(
+    illustrativeOverlay = /* @__PURE__ */ jsx20("div", { className: "sf:pointer-events-none sf:absolute sf:inset-0", children: /* @__PURE__ */ jsx20(
       Renderer,
       {
         width: w,
@@ -2908,7 +3242,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
   };
   let singleLabelContent;
   if (renderSingleLabelAsDescription) {
-    singleLabelContent = editing === "description" && descEditable ? /* @__PURE__ */ jsx17(
+    singleLabelContent = editing === "description" && descEditable ? /* @__PURE__ */ jsx20(
       InlineEdit,
       {
         initialValue: description,
@@ -2920,7 +3254,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         style: descriptionFontStyle,
         placeholder: "Description"
       }
-    ) : /* @__PURE__ */ jsx17(
+    ) : /* @__PURE__ */ jsx20(
       "button",
       {
         type: "button",
@@ -2933,7 +3267,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       }
     );
   } else {
-    singleLabelContent = editing === "name" && nameEditable ? /* @__PURE__ */ jsx17(
+    singleLabelContent = editing === "name" && nameEditable ? /* @__PURE__ */ jsx20(
       InlineEdit,
       {
         initialValue: data.name ?? "",
@@ -2945,7 +3279,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         style: labelFontStyle,
         placeholder: isText ? "Text" : "Label"
       }
-    ) : /* @__PURE__ */ jsx17(
+    ) : /* @__PURE__ */ jsx20(
       "button",
       {
         type: "button",
@@ -2959,19 +3293,19 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       }
     );
   }
-  const headerBodyContent = /* @__PURE__ */ jsxs12(Fragment2, { children: [
-    /* @__PURE__ */ jsx17(
+  const headerBodyContent = /* @__PURE__ */ jsxs13(Fragment2, { children: [
+    /* @__PURE__ */ jsx20(
       "div",
       {
         className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:px-2 sf:py-1.5",
         style: colorTokenStyle(data.backgroundColor, "node-header"),
         "data-testid": "shape-node-header",
-        children: /* @__PURE__ */ jsx17(
+        children: /* @__PURE__ */ jsx20(
           "div",
           {
             className: "sf:min-w-0 sf:flex-1 sf:whitespace-pre-wrap sf:wrap-break-word sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight",
             style: labelFontStyle,
-            children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx17(
+            children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx20(
               InlineEdit,
               {
                 initialValue: data.name ?? "",
@@ -2983,7 +3317,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
                 style: labelFontStyle,
                 placeholder: "Title"
               }
-            ) : /* @__PURE__ */ jsx17(
+            ) : /* @__PURE__ */ jsx20(
               "button",
               {
                 type: "button",
@@ -2999,12 +3333,12 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         )
       }
     ),
-    /* @__PURE__ */ jsx17(
+    /* @__PURE__ */ jsx20(
       "div",
       {
         className: "sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1.5",
         "data-testid": "shape-node-body",
-        children: editing === "description" && descEditable ? /* @__PURE__ */ jsx17(
+        children: editing === "description" && descEditable ? /* @__PURE__ */ jsx20(
           InlineEdit,
           {
             initialValue: description,
@@ -3016,7 +3350,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             style: descriptionFontStyle,
             placeholder: "Description"
           }
-        ) : /* @__PURE__ */ jsx17(
+        ) : /* @__PURE__ */ jsx20(
           "button",
           {
             type: "button",
@@ -3032,7 +3366,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       }
     )
   ] });
-  return /* @__PURE__ */ jsxs12(
+  return /* @__PURE__ */ jsxs13(
     "div",
     {
       className: cn(
@@ -3056,7 +3390,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       onDoubleClick: handleWrapperDoubleClick,
       children: [
         illustrativeOverlay,
-        /* @__PURE__ */ jsx17(
+        /* @__PURE__ */ jsx20(
           ResizeControls,
           {
             visible: !!selected && !!data.onResize && !isEditing && !data.locked,
@@ -3068,8 +3402,8 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             onResizeEnd
           }
         ),
-        data.locked ? /* @__PURE__ */ jsx17(LockBadge, {}) : null,
-        !isText && /* @__PURE__ */ jsx17(
+        data.locked ? /* @__PURE__ */ jsx20(LockBadge, {}) : null,
+        !isText && /* @__PURE__ */ jsx20(
           Handle5,
           {
             type: "target",
@@ -3079,7 +3413,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         ),
-        !isText && /* @__PURE__ */ jsx17(
+        !isText && /* @__PURE__ */ jsx20(
           Handle5,
           {
             type: "target",
@@ -3090,7 +3424,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
           }
         ),
         useHeaderLayout ? headerBodyContent : singleLabelContent,
-        !isText && /* @__PURE__ */ jsx17(
+        !isText && /* @__PURE__ */ jsx20(
           Handle5,
           {
             type: "source",
@@ -3100,7 +3434,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
             className: cn(HANDLE_CLASS4, selected && "sf:opacity-100!")
           }
         ),
-        !isText && /* @__PURE__ */ jsx17(
+        !isText && /* @__PURE__ */ jsx20(
           Handle5,
           {
             type: "source",
@@ -3121,10 +3455,10 @@ var ShapeNode = memo5(ShapeNodeImpl, arePropsEqual5);
 
 // src/nodes/state-node.tsx
 import { Handle as Handle6, Position as Position6 } from "@xyflow/react";
-import { memo as memo6, useState as useState7 } from "react";
+import { memo as memo6, useState as useState8 } from "react";
 
 // src/nodes/status-pill.tsx
-import { jsx as jsx18 } from "react/jsx-runtime";
+import { jsx as jsx21 } from "react/jsx-runtime";
 var STYLES = {
   running: "sf:bg-amber-950/50 sf:text-amber-300 sf:animate-pulse",
   done: "sf:bg-emerald-950/50 sf:text-emerald-300",
@@ -3135,7 +3469,7 @@ function StatusPill({
   "data-testid": dataTestId
 }) {
   if (status === "idle") return null;
-  return /* @__PURE__ */ jsx18(
+  return /* @__PURE__ */ jsx21(
     "span",
     {
       "data-status": status,
@@ -3150,7 +3484,7 @@ function StatusPill({
 }
 
 // src/nodes/state-node.tsx
-import { jsx as jsx19, jsxs as jsxs13 } from "react/jsx-runtime";
+import { jsx as jsx22, jsxs as jsxs14 } from "react/jsx-runtime";
 var MIN_W5 = 100;
 var MIN_H5 = 44;
 var DEFAULT_W2 = 200;
@@ -3161,9 +3495,11 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
     onResize: (dims) => data.onResize?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState7(null);
+  const [editing, setEditing] = useState8(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState8(false);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
+  const iconEditable = !!data.onIconChange && !!selected && !data.locked && !!data.icon;
   const sized = data.width !== void 0 || data.height !== void 0;
   const labelFontStyle = {
     ...data.fontSize !== void 0 ? { fontSize: `${data.fontSize}px` } : {},
@@ -3196,7 +3532,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
     if (descEditable) setEditing("description");
     else if (nameEditable) setEditing("name");
   } : void 0;
-  return /* @__PURE__ */ jsxs13(
+  return /* @__PURE__ */ jsxs14(
     "div",
     {
       className: cn(
@@ -3209,7 +3545,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
       "data-testid": "state-node",
       onDoubleClick: handleWrapperDoubleClick,
       children: [
-        /* @__PURE__ */ jsx19(
+        /* @__PURE__ */ jsx22(
           ResizeControls,
           {
             visible: !!selected && !!data.onResize && !data.locked,
@@ -3221,8 +3557,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             onResizeEnd
           }
         ),
-        data.locked ? /* @__PURE__ */ jsx19(LockBadge, {}) : null,
-        /* @__PURE__ */ jsx19(
+        data.locked ? /* @__PURE__ */ jsx22(LockBadge, {}) : null,
+        /* @__PURE__ */ jsx22(
           Handle6,
           {
             type: "target",
@@ -3232,7 +3568,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsx19(
+        /* @__PURE__ */ jsx22(
           Handle6,
           {
             type: "target",
@@ -3242,14 +3578,59 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsxs13(
+        /* @__PURE__ */ jsxs14(
           "div",
           {
             className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2",
             style: colorTokenStyle(data.backgroundColor, "node-header"),
             "data-testid": "node-header",
             children: [
-              data.icon ? /* @__PURE__ */ jsx19(
+              data.icon ? iconEditable && data.onIconChange ? /* @__PURE__ */ jsx22(
+                IconPickerPopover,
+                {
+                  open: iconPickerOpen,
+                  onOpenChange: setIconPickerOpen,
+                  onPick: (name) => {
+                    data.onIconChange?.(id, name);
+                    setIconPickerOpen(false);
+                  },
+                  anchor: /* @__PURE__ */ jsx22(
+                    "button",
+                    {
+                      type: "button",
+                      "data-testid": "state-node-icon-trigger",
+                      "aria-label": "Change icon",
+                      "aria-pressed": iconPickerOpen,
+                      className: cn(
+                        // Hit area matches the icon's intrinsic 16px so the header
+                        // doesn't reflow when selection toggles the button wrapper
+                        // around the icon. Hover/focus surfaces a subtle ring +
+                        // cursor change to advertise interactivity.
+                        "sf:inline-flex sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-sm sf:bg-transparent sf:p-0 sf:transition-shadow",
+                        "sf:hover:ring-2 sf:hover:ring-ring/40 sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring"
+                      ),
+                      onClick: (e) => {
+                        e.stopPropagation();
+                      },
+                      onMouseDown: (e) => {
+                        e.stopPropagation();
+                      },
+                      onDoubleClick: (e) => {
+                        e.stopPropagation();
+                      },
+                      children: /* @__PURE__ */ jsx22(
+                        Icon,
+                        {
+                          name: data.icon,
+                          size: 16,
+                          style: colorTokenStyle(data.textColor, "text"),
+                          "aria-hidden": true
+                        }
+                      )
+                    }
+                  )
+                }
+              ) : /* @__PURE__ */ jsx22(
                 Icon,
                 {
                   name: data.icon,
@@ -3259,12 +3640,12 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                   "aria-hidden": true
                 }
               ) : null,
-              /* @__PURE__ */ jsx19(
+              /* @__PURE__ */ jsx22(
                 "div",
                 {
                   className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
                   style: labelFontStyle,
-                  children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx19(
+                  children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx22(
                     InlineEdit,
                     {
                       initialValue: data.name,
@@ -3276,7 +3657,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                       className: "sf:text-[18px] sf:font-semibold",
                       style: labelFontStyle
                     }
-                  ) : /* @__PURE__ */ jsx19(
+                  ) : /* @__PURE__ */ jsx22(
                     "button",
                     {
                       type: "button",
@@ -3290,17 +3671,17 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                   )
                 }
               ),
-              /* @__PURE__ */ jsx19("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx19(StatusPill, { status }) })
+              /* @__PURE__ */ jsx22("div", { className: "sf:flex sf:shrink-0 sf:items-center sf:gap-1", children: /* @__PURE__ */ jsx22(StatusPill, { status }) })
             ]
           }
         ),
-        /* @__PURE__ */ jsx19(
+        /* @__PURE__ */ jsx22(
           "div",
           {
             className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
-            children: editing === "description" && descEditable ? /* @__PURE__ */ jsx19(
+            children: editing === "description" && descEditable ? /* @__PURE__ */ jsx22(
               InlineEdit,
               {
                 initialValue: data.description ?? "",
@@ -3312,7 +3693,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                 style: descriptionFontStyle,
                 placeholder: data.kind
               }
-            ) : /* @__PURE__ */ jsx19(
+            ) : /* @__PURE__ */ jsx22(
               "button",
               {
                 type: "button",
@@ -3326,7 +3707,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             )
           }
         ),
-        /* @__PURE__ */ jsx19(
+        /* @__PURE__ */ jsx22(
           Handle6,
           {
             type: "source",
@@ -3336,7 +3717,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
             className: cn("sf:opacity-0 sf:transition-opacity", selected && "sf:opacity-100!")
           }
         ),
-        /* @__PURE__ */ jsx19(
+        /* @__PURE__ */ jsx22(
           Handle6,
           {
             type: "source",
@@ -3365,8 +3746,8 @@ import {
   getSmoothStepPath,
   useInternalNode
 } from "@xyflow/react";
-import { useEffect as useEffect5, useState as useState8 } from "react";
-import { Fragment as Fragment3, jsx as jsx20, jsxs as jsxs14 } from "react/jsx-runtime";
+import { useEffect as useEffect6, useState as useState9 } from "react";
+import { Fragment as Fragment3, jsx as jsx23, jsxs as jsxs15 } from "react/jsx-runtime";
 var SMOOTHSTEP_BORDER_RADIUS = 8;
 var RECONNECT_ANCHOR_SHIFT = 10;
 var shiftAnchorForSide = (baseX, baseY, side) => {
@@ -3416,7 +3797,7 @@ function EditableEdge({
   interactionWidth,
   data
 }) {
-  const [editing, setEditing] = useState8(false);
+  const [editing, setEditing] = useState9(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const sourceFallback = {
@@ -3463,7 +3844,7 @@ function EditableEdge({
   const targetSide = endpoints.target.side;
   const sourceShift = shiftAnchorForSide(sX, sY, sourceSide);
   const targetShift = shiftAnchorForSide(tX, tY, targetSide);
-  useEffect5(() => {
+  useEffect6(() => {
     const wrapper = document.querySelector(
       `.react-flow__edge[data-id="${CSS.escape(id)}"]`
     );
@@ -3501,15 +3882,15 @@ function EditableEdge({
   const fontSize = data?.fontSize;
   const fontSizeStyle = typeof fontSize === "number" ? { fontSize: `${fontSize}px` } : void 0;
   const registerEditHandle = data?.registerEditHandle;
-  useEffect5(() => {
+  useEffect6(() => {
     if (!registerEditHandle || !editable) return;
     return registerEditHandle(id, () => setEditing(true));
   }, [id, registerEditHandle, editable]);
   const showEndpointDots = data?.reconnectable === true;
   const sourcePinned = data?.sourcePin !== void 0;
   const targetPinned = data?.targetPin !== void 0;
-  return /* @__PURE__ */ jsxs14(Fragment3, { children: [
-    /* @__PURE__ */ jsx20(
+  return /* @__PURE__ */ jsxs15(Fragment3, { children: [
+    /* @__PURE__ */ jsx23(
       BaseEdge,
       {
         id,
@@ -3520,8 +3901,8 @@ function EditableEdge({
         interactionWidth
       }
     ),
-    showEndpointDots ? /* @__PURE__ */ jsxs14(ViewportPortal, { children: [
-      /* @__PURE__ */ jsx20(
+    showEndpointDots ? /* @__PURE__ */ jsxs15(ViewportPortal, { children: [
+      /* @__PURE__ */ jsx23(
         "div",
         {
           "data-testid": `edge-endpoint-source-${id}`,
@@ -3532,7 +3913,7 @@ function EditableEdge({
           }
         }
       ),
-      /* @__PURE__ */ jsx20(
+      /* @__PURE__ */ jsx23(
         "div",
         {
           "data-testid": `edge-endpoint-target-${id}`,
@@ -3544,14 +3925,14 @@ function EditableEdge({
         }
       )
     ] }) : null,
-    /* @__PURE__ */ jsx20(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx20(
+    /* @__PURE__ */ jsx23(EdgeLabelRenderer, { children: /* @__PURE__ */ jsx23(
       "div",
       {
         className: "nodrag nopan nowheel pointer-events-auto absolute",
         style: {
           transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`
         },
-        children: editing && editable ? /* @__PURE__ */ jsx20(
+        children: editing && editable ? /* @__PURE__ */ jsx23(
           InlineEdit,
           {
             initialValue: labelText,
@@ -3562,7 +3943,7 @@ function EditableEdge({
             style: fontSizeStyle,
             placeholder: "Label"
           }
-        ) : labelText ? /* @__PURE__ */ jsx20(
+        ) : labelText ? /* @__PURE__ */ jsx23(
           "button",
           {
             type: "button",
@@ -3577,7 +3958,7 @@ function EditableEdge({
             } : void 0,
             children: labelText
           }
-        ) : editable ? /* @__PURE__ */ jsx20(
+        ) : editable ? /* @__PURE__ */ jsx23(
           "button",
           {
             type: "button",
@@ -3598,29 +3979,13 @@ function EditableEdge({
 // src/ui/command.tsx
 import { Command as CommandPrimitive } from "cmdk";
 import { Search } from "lucide-react";
-import * as React3 from "react";
+import * as React4 from "react";
 
 // src/ui/dialog.tsx
 import * as DialogPrimitive from "@radix-ui/react-dialog";
 import { X } from "lucide-react";
-import * as React2 from "react";
-
-// src/components/canvas-portal-container.tsx
-import { createContext as createContext2, useContext as useContext2 } from "react";
-import { jsx as jsx21 } from "react/jsx-runtime";
-var PortalContainerContext = createContext2(null);
-function CanvasPortalContainerProvider({
-  containerRef,
-  children
-}) {
-  return /* @__PURE__ */ jsx21(PortalContainerContext.Provider, { value: containerRef.current, children });
-}
-function useCanvasPortalContainer() {
-  return useContext2(PortalContainerContext) ?? void 0;
-}
-
-// src/ui/dialog.tsx
-import { jsx as jsx22, jsxs as jsxs15 } from "react/jsx-runtime";
+import * as React3 from "react";
+import { jsx as jsx24, jsxs as jsxs16 } from "react/jsx-runtime";
 var Dialog = DialogPrimitive.Root;
 var DialogTrigger = DialogPrimitive.Trigger;
 var DialogPortal = ({
@@ -3628,10 +3993,10 @@ var DialogPortal = ({
   ...props
 }) => {
   const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx22(DialogPrimitive.Portal, { container: portalContainer, ...props, children });
+  return /* @__PURE__ */ jsx24(DialogPrimitive.Portal, { container: portalContainer, ...props, children });
 };
 var DialogClose = DialogPrimitive.Close;
-var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var DialogOverlay = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
   DialogPrimitive.Overlay,
   {
     ref,
@@ -3643,9 +4008,9 @@ var DialogOverlay = React2.forwardRef(({ className, ...props }, ref) => /* @__PU
   }
 ));
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
-var DialogContent = React2.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxs15(DialogPortal, { children: [
-  /* @__PURE__ */ jsx22(DialogOverlay, {}),
-  /* @__PURE__ */ jsxs15(
+var DialogContent = React3.forwardRef(({ className, children, ...props }, ref) => /* @__PURE__ */ jsxs16(DialogPortal, { children: [
+  /* @__PURE__ */ jsx24(DialogOverlay, {}),
+  /* @__PURE__ */ jsxs16(
     DialogPrimitive.Content,
     {
       ref,
@@ -3656,16 +4021,16 @@ var DialogContent = React2.forwardRef(({ className, children, ...props }, ref) =
       ...props,
       children: [
         children,
-        /* @__PURE__ */ jsxs15(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
-          /* @__PURE__ */ jsx22(X, { className: "sf:h-4 sf:w-4" }),
-          /* @__PURE__ */ jsx22("span", { className: "sr-only", children: "Close" })
+        /* @__PURE__ */ jsxs16(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+          /* @__PURE__ */ jsx24(X, { className: "sf:h-4 sf:w-4" }),
+          /* @__PURE__ */ jsx24("span", { className: "sr-only", children: "Close" })
         ] })
       ]
     }
   )
 ] }));
 DialogContent.displayName = DialogPrimitive.Content.displayName;
-var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx22(
+var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx24(
   "div",
   {
     className: cn("sf:flex sf:flex-col sf:space-y-1.5 sf:text-center sf:sm:text-left", className),
@@ -3673,7 +4038,7 @@ var DialogHeader = ({ className, ...props }) => /* @__PURE__ */ jsx22(
   }
 );
 DialogHeader.displayName = "DialogHeader";
-var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx22(
+var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx24(
   "div",
   {
     className: cn(
@@ -3684,7 +4049,7 @@ var DialogFooter = ({ className, ...props }) => /* @__PURE__ */ jsx22(
   }
 );
 DialogFooter.displayName = "DialogFooter";
-var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var DialogTitle = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
   DialogPrimitive.Title,
   {
     ref,
@@ -3693,7 +4058,7 @@ var DialogTitle = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE
   }
 ));
 DialogTitle.displayName = DialogPrimitive.Title.displayName;
-var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx22(
+var DialogDescription = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
   DialogPrimitive.Description,
   {
     ref,
@@ -3704,8 +4069,8 @@ var DialogDescription = React2.forwardRef(({ className, ...props }, ref) => /* @
 DialogDescription.displayName = DialogPrimitive.Description.displayName;
 
 // src/ui/command.tsx
-import { jsx as jsx23, jsxs as jsxs16 } from "react/jsx-runtime";
-var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+import { jsx as jsx25, jsxs as jsxs17 } from "react/jsx-runtime";
+var Command = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive,
   {
     ref,
@@ -3718,11 +4083,11 @@ var Command = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ *
 ));
 Command.displayName = CommandPrimitive.displayName;
 var CommandDialog = ({ children, ...props }) => {
-  return /* @__PURE__ */ jsx23(Dialog, { ...props, children: /* @__PURE__ */ jsx23(DialogContent, { className: "sf:overflow-hidden sf:p-0 sf:shadow-lg", children: /* @__PURE__ */ jsx23(Command, { className: "sf:**:[[cmdk-group-heading]]:px-2 sf:**:[[cmdk-group-heading]]:font-medium sf:**:[[cmdk-group-heading]]:text-muted-foreground sf:[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 sf:**:[[cmdk-group]]:px-2 sf:[&_[cmdk-input-wrapper]_svg]:h-5 sf:[&_[cmdk-input-wrapper]_svg]:w-5 sf:**:[[cmdk-input]]:h-12 sf:**:[[cmdk-item]]:px-2 sf:**:[[cmdk-item]]:py-3 sf:[&_[cmdk-item]_svg]:h-5 sf:[&_[cmdk-item]_svg]:w-5", children }) }) });
+  return /* @__PURE__ */ jsx25(Dialog, { ...props, children: /* @__PURE__ */ jsx25(DialogContent, { className: "sf:overflow-hidden sf:p-0 sf:shadow-lg", children: /* @__PURE__ */ jsx25(Command, { className: "sf:**:[[cmdk-group-heading]]:px-2 sf:**:[[cmdk-group-heading]]:font-medium sf:**:[[cmdk-group-heading]]:text-muted-foreground sf:[&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 sf:**:[[cmdk-group]]:px-2 sf:[&_[cmdk-input-wrapper]_svg]:h-5 sf:[&_[cmdk-input-wrapper]_svg]:w-5 sf:**:[[cmdk-input]]:h-12 sf:**:[[cmdk-item]]:px-2 sf:**:[[cmdk-item]]:py-3 sf:[&_[cmdk-item]_svg]:h-5 sf:[&_[cmdk-item]_svg]:w-5", children }) }) });
 };
-var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs16("div", { className: "sf:flex sf:items-center sf:border-b sf:px-3", "cmdk-input-wrapper": "", children: [
-  /* @__PURE__ */ jsx23(Search, { className: "sf:mr-2 sf:h-4 sf:w-4 sf:shrink-0 sf:opacity-50" }),
-  /* @__PURE__ */ jsx23(
+var CommandInput = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs17("div", { className: "sf:flex sf:items-center sf:border-b sf:px-3", "cmdk-input-wrapper": "", children: [
+  /* @__PURE__ */ jsx25(Search, { className: "sf:mr-2 sf:h-4 sf:w-4 sf:shrink-0 sf:opacity-50" }),
+  /* @__PURE__ */ jsx25(
     CommandPrimitive.Input,
     {
       ref,
@@ -3735,7 +4100,7 @@ var CommandInput = React3.forwardRef(({ className, ...props }, ref) => /* @__PUR
   )
 ] }));
 CommandInput.displayName = CommandPrimitive.Input.displayName;
-var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var CommandList = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive.List,
   {
     ref,
@@ -3744,9 +4109,9 @@ var CommandList = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
   }
 ));
 CommandList.displayName = CommandPrimitive.List.displayName;
-var CommandEmpty = React3.forwardRef((props, ref) => /* @__PURE__ */ jsx23(CommandPrimitive.Empty, { ref, className: "sf:py-6 sf:text-center sf:text-sm", ...props }));
+var CommandEmpty = React4.forwardRef((props, ref) => /* @__PURE__ */ jsx25(CommandPrimitive.Empty, { ref, className: "sf:py-6 sf:text-center sf:text-sm", ...props }));
 CommandEmpty.displayName = CommandPrimitive.Empty.displayName;
-var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var CommandGroup = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive.Group,
   {
     ref,
@@ -3758,7 +4123,7 @@ var CommandGroup = React3.forwardRef(({ className, ...props }, ref) => /* @__PUR
   }
 ));
 CommandGroup.displayName = CommandPrimitive.Group.displayName;
-var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var CommandSeparator = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive.Separator,
   {
     ref,
@@ -3767,7 +4132,7 @@ var CommandSeparator = React3.forwardRef(({ className, ...props }, ref) => /* @_
   }
 ));
 CommandSeparator.displayName = CommandPrimitive.Separator.displayName;
-var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx23(
+var CommandItem = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
   CommandPrimitive.Item,
   {
     ref,
@@ -3780,7 +4145,7 @@ var CommandItem = React3.forwardRef(({ className, ...props }, ref) => /* @__PURE
 ));
 CommandItem.displayName = CommandPrimitive.Item.displayName;
 var CommandShortcut = ({ className, ...props }) => {
-  return /* @__PURE__ */ jsx23(
+  return /* @__PURE__ */ jsx25(
     "span",
     {
       className: cn("sf:ml-auto sf:text-xs sf:tracking-widest sf:text-muted-foreground", className),
@@ -3792,13 +4157,13 @@ CommandShortcut.displayName = "CommandShortcut";
 
 // src/ui/context-menu.tsx
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
-import * as React4 from "react";
-import { jsx as jsx24 } from "react/jsx-runtime";
+import * as React5 from "react";
+import { jsx as jsx26 } from "react/jsx-runtime";
 var ContextMenu = ContextMenuPrimitive.Root;
 var ContextMenuTrigger = ContextMenuPrimitive.Trigger;
-var ContextMenuContent = React4.forwardRef(({ className, ...props }, ref) => {
+var ContextMenuContent = React5.forwardRef(({ className, ...props }, ref) => {
   const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx24(ContextMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx24(
+  return /* @__PURE__ */ jsx26(ContextMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx26(
     ContextMenuPrimitive.Content,
     {
       ref,
@@ -3811,7 +4176,7 @@ var ContextMenuContent = React4.forwardRef(({ className, ...props }, ref) => {
   ) });
 });
 ContextMenuContent.displayName = ContextMenuPrimitive.Content.displayName;
-var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
+var ContextMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx26(
   ContextMenuPrimitive.Item,
   {
     ref,
@@ -3823,7 +4188,7 @@ var ContextMenuItem = React4.forwardRef(({ className, ...props }, ref) => /* @__
   }
 ));
 ContextMenuItem.displayName = ContextMenuPrimitive.Item.displayName;
-var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx24(
+var ContextMenuSeparator = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx26(
   ContextMenuPrimitive.Separator,
   {
     ref,
@@ -3832,7 +4197,7 @@ var ContextMenuSeparator = React4.forwardRef(({ className, ...props }, ref) => /
   }
 ));
 ContextMenuSeparator.displayName = ContextMenuPrimitive.Separator.displayName;
-var ContextMenuShortcut = ({ className, ...props }) => /* @__PURE__ */ jsx24(
+var ContextMenuShortcut = ({ className, ...props }) => /* @__PURE__ */ jsx26(
   "span",
   {
     className: cn(
@@ -3846,13 +4211,13 @@ ContextMenuShortcut.displayName = "ContextMenuShortcut";
 
 // src/ui/dropdown-menu.tsx
 import * as DropdownMenuPrimitive from "@radix-ui/react-dropdown-menu";
-import * as React5 from "react";
-import { jsx as jsx25 } from "react/jsx-runtime";
+import * as React6 from "react";
+import { jsx as jsx27 } from "react/jsx-runtime";
 var DropdownMenu = DropdownMenuPrimitive.Root;
 var DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
-var DropdownMenuContent = React5.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
+var DropdownMenuContent = React6.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
   const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx25(DropdownMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx25(
+  return /* @__PURE__ */ jsx27(DropdownMenuPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx27(
     DropdownMenuPrimitive.Content,
     {
       ref,
@@ -3866,7 +4231,7 @@ var DropdownMenuContent = React5.forwardRef(({ className, sideOffset = 4, ...pro
   ) });
 });
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
-var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
+var DropdownMenuItem = React6.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx27(
   DropdownMenuPrimitive.Item,
   {
     ref,
@@ -3878,7 +4243,7 @@ var DropdownMenuItem = React5.forwardRef(({ className, ...props }, ref) => /* @_
   }
 ));
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName;
-var DropdownMenuSeparator = React5.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx25(
+var DropdownMenuSeparator = React6.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx27(
   DropdownMenuPrimitive.Separator,
   {
     ref,
@@ -3893,14 +4258,14 @@ import { Fragment as Fragment4 } from "react";
 
 // src/ui/tooltip.tsx
 import * as TooltipPrimitive from "@radix-ui/react-tooltip";
-import * as React6 from "react";
-import { jsx as jsx26 } from "react/jsx-runtime";
+import * as React7 from "react";
+import { jsx as jsx28 } from "react/jsx-runtime";
 var TooltipProvider = TooltipPrimitive.Provider;
 var Tooltip = TooltipPrimitive.Root;
 var TooltipTrigger = TooltipPrimitive.Trigger;
-var TooltipContent = React6.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
+var TooltipContent = React7.forwardRef(({ className, sideOffset = 4, ...props }, ref) => {
   const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx26(TooltipPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx26(
+  return /* @__PURE__ */ jsx28(TooltipPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx28(
     TooltipPrimitive.Content,
     {
       ref,
@@ -3916,7 +4281,7 @@ var TooltipContent = React6.forwardRef(({ className, sideOffset = 4, ...props },
 TooltipContent.displayName = TooltipPrimitive.Content.displayName;
 
 // src/ui/icon-toggle-group.tsx
-import { jsx as jsx27, jsxs as jsxs17 } from "react/jsx-runtime";
+import { jsx as jsx29, jsxs as jsxs18 } from "react/jsx-runtime";
 function IconToggleGroup({
   value,
   onChange,
@@ -3924,7 +4289,7 @@ function IconToggleGroup({
   ariaLabel,
   className
 }) {
-  return /* @__PURE__ */ jsx27(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsx27(
+  return /* @__PURE__ */ jsx29(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsx29(
     "div",
     {
       "aria-label": ariaLabel,
@@ -3935,10 +4300,10 @@ function IconToggleGroup({
       children: options.map((opt, idx) => {
         const isActive = value === opt.value;
         const Icon2 = opt.icon;
-        return /* @__PURE__ */ jsxs17(Fragment4, { children: [
-          idx > 0 ? /* @__PURE__ */ jsx27("div", { "aria-hidden": true, className: "sf:mx-0.5 sf:w-px sf:self-stretch sf:bg-border/70" }) : null,
-          /* @__PURE__ */ jsxs17(Tooltip, { children: [
-            /* @__PURE__ */ jsx27(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx27(
+        return /* @__PURE__ */ jsxs18(Fragment4, { children: [
+          idx > 0 ? /* @__PURE__ */ jsx29("div", { "aria-hidden": true, className: "sf:mx-0.5 sf:w-px sf:self-stretch sf:bg-border/70" }) : null,
+          /* @__PURE__ */ jsxs18(Tooltip, { children: [
+            /* @__PURE__ */ jsx29(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx29(
               "button",
               {
                 type: "button",
@@ -3951,10 +4316,10 @@ function IconToggleGroup({
                   "sf:flex sf:flex-1 sf:items-center sf:justify-center sf:rounded sf:px-2 sf:transition-colors sf:focus-visible:outline-hidden sf:focus-visible:ring-1 sf:focus-visible:ring-ring",
                   isActive ? "sf:bg-secondary sf:text-secondary-foreground sf:shadow-sm" : "sf:text-muted-foreground sf:hover:bg-accent sf:hover:text-accent-foreground"
                 ),
-                children: /* @__PURE__ */ jsx27(Icon2, { className: "sf:h-4 sf:w-4" })
+                children: /* @__PURE__ */ jsx29(Icon2, { className: "sf:h-4 sf:w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx27(TooltipContent, { side: "top", className: "sf:px-2 sf:py-1 sf:text-xs", children: opt.label })
+            /* @__PURE__ */ jsx29(TooltipContent, { side: "top", className: "sf:px-2 sf:py-1 sf:text-xs", children: opt.label })
           ] })
         ] }, opt.value);
       })
@@ -3963,7 +4328,7 @@ function IconToggleGroup({
 }
 
 // src/ui/line-style-icons.tsx
-import { jsx as jsx28 } from "react/jsx-runtime";
+import { jsx as jsx30 } from "react/jsx-runtime";
 var baseProps = (props) => ({
   width: 16,
   height: 16,
@@ -3974,43 +4339,18 @@ var baseProps = (props) => ({
   strokeWidth: 1.75,
   ...props
 });
-var LineSolidIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8" }) });
-var LineDashedIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "3 2.5" }) });
-var LineDottedIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "0.1 2.6" }) });
-var PathCurveIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("path", { d: "M2 12 C 5 12, 5 4, 8 4 S 11 12, 14 12" }) });
-var PathStepIcon = (props) => /* @__PURE__ */ jsx28("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx28("path", { d: "M2 12 H 6 V 4 H 14" }) });
-
-// src/ui/popover.tsx
-import * as PopoverPrimitive from "@radix-ui/react-popover";
-import * as React7 from "react";
-import { jsx as jsx29 } from "react/jsx-runtime";
-var Popover = PopoverPrimitive.Root;
-var PopoverTrigger = PopoverPrimitive.Trigger;
-var PopoverAnchor = PopoverPrimitive.Anchor;
-var PopoverContent = React7.forwardRef(({ className, align = "center", sideOffset = 4, ...props }, ref) => {
-  const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx29(PopoverPrimitive.Portal, { container: portalContainer, children: /* @__PURE__ */ jsx29(
-    PopoverPrimitive.Content,
-    {
-      ref,
-      align,
-      sideOffset,
-      className: cn(
-        "sf:z-50 sf:w-72 sf:rounded-md sf:border sf:bg-popover sf:p-4 sf:text-popover-foreground sf:shadow-md sf:outline-hidden sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[side=bottom]:slide-in-from-top-2 sf:data-[side=left]:slide-in-from-right-2 sf:data-[side=right]:slide-in-from-left-2 sf:data-[side=top]:slide-in-from-bottom-2",
-        className
-      ),
-      ...props
-    }
-  ) });
-});
-PopoverContent.displayName = PopoverPrimitive.Content.displayName;
+var LineSolidIcon = (props) => /* @__PURE__ */ jsx30("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx30("line", { x1: "2", y1: "8", x2: "14", y2: "8" }) });
+var LineDashedIcon = (props) => /* @__PURE__ */ jsx30("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx30("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "3 2.5" }) });
+var LineDottedIcon = (props) => /* @__PURE__ */ jsx30("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx30("line", { x1: "2", y1: "8", x2: "14", y2: "8", strokeDasharray: "0.1 2.6" }) });
+var PathCurveIcon = (props) => /* @__PURE__ */ jsx30("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx30("path", { d: "M2 12 C 5 12, 5 4, 8 4 S 11 12, 14 12" }) });
+var PathStepIcon = (props) => /* @__PURE__ */ jsx30("svg", { ...baseProps(props), "aria-hidden": "true", children: /* @__PURE__ */ jsx30("path", { d: "M2 12 H 6 V 4 H 14" }) });
 
 // src/ui/sheet.tsx
 import * as SheetPrimitive from "@radix-ui/react-dialog";
 import { cva as cva2 } from "class-variance-authority";
 import { X as X2 } from "lucide-react";
 import * as React8 from "react";
-import { jsx as jsx30, jsxs as jsxs18 } from "react/jsx-runtime";
+import { jsx as jsx31, jsxs as jsxs19 } from "react/jsx-runtime";
 var Sheet = SheetPrimitive.Root;
 var SheetTrigger = SheetPrimitive.Trigger;
 var SheetClose = SheetPrimitive.Close;
@@ -4019,9 +4359,9 @@ var SheetPortal = ({
   ...props
 }) => {
   const portalContainer = useCanvasPortalContainer();
-  return /* @__PURE__ */ jsx30(SheetPrimitive.Portal, { container: portalContainer, ...props, children });
+  return /* @__PURE__ */ jsx31(SheetPrimitive.Portal, { container: portalContainer, ...props, children });
 };
-var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
+var SheetOverlay = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
   SheetPrimitive.Overlay,
   {
     className: cn(
@@ -4049,18 +4389,18 @@ var sheetVariants = cva2(
     }
   }
 );
-var SheetContent = React8.forwardRef(({ side = "right", className, children, ...props }, ref) => /* @__PURE__ */ jsxs18(SheetPortal, { children: [
-  /* @__PURE__ */ jsx30(SheetOverlay, {}),
-  /* @__PURE__ */ jsxs18(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
+var SheetContent = React8.forwardRef(({ side = "right", className, children, ...props }, ref) => /* @__PURE__ */ jsxs19(SheetPortal, { children: [
+  /* @__PURE__ */ jsx31(SheetOverlay, {}),
+  /* @__PURE__ */ jsxs19(SheetPrimitive.Content, { ref, className: cn(sheetVariants({ side }), className), ...props, children: [
     children,
-    /* @__PURE__ */ jsxs18(SheetPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
-      /* @__PURE__ */ jsx30(X2, { className: "sf:h-4 sf:w-4" }),
-      /* @__PURE__ */ jsx30("span", { className: "sf:sr-only", children: "Close" })
+    /* @__PURE__ */ jsxs19(SheetPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
+      /* @__PURE__ */ jsx31(X2, { className: "sf:h-4 sf:w-4" }),
+      /* @__PURE__ */ jsx31("span", { className: "sf:sr-only", children: "Close" })
     ] })
   ] })
 ] }));
 SheetContent.displayName = SheetPrimitive.Content.displayName;
-var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx30(
+var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx31(
   "div",
   {
     className: cn("sf:flex sf:flex-col sf:space-y-2 sf:text-center sf:sm:text-left", className),
@@ -4068,7 +4408,7 @@ var SheetHeader = ({ className, ...props }) => /* @__PURE__ */ jsx30(
   }
 );
 SheetHeader.displayName = "SheetHeader";
-var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx30(
+var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx31(
   "div",
   {
     className: cn(
@@ -4079,7 +4419,7 @@ var SheetFooter = ({ className, ...props }) => /* @__PURE__ */ jsx30(
   }
 );
 SheetFooter.displayName = "SheetFooter";
-var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
+var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
   SheetPrimitive.Title,
   {
     ref,
@@ -4088,7 +4428,7 @@ var SheetTitle = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE_
   }
 ));
 SheetTitle.displayName = SheetPrimitive.Title.displayName;
-var SheetDescription = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx30(
+var SheetDescription = React8.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx31(
   SheetPrimitive.Description,
   {
     ref,
@@ -4101,8 +4441,8 @@ SheetDescription.displayName = SheetPrimitive.Description.displayName;
 // src/ui/slider.tsx
 import * as SliderPrimitive from "@radix-ui/react-slider";
 import * as React9 from "react";
-import { jsx as jsx31, jsxs as jsxs19 } from "react/jsx-runtime";
-var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs19(
+import { jsx as jsx32, jsxs as jsxs20 } from "react/jsx-runtime";
+var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsxs20(
   SliderPrimitive.Root,
   {
     ref,
@@ -4112,8 +4452,8 @@ var Slider = React9.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */
     ),
     ...props,
     children: [
-      /* @__PURE__ */ jsx31(SliderPrimitive.Track, { className: "sf:relative sf:h-1.5 sf:w-full sf:grow sf:overflow-hidden sf:rounded-full sf:bg-secondary", children: /* @__PURE__ */ jsx31(SliderPrimitive.Range, { className: "sf:absolute sf:h-full sf:bg-primary" }) }),
-      /* @__PURE__ */ jsx31(SliderPrimitive.Thumb, { className: "sf:block sf:h-4 sf:w-4 sf:rounded-full sf:border sf:border-primary/60 sf:bg-background sf:shadow-sm sf:transition-colors sf:hover:border-primary sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:disabled:pointer-events-none sf:disabled:opacity-50" })
+      /* @__PURE__ */ jsx32(SliderPrimitive.Track, { className: "sf:relative sf:h-1.5 sf:w-full sf:grow sf:overflow-hidden sf:rounded-full sf:bg-secondary", children: /* @__PURE__ */ jsx32(SliderPrimitive.Range, { className: "sf:absolute sf:h-full sf:bg-primary" }) }),
+      /* @__PURE__ */ jsx32(SliderPrimitive.Thumb, { className: "sf:block sf:h-4 sf:w-4 sf:rounded-full sf:border sf:border-primary/60 sf:bg-background sf:shadow-sm sf:transition-colors sf:hover:border-primary sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:disabled:pointer-events-none sf:disabled:opacity-50" })
     ]
   }
 ));
@@ -4122,9 +4462,9 @@ Slider.displayName = SliderPrimitive.Root.displayName;
 // src/ui/tabs.tsx
 import * as TabsPrimitive from "@radix-ui/react-tabs";
 import * as React10 from "react";
-import { jsx as jsx32 } from "react/jsx-runtime";
+import { jsx as jsx33 } from "react/jsx-runtime";
 var Tabs = TabsPrimitive.Root;
-var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
+var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx33(
   TabsPrimitive.List,
   {
     ref,
@@ -4136,7 +4476,7 @@ var TabsList = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__
   }
 ));
 TabsList.displayName = TabsPrimitive.List.displayName;
-var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
+var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx33(
   TabsPrimitive.Trigger,
   {
     ref,
@@ -4148,7 +4488,7 @@ var TabsTrigger = React10.forwardRef(({ className, ...props }, ref) => /* @__PUR
   }
 ));
 TabsTrigger.displayName = TabsPrimitive.Trigger.displayName;
-var TabsContent = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx32(
+var TabsContent = React10.forwardRef(({ className, ...props }, ref) => /* @__PURE__ */ jsx33(
   TabsPrimitive.Content,
   {
     ref,
@@ -4176,144 +4516,6 @@ import {
   User
 } from "lucide-react";
 import { useState as useState10 } from "react";
-
-// src/components/icon-picker-popover.tsx
-import { useEffect as useEffect6, useMemo, useState as useState9 } from "react";
-import { jsx as jsx33, jsxs as jsxs20 } from "react/jsx-runtime";
-var COLS = 8;
-var ROW_HEIGHT = 32;
-var LIST_HEIGHT = 256;
-var OVERSCAN = 2;
-function filterIcons(names, query) {
-  const q = query.trim().toLowerCase();
-  if (q === "") return names.slice();
-  return names.filter((name) => name.toLowerCase().includes(q));
-}
-function IconPickerPopover({ open, onOpenChange, anchor, onPick }) {
-  const [query, setQuery] = useState9("");
-  const recents = useMemo(() => open ? getRecents() : [], [open]);
-  useEffect6(() => {
-    if (!open) setQuery("");
-  }, [open]);
-  return /* @__PURE__ */ jsxs20(Popover, { open, onOpenChange, children: [
-    /* @__PURE__ */ jsx33(PopoverTrigger, { asChild: true, children: anchor }),
-    /* @__PURE__ */ jsx33(
-      PopoverContent,
-      {
-        align: "start",
-        side: "bottom",
-        sideOffset: 6,
-        className: "sf:w-[340px] sf:p-0",
-        "data-testid": "icon-picker-popover",
-        children: /* @__PURE__ */ jsx33(IconPickerBody, { query, onQueryChange: setQuery, recents, onPick })
-      }
-    )
-  ] });
-}
-function IconPickerBody({ query, onQueryChange, recents, onPick }) {
-  const filtered = useMemo(() => filterIcons(ICON_NAMES, query), [query]);
-  const showRecents = query.trim() === "" && recents.length > 0;
-  const [scrollTop, setScrollTop] = useState9(0);
-  const totalRows = Math.max(1, Math.ceil(filtered.length / COLS));
-  const totalHeight = totalRows * ROW_HEIGHT;
-  const visibleRowCount = Math.ceil(LIST_HEIGHT / ROW_HEIGHT) + OVERSCAN * 2;
-  const startRow = Math.max(0, Math.floor(scrollTop / ROW_HEIGHT) - OVERSCAN);
-  const endRow = Math.min(totalRows, startRow + visibleRowCount);
-  const startIndex = startRow * COLS;
-  const endIndex = Math.min(filtered.length, endRow * COLS);
-  const visible = filtered.slice(startIndex, endIndex);
-  return /* @__PURE__ */ jsxs20("div", { className: "sf:flex sf:w-full sf:flex-col", children: [
-    /* @__PURE__ */ jsx33("div", { className: "sf:border-b sf:border-border sf:p-2", children: /* @__PURE__ */ jsx33(
-      "input",
-      {
-        type: "text",
-        value: query,
-        placeholder: "Search icons\u2026",
-        "aria-label": "Search icons",
-        "data-testid": "icon-picker-search",
-        className: cn(
-          "sf:flex sf:h-8 sf:w-full sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-3 sf:text-sm",
-          "placeholder:text-muted-foreground",
-          "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
-        ),
-        onChange: (e) => onQueryChange(e.target.value)
-      }
-    ) }),
-    showRecents ? /* @__PURE__ */ jsxs20("div", { className: "sf:border-b sf:border-border sf:p-2", "data-testid": "icon-picker-recents", children: [
-      /* @__PURE__ */ jsx33("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "Recent" }),
-      /* @__PURE__ */ jsx33(
-        "div",
-        {
-          className: "sf:grid sf:gap-1",
-          style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
-          children: recents.map((name) => renderTile(name, onPick, `icon-picker-recent-${name}`))
-        }
-      )
-    ] }) : null,
-    /* @__PURE__ */ jsxs20("div", { className: "sf:p-2", children: [
-      /* @__PURE__ */ jsx33("div", { className: "sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: "All icons" }),
-      filtered.length === 0 ? /* @__PURE__ */ jsx33(
-        "div",
-        {
-          className: "sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground",
-          style: { height: LIST_HEIGHT },
-          "data-testid": "icon-picker-empty",
-          children: "No icons match."
-        }
-      ) : /* @__PURE__ */ jsx33(
-        "div",
-        {
-          "data-testid": "icon-picker-all",
-          className: "overflow-y-auto",
-          style: { height: LIST_HEIGHT },
-          onScroll: (e) => setScrollTop(e.currentTarget.scrollTop),
-          children: /* @__PURE__ */ jsx33("div", { style: { height: totalHeight, position: "relative" }, children: /* @__PURE__ */ jsx33(
-            "div",
-            {
-              style: {
-                position: "absolute",
-                top: startRow * ROW_HEIGHT,
-                left: 0,
-                right: 0
-              },
-              children: /* @__PURE__ */ jsx33(
-                "div",
-                {
-                  className: "sf:grid sf:gap-1",
-                  style: { gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` },
-                  children: visible.map((name) => renderTile(name, onPick, `icon-picker-tile-${name}`))
-                }
-              )
-            }
-          ) })
-        }
-      )
-    ] })
-  ] });
-}
-function renderTile(name, onPick, testId) {
-  const Icon2 = ICON_REGISTRY[name];
-  return /* @__PURE__ */ jsx33(
-    "button",
-    {
-      type: "button",
-      title: name,
-      "aria-label": name,
-      "data-testid": testId,
-      "data-icon-name": name,
-      onClick: () => onPick(name),
-      className: cn(
-        "sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
-        "sf:hover:bg-accent sf:hover:text-accent-foreground",
-        "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
-      ),
-      children: Icon2 ? /* @__PURE__ */ jsx33(Icon2, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" }) : null
-    },
-    testId
-  );
-}
-
-// src/components/canvas-toolbar.tsx
 import { jsx as jsx34, jsxs as jsxs21 } from "react/jsx-runtime";
 var HTML_BLOCK_DND_TYPE = "application/x-seeflow-create-html-block";
 var TOP_PRIMARY_SHAPES = [
@@ -4470,7 +4672,10 @@ function CanvasToolbar({
                 children: /* @__PURE__ */ jsx34(Sticker, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
               }
             ),
-            onPick: onPickIcon
+            clearable: false,
+            onPick: (name) => {
+              if (name !== null) onPickIcon(name);
+            }
           }
         ) : null,
         /* @__PURE__ */ jsx34("div", { className: "sf:my-1 sf:h-px sf:w-6 sf:bg-border", "aria-hidden": "true" }),
@@ -4481,15 +4686,15 @@ function CanvasToolbar({
 }
 
 // src/components/detail-panel.tsx
-import { FolderOpen, PencilLine, X as X3 } from "lucide-react";
+import { FolderOpen, ImagePlus, PencilLine } from "lucide-react";
 import {
   useEffect as useEffect7,
-  useRef as useRef3,
+  useRef as useRef4,
   useState as useState11
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { Fragment as Fragment5, jsx as jsx35, jsxs as jsxs22 } from "react/jsx-runtime";
+import { jsx as jsx35, jsxs as jsxs22 } from "react/jsx-runtime";
 function DetailPanel({
   demoId,
   node,
@@ -4511,7 +4716,7 @@ function DetailPanel({
   const description = inspectableNode?.data.description ?? "";
   const detail = inspectableNode?.data.detail ?? "";
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
-  const supportsIconField = inspectableNode !== null && (inspectableNode.type === "playNode" || inspectableNode.type === "stateNode" || inspectableNode.type === "htmlNode");
+  const supportsIconField = inspectableNode !== null && (inspectableNode.type === "playNode" || inspectableNode.type === "stateNode");
   const showIconField = supportsIconField && typeof onIconChange === "function";
   const currentIcon = showIconField && "icon" in inspectableNode.data ? inspectableNode.data.icon ?? null : null;
   const [width, setWidth] = useState11(() => getStoredDetailPanelWidth());
@@ -4568,19 +4773,29 @@ function DetailPanel({
             ),
             inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
               /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
-                showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsx35(
-                  EditableField,
-                  {
-                    nodeId: inspectableNode.id,
-                    value: nodeName,
-                    placeholder: "Name",
-                    multiline: false,
-                    ariaLabel: "Name",
-                    testIdBase: "detail-panel-name",
-                    onSave: onNameChange,
-                    textClassName: "sf:text-base sf:font-semibold"
-                  }
-                ) }) : (
+                showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
+                  showIconField && onIconChange ? /* @__PURE__ */ jsx35(
+                    TitleIconTrigger,
+                    {
+                      nodeId: inspectableNode.id,
+                      icon: currentIcon,
+                      onChange: onIconChange
+                    }
+                  ) : null,
+                  /* @__PURE__ */ jsx35("div", { className: "sf:min-w-0 sf:flex-1", children: /* @__PURE__ */ jsx35(
+                    EditableField,
+                    {
+                      nodeId: inspectableNode.id,
+                      value: nodeName,
+                      placeholder: "Name",
+                      multiline: false,
+                      ariaLabel: "Name",
+                      testIdBase: "detail-panel-name",
+                      onSave: onNameChange,
+                      textClassName: "sf:text-base sf:font-semibold"
+                    }
+                  ) })
+                ] }) }) : (
                   // Radix requires a SheetTitle for a11y; keep it sr-only for
                   // ellipse so the panel stops rendering a Name row visually but
                   // still announces the entity to screen readers.
@@ -4594,7 +4809,6 @@ function DetailPanel({
               ] }),
               /* @__PURE__ */ jsxs22("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-3", children: [
                 statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
-                showIconField && onIconChange ? /* @__PURE__ */ jsx35(IconRow, { nodeId: inspectableNode.id, icon: currentIcon, onChange: onIconChange }) : null,
                 /* @__PURE__ */ jsx35(
                   EditableField,
                   {
@@ -4652,8 +4866,8 @@ function EditableField({
   markdown = false
 }) {
   const [isEditing, setIsEditing] = useState11(false);
-  const editorRef = useRef3(null);
-  const cancelOnBlurRef = useRef3(false);
+  const editorRef = useRef4(null);
+  const cancelOnBlurRef = useRef4(false);
   useEffect7(() => {
     if (!isEditing) return;
     const el = editorRef.current;
@@ -4771,59 +4985,38 @@ function EditableField({
     }
   ) });
 }
-function IconRow({
+function TitleIconTrigger({
   nodeId,
   icon,
   onChange
 }) {
   const [open, setOpen] = useState11(false);
-  return /* @__PURE__ */ jsxs22("div", { "data-testid": "detail-panel-icon", className: "sf:flex sf:items-center sf:gap-2 sf:px-2", children: [
-    /* @__PURE__ */ jsx35("span", { className: "sf:text-xs sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground sf:w-16 sf:shrink-0", children: "Icon" }),
-    /* @__PURE__ */ jsx35(
-      IconPickerPopover,
-      {
-        open,
-        onOpenChange: setOpen,
-        onPick: (name) => {
-          onChange(nodeId, name);
-          setOpen(false);
-        },
-        anchor: /* @__PURE__ */ jsx35(
-          "button",
-          {
-            type: "button",
-            "data-testid": "detail-panel-icon-trigger",
-            "aria-label": "Choose icon",
-            "aria-pressed": open,
-            className: cn(
-              "sf:inline-flex sf:h-8 sf:min-w-8 sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-2 sf:text-sm sf:transition-colors",
-              "sf:hover:bg-muted"
-            ),
-            children: icon ? /* @__PURE__ */ jsxs22(Fragment5, { children: [
-              /* @__PURE__ */ jsx35(Icon, { name: icon, size: 16, "aria-hidden": true }),
-              /* @__PURE__ */ jsx35("span", { className: "sf:font-mono sf:text-xs", children: icon })
-            ] }) : /* @__PURE__ */ jsx35("span", { className: "sf:text-muted-foreground sf:italic", children: "None" })
-          }
-        )
-      }
-    ),
-    icon ? /* @__PURE__ */ jsxs22(
-      Button,
-      {
-        type: "button",
-        size: "sm",
-        variant: "ghost",
-        "data-testid": "detail-panel-icon-clear",
-        "aria-label": "Clear icon",
-        className: "sf:h-8 sf:gap-1 sf:px-2 sf:text-xs",
-        onClick: () => onChange(nodeId, null),
-        children: [
-          /* @__PURE__ */ jsx35(X3, { className: "sf:h-3.5 sf:w-3.5" }),
-          "Clear"
-        ]
-      }
-    ) : null
-  ] });
+  return /* @__PURE__ */ jsx35(
+    IconPickerPopover,
+    {
+      open,
+      onOpenChange: setOpen,
+      onPick: (name) => {
+        onChange(nodeId, name);
+        setOpen(false);
+      },
+      anchor: /* @__PURE__ */ jsx35(
+        "button",
+        {
+          type: "button",
+          "data-testid": "detail-panel-icon-trigger",
+          "aria-label": icon ? "Change icon" : "Add icon",
+          "aria-pressed": open,
+          className: cn(
+            "sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:rounded-md sf:text-foreground sf:transition-colors",
+            icon ? "sf:hover:bg-muted" : "sf:border sf:border-dashed sf:border-muted-foreground/40 sf:text-muted-foreground/60 sf:hover:border-muted-foreground sf:hover:text-foreground",
+            "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
+          ),
+          children: icon ? /* @__PURE__ */ jsx35(Icon, { name: icon, size: 16, "aria-hidden": true }) : /* @__PURE__ */ jsx35(ImagePlus, { className: "sf:h-4 sf:w-4", "aria-hidden": true })
+        }
+      )
+    }
+  );
 }
 function HtmlNodeSection({
   adapter,
@@ -5058,7 +5251,7 @@ function SummaryRow({ label, value }) {
 }
 
 // src/components/embed-dialog.tsx
-import { useCallback as useCallback2, useRef as useRef4, useState as useState12 } from "react";
+import { useCallback as useCallback2, useRef as useRef5, useState as useState12 } from "react";
 
 // src/lib/build-embed-snippet.ts
 var EMBED_HOST = "https://seeflow.dev/embed";
@@ -5088,7 +5281,7 @@ var COPIED_RESET_MS = 1500;
 function EmbedDialog({ open, onOpenChange, projectId }) {
   const snippet = buildEmbedSnippet(buildEmbedUrl(projectId));
   const [copyStatus, setCopyStatus] = useState12("idle");
-  const textareaRef = useRef4(null);
+  const textareaRef = useRef5(null);
   const handleCopy = useCallback2(async () => {
     try {
       await navigator.clipboard.writeText(snippet);
@@ -5147,7 +5340,7 @@ function EmbedDialog({ open, onOpenChange, projectId }) {
 // src/components/share-menu.tsx
 import { FileDown, Image as ImageIcon, Loader2 as Loader22, Share2, Square as Square2, Upload } from "lucide-react";
 import { useCallback as useCallback3, useState as useState13 } from "react";
-import { Fragment as Fragment6, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
+import { Fragment as Fragment5, jsx as jsx37, jsxs as jsxs24 } from "react/jsx-runtime";
 var SHARE_LABEL = "Share / download";
 var DOWNLOAD_PDF_LABEL = "Download PDF";
 var DOWNLOAD_PNG_LABEL = "Download PNG";
@@ -5189,7 +5382,7 @@ function ShareMenu({
   const showEmbed = mode === "edit" && typeof projectId === "string" && projectId.length > 0;
   const showExportToCloud = mode === "edit" && Boolean(onExportToCloud);
   if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
-  return /* @__PURE__ */ jsxs24(Fragment6, { children: [
+  return /* @__PURE__ */ jsxs24(Fragment5, { children: [
     /* @__PURE__ */ jsxs24(DropdownMenu, { children: [
       /* @__PURE__ */ jsx37(DropdownMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx37(
         "button",
@@ -5316,7 +5509,7 @@ function RestartDemoButton({ onRestartDemo }) {
 // src/components/selection-resize-overlay.tsx
 import { useReactFlow } from "@xyflow/react";
 import {
-  useRef as useRef5,
+  useRef as useRef6,
   useState as useState15
 } from "react";
 var SELECTION_OVERLAY_PADDING = 8;
@@ -5430,8 +5623,8 @@ function SelectionResizeOverlay({
   const reactFlow = useReactFlow();
   const [dragState, setDragState] = useState15(null);
   const [previewRect, setPreviewRect] = useState15(null);
-  const shiftHeldRef = useRef5(false);
-  const liveDispatchRafRef = useRef5(null);
+  const shiftHeldRef = useRef6(false);
+  const liveDispatchRafRef = useRef6(null);
   if (!selectionEligibleForOverlay(selectedNodes)) return null;
   const unionRect = computeUnionRect(selectedNodes);
   if (!unionRect) return null;
@@ -5555,7 +5748,7 @@ import {
   Type as Type2
 } from "lucide-react";
 import { useEffect as useEffect8, useState as useState16 } from "react";
-import { Fragment as Fragment7, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
+import { Fragment as Fragment6, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
 var DEFAULT_BORDER_SIZE = 3;
@@ -6335,7 +6528,7 @@ function SliderControl({
       {
         "data-testid": `${testId}-value`,
         className: "sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground",
-        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs26(Fragment7, { children: [
+        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs26(Fragment6, { children: [
           local,
           suffix
         ] })
@@ -6360,14 +6553,14 @@ import {
   useStore,
   useStoreApi
 } from "@xyflow/react";
-import { LayoutDashboard, Maximize2 } from "lucide-react";
+import { LayoutDashboard, Maximize2 as Maximize22 } from "lucide-react";
 import {
   forwardRef as forwardRef11,
   useCallback as useCallback6,
   useEffect as useEffect9,
   useImperativeHandle,
   useMemo as useMemo2,
-  useRef as useRef6,
+  useRef as useRef7,
   useState as useState18
 } from "react";
 
@@ -6470,7 +6663,7 @@ var useCanvasExport = ({
 
 // src/components/seeflow-canvas.tsx
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment8, jsx as jsx40, jsxs as jsxs27 } from "react/jsx-runtime";
+import { Fragment as Fragment7, jsx as jsx40, jsxs as jsxs27 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -6935,6 +7128,7 @@ function SeeflowCanvasImpl(props, ref) {
     onNodePositionChange,
     onNodePositionsChange,
     onNodeResize,
+    onHtmlNodeFitToContent,
     onMultiResize,
     onNodeNameChange,
     onNodeDescriptionChange,
@@ -7046,7 +7240,7 @@ function SeeflowCanvasImpl(props, ref) {
     ]
   );
   const isEditMode = mode === "edit";
-  const flagsRef = useRef6(flags);
+  const flagsRef = useRef7(flags);
   useEffect9(() => {
     flagsRef.current = flags;
   }, [flags]);
@@ -7059,12 +7253,12 @@ function SeeflowCanvasImpl(props, ref) {
   const statusByNode = runtime?.statuses;
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
   const connectorOverrides = runtime?.pendingOverrides?.connectors;
-  const wrapperRef = useRef6(null);
-  const rfInstanceRef = useRef6(null);
-  const didMountFitRef = useRef6(false);
-  const pendingFitRef = useRef6(false);
-  const signalEffectMountedRef = useRef6(false);
-  const resolvedAutoFitViewRef = useRef6(resolvedAutoFitView);
+  const wrapperRef = useRef7(null);
+  const rfInstanceRef = useRef7(null);
+  const didMountFitRef = useRef7(false);
+  const pendingFitRef = useRef7(false);
+  const signalEffectMountedRef = useRef7(false);
+  const resolvedAutoFitViewRef = useRef7(resolvedAutoFitView);
   resolvedAutoFitViewRef.current = resolvedAutoFitView;
   useEffect9(() => {
     if (didMountFitRef.current) return;
@@ -7075,10 +7269,10 @@ function SeeflowCanvasImpl(props, ref) {
     rfInstance.fitView(FIT_VIEW_OPTIONS);
     didMountFitRef.current = true;
   }, [nodes, resolvedAutoFitView.onMount]);
-  const storeApiRef = useRef6(null);
+  const storeApiRef = useRef7(null);
   const drawShape = activeShape;
   const setDrawShape = onSelectShape;
-  const editHandlesRef = useRef6(/* @__PURE__ */ new Map());
+  const editHandlesRef = useRef7(/* @__PURE__ */ new Map());
   const registerEditHandle = useCallback6((id, enter) => {
     editHandlesRef.current.set(id, enter);
     return () => {
@@ -7087,15 +7281,15 @@ function SeeflowCanvasImpl(props, ref) {
     };
   }, []);
   const [connecting, setConnecting] = useState18(false);
-  const connectingRef = useRef6(false);
+  const connectingRef = useRef7(false);
   useEffect9(() => {
     connectingRef.current = connecting;
   }, [connecting]);
-  const connectCancelledRef = useRef6(false);
-  const reconnectCancelledRef = useRef6(false);
-  const isReconnectingRef = useRef6(false);
+  const connectCancelledRef = useRef7(false);
+  const reconnectCancelledRef = useRef7(false);
+  const isReconnectingRef = useRef7(false);
   const [dropPopover, setDropPopover] = useState18(null);
-  const dropPopoverRef = useRef6(null);
+  const dropPopoverRef = useRef7(null);
   useEffect9(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
@@ -7106,8 +7300,8 @@ function SeeflowCanvasImpl(props, ref) {
     () => buildReconnectAwareConnectionLine(isReconnectingRef),
     []
   );
-  const connectSourceNodeIdRef = useRef6(null);
-  const connectTargetNodeIdRef = useRef6(null);
+  const connectSourceNodeIdRef = useRef7(null);
+  const connectTargetNodeIdRef = useRef7(null);
   const setConnectSource = useCallback6((nodeId) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
@@ -7164,10 +7358,10 @@ function SeeflowCanvasImpl(props, ref) {
   }, [connecting, setConnectTarget]);
   const [drawStart, setDrawStart] = useState18(null);
   const [drawCurrent, setDrawCurrent] = useState18(null);
-  const drawShapeRef = useRef6(null);
-  const drawStartRef = useRef6(null);
-  const drawCurrentRef = useRef6(null);
-  const drawingRef = useRef6(false);
+  const drawShapeRef = useRef7(null);
+  const drawStartRef = useRef7(null);
+  const drawCurrentRef = useRef7(null);
+  const drawingRef = useRef7(false);
   useEffect9(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
@@ -7288,9 +7482,9 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [exitDrawMode, onCreateShapeNode]
   );
-  const draggingRef = useRef6(false);
-  const resizingRef = useRef6(false);
-  const viewModePositionsRef = useRef6(/* @__PURE__ */ new Map());
+  const draggingRef = useRef7(false);
+  const resizingRef = useRef7(false);
+  const viewModePositionsRef = useRef7(/* @__PURE__ */ new Map());
   const flushPendingFit = useCallback6(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
@@ -7321,8 +7515,8 @@ function SeeflowCanvasImpl(props, ref) {
   const [contextOnNode, setContextOnNode] = useState18(false);
   const [contextNodeType, setContextNodeType] = useState18(null);
   const [contextEndpoint, setContextEndpoint] = useState18(null);
-  const contextNodeIdRef = useRef6(null);
-  const contextTriggerRef = useRef6(null);
+  const contextNodeIdRef = useRef7(null);
+  const contextTriggerRef = useRef7(null);
   useEffect9(() => {
     if (!contextMenuPos) return;
     const trigger = contextTriggerRef.current;
@@ -7454,6 +7648,10 @@ function SeeflowCanvasImpl(props, ref) {
           onPlay: onPlayNode,
           onResize: onNodeResize,
           setResizing,
+          // htmlNode-only: routed through to the renderer's fit-to-content
+          // button. Gated on type so other node variants don't pick up an
+          // unused callback in their runtime data.
+          onFitToContent: merged.type === "htmlNode" ? onHtmlNodeFitToContent : void 0,
           onNameChange: (() => {
             if (!isEditMode) return void 0;
             if (merged.type === "shapeNode") {
@@ -7470,6 +7668,11 @@ function SeeflowCanvasImpl(props, ref) {
             }
             if (merged.type === "imageNode" || merged.type === "iconNode") return void 0;
             return onNodeDescriptionChange;
+          })(),
+          onIconChange: (() => {
+            if (!isEditMode) return void 0;
+            if (merged.type !== "playNode" && merged.type !== "stateNode") return void 0;
+            return onIconChange;
           })(),
           // US-015: inject autoEditOnMount on the freshly drop-popover-created
           // node so it opens in label-edit mode. The flag is consumed once at
@@ -7505,10 +7708,12 @@ function SeeflowCanvasImpl(props, ref) {
     statusByNode,
     onPlayNode,
     onNodeResize,
+    onHtmlNodeFitToContent,
     setResizing,
     nodeOverrides,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onIconChange,
     onRetryImageUpload,
     pendingEditNodeId,
     isEditMode
@@ -7521,25 +7726,25 @@ function SeeflowCanvasImpl(props, ref) {
   useEffect9(() => {
     rfNodesRef.current = rfNodes;
   }, [rfNodes]);
-  const selectedIdSetRef = useRef6(selectedNodeIdSet);
+  const selectedIdSetRef = useRef7(selectedNodeIdSet);
   useEffect9(() => {
     selectedIdSetRef.current = selectedNodeIdSet;
   }, [selectedNodeIdSet]);
-  const onSelectionChangeRef = useRef6(onSelectionChange);
+  const onSelectionChangeRef = useRef7(onSelectionChange);
   useEffect9(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
-  const selectedConnIdSetRef = useRef6(selectedConnectorIdSet);
+  const selectedConnIdSetRef = useRef7(selectedConnectorIdSet);
   useEffect9(() => {
     selectedConnIdSetRef.current = selectedConnectorIdSet;
   }, [selectedConnectorIdSet]);
-  const rfNodesRef = useRef6(sourceNodes);
-  const marqueeActiveRef = useRef6(false);
-  const marqueeSelectedNodeIdsRef = useRef6(/* @__PURE__ */ new Set());
-  const marqueeSelectedEdgeIdsRef = useRef6(/* @__PURE__ */ new Set());
-  const additiveBaseNodeIdsRef = useRef6(/* @__PURE__ */ new Set());
-  const additiveBaseEdgeIdsRef = useRef6(/* @__PURE__ */ new Set());
-  const tentativeAdditiveBaseRef = useRef6(null);
+  const rfNodesRef = useRef7(sourceNodes);
+  const marqueeActiveRef = useRef7(false);
+  const marqueeSelectedNodeIdsRef = useRef7(/* @__PURE__ */ new Set());
+  const marqueeSelectedEdgeIdsRef = useRef7(/* @__PURE__ */ new Set());
+  const additiveBaseNodeIdsRef = useRef7(/* @__PURE__ */ new Set());
+  const additiveBaseEdgeIdsRef = useRef7(/* @__PURE__ */ new Set());
+  const tentativeAdditiveBaseRef = useRef7(null);
   const onNodesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseNodeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.nodeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -7580,7 +7785,7 @@ function SeeflowCanvasImpl(props, ref) {
     selectedIdSetRef.current = new Set(sel);
     cb(sel, [...selectedConnIdSetRef.current]);
   }, []);
-  const rfEdgesRef = useRef6([]);
+  const rfEdgesRef = useRef7([]);
   const onEdgesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseEdgeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.edgeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -7815,8 +8020,8 @@ function SeeflowCanvasImpl(props, ref) {
     );
   }, []);
   const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
-  const connectSucceededRef = useRef6(false);
-  const connectStartRef = useRef6(
+  const connectSucceededRef = useRef7(false);
+  const connectStartRef = useRef7(
     null
   );
   const onConnect = useCallback6(
@@ -7902,7 +8107,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onCreateConnector, clearConnectMarkers, isValidConnection]
   );
-  const reconnectSucceededRef = useRef6(false);
+  const reconnectSucceededRef = useRef7(false);
   const onReconnect = useCallback6(
     (oldEdge, newConnection) => {
       if (!onReconnectConnector) return;
@@ -8309,7 +8514,7 @@ function SeeflowCanvasImpl(props, ref) {
                     onClick: () => {
                       rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
                     },
-                    children: /* @__PURE__ */ jsx40(Maximize2, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx40(Maximize22, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 ),
                 /* @__PURE__ */ jsx40(
@@ -8472,7 +8677,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 ) : null,
                 contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
-                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs27(Fragment8, { children: [
+                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs27(Fragment7, { children: [
                   /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {

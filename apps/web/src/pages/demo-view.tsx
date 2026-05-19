@@ -556,6 +556,55 @@ export function DemoView({
     ],
   );
 
+  // htmlNode-only: flip the node back to auto-size mode. The studio's
+  // mergeNodeUpdates strips width/height server-side per the autoSize
+  // invariant, so we don't need to send explicit width/height clears.
+  const onHtmlNodeFitToContent = useCallback(
+    (nodeId: string) => {
+      if (!demoId || !adapter) return;
+      const node = demoNodes?.find((n) => n.id === nodeId);
+      if (!node) return;
+      const prev = {
+        autoSize: (node.data as { autoSize?: boolean }).autoSize,
+        width: node.data.width,
+        height: node.data.height,
+      };
+      const next = { autoSize: true };
+      // Optimistic strip: hide the persisted dims locally so the renderer
+      // immediately switches to auto-size layout while the PATCH is in flight.
+      setNodeOverride(nodeId, {
+        data: { autoSize: true, width: undefined, height: undefined },
+      } as Partial<DemoNode>);
+      setEditError(null);
+      markMutation();
+      pushUndo({
+        do: async () => {
+          await adapter.updateNode(nodeId, next);
+        },
+        undo: async () => {
+          await adapter.updateNode(nodeId, prev);
+        },
+        coalesceKey: `node:${nodeId}:fit-to-content`,
+      });
+      adapter.updateNode(nodeId, next).catch((err) => {
+        dropNodeOverride(nodeId);
+        dropUndoTop();
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode (fit-to-content) failed', err);
+      });
+    },
+    [
+      demoId,
+      adapter,
+      demoNodes,
+      setNodeOverride,
+      dropNodeOverride,
+      pushUndo,
+      dropUndoTop,
+      markMutation,
+    ],
+  );
+
   // US-007: atomic multi-select bounding-box resize. The canvas overlay
   // pre-computes each scaled node's position/size and dispatches the whole
   // batch via this callback; we commit it as ONE undo entry — Cmd+Z reverts
@@ -2982,6 +3031,7 @@ export function DemoView({
           onNodePositionChange={onNodePositionChange}
           onNodePositionsChange={onNodePositionsChange}
           onNodeResize={onNodeResize}
+          onHtmlNodeFitToContent={onHtmlNodeFitToContent}
           onMultiResize={onMultiResize}
           onNodeNameChange={onNodeNameChange}
           onNodeDescriptionChange={onNodeDescriptionChange}
