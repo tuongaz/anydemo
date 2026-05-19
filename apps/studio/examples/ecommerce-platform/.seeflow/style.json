@@ -80,6 +80,19 @@
       "fontSize": 15,
       "borderColor": "green",
       "borderSize": 1
+    },
+    "platform-health": {
+      "position": {
+        "x": 1340,
+        "y": 50
+      },
+      "width": 380,
+      "height": 220,
+      "backgroundColor": "slate",
+      "borderColor": "green",
+      "borderSize": 1,
+      "cornerRadius": 8,
+      "autoSize": false
     }
   }
 }

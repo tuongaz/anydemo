@@ -134,6 +134,14 @@
         "name": "PostgreSQL",
         "description": "Orders, users, products \u2014 primary OLTP store"
       }
+    },
+    {
+      "id": "platform-health",
+      "type": "htmlNode",
+      "data": {
+        "name": "Platform Health",
+        "htmlPath": "scripts/platform-health.html"
+      }
     }
   ],
   "connectors": [
