@@ -95,7 +95,7 @@ describe('POST /api/flows/register', () => {
         {
           id: 'queue-orders',
           type: 'stateNode',
-              data: {
+          data: {
             name: 'orders.created',
             kind: 'queue',
             stateSource: { kind: 'event' },
@@ -160,10 +160,16 @@ describe('POST /api/flows/register', () => {
     const repoPath = tmpRepoWithDemo();
 
     const first = await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json();
     const second = await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json();
 
     expect((second as { id: string }).id).toBe((first as { id: string }).id);
@@ -263,7 +269,7 @@ describe('POST /api/flows/validate', () => {
         {
           id: 'box',
           type: 'shapeNode',
-              data: { shape: 'rectangle' },
+          data: { shape: 'rectangle' },
         },
       ],
       connectors: [],
@@ -283,7 +289,7 @@ describe('POST /api/flows/validate', () => {
       nodes: Array.from({ length: 31 }, (_, i) => ({
         id: `n${i}`,
         type: 'shapeNode',
-          data: { shape: 'rectangle' as const },
+        data: { shape: 'rectangle' as const },
       })),
       connectors: [],
     };
@@ -469,8 +475,14 @@ describe('GET /api/flows', () => {
       registry: reg1,
       disableWatcher: true,
     });
-    await post(app1, '/api/flows/register', { repoPath: repoA, architecturePath: '.seeflow/seeflow.json' });
-    await post(app1, '/api/flows/register', { repoPath: repoB, architecturePath: '.seeflow/seeflow.json' });
+    await post(app1, '/api/flows/register', {
+      repoPath: repoA,
+      architecturePath: '.seeflow/seeflow.json',
+    });
+    await post(app1, '/api/flows/register', {
+      repoPath: repoB,
+      architecturePath: '.seeflow/seeflow.json',
+    });
 
     const reg2 = createRegistry({ path: registryPath });
     const app2 = createApp({
@@ -494,7 +506,10 @@ describe('GET /api/flows/:id', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await app.request(`/api/flows/${reg.id}`);
@@ -524,7 +539,10 @@ describe('GET /api/flows/:id', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     writeFileSync(join(repoPath, '.seeflow', 'seeflow.json'), '{ broken');
@@ -658,7 +676,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app, spawnerRecord } = buildPlayApp({ stdout: '{"ok":true,"echoed":42}\n' });
     const repoPath = tmpRepoWithPlayScript();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
@@ -682,7 +703,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app, bus } = buildPlayApp({ stdout: '{"ok":true}' });
     const repoPath = tmpRepoWithPlayScript();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
@@ -703,7 +727,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app, runnerCalls } = buildPlayApp({ stdout: '{"ok":true}' });
     const repoPath = tmpRepoWithPlayScript();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
@@ -716,7 +743,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app, runnerCalls } = buildPlayApp({ stdout: '{"ok":true}' });
     const repoPath = tmpRepoWithPlayScript();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
@@ -746,7 +776,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     symlinkSync(join(outside, 'evil.ts'), join(repoPath, '.seeflow', 'escape.ts'));
 
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
@@ -765,7 +798,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const { app } = buildPlayApp({ stdout: '{}' });
     const repoPath = tmpRepoWithPlayScript();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await post(app, `/api/flows/${reg.id}/play/missing`, {});
     expect(res.status).toBe(404);
@@ -781,14 +817,17 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         {
           id: 'shape-only',
           type: 'shapeNode',
-              data: { shape: 'rectangle' },
+          data: { shape: 'rectangle' },
         },
       ],
       connectors: [],
     };
     const repoPath = tmpRepoWithDemo(demo);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/play/shape-only`, {});
@@ -886,7 +925,10 @@ describe('POST /api/flows/:id/reset', () => {
     const { app, bus, log } = buildResetApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string }> = [];
@@ -923,7 +965,10 @@ describe('POST /api/flows/:id/reset', () => {
     writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/reset`, {});
@@ -958,7 +1003,10 @@ describe('POST /api/flows/:id/reset', () => {
     writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string }> = [];
@@ -984,7 +1032,10 @@ describe('POST /api/flows/:id/reset', () => {
     writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string }> = [];
@@ -1026,7 +1077,10 @@ describe('POST /api/emit', () => {
     const { app, bus } = buildAppWithBus();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
@@ -1049,7 +1103,10 @@ describe('POST /api/emit', () => {
     const { app, bus } = buildAppWithBus();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
@@ -1082,7 +1139,10 @@ describe('POST /api/emit', () => {
     const { app, bus } = buildAppWithBus();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const captured: Array<{ type: string }> = [];
@@ -1113,7 +1173,10 @@ describe('POST /api/emit', () => {
     const { app } = buildAppWithBus();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, '/api/emit', {
@@ -1161,7 +1224,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const styleFile = join(repoPath, '.seeflow', 'style.json');
@@ -1185,7 +1251,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1207,7 +1276,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/missing/position`, { x: 0, y: 0 });
     expect(res.status).toBe(404);
@@ -1217,7 +1289,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
       x: 'oops',
@@ -1230,7 +1305,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const dir = join(repoPath, '.seeflow');
@@ -1250,17 +1328,17 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
       {
         id: 'a',
         type: 'shapeNode',
-          data: { shape: 'rectangle' },
+        data: { shape: 'rectangle' },
       },
       {
         id: 'b',
         type: 'shapeNode',
-          data: { shape: 'rectangle' },
+        data: { shape: 'rectangle' },
       },
       {
         id: 'c',
         type: 'shapeNode',
-          data: { shape: 'rectangle' },
+        data: { shape: 'rectangle' },
       },
     ],
     connectors: [],
@@ -1282,7 +1360,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_THREE_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
     return { app, demoFile, flowId: reg.id };
@@ -1389,7 +1470,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1428,7 +1512,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const styleFile = join(repoPath, '.seeflow', 'style.json');
@@ -1447,7 +1534,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1469,7 +1559,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1487,7 +1580,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
@@ -1506,7 +1602,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/missing`, { name: 'x' });
     expect(res.status).toBe(404);
@@ -1516,7 +1615,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1536,7 +1638,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1558,7 +1663,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1591,7 +1699,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1622,7 +1733,10 @@ describe('POST /api/flows/:id/nodes', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1648,7 +1762,10 @@ describe('POST /api/flows/:id/nodes', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
@@ -1665,7 +1782,10 @@ describe('POST /api/flows/:id/nodes', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1700,12 +1820,15 @@ describe('POST /api/flows/:id/nodes', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-          data: {},
+        data: {},
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -1737,13 +1860,16 @@ describe('POST /api/flows/:id/nodes', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         id: 'hero-block',
         type: 'htmlNode',
-          data: {},
+        data: {},
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
@@ -1758,12 +1884,15 @@ describe('POST /api/flows/:id/nodes', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-          data: { htmlPath: 'custom/hero.html' },
+        data: { htmlPath: 'custom/hero.html' },
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
@@ -1784,12 +1913,15 @@ describe('POST /api/flows/:id/nodes', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         type: 'htmlNode',
-          data: { name: 'Pricing card', width: 280, height: 160 },
+        data: { name: 'Pricing card', width: 280, height: 160 },
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -1812,7 +1944,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       {
         id: 'a',
         type: 'playNode',
-          data: {
+        data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -1822,7 +1954,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       {
         id: 'b',
         type: 'playNode',
-          data: {
+        data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -1840,7 +1972,10 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1866,7 +2001,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         {
           id: 'c',
           type: 'playNode',
-              data: {
+          data: {
             name: 'C',
             kind: 'service',
             stateSource: { kind: 'request' },
@@ -1882,7 +2017,10 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(demo);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -1908,7 +2046,10 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await app.request(`/api/flows/${reg.id}/nodes/missing`, { method: 'DELETE' });
     expect(res.status).toBe(404);
@@ -1919,13 +2060,16 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-              data: {},
+          data: {},
         })
       ).json()) as { id: string; node: { data: { htmlPath: string } } };
       const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
@@ -1950,7 +2094,10 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const customDir = join(repoPath, '.seeflow', 'custom');
@@ -1961,7 +2108,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-              data: { htmlPath: 'custom/hero.html' },
+          data: { htmlPath: 'custom/hero.html' },
         })
       ).json()) as { id: string; node: { data: { htmlPath: string } } };
       expect(created.node.data.htmlPath).toBe('custom/hero.html');
@@ -1978,13 +2125,16 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-              data: {},
+          data: {},
         })
       ).json()) as { id: string };
       const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
@@ -2009,19 +2159,22 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
-        await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+        await post(app, '/api/flows/register', {
+          repoPath,
+          architecturePath: '.seeflow/seeflow.json',
+        })
       ).json()) as { id: string };
 
       const first = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-              data: {},
+          data: {},
         })
       ).json()) as { id: string };
       const second = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           type: 'htmlNode',
-              data: {},
+          data: {},
         })
       ).json()) as { id: string };
       const firstFile = join(repoPath, '.seeflow', 'blocks', `${first.id}.html`);
@@ -2045,7 +2198,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       {
         id: 'a',
         type: 'playNode',
-          data: {
+        data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2055,7 +2208,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       {
         id: 'b',
         type: 'playNode',
-          data: {
+        data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2077,7 +2230,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2122,7 +2278,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(demo);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2142,7 +2301,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2161,7 +2323,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
@@ -2177,7 +2342,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const styleFile = join(repoPath, '.seeflow', 'style.json');
@@ -2198,7 +2366,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2222,7 +2393,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     // 't' is a valid handle id but only as a target — sending it as a
@@ -2237,7 +2411,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
@@ -2256,7 +2433,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/connectors/missing`, { label: 'x' });
     expect(res.status).toBe(404);
@@ -2269,7 +2449,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const styleFile = join(repoPath, '.seeflow', 'style.json');
 
@@ -2302,7 +2485,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
@@ -2320,7 +2506,7 @@ describe('POST /api/flows/:id/connectors', () => {
       {
         id: 'a',
         type: 'playNode',
-          data: {
+        data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2330,7 +2516,7 @@ describe('POST /api/flows/:id/connectors', () => {
       {
         id: 'b',
         type: 'playNode',
-          data: {
+        data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2345,7 +2531,10 @@ describe('POST /api/flows/:id/connectors', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2370,7 +2559,10 @@ describe('POST /api/flows/:id/connectors', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -2389,7 +2581,10 @@ describe('POST /api/flows/:id/connectors', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2410,7 +2605,10 @@ describe('POST /api/flows/:id/connectors', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2429,7 +2627,10 @@ describe('POST /api/flows/:id/connectors', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     // kind='event' but no eventName — fails the discriminated union shape.
@@ -2464,18 +2665,21 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'svc',
           type: 'stateNode',
-              data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
         },
         {
           id: 'icon-1',
           type: 'iconNode',
-              data: { icon: 'shopping-cart' },
+          data: { icon: 'shopping-cart' },
         },
       ],
       connectors: [],
     });
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -2502,18 +2706,21 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'icon-1',
           type: 'iconNode',
-              data: { icon: 'shopping-cart' },
+          data: { icon: 'shopping-cart' },
         },
         {
           id: 'svc',
           type: 'stateNode',
-              data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
         },
       ],
       connectors: [],
     });
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -2538,18 +2745,21 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'icon-a',
           type: 'iconNode',
-              data: { icon: 'circle' },
+          data: { icon: 'circle' },
         },
         {
           id: 'icon-b',
           type: 'iconNode',
-              data: { icon: 'square' },
+          data: { icon: 'square' },
         },
       ],
       connectors: [],
     });
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -2573,7 +2783,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       {
         id: 'a',
         type: 'playNode',
-          data: {
+        data: {
           name: 'A',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2583,7 +2793,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       {
         id: 'b',
         type: 'playNode',
-          data: {
+        data: {
           name: 'B',
           kind: 'service',
           stateSource: { kind: 'request' },
@@ -2601,7 +2811,10 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_TWO_CONNS);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const demoFile = join(repoPath, '.seeflow', 'seeflow.json');
@@ -2625,7 +2838,10 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_TWO_CONNS);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
     const res = await app.request(`/api/flows/${reg.id}/connectors/missing`, { method: 'DELETE' });
     expect(res.status).toBe(404);
@@ -2637,7 +2853,10 @@ describe('DELETE /api/flows/:id', () => {
     const { app, registry } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string };
 
     const res = await app.request(`/api/flows/${reg.id}`, { method: 'DELETE' });
@@ -2650,7 +2869,10 @@ describe('DELETE /api/flows/:id', () => {
     const { app, registry } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, architecturePath: '.seeflow/seeflow.json' })
+      await post(app, '/api/flows/register', {
+        repoPath,
+        architecturePath: '.seeflow/seeflow.json',
+      })
     ).json()) as { id: string; slug: string };
 
     const res = await app.request(`/api/flows/${reg.slug}`, { method: 'DELETE' });
@@ -2719,10 +2941,7 @@ describe('POST /api/projects', () => {
     expect(registry.list()).toHaveLength(1);
 
     const written = JSON.parse(
-      readFileSync(
-        join(projectBaseDir, 'fresh-project', '.seeflow', 'architecture.json'),
-        'utf-8',
-      ),
+      readFileSync(join(projectBaseDir, 'fresh-project', '.seeflow', 'architecture.json'), 'utf-8'),
     );
     expect(written).toEqual({ version: 2, name: 'Fresh Project', nodes: [], connectors: [] });
   });

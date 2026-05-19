@@ -18,20 +18,20 @@ import {
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
+import { mergeArchitectureAndStyle, splitFlow } from './merge.ts';
 import { seeflowHome } from './paths.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
+  EdgePinSchema,
   type Flow,
   FlowSchema,
-  EdgePinSchema,
   SourceHandleIdSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
-import { mergeArchitectureAndStyle, splitFlow } from './merge.ts';
+import { ArchitectureSchema, StyleSchema } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
-import { ArchitectureSchema, StyleSchema } from './schema.ts';
 
 const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/architecture.json';
 
@@ -1193,7 +1193,9 @@ export function validateImpl(body: ValidateBody): ValidateOutcome {
     }
   }
 
-  let styleData: { nodes?: Record<string, unknown>; connectors?: Record<string, unknown> } | undefined;
+  let styleData:
+    | { nodes?: Record<string, unknown>; connectors?: Record<string, unknown> }
+    | undefined;
   if (body.style !== undefined) {
     const styleParse = StyleSchema.safeParse(body.style);
     if (!styleParse.success) {

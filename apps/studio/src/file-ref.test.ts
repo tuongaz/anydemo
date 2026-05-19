@@ -22,10 +22,7 @@ describe('resolveFileRefs', () => {
   it('substitutes a file:// reference with the file contents', () => {
     mkdirSync(join(root, 'details'));
     writeFileSync(join(root, 'details/foo.md'), '# Hello world');
-    const { resolved, refs } = resolveFileRefs(
-      { data: { detail: 'file://details/foo.md' } },
-      root,
-    );
+    const { resolved, refs } = resolveFileRefs({ data: { detail: 'file://details/foo.md' } }, root);
     expect(resolved).toEqual({ data: { detail: '# Hello world' } });
     expect(refs).toEqual(['details/foo.md']);
   });
@@ -44,29 +41,20 @@ describe('resolveFileRefs', () => {
   });
 
   it('substitutes a placeholder marker when the file is missing', () => {
-    const { resolved, refs } = resolveFileRefs(
-      { data: { detail: 'file://missing.md' } },
-      root,
-    );
+    const { resolved, refs } = resolveFileRefs({ data: { detail: 'file://missing.md' } }, root);
     expect(resolved).toEqual({ data: { detail: "[seeflow: missing file 'missing.md']" } });
     expect(refs).toEqual([]);
   });
 
   it('rejects path traversal with an invalid-path marker', () => {
-    const { resolved } = resolveFileRefs(
-      { data: { detail: 'file://../escape.md' } },
-      root,
-    );
+    const { resolved } = resolveFileRefs({ data: { detail: 'file://../escape.md' } }, root);
     expect(resolved).toEqual({
       data: { detail: "[seeflow: invalid file:// path '../escape.md']" },
     });
   });
 
   it('rejects absolute paths with an invalid-path marker', () => {
-    const { resolved } = resolveFileRefs(
-      { data: { detail: 'file:///etc/passwd' } },
-      root,
-    );
+    const { resolved } = resolveFileRefs({ data: { detail: 'file:///etc/passwd' } }, root);
     expect(resolved).toEqual({
       data: { detail: "[seeflow: invalid file:// path '/etc/passwd']" },
     });
@@ -78,10 +66,7 @@ describe('resolveFileRefs', () => {
       writeFileSync(join(outsideDir, 'secret.md'), 'secret');
       mkdirSync(join(root, 'sub'));
       symlinkSync(join(outsideDir, 'secret.md'), join(root, 'sub/escape.md'));
-      const { resolved } = resolveFileRefs(
-        { data: { detail: 'file://sub/escape.md' } },
-        root,
-      );
+      const { resolved } = resolveFileRefs({ data: { detail: 'file://sub/escape.md' } }, root);
       const detail = (resolved as { data: { detail: string } }).data.detail;
       expect(detail).toMatch(/^\[seeflow: invalid file:\/\/ path/);
     } finally {
@@ -91,10 +76,7 @@ describe('resolveFileRefs', () => {
 
   it('returns refs sorted and de-duplicated', () => {
     writeFileSync(join(root, 'x.txt'), 'X');
-    const { refs } = resolveFileRefs(
-      { a: 'file://x.txt', b: 'file://x.txt' },
-      root,
-    );
+    const { refs } = resolveFileRefs({ a: 'file://x.txt', b: 'file://x.txt' }, root);
     expect(refs).toEqual(['x.txt']);
   });
 });

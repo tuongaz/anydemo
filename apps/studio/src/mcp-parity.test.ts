@@ -233,7 +233,7 @@ const SCENARIOS: ParityScenario[] = [
       const newNode = {
         id: 'parity-new',
         type: 'shapeNode',
-          data: { shape: 'rectangle', name: 'New' },
+        data: { shape: 'rectangle', name: 'New' },
       };
       return {
         demoFile: fix.demoFile,

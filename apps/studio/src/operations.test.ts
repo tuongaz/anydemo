@@ -118,7 +118,6 @@ describe('validateImpl', () => {
       style: { nodes: { ghost: { fontSize: 14 } } },
     });
     expect(r.ok).toBe(false);
-    if (!r.ok)
-      expect(r.issues.find((i) => i.code === 'orphan_style_node')).toBeDefined();
+    if (!r.ok) expect(r.issues.find((i) => i.code === 'orphan_style_node')).toBeDefined();
   });
 });

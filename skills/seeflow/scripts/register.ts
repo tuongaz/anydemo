@@ -53,8 +53,13 @@ function flagValue(argv: string[], name: string): string | undefined {
   return undefined;
 }
 
-function readNameFromArchitectureFile(repoPath: string, architecturePath: string): string | undefined {
-  const fullPath = isAbsolute(architecturePath) ? architecturePath : join(repoPath, architecturePath);
+function readNameFromArchitectureFile(
+  repoPath: string,
+  architecturePath: string,
+): string | undefined {
+  const fullPath = isAbsolute(architecturePath)
+    ? architecturePath
+    : join(repoPath, architecturePath);
   if (!existsSync(fullPath)) return undefined;
   try {
     const raw = readFileSync(fullPath, 'utf8');

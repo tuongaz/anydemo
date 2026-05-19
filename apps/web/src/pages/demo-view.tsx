@@ -9,10 +9,10 @@ import { useUndoStack } from '@/hooks/use-undo-stack';
 import type {
   Connector,
   DefaultConnector,
+  EdgePin,
   FlowDetail,
   FlowNode,
   FlowSummary,
-  EdgePin,
   ShapeKind,
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';

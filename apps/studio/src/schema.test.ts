@@ -2361,7 +2361,9 @@ describe('ArchitectureSchema', () => {
           data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
         },
       ],
-      connectors: [{ id: 'c', source: 'a', target: 'b', kind: 'event', eventName: 'evt', label: 'hi' }],
+      connectors: [
+        { id: 'c', source: 'a', target: 'b', kind: 'event', eventName: 'evt', label: 'hi' },
+      ],
     });
     expect(result.success).toBe(true);
   });
@@ -2375,7 +2377,14 @@ describe('StyleSchema', () => {
   it('accepts position + visual fields on a node entry', () => {
     const r = StyleSchema.safeParse({
       nodes: {
-        n1: { position: { x: 1, y: 2 }, width: 100, height: 50, borderColor: 'blue', fontSize: 14, locked: false },
+        n1: {
+          position: { x: 1, y: 2 },
+          width: 100,
+          height: 50,
+          borderColor: 'blue',
+          fontSize: 14,
+          locked: false,
+        },
       },
     });
     expect(r.success).toBe(true);

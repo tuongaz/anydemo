@@ -67,7 +67,7 @@ import {
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import { StateNode } from '../nodes/state-node.tsx';
 import type { NodeStatus } from '../nodes/status-pill.tsx';
-import type { Connector, FlowNode, EdgePin, ShapeKind, StatusReport } from '../types.ts';
+import type { Connector, EdgePin, FlowNode, ShapeKind, StatusReport } from '../types.ts';
 import {
   ContextMenu,
   ContextMenuContent,

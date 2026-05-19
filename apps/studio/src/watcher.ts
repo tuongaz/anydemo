@@ -4,12 +4,7 @@ import type { EventBus } from './events.ts';
 import { resolveFileRefs } from './file-ref.ts';
 import { mergeArchitectureAndStyle } from './merge.ts';
 import type { Registry } from './registry.ts';
-import {
-  type Architecture,
-  ArchitectureSchema,
-  type Flow,
-  StyleSchema,
-} from './schema.ts';
+import { type Architecture, ArchitectureSchema, type Flow, StyleSchema } from './schema.ts';
 
 const DEFAULT_DEBOUNCE_MS = 100;
 

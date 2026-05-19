@@ -25,7 +25,10 @@ export interface Registry {
   getById(id: string): FlowEntry | undefined;
   getBySlug(slug: string): FlowEntry | undefined;
   getByRepoPath(repoPath: string): FlowEntry | undefined;
-  getByRepoPathAndArchitecturePath(repoPath: string, architecturePath: string): FlowEntry | undefined;
+  getByRepoPathAndArchitecturePath(
+    repoPath: string,
+    architecturePath: string,
+  ): FlowEntry | undefined;
   upsert(input: RegisterInput): FlowEntry;
   remove(id: string): boolean;
 }
@@ -84,7 +87,10 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     return undefined;
   };
 
-  const findByRepoPathAndArchitecturePath = (repoPath: string, architecturePath: string): FlowEntry | undefined => {
+  const findByRepoPathAndArchitecturePath = (
+    repoPath: string,
+    architecturePath: string,
+  ): FlowEntry | undefined => {
     for (const e of entries.values()) {
       if (e.repoPath === repoPath && e.architecturePath === architecturePath) return e;
     }

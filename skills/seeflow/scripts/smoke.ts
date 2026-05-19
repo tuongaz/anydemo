@@ -1,8 +1,8 @@
 #!/usr/bin/env bun
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { readFileSync } from 'node:fs';
 import { registerDemo } from './register';
 import { resolveStudioUrl } from './studio-config';
 import { unregisterDemo } from './unregister';

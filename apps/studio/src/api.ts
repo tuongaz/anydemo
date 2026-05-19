@@ -48,9 +48,9 @@ import {
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
 import { FlowSchema } from './schema.ts';
-import { readMergedFlow } from './watcher.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
+import { readMergedFlow } from './watcher.ts';
 import type { FlowWatcher } from './watcher.ts';
 
 const EmitBodySchema = z.object({

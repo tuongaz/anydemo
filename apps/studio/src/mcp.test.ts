@@ -133,7 +133,9 @@ describe('POST /mcp tools/list', () => {
     const register = byName.get('seeflow_register_flow');
     expect(register?.inputSchema?.type).toBe('object');
     const registerProps = register?.inputSchema?.properties as Record<string, unknown>;
-    expect(Object.keys(registerProps)).toEqual(expect.arrayContaining(['repoPath', 'architecturePath']));
+    expect(Object.keys(registerProps)).toEqual(
+      expect.arrayContaining(['repoPath', 'architecturePath']),
+    );
 
     const createProject = byName.get('seeflow_create_project');
     const cpProps = createProject?.inputSchema?.properties as Record<string, unknown>;
@@ -351,7 +353,7 @@ describe('seeflow_add_node', () => {
       flowId: reg.id,
       node: {
         type: 'shapeNode',
-          data: { shape: 'rectangle', name: 'Note A' },
+        data: { shape: 'rectangle', name: 'Note A' },
       },
     });
     const body = expectOk(envelope) as { ok: boolean; id: string };
