@@ -278,7 +278,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:bg-muted/30 sf:px-2 sf:py-2"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-2 sf:py-2"
         data-testid="node-header"
       >
         {data.icon ? (

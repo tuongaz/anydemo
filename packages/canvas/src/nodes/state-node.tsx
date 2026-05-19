@@ -169,7 +169,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-2 sf:py-2"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="node-header"
       >
