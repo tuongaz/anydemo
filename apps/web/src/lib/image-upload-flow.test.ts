@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { DemoNode } from '@/lib/api';
+import type { FlowNode } from '@/lib/api';
 import {
   buildFailedOverride,
   buildUploadedOverride,
@@ -10,7 +10,7 @@ import { NEW_NODE_BORDER_WIDTH, type NodeCreateInput } from '@seeflow/canvas';
 
 interface OverrideEvent {
   id: string;
-  partial: Partial<DemoNode>;
+  partial: Partial<FlowNode>;
 }
 
 const stubFile = (name = 'pic.png', type = 'image/png'): File =>
@@ -18,12 +18,12 @@ const stubFile = (name = 'pic.png', type = 'image/png'): File =>
 
 const buildDeps = (overrides?: {
   upload?: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
-  createNode?: (demoId: string, body: NodeCreateInput) => Promise<{ id: string }>;
+  createNode?: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
 }) => {
   const overrideEvents: OverrideEvent[] = [];
   const uploadCalls: { projectId: string; file: File; filename: string }[] = [];
-  const createCalls: { demoId: string; body: NodeCreateInput }[] = [];
-  const deleteCalls: { demoId: string; nodeId: string }[] = [];
+  const createCalls: { flowId: string; body: NodeCreateInput }[] = [];
+  const deleteCalls: { flowId: string; nodeId: string }[] = [];
   const undoCalls: { do: () => Promise<void>; undo: () => Promise<void> }[] = [];
   const retryRemembered: { nodeId: string; args: unknown }[] = [];
   const retryForgotten: string[] = [];
@@ -37,15 +37,15 @@ const buildDeps = (overrides?: {
       }),
     createNode:
       overrides?.createNode ??
-      (async (demoId: string, body: NodeCreateInput) => {
-        createCalls.push({ demoId, body });
+      (async (flowId: string, body: NodeCreateInput) => {
+        createCalls.push({ flowId, body });
         return { id: body.id ?? 'server-generated' };
       }),
-    deleteNode: async (demoId: string, nodeId: string) => {
-      deleteCalls.push({ demoId, nodeId });
+    deleteNode: async (flowId: string, nodeId: string) => {
+      deleteCalls.push({ flowId, nodeId });
       return { ok: true as const };
     },
-    setOverride: (id: string, partial: Partial<DemoNode>) => {
+    setOverride: (id: string, partial: Partial<FlowNode>) => {
       overrideEvents.push({ id, partial });
     },
     pushUndo: (entry: { do: () => Promise<void>; undo: () => Promise<void> }) => {
@@ -73,7 +73,7 @@ const buildDeps = (overrides?: {
 
 const baseArgs = (overrides: Partial<Parameters<typeof performImageDropUpload>[0]> = {}) => ({
   nodeId: 'node-test-1',
-  demoId: 'demo-1',
+  flowId: 'demo-1',
   file: stubFile('Hero.png'),
   originalFilename: 'Hero.png',
   position: { x: 100, y: 200 },
@@ -117,7 +117,7 @@ describe('performImageDropUpload (US-008)', () => {
     expect(ctx.retryRemembered[0]?.nodeId).toBe('node-test-1');
   });
 
-  it('calls upload with demoId + file + originalFilename in order', async () => {
+  it('calls upload with flowId + file + originalFilename in order', async () => {
     const ctx = buildDeps();
     const file = stubFile('Logo.SVG', 'image/svg+xml');
     await performImageDropUpload(baseArgs({ file, originalFilename: 'Logo.SVG' }), ctx.deps);
@@ -148,7 +148,7 @@ describe('performImageDropUpload (US-008)', () => {
     const ctx = buildDeps();
     await performImageDropUpload(baseArgs(), ctx.deps);
     expect(ctx.createCalls).toHaveLength(1);
-    expect(ctx.createCalls[0]?.demoId).toBe('demo-1');
+    expect(ctx.createCalls[0]?.flowId).toBe('demo-1');
     expect(ctx.createCalls[0]?.body.id).toBe('node-test-1');
     expect(ctx.createCalls[0]?.body.type).toBe('imageNode');
     expect(ctx.createCalls[0]?.body.position).toEqual({ x: 100, y: 200 });
@@ -179,7 +179,7 @@ describe('performImageDropUpload (US-008)', () => {
     const entry = ctx.undoCalls[0];
     if (!entry) throw new Error('expected one undo entry');
     await entry.undo();
-    expect(ctx.deleteCalls).toEqual([{ demoId: 'demo-1', nodeId: 'server-id-42' }]);
+    expect(ctx.deleteCalls).toEqual([{ flowId: 'demo-1', nodeId: 'server-id-42' }]);
   });
 
   it('on upload FAILURE: sets _uploadError override, does NOT call createNode, keeps retry entry', async () => {

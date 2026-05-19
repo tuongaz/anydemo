@@ -2,13 +2,13 @@ import { type FSWatcher, existsSync, readFileSync, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { EventBus } from './events.ts';
 import type { Registry } from './registry.ts';
-import { type Demo, DemoSchema } from './schema.ts';
+import { type Flow, FlowSchema } from './schema.ts';
 
 const DEFAULT_DEBOUNCE_MS = 100;
 
-export interface DemoSnapshot {
-  /** Last successfully parsed demo, if we ever saw one. */
-  demo: Demo | null;
+export interface FlowSnapshot {
+  /** Last successfully parsed flow, if we ever saw one. */
+  flow: Flow | null;
   /** Result of the most recent parse attempt. */
   valid: boolean;
   /** Human-readable error from the most recent parse, when `valid: false`. */
@@ -26,25 +26,25 @@ export interface WatcherDeps {
   debounceMs?: number;
 }
 
-export interface DemoWatcher {
+export interface FlowWatcher {
   /** Read the current snapshot for a demo, or null if unknown. */
-  snapshot(demoId: string): DemoSnapshot | null;
+  snapshot(flowId: string): FlowSnapshot | null;
   /** Begin watching the file backing the given demo id. Idempotent. */
-  watch(demoId: string): void;
+  watch(flowId: string): void;
   /** Stop watching a single demo. */
-  unwatch(demoId: string): void;
+  unwatch(flowId: string): void;
   /** Start watchers for every entry currently in the registry. */
   watchAll(): void;
   /** Stop everything (used in tests + on shutdown). */
   closeAll(): void;
   /** Force a reparse synchronously. Useful for tests + initial load. */
-  reparse(demoId: string): DemoSnapshot | null;
+  reparse(flowId: string): FlowSnapshot | null;
   /**
    * Relative paths (under `<project>/.seeflow/`) currently being watched
    * because they're referenced by a node's `data.htmlPath` or `data.path`.
    * Sorted for stable assertion order. Used by tests.
    */
-  referencedPaths(demoId: string): string[];
+  referencedPaths(flowId: string): string[];
 }
 
 interface FileWatchEntry {
@@ -67,8 +67,8 @@ interface WatchHandle {
   fileWatchers: Map<string, FileWatchEntry>;
 }
 
-const resolveFilePath = (repoPath: string, demoPath: string): string =>
-  isAbsolute(demoPath) ? demoPath : join(repoPath, demoPath);
+const resolveFilePath = (repoPath: string, architecturePath: string): string =>
+  isAbsolute(architecturePath) ? architecturePath : join(repoPath, architecturePath);
 
 const isCleanRelativePath = (p: string): boolean => {
   if (!p) return false;
@@ -116,18 +116,18 @@ const closeFileWatchers = (handle: WatchHandle): void => {
   handle.fileWatchers.clear();
 };
 
-export function createWatcher(deps: WatcherDeps): DemoWatcher {
+export function createWatcher(deps: WatcherDeps): FlowWatcher {
   const { registry, events } = deps;
   const debounceMs = deps.debounceMs ?? DEFAULT_DEBOUNCE_MS;
 
   const handles = new Map<string, WatchHandle>();
-  const snapshots = new Map<string, DemoSnapshot>();
+  const snapshots = new Map<string, FlowSnapshot>();
 
-  // Reconcile the file-watch set for `demoId` against the desired referenced
+  // Reconcile the file-watch set for `flowId` against the desired referenced
   // paths. Closes watchers for dirs that disappeared, updates the basename
   // map for dirs that survived, opens new fs.watch handles for new dirs.
   const reconcileFileWatchers = (
-    demoId: string,
+    flowId: string,
     handle: WatchHandle,
     seeflowRoot: string,
     refs: string[],
@@ -190,14 +190,14 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
             cur.timers.delete(changed);
             events.broadcast({
               type: 'file:changed',
-              demoId,
+              flowId,
               payload: { path: rel },
             });
           }, debounceMs);
           cur.timers.set(changed, timer);
         });
       } catch (err) {
-        console.error(`[watcher] failed to watch ${dir} for demo ${demoId}:`, err);
+        console.error(`[watcher] failed to watch ${dir} for demo ${flowId}:`, err);
         continue;
       }
 
@@ -209,27 +209,27 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
     }
   };
 
-  const reparse = (demoId: string): DemoSnapshot | null => {
-    const entry = registry.getById(demoId);
+  const reparse = (flowId: string): FlowSnapshot | null => {
+    const entry = registry.getById(flowId);
     if (!entry) return null;
-    const filePath = resolveFilePath(entry.repoPath, entry.demoPath);
+    const filePath = resolveFilePath(entry.repoPath, entry.architecturePath);
 
-    const previous = snapshots.get(demoId) ?? null;
+    const previous = snapshots.get(flowId) ?? null;
     const parsedAt = Date.now();
-    const fail = (error: string): DemoSnapshot => ({
-      demo: previous?.demo ?? null,
+    const fail = (error: string): FlowSnapshot => ({
+      flow: previous?.flow ?? null,
       valid: false,
       error,
       filePath,
       parsedAt,
     });
 
-    let next: DemoSnapshot;
+    let next: FlowSnapshot;
     let raw: unknown = null;
     let rawOk = false;
 
     if (!existsSync(filePath)) {
-      next = fail(`Demo file not found: ${filePath}`);
+      next = fail(`Flow file not found: ${filePath}`);
     } else {
       let parseError: string | null = null;
       try {
@@ -242,29 +242,29 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
       if (!rawOk) {
         next = fail(parseError ?? 'Invalid JSON');
       } else {
-        const parsed = DemoSchema.safeParse(raw);
+        const parsed = FlowSchema.safeParse(raw);
         if (!parsed.success) {
           const message = parsed.error.issues
             .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
             .join('; ');
           next = fail(`Schema validation failed: ${message}`);
         } else {
-          next = { demo: parsed.data, valid: true, error: null, filePath, parsedAt };
+          next = { flow: parsed.data, valid: true, error: null, filePath, parsedAt };
         }
       }
     }
 
-    snapshots.set(demoId, next);
+    snapshots.set(flowId, next);
 
     // Recompute the referenced-files watch set whenever raw JSON parsed
     // cleanly (regardless of schema validity). Schema errors shouldn't drop
     // the watch set — the user is mid-edit and the referenced files are
     // still valid targets.
     if (rawOk) {
-      const handle = handles.get(demoId);
+      const handle = handles.get(flowId);
       if (handle) {
         reconcileFileWatchers(
-          demoId,
+          flowId,
           handle,
           join(entry.repoPath, '.seeflow'),
           collectReferencedPaths(raw),
@@ -275,34 +275,34 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
     return next;
   };
 
-  const broadcastReload = (demoId: string, snap: DemoSnapshot) => {
+  const broadcastReload = (flowId: string, snap: FlowSnapshot) => {
     events.broadcast({
-      type: 'demo:reload',
-      demoId,
-      payload: snap.valid ? { valid: true, demo: snap.demo } : { valid: false, error: snap.error },
+      type: 'flow:reload',
+      flowId,
+      payload: snap.valid ? { valid: true, flow: snap.flow } : { valid: false, error: snap.error },
     });
   };
 
-  const startWatch = (demoId: string) => {
-    const existing = handles.get(demoId);
+  const startWatch = (flowId: string) => {
+    const existing = handles.get(flowId);
     if (existing) {
       existing.fsWatcher.close();
       if (existing.debounceTimer) clearTimeout(existing.debounceTimer);
       closeFileWatchers(existing);
-      handles.delete(demoId);
+      handles.delete(flowId);
     }
 
-    const entry = registry.getById(demoId);
+    const entry = registry.getById(flowId);
     if (!entry) return;
 
-    const filePath = resolveFilePath(entry.repoPath, entry.demoPath);
+    const filePath = resolveFilePath(entry.repoPath, entry.architecturePath);
     const dir = dirname(filePath);
     const base = basename(filePath);
 
     if (!existsSync(dir)) {
       // Directory missing — record an invalid snapshot but don't try to watch.
-      const snap = reparse(demoId);
-      if (snap) broadcastReload(demoId, snap);
+      const snap = reparse(flowId);
+      if (snap) broadcastReload(flowId, snap);
       return;
     }
 
@@ -312,50 +312,50 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
         // Only react to the demo file (or to events with no filename, which
         // some platforms emit for rename-on-save patterns).
         if (changed && changed !== base) return;
-        const handle = handles.get(demoId);
+        const handle = handles.get(flowId);
         if (!handle) return;
         if (handle.debounceTimer) clearTimeout(handle.debounceTimer);
         handle.debounceTimer = setTimeout(() => {
           handle.debounceTimer = null;
-          const snap = reparse(demoId);
-          if (snap) broadcastReload(demoId, snap);
+          const snap = reparse(flowId);
+          if (snap) broadcastReload(flowId, snap);
         }, debounceMs);
       });
     } catch (err) {
-      console.error(`[watcher] failed to watch ${dir} for demo ${demoId}:`, err);
-      const snap = reparse(demoId);
-      if (snap) broadcastReload(demoId, snap);
+      console.error(`[watcher] failed to watch ${dir} for demo ${flowId}:`, err);
+      const snap = reparse(flowId);
+      if (snap) broadcastReload(flowId, snap);
       return;
     }
 
-    handles.set(demoId, {
+    handles.set(flowId, {
       fsWatcher,
       debounceTimer: null,
       filePath,
       fileWatchers: new Map(),
     });
 
-    // Seed the snapshot from disk so callers can serve GET /api/demos/:id
+    // Seed the snapshot from disk so callers can serve GET /api/flows/:id
     // without having to wait for the first fs event. Also seeds the
     // referenced-file watch set via reconcileFileWatchers().
-    reparse(demoId);
+    reparse(flowId);
   };
 
   return {
-    snapshot(demoId) {
-      return snapshots.get(demoId) ?? null;
+    snapshot(flowId) {
+      return snapshots.get(flowId) ?? null;
     },
-    watch(demoId) {
-      startWatch(demoId);
+    watch(flowId) {
+      startWatch(flowId);
     },
-    unwatch(demoId) {
-      const h = handles.get(demoId);
+    unwatch(flowId) {
+      const h = handles.get(flowId);
       if (!h) return;
       h.fsWatcher.close();
       if (h.debounceTimer) clearTimeout(h.debounceTimer);
       closeFileWatchers(h);
-      handles.delete(demoId);
-      snapshots.delete(demoId);
+      handles.delete(flowId);
+      snapshots.delete(flowId);
     },
     watchAll() {
       for (const entry of registry.list()) startWatch(entry.id);
@@ -370,8 +370,8 @@ export function createWatcher(deps: WatcherDeps): DemoWatcher {
       snapshots.clear();
     },
     reparse,
-    referencedPaths(demoId) {
-      const h = handles.get(demoId);
+    referencedPaths(flowId) {
+      const h = handles.get(flowId);
       if (!h) return [];
       const paths: string[] = [];
       for (const entry of h.fileWatchers.values()) {

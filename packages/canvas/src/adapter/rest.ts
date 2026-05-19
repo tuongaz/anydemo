@@ -1,7 +1,7 @@
 // REST implementation of CanvasAdapter. Mirrors the canonical studio endpoints
 // so embedders that don't override `fetch` get the same wire-level behavior as
-// the in-app studio (POST/PATCH/DELETE on /api/demos/:demoId/{nodes,connectors}
-// + POST /api/projects/:demoId/files/upload). The error shape (JSON body with
+// the in-app studio (POST/PATCH/DELETE on /api/flows/:flowId/{nodes,connectors}
+// + POST /api/projects/:flowId/files/upload). The error shape (JSON body with
 // optional `error` field, falling back to a `METHOD URL → status` string) lets
 // embedder rollback paths use a single catch handler.
 
@@ -20,8 +20,8 @@ import type {
 export interface RestAdapterOptions {
   /** URL prefix (e.g. '' in-studio, 'https://example.com' for cross-origin). */
   baseUrl: string;
-  /** demoId (== projectId in the studio registry). Bound for the adapter's lifetime. */
-  demoId: string;
+  /** flowId (== projectId in the studio registry). Bound for the adapter's lifetime. */
+  flowId: string;
   /** Optional fetch override — primarily for tests. Defaults to globalThis.fetch. */
   fetch?: typeof fetch;
 }
@@ -51,9 +51,9 @@ const requestJson = async <T>(
 };
 
 export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter => {
-  const { baseUrl, demoId } = options;
+  const { baseUrl, flowId } = options;
   const fetchImpl: typeof fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
-  const demoBase = `${baseUrl}/api/demos/${demoId}`;
+  const demoBase = `${baseUrl}/api/flows/${flowId}`;
 
   return {
     async createNode(input: NodeCreateInput) {
@@ -119,7 +119,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       form.append('filename', filename);
       // Browser sets the multipart boundary automatically — never pass an
       // explicit `content-type` header (matches `uploadImageFile` in api.ts).
-      const url = `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/upload`;
+      const url = `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/upload`;
       const res = await fetchImpl(url, { method: 'POST', body: form });
       if (!res.ok) {
         let errorBody: { error?: string } | null = null;
@@ -141,7 +141,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<unknown>(
         fetchImpl,
         'POST',
-        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/open`,
+        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/open`,
         { path },
       );
     },
@@ -150,7 +150,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<unknown>(
         fetchImpl,
         'POST',
-        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/reveal`,
+        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
         { path },
       );
     },

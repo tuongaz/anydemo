@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 
 export type StudioEventType =
-  | 'demo:reload'
+  | 'flow:reload'
   | 'node:running'
   | 'node:done'
   | 'node:error'
@@ -10,7 +10,7 @@ export type StudioEventType =
 export interface StudioEvent {
   type: StudioEventType;
   ts: number;
-  /** Convenience flag — present on demo:reload only. */
+  /** Convenience flag — present on flow:reload only. */
   valid?: boolean;
   error?: string;
   /** Other payload data passed through. */
@@ -18,24 +18,24 @@ export interface StudioEvent {
 }
 
 export interface UseStudioEventsOptions {
-  /** Fired on the first hello + every demo:reload event so the page can re-fetch. */
+  /** Fired on the first hello + every flow:reload event so the page can re-fetch. */
   onReload?: () => void;
   onEvent?: (event: StudioEvent) => void;
 }
 
 export interface UseStudioEventsResult {
-  /** The most recent demo:reload event (or null if none yet). */
+  /** The most recent flow:reload event (or null if none yet). */
   lastReload: StudioEvent | null;
   connected: boolean;
 }
 
 /**
- * Wraps an EventSource subscribed to /api/events?demoId=:id. Fires `onReload`
- * on every `demo:reload` AND on the initial `hello`/each reconnect so the
+ * Wraps an EventSource subscribed to /api/events?flowId=:id. Fires `onReload`
+ * on every `flow:reload` AND on the initial `hello`/each reconnect so the
  * caller can always re-fetch and catch up on missed mutations.
  */
 export const useStudioEvents = (
-  demoId: string | null,
+  flowId: string | null,
   options: UseStudioEventsOptions = {},
 ): UseStudioEventsResult => {
   const [lastReload, setLastReload] = useState<StudioEvent | null>(null);
@@ -43,13 +43,13 @@ export const useStudioEvents = (
   const { onReload, onEvent } = options;
 
   useEffect(() => {
-    if (!demoId) {
+    if (!flowId) {
       setLastReload(null);
       setConnected(false);
       return;
     }
 
-    const url = `/api/events?demoId=${encodeURIComponent(demoId)}`;
+    const url = `/api/events?flowId=${encodeURIComponent(flowId)}`;
     const source = new EventSource(url);
 
     source.addEventListener('open', () => setConnected(true));
@@ -61,8 +61,8 @@ export const useStudioEvents = (
       onReload?.();
     });
 
-    source.addEventListener('demo:reload', (e) => {
-      const event = parsePayload(e, 'demo:reload');
+    source.addEventListener('flow:reload', (e) => {
+      const event = parsePayload(e, 'flow:reload');
       setLastReload(event);
       onEvent?.(event);
       onReload?.();
@@ -77,7 +77,7 @@ export const useStudioEvents = (
     return () => {
       source.close();
     };
-  }, [demoId, onReload, onEvent]);
+  }, [flowId, onReload, onEvent]);
 
   return { lastReload, connected };
 };

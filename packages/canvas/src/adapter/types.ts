@@ -1,7 +1,7 @@
 // CanvasAdapter abstraction over the studio REST surface.
 //
-// The adapter binds a demoId (== projectId in the studio registry) at
-// construction and exposes single-method calls that drop the demoId param.
+// The adapter binds a flowId (== projectId in the studio registry) at
+// construction and exposes single-method calls that drop the flowId param.
 // Patch shapes mirror the wire format accepted by apps/studio's REST endpoints
 // and are owned by the canvas package so embedders can plug in their own
 // backend.
@@ -12,7 +12,7 @@ import type {
   ConnectorDirection,
   ConnectorPath,
   ConnectorStyle,
-  DemoNode,
+  FlowNode,
   EdgePin,
   RunResult,
   ShapeKind,
@@ -176,7 +176,7 @@ export interface CanvasRuntime {
    * a single map would lose type safety on the values.
    */
   pendingOverrides?: {
-    nodes?: Record<string, Partial<DemoNode>>;
+    nodes?: Record<string, Partial<FlowNode>>;
     connectors?: Record<string, Partial<Connector>>;
   };
 }

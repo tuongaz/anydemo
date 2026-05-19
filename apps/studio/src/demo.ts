@@ -11,7 +11,7 @@ const delay = (): Promise<void> => new Promise((r) => setTimeout(r, 200 + Math.r
 
 function nodeEmit(
   events: EventBus,
-  demoId: string,
+  flowId: string,
   runId: string,
   nodeId: string,
   status: keyof typeof STATUS_TO_EVENT,
@@ -19,17 +19,17 @@ function nodeEmit(
 ) {
   events.broadcast({
     type: STATUS_TO_EVENT[status],
-    demoId,
+    flowId,
     payload: { nodeId, runId, ...payload },
   });
 }
 
-async function runOrderPipeline(events: EventBus, demoId: string, runId: string, orderId: string) {
+async function runOrderPipeline(events: EventBus, flowId: string, runId: string, orderId: string) {
   const emit = (
     nodeId: string,
     status: keyof typeof STATUS_TO_EVENT,
     payload?: Record<string, unknown>,
-  ) => nodeEmit(events, demoId, runId, nodeId, status, payload);
+  ) => nodeEmit(events, flowId, runId, nodeId, status, payload);
 
   emit('post-orders', 'running');
   await delay();
@@ -52,11 +52,11 @@ export function createDemoRouter(events: EventBus): Hono {
   const app = new Hono();
 
   app.post('/orders', async (c) => {
-    const demoId = c.req.header('x-seeflow-demo-id') ?? '';
+    const flowId = c.req.header('x-seeflow-demo-id') ?? '';
     const runId = c.req.header('x-seeflow-run-id') ?? '';
     const orderId = `ord_${Date.now()}`;
 
-    void runOrderPipeline(events, demoId, runId, orderId);
+    void runOrderPipeline(events, flowId, runId, orderId);
 
     return c.json({ orderId });
   });

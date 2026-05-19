@@ -29,7 +29,7 @@ afterEach(() => {
 });
 
 describe('unregisterDemo (stubbed fetch)', () => {
-  it('issues DELETE to /api/demos/:id and returns ok on 200', async () => {
+  it('issues DELETE to /api/flows/:id and returns ok on 200', async () => {
     let capturedUrl = '';
     let capturedMethod = '';
     globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -41,7 +41,7 @@ describe('unregisterDemo (stubbed fetch)', () => {
     const result = await unregisterDemo({ id: 'demo-123', url: 'http://localhost:4321' });
     expect(result.ok).toBe(true);
     expect(result.status).toBe(200);
-    expect(capturedUrl).toBe('http://localhost:4321/api/demos/demo-123');
+    expect(capturedUrl).toBe('http://localhost:4321/api/flows/demo-123');
     expect(capturedMethod).toBe('DELETE');
   });
 

@@ -1,6 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import * as React from 'react';
-import type { Connector, DemoNode } from '../types.ts';
+import type { Connector, FlowNode } from '../types.ts';
 import { type NodeStylePatch, StyleStrip, type StyleStripProps } from './style-strip.tsx';
 
 // Same dispatcher-shim trick used by icon-node.test.tsx and
@@ -112,22 +112,22 @@ function callStrip(overrides: Partial<StyleStripProps> = {}): unknown {
   return renderWithHooks(() => (StyleStrip as unknown as (p: StyleStripProps) => unknown)(props));
 }
 
-function iconNode(id: string, color?: string): DemoNode {
+function iconNode(id: string, color?: string): FlowNode {
   return {
     id,
     type: 'iconNode',
     position: { x: 0, y: 0 },
     data: { icon: 'shopping-cart', ...(color ? { color } : {}) },
-  } as DemoNode;
+  } as FlowNode;
 }
 
-function shapeNode(id: string): DemoNode {
+function shapeNode(id: string): FlowNode {
   return {
     id,
     type: 'shapeNode',
     position: { x: 0, y: 0 },
     data: { shape: 'rectangle', label: 's' },
-  } as DemoNode;
+  } as FlowNode;
 }
 
 describe('StyleStrip — iconNode color picker (US-014)', () => {
@@ -295,7 +295,7 @@ function imageNode(
     borderStyle?: 'solid' | 'dashed' | 'dotted';
     cornerRadius?: number;
   } = {},
-): DemoNode {
+): FlowNode {
   return {
     id,
     type: 'imageNode',
@@ -307,7 +307,7 @@ function imageNode(
       ...(opts.borderStyle ? { borderStyle: opts.borderStyle } : {}),
       ...(opts.cornerRadius !== undefined ? { cornerRadius: opts.cornerRadius } : {}),
     },
-  } as DemoNode;
+  } as FlowNode;
 }
 
 describe('StyleStrip — image-node border editor (US-014)', () => {

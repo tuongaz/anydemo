@@ -58,7 +58,7 @@ export function subscribeFileChanged(projectId: string, listener: Listener): () 
   let entry = buses.get(projectId);
   if (!entry) {
     const factory = factoryOverride ?? defaultFactory;
-    const source = factory(`/api/events?demoId=${encodeURIComponent(projectId)}`);
+    const source = factory(`/api/events?flowId=${encodeURIComponent(projectId)}`);
     if (!source) {
       // SSR / non-browser runtime — the listener will never be called but the
       // unsubscribe callback still needs to be safe to invoke.

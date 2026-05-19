@@ -79,7 +79,7 @@ describe('applyNodeStatus', () => {
     const prev: NodeStatuses = { n1: { state: 'ok', ts: 1 } };
     expect(applyNodeStatus(prev, { type: 'node:running', nodeId: 'n1' })).toBe(prev);
     expect(applyNodeStatus(prev, { type: 'node:done', nodeId: 'n1' })).toBe(prev);
-    expect(applyNodeStatus(prev, { type: 'demo:reload' })).toBe(prev);
+    expect(applyNodeStatus(prev, { type: 'flow:reload' })).toBe(prev);
   });
 
   it('ignores events with missing nodeId or invalid state', () => {

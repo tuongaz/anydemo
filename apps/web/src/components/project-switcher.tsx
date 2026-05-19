@@ -1,6 +1,6 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import type { CreateProjectResult, DemoSummary } from '@/lib/api';
-import { deleteDemo } from '@/lib/api';
+import type { CreateProjectResult, FlowSummary } from '@/lib/api';
+import { deleteFlow } from '@/lib/api';
 import { navigate } from '@/lib/router';
 import {
   Button,
@@ -26,7 +26,7 @@ import { ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface ProjectSwitcherProps {
-  demos: DemoSummary[];
+  demos: FlowSummary[];
   currentSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
   onProjectUnregistered?: (id: string) => void;
@@ -40,7 +40,7 @@ export function ProjectSwitcher({
 }: ProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [unregisterTarget, setUnregisterTarget] = useState<DemoSummary | null>(null);
+  const [unregisterTarget, setUnregisterTarget] = useState<FlowSummary | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [unregisterError, setUnregisterError] = useState<string | null>(null);
 
@@ -62,7 +62,7 @@ export function ProjectSwitcher({
     navigate(`/d/${result.slug}`);
   };
 
-  const openUnregisterDialog = (demo: DemoSummary) => {
+  const openUnregisterDialog = (demo: FlowSummary) => {
     setUnregisterTarget(demo);
     setUnregisterError(null);
   };
@@ -78,7 +78,7 @@ export function ProjectSwitcher({
     setUnregistering(true);
     setUnregisterError(null);
     try {
-      await deleteDemo(unregisterTarget.id);
+      await deleteFlow(unregisterTarget.id);
       const id = unregisterTarget.id;
       setUnregisterTarget(null);
       onProjectUnregistered?.(id);

@@ -17,7 +17,7 @@ import type {
   ConnectorDirection,
   ConnectorPath,
   ConnectorStyle,
-  DemoNode,
+  FlowNode,
 } from '../types.ts';
 import { IconToggleGroup, type IconToggleOption } from '../ui/icon-toggle-group.tsx';
 import {
@@ -64,7 +64,7 @@ export interface ConnectorStylePatch {
 
 export interface StyleStripProps {
   /** Currently selected nodes (with optimistic overrides applied). */
-  nodes: DemoNode[];
+  nodes: FlowNode[];
   /** Currently selected connectors (with optimistic overrides applied). */
   connectors: Connector[];
   onStyleNode: (nodeId: string, patch: NodeStylePatch) => void;
@@ -182,7 +182,7 @@ export function StyleStrip({
   // it out for the shared border/font/corner controls — the iconNode-only
   // color picker handled below writes `data.color` via a dedicated apply.
   const visualNodes = nodes.filter(
-    (n): n is Exclude<DemoNode, { type: 'iconNode' }> => n.type !== 'iconNode',
+    (n): n is Exclude<FlowNode, { type: 'iconNode' }> => n.type !== 'iconNode',
   );
   const firstVisualNode = visualNodes[0];
   // US-014: when every selected node is an iconNode the strip collapses to
@@ -191,7 +191,7 @@ export function StyleStrip({
   // and let the shared controls drive the non-icon nodes only.
   const pureIconNode = pureNode && nodes.every((n) => n.type === 'iconNode');
   const firstIconNode = pureIconNode
-    ? (nodes.find((n) => n.type === 'iconNode') as Extract<DemoNode, { type: 'iconNode' }>)
+    ? (nodes.find((n) => n.type === 'iconNode') as Extract<FlowNode, { type: 'iconNode' }>)
     : undefined;
   // US-014: dedicated image-node branch. Image borders use `borderWidth` (1–8),
   // NOT shape nodes' open-ended `borderSize`.
@@ -400,7 +400,7 @@ export function StyleStrip({
     // onStyleNode (per-node fan-out for multi-image selections), reusing the
     // existing PATCH+undo path. Image nodes also keep their cornerRadius
     // control (already supported by the renderer's containerStyle).
-    const firstImage = nodes[0] as Extract<DemoNode, { type: 'imageNode' }> | undefined;
+    const firstImage = nodes[0] as Extract<FlowNode, { type: 'imageNode' }> | undefined;
     const imageBorderColor: ColorToken = firstImage?.data.borderColor ?? 'default';
     const imageBorderStyle = (firstImage?.data.borderStyle ?? 'solid') as
       | 'solid'

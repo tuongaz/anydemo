@@ -1,7 +1,7 @@
 // Shared canvas types — single source of truth lives in @seeflow/canvas.
 // App-specific extensions (transient upload state, runtime API types) are
 // defined below and re-exported alongside the shared types.
-import type { ImageNodeData as BaseImageNodeData, Demo } from '@seeflow/canvas';
+import type { ImageNodeData as BaseImageNodeData, Flow } from '@seeflow/canvas';
 
 export type {
   ColorToken,
@@ -11,8 +11,8 @@ export type {
   ConnectorPath,
   ConnectorStyle,
   DefaultConnector,
-  Demo,
-  DemoNode,
+  Flow,
+  FlowNode,
   EdgePin,
   EdgePinSide,
   EventConnector,
@@ -30,7 +30,7 @@ export type {
   StatusReportState,
 } from '@seeflow/canvas';
 
-export interface DemoSummary {
+export interface FlowSummary {
   id: string;
   slug: string;
   name: string;
@@ -48,26 +48,26 @@ export interface ImageNodeData extends BaseImageNodeData {
   _uploadError?: string;
 }
 
-export interface DemoDetail {
+export interface FlowDetail {
   id: string;
   slug: string;
   name: string;
   filePath: string;
-  demo: Demo | null;
+  flow: Flow | null;
   valid: boolean;
   error: string | null;
 }
 
-export const fetchDemos = async (): Promise<DemoSummary[]> => {
-  const res = await fetch('/api/demos');
-  if (!res.ok) throw new Error(`GET /api/demos failed: ${res.status}`);
-  return (await res.json()) as DemoSummary[];
+export const fetchFlows = async (): Promise<FlowSummary[]> => {
+  const res = await fetch('/api/flows');
+  if (!res.ok) throw new Error(`GET /api/flows failed: ${res.status}`);
+  return (await res.json()) as FlowSummary[];
 };
 
-export const fetchDemoDetail = async (id: string): Promise<DemoDetail> => {
-  const res = await fetch(`/api/demos/${id}`);
-  if (!res.ok) throw new Error(`GET /api/demos/${id} failed: ${res.status}`);
-  return (await res.json()) as DemoDetail;
+export const fetchFlowDetail = async (id: string): Promise<FlowDetail> => {
+  const res = await fetch(`/api/flows/${id}`);
+  if (!res.ok) throw new Error(`GET /api/flows/${id} failed: ${res.status}`);
+  return (await res.json()) as FlowDetail;
 };
 
 export interface PlayResult {
@@ -87,8 +87,8 @@ export interface CreateProjectResult {
   scaffolded: boolean;
 }
 
-export const deleteDemo = async (id: string): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/demos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const deleteFlow = async (id: string): Promise<{ ok: true }> => {
+  const res = await fetch(`/api/flows/${encodeURIComponent(id)}`, { method: 'DELETE' });
   if (!res.ok) {
     let errorBody: { error?: string } | null = null;
     try {
@@ -96,7 +96,7 @@ export const deleteDemo = async (id: string): Promise<{ ok: true }> => {
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `DELETE /api/demos/${id} → ${res.status}`);
+    throw new Error(errorBody?.error ?? `DELETE /api/flows/${id} → ${res.status}`);
   }
   return (await res.json()) as { ok: true };
 };
@@ -119,13 +119,13 @@ export const createProject = async (body: CreateProjectBody): Promise<CreateProj
   return (await res.json()) as CreateProjectResult;
 };
 
-export interface RestartDemoResult {
+export interface RestartFlowResult {
   ok: true;
   calledResetAction: boolean;
 }
 
-export const restartDemo = async (demoId: string): Promise<RestartDemoResult> => {
-  const res = await fetch(`/api/demos/${demoId}/reset`, {
+export const restartFlow = async (flowId: string): Promise<RestartFlowResult> => {
+  const res = await fetch(`/api/flows/${flowId}/reset`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
@@ -137,9 +137,9 @@ export const restartDemo = async (demoId: string): Promise<RestartDemoResult> =>
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `POST /api/demos/${demoId}/reset → ${res.status}`);
+    throw new Error(errorBody?.error ?? `POST /api/flows/${flowId}/reset → ${res.status}`);
   }
-  return (await res.json()) as RestartDemoResult;
+  return (await res.json()) as RestartFlowResult;
 };
 
 /**
@@ -214,8 +214,8 @@ export const revealProjectFile = async (
   path: string,
 ): Promise<FileActionResult> => requestFileAction(projectId, 'reveal', path);
 
-export const playNode = async (demoId: string, nodeId: string): Promise<PlayResult> => {
-  const res = await fetch(`/api/demos/${demoId}/play/${nodeId}`, {
+export const playNode = async (flowId: string, nodeId: string): Promise<PlayResult> => {
+  const res = await fetch(`/api/flows/${flowId}/play/${nodeId}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
@@ -227,7 +227,7 @@ export const playNode = async (demoId: string, nodeId: string): Promise<PlayResu
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `POST /api/demos/${demoId}/play/${nodeId} → ${res.status}`);
+    throw new Error(errorBody?.error ?? `POST /api/flows/${flowId}/play/${nodeId} → ${res.status}`);
   }
   return (await res.json()) as PlayResult;
 };

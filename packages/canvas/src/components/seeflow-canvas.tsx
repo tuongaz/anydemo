@@ -67,7 +67,7 @@ import {
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import { StateNode } from '../nodes/state-node.tsx';
 import type { NodeStatus } from '../nodes/status-pill.tsx';
-import type { Connector, DemoNode, EdgePin, ShapeKind, StatusReport } from '../types.ts';
+import type { Connector, FlowNode, EdgePin, ShapeKind, StatusReport } from '../types.ts';
 import {
   ContextMenu,
   ContextMenuContent,
@@ -329,7 +329,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * project id).
    */
   projectId?: string;
-  nodes: DemoNode[];
+  nodes: FlowNode[];
   connectors: Connector[];
   /** Currently selected node ids (US-019: multi-select). */
   selectedNodeIds: readonly string[];
@@ -539,7 +539,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * canvas style strip's controls and fan-out apply (US-019). Empty when no
    * node is selected.
    */
-  selectedNodes?: DemoNode[];
+  selectedNodes?: FlowNode[];
   /**
    * Currently selected connectors (with optimistic overrides applied) — drives
    * the canvas style strip's controls and fan-out apply (US-019). Empty when
@@ -1079,13 +1079,13 @@ export function classifyHandleDropFailure(
   return 'fall-through';
 }
 
-const mergeNodeOverride = (node: DemoNode, override: Partial<DemoNode> | undefined): DemoNode => {
+const mergeNodeOverride = (node: FlowNode, override: Partial<FlowNode> | undefined): FlowNode => {
   if (!override) return node;
   // The override is keyed by the node's id, so its `data` (when present) is
   // always a partial of the SAME variant as node.data. TS can't see this
   // through the discriminated union spread, so cast at the boundary.
   const data = override.data ? { ...node.data, ...override.data } : node.data;
-  return { ...node, ...override, data } as DemoNode;
+  return { ...node, ...override, data } as FlowNode;
 };
 
 const mergeConnectorOverride = (
@@ -2502,7 +2502,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const selectedNodesForStyleStrip = selectedNodes ?? [];
 
   const sourceNodes = useMemo<Node[]>(() => {
-    const buildNode = (merged: DemoNode): Node => {
+    const buildNode = (merged: FlowNode): Node => {
       // View-mode local drag override: see viewModePositionsRef declaration.
       // Gated on !isEditMode so edit-mode renders byte-identical to before;
       // the ref is never written in edit mode but the guard is also load-
@@ -2614,7 +2614,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const fromServer = nodes.map((n) => buildNode(mergeNodeOverride(n, nodeOverrides?.[n.id])));
     // Override-only entries represent optimistic/pending creations (US-007):
     // a shape node has been drawn locally and the override carries a full
-    // DemoNode whose id is not yet on the server. Once the SSE echo of the
+    // FlowNode whose id is not yet on the server. Once the SSE echo of the
     // POST resolves, the entry shows up in `nodes` and `pruneAgainst` drops
     // the override (per US-021) — until then we render the candidate so the
     // node appears at the dragged size with no flicker from default→dragged.
@@ -2623,9 +2623,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     if (nodeOverrides) {
       for (const [id, partial] of Object.entries(nodeOverrides)) {
         if (serverIds.has(id)) continue;
-        const cand = partial as Partial<DemoNode>;
+        const cand = partial as Partial<FlowNode>;
         if (typeof cand.type !== 'string' || !cand.position || !cand.data) continue;
-        fromOverrides.push(buildNode({ ...cand, id } as DemoNode));
+        fromOverrides.push(buildNode({ ...cand, id } as FlowNode));
       }
     }
     return [...fromServer, ...fromOverrides];
@@ -3875,8 +3875,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const sidebarConnector = sidebarConnectorId
     ? (connectors.find((c) => c.id === sidebarConnectorId) ?? null)
     : null;
-  // The DetailPanel only reads `demoId` to gate htmlNode file-action visibility;
-  // CanvasAdapter doesn't expose its bound demoId on the type, so we route via
+  // The DetailPanel only reads `flowId` to gate htmlNode file-action visibility;
+  // CanvasAdapter doesn't expose its bound flowId on the type, so we route via
   // the existing `projectId` prop (which the studio already passes — identical
   // value, no new wiring at the host).
   const sidebarDemoId = projectId ?? null;
@@ -4529,7 +4529,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           ) : null}
           {shouldRenderSidebar ? (
             <DetailPanel
-              demoId={sidebarDemoId}
+              flowId={sidebarDemoId}
               node={sidebarNode}
               connector={sidebarConnector}
               adapter={adapter ?? null}

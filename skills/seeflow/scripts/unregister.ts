@@ -15,7 +15,7 @@ export interface UnregisterResult {
 
 export async function unregisterDemo(args: UnregisterArgs): Promise<UnregisterResult> {
   const url = args.url ?? resolveStudioUrl();
-  const res = await globalThis.fetch(`${url}/api/demos/${args.id}`, { method: 'DELETE' });
+  const res = await globalThis.fetch(`${url}/api/flows/${args.id}`, { method: 'DELETE' });
 
   let body: unknown;
   try {
@@ -42,7 +42,7 @@ function flagValue(argv: string[], name: string): string | undefined {
 export async function main(argv: string[]): Promise<number> {
   const id = flagValue(argv, 'id');
   if (!id) {
-    process.stderr.write('Usage: unregister.ts --id <demoId>\n');
+    process.stderr.write('Usage: unregister.ts --id <flowId>\n');
     return 1;
   }
   const result = await unregisterDemo({ id });

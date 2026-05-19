@@ -18,22 +18,22 @@ import {
   addNodeImpl,
   createProjectImpl,
   deleteConnectorImpl,
-  deleteDemoImpl,
+  deleteFlowImpl,
   deleteNodeImpl,
-  getDemoImpl,
+  getFlowImpl,
   listDemosImpl,
   moveNodeImpl,
   patchConnectorImpl,
   patchNodeImpl,
-  registerDemoImpl,
+  registerFlowImpl,
   reorderNodeImpl,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
-import type { DemoWatcher } from './watcher.ts';
+import type { FlowWatcher } from './watcher.ts';
 
 export interface CreateMcpServerOptions {
   registry: Registry;
-  watcher?: DemoWatcher;
+  watcher?: FlowWatcher;
   /** Override base directory for new projects. Defaults to ~/.seeflow. Tests inject a tmp dir. */
   projectBaseDir?: string;
 }
@@ -69,44 +69,44 @@ const errorResult = (text: string): CallToolResult => ({
   content: [{ type: 'text', text }],
 });
 
-// Most MCP tools take a single demoId argument. Defined inline as plain
+// Most MCP tools take a single flowId argument. Defined inline as plain
 // JSON Schema (rather than a one-off Zod schema) because there's no REST
 // counterpart to share with.
 const DEMO_ID_INPUT_SCHEMA = {
   type: 'object',
-  properties: { demoId: { type: 'string', minLength: 1 } },
-  required: ['demoId'],
+  properties: { flowId: { type: 'string', minLength: 1 } },
+  required: ['flowId'],
   additionalProperties: false,
 } as const;
 
-const requireDemoId = (args: unknown): { demoId: string } | { error: string } => {
+const requireDemoId = (args: unknown): { flowId: string } | { error: string } => {
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return { error: 'Invalid arguments: expected an object with demoId' };
+    return { error: 'Invalid arguments: expected an object with flowId' };
   }
-  const { demoId } = args as { demoId?: unknown };
-  if (typeof demoId !== 'string' || demoId.length === 0) {
-    return { error: 'Invalid arguments: demoId must be a non-empty string' };
+  const { flowId } = args as { flowId?: unknown };
+  if (typeof flowId !== 'string' || flowId.length === 0) {
+    return { error: 'Invalid arguments: flowId must be a non-empty string' };
   }
-  return { demoId };
+  return { flowId };
 };
 
-// {demoId, nodeId} body shape shared by move + reorder + delete inputs.
+// {flowId, nodeId} body shape shared by move + reorder + delete inputs.
 const DemoNodeIdBaseSchema = z.object({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   nodeId: z.string().min(1),
 });
 
-// add_node input: { demoId, node: <node payload> }. The inner `node` object is
-// loose here (additionalProperties=true via passthrough) because DemoSchema
+// add_node input: { flowId, node: <node payload> }. The inner `node` object is
+// loose here (additionalProperties=true via passthrough) because FlowSchema
 // runs the full validation server-side after the new node is merged in.
 const AddNodeInputSchema = z.object({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   node: z.record(z.unknown()),
 });
 
 const DeleteNodeInputSchema = DemoNodeIdBaseSchema;
 
-// move_node input: { demoId, nodeId } extended with PositionBodySchema's
+// move_node input: { flowId, nodeId } extended with PositionBodySchema's
 // { x, y } fields so agents see one flat schema.
 const MoveNodeInputSchema = DemoNodeIdBaseSchema.extend({
   x: PositionBodySchema.shape.x,
@@ -114,7 +114,7 @@ const MoveNodeInputSchema = DemoNodeIdBaseSchema.extend({
 });
 
 // reorder_node input: each branch of the existing ReorderBodySchema
-// discriminated union extended with demoId/nodeId. Keeps the discriminator
+// discriminated union extended with flowId/nodeId. Keeps the discriminator
 // on `op` so the emitted JSON Schema is an oneOf the agent can introspect.
 const ReorderNodeInputSchema = z.discriminatedUnion('op', [
   DemoNodeIdBaseSchema.extend({ op: z.literal('forward') }),
@@ -127,36 +127,36 @@ const ReorderNodeInputSchema = z.discriminatedUnion('op', [
   }),
 ]);
 
-// patch_node input: { demoId, nodeId } merged with NodePatchBodySchema's
+// patch_node input: { flowId, nodeId } merged with NodePatchBodySchema's
 // optional fields. .extend() on the strict body schema preserves strict
 // mode, so unknown top-level keys still trip the Zod parse before any disk
 // IO — matching the REST handler's "Invalid node patch body" 400 path.
 const PatchNodeInputSchema = NodePatchBodySchema.extend({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   nodeId: z.string().min(1),
 });
 
-// add_connector input: { demoId, connector: <connector payload> }. The inner
+// add_connector input: { flowId, connector: <connector payload> }. The inner
 // `connector` object is loose (additionalProperties=true via z.record) because
-// DemoSchema runs the full validation server-side after the new connector is
+// FlowSchema runs the full validation server-side after the new connector is
 // merged in (post-mutation parse catches dangling source/target refs and
 // kind-discriminator violations).
 const AddConnectorInputSchema = z.object({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   connector: z.record(z.unknown()),
 });
 
-// patch_connector input: { demoId, connectorId } merged with the strict
+// patch_connector input: { flowId, connectorId } merged with the strict
 // ConnectorPatchBodySchema. .extend() preserves strict mode so unknown
 // top-level keys trip the Zod parse before any IO — matching the REST
 // handler's "Invalid connector patch body" 400 path.
 const PatchConnectorInputSchema = ConnectorPatchBodySchema.extend({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   connectorId: z.string().min(1),
 });
 
 const DeleteConnectorInputSchema = z.object({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   connectorId: z.string().min(1),
 });
 
@@ -172,19 +172,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_get_demo',
-    description: 'Get the full demo definition and on-disk state for a demoId.',
+    description: 'Get the full demo definition and on-disk state for a flowId.',
     inputSchema: DEMO_ID_INPUT_SCHEMA,
     handler: async (args) => {
       const v = requireDemoId(args);
       if ('error' in v) return errorResult(v.error);
-      const result = await getDemoImpl(deps, v.demoId);
+      const result = await getFlowImpl(deps, v.flowId);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
         case 'notFound':
           return errorResult('not found');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
       }
     },
   },
@@ -197,17 +197,17 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid register body: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const result = await registerDemoImpl(deps, parsed.data);
+      const result = await registerFlowImpl(deps, parsed.data);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.detail}`);
+          return errorResult(`Flow file is not valid JSON: ${result.detail}`);
         case 'badSchema':
           return errorResult(
-            `Demo file failed schema validation: ${JSON.stringify(result.issues)}`,
+            `Flow file failed schema validation: ${JSON.stringify(result.issues)}`,
           );
         case 'sdkWriteFailed':
           return errorResult(`Failed to write SDK helper: ${result.message}`);
@@ -221,7 +221,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     handler: async (args) => {
       const v = requireDemoId(args);
       if ('error' in v) return errorResult(v.error);
-      const result = deleteDemoImpl(deps, v.demoId);
+      const result = deleteFlowImpl(deps, v.flowId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -265,19 +265,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid add_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { demoId, node } = parsed.data;
-      const result = await addNodeImpl(deps, demoId, node);
+      const { flowId, node } = parsed.data;
+      const result = await addNodeImpl(deps, flowId, node);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id, node: result.data.node });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'writeFailed':
           return errorResult(`Failed to write demo file: ${result.message}`);
       }
@@ -292,19 +292,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid delete_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { demoId, nodeId } = parsed.data;
-      const result = await deleteNodeImpl(deps, demoId, nodeId);
+      const { flowId, nodeId } = parsed.data;
+      const result = await deleteNodeImpl(deps, flowId, nodeId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
@@ -321,19 +321,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid move_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { demoId, nodeId, x, y } = parsed.data;
-      const result = await moveNodeImpl(deps, demoId, nodeId, { x, y });
+      const { flowId, nodeId, x, y } = parsed.data;
+      const result = await moveNodeImpl(deps, flowId, nodeId, { x, y });
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, position: result.data.position });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
@@ -351,19 +351,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid patch_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { demoId, nodeId, ...updates } = parsed.data;
-      const result = await patchNodeImpl(deps, demoId, nodeId, updates);
+      const { flowId, nodeId, ...updates } = parsed.data;
+      const result = await patchNodeImpl(deps, flowId, nodeId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
@@ -383,23 +383,23 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           `Invalid reorder_node arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { demoId, nodeId, ...body } = parsed.data;
+      const { flowId, nodeId, ...body } = parsed.data;
       // Delegate the op-specific shape to the existing ReorderBodySchema so
       // reorderNodeImpl receives the same discriminated union the REST route
       // does — keeps a single source of truth for op semantics.
       const reorderBody = ReorderBodySchema.parse(body);
-      const result = await reorderNodeImpl(deps, demoId, nodeId, reorderBody);
+      const result = await reorderNodeImpl(deps, flowId, nodeId, reorderBody);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownNode':
           return errorResult(`Unknown nodeId: ${nodeId}`);
         case 'writeFailed':
@@ -419,19 +419,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           `Invalid add_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { demoId, connector } = parsed.data;
-      const result = await addConnectorImpl(deps, demoId, connector);
+      const { flowId, connector } = parsed.data;
+      const result = await addConnectorImpl(deps, flowId, connector);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'writeFailed':
           return errorResult(`Failed to write demo file: ${result.message}`);
       }
@@ -449,19 +449,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           `Invalid patch_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { demoId, connectorId, ...updates } = parsed.data;
-      const result = await patchConnectorImpl(deps, demoId, connectorId, updates);
+      const { flowId, connectorId, ...updates } = parsed.data;
+      const result = await patchConnectorImpl(deps, flowId, connectorId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownConnector':
           return errorResult(`Unknown connectorId: ${connectorId}`);
         case 'writeFailed':
@@ -480,19 +480,19 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           `Invalid delete_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { demoId, connectorId } = parsed.data;
-      const result = await deleteConnectorImpl(deps, demoId, connectorId);
+      const { flowId, connectorId } = parsed.data;
+      const result = await deleteConnectorImpl(deps, flowId, connectorId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
-        case 'demoNotFound':
+        case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
-          return errorResult(`Demo file not found: ${result.path}`);
+          return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
-          return errorResult(`Demo file is not valid JSON: ${result.message}`);
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
-          return errorResult(`Demo failed schema validation: ${JSON.stringify(result.issues)}`);
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'unknownConnector':
           return errorResult(`Unknown connectorId: ${connectorId}`);
         case 'writeFailed':

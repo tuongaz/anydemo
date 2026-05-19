@@ -359,9 +359,9 @@ bun skills/seeflow/scripts/validate-end-to-end.ts <id> [--skip-nodes <id1>,<id2>
 Pass `--skip-nodes` when `unsafeNodeIds` is non-empty (nodes that hit third-party services or charge money). Skipped nodes appear in `skipped[]` and are not counted as failures.
 
 The script:
-- GETs `/api/demos/<id>` (expects 200, `valid: true`).
-- Opens SSE at `/api/events?demoId=<id>` before triggering plays.
-- POSTs `/api/demos/<id>/play/<nodeId>` for each safe play node; awaits response.
+- GETs `/api/flows/<id>` (expects 200, `valid: true`).
+- Opens SSE at `/api/events?flowId=<id>` before triggering plays.
+- POSTs `/api/flows/<id>/play/<nodeId>` for each safe play node; awaits response.
 - Drains SSE for `node:done` / `node:error` / `node:status` events. SSE outcome takes precedence.
 - Hard ceiling: ~2 minutes. Emits `{ok, plays, statuses, skipped}`.
 
@@ -605,10 +605,10 @@ Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
 | Endpoint | Method | Phase | Body |
 |---|---|---|---|
 | `/health` | GET | 0 | — |
-| `/api/demos/register` | POST | 3, 6 | `{name, repoPath, demoPath}` |
-| `/api/demos/:id` | GET | 7 | — |
-| `/api/demos/:id/play/:nodeId` | POST | 7 | — |
-| `/api/events?demoId=:id` | GET (SSE) | 7 | — |
-| `/api/demos/:id` | DELETE | rollback only | — |
+| `/api/flows/register` | POST | 3, 6 | `{name, repoPath, architecturePath}` |
+| `/api/flows/:id` | GET | 7 | — |
+| `/api/flows/:id/play/:nodeId` | POST | 7 | — |
+| `/api/events?flowId=:id` | GET (SSE) | 7 | — |
+| `/api/flows/:id` | DELETE | rollback only | — |
 
 Never invent endpoints. Surface anything outside this table to the user.

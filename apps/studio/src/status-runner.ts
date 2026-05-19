@@ -4,10 +4,10 @@
  * newline-delimited JSON stdout into `node:status` SSE events.
  *
  * Lifecycle per demo (held in `trackedByDemo`):
- *   restart(demoId) → kill previous batch (SIGTERM → 2s grace → SIGKILL in
+ *   restart(flowId) → kill previous batch (SIGTERM → 2s grace → SIGKILL in
  *     parallel) → re-read demo from disk → spawn each `statusAction` node in
  *     parallel.
- *   stop(demoId) / stopAll() → kill without respawn.
+ *   stop(flowId) / stopAll() → kill without respawn.
  *
  * Per-script lifecycle: spawn → drain stdout line-by-line → for each line,
  * JSON.parse + StatusReportSchema.safeParse → on success broadcast `node:status`,
@@ -24,14 +24,14 @@ import { existsSync, realpathSync } from 'node:fs';
 import { isAbsolute, join, resolve, sep } from 'node:path';
 import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
-import type { DemoEntry, Registry } from './registry.ts';
-import { type Demo, DemoSchema, type StatusAction, StatusReportSchema } from './schema.ts';
+import type { FlowEntry, Registry } from './registry.ts';
+import { type Flow, FlowSchema, type StatusAction, StatusReportSchema } from './schema.ts';
 
 export interface StatusRunner {
-  /** Kill the current batch for `demoId` and respawn from the on-disk demo. */
-  restart(demoId: string): Promise<void>;
-  /** Kill all status scripts for `demoId`. */
-  stop(demoId: string): Promise<void>;
+  /** Kill the current batch for `flowId` and respawn from the on-disk demo. */
+  restart(flowId: string): Promise<void>;
+  /** Kill all status scripts for `flowId`. */
+  stop(flowId: string): Promise<void>;
   /** Kill all status scripts for every demo. Used at studio shutdown. */
   stopAll(): Promise<void>;
 }
@@ -140,14 +140,14 @@ function truncate(s: string, n: number): string {
   return s.length > n ? `${s.slice(0, n)}…` : s;
 }
 
-async function loadDemo(entry: DemoEntry): Promise<Demo | undefined> {
-  const fullPath = isAbsolute(entry.demoPath)
-    ? entry.demoPath
-    : join(entry.repoPath, entry.demoPath);
+async function loadDemo(entry: FlowEntry): Promise<Flow | undefined> {
+  const fullPath = isAbsolute(entry.architecturePath)
+    ? entry.architecturePath
+    : join(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return undefined;
   try {
     const raw = await Bun.file(fullPath).json();
-    const parsed = DemoSchema.safeParse(raw);
+    const parsed = FlowSchema.safeParse(raw);
     return parsed.success ? parsed.data : undefined;
   } catch {
     return undefined;
@@ -159,7 +159,7 @@ interface StatusNode {
   action: StatusAction;
 }
 
-function collectStatusNodes(demo: Demo): StatusNode[] {
+function collectStatusNodes(demo: Flow): StatusNode[] {
   const out: StatusNode[] = [];
   for (const node of demo.nodes) {
     if (node.type !== 'playNode' && node.type !== 'stateNode') continue;
@@ -176,7 +176,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
   const trackedByDemo = new Map<string, TrackedHandle[]>();
 
   function spawnStatusScript(
-    demoId: string,
+    flowId: string,
     repoPath: string,
     sn: StatusNode,
   ): TrackedHandle | undefined {
@@ -186,7 +186,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
     if (!resolved.ok) {
       events.broadcast({
         type: 'node:status',
-        demoId,
+        flowId,
         payload: {
           nodeId,
           state: 'error',
@@ -199,7 +199,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
 
     const runId = crypto.randomUUID();
     const env = buildChildEnv({
-      SEEFLOW_DEMO_ID: demoId,
+      SEEFLOW_DEMO_ID: flowId,
       SEEFLOW_NODE_ID: nodeId,
       SEEFLOW_RUN_ID: runId,
     });
@@ -216,7 +216,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       const message = err instanceof Error ? err.message : String(err);
       events.broadcast({
         type: 'node:status',
-        demoId,
+        flowId,
         payload: {
           nodeId,
           state: 'error',
@@ -244,7 +244,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       tracked.expectingKill = true;
       events.broadcast({
         type: 'node:status',
-        demoId,
+        flowId,
         payload: {
           nodeId,
           state: 'error',
@@ -264,7 +264,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       } catch (err) {
         const reason = err instanceof Error ? err.message : String(err);
         console.warn(
-          `[status-runner] malformed status line (demo=${demoId} node=${nodeId}): ${truncate(trimmed, MALFORMED_LINE_TRUNCATE)} (${reason})`,
+          `[status-runner] malformed status line (demo=${flowId} node=${nodeId}): ${truncate(trimmed, MALFORMED_LINE_TRUNCATE)} (${reason})`,
         );
         return;
       }
@@ -272,14 +272,14 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       if (!result.success) {
         const reason = result.error.issues[0]?.message ?? 'schema validation failed';
         console.warn(
-          `[status-runner] invalid status report (demo=${demoId} node=${nodeId}): ${truncate(trimmed, MALFORMED_LINE_TRUNCATE)} (${reason})`,
+          `[status-runner] invalid status report (demo=${flowId} node=${nodeId}): ${truncate(trimmed, MALFORMED_LINE_TRUNCATE)} (${reason})`,
         );
         return;
       }
       const report = result.data;
       events.broadcast({
         type: 'node:status',
-        demoId,
+        flowId,
         payload: {
           nodeId,
           state: report.state,
@@ -302,7 +302,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       if (code !== 0) {
         events.broadcast({
           type: 'node:status',
-          demoId,
+          flowId,
           payload: {
             nodeId,
             state: 'error',
@@ -336,14 +336,14 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
     );
   }
 
-  async function restart(demoId: string): Promise<void> {
-    const existing = trackedByDemo.get(demoId);
+  async function restart(flowId: string): Promise<void> {
+    const existing = trackedByDemo.get(flowId);
     if (existing) {
-      trackedByDemo.delete(demoId);
+      trackedByDemo.delete(flowId);
       await killBatch(existing);
     }
 
-    const entry = registry.getById(demoId);
+    const entry = registry.getById(flowId);
     if (!entry) return;
     const demo = await loadDemo(entry);
     if (!demo) return;
@@ -352,16 +352,16 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
 
     const batch: TrackedHandle[] = [];
     for (const sn of statusNodes) {
-      const t = spawnStatusScript(demoId, entry.repoPath, sn);
+      const t = spawnStatusScript(flowId, entry.repoPath, sn);
       if (t) batch.push(t);
     }
-    if (batch.length > 0) trackedByDemo.set(demoId, batch);
+    if (batch.length > 0) trackedByDemo.set(flowId, batch);
   }
 
-  async function stop(demoId: string): Promise<void> {
-    const existing = trackedByDemo.get(demoId);
+  async function stop(flowId: string): Promise<void> {
+    const existing = trackedByDemo.get(flowId);
     if (!existing) return;
-    trackedByDemo.delete(demoId);
+    trackedByDemo.delete(flowId);
     await killBatch(existing);
   }
 

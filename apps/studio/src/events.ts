@@ -1,11 +1,11 @@
 /**
- * In-memory pub/sub keyed by demoId. Subscribers receive every event published
+ * In-memory pub/sub keyed by flowId. Subscribers receive every event published
  * for that demo until they unsubscribe; subscribers for other demos are not
  * notified.
  */
 
 export type StudioEventType =
-  | 'demo:reload'
+  | 'flow:reload'
   | 'demo:reset'
   | 'node:running'
   | 'node:done'
@@ -15,7 +15,7 @@ export type StudioEventType =
 
 export interface StudioEvent {
   type: StudioEventType;
-  demoId: string;
+  flowId: string;
   /** Arbitrary JSON-serializable payload. Shape depends on event type. */
   payload: unknown;
   /** Server-side timestamp (ms since epoch). */
@@ -26,33 +26,33 @@ export type Subscriber = (event: StudioEvent) => void;
 
 export interface EventBus {
   /** Subscribe to events for a specific demo. Returns an unsubscribe fn. */
-  subscribe(demoId: string, fn: Subscriber): () => void;
-  /** Broadcast an event to all subscribers of `demoId`. */
+  subscribe(flowId: string, fn: Subscriber): () => void;
+  /** Broadcast an event to all subscribers of `flowId`. */
   broadcast(event: Omit<StudioEvent, 'ts'> & { ts?: number }): void;
   /** Number of active subscribers for a given demo (used in tests). */
-  subscriberCount(demoId: string): number;
+  subscriberCount(flowId: string): number;
 }
 
 export function createEventBus(): EventBus {
   const subs = new Map<string, Set<Subscriber>>();
 
   return {
-    subscribe(demoId, fn) {
-      let set = subs.get(demoId);
+    subscribe(flowId, fn) {
+      let set = subs.get(flowId);
       if (!set) {
         set = new Set();
-        subs.set(demoId, set);
+        subs.set(flowId, set);
       }
       set.add(fn);
       return () => {
-        const current = subs.get(demoId);
+        const current = subs.get(flowId);
         if (!current) return;
         current.delete(fn);
-        if (current.size === 0) subs.delete(demoId);
+        if (current.size === 0) subs.delete(flowId);
       };
     },
     broadcast(event) {
-      const set = subs.get(event.demoId);
+      const set = subs.get(event.flowId);
       if (!set) return;
       const full: StudioEvent = { ...event, ts: event.ts ?? Date.now() };
       for (const fn of set) {
@@ -63,8 +63,8 @@ export function createEventBus(): EventBus {
         }
       }
     },
-    subscriberCount(demoId) {
-      return subs.get(demoId)?.size ?? 0;
+    subscriberCount(flowId) {
+      return subs.get(flowId)?.size ?? 0;
     },
   };
 }

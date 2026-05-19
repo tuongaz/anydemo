@@ -2,10 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import { mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Demo } from './schema.ts';
+import type { Flow } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 
-const REQUEST_DEMO: Demo = {
+const REQUEST_DEMO: Flow = {
   version: 1,
   name: 'Request only',
   nodes: [
@@ -24,7 +24,7 @@ const REQUEST_DEMO: Demo = {
   connectors: [],
 };
 
-const EVENT_DEMO: Demo = {
+const EVENT_DEMO: Flow = {
   ...REQUEST_DEMO,
   name: 'With worker',
   nodes: [

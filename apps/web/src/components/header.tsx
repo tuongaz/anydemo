@@ -1,10 +1,10 @@
 import { ProjectSwitcher } from '@/components/project-switcher';
-import type { CreateProjectResult, DemoSummary } from '@/lib/api';
+import type { CreateProjectResult, FlowSummary } from '@/lib/api';
 import { navigate } from '@/lib/router';
 import { Workflow } from 'lucide-react';
 
 export interface HeaderProps {
-  demos: DemoSummary[];
+  demos: FlowSummary[];
   currentSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
   onProjectUnregistered?: (id: string) => void;

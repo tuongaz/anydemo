@@ -44,15 +44,15 @@ export interface UseNodeEventsResult {
  * Per-node ring buffer (last 5 events) keyed by nodeId. Driven by `node:*`
  * SSE events. Used by the detail panel's "Recent events" list.
  */
-export const useNodeEvents = (demoId: string | null): UseNodeEventsResult => {
+export const useNodeEvents = (flowId: string | null): UseNodeEventsResult => {
   const [events, dispatch] = useReducer(reducer, {} as NodeEventLog);
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: demoId is the trigger; effect body intentionally doesn't reference it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: flowId is the trigger; effect body intentionally doesn't reference it.
   useEffect(() => {
     dispatchRef.current({ type: 'reset' });
-  }, [demoId]);
+  }, [flowId]);
 
   const apply = useCallback((event: NodeEventInput) => {
     const status = TYPE_TO_STATUS[event.type];

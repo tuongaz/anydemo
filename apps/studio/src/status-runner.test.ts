@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { type StudioEvent, createEventBus } from './events.ts';
 import type { ProcessSpawner, SpawnHandle, SpawnOptions } from './process-spawner.ts';
-import type { DemoEntry, Registry } from './registry.ts';
+import type { FlowEntry, Registry } from './registry.ts';
 import { createStatusRunner } from './status-runner.ts';
 
 interface FakeSpawnConfig {
@@ -73,14 +73,14 @@ function makeFakeSpawner(configFor: (index: number, opts: SpawnOptions) => FakeS
   return { spawner, spawns };
 }
 
-function makeFakeRegistry(entries: DemoEntry[]): Registry {
+function makeFakeRegistry(entries: FlowEntry[]): Registry {
   const map = new Map(entries.map((e) => [e.id, e]));
   return {
     list: () => [...map.values()],
     getById: (id) => map.get(id),
     getBySlug: () => undefined,
     getByRepoPath: () => undefined,
-    getByRepoPathAndDemoPath: () => undefined,
+    getByRepoPathAndArchitecturePath: () => undefined,
     upsert() {
       throw new Error('not implemented in fake');
     },
@@ -127,8 +127,8 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
     ],
     connectors: [],
   };
-  const demoPath = join(cwd, '.seeflow', 'seeflow.json');
-  writeFileSync(demoPath, JSON.stringify(demo, null, 2));
+  const architecturePath = join(cwd, '.seeflow', 'seeflow.json');
+  writeFileSync(architecturePath, JSON.stringify(demo, null, 2));
   return {
     cwd,
     nodeId,
@@ -137,10 +137,10 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
       slug: 'demo-a',
       name: 'Test demo',
       repoPath: cwd,
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
       lastModified: Date.now(),
       valid: true,
-    } satisfies DemoEntry,
+    } satisfies FlowEntry,
   };
 }
 
@@ -151,9 +151,9 @@ afterEach(() => {
   }
 });
 
-function captureEvents(bus: ReturnType<typeof createEventBus>, demoId: string): StudioEvent[] {
+function captureEvents(bus: ReturnType<typeof createEventBus>, flowId: string): StudioEvent[] {
   const list: StudioEvent[] = [];
-  bus.subscribe(demoId, (e) => list.push(e));
+  bus.subscribe(flowId, (e) => list.push(e));
   return list;
 }
 
@@ -289,7 +289,7 @@ describe('createStatusRunner', () => {
   it('isolates demos: restart on demo A does not touch demo B', async () => {
     const { entry: entryA } = makeProject({ hasStatus: true, nodeId: 'a-node' });
     const projB = makeProject({ hasStatus: true, nodeId: 'b-node' });
-    const entryB: DemoEntry = { ...projB.entry, id: 'demoB', slug: 'demo-b' };
+    const entryB: FlowEntry = { ...projB.entry, id: 'demoB', slug: 'demo-b' };
 
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
@@ -349,12 +349,12 @@ describe('createStatusRunner', () => {
       connectors: [],
     };
     writeFileSync(join(cwd, '.seeflow', 'seeflow.json'), JSON.stringify(demo));
-    const entry: DemoEntry = {
+    const entry: FlowEntry = {
       id: 'demoA',
       slug: 'demo-a',
       name: 'Lifetime test',
       repoPath: cwd,
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
       lastModified: Date.now(),
       valid: true,
     };
@@ -439,7 +439,7 @@ describe('createStatusRunner', () => {
         getById: () => entry,
         getBySlug: () => undefined,
         getByRepoPath: () => undefined,
-        getByRepoPathAndDemoPath: () => undefined,
+        getByRepoPathAndArchitecturePath: () => undefined,
         upsert: () => {
           throw new Error('nope');
         },
@@ -455,7 +455,7 @@ describe('createStatusRunner', () => {
     // Swap in a demo file with no statusAction nodes.
     const proj2 = makeProject({ hasStatus: false });
     entry = proj2.entry;
-    // Reuse demoId so the runner's internal map matches the previous batch.
+    // Reuse flowId so the runner's internal map matches the previous batch.
     entry.id = 'demoA';
 
     await runner.restart('demoA');

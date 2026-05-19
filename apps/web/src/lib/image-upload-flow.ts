@@ -1,4 +1,4 @@
-import type { DemoNode, ImageNodeData } from '@/lib/api';
+import type { FlowNode, ImageNodeData } from '@/lib/api';
 import {
   type ImageDataDefaults,
   type NodeCreateInput,
@@ -29,8 +29,8 @@ import {
 export interface PerformImageDropUploadArgs {
   /** Pre-allocated client-side node id, shared by override + createNode. */
   nodeId: string;
-  /** demoId (== projectId in the studio's registry). */
-  demoId: string;
+  /** flowId (== projectId in the studio's registry). */
+  flowId: string;
   /** Source File for upload. */
   file: File;
   /** Override the File's own .name when posting (used on retry to preserve
@@ -47,9 +47,9 @@ export interface PerformImageDropUploadArgs {
 
 export interface PerformImageDropUploadDeps {
   upload: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
-  createNode: (demoId: string, body: NodeCreateInput) => Promise<{ id: string }>;
-  deleteNode: (demoId: string, nodeId: string) => Promise<{ ok: true }>;
-  setOverride: (id: string, partial: Partial<DemoNode>) => void;
+  createNode: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
+  deleteNode: (flowId: string, nodeId: string) => Promise<{ ok: true }>;
+  setOverride: (id: string, partial: Partial<FlowNode>) => void;
   /** Push the create-undo entry on success. Absent → undo not wired. */
   pushUndo?: (entry: { do: () => Promise<void>; undo: () => Promise<void> }) => void;
   /** Stash the upload args for a possible retry after failure. */
@@ -73,7 +73,7 @@ export const buildUploadingOverride = (args: {
   position: { x: number; y: number };
   dims: { width: number; height: number };
   originalFilename: string;
-}): Partial<DemoNode> => ({
+}): Partial<FlowNode> => ({
   type: 'imageNode',
   position: args.position,
   data: {
@@ -93,7 +93,7 @@ export const buildUploadedOverride = (args: {
   dims: { width: number; height: number };
   originalFilename: string;
   lastUsed?: Partial<NodeStylePatch>;
-}): Partial<DemoNode> => ({
+}): Partial<FlowNode> => ({
   type: 'imageNode',
   data: buildUploadedImageData(args),
 });
@@ -105,7 +105,7 @@ export const buildFailedOverride = (args: {
   dims: { width: number; height: number };
   originalFilename: string;
   message: string;
-}): Partial<DemoNode> => ({
+}): Partial<FlowNode> => ({
   type: 'imageNode',
   position: args.position,
   data: {
@@ -134,7 +134,7 @@ export const performImageDropUpload = async (
   args: PerformImageDropUploadArgs,
   deps: PerformImageDropUploadDeps,
 ): Promise<void> => {
-  const { nodeId, demoId, file, originalFilename, position, dims, lastUsed } = args;
+  const { nodeId, flowId, file, originalFilename, position, dims, lastUsed } = args;
   // 1. Stash retry args BEFORE the upload starts. If the user reloads the page
   //    mid-upload the retry context is lost (we don't persist it across page
   //    reloads), but if the upload fails synchronously the placeholder can
@@ -145,7 +145,7 @@ export const performImageDropUpload = async (
 
   let path: string;
   try {
-    const result = await deps.upload(demoId, file, originalFilename);
+    const result = await deps.upload(flowId, file, originalFilename);
     path = result.path;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -163,7 +163,7 @@ export const performImageDropUpload = async (
     position,
     data,
   };
-  const { id: returnedId } = await deps.createNode(demoId, payload);
+  const { id: returnedId } = await deps.createNode(flowId, payload);
   // 4. Upload + persist both succeeded — drop the retry entry.
   deps.forgetRetry(nodeId);
   // 5. Push the undo entry bound to the server-issued id (matches
@@ -171,10 +171,10 @@ export const performImageDropUpload = async (
   if (deps.pushUndo) {
     deps.pushUndo({
       do: async () => {
-        await deps.createNode(demoId, { ...payload, id: returnedId });
+        await deps.createNode(flowId, { ...payload, id: returnedId });
       },
       undo: async () => {
-        await deps.deleteNode(demoId, returnedId);
+        await deps.deleteNode(flowId, returnedId);
       },
     });
   }

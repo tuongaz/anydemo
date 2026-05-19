@@ -82,7 +82,7 @@ export const applyPruneAgainst = <T extends { id: string }>(
 /**
  * Generalized optimistic-edit reconciliation. Generalizes the original
  * `positionOverrides` flow in `demo-view.tsx`: callers `setOverride` BEFORE
- * firing the API call, then either `pruneAgainst` on the next demo:reload
+ * firing the API call, then either `pruneAgainst` on the next flow:reload
  * echo (server caught up) or `dropOverride` on API failure (revert).
  */
 export const usePendingOverrides = <T extends { id: string }>(): PendingOverrides<T> => {

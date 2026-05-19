@@ -5,7 +5,7 @@ import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
 import { useStudioEvents } from '@/hooks/use-studio-events';
-import { type CreateProjectResult, playNode, restartDemo } from '@/lib/api';
+import { type CreateProjectResult, playNode, restartFlow } from '@/lib/api';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { navigate, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
@@ -25,19 +25,19 @@ export function App() {
   const slug = matchDemoSlug(pathname);
 
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
-  const demoId = currentSummary?.id ?? null;
+  const flowId = currentSummary?.id ?? null;
 
-  const { detail, loading, refresh: refreshDetail } = useDemoData(demoId);
-  const { runs, apply: applyRun } = useNodeRuns(demoId);
-  const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(demoId);
+  const { detail, loading, refresh: refreshDetail } = useDemoData(flowId);
+  const { runs, apply: applyRun } = useNodeRuns(flowId);
+  const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
   const {
     statusByNode,
     apply: applyNodeStatus,
     reset: resetNodeStatuses,
-  } = useNodeStatuses(demoId);
+  } = useNodeStatuses(flowId);
 
   const onReload = useCallback(() => {
-    // The studio kills the previous status batch on every demo:reload, so
+    // The studio kills the previous status batch on every flow:reload, so
     // the prior `statusByNode` entries are stale by the time we get here.
     resetNodeStatuses();
     refreshDetail();
@@ -57,16 +57,16 @@ export function App() {
   // per-node badge + sidebar status section. It threads through DemoView →
   // DemoCanvas / DetailPanel; the renderers in those files are wired in US-007.
 
-  useStudioEvents(demoId, { onReload, onEvent });
+  useStudioEvents(flowId, { onReload, onEvent });
 
   const onRestartDemo = useCallback(async (): Promise<void> => {
-    if (!demoId) return;
+    if (!flowId) return;
     try {
-      await restartDemo(demoId);
+      await restartFlow(flowId);
     } catch (err) {
       console.error('Failed to restart demo:', err);
     }
-  }, [demoId]);
+  }, [flowId]);
 
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
@@ -79,9 +79,9 @@ export function App() {
   const onProjectUnregistered = useCallback(
     async (id: string) => {
       await refreshDemos();
-      if (demoId === id) navigate('/');
+      if (flowId === id) navigate('/');
     },
-    [refreshDemos, demoId],
+    [refreshDemos, flowId],
   );
 
   // On '/', skip the picker when there's nothing to pick: jump straight in if
@@ -101,10 +101,10 @@ export function App() {
 
   const onPlayNode = useCallback(
     (nodeId: string) => {
-      if (!demoId) return;
+      if (!flowId) return;
       // Fire and forget — the SSE node:* events drive the UI; the synchronous
       // response is currently surfaced through the same SSE stream.
-      playNode(demoId, nodeId).catch((err) => {
+      playNode(flowId, nodeId).catch((err) => {
         applyRun({
           type: 'node:error',
           nodeId,
@@ -113,7 +113,7 @@ export function App() {
         });
       });
     },
-    [demoId, applyRun],
+    [flowId, applyRun],
   );
 
   if (demos === null) {
@@ -144,7 +144,7 @@ export function App() {
               nodeEvents={nodeEvents}
               statusByNode={statusByNode}
               onPlayNode={onPlayNode}
-              onRestartDemo={demoId ? onRestartDemo : undefined}
+              onRestartDemo={flowId ? onRestartDemo : undefined}
             />
           ) : (
             <StudioHome demos={demos} />

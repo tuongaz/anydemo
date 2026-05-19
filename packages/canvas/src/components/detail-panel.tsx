@@ -19,7 +19,7 @@ import {
   startResizeGesture,
 } from '../lib/detail-panel-width.ts';
 import { StatusBadge } from '../nodes/status-badge.tsx';
-import type { Connector, DemoNode, StatusReport } from '../types.ts';
+import type { Connector, FlowNode, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
@@ -30,8 +30,8 @@ import { IconPickerPopover } from './icon-picker-popover.tsx';
 type IconChangeHandler = (nodeId: string, icon: string | null) => void;
 
 export interface DetailPanelProps {
-  demoId: string | null;
-  node: DemoNode | null;
+  flowId: string | null;
+  node: FlowNode | null;
   connector: Connector | null;
   /**
    * Optional canvas adapter used for project-scoped file actions on htmlNode
@@ -66,7 +66,7 @@ export interface DetailPanelProps {
 }
 
 export function DetailPanel({
-  demoId,
+  flowId,
   node,
   connector,
   adapter,
@@ -258,7 +258,7 @@ export function DetailPanel({
                 markdown={true}
               />
 
-              {inspectableNode.type === 'htmlNode' && demoId ? (
+              {inspectableNode.type === 'htmlNode' && flowId ? (
                 <HtmlNodeSection adapter={adapter} htmlPath={inspectableNode.data.htmlPath} />
               ) : null}
             </div>

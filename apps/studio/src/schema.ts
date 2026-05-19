@@ -396,7 +396,7 @@ const ConnectorSchema = z.discriminatedUnion('kind', [
   DefaultConnectorSchema,
 ]);
 
-export const DemoSchema = z
+export const FlowSchema = z
   .object({
     version: z.literal(1),
     name: z.string().min(1),
@@ -404,13 +404,13 @@ export const DemoSchema = z
     connectors: z.array(ConnectorSchema),
     // Optional one-shot script the studio runs when the user clicks Restart.
     // Lets the running app wipe its own in-memory state. The studio kills
-    // every live play + status script for the demo BEFORE invoking this
+    // every live play + status script for the flow BEFORE invoking this
     // script (US-008), so the script sees no stragglers.
     resetAction: ResetActionSchema.optional(),
   })
-  .superRefine((demo, ctx) => {
-    const nodeIds = new Set(demo.nodes.map((n) => n.id));
-    demo.connectors.forEach((c, idx) => {
+  .superRefine((flow, ctx) => {
+    const nodeIds = new Set(flow.nodes.map((n) => n.id));
+    flow.connectors.forEach((c, idx) => {
       if (!nodeIds.has(c.source)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -428,8 +428,8 @@ export const DemoSchema = z
     });
   });
 
-export type Demo = z.infer<typeof DemoSchema>;
-export type DemoNode = z.infer<typeof NodeSchema>;
+export type Flow = z.infer<typeof FlowSchema>;
+export type FlowNode = z.infer<typeof NodeSchema>;
 export type ShapeNode = z.infer<typeof ShapeNodeSchema>;
 export type ImageNode = z.infer<typeof ImageNodeSchema>;
 export type IconNode = z.infer<typeof IconNodeSchema>;

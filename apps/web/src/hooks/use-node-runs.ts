@@ -92,17 +92,17 @@ export interface UseNodeRunsResult {
  * to wire `apply` to `useStudioEvents.onEvent` and call `reset` when the
  * demo id changes.
  */
-export const useNodeRuns = (demoId: string | null): UseNodeRunsResult => {
+export const useNodeRuns = (flowId: string | null): UseNodeRunsResult => {
   const [runs, dispatch] = useReducer(reducer, {} as NodeRuns);
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
 
   // Reset whenever the demo id changes — switching demos shouldn't bleed
   // status state across canvases.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: demoId is the trigger; the effect body intentionally doesn't reference it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: flowId is the trigger; the effect body intentionally doesn't reference it.
   useEffect(() => {
     dispatchRef.current({ type: 'reset' });
-  }, [demoId]);
+  }, [flowId]);
 
   const apply = useCallback((event: NodeRunEvent) => {
     const nodeId = typeof event.nodeId === 'string' ? event.nodeId : null;

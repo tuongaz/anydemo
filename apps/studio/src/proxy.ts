@@ -31,7 +31,7 @@ export interface PlayResult {
 
 export interface RunPlayOptions {
   events: EventBus;
-  demoId: string;
+  flowId: string;
   nodeId: string;
   /** Project root (`<repoPath>`). Script resolves under `<cwd>/.seeflow/`. */
   cwd: string;
@@ -103,24 +103,24 @@ async function writeStdinPayload(handle: SpawnHandle, input: unknown): Promise<v
   }
 }
 
-// Live play-script handles indexed by demoId. Populated by runPlay() on spawn;
+// Live play-script handles indexed by flowId. Populated by runPlay() on spawn;
 // entries are removed when each handle's `exited` promise resolves (success
-// AND error paths). `stopAllPlays(demoId)` consults this map to terminate
+// AND error paths). `stopAllPlays(flowId)` consults this map to terminate
 // every in-flight play for a demo on /reset.
 const livePlayHandles = new Map<string, Set<SpawnHandle>>();
 
-function registerLiveHandle(demoId: string, handle: SpawnHandle): void {
-  let set = livePlayHandles.get(demoId);
+function registerLiveHandle(flowId: string, handle: SpawnHandle): void {
+  let set = livePlayHandles.get(flowId);
   if (!set) {
     set = new Set();
-    livePlayHandles.set(demoId, set);
+    livePlayHandles.set(flowId, set);
   }
   set.add(handle);
   handle.exited.finally(() => {
-    const current = livePlayHandles.get(demoId);
+    const current = livePlayHandles.get(flowId);
     if (!current) return;
     current.delete(handle);
-    if (current.size === 0) livePlayHandles.delete(demoId);
+    if (current.size === 0) livePlayHandles.delete(flowId);
   });
 }
 
@@ -138,21 +138,21 @@ async function killWithGrace(handle: SpawnHandle): Promise<void> {
   }
 }
 
-// Kill every live play-script for `demoId` (SIGTERM → 2s grace → SIGKILL in
-// parallel) and wait for each to exit. Idempotent on an unknown demoId. The
-// map is keyed by demoId so a stop on demo A never touches demo B.
-export async function stopAllPlays(demoId: string): Promise<void> {
-  const set = livePlayHandles.get(demoId);
+// Kill every live play-script for `flowId` (SIGTERM → 2s grace → SIGKILL in
+// parallel) and wait for each to exit. Idempotent on an unknown flowId. The
+// map is keyed by flowId so a stop on demo A never touches demo B.
+export async function stopAllPlays(flowId: string): Promise<void> {
+  const set = livePlayHandles.get(flowId);
   if (!set || set.size === 0) return;
   const handles = [...set];
   // Clear eagerly so a parallel runPlay can't double-count an entry we're
   // about to await on. The exited.finally() will no-op the second delete.
-  livePlayHandles.delete(demoId);
+  livePlayHandles.delete(flowId);
   await Promise.all(handles.map((h) => killWithGrace(h)));
 }
 
 export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
-  const { events, demoId, nodeId, cwd, action } = options;
+  const { events, flowId, nodeId, cwd, action } = options;
   const spawner = options.spawner ?? defaultProcessSpawner;
   const runId = crypto.randomUUID();
 
@@ -160,7 +160,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
   if (!resolved.ok) {
     events.broadcast({
       type: 'node:error',
-      demoId,
+      flowId,
       payload: { nodeId, runId, message: SCRIPT_PATH_ESCAPE },
     });
     return { runId, error: SCRIPT_PATH_ESCAPE };
@@ -168,7 +168,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
 
   events.broadcast({
     type: 'node:running',
-    demoId,
+    flowId,
     payload: {
       nodeId,
       runId,
@@ -179,7 +179,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
 
   const wantsStdin = action.input !== undefined;
   const env = buildChildEnv({
-    SEEFLOW_DEMO_ID: demoId,
+    SEEFLOW_DEMO_ID: flowId,
     SEEFLOW_NODE_ID: nodeId,
     SEEFLOW_RUN_ID: runId,
   });
@@ -196,13 +196,13 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
     const message = err instanceof Error ? err.message : String(err);
     events.broadcast({
       type: 'node:error',
-      demoId,
+      flowId,
       payload: { nodeId, runId, message },
     });
     return { runId, error: message };
   }
 
-  registerLiveHandle(demoId, handle);
+  registerLiveHandle(flowId, handle);
 
   // Drain stdout AND stderr CONCURRENTLY with the process running so OS pipe
   // buffers (~64 KB) don't fill up and deadlock the child.
@@ -242,7 +242,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
     const message = `script timed out after ${timeoutMs}ms`;
     events.broadcast({
       type: 'node:error',
-      demoId,
+      flowId,
       payload: { nodeId, runId, message },
     });
     return { runId, error: message };
@@ -260,7 +260,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
     }
     events.broadcast({
       type: 'node:done',
-      demoId,
+      flowId,
       payload: { nodeId, runId, status: 200, body },
     });
     return { runId, status: 200, body };
@@ -271,7 +271,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
   const message = truncated.length > 0 ? truncated : `script exited with code ${code}`;
   events.broadcast({
     type: 'node:error',
-    demoId,
+    flowId,
     payload: { nodeId, runId, message },
   });
   return { runId, error: message };
@@ -279,7 +279,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
 
 export interface RunResetOptions {
   events: EventBus;
-  demoId: string;
+  flowId: string;
   /** Project root (`<repoPath>`). Script resolves under `<cwd>/.seeflow/`. */
   cwd: string;
   action: ResetAction;
@@ -300,21 +300,21 @@ export interface ResetResult {
 // returned shape. Callers (the /reset endpoint) decide what HTTP status to
 // surface; this returns `{ ok }` plus body/error so the endpoint can map.
 export async function runReset(options: RunResetOptions): Promise<ResetResult> {
-  const { events, demoId, cwd, action } = options;
+  const { events, flowId, cwd, action } = options;
   const spawner = options.spawner ?? defaultProcessSpawner;
 
   const resolved = resolveScript(cwd, action.scriptPath);
   if (!resolved.ok) {
     events.broadcast({
       type: 'demo:reset',
-      demoId,
+      flowId,
       payload: { ok: false, error: SCRIPT_PATH_ESCAPE },
     });
     return { ok: false, error: SCRIPT_PATH_ESCAPE };
   }
 
   const wantsStdin = action.input !== undefined;
-  const env = buildChildEnv({ SEEFLOW_DEMO_ID: demoId });
+  const env = buildChildEnv({ SEEFLOW_DEMO_ID: flowId });
 
   let handle: SpawnHandle;
   try {
@@ -328,7 +328,7 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
     const message = err instanceof Error ? err.message : String(err);
     events.broadcast({
       type: 'demo:reset',
-      demoId,
+      flowId,
       payload: { ok: false, error: message },
     });
     return { ok: false, error: message };
@@ -357,7 +357,7 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
     const message = `reset script timed out after ${timeoutMs}ms`;
     events.broadcast({
       type: 'demo:reset',
-      demoId,
+      flowId,
       payload: { ok: false, error: message },
     });
     return { ok: false, error: message };
@@ -375,7 +375,7 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
     }
     events.broadcast({
       type: 'demo:reset',
-      demoId,
+      flowId,
       payload: { ok: true, body },
     });
     return { ok: true, body };
@@ -386,7 +386,7 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
   const message = truncated.length > 0 ? truncated : `reset script exited with code ${code}`;
   events.broadcast({
     type: 'demo:reset',
-    demoId,
+    flowId,
     payload: { ok: false, error: message },
   });
   return { ok: false, error: message };

@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'bun:test';
-import type { DemoSummary } from '@/lib/api';
+import type { FlowSummary } from '@/lib/api';
 import { pickInitialDemo } from '@/lib/last-project';
 
-const summary = (id: string, slug: string): DemoSummary => ({
+const summary = (id: string, slug: string): FlowSummary => ({
   id,
   slug,
   name: slug,

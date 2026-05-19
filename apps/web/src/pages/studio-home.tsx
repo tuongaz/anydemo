@@ -1,9 +1,9 @@
 import { EmptyState } from '@/components/empty-state';
-import type { DemoSummary } from '@/lib/api';
+import type { FlowSummary } from '@/lib/api';
 import { navigate } from '@/lib/router';
 
 export interface StudioHomeProps {
-  demos: DemoSummary[];
+  demos: FlowSummary[];
 }
 
 export function StudioHome({ demos }: StudioHomeProps) {

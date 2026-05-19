@@ -93,7 +93,7 @@ interface NodeBase {
   position: { x: number; y: number };
 }
 
-export type DemoNode =
+export type FlowNode =
   | (NodeBase & { type: 'playNode'; data: NodeData })
   | (NodeBase & { type: 'stateNode'; data: NodeData })
   | (NodeBase & { type: 'shapeNode'; data: ShapeNodeData })
@@ -190,9 +190,9 @@ export interface RunResult {
   ts?: number;
 }
 
-export interface Demo {
+export interface Flow {
   version: 1;
   name: string;
-  nodes: DemoNode[];
+  nodes: FlowNode[];
   connectors: Connector[];
 }

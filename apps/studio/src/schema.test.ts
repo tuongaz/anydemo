@@ -1,15 +1,15 @@
 import { describe, expect, it } from 'bun:test';
-import { DemoSchema, HtmlNodeDataSchema, StatusReportSchema } from './schema.ts';
+import { FlowSchema, HtmlNodeDataSchema, StatusReportSchema } from './schema.ts';
 
 const fixturePath = (name: string) => new URL(`../test/fixtures/${name}`, import.meta.url).pathname;
 
 const readFixture = async (name: string): Promise<unknown> =>
   await Bun.file(fixturePath(name)).json();
 
-describe('DemoSchema', () => {
+describe('FlowSchema', () => {
   it('parses a valid demo fixture', async () => {
     const data = await readFixture('valid-demo.json');
-    const result = DemoSchema.safeParse(data);
+    const result = FlowSchema.safeParse(data);
     if (!result.success) {
       throw new Error(
         `expected valid fixture to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`,
@@ -27,7 +27,7 @@ describe('DemoSchema', () => {
 
   it('rejects an invalid demo fixture with a usable Zod error', async () => {
     const data = await readFixture('invalid-demo.json');
-    const result = DemoSchema.safeParse(data);
+    const result = FlowSchema.safeParse(data);
     expect(result.success).toBe(false);
     if (result.success) return;
 
@@ -46,7 +46,7 @@ describe('DemoSchema', () => {
 
   it('rejects an invalid-demo-connector fixture (connector references missing nodeId)', async () => {
     const data = await readFixture('invalid-demo-connector.json');
-    const result = DemoSchema.safeParse(data);
+    const result = FlowSchema.safeParse(data);
     expect(result.success).toBe(false);
     if (result.success) return;
 
@@ -127,7 +127,7 @@ describe('DemoSchema', () => {
       ],
     };
 
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`);
     }
@@ -157,7 +157,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'whisper' }],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     expect(result.success).toBe(false);
   });
 
@@ -199,7 +199,7 @@ describe('DemoSchema', () => {
       'queue',
       'cloud',
     ] as const) {
-      const result = DemoSchema.safeParse(make(shape));
+      const result = FlowSchema.safeParse(make(shape));
       if (!result.success) {
         throw new Error(
           `expected ${shape} shapeNode to parse, got: ${JSON.stringify(result.error.issues)}`,
@@ -226,7 +226,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(
         `expected database shapeNode to parse, got: ${JSON.stringify(result.error.issues)}`,
@@ -251,7 +251,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     expect(result.success).toBe(true);
   });
 
@@ -269,7 +269,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     expect(result.success).toBe(false);
   });
 
@@ -324,7 +324,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -384,7 +384,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -410,7 +410,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(true);
+    expect(FlowSchema.safeParse(demo).success).toBe(true);
   });
 
   it('rejects width/height that are zero or negative', () => {
@@ -433,9 +433,9 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     });
-    expect(DemoSchema.safeParse(demo(0, 80)).success).toBe(false);
-    expect(DemoSchema.safeParse(demo(-1, 80)).success).toBe(false);
-    expect(DemoSchema.safeParse(demo(120, 0)).success).toBe(false);
+    expect(FlowSchema.safeParse(demo(0, 80)).success).toBe(false);
+    expect(FlowSchema.safeParse(demo(-1, 80)).success).toBe(false);
+    expect(FlowSchema.safeParse(demo(120, 0)).success).toBe(false);
   });
 
   it('rejects an invalid color token (only enum values allowed)', () => {
@@ -457,7 +457,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     expect(result.success).toBe(false);
     if (result.success) return;
     const issue = result.error.issues.find(
@@ -488,7 +488,7 @@ describe('DemoSchema', () => {
         { id: 'c1', source: 'a', target: 'b', kind: 'default' as const, label: 'see also' },
       ],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -546,7 +546,7 @@ describe('DemoSchema', () => {
         },
       ],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -582,7 +582,7 @@ describe('DemoSchema', () => {
         },
       ],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -612,7 +612,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const }],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -651,7 +651,7 @@ describe('DemoSchema', () => {
         },
       ],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -681,7 +681,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const }],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -719,7 +719,7 @@ describe('DemoSchema', () => {
         },
       ],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects a pin with t outside [0, 1] (US-006)', () => {
@@ -750,10 +750,10 @@ describe('DemoSchema', () => {
         },
       ],
     });
-    expect(DemoSchema.safeParse(make(-0.1)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(1.1)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(0)).success).toBe(true);
-    expect(DemoSchema.safeParse(make(1)).success).toBe(true);
+    expect(FlowSchema.safeParse(make(-0.1)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(1.1)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(0)).success).toBe(true);
+    expect(FlowSchema.safeParse(make(1)).success).toBe(true);
   });
 
   it('rejects an invalid connector style value', () => {
@@ -776,7 +776,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', style: 'wavy' }],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects an invalid connector direction value', () => {
@@ -799,7 +799,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', direction: 'sideways' }],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects an invalid connector color token', () => {
@@ -822,7 +822,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', color: 'fuchsia' }],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('accepts a positive borderSize on nodes and connectors, rejects 0/negative', () => {
@@ -860,7 +860,7 @@ describe('DemoSchema', () => {
     });
 
     // node borderSize: 3, connector borderSize: 4 — both accepted.
-    const ok = DemoSchema.safeParse(make(3, 4));
+    const ok = FlowSchema.safeParse(make(3, 4));
     if (!ok.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(ok.error.issues)}`);
     }
@@ -870,8 +870,8 @@ describe('DemoSchema', () => {
     expect(ok.data.connectors[0]?.borderSize).toBe(4);
 
     // 0 and negative values rejected (positive constraint).
-    expect(DemoSchema.safeParse(make(0, 4)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(-2, 4)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(0, 4)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(-2, 4)).success).toBe(false);
   });
 
   it('accepts cornerRadius=12 and cornerRadius=0 on a node, rejects negative values (US-001)', () => {
@@ -899,7 +899,7 @@ describe('DemoSchema', () => {
       connectors: [],
     });
 
-    const ok12 = DemoSchema.safeParse(make(12));
+    const ok12 = FlowSchema.safeParse(make(12));
     if (!ok12.success) {
       throw new Error(
         `expected cornerRadius=12 to parse, got: ${JSON.stringify(ok12.error.issues)}`,
@@ -909,12 +909,12 @@ describe('DemoSchema', () => {
     if (node12?.type !== 'playNode') throw new Error('expected playNode');
     expect(node12.data.cornerRadius).toBe(12);
 
-    const ok0 = DemoSchema.safeParse(make(0));
+    const ok0 = FlowSchema.safeParse(make(0));
     if (!ok0.success) {
       throw new Error(`expected cornerRadius=0 to parse, got: ${JSON.stringify(ok0.error.issues)}`);
     }
 
-    expect(DemoSchema.safeParse(make(-5)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(-5)).success).toBe(false);
   });
 
   // US-004: ImageNodeDataSchema hard-cut from a `data:image/...` URL to a
@@ -940,7 +940,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -968,7 +968,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects an imageNode whose path is absolute (US-004)', () => {
@@ -985,7 +985,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects an imageNode whose path uses `..` traversal (US-004)', () => {
@@ -1002,7 +1002,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   // US-014: image nodes gain an optional `borderWidth` (1–8). `borderColor`
@@ -1027,7 +1027,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1052,7 +1052,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1078,13 +1078,13 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(tooSmall).success).toBe(false);
+    expect(FlowSchema.safeParse(tooSmall).success).toBe(false);
 
     const tooLarge = {
       ...tooSmall,
       nodes: [{ ...tooSmall.nodes[0], data: { path: basePath, borderWidth: 9 } }],
     };
-    expect(DemoSchema.safeParse(tooLarge).success).toBe(false);
+    expect(FlowSchema.safeParse(tooLarge).success).toBe(false);
   });
 
   it('accepts a connector pointing at an imageNode id (US-002)', () => {
@@ -1107,7 +1107,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 's', target: 'img-1', kind: 'default' as const }],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1151,7 +1151,7 @@ describe('DemoSchema', () => {
         { id: 'c3', source: 'icon-1', target: 'icon-2', kind: 'default' as const },
       ],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1178,7 +1178,7 @@ describe('DemoSchema', () => {
         scriptPath: 'scripts/reset.ts',
       },
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1201,7 +1201,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1222,7 +1222,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1255,7 +1255,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1287,7 +1287,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1310,7 +1310,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     };
-    expect(DemoSchema.safeParse(demo).success).toBe(false);
+    expect(FlowSchema.safeParse(demo).success).toBe(false);
   });
 
   it('rejects an iconNode strokeWidth outside [0.5, 4] (US-008)', () => {
@@ -1327,10 +1327,10 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     });
-    expect(DemoSchema.safeParse(make(0.25)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(4.5)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(0.5)).success).toBe(true);
-    expect(DemoSchema.safeParse(make(4)).success).toBe(true);
+    expect(FlowSchema.safeParse(make(0.25)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(4.5)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(0.5)).success).toBe(true);
+    expect(FlowSchema.safeParse(make(4)).success).toBe(true);
   });
 
   it('rejects an iconNode with non-positive width or height (US-008)', () => {
@@ -1347,10 +1347,10 @@ describe('DemoSchema', () => {
       ],
       connectors: [],
     });
-    expect(DemoSchema.safeParse(make(0, 48)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(-10, 48)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(48, 0)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(48, -10)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(0, 48)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(-10, 48)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(48, 0)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(48, -10)).success).toBe(false);
   });
 
   it('round-trips optional connector fontSize (US-018)', () => {
@@ -1373,7 +1373,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const, fontSize: 16 }],
     };
-    const result = DemoSchema.safeParse(demo);
+    const result = FlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
@@ -1404,16 +1404,16 @@ describe('DemoSchema', () => {
         { id: 'c1', source: 'a', target: 'b', kind: 'default' as const, fontSize: size },
       ],
     });
-    expect(DemoSchema.safeParse(make(0)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(-1)).success).toBe(false);
-    expect(DemoSchema.safeParse(make(12)).success).toBe(true);
+    expect(FlowSchema.safeParse(make(0)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(-1)).success).toBe(false);
+    expect(FlowSchema.safeParse(make(12)).success).toBe(true);
   });
 
   it('demos without group nodes round-trip unchanged', () => {
     // Demos without group nodes produce a deep-equal result with no injected keys.
     const raw = {
       version: 1,
-      name: 'Legacy Demo',
+      name: 'Legacy Flow',
       nodes: [
         {
           id: 'svc',
@@ -1440,7 +1440,7 @@ describe('DemoSchema', () => {
       ],
       connectors: [{ id: 'c1', source: 'svc', target: 'worker', kind: 'default' }],
     };
-    const parsed = DemoSchema.safeParse(raw);
+    const parsed = FlowSchema.safeParse(raw);
     if (!parsed.success) {
       throw new Error(`expected legacy demo to parse: ${JSON.stringify(parsed.error.issues)}`);
     }
@@ -1461,9 +1461,9 @@ describe('DemoSchema', () => {
       connectors: [],
     });
 
-    expect(DemoSchema.safeParse(baseDemo(baseData)).success).toBe(true);
+    expect(FlowSchema.safeParse(baseDemo(baseData)).success).toBe(true);
     expect(
-      DemoSchema.safeParse(baseDemo({ ...baseData, handlerModule: 'src/workers/fulfillment.ts' }))
+      FlowSchema.safeParse(baseDemo({ ...baseData, handlerModule: 'src/workers/fulfillment.ts' }))
         .success,
     ).toBe(true);
   });
@@ -1555,7 +1555,7 @@ describe('DemoSchema', () => {
 
       for (const { id, node } of variants) {
         const demo = makeDemoWithNode(node);
-        const parsed = DemoSchema.safeParse(demo);
+        const parsed = FlowSchema.safeParse(demo);
         if (!parsed.success) {
           throw new Error(
             `${id} expected to parse, got: ${JSON.stringify(parsed.error.issues, null, 2)}`,
@@ -1575,7 +1575,7 @@ describe('DemoSchema', () => {
         position: { x: 0, y: 0 },
         data: { shape: 'rectangle' },
       });
-      expect(DemoSchema.safeParse(demo).success).toBe(true);
+      expect(FlowSchema.safeParse(demo).success).toBe(true);
     });
 
     it('accepts description with no length cap (large free-form text round-trips)', () => {
@@ -1586,7 +1586,7 @@ describe('DemoSchema', () => {
         position: { x: 0, y: 0 },
         data: { shape: 'rectangle', description: big },
       });
-      const parsed = DemoSchema.safeParse(demo);
+      const parsed = FlowSchema.safeParse(demo);
       if (!parsed.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
       }
@@ -1606,7 +1606,7 @@ describe('DemoSchema', () => {
         position: { x: 0, y: 0 },
         data: { shape: 'rectangle', description: '', detail: '' },
       });
-      expect(DemoSchema.safeParse(demo).success).toBe(true);
+      expect(FlowSchema.safeParse(demo).success).toBe(true);
     });
   });
 
@@ -1630,7 +1630,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1666,7 +1666,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1703,7 +1703,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const parsed = DemoSchema.safeParse(demo);
+      const parsed = FlowSchema.safeParse(demo);
       if (!parsed.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
       }
@@ -1725,7 +1725,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
       if (result.success) return;
       const issue = result.error.issues.find((i) => i.path.includes('htmlPath'));
@@ -1746,7 +1746,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
       if (result.success) return;
       const issue = result.error.issues.find((i) => i.path.includes('htmlPath'));
@@ -1767,7 +1767,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      expect(DemoSchema.safeParse(demo).success).toBe(false);
+      expect(FlowSchema.safeParse(demo).success).toBe(false);
     });
 
     it('rejects an htmlNode with an empty htmlPath', () => {
@@ -1784,7 +1784,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      expect(DemoSchema.safeParse(demo).success).toBe(false);
+      expect(FlowSchema.safeParse(demo).success).toBe(false);
     });
 
     it('does NOT enforce file existence — missing htmlPath files parse cleanly (renderer shows placeholder)', () => {
@@ -1804,7 +1804,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      expect(DemoSchema.safeParse(demo).success).toBe(true);
+      expect(FlowSchema.safeParse(demo).success).toBe(true);
     });
 
     it('accepts an htmlNode as a connector endpoint (source AND target)', () => {
@@ -1830,7 +1830,7 @@ describe('DemoSchema', () => {
           { id: 'c2', source: 'html-1', target: 's', kind: 'default' as const },
         ],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1870,7 +1870,7 @@ describe('DemoSchema', () => {
         input: { foo: 'bar' },
         timeoutMs: 5000,
       });
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -1889,7 +1889,7 @@ describe('DemoSchema', () => {
         interpreter: 'bun',
         scriptPath: '/etc/passwd',
       });
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
 
@@ -1899,7 +1899,7 @@ describe('DemoSchema', () => {
         interpreter: 'bun',
         scriptPath: '../../etc/passwd',
       });
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
 
@@ -1908,7 +1908,7 @@ describe('DemoSchema', () => {
         kind: 'script',
         scriptPath: 'scripts/play.ts',
       });
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
 
@@ -1919,7 +1919,7 @@ describe('DemoSchema', () => {
         scriptPath: 'scripts/play.ts',
         timeoutMs: 0,
       });
-      expect(DemoSchema.safeParse(zero).success).toBe(false);
+      expect(FlowSchema.safeParse(zero).success).toBe(false);
 
       const negative = makeDemoWithPlayAction({
         kind: 'script',
@@ -1927,7 +1927,7 @@ describe('DemoSchema', () => {
         scriptPath: 'scripts/play.ts',
         timeoutMs: -1,
       });
-      expect(DemoSchema.safeParse(negative).success).toBe(false);
+      expect(FlowSchema.safeParse(negative).success).toBe(false);
     });
 
     it('rejects a playAction with timeoutMs above 600_000', () => {
@@ -1937,7 +1937,7 @@ describe('DemoSchema', () => {
         scriptPath: 'scripts/play.ts',
         timeoutMs: 600_001,
       });
-      expect(DemoSchema.safeParse(demo).success).toBe(false);
+      expect(FlowSchema.safeParse(demo).success).toBe(false);
     });
 
     it('accepts a playAction with timeoutMs at the upper bound (600_000)', () => {
@@ -1947,7 +1947,7 @@ describe('DemoSchema', () => {
         scriptPath: 'scripts/play.ts',
         timeoutMs: 600_000,
       });
-      expect(DemoSchema.safeParse(demo).success).toBe(true);
+      expect(FlowSchema.safeParse(demo).success).toBe(true);
     });
 
     it('parses a valid statusAction on a playNode', () => {
@@ -1980,7 +1980,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -2014,7 +2014,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -2047,7 +2047,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      expect(DemoSchema.safeParse(demo).success).toBe(false);
+      expect(FlowSchema.safeParse(demo).success).toBe(false);
     });
 
     it('accepts a statusAction with maxLifetimeMs at the upper bound (3_600_000)', () => {
@@ -2074,7 +2074,7 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       };
-      expect(DemoSchema.safeParse(demo).success).toBe(true);
+      expect(FlowSchema.safeParse(demo).success).toBe(true);
     });
 
     it('rejects a statusAction with zero or negative maxLifetimeMs', () => {
@@ -2101,8 +2101,8 @@ describe('DemoSchema', () => {
         ],
         connectors: [],
       });
-      expect(DemoSchema.safeParse(buildDemo(0)).success).toBe(false);
-      expect(DemoSchema.safeParse(buildDemo(-1)).success).toBe(false);
+      expect(FlowSchema.safeParse(buildDemo(0)).success).toBe(false);
+      expect(FlowSchema.safeParse(buildDemo(-1)).success).toBe(false);
     });
 
     it('parses a valid StatusReport with all fields', () => {
@@ -2160,7 +2160,7 @@ describe('DemoSchema', () => {
           scriptPath: 'scripts/reset.ts',
         },
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       if (!result.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
@@ -2192,7 +2192,7 @@ describe('DemoSchema', () => {
           url: 'http://localhost:3000/reset',
         },
       };
-      const result = DemoSchema.safeParse(demo);
+      const result = FlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
   });

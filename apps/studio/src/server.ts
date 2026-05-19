@@ -11,7 +11,7 @@ import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts
 import { type Registry, createRegistry } from './registry.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
-import { type DemoWatcher, createWatcher } from './watcher.ts';
+import { type FlowWatcher, createWatcher } from './watcher.ts';
 
 /** Absolute path to the vendored runtime asset directory. Resolved relative
  *  to this source file so the path is stable whether the studio runs from
@@ -32,7 +32,7 @@ export interface CreateAppOptions {
   /** Inject an event bus; defaults to a fresh in-memory bus. */
   events?: EventBus;
   /** Inject a watcher; defaults to one wired to the registry + event bus. */
-  watcher?: DemoWatcher;
+  watcher?: FlowWatcher;
   /** Skip starting fs.watch on registered demos. Useful for tests. */
   watchAllOnBoot?: boolean;
   /** Disable file watching entirely (no fs handles leaked). Useful for tests. */

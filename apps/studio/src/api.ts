@@ -23,16 +23,16 @@ import {
   addNodeImpl,
   createProjectImpl,
   deleteConnectorImpl,
-  deleteDemoImpl,
+  deleteFlowImpl,
   deleteNodeImpl,
-  getDemoImpl,
+  getFlowImpl,
   listDemosImpl,
   moveNodeImpl,
   patchConnectorImpl,
   patchNodeImpl,
-  registerDemoImpl,
+  registerFlowImpl,
   reorderNodeImpl,
-  resolveDemoPath,
+  resolveFilePath,
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
 import {
@@ -45,13 +45,13 @@ import {
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
-import { DemoSchema } from './schema.ts';
+import { FlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
-import type { DemoWatcher } from './watcher.ts';
+import type { FlowWatcher } from './watcher.ts';
 
 const EmitBodySchema = z.object({
-  demoId: z.string().min(1),
+  flowId: z.string().min(1),
   nodeId: z.string().min(1),
   status: z.enum(['running', 'done', 'error']),
   runId: z.string().optional(),
@@ -167,7 +167,7 @@ function pickUploadFilename(assetsDir: string, base: string, ext: string): strin
 export interface ApiOptions {
   registry: Registry;
   events?: EventBus;
-  watcher?: DemoWatcher;
+  watcher?: FlowWatcher;
   /** Injectable shellout for tests; defaults to Bun.spawn fire-and-forget. */
   spawner?: Spawner;
   /** Override `process.platform` for tests covering darwin/win32/linux branches. */
@@ -195,7 +195,7 @@ export interface ApiOptions {
 export interface ProxyFacade {
   runPlay(options: RunPlayOptions): Promise<PlayResult>;
   runReset(options: RunResetOptions): Promise<ResetResult>;
-  stopAllPlays(demoId: string): Promise<void>;
+  stopAllPlays(flowId: string): Promise<void>;
 }
 
 export const defaultProxyFacade: ProxyFacade = {
@@ -213,7 +213,7 @@ export function createApi(options: ApiOptions): Hono {
   const projectBaseDir = options.projectBaseDir;
   const api = new Hono();
 
-  api.post('/demos/register', async (c) => {
+  api.post('/flows/register', async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -226,16 +226,16 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid register body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await registerDemoImpl({ registry, watcher }, parsed.data);
+    const result = await registerFlowImpl({ registry, watcher }, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 400);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 400);
       case 'badJson':
-        return c.json({ error: 'Demo file is not valid JSON', detail: result.detail }, 400);
+        return c.json({ error: 'Flow file is not valid JSON', detail: result.detail }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo file failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow file failed schema validation', issues: result.issues }, 400);
       case 'sdkWriteFailed':
         return c.json(
           {
@@ -248,12 +248,12 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  // POST /api/demos/validate — dry-run validation. The skill's diagram
+  // POST /api/flows/validate — dry-run validation. The skill's diagram
   // pipeline calls this between assemble and register to decide whether to
   // rewire. Runs the Zod schema, the soft node cap, and the tier playability
   // check. Filesystem-bound checks (harness coverage, event emitter index)
   // stay in the skill since the studio doesn't see the user's $TARGET.
-  api.post('/demos/validate', async (c) => {
+  api.post('/flows/validate', async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -345,20 +345,20 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  api.get('/demos', (c) => {
+  api.get('/flows', (c) => {
     const result = listDemosImpl({ registry });
     return c.json(result.data);
   });
 
-  api.get('/demos/:id', async (c) => {
-    const result = await getDemoImpl({ registry, watcher }, c.req.param('id'));
+  api.get('/flows/:id', async (c) => {
+    const result = await getFlowImpl({ registry, watcher }, c.req.param('id'));
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
       case 'notFound':
         return c.json({ error: 'not found' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
     }
   });
 
@@ -548,8 +548,8 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ path: `assets/${finalName}` });
   });
 
-  api.delete('/demos/:id', (c) => {
-    const result = deleteDemoImpl({ registry, watcher }, c.req.param('id'));
+  api.delete('/flows/:id', (c) => {
+    const result = deleteFlowImpl({ registry, watcher }, c.req.param('id'));
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -558,7 +558,7 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  api.post('/demos/:id/play/:nodeId', async (c) => {
+  api.post('/flows/:id/play/:nodeId', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
     const entry = registry.getById(id);
@@ -567,9 +567,9 @@ export function createApi(options: ApiOptions): Hono {
 
     // Always re-read from disk so the user's most recent edit (validated or
     // not yet observed by the watcher) drives the actual fetch.
-    const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+    const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
     if (!existsSync(fullPath)) {
-      return c.json({ error: `Demo file not found: ${fullPath}` }, 404);
+      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
     let raw: unknown;
     try {
@@ -577,14 +577,14 @@ export function createApi(options: ApiOptions): Hono {
     } catch (err) {
       return c.json(
         {
-          error: `Demo file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+          error: `Flow file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
         },
         400,
       );
     }
-    const parsed = DemoSchema.safeParse(raw);
+    const parsed = FlowSchema.safeParse(raw);
     if (!parsed.success) {
-      return c.json({ error: 'Demo failed schema validation', issues: parsed.error.issues }, 400);
+      return c.json({ error: 'Flow failed schema validation', issues: parsed.error.issues }, 400);
     }
 
     const node = parsed.data.nodes.find((n) => n.id === nodeId);
@@ -613,7 +613,7 @@ export function createApi(options: ApiOptions): Hono {
 
     const result = await proxy.runPlay({
       events,
-      demoId: id,
+      flowId: id,
       nodeId,
       cwd: entry.repoPath,
       action: node.data.playAction,
@@ -628,25 +628,25 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(result);
   });
 
-  // POST /api/demos/:id/reset — the "Restart demo" workflow (US-008). Order:
+  // POST /api/flows/:id/reset — the "Restart demo" workflow (US-008). Order:
   //   1. Stop every live play-script + every long-running status-script for
   //      this demo in parallel — both must complete before any reset script
   //      spawns so the script sees no stragglers.
   //   2. Run the demo's `resetAction` script (if declared); any non-zero exit
   //      becomes a 502 to the caller but does NOT suppress reload/restart.
-  //   3. Broadcast `demo:reload` unconditionally so the canvas re-fetches.
+  //   3. Broadcast `flow:reload` unconditionally so the canvas re-fetches.
   //   4. Fire-and-forget `statusRunner.restart` so the next status batch is
   //      spawning by the time the response lands. Individual spawn failures
   //      surface via console.warn but never fail the /reset call.
-  api.post('/demos/:id/reset', async (c) => {
+  api.post('/flows/:id/reset', async (c) => {
     const id = c.req.param('id');
     const entry = registry.getById(id);
     if (!entry) return c.json({ error: 'unknown demo' }, 404);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
-    const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+    const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
     if (!existsSync(fullPath)) {
-      return c.json({ error: `Demo file not found: ${fullPath}` }, 404);
+      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
     }
     let raw: unknown;
     try {
@@ -654,14 +654,14 @@ export function createApi(options: ApiOptions): Hono {
     } catch (err) {
       return c.json(
         {
-          error: `Demo file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+          error: `Flow file is not valid JSON: ${err instanceof Error ? err.message : String(err)}`,
         },
         400,
       );
     }
-    const parsed = DemoSchema.safeParse(raw);
+    const parsed = FlowSchema.safeParse(raw);
     if (!parsed.success) {
-      return c.json({ error: 'Demo failed schema validation', issues: parsed.error.issues }, 400);
+      return c.json({ error: 'Flow failed schema validation', issues: parsed.error.issues }, 400);
     }
 
     // 1. Stop every play + status script in parallel. await BOTH before
@@ -680,7 +680,7 @@ export function createApi(options: ApiOptions): Hono {
       calledResetAction = true;
       const result = await proxy.runReset({
         events,
-        demoId: id,
+        flowId: id,
         cwd: entry.repoPath,
         action: resetAction,
       });
@@ -693,8 +693,8 @@ export function createApi(options: ApiOptions): Hono {
     //    the canvas should still refresh from disk in case the user just
     //    edited the file.
     events.broadcast({
-      type: 'demo:reload',
-      demoId: id,
+      type: 'flow:reload',
+      flowId: id,
       payload: {},
     });
 
@@ -717,7 +717,7 @@ export function createApi(options: ApiOptions): Hono {
   // the second (and only other) place the studio mutates user files — the
   // first being the SDK helper write in `register`. Atomic write via tempfile
   // + rename keeps editor diffs clean and avoids corruption mid-write.
-  api.patch('/demos/:id/nodes/:nodeId/position', async (c) => {
+  api.patch('/flows/:id/nodes/:nodeId/position', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
 
@@ -736,14 +736,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, position: result.data.position });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
@@ -758,7 +758,7 @@ export function createApi(options: ApiOptions): Hono {
   // toBack (remove + push/unshift), and toIndex (pin to an absolute index)
   // which the undo path uses to faithfully revert forward/backward gestures
   // even if the array changed between the original op and the undo.
-  api.patch('/demos/:id/nodes/:nodeId/order', async (c) => {
+  api.patch('/flows/:id/nodes/:nodeId/order', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
 
@@ -777,14 +777,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
@@ -797,9 +797,9 @@ export function createApi(options: ApiOptions): Hono {
   // the high-frequency drag fast-path above) flows through here. The mutation
   // is performed against the raw parsed JSON (so unknown v2 fields the schema
   // doesn't yet recognize survive round-trips) and the WHOLE resulting demo
-  // is re-validated through DemoSchema before commit, preventing partial
+  // is re-validated through FlowSchema before commit, preventing partial
   // writes from breaking invariants like the connector→node superRefine.
-  api.patch('/demos/:id/nodes/:nodeId', async (c) => {
+  api.patch('/flows/:id/nodes/:nodeId', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
 
@@ -818,14 +818,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
@@ -834,9 +834,9 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // POST a new node into the demo. Body is the node payload (id auto-generated
-  // server-side if absent). Atomicity + final-DemoSchema validation match the
+  // server-side if absent). Atomicity + final-FlowSchema validation match the
   // PATCH path above, so a malformed node never produces a half-written file.
-  api.post('/demos/:id/nodes', async (c) => {
+  api.post('/flows/:id/nodes', async (c) => {
     const id = c.req.param('id');
 
     let body: unknown;
@@ -853,25 +853,25 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, id: result.data.id, node: result.data.node });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'writeFailed':
         return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
     }
   });
 
   // DELETE a node and cascade-remove every connector with source === nodeId or
-  // target === nodeId in the same atomic write. Final-DemoSchema validation
+  // target === nodeId in the same atomic write. Final-FlowSchema validation
   // is still run after the mutation — connector cascade closure means it
   // should always pass, but the check makes the failure mode honest if the
   // file had a pre-existing schema violation we'd otherwise paper over.
-  api.delete('/demos/:id/nodes/:nodeId', async (c) => {
+  api.delete('/flows/:id/nodes/:nodeId', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
 
@@ -879,14 +879,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownNode':
         return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
       case 'writeFailed':
@@ -897,11 +897,11 @@ export function createApi(options: ApiOptions): Hono {
   // PATCH a single connector — partial update of label/style/color/direction
   // and (optionally) kind + per-kind payload fields. When `kind` changes,
   // stale kind-specific fields are dropped before the merge. The whole demo
-  // is re-validated through DemoSchema before commit so the discriminated
+  // is re-validated through FlowSchema before commit so the discriminated
   // union catches missing-required-fields (e.g. kind='event' without
   // eventName) and the superRefine still gates source/target referential
   // integrity.
-  api.patch('/demos/:id/connectors/:connId', async (c) => {
+  api.patch('/flows/:id/connectors/:connId', async (c) => {
     const id = c.req.param('id');
     const connId = c.req.param('connId');
 
@@ -920,14 +920,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownConnector':
         return c.json({ error: `Unknown connectorId: ${connId}` }, 404);
       case 'writeFailed':
@@ -938,8 +938,8 @@ export function createApi(options: ApiOptions): Hono {
   // POST a new connector. Body is the connector payload; `id` is auto-generated
   // server-side if absent and `kind` defaults to 'default' (the no-semantics
   // user-drawn variant). Source/target referential integrity is enforced by
-  // DemoSchema's superRefine on the post-mutation parse.
-  api.post('/demos/:id/connectors', async (c) => {
+  // FlowSchema's superRefine on the post-mutation parse.
+  api.post('/flows/:id/connectors', async (c) => {
     const id = c.req.param('id');
 
     let body: unknown;
@@ -960,14 +960,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, id: result.data.id });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'writeFailed':
         return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
     }
@@ -975,7 +975,7 @@ export function createApi(options: ApiOptions): Hono {
 
   // DELETE a connector. Just removes the entry from demo.connectors — node
   // deletion is what cascades, not connector deletion.
-  api.delete('/demos/:id/connectors/:connId', async (c) => {
+  api.delete('/flows/:id/connectors/:connId', async (c) => {
     const id = c.req.param('id');
     const connId = c.req.param('connId');
 
@@ -983,14 +983,14 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
-      case 'demoNotFound':
+      case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
-        return c.json({ error: `Demo file not found: ${result.path}` }, 404);
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json({ error: `Demo file is not valid JSON: ${result.message}` }, 400);
+        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
-        return c.json({ error: 'Demo failed schema validation', issues: result.issues }, 400);
+        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'unknownConnector':
         return c.json({ error: `Unknown connectorId: ${connId}` }, 404);
       case 'writeFailed':
@@ -1013,9 +1013,9 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid emit body', issues: parsed.error.issues }, 400);
     }
 
-    const { demoId, nodeId, status, runId, payload } = parsed.data;
-    if (!registry.getById(demoId)) {
-      return c.json({ error: `Unknown demoId: ${demoId}` }, 404);
+    const { flowId, nodeId, status, runId, payload } = parsed.data;
+    if (!registry.getById(flowId)) {
+      return c.json({ error: `Unknown flowId: ${flowId}` }, 404);
     }
 
     const extras =
@@ -1027,7 +1027,7 @@ export function createApi(options: ApiOptions): Hono {
 
     events.broadcast({
       type: EMIT_STATUS_TO_EVENT[status],
-      demoId,
+      flowId,
       payload: eventPayload,
     });
 
@@ -1035,9 +1035,9 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/events', (c) => {
-    const demoId = c.req.query('demoId');
-    if (!demoId) return c.json({ error: 'demoId query param required' }, 400);
-    if (!registry.getById(demoId)) return c.json({ error: 'unknown demoId' }, 404);
+    const flowId = c.req.query('flowId');
+    if (!flowId) return c.json({ error: 'flowId query param required' }, 400);
+    if (!registry.getById(flowId)) return c.json({ error: 'unknown flowId' }, 404);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     return streamSSE(c, async (stream) => {
@@ -1053,7 +1053,7 @@ export function createApi(options: ApiOptions): Hono {
         }
       };
 
-      const unsubscribe = events.subscribe(demoId, (e) => {
+      const unsubscribe = events.subscribe(flowId, (e) => {
         queue.push({ event: e.type, data: JSON.stringify({ ts: e.ts, ...(e.payload as object) }) });
         wake();
       });
@@ -1068,7 +1068,7 @@ export function createApi(options: ApiOptions): Hono {
       // and trigger a re-fetch on the frontend.
       await stream.writeSSE({
         event: 'hello',
-        data: JSON.stringify({ demoId, ts: Date.now() }),
+        data: JSON.stringify({ flowId, ts: Date.now() }),
       });
 
       try {

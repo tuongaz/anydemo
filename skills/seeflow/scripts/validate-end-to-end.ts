@@ -40,7 +40,7 @@ export interface ValidationReport {
 }
 
 export interface ValidateOptions {
-  demoId: string;
+  flowId: string;
   url?: string;
   hardCeilingMs?: number;
   statusWaitMs?: number;
@@ -65,7 +65,7 @@ interface DemoShape {
   nodes?: NodeShape[];
 }
 
-interface DemoGetResponse {
+interface FlowGetResponse {
   id?: string;
   valid?: boolean;
   error?: string | null;
@@ -184,7 +184,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
   const skipped: SkippedItem[] = [];
 
   // Fetch and validate demo registration
-  const demoRes = await globalThis.fetch(`${url}/api/demos/${options.demoId}`);
+  const demoRes = await globalThis.fetch(`${url}/api/flows/${options.flowId}`);
   if (!demoRes.ok) {
     return {
       ok: false,
@@ -193,12 +193,12 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
       skipped: [
         {
           nodeId: '<demo>',
-          reason: `GET /api/demos/${options.demoId} returned HTTP ${demoRes.status}`,
+          reason: `GET /api/flows/${options.flowId} returned HTTP ${demoRes.status}`,
         },
       ],
     };
   }
-  const demoData = (await demoRes.json()) as DemoGetResponse;
+  const demoData = (await demoRes.json()) as FlowGetResponse;
   if (!demoData.valid || !demoData.demo) {
     return {
       ok: false,
@@ -235,7 +235,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
   // emitted during play execution are buffered and not lost.
   let channel: SseChannel | undefined;
   try {
-    const sseRes = await globalThis.fetch(`${url}/api/events?demoId=${options.demoId}`, {
+    const sseRes = await globalThis.fetch(`${url}/api/events?flowId=${options.flowId}`, {
       headers: { accept: 'text/event-stream' },
     });
     if (sseRes.ok && sseRes.body) {
@@ -276,7 +276,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
     }
     let res: Response;
     try {
-      res = await globalThis.fetch(`${url}/api/demos/${options.demoId}/play/${nodeId}`, {
+      res = await globalThis.fetch(`${url}/api/flows/${options.flowId}/play/${nodeId}`, {
         method: 'POST',
       });
     } catch (err) {
@@ -438,15 +438,15 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
 }
 
 export async function main(argv: string[]): Promise<number> {
-  const [demoId, ...flags] = argv;
-  if (!demoId) {
-    process.stderr.write('Usage: validate-end-to-end.ts <demoId> [--skip-nodes nodeId1,nodeId2]\n');
+  const [flowId, ...flags] = argv;
+  if (!flowId) {
+    process.stderr.write('Usage: validate-end-to-end.ts <flowId> [--skip-nodes nodeId1,nodeId2]\n');
     return 1;
   }
   const skipIdx = flags.indexOf('--skip-nodes');
   const skipNodes =
     skipIdx !== -1 && flags[skipIdx + 1] ? flags[skipIdx + 1].split(',').filter(Boolean) : [];
-  const report = await validateEndToEnd({ demoId, skipNodes });
+  const report = await validateEndToEnd({ flowId, skipNodes });
   process.stdout.write(`${JSON.stringify(report)}\n`);
   return report.ok ? 0 : 1;
 }

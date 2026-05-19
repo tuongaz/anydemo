@@ -67,7 +67,7 @@ const runCli = async (
 };
 
 describe('seeflow CLI register integration', () => {
-  it('two registers from the same repo with different demoPath produce two distinct studio entries', async () => {
+  it('two registers from the same repo with different architecturePath produce two distinct studio entries', async () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-repo-'));

@@ -5,7 +5,7 @@ import { resolveStudioUrl } from './studio-config';
 
 export interface RegisterArgs {
   repoPath: string;
-  demoPath: string;
+  architecturePath: string;
   name?: string;
   url?: string;
 }
@@ -21,11 +21,11 @@ export async function registerDemo(args: RegisterArgs): Promise<RegisterResult> 
   const url = args.url ?? resolveStudioUrl();
   const payload: Record<string, unknown> = {
     repoPath: args.repoPath,
-    demoPath: args.demoPath,
+    architecturePath: args.architecturePath,
   };
   if (typeof args.name === 'string' && args.name.length > 0) payload.name = args.name;
 
-  const res = await globalThis.fetch(`${url}/api/demos/register`, {
+  const res = await globalThis.fetch(`${url}/api/flows/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(payload),
@@ -53,8 +53,8 @@ function flagValue(argv: string[], name: string): string | undefined {
   return undefined;
 }
 
-function readNameFromDemoFile(repoPath: string, demoPath: string): string | undefined {
-  const fullPath = isAbsolute(demoPath) ? demoPath : join(repoPath, demoPath);
+function readNameFromArchitectureFile(repoPath: string, architecturePath: string): string | undefined {
+  const fullPath = isAbsolute(architecturePath) ? architecturePath : join(repoPath, architecturePath);
   if (!existsSync(fullPath)) return undefined;
   try {
     const raw = readFileSync(fullPath, 'utf8');
@@ -73,10 +73,10 @@ export async function main(argv: string[]): Promise<number> {
     return 1;
   }
   const repoPath = resolve(repoPathArg);
-  const demoPath = demoPathArg;
-  const name = readNameFromDemoFile(repoPath, demoPath);
+  const architecturePath = demoPathArg;
+  const name = readNameFromArchitectureFile(repoPath, architecturePath);
 
-  const result = await registerDemo({ repoPath, demoPath, name });
+  const result = await registerDemo({ repoPath, architecturePath, name });
   if (!result.ok) {
     const text =
       typeof result.body === 'string' ? result.body : JSON.stringify(result.body ?? null);

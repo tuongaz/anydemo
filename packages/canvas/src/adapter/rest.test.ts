@@ -54,7 +54,7 @@ const stubFetch = (handler: (call: FetchCall) => Response) => {
 };
 
 describe('createRestAdapter (US-024)', () => {
-  it('createNode POSTs the input to /api/demos/:id/nodes and returns the server-issued id + node', async () => {
+  it('createNode POSTs the input to /api/flows/:id/nodes and returns the server-issued id + node', async () => {
     const { impl, calls } = stubFetch(() =>
       stubResponse({
         ok: true,
@@ -62,7 +62,7 @@ describe('createRestAdapter (US-024)', () => {
         node: { id: 'server-id', type: 'shapeNode', position: { x: 10, y: 20 } },
       }),
     );
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     const result = await adapter.createNode({
       type: 'shapeNode',
@@ -73,7 +73,7 @@ describe('createRestAdapter (US-024)', () => {
     expect(result.id).toBe('server-id');
     expect(result.node).toEqual({ id: 'server-id', type: 'shapeNode', position: { x: 10, y: 20 } });
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/nodes');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes');
     expect(calls[0]?.method).toBe('POST');
     expect(calls[0]?.headers?.['content-type']).toBe('application/json');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({
@@ -83,67 +83,67 @@ describe('createRestAdapter (US-024)', () => {
     });
   });
 
-  it('updateNode PATCHes the patch body to /api/demos/:id/nodes/:nodeId', async () => {
+  it('updateNode PATCHes the patch body to /api/flows/:id/nodes/:nodeId', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await adapter.updateNode('node-a', { name: 'Renamed', borderColor: 'blue' });
 
     expect(calls).toHaveLength(1);
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/nodes/node-a');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes/node-a');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ name: 'Renamed', borderColor: 'blue' });
   });
 
   it('updateNodePosition PATCHes the /position endpoint and returns the server result', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, position: { x: 50, y: 60 } }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     const result = await adapter.updateNodePosition('node-a', { x: 50, y: 60 });
 
     expect(result).toEqual({ ok: true, position: { x: 50, y: 60 } });
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/nodes/node-a/position');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes/node-a/position');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ x: 50, y: 60 });
   });
 
-  it('deleteNode DELETEs /api/demos/:id/nodes/:nodeId with no body', async () => {
+  it('deleteNode DELETEs /api/flows/:id/nodes/:nodeId with no body', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await adapter.deleteNode('node-a');
 
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/nodes/node-a');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes/node-a');
     expect(calls[0]?.method).toBe('DELETE');
     expect(calls[0]?.body).toBeNull();
   });
 
-  it('createConnector POSTs to /api/demos/:id/connectors and returns the server-issued id', async () => {
+  it('createConnector POSTs to /api/flows/:id/connectors and returns the server-issued id', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, id: 'conn-1' }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     const result = await adapter.createConnector({ source: 'a', target: 'b' });
 
     expect(result).toEqual({ id: 'conn-1' });
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/connectors');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/connectors');
     expect(calls[0]?.method).toBe('POST');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ source: 'a', target: 'b' });
   });
 
   it('reorderNode PATCHes the order op to /nodes/:nodeId/order', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await adapter.reorderNode('node-a', { op: 'toFront' });
 
-    expect(calls[0]?.url).toBe('/api/demos/demo-42/nodes/node-a/order');
+    expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes/node-a/order');
     expect(calls[0]?.method).toBe('PATCH');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ op: 'toFront' });
   });
 
   it('uploadImage POSTs FormData to /api/projects/:id/files/upload', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ path: 'assets/pic.png' }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'project-77', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'project-77', fetch: impl });
 
     const file = new File([new Uint8Array([1, 2, 3])], 'Pic.png', { type: 'image/png' });
     const result = await adapter.uploadImage(file, 'pic.png');
@@ -161,17 +161,17 @@ describe('createRestAdapter (US-024)', () => {
 
   it('throws an Error carrying the server error message on non-2xx responses', async () => {
     const { impl } = stubFetch(() => stubResponse({ error: 'node not found' }, 404));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await expect(adapter.deleteNode('missing')).rejects.toThrow('node not found');
   });
 
   it('falls back to a "METHOD URL → status" message when the error body has no `error` field', async () => {
     const { impl } = stubFetch(() => stubResponse({}, 500));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await expect(adapter.updateNode('node-a', { name: 'x' })).rejects.toThrow(
-      'PATCH /api/demos/demo-42/nodes/node-a → 500',
+      'PATCH /api/flows/demo-42/nodes/node-a → 500',
     );
   });
 
@@ -179,7 +179,7 @@ describe('createRestAdapter (US-024)', () => {
     const { impl, calls } = stubFetch(() =>
       stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
     );
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await adapter.openFile?.('flows/demo/state.ts');
 
@@ -194,7 +194,7 @@ describe('createRestAdapter (US-024)', () => {
     const { impl, calls } = stubFetch(() =>
       stubResponse({ ok: true, absPath: '/abs/flows/demo/state.ts' }),
     );
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo-42', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     await adapter.revealFile?.('flows/demo/state.ts');
 
@@ -205,9 +205,9 @@ describe('createRestAdapter (US-024)', () => {
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ path: 'flows/demo/state.ts' });
   });
 
-  it('openFile and revealFile URL-encode the demoId in the projects path', async () => {
+  it('openFile and revealFile URL-encode the flowId in the projects path', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true, absPath: '/abs/x' }));
-    const adapter = createRestAdapter({ baseUrl: '', demoId: 'demo with space', fetch: impl });
+    const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo with space', fetch: impl });
 
     await adapter.openFile?.('a.ts');
     await adapter.revealFile?.('a.ts');
@@ -220,12 +220,12 @@ describe('createRestAdapter (US-024)', () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({
       baseUrl: 'https://studio.example.com',
-      demoId: 'demo-42',
+      flowId: 'demo-42',
       fetch: impl,
     });
 
     await adapter.updateNode('node-a', { name: 'x' });
 
-    expect(calls[0]?.url).toBe('https://studio.example.com/api/demos/demo-42/nodes/node-a');
+    expect(calls[0]?.url).toBe('https://studio.example.com/api/flows/demo-42/nodes/node-a');
   });
 });

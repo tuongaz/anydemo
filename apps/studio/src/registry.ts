@@ -2,12 +2,12 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { seeflowHome } from './paths.ts';
 
-export interface DemoEntry {
+export interface FlowEntry {
   id: string;
   slug: string;
   name: string;
   repoPath: string;
-  demoPath: string;
+  architecturePath: string;
   lastModified: number;
   valid: boolean;
 }
@@ -15,18 +15,18 @@ export interface DemoEntry {
 export interface RegisterInput {
   name: string;
   repoPath: string;
-  demoPath: string;
+  architecturePath: string;
   valid?: boolean;
   lastModified?: number;
 }
 
 export interface Registry {
-  list(): DemoEntry[];
-  getById(id: string): DemoEntry | undefined;
-  getBySlug(slug: string): DemoEntry | undefined;
-  getByRepoPath(repoPath: string): DemoEntry | undefined;
-  getByRepoPathAndDemoPath(repoPath: string, demoPath: string): DemoEntry | undefined;
-  upsert(input: RegisterInput): DemoEntry;
+  list(): FlowEntry[];
+  getById(id: string): FlowEntry | undefined;
+  getBySlug(slug: string): FlowEntry | undefined;
+  getByRepoPath(repoPath: string): FlowEntry | undefined;
+  getByRepoPathAndArchitecturePath(repoPath: string, architecturePath: string): FlowEntry | undefined;
+  upsert(input: RegisterInput): FlowEntry;
   remove(id: string): boolean;
 }
 
@@ -44,7 +44,7 @@ export function slugify(name: string): string {
 
 export function createRegistry(options: { path?: string } = {}): Registry {
   const path = options.path ?? defaultRegistryPath();
-  const entries = new Map<string, DemoEntry>();
+  const entries = new Map<string, FlowEntry>();
 
   if (existsSync(path)) {
     try {
@@ -57,7 +57,13 @@ export function createRegistry(options: { path?: string } = {}): Registry {
             typeof e.slug === 'string' &&
             typeof e.repoPath === 'string'
           ) {
-            entries.set(e.id, e as DemoEntry);
+            if (typeof e.architecturePath !== 'string') {
+              console.warn(
+                `[registry] ignoring legacy entry ${e.id} (${e.slug}) — pre-split format, please re-register`,
+              );
+              continue;
+            }
+            entries.set(e.id, e as FlowEntry);
           }
         }
       }
@@ -71,16 +77,16 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     writeFileSync(path, JSON.stringify([...entries.values()], null, 2));
   };
 
-  const findByRepoPath = (repoPath: string): DemoEntry | undefined => {
+  const findByRepoPath = (repoPath: string): FlowEntry | undefined => {
     for (const e of entries.values()) {
       if (e.repoPath === repoPath) return e;
     }
     return undefined;
   };
 
-  const findByRepoPathAndDemoPath = (repoPath: string, demoPath: string): DemoEntry | undefined => {
+  const findByRepoPathAndArchitecturePath = (repoPath: string, architecturePath: string): FlowEntry | undefined => {
     for (const e of entries.values()) {
-      if (e.repoPath === repoPath && e.demoPath === demoPath) return e;
+      if (e.repoPath === repoPath && e.architecturePath === architecturePath) return e;
     }
     return undefined;
   };
@@ -98,16 +104,16 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     getById: (id) => entries.get(id),
     getBySlug: (slug) => [...entries.values()].find((e) => e.slug === slug),
     getByRepoPath: findByRepoPath,
-    getByRepoPathAndDemoPath: findByRepoPathAndDemoPath,
+    getByRepoPathAndArchitecturePath: findByRepoPathAndArchitecturePath,
     upsert(input) {
       const lastModified = input.lastModified ?? Date.now();
       const valid = input.valid ?? true;
-      const existing = findByRepoPathAndDemoPath(input.repoPath, input.demoPath);
+      const existing = findByRepoPathAndArchitecturePath(input.repoPath, input.architecturePath);
       if (existing) {
-        const updated: DemoEntry = {
+        const updated: FlowEntry = {
           ...existing,
           name: input.name,
-          demoPath: input.demoPath,
+          architecturePath: input.architecturePath,
           lastModified,
           valid,
         };
@@ -117,12 +123,12 @@ export function createRegistry(options: { path?: string } = {}): Registry {
       }
       const id = crypto.randomUUID();
       const slug = uniqueSlug(slugify(input.name));
-      const entry: DemoEntry = {
+      const entry: FlowEntry = {
         id,
         slug,
         name: input.name,
         repoPath: input.repoPath,
-        demoPath: input.demoPath,
+        architecturePath: input.architecturePath,
         lastModified,
         valid,
       };

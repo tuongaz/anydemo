@@ -38,7 +38,7 @@ export async function pingStudio(url: string, timeoutMs = HEALTH_TIMEOUT_MS): Pr
 function firstDemoFixture(): unknown {
   return {
     version: 1,
-    name: 'Smoke Demo',
+    name: 'Smoke Flow',
     nodes: [
       {
         id: 'smoke-service',
@@ -65,7 +65,7 @@ function firstDemoFixture(): unknown {
 function secondDemoFixture(): unknown {
   return {
     version: 1,
-    name: 'Sample Demo',
+    name: 'Sample Flow',
     nodes: [
       {
         id: 'sample-service',
@@ -89,18 +89,18 @@ function secondDemoFixture(): unknown {
   };
 }
 
-interface DemoSummary {
+interface FlowSummary {
   id: string;
   slug: string;
   repoPath: string;
 }
 
-async function listDemos(url: string): Promise<DemoSummary[]> {
-  const res = await globalThis.fetch(`${url}/api/demos`);
+async function listDemos(url: string): Promise<FlowSummary[]> {
+  const res = await globalThis.fetch(`${url}/api/flows`);
   if (!res.ok) {
-    throw new Error(`GET /api/demos failed: ${res.status}`);
+    throw new Error(`GET /api/flows failed: ${res.status}`);
   }
-  return (await res.json()) as DemoSummary[];
+  return (await res.json()) as FlowSummary[];
 }
 
 export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult> {
@@ -126,7 +126,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
     // 1. Register the first demo at .seeflow/seeflow.json.
     const firstReg = await registerDemo({
       repoPath: tmpRepo,
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
       url,
     });
     if (!firstReg.ok) {
@@ -163,7 +163,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
 
     const secondReg = await registerDemo({
       repoPath: tmpRepo,
-      demoPath: '.seeflow/sample/seeflow.json',
+      architecturePath: '.seeflow/sample/seeflow.json',
       url,
     });
     if (!secondReg.ok) {
@@ -198,7 +198,7 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
       };
     }
 
-    // 3. Both demos must appear in GET /api/demos with the same repoPath.
+    // 3. Both demos must appear in GET /api/flows with the same repoPath.
     const list = await listDemos(url);
     const ours = list.filter((e) => e.repoPath === tmpRepo);
     if (ours.length !== 2) {
@@ -218,11 +218,11 @@ export async function runSmoke(options: SmokeOptions = {}): Promise<SmokeResult>
       };
     }
 
-    // 4. Re-register the SECOND demo: same repoPath + same demoPath. Its id and
+    // 4. Re-register the SECOND demo: same repoPath + same architecturePath. Its id and
     //    slug must be stable, and the FIRST demo's id must NOT change.
     const reReg = await registerDemo({
       repoPath: tmpRepo,
-      demoPath: '.seeflow/sample/seeflow.json',
+      architecturePath: '.seeflow/sample/seeflow.json',
       url,
     });
     if (!reReg.ok) {

@@ -44,8 +44,8 @@ describe('registerDemo (stubbed fetch)', () => {
 
     const result = await registerDemo({
       repoPath: '/tmp/some-repo',
-      demoPath: '.seeflow/seeflow.json',
-      name: 'My Demo',
+      architecturePath: '.seeflow/seeflow.json',
+      name: 'My Flow',
       url: 'http://127.0.0.1:9999',
     });
 
@@ -53,13 +53,13 @@ describe('registerDemo (stubbed fetch)', () => {
     expect(result.status).toBe(200);
     expect(result.body).toEqual({ id: 'demo-123', slug: 'my-demo' });
     expect(captured).toHaveLength(1);
-    expect(captured[0]?.url).toBe('http://127.0.0.1:9999/api/demos/register');
+    expect(captured[0]?.url).toBe('http://127.0.0.1:9999/api/flows/register');
     expect(captured[0]?.init?.method).toBe('POST');
     const sentBody = JSON.parse((captured[0]?.init?.body as string) ?? 'null');
     expect(sentBody).toEqual({
       repoPath: '/tmp/some-repo',
-      demoPath: '.seeflow/seeflow.json',
-      name: 'My Demo',
+      architecturePath: '.seeflow/seeflow.json',
+      name: 'My Flow',
     });
   });
 
@@ -72,11 +72,11 @@ describe('registerDemo (stubbed fetch)', () => {
 
     await registerDemo({
       repoPath: '/tmp/repo',
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
       url: 'http://localhost:1234',
     });
     const sentBody = JSON.parse((captured[0]?.init?.body as string) ?? 'null');
-    expect(sentBody).toEqual({ repoPath: '/tmp/repo', demoPath: '.seeflow/seeflow.json' });
+    expect(sentBody).toEqual({ repoPath: '/tmp/repo', architecturePath: '.seeflow/seeflow.json' });
     expect('name' in sentBody).toBe(false);
   });
 
@@ -89,7 +89,7 @@ describe('registerDemo (stubbed fetch)', () => {
 
     const result = await registerDemo({
       repoPath: '/tmp/r',
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
       url: 'http://localhost:1234',
     });
     expect(result.ok).toBe(false);
@@ -135,7 +135,7 @@ describe('register.ts main()', () => {
       const sent = JSON.parse((init?.body as string) ?? 'null');
       expect(sent.name).toBe('Checkout Flow');
       expect(sent.repoPath).toBe(repoPath);
-      expect(sent.demoPath).toBe('.seeflow/seeflow.json');
+      expect(sent.architecturePath).toBe('.seeflow/seeflow.json');
       return jsonResponse({ id: 'abc', slug: 'checkout-flow' }, 200);
     }) as typeof fetch;
 

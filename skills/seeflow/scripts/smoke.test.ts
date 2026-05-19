@@ -48,10 +48,10 @@ describe('runSmoke', () => {
 
       if (url.endsWith('/health')) return jsonResponse({ ok: true });
 
-      if (url.endsWith('/api/demos/register') && method === 'POST') {
+      if (url.endsWith('/api/flows/register') && method === 'POST') {
         const body = JSON.parse((init?.body as string) ?? '{}') as {
           repoPath: string;
-          demoPath: string;
+          architecturePath: string;
         };
         lastRegisteredRepoPath = body.repoPath;
         registerCalls += 1;
@@ -61,7 +61,7 @@ describe('runSmoke', () => {
         return jsonResponse({ id: SECOND_ID, slug: SECOND_SLUG });
       }
 
-      if (url.endsWith('/api/demos') && method === 'GET') {
+      if (url.endsWith('/api/flows') && method === 'GET') {
         listCalls += 1;
         return jsonResponse([
           { id: FIRST_ID, slug: FIRST_SLUG, repoPath: lastRegisteredRepoPath },
@@ -85,14 +85,14 @@ describe('runSmoke', () => {
     expect(listCalls).toBe(2);
 
     const registerUrls = captured
-      .filter((c) => c.url.endsWith('/api/demos/register'))
+      .filter((c) => c.url.endsWith('/api/flows/register'))
       .map((c) => c.method);
     expect(registerUrls).toEqual(['POST', 'POST', 'POST']);
 
     const deletes = captured.filter((c) => c.method === 'DELETE').map((c) => c.url);
     expect(deletes.length).toBe(2);
-    expect(deletes.some((u) => u.endsWith(`/api/demos/${FIRST_ID}`))).toBe(true);
-    expect(deletes.some((u) => u.endsWith(`/api/demos/${SECOND_ID}`))).toBe(true);
+    expect(deletes.some((u) => u.endsWith(`/api/flows/${FIRST_ID}`))).toBe(true);
+    expect(deletes.some((u) => u.endsWith(`/api/flows/${SECOND_ID}`))).toBe(true);
   });
 
   it('returns ok:false when the studio rejects the first register with 400', async () => {
@@ -100,8 +100,8 @@ describe('runSmoke', () => {
       const url = String(input);
       const method = (init?.method ?? 'GET').toUpperCase();
       if (url.endsWith('/health')) return jsonResponse({ ok: true });
-      if (url.endsWith('/api/demos/register') && method === 'POST') {
-        return jsonResponse({ error: 'Demo file failed schema validation' }, 400);
+      if (url.endsWith('/api/flows/register') && method === 'POST') {
+        return jsonResponse({ error: 'Flow file failed schema validation' }, 400);
       }
       return new Response('unexpected', { status: 500 });
     }) as typeof fetch;
@@ -118,7 +118,7 @@ describe('runSmoke', () => {
       const url = String(input);
       const method = (init?.method ?? 'GET').toUpperCase();
       if (url.endsWith('/health')) return jsonResponse({ ok: true });
-      if (url.endsWith('/api/demos/register') && method === 'POST') {
+      if (url.endsWith('/api/flows/register') && method === 'POST') {
         calls += 1;
         return jsonResponse({ id: 'collide-id', slug: `slug-${calls}` });
       }

@@ -121,9 +121,9 @@ afterEach(() => {
   }
 });
 
-function captureEvents(bus: ReturnType<typeof createEventBus>, demoId: string): Captured[] {
+function captureEvents(bus: ReturnType<typeof createEventBus>, flowId: string): Captured[] {
   const captured: Captured[] = [];
-  bus.subscribe(demoId, (e: StudioEvent) =>
+  bus.subscribe(flowId, (e: StudioEvent) =>
     captured.push({ type: e.type, payload: e.payload as Record<string, unknown> }),
   );
   return captured;
@@ -138,7 +138,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'node1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -167,7 +167,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -187,7 +187,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -216,7 +216,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: {
@@ -246,7 +246,7 @@ describe('runPlay (script spawner)', () => {
 
     await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: {
@@ -271,7 +271,7 @@ describe('runPlay (script spawner)', () => {
 
     await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -289,7 +289,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'node-x',
       cwd,
       action: {
@@ -330,7 +330,7 @@ describe('runPlay (script spawner)', () => {
 
     const result = await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath: 'escape.ts' },
@@ -410,7 +410,7 @@ function makeMultiFakeSpawner(configFor: (i: number) => PerSpawnConfig): {
 }
 
 describe('stopAllPlays (US-008)', () => {
-  it('kills every live handle for the demoId via SIGTERM then awaits exit', async () => {
+  it('kills every live handle for the flowId via SIGTERM then awaits exit', async () => {
     const { cwd, scriptPath } = makeProjectWithScript();
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
@@ -419,7 +419,7 @@ describe('stopAllPlays (US-008)', () => {
 
     const run1 = runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -427,7 +427,7 @@ describe('stopAllPlays (US-008)', () => {
     });
     const run2 = runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n2',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -458,7 +458,7 @@ describe('stopAllPlays (US-008)', () => {
 
     const run = runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -472,12 +472,12 @@ describe('stopAllPlays (US-008)', () => {
     await run;
   }, 10_000);
 
-  it('is a no-op for an unknown demoId', async () => {
+  it('is a no-op for an unknown flowId', async () => {
     // No spawns; just ensure the call resolves without throwing.
     await stopAllPlays('never-spawned');
   });
 
-  it('isolates per demoId — stop on demo A does not touch demo B', async () => {
+  it('isolates per flowId — stop on demo A does not touch demo B', async () => {
     const { cwd, scriptPath } = makeProjectWithScript();
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
@@ -486,7 +486,7 @@ describe('stopAllPlays (US-008)', () => {
 
     const runA = runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -494,7 +494,7 @@ describe('stopAllPlays (US-008)', () => {
     });
     const runB = runPlay({
       events: bus,
-      demoId: 'demoB',
+      flowId: 'demoB',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -521,7 +521,7 @@ describe('stopAllPlays (US-008)', () => {
 
     await runPlay({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       nodeId: 'n1',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
@@ -543,7 +543,7 @@ describe('runReset (US-008)', () => {
 
     const result = await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
       spawner,
@@ -563,7 +563,7 @@ describe('runReset (US-008)', () => {
 
     const result = await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
       spawner,
@@ -582,7 +582,7 @@ describe('runReset (US-008)', () => {
 
     const result = await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
       spawner,
@@ -602,7 +602,7 @@ describe('runReset (US-008)', () => {
 
     const result = await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath, timeoutMs: 50 },
       spawner,
@@ -628,7 +628,7 @@ describe('runReset (US-008)', () => {
 
     const result = await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath: 'escape.ts' },
       spawner,
@@ -652,7 +652,7 @@ describe('runReset (US-008)', () => {
 
     await runReset({
       events: bus,
-      demoId: 'demoA',
+      flowId: 'demoA',
       cwd,
       action: { kind: 'script', interpreter: 'bun', scriptPath },
       spawner,

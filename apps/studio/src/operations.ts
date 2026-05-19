@@ -14,21 +14,21 @@ import { seeflowHome } from './paths.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
-  type Demo,
-  DemoSchema,
+  type Flow,
+  FlowSchema,
   EdgePinSchema,
   SourceHandleIdSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
-import type { DemoSnapshot, DemoWatcher } from './watcher.ts';
+import type { FlowSnapshot, FlowWatcher } from './watcher.ts';
 
-const DEFAULT_DEMO_RELATIVE_PATH = '.seeflow/seeflow.json';
+const DEFAULT_ARCHITECTURE_RELATIVE_PATH = '.seeflow/seeflow.json';
 
 export const RegisterBodySchema = z.object({
   name: z.string().min(1).optional(),
   repoPath: z.string().min(1),
-  demoPath: z.string().min(1),
+  architecturePath: z.string().min(1),
 });
 export type RegisterBody = z.infer<typeof RegisterBodySchema>;
 
@@ -58,7 +58,7 @@ export type ReorderBody = z.infer<typeof ReorderBodySchema>;
 
 // Partial node update body. Top-level `position` lands on node.position; every
 // other key lands inside node.data. Final validity is enforced by re-parsing
-// the whole demo through DemoSchema after the merge — this body schema just
+// the whole demo through FlowSchema after the merge — this body schema just
 // rejects unknown top-level keys to catch typos.
 export const NodePatchBodySchema = z
   .object({
@@ -79,7 +79,7 @@ export const NodePatchBodySchema = z
     // that autoSize:true never coexists with persisted width/height.
     autoSize: z.boolean().optional(),
     shape: z.enum(['rectangle', 'ellipse', 'sticky', 'text']).optional(),
-    // iconNode-only: stroke color token. Lands at data.color; DemoSchema's
+    // iconNode-only: stroke color token. Lands at data.color; FlowSchema's
     // post-merge reparse gates that this is only valid on an iconNode.
     color: ColorTokenSchema.optional(),
     // iconNode-only: glyph stroke width. Lands at data.strokeWidth; the
@@ -204,7 +204,7 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
 
 export interface OperationsDeps {
   registry: Registry;
-  watcher?: DemoWatcher;
+  watcher?: FlowWatcher;
   /**
    * Override the base directory for new projects. Defaults to seeflowHome()
    * — `${SEEFLOW_WORKSPACE}/.seeflow` inside Docker, `~/.seeflow` locally.
@@ -213,7 +213,7 @@ export interface OperationsDeps {
   projectBaseDir?: string;
 }
 
-export interface DemoListItem {
+export interface FlowListItem {
   id: string;
   slug: string;
   name: string;
@@ -222,17 +222,17 @@ export interface DemoListItem {
   valid: boolean;
 }
 
-export interface DemoGetResponse {
+export interface FlowGetResponse {
   id: string;
   slug: string;
   name: string;
   filePath: string;
-  demo: Demo | null;
+  flow: Flow | null;
   valid: boolean;
   error: string | null;
 }
 
-export interface RegisterDemoSuccess {
+export interface RegisterFlowSuccess {
   id: string;
   slug: string;
   sdk: { outcome: 'written' | 'present' | 'skipped'; filePath: string | null };
@@ -244,21 +244,21 @@ export interface CreateProjectSuccess {
   scaffolded: boolean;
 }
 
-export type ListDemosOutcome = { kind: 'ok'; data: DemoListItem[] };
+export type ListFlowsOutcome = { kind: 'ok'; data: FlowListItem[] };
 
-export type GetDemoOutcome =
-  | { kind: 'ok'; data: DemoGetResponse }
+export type GetFlowOutcome =
+  | { kind: 'ok'; data: FlowGetResponse }
   | { kind: 'notFound' }
   | { kind: 'fileNotFound'; path: string };
 
-export type RegisterDemoOutcome =
-  | { kind: 'ok'; data: RegisterDemoSuccess }
+export type RegisterFlowOutcome =
+  | { kind: 'ok'; data: RegisterFlowSuccess }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; detail: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
   | { kind: 'sdkWriteFailed'; id: string; slug: string; message: string };
 
-export type DeleteDemoOutcome = { kind: 'ok' } | { kind: 'notFound' };
+export type DeleteFlowOutcome = { kind: 'ok' } | { kind: 'notFound' };
 
 export type CreateProjectOutcome =
   | { kind: 'ok'; data: CreateProjectSuccess }
@@ -272,7 +272,7 @@ export type CreateProjectOutcome =
 // same status code + JSON body it used to emit directly.
 export type AddNodeOutcome =
   | { kind: 'ok'; data: { id: string; node: Record<string, unknown> } }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -280,7 +280,7 @@ export type AddNodeOutcome =
 
 export type DeleteNodeOutcome =
   | { kind: 'ok' }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -289,7 +289,7 @@ export type DeleteNodeOutcome =
 
 export type MoveNodeOutcome =
   | { kind: 'ok'; data: { position: PositionBody } }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -298,7 +298,7 @@ export type MoveNodeOutcome =
 
 export type ReorderNodeOutcome =
   | { kind: 'ok' }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -307,7 +307,7 @@ export type ReorderNodeOutcome =
 
 export type PatchNodeOutcome =
   | { kind: 'ok' }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -316,7 +316,7 @@ export type PatchNodeOutcome =
 
 // Partial connector update body. Strict at the top level so client typos
 // surface as 400. Per-kind invariants (e.g. kind='event' requires eventName)
-// are enforced post-merge by re-parsing the whole demo through DemoSchema.
+// are enforced post-merge by re-parsing the whole demo through FlowSchema.
 const ConnectorKindSchema = z.enum(['http', 'event', 'queue', 'default']);
 export const ConnectorPatchBodySchema = z
   .object({
@@ -334,7 +334,7 @@ export const ConnectorPatchBodySchema = z
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
     url: z.string().optional(),
     // Reconnect: drag an edge endpoint onto another node's handle. The
-    // post-merge DemoSchema parse rejects dangling references, so we don't
+    // post-merge FlowSchema parse rejects dangling references, so we don't
     // need a referential check here.
     source: z.string().min(1).optional(),
     target: z.string().min(1).optional(),
@@ -368,7 +368,7 @@ export type ConnectorPatchBody = z.infer<typeof ConnectorPatchBodySchema>;
 // Kind-specific connector fields. When `kind` changes via PATCH, these are
 // dropped first so the resulting connector doesn't carry phantom payloads
 // from the previous kind (e.g. an event→default change leaving eventName
-// behind, which DemoSchema would silently strip on parse but leave on disk).
+// behind, which FlowSchema would silently strip on parse but leave on disk).
 const CONNECTOR_KIND_FIELDS = ['method', 'url', 'eventName', 'queueName'] as const;
 
 export const mergeConnectorUpdates = (
@@ -395,7 +395,7 @@ export const mergeConnectorUpdates = (
 
 export type AddConnectorOutcome =
   | { kind: 'ok'; data: { id: string } }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -403,7 +403,7 @@ export type AddConnectorOutcome =
 
 export type PatchConnectorOutcome =
   | { kind: 'ok' }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
@@ -412,28 +412,28 @@ export type PatchConnectorOutcome =
 
 export type DeleteConnectorOutcome =
   | { kind: 'ok' }
-  | { kind: 'demoNotFound' }
+  | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
   | { kind: 'unknownConnector' }
   | { kind: 'writeFailed'; message: string };
 
-export const resolveDemoPath = (repoPath: string, demoPath: string): string =>
-  isAbsolute(demoPath) ? demoPath : join(repoPath, demoPath);
+export const resolveFilePath = (repoPath: string, architecturePath: string): string =>
+  isAbsolute(architecturePath) ? architecturePath : join(repoPath, architecturePath);
 
 // Per-demo serialization: read-modify-write of the demo file isn't atomic
 // across multiple PATCHes, so two concurrent drags would race (later writer's
 // older read clobbers the earlier writer's update). We chain writes per
-// demoId so the read+write sequence is effectively serialized.
-const demoWriteChains = new Map<string, Promise<unknown>>();
-export const withDemoWriteLock = <T>(demoId: string, fn: () => Promise<T>): Promise<T> => {
-  const prev = demoWriteChains.get(demoId) ?? Promise.resolve();
+// flowId so the read+write sequence is effectively serialized.
+const flowWriteChains = new Map<string, Promise<unknown>>();
+export const withFlowWriteLock = <T>(flowId: string, fn: () => Promise<T>): Promise<T> => {
+  const prev = flowWriteChains.get(flowId) ?? Promise.resolve();
   const next = prev.then(fn, fn);
   // Replace with a tail that swallows errors so the chain keeps moving even
   // if one write fails — but the original promise still rejects to its caller.
-  demoWriteChains.set(
-    demoId,
+  flowWriteChains.set(
+    flowId,
     next.catch(() => undefined),
   );
   return next as Promise<T>;
@@ -511,9 +511,9 @@ export const reorderNodes = (
   }
 };
 
-export function listDemosImpl(deps: OperationsDeps): ListDemosOutcome {
+export function listDemosImpl(deps: OperationsDeps): ListFlowsOutcome {
   const data = deps.registry.list().map((e) => {
-    const fullPath = resolveDemoPath(e.repoPath, e.demoPath);
+    const fullPath = resolveFilePath(e.repoPath, e.architecturePath);
     const fileExists = existsSync(fullPath);
     return {
       id: e.id,
@@ -527,20 +527,20 @@ export function listDemosImpl(deps: OperationsDeps): ListDemosOutcome {
   return { kind: 'ok', data };
 }
 
-export async function getDemoImpl(deps: OperationsDeps, demoId: string): Promise<GetDemoOutcome> {
+export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise<GetFlowOutcome> {
   const { registry, watcher } = deps;
-  const entry = registry.getById(demoId);
+  const entry = registry.getById(flowId);
   if (!entry) return { kind: 'notFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
-  const snap = watcher?.snapshot(demoId) ?? watcher?.reparse(demoId) ?? null;
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
+  const snap = watcher?.snapshot(flowId) ?? watcher?.reparse(flowId) ?? null;
 
-  const buildResponse = (s: DemoSnapshot): DemoGetResponse => ({
+  const buildResponse = (s: FlowSnapshot): FlowGetResponse => ({
     id: entry.id,
     slug: entry.slug,
     name: entry.name,
     filePath: fullPath,
-    demo: s.demo,
+    flow: s.flow,
     valid: s.valid,
     error: s.valid ? null : s.error,
   });
@@ -558,7 +558,7 @@ export async function getDemoImpl(deps: OperationsDeps, demoId: string): Promise
     return {
       kind: 'ok',
       data: buildResponse({
-        demo: null,
+        flow: null,
         valid: false,
         error: `Invalid JSON: ${err instanceof Error ? err.message : String(err)}`,
         filePath: fullPath,
@@ -566,12 +566,12 @@ export async function getDemoImpl(deps: OperationsDeps, demoId: string): Promise
       }),
     };
   }
-  const parsed = DemoSchema.safeParse(raw);
+  const parsed = FlowSchema.safeParse(raw);
   if (!parsed.success) {
     return {
       kind: 'ok',
       data: buildResponse({
-        demo: null,
+        flow: null,
         valid: false,
         error: parsed.error.issues
           .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
@@ -584,7 +584,7 @@ export async function getDemoImpl(deps: OperationsDeps, demoId: string): Promise
   return {
     kind: 'ok',
     data: buildResponse({
-      demo: parsed.data,
+      flow: parsed.data,
       valid: true,
       error: null,
       filePath: fullPath,
@@ -593,13 +593,13 @@ export async function getDemoImpl(deps: OperationsDeps, demoId: string): Promise
   };
 }
 
-export async function registerDemoImpl(
+export async function registerFlowImpl(
   deps: OperationsDeps,
   body: RegisterBody,
-): Promise<RegisterDemoOutcome> {
+): Promise<RegisterFlowOutcome> {
   const { registry, watcher } = deps;
-  const { repoPath, demoPath } = body;
-  const fullPath = resolveDemoPath(repoPath, demoPath);
+  const { repoPath, architecturePath } = body;
+  const fullPath = resolveFilePath(repoPath, architecturePath);
 
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
@@ -612,14 +612,14 @@ export async function registerDemoImpl(
     return { kind: 'badJson', detail: String(err) };
   }
 
-  const demoParse = DemoSchema.safeParse(demo);
+  const demoParse = FlowSchema.safeParse(demo);
   if (!demoParse.success) return { kind: 'badSchema', issues: demoParse.error.issues };
 
   const lastModified = statSync(fullPath).mtimeMs;
   const entry = registry.upsert({
     name: body.name ?? demoParse.data.name,
     repoPath,
-    demoPath,
+    architecturePath,
     valid: true,
     lastModified,
   });
@@ -644,7 +644,7 @@ export async function registerDemoImpl(
   };
 }
 
-export function deleteDemoImpl(deps: OperationsDeps, idOrSlug: string): DeleteDemoOutcome {
+export function deleteFlowImpl(deps: OperationsDeps, idOrSlug: string): DeleteFlowOutcome {
   const { registry, watcher } = deps;
   const entry = registry.getById(idOrSlug) ?? registry.getBySlug(idOrSlug);
   if (!entry) return { kind: 'notFound' };
@@ -662,7 +662,7 @@ export async function createProjectImpl(
   const baseDir = deps.projectBaseDir ?? seeflowHome();
   const folderPath = join(baseDir, slugify(name));
 
-  const demoFullPath = join(folderPath, DEFAULT_DEMO_RELATIVE_PATH);
+  const demoFullPath = join(folderPath, DEFAULT_ARCHITECTURE_RELATIVE_PATH);
 
   if (existsSync(demoFullPath)) {
     let raw: unknown;
@@ -671,14 +671,14 @@ export async function createProjectImpl(
     } catch (err) {
       return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
     }
-    const demoParse = DemoSchema.safeParse(raw);
+    const demoParse = FlowSchema.safeParse(raw);
     if (!demoParse.success) return { kind: 'badSchema', issues: demoParse.error.issues };
 
     const lastModified = statSync(demoFullPath).mtimeMs;
     const entry = registry.upsert({
       name,
       repoPath: folderPath,
-      demoPath: DEFAULT_DEMO_RELATIVE_PATH,
+      architecturePath: DEFAULT_ARCHITECTURE_RELATIVE_PATH,
       valid: true,
       lastModified,
     });
@@ -686,7 +686,7 @@ export async function createProjectImpl(
     return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: false } };
   }
 
-  const scaffold: Demo = { version: 1, name, nodes: [], connectors: [] };
+  const scaffold: Flow = { version: 1, name, nodes: [], connectors: [] };
 
   try {
     mkdirSync(join(folderPath, '.seeflow'), { recursive: true });
@@ -708,7 +708,7 @@ export async function createProjectImpl(
   const entry = registry.upsert({
     name,
     repoPath: folderPath,
-    demoPath: DEFAULT_DEMO_RELATIVE_PATH,
+    architecturePath: DEFAULT_ARCHITECTURE_RELATIVE_PATH,
     valid: true,
     lastModified,
   });
@@ -716,16 +716,16 @@ export async function createProjectImpl(
   return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: true } };
 }
 
-// Append a new node to the demo. Auto-generates an id when absent; DemoSchema
+// Append a new node to the demo. Auto-generates an id when absent; FlowSchema
 // is re-run on the post-mutation raw object before commit so a malformed
 // payload never produces a half-written file.
 export async function addNodeImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   nodeBody: Record<string, unknown>,
 ): Promise<AddNodeOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
   const newNode = { ...nodeBody };
   if (typeof newNode.id !== 'string' || newNode.id.length === 0) {
@@ -761,7 +761,7 @@ export async function addNodeImpl(
     }
   }
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -770,20 +770,20 @@ export async function addNodeImpl(
     | { kind: 'badSchema'; issues: ZodIssue[] }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { nodes: Array<Record<string, unknown>> };
     obj.nodes.push(newNode);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     if (starterFile) {
@@ -821,7 +821,7 @@ const buildHtmlNodeStarter = (nodeId: string): string =>
 `;
 
 // Remove a node and cascade-delete every connector touching it in a single
-// atomic write. Final DemoSchema parse stays in place so a pre-existing
+// atomic write. Final FlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 // US-016: when the removed node is an htmlNode whose data.htmlPath matches the
 // studio-managed shape `blocks/<id>.html`, the companion file is removed AFTER
@@ -829,13 +829,13 @@ const buildHtmlNodeStarter = (nodeId: string): string =>
 // with US-015's "client-supplied htmlPath wins, no starter file written").
 export async function deleteNodeImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   nodeId: string,
 ): Promise<DeleteNodeOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -845,14 +845,14 @@ export async function deleteNodeImpl(
     | { kind: 'unknownNode' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as {
@@ -866,7 +866,7 @@ export async function deleteNodeImpl(
     obj.nodes.splice(idx, 1);
     obj.connectors = obj.connectors.filter((cn) => cn.source !== nodeId && cn.target !== nodeId);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {
@@ -918,14 +918,14 @@ const managedHtmlNodePath = (
 // schema doesn't yet recognize survive the round-trip untouched.
 export async function moveNodeImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   nodeId: string,
   position: PositionBody,
 ): Promise<MoveNodeOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -935,14 +935,14 @@ export async function moveNodeImpl(
     | { kind: 'unknownNode' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as {
@@ -961,9 +961,9 @@ export async function moveNodeImpl(
   });
 
   if (result.kind === 'ok') {
-    // Eagerly refresh snapshot so a subsequent GET /api/demos/:id (e.g. export)
+    // Eagerly refresh snapshot so a subsequent GET /api/flows/:id (e.g. export)
     // returns the updated position without waiting for the 100ms FSWatcher debounce.
-    deps.watcher?.reparse(demoId);
+    deps.watcher?.reparse(flowId);
     return { kind: 'ok', data: { position: { x: position.x, y: position.y } } };
   }
   return result;
@@ -971,18 +971,18 @@ export async function moveNodeImpl(
 
 // Apply a partial PATCH body to a single node. Mutation runs against the
 // raw parsed JSON (so unknown forward-compat fields survive a round-trip),
-// and the whole demo is re-validated through DemoSchema before commit so
+// and the whole demo is re-validated through FlowSchema before commit so
 // partial writes can't break invariants like the connector→node superRefine.
 export async function patchNodeImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   nodeId: string,
   updates: NodePatchBody,
 ): Promise<PatchNodeOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -992,14 +992,14 @@ export async function patchNodeImpl(
     | { kind: 'unknownNode' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { nodes: Array<Record<string, unknown>> };
@@ -1008,7 +1008,7 @@ export async function patchNodeImpl(
 
     mergeNodeUpdates(onDiskNode, updates);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {
@@ -1027,14 +1027,14 @@ export async function patchNodeImpl(
 // writing so we don't trigger a watcher echo for nothing.
 export async function reorderNodeImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   nodeId: string,
   body: ReorderBody,
 ): Promise<ReorderNodeOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -1044,14 +1044,14 @@ export async function reorderNodeImpl(
     | { kind: 'unknownNode' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { nodes: Array<Record<string, unknown>> };
@@ -1061,7 +1061,7 @@ export async function reorderNodeImpl(
     const moved = reorderNodes(obj.nodes, fromIdx, body);
     if (!moved) return { kind: 'ok' };
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {
@@ -1077,15 +1077,15 @@ export async function reorderNodeImpl(
 
 // Append a new connector to demo.connectors. `id` is auto-generated when
 // absent and `kind` defaults to 'default' (the no-semantics user-drawn
-// variant). Source/target referential integrity is enforced by DemoSchema's
+// variant). Source/target referential integrity is enforced by FlowSchema's
 // superRefine on the post-mutation parse.
 export async function addConnectorImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   connBody: Record<string, unknown>,
 ): Promise<AddConnectorOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
   const newConn = { ...connBody };
   if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
@@ -1096,7 +1096,7 @@ export async function addConnectorImpl(
   }
   const newId = newConn.id as string;
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -1105,20 +1105,20 @@ export async function addConnectorImpl(
     | { kind: 'badSchema'; issues: ZodIssue[] }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { connectors: Array<Record<string, unknown>> };
     obj.connectors.push(newConn);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {
@@ -1138,20 +1138,20 @@ export async function addConnectorImpl(
 // When `kind` changes, the previous kind's payload fields are dropped first
 // so the connector doesn't carry phantom data; explicit `null` in the patch
 // clears the field on disk (used by reconnect-to-body to drop a pinned
-// handle id). The whole demo is re-validated through DemoSchema before
+// handle id). The whole demo is re-validated through FlowSchema before
 // commit so the discriminated union catches missing-required-fields
 // (e.g. kind='event' without eventName) and the superRefine gates
 // source/target referential integrity + handle role invariants.
 export async function patchConnectorImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   connectorId: string,
   updates: ConnectorPatchBody,
 ): Promise<PatchConnectorOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -1161,14 +1161,14 @@ export async function patchConnectorImpl(
     | { kind: 'unknownConnector' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { connectors: Array<Record<string, unknown>> };
@@ -1177,7 +1177,7 @@ export async function patchConnectorImpl(
 
     mergeConnectorUpdates(onDiskConn, updates);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {
@@ -1192,17 +1192,17 @@ export async function patchConnectorImpl(
 }
 
 // Remove a connector by id. No cascade — node deletion is what cascades,
-// not connector deletion. Final DemoSchema parse still runs so a pre-existing
+// not connector deletion. Final FlowSchema parse still runs so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 export async function deleteConnectorImpl(
   deps: OperationsDeps,
-  demoId: string,
+  flowId: string,
   connectorId: string,
 ): Promise<DeleteConnectorOutcome> {
-  const entry = deps.registry.getById(demoId);
-  if (!entry) return { kind: 'demoNotFound' };
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
 
-  const fullPath = resolveDemoPath(entry.repoPath, entry.demoPath);
+  const fullPath = resolveFilePath(entry.repoPath, entry.architecturePath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
   type Inner =
@@ -1212,14 +1212,14 @@ export async function deleteConnectorImpl(
     | { kind: 'unknownConnector' }
     | { kind: 'writeFailed'; message: string };
 
-  const result = await withDemoWriteLock<Inner>(demoId, async () => {
+  const result = await withFlowWriteLock<Inner>(flowId, async () => {
     let raw: unknown;
     try {
       raw = await Bun.file(fullPath).json();
     } catch (err) {
       return { kind: 'badJson', message: err instanceof Error ? err.message : String(err) };
     }
-    const demoParsed = DemoSchema.safeParse(raw);
+    const demoParsed = FlowSchema.safeParse(raw);
     if (!demoParsed.success) return { kind: 'badSchema', issues: demoParsed.error.issues };
 
     const obj = raw as { connectors: Array<{ id: string }> };
@@ -1227,7 +1227,7 @@ export async function deleteConnectorImpl(
     if (idx < 0) return { kind: 'unknownConnector' };
     obj.connectors.splice(idx, 1);
 
-    const finalParse = DemoSchema.safeParse(raw);
+    const finalParse = FlowSchema.safeParse(raw);
     if (!finalParse.success) return { kind: 'badSchema', issues: finalParse.error.issues };
 
     try {

@@ -88,7 +88,7 @@ interface NodeBase {
         y: number;
     };
 }
-type DemoNode = (NodeBase & {
+type FlowNode = (NodeBase & {
     type: 'playNode';
     data: NodeData;
 }) | (NodeBase & {
@@ -170,10 +170,10 @@ interface RunResult {
     /** ms since epoch of the most recent transition. */
     ts?: number;
 }
-interface Demo {
+interface Flow {
     version: 1;
     name: string;
-    nodes: DemoNode[];
+    nodes: FlowNode[];
     connectors: Connector[];
 }
 
@@ -770,7 +770,7 @@ interface ConnectorStylePatch {
 }
 interface StyleStripProps {
     /** Currently selected nodes (with optimistic overrides applied). */
-    nodes: DemoNode[];
+    nodes: FlowNode[];
     /** Currently selected connectors (with optimistic overrides applied). */
     connectors: Connector[];
     onStyleNode: (nodeId: string, patch: NodeStylePatch) => void;
@@ -1117,7 +1117,7 @@ interface CanvasRuntime {
      * a single map would lose type safety on the values.
      */
     pendingOverrides?: {
-        nodes?: Record<string, Partial<DemoNode>>;
+        nodes?: Record<string, Partial<FlowNode>>;
         connectors?: Record<string, Partial<Connector>>;
     };
 }
@@ -1163,8 +1163,8 @@ interface CanvasAdapter {
 interface RestAdapterOptions {
     /** URL prefix (e.g. '' in-studio, 'https://example.com' for cross-origin). */
     baseUrl: string;
-    /** demoId (== projectId in the studio registry). Bound for the adapter's lifetime. */
-    demoId: string;
+    /** flowId (== projectId in the studio registry). Bound for the adapter's lifetime. */
+    flowId: string;
     /** Optional fetch override — primarily for tests. Defaults to globalThis.fetch. */
     fetch?: typeof fetch;
 }
@@ -1828,8 +1828,8 @@ declare const TOOLBAR_SHAPES: ToolbarShapeEntry[];
 declare function CanvasToolbar({ activeShape, onSelectShape, iconPickerOpen, onOpenIconPicker, onCloseIconPicker, onPickIcon, }: CanvasToolbarProps): react_jsx_runtime.JSX.Element;
 
 interface DetailPanelProps {
-    demoId: string | null;
-    node: DemoNode | null;
+    flowId: string | null;
+    node: FlowNode | null;
     connector: Connector | null;
     /**
      * Optional canvas adapter used for project-scoped file actions on htmlNode
@@ -1860,7 +1860,7 @@ interface DetailPanelProps {
     };
     onClose: () => void;
 }
-declare function DetailPanel({ demoId, node, connector, adapter, onNameChange, onDescriptionChange, onDetailChange, onIconChange, statusReport, onClose, }: DetailPanelProps): react_jsx_runtime.JSX.Element;
+declare function DetailPanel({ flowId, node, connector, adapter, onNameChange, onDescriptionChange, onDetailChange, onIconChange, statusReport, onClose, }: DetailPanelProps): react_jsx_runtime.JSX.Element;
 declare function EditableField({ nodeId, value, placeholder, multiline, ariaLabel, testIdBase, onSave, textClassName, markdown, }: {
     nodeId: string;
     value: string;
@@ -2270,7 +2270,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
      * project id).
      */
     projectId?: string;
-    nodes: DemoNode[];
+    nodes: FlowNode[];
     connectors: Connector[];
     /** Currently selected node ids (US-019: multi-select). */
     selectedNodeIds: readonly string[];
@@ -2506,7 +2506,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
      * canvas style strip's controls and fan-out apply (US-019). Empty when no
      * node is selected.
      */
-    selectedNodes?: DemoNode[];
+    selectedNodes?: FlowNode[];
     /**
      * Currently selected connectors (with optimistic overrides applied) — drives
      * the canvas style strip's controls and fan-out apply (US-019). Empty when
@@ -2924,4 +2924,4 @@ declare function handleClipboardShortcut(deps: ClipboardShortcutDeps): boolean;
  */
 declare const SeeflowCanvas: React.ForwardRefExoticComponent<SeeflowCanvasProps & React.RefAttributes<SeeflowCanvasHandle>>;
 
-export { type AutoLayoutEdge, type AutoLayoutNode, type AutoLayoutOptions, BG_FALLBACK, BORDER_FALLBACK, Button, type ButtonProps, COLOR_TOKENS, COMMANDS, type CanvasAdapter, type CanvasDropDispatchArgs, type CanvasFeatureOverrides, type CanvasRuntime, CanvasToolbar, type CanvasToolbarProps, type ClipboardChord, type ClipboardChordInput, type ClipboardShortcutDeps, type ClipboardShortcutEventLike, CloudShape, type ColorToken, Command, type CommandCategory, type CommandContext, type CommandDef, CommandDialog, CommandEmpty, CommandGroup, type CommandId, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, type Connector, type ConnectorBase, type ConnectorCreateInput, type ConnectorDirection, type ConnectorPatch, type ConnectorPath, type ConnectorStyle, type ConnectorStylePatch, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger, DEFAULT_STORAGE_PREFIX, DEFAULT_STROKE_WIDTH, DETAIL_PANEL_WIDTH_DEFAULT, DETAIL_PANEL_WIDTH_KEY, DETAIL_PANEL_WIDTH_MAX, DETAIL_PANEL_WIDTH_MIN, DatabaseShape, type Debouncer, type DebouncerOptions, type DefaultConnector, type Demo, type DemoNode, type DerivedEdge, DetailPanel, type DetailPanelProps, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, type EdgeColorStyle, type EdgePin, type EdgePinSide, EditableEdge, type EditableEdgeData, type EditableEdgeType, EditableField, EmbedDialog, type EmbedDialogProps, type Endpoint, type EndpointInput, type EventConnector, type FloatingRect, HTML_BLOCK_DND_TYPE, HTML_DEFAULT_SIZE, type HandleCanvasFileDropArgs, HtmlNode, type HtmlNodeData, type HtmlNodeRuntimeData, HtmlNodeSection, type HtmlNodeType, type HttpAction, type HttpConnector, ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, ICON_NAMES, ICON_RECENTS_STORAGE_KEY, ICON_REGISTRY, ILLUSTRATIVE_SHAPE_RENDERERS, IMAGE_DEFAULT_SIZE, IMAGE_DROP_EXTS, IMAGE_DROP_MAX_LONGEST_SIDE, IMAGE_DROP_SVG_FALLBACK, IS_MAC, Icon, type IconInsertPayload, type IconInsertRfInstance, type IconInsertViewport, IconNode, type IconNodeData, type IconNodeRuntimeData, type IconNodeType, IconPickerBody, type IconPickerBodyProps, IconPickerPopover, type IconPickerPopoverProps, type IconProps, IconRegistryProvider, type IconRegistryProviderProps, type IconRegistryValue, IconToggleGroup, type IconToggleGroupProps, type IconToggleOption, type ImageDataDefaults, ImageNode, type ImageNodeData, type ImageNodeRuntimeData, type ImageNodeType, InlineEdit, type InlineEditProps, type LastUsedStyle, type LayoutDirection, LineDashedIcon, LineDottedIcon, LineSolidIcon, LockBadge, type ModifierEvent, type MultiResizeUpdate, NEW_NODE_BORDER_WIDTH, NEW_NODE_FONT_SIZE, NODE_DEFAULT_BG_WHITE, type NodeColorStyle, type NodeCreateInput, type NodeData, type NodeDescription, type NodeHeaderColorStyle, type NodeKind, type NodePatch, type NodeStatus, type NodeStylePatch, type NodeVisual, type NudgeDelta, type OverlayInputNode, PathCurveIcon, PathStepIcon, type Pin, PlaceholderCard, PlayNode, type PlayNodeData, type PlayNodeResult, type PlayNodeType, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, type QueueConnector, QueueShape, type Rect, type ReorderOp, ResizeControls, type ResizeControlsProps, type ResizeGestureCallbacks, type ResolvedCanvasFlags, type RestAdapterOptions, RestartDemoButton, type RestartDemoButtonProps, type RunResult, SELECTION_OVERLAY_PADDING, SHAPE_CLASS, SHAPE_DEFAULT_SIZE, type ScalableNode, type ScaleNodesOptions, SeeflowCanvas, type SeeflowCanvasHandle, type SeeflowCanvasMode, type SeeflowCanvasProps, SelectionResizeOverlay, type SelectionResizeOverlayProps, ServerShape, type ShapeDataDefaults, type ShapeKind, ShapeNode, type ShapeNodeData, type ShapeNodeRuntimeData, type ShapeNodeType, type ShapePartProps, ShareMenu, type ShareMenuMode, type ShareMenuProps, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, type ShortcutParts, type Side, Slider, StateNode, type StateNodeData, type StateNodeType, StatusBadge, type StatusBadgeProps, StatusPill, type StatusReport, type StatusReportState, StatusSection, StyleStrip, type StyleStripProps, TOOLBAR_SHAPES, Tabs, TabsContent, TabsList, TabsTrigger, type TextColorStyle, type ToolShortcutResult, type ToolbarShapeEntry, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, type UpdateNodePositionResult, type UploadImageResult, UserShape, type XY, type ZoomAction, applyLayout, applyNudge, buildIconInsertPayload, buildNewImageData, buildNewShapeData, buttonVariants, clampDetailPanelWidth, clampImageDims, classifyHandleDropFailure, classifyReconnectBodyDrop, cn, colorTokenStyle, computeIconInsertPosition, computeImageDims, computeNewRectFromAnchorDrag, computeSelectionResizeUpdates, computeUnionRect, computeUnmovedLockPin, connectorToEdge, createDebouncer, createRestAdapter, dashFor, endpointFromPin, endpointToPin, eventTargetIsOtherNode, extractImageFile, fileUrl, filterIcons, formatRelativeTime, formatShortcut, getCommandTooltip, getLastUsedStyle, getNodeIntersection, getNudgeDelta, getRecents, getStoredDetailPanelWidth, getZoomChord, handleCanvasFileDrop, handleClipboardShortcut, isAcceptableImageFile, projectCursorToPerimeter, pushRecent, rememberConnectorStyle, rememberNodeStyle, resolveClipboardChord, resolveEdgeEndpoints, resolveFlags, resolveToolShortcut, scaleNodesWithinRect, scheduleRaf, selectionEligibleForOverlay, setStoredDetailPanelWidth, shapeChromeClass, shapeChromeStyle, startResizeGesture, styleForKind, useIconRegistry, useResizeGesture };
+export { type AutoLayoutEdge, type AutoLayoutNode, type AutoLayoutOptions, BG_FALLBACK, BORDER_FALLBACK, Button, type ButtonProps, COLOR_TOKENS, COMMANDS, type CanvasAdapter, type CanvasDropDispatchArgs, type CanvasFeatureOverrides, type CanvasRuntime, CanvasToolbar, type CanvasToolbarProps, type ClipboardChord, type ClipboardChordInput, type ClipboardShortcutDeps, type ClipboardShortcutEventLike, CloudShape, type ColorToken, Command, type CommandCategory, type CommandContext, type CommandDef, CommandDialog, CommandEmpty, CommandGroup, type CommandId, CommandInput, CommandItem, CommandList, CommandSeparator, CommandShortcut, type Connector, type ConnectorBase, type ConnectorCreateInput, type ConnectorDirection, type ConnectorPatch, type ConnectorPath, type ConnectorStyle, type ConnectorStylePatch, ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuShortcut, ContextMenuTrigger, DEFAULT_STORAGE_PREFIX, DEFAULT_STROKE_WIDTH, DETAIL_PANEL_WIDTH_DEFAULT, DETAIL_PANEL_WIDTH_KEY, DETAIL_PANEL_WIDTH_MAX, DETAIL_PANEL_WIDTH_MIN, DatabaseShape, type Debouncer, type DebouncerOptions, type DefaultConnector, type DerivedEdge, DetailPanel, type DetailPanelProps, Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger, DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger, type EdgeColorStyle, type EdgePin, type EdgePinSide, EditableEdge, type EditableEdgeData, type EditableEdgeType, EditableField, EmbedDialog, type EmbedDialogProps, type Endpoint, type EndpointInput, type EventConnector, type FloatingRect, type Flow, type FlowNode, HTML_BLOCK_DND_TYPE, HTML_DEFAULT_SIZE, type HandleCanvasFileDropArgs, HtmlNode, type HtmlNodeData, type HtmlNodeRuntimeData, HtmlNodeSection, type HtmlNodeType, type HttpAction, type HttpConnector, ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, ICON_NAMES, ICON_RECENTS_STORAGE_KEY, ICON_REGISTRY, ILLUSTRATIVE_SHAPE_RENDERERS, IMAGE_DEFAULT_SIZE, IMAGE_DROP_EXTS, IMAGE_DROP_MAX_LONGEST_SIDE, IMAGE_DROP_SVG_FALLBACK, IS_MAC, Icon, type IconInsertPayload, type IconInsertRfInstance, type IconInsertViewport, IconNode, type IconNodeData, type IconNodeRuntimeData, type IconNodeType, IconPickerBody, type IconPickerBodyProps, IconPickerPopover, type IconPickerPopoverProps, type IconProps, IconRegistryProvider, type IconRegistryProviderProps, type IconRegistryValue, IconToggleGroup, type IconToggleGroupProps, type IconToggleOption, type ImageDataDefaults, ImageNode, type ImageNodeData, type ImageNodeRuntimeData, type ImageNodeType, InlineEdit, type InlineEditProps, type LastUsedStyle, type LayoutDirection, LineDashedIcon, LineDottedIcon, LineSolidIcon, LockBadge, type ModifierEvent, type MultiResizeUpdate, NEW_NODE_BORDER_WIDTH, NEW_NODE_FONT_SIZE, NODE_DEFAULT_BG_WHITE, type NodeColorStyle, type NodeCreateInput, type NodeData, type NodeDescription, type NodeHeaderColorStyle, type NodeKind, type NodePatch, type NodeStatus, type NodeStylePatch, type NodeVisual, type NudgeDelta, type OverlayInputNode, PathCurveIcon, PathStepIcon, type Pin, PlaceholderCard, PlayNode, type PlayNodeData, type PlayNodeResult, type PlayNodeType, Popover, PopoverAnchor, PopoverContent, PopoverTrigger, type QueueConnector, QueueShape, type Rect, type ReorderOp, ResizeControls, type ResizeControlsProps, type ResizeGestureCallbacks, type ResolvedCanvasFlags, type RestAdapterOptions, RestartDemoButton, type RestartDemoButtonProps, type RunResult, SELECTION_OVERLAY_PADDING, SHAPE_CLASS, SHAPE_DEFAULT_SIZE, type ScalableNode, type ScaleNodesOptions, SeeflowCanvas, type SeeflowCanvasHandle, type SeeflowCanvasMode, type SeeflowCanvasProps, SelectionResizeOverlay, type SelectionResizeOverlayProps, ServerShape, type ShapeDataDefaults, type ShapeKind, ShapeNode, type ShapeNodeData, type ShapeNodeRuntimeData, type ShapeNodeType, type ShapePartProps, ShareMenu, type ShareMenuMode, type ShareMenuProps, Sheet, SheetClose, SheetContent, SheetDescription, SheetFooter, SheetHeader, SheetOverlay, SheetPortal, SheetTitle, SheetTrigger, type ShortcutParts, type Side, Slider, StateNode, type StateNodeData, type StateNodeType, StatusBadge, type StatusBadgeProps, StatusPill, type StatusReport, type StatusReportState, StatusSection, StyleStrip, type StyleStripProps, TOOLBAR_SHAPES, Tabs, TabsContent, TabsList, TabsTrigger, type TextColorStyle, type ToolShortcutResult, type ToolbarShapeEntry, Tooltip, TooltipContent, TooltipProvider, TooltipTrigger, type UpdateNodePositionResult, type UploadImageResult, UserShape, type XY, type ZoomAction, applyLayout, applyNudge, buildIconInsertPayload, buildNewImageData, buildNewShapeData, buttonVariants, clampDetailPanelWidth, clampImageDims, classifyHandleDropFailure, classifyReconnectBodyDrop, cn, colorTokenStyle, computeIconInsertPosition, computeImageDims, computeNewRectFromAnchorDrag, computeSelectionResizeUpdates, computeUnionRect, computeUnmovedLockPin, connectorToEdge, createDebouncer, createRestAdapter, dashFor, endpointFromPin, endpointToPin, eventTargetIsOtherNode, extractImageFile, fileUrl, filterIcons, formatRelativeTime, formatShortcut, getCommandTooltip, getLastUsedStyle, getNodeIntersection, getNudgeDelta, getRecents, getStoredDetailPanelWidth, getZoomChord, handleCanvasFileDrop, handleClipboardShortcut, isAcceptableImageFile, projectCursorToPerimeter, pushRecent, rememberConnectorStyle, rememberNodeStyle, resolveClipboardChord, resolveEdgeEndpoints, resolveFlags, resolveToolShortcut, scaleNodesWithinRect, scheduleRaf, selectionEligibleForOverlay, setStoredDetailPanelWidth, shapeChromeClass, shapeChromeStyle, startResizeGesture, styleForKind, useIconRegistry, useResizeGesture };

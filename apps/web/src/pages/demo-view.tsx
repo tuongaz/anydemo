@@ -9,9 +9,9 @@ import { useUndoStack } from '@/hooks/use-undo-stack';
 import type {
   Connector,
   DefaultConnector,
-  DemoDetail,
-  DemoNode,
-  DemoSummary,
+  FlowDetail,
+  FlowNode,
+  FlowSummary,
   EdgePin,
   ShapeKind,
 } from '@/lib/api';
@@ -117,8 +117,8 @@ export const applyReorderOpToIds = (
 
 export interface DemoViewProps {
   slug: string;
-  demos: DemoSummary[];
-  detail: DemoDetail | null;
+  demos: FlowSummary[];
+  detail: FlowDetail | null;
   loading: boolean;
   runs: NodeRuns;
   nodeEvents: NodeEventLog;
@@ -187,13 +187,13 @@ export function DemoView({
   // thumbnail.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   // Generalized optimistic overrides for nodes + connectors. Set on user
-  // edits BEFORE firing the API call; pruned on the next demo:reload echo
+  // edits BEFORE firing the API call; pruned on the next flow:reload echo
   // (server caught up); dropped on API failure (revert to server state).
-  const nodePending = usePendingOverrides<DemoNode>();
+  const nodePending = usePendingOverrides<FlowNode>();
   const connectorPending = usePendingOverrides<Connector>();
   // US-016: optimistic-delete sets. `mark()` BEFORE firing the DELETE API
   // call so the entity disappears from the canvas in the same React tick;
-  // pruned on the next demo:reload echo (server confirmed delete) or
+  // pruned on the next flow:reload echo (server confirmed delete) or
   // unmarked on API failure (rollback restores the entity).
   const nodeDeletions = usePendingDeletions();
   const connectorDeletions = usePendingDeletions();
@@ -281,8 +281,8 @@ export function DemoView({
   // and closes on pane-click (which clears the selection) without a separate
   // panel-target state.
 
-  const demoNodes = detail?.demo?.nodes;
-  const demoConnectors = detail?.demo?.connectors;
+  const demoNodes = detail?.flow?.nodes;
+  const demoConnectors = detail?.flow?.connectors;
   const { pruneAgainst: pruneNodeOverrides } = nodePending;
   const { pruneAgainst: pruneConnectorOverrides } = connectorPending;
   const { pruneAgainst: pruneNodeDeletions } = nodeDeletions;
@@ -310,7 +310,7 @@ export function DemoView({
     if (Date.now() - undoLastMutationAt() > 2000) clearUndo();
   }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, undoLastMutationAt, clearUndo]);
 
-  // US-010: bump `autoFitViewSignal` whenever the SSE-driven demo:reload echo
+  // US-010: bump `autoFitViewSignal` whenever the SSE-driven flow:reload echo
   // adds or removes a node id that wasn't part of a still-pending local
   // mutation. Read from closure: the pending-override and pending-deletion
   // sets are still populated at the moment the echo arrives (the prune effect
@@ -380,13 +380,13 @@ export function DemoView({
     setNodeOrderOverride(null);
   }, [demoNodes, nodeOrderOverride]);
 
-  const demoId = detail?.id ?? null;
+  const flowId = detail?.id ?? null;
   // US-025: persistence adapter built from the demo's id. Bound to one demo for
   // its lifetime; rebuilt on demo switch. Every REST mutation in this file (and
   // the prop threaded to <SeeflowCanvas>) now routes through this adapter.
   const adapter = useMemo(
-    () => (demoId ? createRestAdapter({ baseUrl: '', demoId }) : null),
-    [demoId],
+    () => (flowId ? createRestAdapter({ baseUrl: '', flowId }) : null),
+    [flowId],
   );
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { setOverride: setNodeOverride, dropOverride: dropNodeOverride } = nodePending;
@@ -400,7 +400,7 @@ export function DemoView({
 
   const onNodePositionChange = useCallback(
     (nodeId: string, position: Position) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       // Snapshot the on-disk pre-state BEFORE the optimistic override so the
       // undo entry can revert to where the node was before the drag started.
       const prev = demoNodes?.find((n) => n.id === nodeId)?.position;
@@ -431,7 +431,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       setNodeOverride,
@@ -449,7 +449,7 @@ export function DemoView({
   // Mirrors the onTidy / onStyleNodes batch pattern.
   const onNodePositionsChange = useCallback(
     (updates: { id: string; position: Position }[]) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       if (updates.length === 0) return;
       const overrides = nodeOverridesRef.current;
       const targets = updates
@@ -494,12 +494,12 @@ export function DemoView({
         if (firstErr) setEditError(firstErr);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   const onNodeResize = useCallback(
     (nodeId: string, dims: { width: number; height: number; x: number; y: number }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       // US-012: capture both prior size AND prior position so a top/left
       // handle resize (which moves x/y) reverts cleanly on undo.
@@ -523,7 +523,7 @@ export function DemoView({
       setNodeOverride(nodeId, {
         position: next.position,
         data: { width: next.width, height: next.height },
-      } as Partial<DemoNode>);
+      } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       if (prev) {
@@ -545,7 +545,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       setNodeOverride,
@@ -561,7 +561,7 @@ export function DemoView({
   // invariant, so we don't need to send explicit width/height clears.
   const onHtmlNodeFitToContent = useCallback(
     (nodeId: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = {
@@ -574,7 +574,7 @@ export function DemoView({
       // immediately switches to auto-size layout while the PATCH is in flight.
       setNodeOverride(nodeId, {
         data: { autoSize: true, width: undefined, height: undefined },
-      } as Partial<DemoNode>);
+      } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       pushUndo({
@@ -594,7 +594,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       setNodeOverride,
@@ -624,7 +624,7 @@ export function DemoView({
         height?: number;
       }[],
     ) => {
-      if (!demoId || !adapter || updates.length === 0) return;
+      if (!flowId || !adapter || updates.length === 0) return;
       type DimsPatch = {
         width?: number;
         height?: number;
@@ -654,7 +654,7 @@ export function DemoView({
         setNodeOverride(t.id, {
           position: t.next.position,
           ...(Object.keys(dataPatch).length > 0 ? { data: dataPatch } : {}),
-        } as Partial<DemoNode>);
+        } as Partial<FlowNode>);
       }
       setEditError(null);
       markMutation();
@@ -689,7 +689,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
@@ -699,7 +699,7 @@ export function DemoView({
   // PATCH+undo path runs once on pointer release via onStyleNode/onStyleConnector.
   const onStyleNodePreview = useCallback(
     (nodeId: string, patch: NodeStylePatch) => {
-      setNodeOverride(nodeId, { data: patch } as Partial<DemoNode>);
+      setNodeOverride(nodeId, { data: patch } as Partial<FlowNode>);
     },
     [setNodeOverride],
   );
@@ -708,7 +708,7 @@ export function DemoView({
   const onStyleNodesPreview = useCallback(
     (nodeIds: string[], patch: NodeStylePatch) => {
       for (const id of nodeIds) {
-        setNodeOverride(id, { data: patch } as Partial<DemoNode>);
+        setNodeOverride(id, { data: patch } as Partial<FlowNode>);
       }
     },
     [setNodeOverride],
@@ -721,11 +721,11 @@ export function DemoView({
   );
 
   // Style-tab edit on a node: border + background tokens. Cast the partial
-  // through Partial<DemoNode> because the discriminated union prevents TS from
+  // through Partial<FlowNode> because the discriminated union prevents TS from
   // seeing that 'data' on the override matches the variant of the keyed node.
   const onStyleNode = useCallback(
     (nodeId: string, patch: NodeStylePatch) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       // Remember the user's pick BEFORE the PATCH dispatches — last-used tracks
       // intent (what they picked), not server-confirmed state. A later network
       // failure does not roll the bucket back.
@@ -741,7 +741,7 @@ export function DemoView({
           (prev as Record<string, unknown>)[k] = data[k];
         }
       }
-      setNodeOverride(nodeId, { data: patch } as Partial<DemoNode>);
+      setNodeOverride(nodeId, { data: patch } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       if (prev) {
@@ -764,7 +764,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       setNodeOverride,
@@ -781,7 +781,7 @@ export function DemoView({
   // Mirrors the onTidy batch pattern below.
   const onStyleNodes = useCallback(
     (nodeIds: string[], patch: NodeStylePatch) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       if (nodeIds.length === 0) return;
       // Remember the user's pick on the batch path too — the single-node
       // `onStyleNode` does the same.
@@ -800,7 +800,7 @@ export function DemoView({
         .filter((t): t is { id: string; prev: NodeStylePatch } => t !== null);
       if (targets.length === 0) return;
       for (const t of targets) {
-        setNodeOverride(t.id, { data: patch } as Partial<DemoNode>);
+        setNodeOverride(t.id, { data: patch } as Partial<FlowNode>);
       }
       setEditError(null);
       markMutation();
@@ -830,7 +830,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-019: toggle the lock state of one or more nodes as a single undo
@@ -841,7 +841,7 @@ export function DemoView({
   // whole batch.
   const onToggleNodeLock = useCallback(
     (nodeIds: string[]) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       if (nodeIds.length === 0) return;
       const targets = nodeIds
         .map((id) => {
@@ -857,7 +857,7 @@ export function DemoView({
       const changed = targets.filter((t) => t.prev !== nextLocked);
       if (changed.length === 0) return;
       for (const t of changed) {
-        setNodeOverride(t.id, { data: { locked: nextLocked } } as Partial<DemoNode>);
+        setNodeOverride(t.id, { data: { locked: nextLocked } } as Partial<FlowNode>);
       }
       setEditError(null);
       markMutation();
@@ -888,7 +888,7 @@ export function DemoView({
         if (first) setEditError(first);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // Style-tab edit on a connector: color, edge style, direction. Cast through
@@ -897,7 +897,7 @@ export function DemoView({
   // is safe at runtime).
   const onStyleConnector = useCallback(
     (connId: string, patch: ConnectorStylePatch) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, patch);
       const conn = demoConnectors?.find((c) => c.id === connId);
       // Snapshot only the keys the caller is touching so undo restores those
@@ -933,7 +933,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoConnectors,
       setConnectorOverride,
@@ -959,7 +959,7 @@ export function DemoView({
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       // US-019: locked nodes opt out of every delete path. Silent no-op —
@@ -1015,7 +1015,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       demoConnectors,
@@ -1039,7 +1039,7 @@ export function DemoView({
   // invert from the middle of the array).
   const onReorderNode = useCallback(
     (nodeId: string, op: ReorderOp) => {
-      if (!demoId || !adapter || !demoNodes) return;
+      if (!flowId || !adapter || !demoNodes) return;
       const currentIds = nodeOrderOverride ?? demoNodes.map((n) => n.id);
       const newIds = applyReorderOpToIds(currentIds, nodeId, op);
       if (!newIds) return;
@@ -1065,12 +1065,12 @@ export function DemoView({
         console.error('reorderNode failed', err);
       });
     },
-    [demoId, adapter, demoNodes, nodeOrderOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, nodeOrderOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onDeleteConnector = useCallback(
     (connId: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       // Snapshot the full connector BEFORE the delete API call so undo can
       // recreate it with the original id and properties.
       const conn = demoConnectors?.find((c) => c.id === connId);
@@ -1099,7 +1099,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoConnectors,
       markConnectorDeleted,
@@ -1117,7 +1117,7 @@ export function DemoView({
   // onTidy / onStyleNodes batch shape.
   const onDeleteSelection = useCallback(
     (nodeIds: string[], connectorIds: string[]) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       if (nodeIds.length === 0 && connectorIds.length === 0) return;
       const expandedNodeIds = nodeIds;
       // US-019: skip locked nodes silently. Locked nodes opt out of every
@@ -1134,7 +1134,7 @@ export function DemoView({
       const cascadingNodeIdSet = new Set(filteredNodeIds);
       const nodeSnapshots = filteredNodeIds
         .map((id) => demoNodes?.find((n) => n.id === id))
-        .filter((n): n is DemoNode => !!n);
+        .filter((n): n is FlowNode => !!n);
       // Cascaded connectors: any connector whose source/target is in the
       // doomed node set. The server cascades these as part of deleteNode;
       // mirror it locally so undo can restore them all.
@@ -1257,7 +1257,7 @@ export function DemoView({
       })();
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       demoConnectors,
@@ -1353,7 +1353,7 @@ export function DemoView({
   // on disk via mergeNodeUpdates' '' → delete handling.
   const onNodeNameChange = useCallback(
     (nodeId: string, name: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       const prevName = node && 'name' in node.data ? node.data.name : undefined;
       // Undo must restore the previous name including the "no name" case.
@@ -1361,7 +1361,7 @@ export function DemoView({
       // prevName; optional-name variants (icon/shape/group/html) treat '' as
       // clear.
       const undoName = prevName ?? '';
-      setNodeOverride(nodeId, { data: { name } } as Partial<DemoNode>);
+      setNodeOverride(nodeId, { data: { name } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       if (node) {
@@ -1381,16 +1381,16 @@ export function DemoView({
         console.error('updateNode name failed', err);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onNodeDescriptionChange = useCallback(
     (nodeId: string, next: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = node.data.description ?? '';
-      setNodeOverride(nodeId, { data: { description: next } } as Partial<DemoNode>);
+      setNodeOverride(nodeId, { data: { description: next } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       pushUndo({
@@ -1408,16 +1408,16 @@ export function DemoView({
         console.error('updateNode description failed', err);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onNodeDetailChange = useCallback(
     (nodeId: string, next: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = node.data.detail ?? '';
-      setNodeOverride(nodeId, { data: { detail: next } } as Partial<DemoNode>);
+      setNodeOverride(nodeId, { data: { detail: next } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       pushUndo({
@@ -1435,7 +1435,7 @@ export function DemoView({
         console.error('updateNode detail failed', err);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   // US-009: persist a new icon name (or clear it via null) from the
@@ -1445,13 +1445,13 @@ export function DemoView({
   // canvas renders the no-icon variant immediately.
   const onNodeIconChange = useCallback(
     (nodeId: string, next: string | null) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
       const prev = 'icon' in node.data ? (node.data.icon ?? null) : null;
       setNodeOverride(nodeId, {
         data: { icon: next ?? undefined },
-      } as Partial<DemoNode>);
+      } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
       pushUndo({
@@ -1469,12 +1469,12 @@ export function DemoView({
         console.error('updateNode icon failed', err);
       });
     },
-    [demoId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   const onCreateShapeNode = useCallback(
     (shape: ShapeKind, position: Position, dims: { width: number; height: number }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       setEditError(null);
       // Generate the id client-side so the optimistic override and the
       // server echo share an id — the SSE-driven prune drops the override
@@ -1496,13 +1496,13 @@ export function DemoView({
       // echo arrives. Without this the node briefly shows at SHAPE_DEFAULT_SIZE
       // (the renderer's pre-`data.width` fallback) and snaps to the dragged
       // size on the next paint.
-      const optimistic: DemoNode = {
+      const optimistic: FlowNode = {
         id,
         type: 'shapeNode',
         position,
         data,
       };
-      setNodeOverride(id, optimistic as Partial<DemoNode>);
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
       markMutation();
       // Push from the .then so the undo entry binds to the server-issued id
       // (matches `onCreateConnector`). No dropTop is needed on .catch because
@@ -1525,7 +1525,7 @@ export function DemoView({
           console.error('createNode failed', err);
         });
     },
-    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-013 (icon picker): commit a new iconNode at the picked viewport
@@ -1535,7 +1535,7 @@ export function DemoView({
   // marked selected on success so the detail panel + style strip open on it.
   const onCreateIconNode = useCallback(
     (iconName: string, position: Position) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       setEditError(null);
       const id = `node-${crypto.randomUUID()}`;
       const data = {
@@ -1549,13 +1549,13 @@ export function DemoView({
         position,
         data,
       };
-      const optimistic: DemoNode = {
+      const optimistic: FlowNode = {
         id,
         type: 'iconNode',
         position,
         data,
       };
-      setNodeOverride(id, optimistic as Partial<DemoNode>);
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
       markMutation();
       adapter
@@ -1576,7 +1576,7 @@ export function DemoView({
           console.error('createNode (icon) failed', err);
         });
     },
-    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-017: commit a new htmlNode at the drop position from the toolbar's
@@ -1597,7 +1597,7 @@ export function DemoView({
   // visible "Loading…" → "Edit me" transition is the expected UX.
   const onCreateHtmlNode = useCallback(
     (args: { position: Position }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       setEditError(null);
       const id = `node-${crypto.randomUUID()}`;
       const htmlPath = `blocks/${id}.html`;
@@ -1607,13 +1607,13 @@ export function DemoView({
         position: args.position,
         data: {},
       };
-      const optimistic: DemoNode = {
+      const optimistic: FlowNode = {
         id,
         type: 'htmlNode',
         position: args.position,
         data: { htmlPath },
       };
-      setNodeOverride(id, optimistic as Partial<DemoNode>);
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
       markMutation();
       adapter
@@ -1634,7 +1634,7 @@ export function DemoView({
           console.error('createNode (htmlNode) failed', err);
         });
     },
-    [demoId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
   // US-008: retry map for in-flight image uploads. Keyed by the optimistic
@@ -1685,15 +1685,15 @@ export function DemoView({
       position: Position;
       dims: { width: number; height: number };
     }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       setEditError(null);
       markMutation();
-      // US-025: image-upload-flow's deps still match the legacy (demoId, …)
+      // US-025: image-upload-flow's deps still match the legacy (flowId, …)
       // signatures from `@/lib/api`. Wrap the bound adapter into those shapes
       // so the orchestrator continues to work unchanged; refactoring its
       // signature is out-of-scope for US-025 and lands in a later P4/P5 story.
       void performImageDropUpload(
-        { ...args, demoId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
+        { ...args, flowId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
           upload: (_projectId, file, filename) => adapter.uploadImage(file, filename),
           createNode: async (_demoId, body) => {
@@ -1714,7 +1714,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       setNodeOverride,
       pushUndo,
@@ -1731,13 +1731,13 @@ export function DemoView({
       dims: { width: number; height: number };
       originalFilename: string;
     }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       // Generate the id client-side so the optimistic override and the server
       // echo share an id (mirrors `onCreateShapeNode`).
       const nodeId = `node-${crypto.randomUUID()}`;
       runImageUpload({ nodeId, ...args });
     },
-    [demoId, adapter, runImageUpload],
+    [flowId, adapter, runImageUpload],
   );
 
   const onRetryImageUpload = useCallback(
@@ -1780,11 +1780,11 @@ export function DemoView({
     (name: string) => {
       pushRecent(name);
       if (iconPicker.mode === 'replace' && iconPicker.nodeId) {
-        if (demoId && adapter) {
+        if (flowId && adapter) {
           const targetId = iconPicker.nodeId;
           const node = demoNodes?.find((n) => n.id === targetId);
           const prevIcon = node?.type === 'iconNode' ? node.data.icon : undefined;
-          setNodeOverride(targetId, { data: { icon: name } } as Partial<DemoNode>);
+          setNodeOverride(targetId, { data: { icon: name } } as Partial<FlowNode>);
           setEditError(null);
           markMutation();
           if (prevIcon !== undefined) {
@@ -1808,7 +1808,7 @@ export function DemoView({
         }
       } else {
         const rfInstance = rfInstanceRef.current;
-        if (rfInstance && demoId) {
+        if (rfInstance && flowId) {
           const position = computeIconInsertPosition(rfInstance, {
             width: window.innerWidth,
             height: window.innerHeight,
@@ -1821,7 +1821,7 @@ export function DemoView({
     [
       iconPicker.mode,
       iconPicker.nodeId,
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       setNodeOverride,
@@ -1836,7 +1836,7 @@ export function DemoView({
 
   const onConnectorLabelChange = useCallback(
     (connId: string, label: string) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevLabel = conn?.label;
       setConnectorOverride(connId, { label } as Partial<Connector>);
@@ -1861,7 +1861,7 @@ export function DemoView({
         console.error('updateConnector label failed', err);
       });
     },
-    [demoId, adapter, demoConnectors, setConnectorOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoConnectors, setConnectorOverride, pushUndo, dropUndoTop, markMutation],
   );
 
   // Create a default connector from a handle-drag gesture (US-029). We
@@ -1871,7 +1871,7 @@ export function DemoView({
   // surface the existing edit-error-banner.
   const onCreateConnector = useCallback(
     (source: string, target: string, options?: { targetPin?: EdgePin }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const id = `conn-${crypto.randomUUID()}`;
       // US-025: by default every new connector is floating — both endpoints
       // carry *HandleAutoPicked: true and no handle ids. When the body-drop
@@ -1925,7 +1925,7 @@ export function DemoView({
           console.error('createConnector failed', err);
         });
     },
-    [demoId, adapter, setConnectorOverride, dropConnectorOverride, pushUndo, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride, pushUndo, markMutation],
   );
 
   // US-015: drop-on-pane create-and-connect. Combines `onCreateShapeNode` and
@@ -1945,7 +1945,7 @@ export function DemoView({
       position: Position;
       shape: ShapeKind;
     }) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       setEditError(null);
       const newNodeId = `node-${crypto.randomUUID()}`;
       const newConnId = `conn-${crypto.randomUUID()}`;
@@ -1973,13 +1973,13 @@ export function DemoView({
       };
       // Optimistic: render the new node + edge immediately so the user sees
       // the result before the round-trip resolves.
-      const optimisticNode: DemoNode = {
+      const optimisticNode: FlowNode = {
         id: newNodeId,
         type: 'shapeNode',
         position,
         data: shapeData,
       };
-      setNodeOverride(newNodeId, optimisticNode as Partial<DemoNode>);
+      setNodeOverride(newNodeId, optimisticNode as Partial<FlowNode>);
       setConnectorOverride(newConnId, connPayload as Partial<Connector>);
       setPendingEditNodeId(newNodeId);
       markMutation();
@@ -2021,7 +2021,7 @@ export function DemoView({
       })();
     },
     [
-      demoId,
+      flowId,
       adapter,
       setNodeOverride,
       dropNodeOverride,
@@ -2038,7 +2038,7 @@ export function DemoView({
   // mirrors whether the ref is non-null so the right-click menu's Paste item
   // can subscribe to it (refs don't trigger re-renders). Both reset on
   // demo-id change via the same effect that clears selection state.
-  const clipboardRef = useRef<{ nodes: DemoNode[]; connectors: Connector[] } | null>(null);
+  const clipboardRef = useRef<{ nodes: FlowNode[]; connectors: Connector[] } | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
 
   const onCopyNodes = useCallback(
@@ -2062,10 +2062,10 @@ export function DemoView({
 
   const onPasteNodes = useCallback(
     (flowPos: Position | null) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const payload = clipboardRef.current;
       if (!payload || payload.nodes.length === 0) return;
-      const { newNodes, newConnectors } = buildPastePayload<DemoNode, Connector>({
+      const { newNodes, newConnectors } = buildPastePayload<FlowNode, Connector>({
         nodes: payload.nodes,
         connectors: payload.connectors,
         flowPos,
@@ -2077,7 +2077,7 @@ export function DemoView({
       // the POSTs are in flight. The SSE echo of the rewrite drops the
       // overrides via pruneAgainst once server state matches.
       for (const n of newNodes) {
-        setNodeOverride(n.id, n as Partial<DemoNode>);
+        setNodeOverride(n.id, n as Partial<FlowNode>);
       }
       for (const c of newConnectors) {
         setConnectorOverride(c.id, c as Partial<Connector>);
@@ -2141,7 +2141,7 @@ export function DemoView({
       })();
     },
     [
-      demoId,
+      flowId,
       adapter,
       setNodeOverride,
       dropNodeOverride,
@@ -2262,7 +2262,7 @@ export function DemoView({
   // hasn't reported a size yet.
   const onTidy = useCallback(
     (scope: 'all' | 'selection') => {
-      if (!demoId || !adapter || !demoNodes) return;
+      if (!flowId || !adapter || !demoNodes) return;
       const overrides = nodePending.overrides;
       const inst = rfInstanceRef.current;
       const selectedSet = scope === 'selection' ? new Set(selectedIdsRef.current) : null;
@@ -2363,7 +2363,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoNodes,
       demoConnectors,
@@ -2706,7 +2706,7 @@ export function DemoView({
         targetPin?: EdgePin | null;
       },
     ) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       // Capture every endpoint-shape field so undo can reset whichever side(s)
       // moved (and leave the unchanged side at its original value). The
@@ -2775,7 +2775,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoConnectors,
       setConnectorOverride,
@@ -2793,7 +2793,7 @@ export function DemoView({
   // the previous state was unpinned) in one entry per drag gesture.
   const onPinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target', pin: EdgePin) => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
@@ -2825,7 +2825,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoConnectors,
       setConnectorOverride,
@@ -2843,7 +2843,7 @@ export function DemoView({
   // previous pin in one entry.
   const onUnpinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target') => {
-      if (!demoId || !adapter) return;
+      if (!flowId || !adapter) return;
       const conn = demoConnectors?.find((c) => c.id === connId);
       const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       if (!prevPin) return; // Nothing to unpin.
@@ -2867,7 +2867,7 @@ export function DemoView({
       });
     },
     [
-      demoId,
+      flowId,
       adapter,
       demoConnectors,
       setConnectorOverride,
@@ -2882,7 +2882,7 @@ export function DemoView({
   // (active swatches, selected dropdown option) reflect the in-flight edit
   // immediately rather than waiting for the SSE echo. Defined here (above the
   // early returns below) so React's hook order is stable across renders.
-  const demo = detail?.demo;
+  const demo = detail?.flow;
   const nodeOverrides = nodePending.overrides;
   const connectorOverrides = connectorPending.overrides;
   const deletedNodeIds = nodeDeletions.ids;
@@ -2895,10 +2895,10 @@ export function DemoView({
 
   // Style-strip arrays: every selected entity (with optimistic overrides
   // merged) so the strip can fan out edits across the multi-selection.
-  const selectedNodes = useMemo<DemoNode[]>(() => {
+  const selectedNodes = useMemo<FlowNode[]>(() => {
     if (!demo || selectedIds.length === 0) return [];
     const byId = new Map(demo.nodes.map((n) => [n.id, n]));
-    const out: DemoNode[] = [];
+    const out: FlowNode[] = [];
     for (const id of selectedIds) {
       const found = byId.get(id);
       if (!found) continue;
@@ -2908,7 +2908,7 @@ export function DemoView({
         continue;
       }
       const data = ov.data ? { ...found.data, ...ov.data } : found.data;
-      out.push({ ...found, ...ov, data } as DemoNode);
+      out.push({ ...found, ...ov, data } as FlowNode);
     }
     return out;
   }, [demo, selectedIds, nodeOverrides]);
@@ -2929,11 +2929,11 @@ export function DemoView({
   // (US-006). Nodes not in the override (e.g. just-pasted ones whose echo
   // arrived after the reorder) are appended at the end so they render on top
   // until the next echo subsumes the override.
-  const orderedNodes = useMemo<DemoNode[] | null>(() => {
+  const orderedNodes = useMemo<FlowNode[] | null>(() => {
     if (!demo) return null;
     if (!nodeOrderOverride) return demo.nodes;
     const byId = new Map(demo.nodes.map((n) => [n.id, n]));
-    const ordered: DemoNode[] = [];
+    const ordered: FlowNode[] = [];
     const seen = new Set<string>();
     for (const id of nodeOrderOverride) {
       const n = byId.get(id);
@@ -2952,7 +2952,7 @@ export function DemoView({
   // sees them. A pending node delete also suppresses every connector touching
   // it (cascade), so the user never sees a dangling edge mid-flight even if
   // the connector wasn't explicitly marked.
-  const visibleNodes = useMemo<DemoNode[] | null>(() => {
+  const visibleNodes = useMemo<FlowNode[] | null>(() => {
     const base = orderedNodes ?? demo?.nodes ?? null;
     if (!base) return null;
     if (deletedNodeIds.size === 0) return base;
@@ -3014,9 +3014,9 @@ export function DemoView({
           ref={canvasRef}
           mode="edit"
           adapter={adapter}
-          projectId={demoId ?? undefined}
+          projectId={flowId ?? undefined}
           enableEmbed={false}
-          onExportToCloud={demoId ? () => setExportDialogOpen(true) : undefined}
+          onExportToCloud={flowId ? () => setExportDialogOpen(true) : undefined}
           onRestartDemo={onRestartDemo}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
@@ -3038,25 +3038,25 @@ export function DemoView({
           onNodeDescriptionChange={onNodeDescriptionChange}
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
-          onCreateImageFromFile={demoId ? onCreateImageFromFile : undefined}
-          onRetryImageUpload={demoId ? onRetryImageUpload : undefined}
-          onCreateHtmlNode={demoId ? onCreateHtmlNode : undefined}
+          onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
+          onRetryImageUpload={flowId ? onRetryImageUpload : undefined}
+          onCreateHtmlNode={flowId ? onCreateHtmlNode : undefined}
           iconPickerOpen={iconPicker.open}
-          onOpenIconPicker={demoId ? handleOpenIconPickerInsert : undefined}
-          onCloseIconPicker={demoId ? closeIconPicker : undefined}
-          onPickIcon={demoId ? handleIconPicked : undefined}
-          onRequestIconReplace={demoId ? handleChangeIcon : undefined}
+          onOpenIconPicker={flowId ? handleOpenIconPickerInsert : undefined}
+          onCloseIconPicker={flowId ? closeIconPicker : undefined}
+          onPickIcon={flowId ? handleIconPicked : undefined}
+          onRequestIconReplace={flowId ? handleChangeIcon : undefined}
           onCreateConnector={onCreateConnector}
           onReconnectConnector={onReconnectConnector}
-          onPinEndpoint={demoId ? onPinEndpoint : undefined}
-          onUnpinEndpoint={demoId ? onUnpinEndpoint : undefined}
+          onPinEndpoint={flowId ? onPinEndpoint : undefined}
+          onUnpinEndpoint={flowId ? onUnpinEndpoint : undefined}
           onReorderNode={onReorderNode}
           onDeleteNode={onDeleteNode}
           onCopyNode={(nodeId) => onCopyNodes([nodeId])}
           onPasteAt={onPasteNodes}
-          onCopySelection={demoId ? onCopyNodes : undefined}
-          onPasteSelection={demoId ? () => onPasteNodes(null) : undefined}
-          onToggleNodeLock={demoId ? onToggleNodeLock : undefined}
+          onCopySelection={flowId ? onCopyNodes : undefined}
+          onPasteSelection={flowId ? () => onPasteNodes(null) : undefined}
+          onToggleNodeLock={flowId ? onToggleNodeLock : undefined}
           hasClipboard={hasClipboard}
           selectedNodes={selectedNodes}
           selectedConnectors={selectedConnectorsList}
@@ -3115,19 +3115,19 @@ export function DemoView({
           canUndo,
           canRedo,
           hasClipboard,
-          // Export/restart commands need a backing demo. demoId is non-null
+          // Export/restart commands need a backing demo. flowId is non-null
           // whenever the canvas can render; `onRestartDemo` is optional on the
           // props and falls back to false when the parent didn't supply it.
-          canExportDemo: Boolean(demoId),
+          canExportDemo: Boolean(flowId),
           canResetSession: Boolean(onRestartDemo),
         }}
       />
 
-      {demoId ? (
+      {flowId ? (
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          projectId={demoId}
+          projectId={flowId}
           onCapturePreview={() => canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)}
         />
       ) : null}

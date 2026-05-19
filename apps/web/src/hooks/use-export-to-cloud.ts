@@ -1,4 +1,4 @@
-import { fetchDemoDetail } from '@/lib/api';
+import { fetchFlowDetail } from '@/lib/api';
 import { strToU8, zipSync } from 'fflate';
 import { useCallback } from 'react';
 
@@ -13,11 +13,11 @@ export async function exportToCloud(
   visibility: Visibility,
   previewDataUrl?: string,
 ): Promise<{ shareUrl: string }> {
-  const detail = await fetchDemoDetail(projectId);
-  if (!detail.demo) {
-    throw new Error('Demo has no data');
+  const detail = await fetchFlowDetail(projectId);
+  if (!detail.flow) {
+    throw new Error('Flow has no data');
   }
-  const demo = detail.demo;
+  const demo = detail.flow;
 
   // Deduplicate paths across imageNode and htmlNode references
   const seen = new Set<string>();

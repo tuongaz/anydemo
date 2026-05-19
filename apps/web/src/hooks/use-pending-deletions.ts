@@ -89,7 +89,7 @@ export const applyPruneDeletionsAgainst = (
  * server delete + SSE echo has not yet landed. Mirrors `usePendingOverrides`
  * but for "this thing should be hidden" rather than "these fields are
  * pending". Callers `mark()` on delete, then either `pruneAgainst()` on the
- * next demo:reload echo (server caught up) or `unmark()` on API failure.
+ * next flow:reload echo (server caught up) or `unmark()` on API failure.
  */
 export const usePendingDeletions = (): PendingDeletions => {
   const [ids, setIds] = useState<ReadonlySet<string>>(() => new Set());

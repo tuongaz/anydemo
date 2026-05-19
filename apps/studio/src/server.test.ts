@@ -81,7 +81,7 @@ describe('GET /api/projects/:id/files/:path', () => {
     const entry = registry.upsert({
       name: 'Files Test',
       repoPath: repoDir,
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
     });
     const app = createApp({
       mode: 'prod',
@@ -154,7 +154,7 @@ const buildShelloutFixture = (opts?: {
   const entry = registry.upsert({
     name: 'Shellout Test',
     repoPath: repoDir,
-    demoPath: '.seeflow/seeflow.json',
+    architecturePath: '.seeflow/seeflow.json',
   });
 
   const calls: Array<{ cmd: string; args: string[] }> = [];
@@ -379,7 +379,7 @@ describe('POST /api/projects/:id/files/upload', () => {
     const entry = registry.upsert({
       name: 'Upload Test',
       repoPath: repoDir,
-      demoPath: '.seeflow/seeflow.json',
+      architecturePath: '.seeflow/seeflow.json',
     });
     const app = createApp({
       mode: 'prod',

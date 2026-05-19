@@ -85,7 +85,7 @@ persists every mutation.
 ```tsx
 import { SeeflowCanvas, createRestAdapter } from '@seeflow/canvas';
 
-const adapter = createRestAdapter({ baseUrl: '', demoId: 'my-demo' });
+const adapter = createRestAdapter({ baseUrl: '', flowId: 'my-demo' });
 
 <SeeflowCanvas
   mode="edit"

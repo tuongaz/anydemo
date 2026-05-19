@@ -15,7 +15,7 @@ const readEnv = (key: string): string | undefined => {
 };
 
 export async function emit(
-  demoId: string,
+  flowId: string,
   nodeId: string,
   status: EmitStatus,
   opts: EmitOptions = {},
@@ -27,6 +27,6 @@ export async function emit(
   await fetch(`${base}/api/emit`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ demoId, nodeId, status, runId: opts.runId, payload: opts.payload }),
+    body: JSON.stringify({ flowId, nodeId, status, runId: opts.runId, payload: opts.payload }),
   });
 }

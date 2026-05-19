@@ -1,22 +1,22 @@
-import { type DemoDetail, fetchDemoDetail } from '@/lib/api';
+import { type FlowDetail, fetchFlowDetail } from '@/lib/api';
 import { useCallback, useEffect, useState } from 'react';
 
 export interface UseDemoDataResult {
-  detail: DemoDetail | null;
+  detail: FlowDetail | null;
   loading: boolean;
   error: string | null;
   refresh: () => void;
 }
 
 export const useDemoData = (id: string | null): UseDemoDataResult => {
-  const [detail, setDetail] = useState<DemoDetail | null>(null);
+  const [detail, setDetail] = useState<FlowDetail | null>(null);
   const [loading, setLoading] = useState<boolean>(id !== null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
     if (!id) return;
     setLoading(true);
-    fetchDemoDetail(id)
+    fetchFlowDetail(id)
       .then((data) => {
         setDetail(data);
         setError(null);

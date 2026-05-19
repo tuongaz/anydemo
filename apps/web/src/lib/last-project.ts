@@ -1,4 +1,4 @@
-import type { DemoSummary } from '@/lib/api';
+import type { FlowSummary } from '@/lib/api';
 
 export const LAST_PROJECT_STORAGE_KEY = 'seeflow:last-project';
 
@@ -30,9 +30,9 @@ export const writeLastProjectId = (id: string): void => {
  *   - 2+ demos with no valid stored id → null (show the picker).
  */
 export const pickInitialDemo = (
-  demos: DemoSummary[],
+  demos: FlowSummary[],
   lastId: string | null,
-): DemoSummary | null => {
+): FlowSummary | null => {
   if (demos.length === 0) return null;
   if (demos.length === 1) return demos[0] ?? null;
   if (lastId) {

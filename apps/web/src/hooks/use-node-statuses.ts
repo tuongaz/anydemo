@@ -64,7 +64,7 @@ export interface UseNodeStatusesResult {
   statusByNode: NodeStatuses;
   /** Apply a single SSE event. Non-`node:status` events are ignored. */
   apply: (event: NodeStatusEvent) => void;
-  /** Clear all node statuses (used when switching demos or after demo:reload). */
+  /** Clear all node statuses (used when switching demos or after flow:reload). */
   reset: () => void;
 }
 
@@ -72,17 +72,17 @@ export interface UseNodeStatusesResult {
  * Per-node `StatusReport` map driven by SSE `node:status` events. Each
  * incoming event REPLACES the entry for its nodeId (latest wins). The studio
  * kills the previous status batch on every Play click + on demo file reloads,
- * so callers should `reset` on `demo:reload` to drop stale entries.
+ * so callers should `reset` on `flow:reload` to drop stale entries.
  */
-export const useNodeStatuses = (demoId: string | null): UseNodeStatusesResult => {
+export const useNodeStatuses = (flowId: string | null): UseNodeStatusesResult => {
   const [statusByNode, dispatch] = useReducer(reducer, {} as NodeStatuses);
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: demoId is the trigger; the effect body intentionally doesn't reference it.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: flowId is the trigger; the effect body intentionally doesn't reference it.
   useEffect(() => {
     dispatchRef.current({ type: 'reset' });
-  }, [demoId]);
+  }, [flowId]);
 
   const apply = useCallback((event: NodeStatusEvent) => {
     dispatchRef.current({ type: 'event', event });

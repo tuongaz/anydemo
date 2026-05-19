@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import * as React from 'react';
-import type { DemoNode } from '../types.ts';
+import type { FlowNode } from '../types.ts';
 
 // The DetailPanel root reads localStorage on first render
 // (getStoredDetailPanelWidth) and writes back on resize. Provide a Map-backed
@@ -104,7 +104,7 @@ function findByTestId(tree: unknown, testId: string): ReactElementLike | null {
   return matches[0] ?? null;
 }
 
-function makePlayNode(overrides: Partial<DemoNode> = {}): DemoNode {
+function makePlayNode(overrides: Partial<FlowNode> = {}): FlowNode {
   return {
     id: 'n1',
     type: 'playNode',
@@ -118,7 +118,7 @@ function makePlayNode(overrides: Partial<DemoNode> = {}): DemoNode {
       ...((overrides as { data?: object }).data ?? {}),
     },
     ...overrides,
-  } as DemoNode;
+  } as FlowNode;
 }
 
 beforeEach(() => {
@@ -211,7 +211,7 @@ describe('DetailPanel', () => {
   it('renders three EditableField slots (name, description, detail) for a node', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -229,7 +229,7 @@ describe('DetailPanel', () => {
   it('shows no editor-input chrome at rest (no pencil/check icons anywhere)', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -249,7 +249,7 @@ describe('DetailPanel', () => {
   it('omits onSave callbacks → fields render read-only (no <button>)', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -269,7 +269,7 @@ describe('DetailPanel', () => {
   it('Status section is absent when no statusReport prop is provided', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -291,7 +291,7 @@ describe('DetailPanel', () => {
     };
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -400,7 +400,7 @@ describe('DetailPanel icon trigger', () => {
   it('icon trigger is hidden when onIconChange is undefined', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(),
         connector: null,
         onClose: () => {},
@@ -416,8 +416,8 @@ describe('DetailPanel icon trigger', () => {
   it('renders read-only icon span when onIconChange is undefined but node has an icon', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
-        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
+        flowId: 'd1',
+        node: makePlayNode({ data: { icon: 'database' } } as Partial<FlowNode>),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -437,7 +437,7 @@ describe('DetailPanel icon trigger', () => {
   it('omits read-only icon span when node has no icon set', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: makePlayNode(), // no icon in data
         connector: null,
         onClose: () => {},
@@ -457,10 +457,10 @@ describe('DetailPanel icon trigger', () => {
       type: 'shapeNode',
       position: { x: 0, y: 0 },
       data: { shape: 'rect', name: 'rect' },
-    } as unknown as DemoNode;
+    } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: shapeNode,
         connector: null,
         onClose: () => {},
@@ -476,10 +476,10 @@ describe('DetailPanel icon trigger', () => {
       type: 'htmlNode',
       position: { x: 0, y: 0 },
       data: { name: 'h', htmlPath: 'blocks/a.html' },
-    } as unknown as DemoNode;
+    } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: htmlNode,
         connector: null,
         onClose: () => {},
@@ -493,8 +493,8 @@ describe('DetailPanel icon trigger', () => {
   it('icon trigger is visible for a playNode when onIconChange is provided', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
-        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
+        flowId: 'd1',
+        node: makePlayNode({ data: { icon: 'database' } } as Partial<FlowNode>),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -513,10 +513,10 @@ describe('DetailPanel icon trigger', () => {
       type: 'stateNode',
       position: { x: 0, y: 0 },
       data: { name: 's', kind: 'service', status: 'idle' },
-    } as unknown as DemoNode;
+    } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: stateNode,
         connector: null,
         onClose: () => {},
@@ -600,7 +600,7 @@ describe('DetailPanel (connector)', () => {
   it('renders only the ConnectorSummary for a connector (no editable fields)', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
-        demoId: 'd1',
+        flowId: 'd1',
         node: null,
         connector: {
           id: 'c1',

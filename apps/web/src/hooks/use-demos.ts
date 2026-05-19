@@ -1,18 +1,18 @@
-import { type DemoSummary, fetchDemos } from '@/lib/api';
+import { type FlowSummary, fetchFlows } from '@/lib/api';
 import { useCallback, useEffect, useState } from 'react';
 
 export interface UseDemosResult {
-  demos: DemoSummary[] | null;
+  demos: FlowSummary[] | null;
   error: string | null;
   refresh: () => void;
 }
 
 export const useDemos = (): UseDemosResult => {
-  const [demos, setDemos] = useState<DemoSummary[] | null>(null);
+  const [demos, setDemos] = useState<FlowSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback((): Promise<void> => {
-    return fetchDemos()
+    return fetchFlows()
       .then((list) => {
         setDemos(list);
         setError(null);

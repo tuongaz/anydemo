@@ -8,7 +8,7 @@ import { DatabaseShape } from '../nodes/shapes/database.tsx';
 import { QueueShape } from '../nodes/shapes/queue.tsx';
 import { ServerShape } from '../nodes/shapes/server.tsx';
 import { UserShape } from '../nodes/shapes/user.tsx';
-import type { Connector, DemoNode } from '../types.ts';
+import type { Connector, FlowNode } from '../types.ts';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import {
@@ -169,7 +169,7 @@ const noopAdapter: CanvasAdapter = new Proxy({} as CanvasAdapter, {
 // `nodeOverrides` / `connectorOverrides` directly; the wrapper lifts them into
 // `runtime.pendingOverrides` so the assertions reach the same code paths.
 type LegacyOverrides = Partial<SeeflowCanvasProps> & {
-  nodeOverrides?: Record<string, Partial<DemoNode>>;
+  nodeOverrides?: Record<string, Partial<FlowNode>>;
   connectorOverrides?: Record<string, Partial<Connector>>;
 };
 
@@ -218,7 +218,7 @@ function callSeeflowCanvas(
   return renderWithHooks(() => renderFn(props, hookOptions.ref ?? null), hookOptions);
 }
 
-function makeShapeNode(id: string): DemoNode {
+function makeShapeNode(id: string): FlowNode {
   return {
     id,
     type: 'shapeNode',
@@ -227,7 +227,7 @@ function makeShapeNode(id: string): DemoNode {
   };
 }
 
-function makeTextNode(id: string): DemoNode {
+function makeTextNode(id: string): FlowNode {
   return {
     id,
     type: 'shapeNode',
@@ -327,7 +327,7 @@ describe('SeeflowCanvas', () => {
     // store). Returning false makes xyflow paint the candidate handle red
     // and skip onConnect. We assert the prop is wired and exercise the
     // callback directly with synthetic Connections.
-    function getValidator(nodes: DemoNode[]): (c: Connection) => boolean {
+    function getValidator(nodes: FlowNode[]): (c: Connection) => boolean {
       const tree = callSeeflowCanvas({ nodes, selectedNodeIds: [], onCreateConnector: () => {} });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
@@ -403,7 +403,7 @@ describe('SeeflowCanvas', () => {
     //     `isValid === false`), and re-runs isValidConnection so US-004
     //     still holds on the fall-through path.
 
-    function makeShapeNodeOverride(id: string): Partial<DemoNode> {
+    function makeShapeNodeOverride(id: string): Partial<FlowNode> {
       return {
         id,
         type: 'shapeNode',
@@ -412,7 +412,7 @@ describe('SeeflowCanvas', () => {
       };
     }
 
-    function makeTextNodeOverride(id: string): Partial<DemoNode> {
+    function makeTextNodeOverride(id: string): Partial<FlowNode> {
       return {
         id,
         type: 'shapeNode',
@@ -422,8 +422,8 @@ describe('SeeflowCanvas', () => {
     }
 
     function getValidatorWithOverrides(
-      nodes: DemoNode[],
-      nodeOverrides: Record<string, Partial<DemoNode>>,
+      nodes: FlowNode[],
+      nodeOverrides: Record<string, Partial<FlowNode>>,
       selectedNodeIds: readonly string[] = [],
     ): (c: Connection) => boolean {
       const tree = callSeeflowCanvas({
@@ -472,7 +472,7 @@ describe('SeeflowCanvas', () => {
     it('isValidConnection accepts an edge between any two non-text shape nodes', () => {
       // The validator does not gate on node relationship — any two shape nodes
       // that are not text can be connected.
-      const child: DemoNode = makeShapeNode('child');
+      const child: FlowNode = makeShapeNode('child');
       const top = makeShapeNode('top');
       const tree = callSeeflowCanvas({
         nodes: [child, top],
@@ -1267,8 +1267,8 @@ describe('SeeflowCanvas', () => {
       pos: { x: number; y: number },
       dims: { width: number; height: number },
       extra: { locked?: boolean } = {},
-    ): DemoNode {
-      const node: DemoNode = {
+    ): FlowNode {
+      const node: FlowNode = {
         id,
         type: 'shapeNode',
         position: pos,
@@ -1354,7 +1354,7 @@ describe('SeeflowCanvas', () => {
           a: {
             position: { x: 25, y: 30 },
             data: { width: 70, height: 70, locked: true },
-          } as Partial<DemoNode>,
+          } as Partial<FlowNode>,
         },
       });
       if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
@@ -1598,7 +1598,7 @@ describe('SeeflowCanvas', () => {
     });
 
     it('returns false without invoking when onCopySelection is missing for Cmd+C', () => {
-      // Defensive: parent might pass undefined onCopySelection (e.g. demoId
+      // Defensive: parent might pass undefined onCopySelection (e.g. flowId
       // not yet resolved). Handler must NOT throw and must NOT preventDefault.
       const event = makeEvent({ metaKey: true, key: 'c' });
       const handled = handleClipboardShortcut({
@@ -1652,7 +1652,7 @@ describe('SeeflowCanvas', () => {
     const findByTestId = (tree: unknown, id: string) =>
       findElement(tree, (el) => (el.props as { 'data-testid'?: unknown })['data-testid'] === id);
 
-    function lockedShape(id: string): DemoNode {
+    function lockedShape(id: string): FlowNode {
       return {
         id,
         type: 'shapeNode',
@@ -2499,7 +2499,7 @@ describe('SeeflowCanvas', () => {
       const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a'] });
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
-      expect((panel?.props as { node?: DemoNode }).node).toBe(a);
+      expect((panel?.props as { node?: FlowNode }).node).toBe(a);
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
     });
 
@@ -2520,17 +2520,17 @@ describe('SeeflowCanvas', () => {
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
       expect((panel?.props as { connector?: Connector }).connector).toBe(conn);
-      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+      expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
     });
 
     it('panel.node and panel.connector are null when nothing is selected', () => {
       const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const panel = findDetailPanel(tree);
-      expect((panel?.props as { node?: DemoNode | null }).node).toBeNull();
+      expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
     });
 
-    it('forwards adapter, statusReport, demoId, and field-edit callbacks', () => {
+    it('forwards adapter, statusReport, flowId, and field-edit callbacks', () => {
       const onNameChange = () => {};
       const onDescriptionChange = () => {};
       const onDetailChange = () => {};
@@ -2548,14 +2548,14 @@ describe('SeeflowCanvas', () => {
       expect(panel).not.toBeNull();
       const props = panel?.props as {
         adapter?: CanvasAdapter | null;
-        demoId?: string | null;
+        flowId?: string | null;
         statusReport?: typeof statusReport;
         onNameChange?: typeof onNameChange;
         onDescriptionChange?: typeof onDescriptionChange;
         onDetailChange?: typeof onDetailChange;
       };
       expect(props.adapter).toBe(noopAdapter);
-      expect(props.demoId).toBe('proj-123');
+      expect(props.flowId).toBe('proj-123');
       expect(props.statusReport).toBe(statusReport);
       expect(props.onNameChange).toBe(onNameChange);
       expect(props.onDescriptionChange).toBe(onDescriptionChange);

@@ -1465,9 +1465,9 @@ var requestJson = async (fetchImpl, method, url, body) => {
   return await res.json();
 };
 var createRestAdapter = (options) => {
-  const { baseUrl, demoId } = options;
+  const { baseUrl, flowId } = options;
   const fetchImpl = options.fetch ?? globalThis.fetch.bind(globalThis);
-  const demoBase = `${baseUrl}/api/demos/${demoId}`;
+  const demoBase = `${baseUrl}/api/flows/${flowId}`;
   return {
     async createNode(input) {
       const data = await requestJson(
@@ -1519,7 +1519,7 @@ var createRestAdapter = (options) => {
       const form = new FormData();
       form.append("file", file);
       form.append("filename", filename);
-      const url = `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/upload`;
+      const url = `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/upload`;
       const res = await fetchImpl(url, { method: "POST", body: form });
       if (!res.ok) {
         let errorBody = null;
@@ -1538,7 +1538,7 @@ var createRestAdapter = (options) => {
       await requestJson(
         fetchImpl,
         "POST",
-        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/open`,
+        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/open`,
         { path }
       );
     },
@@ -1546,7 +1546,7 @@ var createRestAdapter = (options) => {
       await requestJson(
         fetchImpl,
         "POST",
-        `${baseUrl}/api/projects/${encodeURIComponent(demoId)}/files/reveal`,
+        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
         { path }
       );
     }
@@ -1659,7 +1659,7 @@ function subscribeFileChanged(projectId, listener) {
   let entry = buses.get(projectId);
   if (!entry) {
     const factory = factoryOverride ?? defaultFactory;
-    const source = factory(`/api/events?demoId=${encodeURIComponent(projectId)}`);
+    const source = factory(`/api/events?flowId=${encodeURIComponent(projectId)}`);
     if (!source) {
       return () => {
       };
@@ -4696,7 +4696,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { jsx as jsx35, jsxs as jsxs22 } from "react/jsx-runtime";
 function DetailPanel({
-  demoId,
+  flowId,
   node,
   connector,
   adapter,
@@ -4843,7 +4843,7 @@ function DetailPanel({
                     markdown: true
                   }
                 ),
-                inspectableNode.type === "htmlNode" && demoId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
+                inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
             ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
               /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
@@ -8837,7 +8837,7 @@ function SeeflowCanvasImpl(props, ref) {
         shouldRenderSidebar ? /* @__PURE__ */ jsx40(
           DetailPanel,
           {
-            demoId: sidebarDemoId,
+            flowId: sidebarDemoId,
             node: sidebarNode,
             connector: sidebarConnector,
             adapter: adapter ?? null,

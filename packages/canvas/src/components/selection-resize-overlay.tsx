@@ -326,7 +326,7 @@ export function SelectionResizeOverlay({
     setPreviewRect(newRect);
     // US-016: per-tick live dispatch. Children scale continuously as the user
     // drags, not only at pointer-up. rAF-throttled so we cap at ~60fps even
-    // on a fast trackpad emitting hundreds of pointermove events/sec. Demo-
+    // on a fast trackpad emitting hundreds of pointermove events/sec. Flow-
     // view's `onMultiResize` coalesces every tick into one undo entry via the
     // shared coalesceKey, so this loop produces exactly ONE Cmd+Z reversion.
     if (onMultiResize) {

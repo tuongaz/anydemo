@@ -84,7 +84,7 @@ function installFetch(handler: (url: string, init?: RequestInit) => Promise<Resp
 describe('validateEndToEnd', () => {
   it('ok-path with one play + one status passes', async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -108,12 +108,12 @@ describe('validateEndToEnd', () => {
           }),
         );
       }
-      if (url === `${BASE_URL}/api/demos/demo-1/play/p1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1/play/p1`) {
         return jsonResponse({ runId: 'run-1', status: 200, body: { ok: true } });
       }
-      if (url === `${BASE_URL}/api/events?demoId=demo-1`) {
+      if (url === `${BASE_URL}/api/events?flowId=demo-1`) {
         return sseResponse([
-          { event: 'hello', data: { demoId: 'demo-1' } },
+          { event: 'hello', data: { flowId: 'demo-1' } },
           {
             event: 'node:status',
             data: { nodeId: 'p1', state: 'ok', summary: 'tick 1', ts: 1234 },
@@ -124,7 +124,7 @@ describe('validateEndToEnd', () => {
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 500,
     });
@@ -151,7 +151,7 @@ describe('validateEndToEnd', () => {
 
   it("play returning {error:'...'} marks that play failed", async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -166,7 +166,7 @@ describe('validateEndToEnd', () => {
           }),
         );
       }
-      if (url === `${BASE_URL}/api/demos/demo-1/play/p1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1/play/p1`) {
         return jsonResponse({
           runId: 'run-x',
           error: 'script exited with code 1',
@@ -176,7 +176,7 @@ describe('validateEndToEnd', () => {
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 100,
     });
@@ -194,7 +194,7 @@ describe('validateEndToEnd', () => {
 
   it('status timeout marks that status failed', async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -214,18 +214,18 @@ describe('validateEndToEnd', () => {
           }),
         );
       }
-      if (url === `${BASE_URL}/api/demos/demo-1/play/p1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1/play/p1`) {
         return jsonResponse({ runId: 'run-1', status: 200, body: { ok: true } });
       }
-      if (url === `${BASE_URL}/api/events?demoId=demo-1`) {
+      if (url === `${BASE_URL}/api/events?flowId=demo-1`) {
         // hello only — never sends a node:status event for p1
-        return sseResponse([{ event: 'hello', data: { demoId: 'demo-1' } }]);
+        return sseResponse([{ event: 'hello', data: { flowId: 'demo-1' } }]);
       }
       return jsonResponse({ error: 'unexpected' }, 500);
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 100,
     });
@@ -240,7 +240,7 @@ describe('validateEndToEnd', () => {
   it('validationSafe:false skips the play', async () => {
     let playRequested = 0;
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -267,7 +267,7 @@ describe('validateEndToEnd', () => {
           }),
         );
       }
-      if (url.startsWith(`${BASE_URL}/api/demos/demo-1/play/`)) {
+      if (url.startsWith(`${BASE_URL}/api/flows/demo-1/play/`)) {
         playRequested += 1;
         return jsonResponse({ runId: 'r', status: 200, body: { ok: true } });
       }
@@ -275,7 +275,7 @@ describe('validateEndToEnd', () => {
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 100,
     });
@@ -291,9 +291,9 @@ describe('validateEndToEnd', () => {
     });
   });
 
-  it('marks failure when GET /api/demos returns valid:false', async () => {
+  it('marks failure when GET /api/flows returns valid:false', async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse({
           id: 'demo-1',
           valid: false,
@@ -305,7 +305,7 @@ describe('validateEndToEnd', () => {
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 100,
     });
@@ -316,15 +316,15 @@ describe('validateEndToEnd', () => {
     expect(report.skipped[0]?.reason).toContain('not valid');
   });
 
-  it('marks failure when GET /api/demos returns a non-2xx status', async () => {
+  it('marks failure when GET /api/flows returns a non-2xx status', async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/missing`) {
+      if (url === `${BASE_URL}/api/flows/missing`) {
         return jsonResponse({ error: 'not found' }, 404);
       }
       return jsonResponse({ error: 'unexpected' }, 500);
     });
     const report = await validateEndToEnd({
-      demoId: 'missing',
+      flowId: 'missing',
       url: BASE_URL,
       statusWaitMs: 100,
     });
@@ -334,7 +334,7 @@ describe('validateEndToEnd', () => {
 
   it('ignores node:status events for unrelated nodeIds', async () => {
     installFetch(async (url) => {
-      if (url === `${BASE_URL}/api/demos/demo-1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1`) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -350,12 +350,12 @@ describe('validateEndToEnd', () => {
           }),
         );
       }
-      if (url === `${BASE_URL}/api/demos/demo-1/play/p1`) {
+      if (url === `${BASE_URL}/api/flows/demo-1/play/p1`) {
         return jsonResponse({ runId: 'r', status: 200, body: {} });
       }
-      if (url === `${BASE_URL}/api/events?demoId=demo-1`) {
+      if (url === `${BASE_URL}/api/events?flowId=demo-1`) {
         return sseResponse([
-          { event: 'hello', data: { demoId: 'demo-1' } },
+          { event: 'hello', data: { flowId: 'demo-1' } },
           { event: 'node:status', data: { nodeId: 'other-node', state: 'ok' } },
           { event: 'node:status', data: { nodeId: 'p1', state: 'error', summary: 'fail' } },
           { event: 'node:status', data: { nodeId: 'p1', state: 'pending', summary: 'pending' } },
@@ -365,7 +365,7 @@ describe('validateEndToEnd', () => {
     });
 
     const report = await validateEndToEnd({
-      demoId: 'demo-1',
+      flowId: 'demo-1',
       url: BASE_URL,
       statusWaitMs: 500,
     });
@@ -380,7 +380,7 @@ describe('validateEndToEnd', () => {
 describe('validate-end-to-end main()', () => {
   it('exits 0 and prints the report JSON on success', async () => {
     installFetch(async (url) => {
-      if (url.endsWith('/api/demos/demo-1')) {
+      if (url.endsWith('/api/flows/demo-1')) {
         return jsonResponse(
           demoFixture({
             nodes: [
@@ -395,7 +395,7 @@ describe('validate-end-to-end main()', () => {
           }),
         );
       }
-      if (url.endsWith('/api/demos/demo-1/play/p1')) {
+      if (url.endsWith('/api/flows/demo-1/play/p1')) {
         return jsonResponse({ runId: 'r-1', status: 200, body: { ok: true } });
       }
       return jsonResponse({ error: 'unexpected' }, 500);
@@ -421,7 +421,7 @@ describe('validate-end-to-end main()', () => {
     expect(report.plays[0].outcome).toBe('ok');
   });
 
-  it('exits 1 and prints usage when demoId is missing', async () => {
+  it('exits 1 and prints usage when flowId is missing', async () => {
     const stderrChunks: string[] = [];
     const origWrite = process.stderr.write;
     process.stderr.write = ((chunk: string | Uint8Array) => {

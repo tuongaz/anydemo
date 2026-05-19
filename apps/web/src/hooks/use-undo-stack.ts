@@ -40,7 +40,7 @@ export interface UndoStackState {
 export const MAX_HISTORY = 500;
 export const COALESCE_WINDOW_MS = 500;
 /**
- * Idle window after the most recent UI mutation. If a demo:reload echo arrives
+ * Idle window after the most recent UI mutation. If a flow:reload echo arrives
  * AFTER this window, the change is treated as external (text editor, git
  * checkout) and the stack is cleared so undo never replays against stale state.
  * Sized comfortably above the watcher's ~150-500ms post-mutation echo so normal

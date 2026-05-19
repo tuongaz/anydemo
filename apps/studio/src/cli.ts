@@ -15,11 +15,11 @@ import {
   writeConfig,
   writePid,
 } from './runtime.ts';
-import { DemoSchema } from './schema.ts';
+import { FlowSchema } from './schema.ts';
 import { serve } from './server.ts';
 import { createStatusRunner } from './status-runner.ts';
 
-const DEFAULT_DEMO_PATH = '.seeflow/seeflow.json';
+const DEFAULT_ARCHITECTURE_PATH = '.seeflow/seeflow.json';
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 150;
 
@@ -140,7 +140,7 @@ async function seedExamples(registry: Registry) {
 
 async function seedExample(registry: Registry, exampleName: string) {
   const destDir = join(seeflowHome(), exampleName);
-  const demoPath = '.seeflow/seeflow.json';
+  const architecturePath = '.seeflow/seeflow.json';
 
   // Always sync from source so that schema changes and example updates are
   // reflected on every startup, even when the dest directory already exists.
@@ -148,9 +148,9 @@ async function seedExample(registry: Registry, exampleName: string) {
   if (!existsSync(srcDir)) return;
   cpSync(srcDir, destDir, { recursive: true });
 
-  if (registry.getByRepoPathAndDemoPath(destDir, demoPath)) return;
+  if (registry.getByRepoPathAndArchitecturePath(destDir, architecturePath)) return;
 
-  const flowFile = join(destDir, demoPath);
+  const flowFile = join(destDir, architecturePath);
   if (!existsSync(flowFile)) return;
 
   let demo: unknown;
@@ -160,10 +160,10 @@ async function seedExample(registry: Registry, exampleName: string) {
     return;
   }
 
-  const parsed = DemoSchema.safeParse(demo);
+  const parsed = FlowSchema.safeParse(demo);
   if (!parsed.success) return;
 
-  registry.upsert({ name: parsed.data.name, repoPath: destDir, demoPath });
+  registry.upsert({ name: parsed.data.name, repoPath: destDir, architecturePath });
   console.log(`Seeded example: ${parsed.data.name} → ${destDir}`);
 }
 
@@ -217,7 +217,7 @@ function runStop() {
 
 async function runRegister() {
   const repoPath = resolve(flagValue('path') ?? '.');
-  const demoPathArg = flagValue('flow') ?? DEFAULT_DEMO_PATH;
+  const demoPathArg = flagValue('flow') ?? DEFAULT_ARCHITECTURE_PATH;
   const noStart = hasFlag('no-start');
   const config = readConfig();
   const overrideUrl = process.env.SEEFLOW_STUDIO_URL?.replace(/\/+$/, '');
@@ -226,7 +226,7 @@ async function runRegister() {
   const fullPath = isAbsolute(demoPathArg) ? demoPathArg : join(repoPath, demoPathArg);
   if (!existsSync(fullPath)) {
     console.error(`No demo file at ${fullPath}`);
-    console.error(`Create ${DEFAULT_DEMO_PATH} in your repo, or pass --flow <path>.`);
+    console.error(`Create ${DEFAULT_ARCHITECTURE_PATH} in your repo, or pass --flow <path>.`);
     process.exit(1);
   }
 
@@ -238,7 +238,7 @@ async function runRegister() {
     process.exit(1);
   }
 
-  const parsed = DemoSchema.safeParse(demo);
+  const parsed = FlowSchema.safeParse(demo);
   if (!parsed.success) {
     console.error(`${fullPath} failed schema validation:`);
     for (const issue of parsed.error.issues) {
@@ -251,13 +251,13 @@ async function runRegister() {
 
   let res: Response;
   try {
-    res = await fetch(`${url}/api/demos/register`, {
+    res = await fetch(`${url}/api/flows/register`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         name: parsed.data.name,
         repoPath,
-        demoPath: demoPathArg,
+        architecturePath: demoPathArg,
       }),
     });
   } catch (err) {
