@@ -27,6 +27,7 @@ import {
   patchNodeImpl,
   registerFlowImpl,
   reorderNodeImpl,
+  validateImpl,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
 import type { FlowWatcher } from './watcher.ts';
@@ -162,7 +163,7 @@ const DeleteConnectorInputSchema = z.object({
 
 const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
-    name: 'seeflow_list_demos',
+    name: 'seeflow_list_flows',
     description: 'List every demo registered with the studio.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
@@ -171,7 +172,34 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     },
   },
   {
-    name: 'seeflow_get_demo',
+    name: 'validate_seeflow',
+    description:
+      'Validate an architecture.json (and optional style.json) against the ' +
+      'SeeFlow schemas. Stateless: no flow id, no file:// resolution, no ' +
+      'registry side-effects. Returns { ok: true } or { ok: false, issues }.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        architecture: { type: 'object' },
+        style: { type: 'object' },
+      },
+      required: ['architecture'],
+      additionalProperties: false,
+    },
+    handler: async (args) => {
+      const body = args as Record<string, unknown> | undefined;
+      if (!body || !('architecture' in body)) {
+        return errorResult('Body must include `architecture`');
+      }
+      const result = validateImpl({
+        architecture: body.architecture,
+        style: body.style as unknown,
+      });
+      return okResult(result);
+    },
+  },
+  {
+    name: 'seeflow_get_flow',
     description: 'Get the full demo definition and on-disk state for a flowId.',
     inputSchema: DEMO_ID_INPUT_SCHEMA,
     handler: async (args) => {
@@ -189,7 +217,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     },
   },
   {
-    name: 'seeflow_register_demo',
+    name: 'seeflow_register_flow',
     description: 'Register an existing demo file on disk with the studio.',
     inputSchema: inputSchemaFromZod(RegisterBodySchema),
     handler: async (args) => {
@@ -215,7 +243,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     },
   },
   {
-    name: 'seeflow_delete_demo',
+    name: 'seeflow_delete_flow',
     description: 'Unregister a demo from the studio (the on-disk file is left untouched).',
     inputSchema: DEMO_ID_INPUT_SCHEMA,
     handler: async (args) => {

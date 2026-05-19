@@ -13,15 +13,16 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_add_node',
   'seeflow_create_project',
   'seeflow_delete_connector',
-  'seeflow_delete_demo',
+  'seeflow_delete_flow',
   'seeflow_delete_node',
-  'seeflow_get_demo',
-  'seeflow_list_demos',
+  'seeflow_get_flow',
+  'seeflow_list_flows',
   'seeflow_move_node',
   'seeflow_patch_connector',
   'seeflow_patch_node',
-  'seeflow_register_demo',
+  'seeflow_register_flow',
   'seeflow_reorder_node',
+  'validate_seeflow',
 ] as const;
 
 const tmpRegistry = () => {
