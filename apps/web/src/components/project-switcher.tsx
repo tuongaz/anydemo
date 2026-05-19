@@ -138,7 +138,7 @@ export function ProjectSwitcher({
                       <button
                         type="button"
                         aria-label={`Unregister ${demo.name}`}
-                        className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                        className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpen(false);

@@ -3030,7 +3030,7 @@ export function DemoView({
       {detail && !detail.valid ? (
         <div
           data-testid="demo-error-banner"
-          className="absolute inset-x-0 top-0 z-10 border-b border-rose-500/40 bg-rose-50 px-4 py-2 text-xs text-rose-900 shadow-sm dark:bg-rose-950/40 dark:text-rose-100"
+          className="absolute inset-x-0 top-0 z-10 border-b border-rose-500/40 bg-rose-50 px-4 py-2 text-xs text-rose-900 shadow-xs dark:bg-rose-950/40 dark:text-rose-100"
         >
           <span className="font-medium uppercase tracking-wide">Invalid demo: </span>
           <span className="font-mono">{detail.error}</span>

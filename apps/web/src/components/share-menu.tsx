@@ -63,9 +63,9 @@ export function ShareMenu({ onDownloadPdf, onDownloadPng, onExportToCloud }: Sha
           aria-label={SHARE_LABEL}
           title={SHARE_LABEL}
           className={cn(
-            'inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/95 text-muted-foreground shadow-md backdrop-blur transition-colors',
+            'inline-flex h-8 w-8 items-center justify-center rounded-md border border-border bg-background/95 text-muted-foreground shadow-md backdrop-blur-sm transition-colors',
             'hover:bg-accent hover:text-accent-foreground',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring',
           )}
         >
           <Share2 className="h-4 w-4" aria-hidden="true" />
