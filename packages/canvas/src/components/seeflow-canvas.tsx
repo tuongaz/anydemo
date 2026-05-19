@@ -2214,6 +2214,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // resizingRef is set/cleared by node components via data.setResizing.
   const draggingRef = useRef(false);
   const resizingRef = useRef(false);
+  // View-mode drag override: in view mode, commitDraggedNodes skips the
+  // parent dispatch (no adapter PATCH), so a moved node's new position lives
+  // only in `rfNodes`. Any sourceNodes rebuild (selection change, SSE tick,
+  // etc.) would then re-sync rfNodes back to the server position and snap
+  // the node home. Stash the final drag position here and merge it into
+  // `sourceNodes` so view-mode moves stick for the canvas's lifetime.
+  // Edit mode never writes to this ref (commitDraggedNodes guards on
+  // `!isEditMode`) and the merge in `sourceNodes` also gates on
+  // `!isEditMode`, so edit-mode rendering is byte-identical to before.
+  const viewModePositionsRef = useRef<Map<string, { x: number; y: number }>>(new Map());
   // US-009: flush a deferred external-change fit once any in-flight node
   // drag / resize finishes. Idempotent: a second call after the first
   // consume is a no-op (pendingFitRef is back to false). Re-checks the
@@ -2466,10 +2476,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
   const sourceNodes = useMemo<Node[]>(() => {
     const buildNode = (merged: DemoNode): Node => {
+      // View-mode local drag override: see viewModePositionsRef declaration.
+      // Gated on !isEditMode so edit-mode renders byte-identical to before;
+      // the ref is never written in edit mode but the guard is also load-
+      // bearing if mode flips mid-life (an entry from a previous view-mode
+      // session must not leak into edit-mode rendering).
+      const viewOverridePos = !isEditMode
+        ? viewModePositionsRef.current.get(merged.id)
+        : undefined;
       const node: Node = {
         id: merged.id,
         type: merged.type,
-        position: merged.position,
+        position: viewOverridePos ?? merged.position,
         data: {
           ...merged.data,
           // US-004: file-backed renderers (imageNode, future htmlNode) read
@@ -3707,9 +3725,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (draggedNodes.length === 0) return;
       // US-027: view mode — React Flow's internal applyNodeChanges has already
       // updated the local rfNodes during the drag, so the visual move stuck.
-      // We just skip the parent dispatches that would have persisted via the
-      // adapter — no PATCH fires, no undo entry is pushed.
-      if (!isEditMode) return;
+      // We skip the parent dispatches that would have persisted via the
+      // adapter — no PATCH fires, no undo entry is pushed. We DO record the
+      // final position in `viewModePositionsRef` so the next sourceNodes
+      // rebuild (selection change, etc.) doesn't re-sync rfNodes back to the
+      // server position and snap the node home (the sourceNodes useMemo
+      // merges this ref before yielding the node list).
+      if (!isEditMode) {
+        const map = viewModePositionsRef.current;
+        for (const n of draggedNodes) {
+          map.set(n.id, { x: n.position.x, y: n.position.y });
+        }
+        return;
+      }
       if (draggedNodes.length === 1) {
         const moved = draggedNodes[0];
         if (moved && onNodePositionChange) {
