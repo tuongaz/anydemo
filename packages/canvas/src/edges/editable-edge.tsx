@@ -9,7 +9,7 @@ import {
   getSmoothStepPath,
   useInternalNode,
 } from '@xyflow/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import {
@@ -18,7 +18,20 @@ import {
   type Side,
   resolveEdgeEndpoints,
 } from '../lib/floating-edge-geometry.ts';
-import type { ConnectorPath, EdgePin } from '../types.ts';
+import { deriveVisualStatus } from '../nodes/lib/visual-status.ts';
+import type { ConnectorPath, EdgePin, NodeStatus, StatusReport } from '../types.ts';
+
+/**
+ * Returns true when an edge should fire its handoff pulse, given the source
+ * node's previous and next visual status. Rising edge into 'success' only —
+ * staying in success or moving out of it does not pulse.
+ */
+export function shouldFireEdgeHandoff(
+  prev: string | undefined,
+  next: string,
+): boolean {
+  return next === 'success' && prev !== 'success';
+}
 
 // Smoothstep corner rounding — matches typical "zigzag" diagrams without
 // looking jagged. (US-017)
@@ -140,6 +153,33 @@ export function EditableEdge({
   // endpoint along the perimeter in real time without any rerouter machinery.
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
+
+  // Source-node visual-status drives the handoff pulse on outgoing edges.
+  // The wrapper data attribute matches the CSS selector in styles/index.css
+  // (`.react-flow__edge[data-handoff="true"] .react-flow__edge-path`).
+  const sourceData = (sourceNode?.data ?? {}) as {
+    status?: NodeStatus;
+    statusReport?: StatusReport & { ts: number };
+  };
+  const sourceVisualStatus = deriveVisualStatus(sourceData.status, sourceData.statusReport);
+  const prevSourceVisualStatusRef = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    const prev = prevSourceVisualStatusRef.current;
+    prevSourceVisualStatusRef.current = sourceVisualStatus;
+    if (!shouldFireEdgeHandoff(prev, sourceVisualStatus)) return;
+    const wrapper = document.querySelector(
+      `.react-flow__edge[data-id="${CSS.escape(id)}"]`,
+    ) as SVGGElement | null;
+    if (!wrapper) return;
+    wrapper.setAttribute('data-handoff', 'true');
+    const timer = window.setTimeout(() => {
+      wrapper.removeAttribute('data-handoff');
+    }, 500);
+    return () => {
+      window.clearTimeout(timer);
+      wrapper.removeAttribute('data-handoff');
+    };
+  }, [id, sourceVisualStatus]);
 
   const sourceFallback: Endpoint = {
     x: sourceX,

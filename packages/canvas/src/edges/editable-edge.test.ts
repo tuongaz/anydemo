@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { shouldFireEdgeHandoff } from './editable-edge.tsx';
 
 // Connector label sits ABOVE the connector line, BELOW nodes.
 //
@@ -116,5 +117,28 @@ describe('endpoint dot is visual-only — native React Flow reconnect drives dra
     expect(src).not.toMatch(/onMouseDown=\{[^}]*onPin/);
     expect(src).not.toMatch(/setDragPreview/);
     expect(src).not.toMatch(/document\.elementsFromPoint/);
+  });
+});
+
+describe('shouldFireEdgeHandoff', () => {
+  it('fires on rising edge into success', () => {
+    expect(shouldFireEdgeHandoff(undefined, 'success')).toBe(true);
+    expect(shouldFireEdgeHandoff('idle', 'success')).toBe(true);
+    expect(shouldFireEdgeHandoff('active', 'success')).toBe(true);
+    expect(shouldFireEdgeHandoff('error', 'success')).toBe(true);
+  });
+
+  it('does not fire when staying in success', () => {
+    expect(shouldFireEdgeHandoff('success', 'success')).toBe(false);
+  });
+
+  it('does not fire on transitions away from success', () => {
+    expect(shouldFireEdgeHandoff('success', 'idle')).toBe(false);
+    expect(shouldFireEdgeHandoff('success', 'active')).toBe(false);
+  });
+
+  it('does not fire for other transitions', () => {
+    expect(shouldFireEdgeHandoff('idle', 'active')).toBe(false);
+    expect(shouldFireEdgeHandoff('active', 'error')).toBe(false);
   });
 });
