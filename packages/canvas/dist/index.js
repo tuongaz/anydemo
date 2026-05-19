@@ -4038,7 +4038,7 @@ var SheetContent = React8.forwardRef(({ side = "right", className, children, ...
     children,
     /* @__PURE__ */ jsxs18(SheetPrimitive.Close, { className: "sf-absolute sf-right-4 sf-top-4 sf-rounded-sm sf-opacity-70 sf-ring-offset-background sf-transition-opacity hover:sf-opacity-100 focus:sf-outline-none focus:sf-ring-2 focus:sf-ring-ring focus:sf-ring-offset-2 disabled:sf-pointer-events-none", children: [
       /* @__PURE__ */ jsx30(X2, { className: "sf-h-4 sf-w-4" }),
-      /* @__PURE__ */ jsx30("span", { className: "sr-only", children: "Close" })
+      /* @__PURE__ */ jsx30("span", { className: "sf-sr-only", children: "Close" })
     ] })
   ] })
 ] }));
@@ -7384,6 +7384,42 @@ function SeeflowCanvas(props) {
   useEffect9(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
+  const internalTidy = useCallback2(() => {
+    const inst = rfInstanceRef.current;
+    const current = rfNodesRef.current;
+    if (current.length < 2) return;
+    const layoutNodes = current.map((n) => {
+      const measured = inst?.getInternalNode(n.id)?.measured;
+      const dataAny = n.data;
+      const width = measured?.width ?? dataAny.width ?? 200;
+      const height = measured?.height ?? dataAny.height ?? 120;
+      return { id: n.id, width, height, position: n.position };
+    });
+    const layoutEdges = rfEdgesRef.current.map((e) => ({ source: e.source, target: e.target }));
+    const next = applyLayout(layoutNodes, layoutEdges);
+    let prevMinX = Number.POSITIVE_INFINITY;
+    let prevMinY = Number.POSITIVE_INFINITY;
+    let nextMinX = Number.POSITIVE_INFINITY;
+    let nextMinY = Number.POSITIVE_INFINITY;
+    for (const ln of layoutNodes) {
+      if (ln.position.x < prevMinX) prevMinX = ln.position.x;
+      if (ln.position.y < prevMinY) prevMinY = ln.position.y;
+      const np = next.get(ln.id);
+      if (!np) continue;
+      if (np.x < nextMinX) nextMinX = np.x;
+      if (np.y < nextMinY) nextMinY = np.y;
+    }
+    const offsetX = Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
+    const offsetY = Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
+    setRfNodes(
+      (prev) => prev.map((n) => {
+        const np = next.get(n.id);
+        if (!np) return n;
+        return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
+      })
+    );
+  }, []);
+  const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
   const connectSucceededRef = useRef5(false);
   const connectStartRef = useRef5(
     null
@@ -7866,8 +7902,8 @@ function SeeflowCanvas(props) {
                     "data-testid": "controls-tidy",
                     "aria-label": "Tidy layout (\u2318\u21E7L)",
                     title: "Tidy layout (\u2318\u21E7L)",
-                    disabled: !onTidy,
-                    onClick: () => onTidy?.(),
+                    disabled: !effectiveTidy,
+                    onClick: () => effectiveTidy?.(),
                     children: /* @__PURE__ */ jsx37(LayoutDashboard, { className: "sf-h-3 sf-w-3", "aria-hidden": "true" })
                   }
                 )
