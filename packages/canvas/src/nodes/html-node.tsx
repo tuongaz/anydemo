@@ -1,7 +1,8 @@
-import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import { type CSSProperties, type ReactNode, memo, useEffect } from 'react';
+import { Handle, type Node, type NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
+import { type CSSProperties, type ReactNode, type RefObject, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
+import { debouncedResizeObserver } from '../lib/debounced-resize-observer.ts';
 import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
 import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
 import { useHtmlContent } from '../lib/use-html-content.ts';
@@ -73,7 +74,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     ensureTailwindLoaded();
   }, []);
 
+  const measureRef = useRef<HTMLDivElement | null>(null);
   const content = useHtmlContent(data.projectId, data.htmlPath);
+  // Observer is mounted only when auto-sizing + content is loaded. Keeping
+  // the `useReactFlow()` call inside a sub-component (rather than at the top
+  // of HtmlNodeImpl) lets the hook-shim renderer in tests avoid touching
+  // xyflow's StoreContext — the sub-component appears as a React element in
+  // the tree but is never actually rendered by the shim.
+  const observerActive = autoSize && content.kind === 'loaded';
 
   let body: ReactNode;
   if (content.kind === 'loaded') {
@@ -94,6 +102,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       />
     ) : (
       <div
+        ref={measureRef}
         data-testid="html-node-content"
         className="sf:inline-block"
         style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
@@ -127,6 +136,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       style={outerStyle}
       data-testid="html-node"
     >
+      {observerActive ? <AutoSizeObserver nodeId={id} measureRef={measureRef} /> : null}
       <ResizeControls
         visible={!!selected && !!data.onResize && !data.locked}
         cornerVariant="visible"
@@ -183,6 +193,28 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       ) : null}
     </div>
   );
+}
+
+// Auto-size only: observe the measuring container and tell React Flow to
+// re-read this node's bounding rect once size changes settle. The xyflow hook
+// call lives here (not in HtmlNodeImpl) so the hook-shim renderer in tests
+// never has to provide an xyflow StoreContext.
+function AutoSizeObserver({
+  nodeId,
+  measureRef,
+}: {
+  nodeId: string;
+  measureRef: RefObject<HTMLDivElement | null>;
+}): null {
+  const updateNodeInternals = useUpdateNodeInternals();
+  useEffect(() => {
+    const el = measureRef.current;
+    if (el === null) return;
+    return debouncedResizeObserver(el, 150, () => {
+      updateNodeInternals(nodeId);
+    });
+  }, [nodeId, updateNodeInternals, measureRef]);
+  return null;
 }
 
 function arePropsEqual(prev: NodeProps<HtmlNodeType>, next: NodeProps<HtmlNodeType>): boolean {
