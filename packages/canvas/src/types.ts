@@ -1,4 +1,9 @@
-import type { NodeStatus } from './nodes/status-pill.tsx';
+/**
+ * Per-node run lifecycle. `undefined` (no entry in the runs map) is treated
+ * as `'idle'` visually — see deriveVisualStatus in
+ * `./nodes/lib/visual-status.ts`.
+ */
+export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 
 export type ColorToken =
   | 'default'

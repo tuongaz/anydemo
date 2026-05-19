@@ -1,6 +1,7 @@
+import type { NodeStatus } from '../types.ts';
 import { cn } from '../lib/cn.ts';
 
-export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
+export type { NodeStatus };
 
 const STYLES: Record<Exclude<NodeStatus, 'idle'>, string> = {
   running: 'sf:bg-amber-950/50 sf:text-amber-300 sf:animate-pulse',
