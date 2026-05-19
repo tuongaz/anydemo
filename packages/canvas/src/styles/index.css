@@ -349,28 +349,21 @@ layer(base);
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
 }
 
-/* View + mini modes: keep handles invisible even when the node is selected,
-   AND suppress any host-provided `.react-flow__node.selected::after` blue
-   dashed selection rectangle (the seeflow.dev viewer ships one as a global
-   rule outside our `.seeflow-canvas-root` scope).
+/* View + mini modes: keep the 4 connector handles invisible even when the
+   node is selected. We deliberately leave the `.selected::after` dashed
+   rectangle alone — view-mode users still want a visual selection
+   indicator; only the edit-only connect dots should disappear.
 
    Wrapped in `@layer base` on purpose: the Handle componentry sets
    `sf:opacity-100!` (Tailwind utility, in `@layer utilities`) when selected.
-   For `!important`, EARLIER cascade layers win — putting these overrides
-   in `base` (declared before `utilities`) lets `opacity:0!important` beat
+   For `!important`, EARLIER cascade layers win — putting this override in
+   `base` (declared before `utilities`) lets `opacity:0!important` beat
    `.sf\:opacity-100\!`. Unlayered `!important` would lose here. */
 @layer base {
   .seeflow-canvas-root[data-mode="view"] .react-flow__node.selected .react-flow__handle,
   .seeflow-canvas-root[data-mode="mini"] .react-flow__node.selected .react-flow__handle {
     opacity: 0 !important;
     pointer-events: none !important;
-  }
-
-  .seeflow-canvas-root[data-mode="view"] .react-flow__node.selected::after,
-  .seeflow-canvas-root[data-mode="mini"] .react-flow__node.selected::after {
-    content: none !important;
-    border: none !important;
-    background: none !important;
   }
 }
 
