@@ -143,13 +143,13 @@ export function CanvasToolbar({
         title={tooltip}
         onClick={() => onSelectShape(active ? null : shape)}
         className={cn(
-          'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
+          'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
           active
-            ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-            : 'hover:sf-bg-muted',
+            ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
+            : 'sf:hover:bg-muted',
         )}
       >
-        <Icon className="sf-h-4 sf-w-4" />
+        <Icon className="sf:h-4 sf:w-4" />
       </button>
     );
   };
@@ -157,7 +157,7 @@ export function CanvasToolbar({
   return (
     <div
       data-testid="canvas-toolbar"
-      className="sf-pointer-events-auto sf-flex sf-flex-col sf-items-center sf-gap-1 sf-rounded-lg sf-border sf-border-border sf-bg-card sf-p-1 sf-shadow-md sf-backdrop-blur"
+      className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-card sf:p-1 sf:shadow-md sf:backdrop-blur"
     >
       {TOP_PRIMARY_SHAPES.map(renderShapeButton)}
       <Popover open={shapePickerOpen} onOpenChange={setShapePickerOpen}>
@@ -169,20 +169,20 @@ export function CanvasToolbar({
             aria-pressed={shapePickerOpen || illustrativeActive}
             title={SHAPE_PICKER_LABEL}
             className={cn(
-              'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
+              'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
               shapePickerOpen || illustrativeActive
-                ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-                : 'hover:sf-bg-muted',
+                ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
+                : 'sf:hover:bg-muted',
             )}
           >
-            <Shapes className="sf-h-4 sf-w-4" aria-hidden="true" />
+            <Shapes className="sf:h-4 sf:w-4" aria-hidden="true" />
           </button>
         </PopoverTrigger>
         <PopoverContent
           align="start"
           side="right"
           sideOffset={6}
-          className="sf-w-auto sf-p-1"
+          className="sf:w-auto sf:p-1"
           data-testid="shape-picker-popover"
           onOpenAutoFocus={(e) => {
             // Keep keyboard focus on the canvas so the wrapper-level ESC
@@ -190,7 +190,7 @@ export function CanvasToolbar({
             e.preventDefault();
           }}
         >
-          <div role="menu" aria-label="More shapes" className="sf-flex sf-flex-col sf-gap-0.5">
+          <div role="menu" aria-label="More shapes" className="sf:flex sf:flex-col sf:gap-0.5">
             {ILLUSTRATIVE_SHAPES.map(({ shape, label, commandId, Icon }) => {
               const active = activeShape === shape;
               const tooltip = getCommandTooltip(commandId);
@@ -209,13 +209,13 @@ export function CanvasToolbar({
                     setShapePickerOpen(false);
                   }}
                   className={cn(
-                    'sf-flex sf-items-center sf-gap-2 sf-rounded-sm sf-px-2 sf-py-1.5 sf-text-left sf-text-sm',
+                    'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
                     active
-                      ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-                      : 'hover:sf-bg-muted focus:sf-bg-muted focus:sf-outline-none',
+                      ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
+                      : 'sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden',
                   )}
                 >
-                  <Icon className="sf-h-4 sf-w-4 sf-text-muted-foreground" aria-hidden="true" />
+                  <Icon className="sf:h-4 sf:w-4 sf:text-muted-foreground" aria-hidden="true" />
                   <span>{label}</span>
                 </button>
               );
@@ -238,19 +238,19 @@ export function CanvasToolbar({
               aria-pressed={iconPickerOpen ?? false}
               title={INSERT_ICON_LABEL}
               className={cn(
-                'sf-inline-flex sf-h-8 sf-w-8 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
+                'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
                 iconPickerOpen
-                  ? 'sf-bg-primary/10 sf-text-primary sf-border sf-border-primary/30'
-                  : 'hover:sf-bg-muted',
+                  ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
+                  : 'sf:hover:bg-muted',
               )}
             >
-              <Sticker className="sf-h-4 sf-w-4" aria-hidden="true" />
+              <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />
             </button>
           }
           onPick={onPickIcon}
         />
       ) : null}
-      <div className="sf-my-1 sf-h-px sf-w-6 sf-bg-border" aria-hidden="true" />
+      <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />
       {SECONDARY_PRIMARY_SHAPES.map(renderShapeButton)}
     </div>
   );

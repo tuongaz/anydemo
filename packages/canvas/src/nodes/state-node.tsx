@@ -118,8 +118,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
   return (
     <div
       className={cn(
-        'sf-group sf-flex sf-flex-col sf-justify-center sf-overflow-hidden sf-rounded-lg sf-border-[3px] sf-border-dashed sf-shadow-sm sf-transition-shadow',
-        sized ? 'sf-h-full sf-w-full' : '',
+        'sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:border-dashed sf:shadow-sm sf:transition-shadow',
+        sized ? 'sf:h-full sf:w-full' : '',
         status === 'running' ? 'seeflow-node-pulse' : '',
       )}
       style={containerStyle}
@@ -142,17 +142,17 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         position={Position.Top}
         id="t"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
+        className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <Handle
         type="target"
         position={Position.Left}
         id="l"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
+        className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf-flex sf-shrink-0 sf-items-center sf-justify-between sf-gap-2 sf-border-b sf-px-2 sf-py-2"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:px-2 sf:py-2"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="node-header"
       >
@@ -166,7 +166,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
           />
         ) : null}
         <div
-          className="sf-min-w-0 sf-flex-1 sf-text-[18px] sf-font-semibold sf-leading-tight"
+          className="sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight"
           style={labelFontStyle}
         >
           {editing === 'name' && nameEditable ? (
@@ -177,15 +177,15 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
               commitMode="blur-only"
               onCommit={(v) => data.onNameChange?.(id, v)}
               onExit={() => setEditing(null)}
-              className="sf-text-[18px] sf-font-semibold"
+              className="sf:text-[18px] sf:font-semibold"
               style={labelFontStyle}
             />
           ) : (
             <button
               type="button"
               className={cn(
-                'sf-block sf-w-full sf-whitespace-pre-wrap sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-font-semibold sf-leading-tight',
-                nameEditable ? 'hover:sf-opacity-80' : '',
+                'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight',
+                nameEditable ? 'sf:hover:opacity-80' : '',
               )}
               style={labelFontStyle}
             >
@@ -193,12 +193,12 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
             </button>
           )}
         </div>
-        <div className="sf-flex sf-shrink-0 sf-items-center sf-gap-1">
+        <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
           <StatusPill status={status} />
         </div>
       </div>
       <div
-        className="sf-flex sf-min-h-0 sf-flex-1 sf-items-center sf-px-2 sf-py-1"
+        className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1"
         data-testid="node-content"
         // While resizing, NodeResizer mutates wrapper dims live; we don't need
         // a special class but suppress noise from the linter about isResizing.
@@ -211,7 +211,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
             multiline
             onCommit={(v) => data.onDescriptionChange?.(id, v)}
             onExit={() => setEditing(null)}
-            className="sf-w-full sf-text-[18px] sf-text-muted-foreground"
+            className="sf:w-full sf:text-[18px] sf:text-muted-foreground"
             style={descriptionFontStyle}
             placeholder={data.kind}
           />
@@ -219,8 +219,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
           <button
             type="button"
             className={cn(
-              'sf-block sf-w-full sf-whitespace-normal sf-break-words sf-bg-transparent sf-p-0 sf-text-left sf-text-[18px] sf-text-muted-foreground',
-              descEditable ? 'hover:sf-opacity-80' : '',
+              'sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:text-muted-foreground',
+              descEditable ? 'sf:hover:opacity-80' : '',
             )}
             style={descriptionFontStyle}
           >
@@ -233,14 +233,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         position={Position.Right}
         id="r"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
+        className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <Handle
         type="source"
         position={Position.Bottom}
         id="b"
         isConnectable={isConnectable}
-        className={cn('sf-opacity-0 sf-transition-opacity', selected && '!sf-opacity-100')}
+        className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
     </div>
   );

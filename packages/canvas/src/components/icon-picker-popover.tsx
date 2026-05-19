@@ -43,7 +43,7 @@ export function IconPickerPopover({ open, onOpenChange, anchor, onPick }: IconPi
         align="start"
         side="bottom"
         sideOffset={6}
-        className="sf-w-[340px] sf-p-0"
+        className="sf:w-[340px] sf:p-0"
         data-testid="icon-picker-popover"
       >
         <IconPickerBody query={query} onQueryChange={setQuery} recents={recents} onPick={onPick} />
@@ -80,8 +80,8 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
   const visible = filtered.slice(startIndex, endIndex);
 
   return (
-    <div className="sf-flex sf-w-full sf-flex-col">
-      <div className="sf-border-b sf-border-border sf-p-2">
+    <div className="sf:flex sf:w-full sf:flex-col">
+      <div className="sf:border-b sf:border-border sf:p-2">
         <input
           type="text"
           value={query}
@@ -89,21 +89,21 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
           aria-label="Search icons"
           data-testid="icon-picker-search"
           className={cn(
-            'sf-flex sf-h-8 sf-w-full sf-rounded-md sf-border sf-border-input sf-bg-background sf-px-3 sf-text-sm',
+            'sf:flex sf:h-8 sf:w-full sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-3 sf:text-sm',
             'placeholder:text-muted-foreground',
-            'focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1',
+            'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
           )}
           onChange={(e: ChangeEvent<HTMLInputElement>) => onQueryChange(e.target.value)}
         />
       </div>
 
       {showRecents ? (
-        <div className="sf-border-b sf-border-border sf-p-2" data-testid="icon-picker-recents">
-          <div className="sf-mb-1 sf-px-1 sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground">
+        <div className="sf:border-b sf:border-border sf:p-2" data-testid="icon-picker-recents">
+          <div className="sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground">
             Recent
           </div>
           <div
-            className="sf-grid sf-gap-1"
+            className="sf:grid sf:gap-1"
             style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
           >
             {recents.map((name) => renderTile(name, onPick, `icon-picker-recent-${name}`))}
@@ -111,13 +111,13 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
         </div>
       ) : null}
 
-      <div className="sf-p-2">
-        <div className="sf-mb-1 sf-px-1 sf-text-[11px] sf-font-medium sf-uppercase sf-tracking-wide sf-text-muted-foreground">
+      <div className="sf:p-2">
+        <div className="sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground">
           All icons
         </div>
         {filtered.length === 0 ? (
           <div
-            className="sf-flex sf-items-center sf-justify-center sf-text-xs sf-text-muted-foreground"
+            className="sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground"
             style={{ height: LIST_HEIGHT }}
             data-testid="icon-picker-empty"
           >
@@ -140,7 +140,7 @@ export function IconPickerBody({ query, onQueryChange, recents, onPick }: IconPi
                 }}
               >
                 <div
-                  className="sf-grid sf-gap-1"
+                  className="sf:grid sf:gap-1"
                   style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
                 >
                   {visible.map((name) => renderTile(name, onPick, `icon-picker-tile-${name}`))}
@@ -169,12 +169,12 @@ function renderTile(name: string, onPick: (name: string) => void, testId: string
       data-icon-name={name}
       onClick={() => onPick(name)}
       className={cn(
-        'sf-inline-flex sf-h-7 sf-w-7 sf-items-center sf-justify-center sf-rounded-md sf-text-muted-foreground sf-transition-colors',
-        'hover:sf-bg-accent hover:sf-text-accent-foreground',
-        'focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-1',
+        'sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+        'sf:hover:bg-accent sf:hover:text-accent-foreground',
+        'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
       )}
     >
-      {Icon ? <Icon className="sf-h-4 sf-w-4" aria-hidden="true" /> : null}
+      {Icon ? <Icon className="sf:h-4 sf:w-4" aria-hidden="true" /> : null}
     </button>
   );
 }

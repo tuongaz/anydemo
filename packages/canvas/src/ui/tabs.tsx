@@ -12,7 +12,7 @@ const TabsList = React.forwardRef<
   <TabsPrimitive.List
     ref={ref}
     className={cn(
-      'sf-inline-flex sf-h-9 sf-items-center sf-justify-center sf-rounded-md sf-bg-muted sf-p-1 sf-text-muted-foreground',
+      'sf:inline-flex sf:h-9 sf:items-center sf:justify-center sf:rounded-md sf:bg-muted sf:p-1 sf:text-muted-foreground',
       className,
     )}
     {...props}
@@ -27,7 +27,7 @@ const TabsTrigger = React.forwardRef<
   <TabsPrimitive.Trigger
     ref={ref}
     className={cn(
-      'sf-inline-flex sf-items-center sf-justify-center sf-whitespace-nowrap sf-rounded-sm sf-px-3 sf-py-1 sf-text-xs sf-font-medium sf-ring-offset-background sf-transition-all focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-2 disabled:sf-pointer-events-none disabled:sf-opacity-50 data-[state=active]:sf-bg-background data-[state=active]:sf-text-foreground data-[state=active]:sf-shadow-sm',
+      'sf:inline-flex sf:items-center sf:justify-center sf:whitespace-nowrap sf:rounded-sm sf:px-3 sf:py-1 sf:text-xs sf:font-medium sf:ring-offset-background sf:transition-all sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2 sf:disabled:pointer-events-none sf:disabled:opacity-50 sf:data-[state=active]:bg-background sf:data-[state=active]:text-foreground sf:data-[state=active]:shadow-sm',
       className,
     )}
     {...props}
@@ -42,7 +42,7 @@ const TabsContent = React.forwardRef<
   <TabsPrimitive.Content
     ref={ref}
     className={cn(
-      'sf-mt-2 sf-ring-offset-background focus-visible:sf-outline-none focus-visible:sf-ring-2 focus-visible:sf-ring-ring focus-visible:sf-ring-offset-2',
+      'sf:mt-2 sf:ring-offset-background sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-2',
       className,
     )}
     {...props}

@@ -224,7 +224,7 @@ export function InlineEdit({
       style={style}
       className={cn(
         'nodrag nopan nowheel block w-full bg-transparent p-0 text-inherit outline-none',
-        'sf-whitespace-pre-wrap sf-break-words',
+        'sf:whitespace-pre-wrap sf:wrap-break-word',
         empty && placeholder ? 'inline-edit-empty' : '',
         shake ? 'inline-edit-shake' : '',
         className,

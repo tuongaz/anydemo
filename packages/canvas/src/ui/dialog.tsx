@@ -27,7 +27,7 @@ const DialogOverlay = React.forwardRef<
   <DialogPrimitive.Overlay
     ref={ref}
     className={cn(
-      'sf-fixed sf-inset-0 sf-z-50 sf-bg-black/80 data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0',
+      'sf:fixed sf:inset-0 sf:z-50 sf:bg-black/80 sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0',
       className,
     )}
     {...props}
@@ -44,14 +44,14 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'sf-fixed sf-left-[50%] sf-top-[50%] sf-z-50 sf-grid sf-w-full sf-max-w-lg sf-translate-x-[-50%] sf-translate-y-[-50%] sf-gap-4 sf-border sf-border-border sf-bg-card sf-p-6 sf-shadow-lg sf-duration-200 data-[state=open]:sf-animate-in data-[state=closed]:sf-animate-out data-[state=closed]:sf-fade-out-0 data-[state=open]:sf-fade-in-0 data-[state=closed]:sf-zoom-out-95 data-[state=open]:sf-zoom-in-95 data-[state=closed]:sf-slide-out-to-left-1/2 data-[state=closed]:sf-slide-out-to-top-[48%] data-[state=open]:sf-slide-in-from-left-1/2 data-[state=open]:sf-slide-in-from-top-[48%] sm:sf-rounded-lg',
+        'sf:fixed sf:left-[50%] sf:top-[50%] sf:z-50 sf:grid sf:w-full sf:max-w-lg sf:translate-x-[-50%] sf:translate-y-[-50%] sf:gap-4 sf:border sf:border-border sf:bg-card sf:p-6 sf:shadow-lg sf:duration-200 sf:data-[state=open]:animate-in sf:data-[state=closed]:animate-out sf:data-[state=closed]:fade-out-0 sf:data-[state=open]:fade-in-0 sf:data-[state=closed]:zoom-out-95 sf:data-[state=open]:zoom-in-95 sf:data-[state=closed]:slide-out-to-left-1/2 sf:data-[state=closed]:slide-out-to-top-[48%] sf:data-[state=open]:slide-in-from-left-1/2 sf:data-[state=open]:slide-in-from-top-[48%] sf:sm:rounded-lg',
         className,
       )}
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="sf-absolute sf-right-4 sf-top-4 sf-rounded-sm sf-opacity-70 sf-ring-offset-background sf-transition-opacity hover:sf-opacity-100 focus:sf-outline-none focus:sf-ring-2 focus:sf-ring-ring focus:sf-ring-offset-2 disabled:sf-pointer-events-none">
-        <X className="sf-h-4 sf-w-4" />
+      <DialogPrimitive.Close className="sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none">
+        <X className="sf:h-4 sf:w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
     </DialogPrimitive.Content>
@@ -61,7 +61,7 @@ DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
-    className={cn('sf-flex sf-flex-col sf-space-y-1.5 sf-text-center sm:sf-text-left', className)}
+    className={cn('sf:flex sf:flex-col sf:space-y-1.5 sf:text-center sf:sm:text-left', className)}
     {...props}
   />
 );
@@ -70,7 +70,7 @@ DialogHeader.displayName = 'DialogHeader';
 const DialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
   <div
     className={cn(
-      'sf-flex sf-flex-col-reverse sm:sf-flex-row sm:sf-justify-end sm:sf-space-x-2',
+      'sf:flex sf:flex-col-reverse sf:sm:flex-row sf:sm:justify-end sf:sm:space-x-2',
       className,
     )}
     {...props}
@@ -84,7 +84,7 @@ const DialogTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('sf-text-lg sf-font-semibold sf-leading-none sf-tracking-tight', className)}
+    className={cn('sf:text-lg sf:font-semibold sf:leading-none sf:tracking-tight', className)}
     {...props}
   />
 ));
@@ -96,7 +96,7 @@ const DialogDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Description
     ref={ref}
-    className={cn('sf-text-sm sf-text-muted-foreground', className)}
+    className={cn('sf:text-sm sf:text-muted-foreground', className)}
     {...props}
   />
 ));

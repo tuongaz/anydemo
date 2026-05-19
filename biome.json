@@ -12,7 +12,8 @@
       "**/.seeflow/**",
       "apps/web/dist/**",
       "apps/studio/dist/**",
-      "apps/studio/public/runtime/**"
+      "apps/studio/public/runtime/**",
+      "packages/canvas/src/styles/index.css"
     ]
   },
   "organizeImports": {

@@ -30,7 +30,7 @@ export function IconToggleGroup<V extends string>({
       <div
         aria-label={ariaLabel}
         className={cn(
-          'sf-inline-flex sf-h-9 sf-items-stretch sf-overflow-hidden sf-rounded-md sf-border sf-border-input sf-bg-background sf-p-0.5',
+          'sf:inline-flex sf:h-9 sf:items-stretch sf:overflow-hidden sf:rounded-md sf:border sf:border-input sf:bg-background sf:p-0.5',
           className,
         )}
       >
@@ -40,7 +40,7 @@ export function IconToggleGroup<V extends string>({
           return (
             <Fragment key={opt.value}>
               {idx > 0 ? (
-                <div aria-hidden className="sf-mx-0.5 sf-w-px sf-self-stretch sf-bg-border/70" />
+                <div aria-hidden className="sf:mx-0.5 sf:w-px sf:self-stretch sf:bg-border/70" />
               ) : null}
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -52,16 +52,16 @@ export function IconToggleGroup<V extends string>({
                     data-testid={opt.testId}
                     onClick={() => onChange(opt.value)}
                     className={cn(
-                      'sf-flex sf-flex-1 sf-items-center sf-justify-center sf-rounded sf-px-2 sf-transition-colors focus-visible:sf-outline-none focus-visible:sf-ring-1 focus-visible:sf-ring-ring',
+                      'sf:flex sf:flex-1 sf:items-center sf:justify-center sf:rounded sf:px-2 sf:transition-colors sf:focus-visible:outline-hidden sf:focus-visible:ring-1 sf:focus-visible:ring-ring',
                       isActive
-                        ? 'sf-bg-secondary sf-text-secondary-foreground sf-shadow-sm'
-                        : 'sf-text-muted-foreground hover:sf-bg-accent hover:sf-text-accent-foreground',
+                        ? 'sf:bg-secondary sf:text-secondary-foreground sf:shadow-sm'
+                        : 'sf:text-muted-foreground sf:hover:bg-accent sf:hover:text-accent-foreground',
                     )}
                   >
-                    <Icon className="sf-h-4 sf-w-4" />
+                    <Icon className="sf:h-4 sf:w-4" />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent side="top" className="sf-px-2 sf-py-1 sf-text-xs">
+                <TooltipContent side="top" className="sf:px-2 sf:py-1 sf:text-xs">
                   {opt.label}
                 </TooltipContent>
               </Tooltip>
