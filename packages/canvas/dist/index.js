@@ -3160,6 +3160,11 @@ function resolveIllustrativeColors(data) {
     backgroundColor: data.backgroundColor !== void 0 ? colorTokenStyle(data.backgroundColor, "node").backgroundColor : NODE_DEFAULT_BG_WHITE
   };
 }
+var STICKY_FOLD_SIZE = 20;
+function stickyFoldShade(data) {
+  const token = data.backgroundColor ?? "amber";
+  return colorTokenStyle(token, "node-header").backgroundColor;
+}
 var HANDLE_CLASS4 = "sf:opacity-0 sf:transition-opacity";
 function ShapeNodeImpl({ id, data, selected, isConnectable }) {
   const shape = data.shape;
@@ -3233,6 +3238,40 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
         borderStyle: data.borderStyle
       }
     ) });
+  }
+  let stickyFoldOverlay = null;
+  if (shape === "sticky") {
+    stickyFoldOverlay = /* @__PURE__ */ jsxs13(
+      "svg",
+      {
+        "data-testid": "sticky-fold",
+        className: "sf:pointer-events-none sf:absolute sf:top-0 sf:right-0",
+        width: STICKY_FOLD_SIZE,
+        height: STICKY_FOLD_SIZE,
+        viewBox: `0 0 ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE}`,
+        "aria-hidden": true,
+        children: [
+          /* @__PURE__ */ jsx20(
+            "path",
+            {
+              d: `M 0 0 L ${STICKY_FOLD_SIZE} 0 L ${STICKY_FOLD_SIZE} ${STICKY_FOLD_SIZE} Z`,
+              fill: stickyFoldShade(data)
+            }
+          ),
+          /* @__PURE__ */ jsx20(
+            "line",
+            {
+              x1: 0,
+              y1: 0,
+              x2: STICKY_FOLD_SIZE,
+              y2: STICKY_FOLD_SIZE,
+              stroke: "rgb(0 0 0 / 0.18)",
+              strokeWidth: 1
+            }
+          )
+        ]
+      }
+    );
   }
   const description = data.description ?? "";
   const hasDescription = description !== "";
@@ -3390,6 +3429,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       onDoubleClick: handleWrapperDoubleClick,
       children: [
         illustrativeOverlay,
+        stickyFoldOverlay,
         /* @__PURE__ */ jsx20(
           ResizeControls,
           {
