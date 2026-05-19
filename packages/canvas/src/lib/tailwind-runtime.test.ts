@@ -71,7 +71,7 @@ describe('ensureTailwindLoaded (US-012)', () => {
 
   afterEach(clearDocument);
 
-  it('injects a single <script src="/runtime/tailwind.js"> on first call', () => {
+  it('injects a single <script src="/runtime/tailwind.js?v=..."> on first call', () => {
     ensureTailwindLoaded();
     expect(head.children).toHaveLength(1);
     const script = head.children[0];
@@ -89,9 +89,10 @@ describe('ensureTailwindLoaded (US-012)', () => {
     expect(head.children).toHaveLength(1);
   });
 
-  it('points at the vendored Hono runtime path, not the third-party CDN', () => {
-    expect(TAILWIND_RUNTIME_SRC).toBe('/runtime/tailwind.js');
+  it('points at the vendored Hono runtime path with a cache-busting version', () => {
+    expect(TAILWIND_RUNTIME_SRC.startsWith('/runtime/tailwind.js?v=')).toBe(true);
     expect(TAILWIND_RUNTIME_SRC).not.toContain('cdn.tailwindcss.com');
+    expect(TAILWIND_RUNTIME_SRC).not.toContain('cdn.jsdelivr.net');
   });
 });
 

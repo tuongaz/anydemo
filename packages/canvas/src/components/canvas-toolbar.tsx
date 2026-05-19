@@ -145,8 +145,8 @@ export function CanvasToolbar({
         className={cn(
           'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
           active
-            ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
-            : 'sf:hover:bg-muted',
+            ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50 sf:shadow-[0_0_0_1px_hsl(var(--primary)/0.5)_inset]'
+            : 'sf:hover:bg-muted sf:hover:text-foreground',
         )}
       >
         <Icon className="sf:h-4 sf:w-4" />
@@ -171,8 +171,8 @@ export function CanvasToolbar({
             className={cn(
               'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
               shapePickerOpen || illustrativeActive
-                ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
-                : 'sf:hover:bg-muted',
+                ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
+                : 'sf:hover:bg-muted sf:hover:text-foreground',
             )}
           >
             <Shapes className="sf:h-4 sf:w-4" aria-hidden="true" />
@@ -211,7 +211,7 @@ export function CanvasToolbar({
                   className={cn(
                     'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
                     active
-                      ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
+                      ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
                       : 'sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden',
                   )}
                 >
@@ -240,8 +240,8 @@ export function CanvasToolbar({
               className={cn(
                 'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
                 iconPickerOpen
-                  ? 'sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30'
-                  : 'sf:hover:bg-muted',
+                  ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
+                  : 'sf:hover:bg-muted sf:hover:text-foreground',
               )}
             >
               <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />

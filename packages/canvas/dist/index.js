@@ -1633,7 +1633,8 @@ function injectSanitizedHtml(raw) {
 }
 
 // src/lib/tailwind-runtime.ts
-var TAILWIND_RUNTIME_SRC = "/runtime/tailwind.js";
+var TAILWIND_RUNTIME_VERSION = "v4.3.0";
+var TAILWIND_RUNTIME_SRC = `/runtime/tailwind.js?v=${TAILWIND_RUNTIME_VERSION}`;
 var TAILWIND_RUNTIME_MARKER = "data-seeflow-tailwind-runtime";
 function ensureTailwindLoaded() {
   if (typeof document === "undefined") return;
@@ -2566,7 +2567,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
               /* @__PURE__ */ jsx14(
                 "div",
                 {
-                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
+                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90",
                   style: labelFontStyle,
                   children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx14(
                     InlineEdit,
@@ -2577,7 +2578,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                       commitMode: "blur-only",
                       onCommit: (v) => data.onNameChange?.(id, v),
                       onExit: () => setEditing(null),
-                      className: "sf:text-[18px] sf:font-semibold",
+                      className: "sf:text-[18px] sf:font-semibold sf:text-foreground/90",
                       style: labelFontStyle
                     }
                   ) : /* @__PURE__ */ jsx14(
@@ -2585,7 +2586,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
                     {
                       type: "button",
                       className: cn(
-                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight",
+                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90",
                         nameEditable ? "sf:hover:opacity-80" : ""
                       ),
                       style: labelFontStyle,
@@ -3685,7 +3686,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
               /* @__PURE__ */ jsx22(
                 "div",
                 {
-                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight",
+                  className: "sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90",
                   style: labelFontStyle,
                   children: editing === "name" && nameEditable ? /* @__PURE__ */ jsx22(
                     InlineEdit,
@@ -3696,7 +3697,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                       commitMode: "blur-only",
                       onCommit: (v) => data.onNameChange?.(id, v),
                       onExit: () => setEditing(null),
-                      className: "sf:text-[18px] sf:font-semibold",
+                      className: "sf:text-[18px] sf:font-semibold sf:text-foreground/90",
                       style: labelFontStyle
                     }
                   ) : /* @__PURE__ */ jsx22(
@@ -3704,7 +3705,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
                     {
                       type: "button",
                       className: cn(
-                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight",
+                        "sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90",
                         nameEditable ? "sf:hover:opacity-80" : ""
                       ),
                       style: labelFontStyle,
@@ -3981,7 +3982,7 @@ function EditableEdge({
             field: "connector-label",
             onCommit: (v) => onLabelChange?.(id, v),
             onExit: () => setEditing(false),
-            className: "sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm",
+            className: "sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground/85 sf:shadow-md",
             style: fontSizeStyle,
             placeholder: "Label"
           }
@@ -3990,8 +3991,8 @@ function EditableEdge({
           {
             type: "button",
             className: cn(
-              "sf:rounded sf:border sf:border-border/40 sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground sf:shadow-sm",
-              editable ? "hover:bg-muted/60" : ""
+              "sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground/85 sf:shadow-md",
+              editable ? "sf:hover:bg-muted" : ""
             ),
             style: fontSizeStyle,
             onDoubleClick: editable ? (e) => {
@@ -4005,7 +4006,7 @@ function EditableEdge({
           {
             type: "button",
             "aria-label": "Add connector label",
-            className: "sf:rounded-full sf:border sf:border-dashed sf:border-muted-foreground/40 sf:bg-background sf:px-1 sf:text-[10px] sf:text-muted-foreground/60 sf:opacity-0 sf:transition-opacity sf:hover:opacity-100 sf:group-hover/canvas:opacity-50",
+            className: "sf:rounded-full sf:border sf:border-dashed sf:border-muted-foreground/40 sf:bg-card sf:px-1 sf:text-[10px] sf:text-muted-foreground/60 sf:opacity-0 sf:transition-opacity sf:hover:opacity-100 sf:group-hover/canvas:opacity-50",
             onDoubleClick: (e) => {
               e.stopPropagation();
               setEditing(true);
@@ -4065,7 +4066,7 @@ var DialogContent = React3.forwardRef(({ className, children, ...props }, ref) =
         children,
         /* @__PURE__ */ jsxs16(DialogPrimitive.Close, { className: "sf:absolute sf:right-4 sf:top-4 sf:rounded-sm sf:opacity-70 sf:ring-offset-background sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2 sf:disabled:pointer-events-none", children: [
           /* @__PURE__ */ jsx24(X, { className: "sf:h-4 sf:w-4" }),
-          /* @__PURE__ */ jsx24("span", { className: "sr-only", children: "Close" })
+          /* @__PURE__ */ jsx24("span", { className: "sf:sr-only", children: "Close" })
         ] })
       ]
     }
@@ -4618,7 +4619,7 @@ function CanvasToolbar({
         onClick: () => onSelectShape(active ? null : shape),
         className: cn(
           "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
-          active ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
+          active ? "sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50 sf:shadow-[0_0_0_1px_hsl(var(--primary)/0.5)_inset]" : "sf:hover:bg-muted sf:hover:text-foreground"
         ),
         children: /* @__PURE__ */ jsx34(Icon2, { className: "sf:h-4 sf:w-4" })
       },
@@ -4643,7 +4644,7 @@ function CanvasToolbar({
               title: SHAPE_PICKER_LABEL,
               className: cn(
                 "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
-                shapePickerOpen || illustrativeActive ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
+                shapePickerOpen || illustrativeActive ? "sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50" : "sf:hover:bg-muted sf:hover:text-foreground"
               ),
               children: /* @__PURE__ */ jsx34(Shapes, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
             }
@@ -4678,7 +4679,7 @@ function CanvasToolbar({
                     },
                     className: cn(
                       "sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm",
-                      active ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden"
+                      active ? "sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50" : "sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden"
                     ),
                     children: [
                       /* @__PURE__ */ jsx34(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
@@ -4709,7 +4710,7 @@ function CanvasToolbar({
                 title: INSERT_ICON_LABEL,
                 className: cn(
                   "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors",
-                  iconPickerOpen ? "sf:bg-primary/10 sf:text-primary sf:border sf:border-primary/30" : "sf:hover:bg-muted"
+                  iconPickerOpen ? "sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50" : "sf:hover:bg-muted sf:hover:text-foreground"
                 ),
                 children: /* @__PURE__ */ jsx34(Sticker, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
               }
@@ -4813,8 +4814,8 @@ function DetailPanel({
                 className: "sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
               }
             ),
-            inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+            inspectableNode ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
                 showNameField ? /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:items-center sf:gap-2", children: [
                   showIconField && onIconChange ? /* @__PURE__ */ jsx35(
                     TitleIconTrigger,
@@ -4828,7 +4829,7 @@ function DetailPanel({
                     {
                       "data-testid": "detail-panel-icon-readonly",
                       "aria-hidden": true,
-                      className: "sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground",
+                      className: "sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90",
                       children: /* @__PURE__ */ jsx35(Icon, { name: currentIcon, size: 16 })
                     }
                   ) : null,
@@ -4842,55 +4843,69 @@ function DetailPanel({
                       ariaLabel: "Name",
                       testIdBase: "detail-panel-name",
                       onSave: onNameChange,
-                      textClassName: "sf:text-base sf:font-semibold"
+                      textClassName: "sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
                     }
                   ) })
                 ] }) }) : (
                   // Radix requires a SheetTitle for a11y; keep it sr-only for
                   // ellipse so the panel stops rendering a Name row visually but
                   // still announces the entity to screen readers.
-                  /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", className: "sr-only", children: inspectableNode.id })
+                  /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", className: "sf:sr-only", children: inspectableNode.id })
                 ),
-                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sr-only", children: [
+                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sf:sr-only", children: [
                   inspectableNode.id,
                   " \xB7 ",
                   inspectableNode.type
                 ] })
               ] }),
-              /* @__PURE__ */ jsxs22("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:mt-0 sf:flex sf:flex-col sf:gap-4", children: [
                 statusReport ? /* @__PURE__ */ jsx35(StatusSection, { report: statusReport }) : null,
-                /* @__PURE__ */ jsx35(
-                  EditableField,
-                  {
-                    nodeId: inspectableNode.id,
-                    value: description,
-                    placeholder: "Short description shown on the node body",
-                    multiline: true,
-                    ariaLabel: "Description",
-                    testIdBase: "detail-panel-description",
-                    onSave: onDescriptionChange,
-                    textClassName: "sf:font-medium sf:text-muted-foreground"
-                  }
-                ),
-                /* @__PURE__ */ jsx35(
-                  EditableField,
-                  {
-                    nodeId: inspectableNode.id,
-                    value: detail,
-                    placeholder: "Long-form notes, context, anything\u2026",
-                    multiline: true,
-                    ariaLabel: "Detail",
-                    testIdBase: "detail-panel-detail",
-                    onSave: onDetailChange,
-                    markdown: true
-                  }
-                ),
+                /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+                  /* @__PURE__ */ jsx35(SectionLabel, { children: "Description" }),
+                  /* @__PURE__ */ jsx35(
+                    EditableField,
+                    {
+                      nodeId: inspectableNode.id,
+                      value: description,
+                      placeholder: "Short description shown on the node body",
+                      multiline: true,
+                      ariaLabel: "Description",
+                      testIdBase: "detail-panel-description",
+                      onSave: onDescriptionChange,
+                      textClassName: "sf:font-medium sf:text-muted-foreground"
+                    }
+                  )
+                ] }),
+                /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
+                  /* @__PURE__ */ jsx35(SectionLabel, { children: "Detail" }),
+                  /* @__PURE__ */ jsx35(
+                    EditableField,
+                    {
+                      nodeId: inspectableNode.id,
+                      value: detail,
+                      placeholder: "Long-form notes, context, anything\u2026",
+                      multiline: true,
+                      ariaLabel: "Detail",
+                      testIdBase: "detail-panel-detail",
+                      onSave: onDetailChange,
+                      markdown: true,
+                      textClassName: "sf:text-foreground/85"
+                    }
+                  )
+                ] }),
                 inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx35(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
               ] })
-            ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-3", children: [
-              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1", children: [
-                /* @__PURE__ */ jsx35(SheetTitle, { "data-testid": "detail-panel-title", children: connector.label ?? "Connector" }),
-                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sr-only", children: [
+            ] }) : connector ? /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
+              /* @__PURE__ */ jsxs22("div", { className: "sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3", children: [
+                /* @__PURE__ */ jsx35(
+                  SheetTitle,
+                  {
+                    "data-testid": "detail-panel-title",
+                    className: "sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95",
+                    children: connector.label ?? "Connector"
+                  }
+                ),
+                /* @__PURE__ */ jsxs22(SheetDescription, { className: "sf:sr-only", children: [
                   connector.id,
                   " \xB7 ",
                   connector.kind
@@ -4903,6 +4918,9 @@ function DetailPanel({
       )
     }
   );
+}
+function SectionLabel({ children }) {
+  return /* @__PURE__ */ jsx35("span", { className: "sf:px-2 sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-widest sf:text-muted-foreground/80", children });
 }
 function EditableField({
   nodeId,

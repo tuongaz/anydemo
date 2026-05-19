@@ -46,29 +46,31 @@ describe('connectors paint under nodes; labels stack between edges and nodes', (
     expect(rule).toBeNull();
   });
 
-  it('label markup uses opaque bg-background plate when text is present', () => {
+  it('label markup uses opaque bg-card plate when text is present', () => {
     const src = readFileSync(editableEdgePath, 'utf-8');
     // The label-display branch (`labelText ? <button …` JSX) renders the
-    // visible label plate. It must use `bg-background` (opaque theme token)
-    // so the connector path is masked behind the text. Past regressions
-    // used `bg-card` which is semi-transparent and let the line bleed —
-    // history called out in the bg-background comment.
-    expect(src).toMatch(/bg-background/);
-    // Strip JS comments before scanning so the historical "bg-card"
-    // mention in the bg-background callout doesn't trip the fence.
+    // visible label plate. It uses `bg-card` (opaque theme token, slightly
+    // lighter than the canvas background) so the connector path is masked
+    // behind the text AND the label reads as a discrete chip rather than
+    // blending into the canvas. Both `--background` and `--card` are
+    // opaque in v4; `--card` is the right pick because the canvas wrapper
+    // itself paints on `--background`, so a same-value plate would visually
+    // disappear.
+    expect(src).toMatch(/bg-card/);
+    // Strip JS comments before scanning so the historical "bg-background"
+    // mention in this callout doesn't trip the inverse fence.
     const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
-    expect(codeOnly).not.toMatch(/\bbg-card\b/);
+    expect(codeOnly).not.toMatch(/\bbg-background\b/);
   });
 
-  it('inline-edit branch also uses opaque bg-background plate', () => {
+  it('inline-edit branch also uses opaque bg-card plate', () => {
     const src = readFileSync(editableEdgePath, 'utf-8');
-    // Two label-bearing branches share the same `bg-background` className:
-    // the read-only `<button>` (text present) and the inline editor
-    // (`<InlineEdit>` while editing). Count the bg-background occurrences
-    // to ensure both branches still carry the plate. The empty-label
-    // affordance ('+' button) also uses bg-background to mask the line
-    // when hovered visible.
-    const matches = src.match(/bg-background/g) ?? [];
+    // Three label-bearing branches share the same `bg-card` className:
+    // the read-only `<button>` (text present), the inline editor
+    // (`<InlineEdit>` while editing), and the "+" add-label affordance
+    // (empty + editable). Count the bg-card occurrences to ensure all
+    // three branches still carry the plate.
+    const matches = src.match(/bg-card/g) ?? [];
     expect(matches.length).toBeGreaterThanOrEqual(3);
   });
 

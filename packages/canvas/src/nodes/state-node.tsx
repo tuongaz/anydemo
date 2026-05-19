@@ -230,7 +230,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
           )
         ) : null}
         <div
-          className="sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight"
+          className="sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90"
           style={labelFontStyle}
         >
           {editing === 'name' && nameEditable ? (
@@ -241,14 +241,14 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
               commitMode="blur-only"
               onCommit={(v) => data.onNameChange?.(id, v)}
               onExit={() => setEditing(null)}
-              className="sf:text-[18px] sf:font-semibold"
+              className="sf:text-[18px] sf:font-semibold sf:text-foreground/90"
               style={labelFontStyle}
             />
           ) : (
             <button
               type="button"
               className={cn(
-                'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight',
+                'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90',
                 nameEditable ? 'sf:hover:opacity-80' : '',
               )}
               style={labelFontStyle}

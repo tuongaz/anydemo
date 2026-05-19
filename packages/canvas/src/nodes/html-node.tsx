@@ -72,9 +72,9 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     ...(userSized ? { width: data.width, height: data.height } : {}),
   };
 
-  // US-012: load Tailwind Play CDN at mount so author HTML's utility classes
-  // actually paint. Idempotent — only the first htmlNode on the page injects
-  // the script; subsequent mounts are no-ops.
+  // US-012: load the Tailwind v4 browser runtime at mount so author HTML's
+  // utility classes actually paint. Idempotent — only the first htmlNode on
+  // the page injects the script; subsequent mounts are no-ops.
   useEffect(() => {
     ensureTailwindLoaded();
   }, []);

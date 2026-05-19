@@ -17,7 +17,7 @@ export function Header({
   onProjectUnregistered,
 }: HeaderProps) {
   return (
-    <header className="flex h-12 shrink-0 items-center justify-between border-b border-border bg-background px-4">
+    <header className="relative flex h-12 shrink-0 items-center justify-between bg-background/80 px-4 backdrop-blur-md after:pointer-events-none after:absolute after:inset-x-0 after:bottom-0 after:h-px after:bg-gradient-to-r after:from-transparent after:via-border/60 after:to-transparent">
       <button
         type="button"
         onClick={() => navigate('/')}

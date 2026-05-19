@@ -185,8 +185,8 @@ export function DetailPanel({
           className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
         />
         {inspectableNode ? (
-          <div className="sf:flex sf:flex-col sf:gap-3">
-            <div className="sf:flex sf:flex-col sf:gap-1">
+          <div className="sf:flex sf:flex-col sf:gap-4">
+            <div className="sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3">
               {showNameField ? (
                 <SheetTitle data-testid="detail-panel-title">
                   <div className="sf:flex sf:items-center sf:gap-2">
@@ -200,7 +200,7 @@ export function DetailPanel({
                       <span
                         data-testid="detail-panel-icon-readonly"
                         aria-hidden
-                        className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground"
+                        className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
                       >
                         <Icon name={currentIcon} size={16} />
                       </span>
@@ -214,7 +214,7 @@ export function DetailPanel({
                         ariaLabel="Name"
                         testIdBase="detail-panel-name"
                         onSave={onNameChange}
-                        textClassName="sf:text-base sf:font-semibold"
+                        textClassName="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
                       />
                     </div>
                   </div>
@@ -223,40 +223,47 @@ export function DetailPanel({
                 // Radix requires a SheetTitle for a11y; keep it sr-only for
                 // ellipse so the panel stops rendering a Name row visually but
                 // still announces the entity to screen readers.
-                <SheetTitle data-testid="detail-panel-title" className="sr-only">
+                <SheetTitle data-testid="detail-panel-title" className="sf:sr-only">
                   {inspectableNode.id}
                 </SheetTitle>
               )}
               {/* Radix requires a Description for a11y; keep one as sr-only
                   so screen readers still announce what kind of entity the
                   panel describes without cluttering the visual header. */}
-              <SheetDescription className="sr-only">
+              <SheetDescription className="sf:sr-only">
                 {inspectableNode.id} · {inspectableNode.type}
               </SheetDescription>
             </div>
 
-            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
+            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-4">
               {statusReport ? <StatusSection report={statusReport} /> : null}
-              <EditableField
-                nodeId={inspectableNode.id}
-                value={description}
-                placeholder="Short description shown on the node body"
-                multiline={true}
-                ariaLabel="Description"
-                testIdBase="detail-panel-description"
-                onSave={onDescriptionChange}
-                textClassName="sf:font-medium sf:text-muted-foreground"
-              />
-              <EditableField
-                nodeId={inspectableNode.id}
-                value={detail}
-                placeholder="Long-form notes, context, anything…"
-                multiline={true}
-                ariaLabel="Detail"
-                testIdBase="detail-panel-detail"
-                onSave={onDetailChange}
-                markdown={true}
-              />
+              <div className="sf:flex sf:flex-col sf:gap-1">
+                <SectionLabel>Description</SectionLabel>
+                <EditableField
+                  nodeId={inspectableNode.id}
+                  value={description}
+                  placeholder="Short description shown on the node body"
+                  multiline={true}
+                  ariaLabel="Description"
+                  testIdBase="detail-panel-description"
+                  onSave={onDescriptionChange}
+                  textClassName="sf:font-medium sf:text-muted-foreground"
+                />
+              </div>
+              <div className="sf:flex sf:flex-col sf:gap-1">
+                <SectionLabel>Detail</SectionLabel>
+                <EditableField
+                  nodeId={inspectableNode.id}
+                  value={detail}
+                  placeholder="Long-form notes, context, anything…"
+                  multiline={true}
+                  ariaLabel="Detail"
+                  testIdBase="detail-panel-detail"
+                  onSave={onDetailChange}
+                  markdown={true}
+                  textClassName="sf:text-foreground/85"
+                />
+              </div>
 
               {inspectableNode.type === 'htmlNode' && flowId ? (
                 <HtmlNodeSection adapter={adapter} htmlPath={inspectableNode.data.htmlPath} />
@@ -264,12 +271,15 @@ export function DetailPanel({
             </div>
           </div>
         ) : connector ? (
-          <div className="sf:flex sf:flex-col sf:gap-3">
-            <div className="sf:flex sf:flex-col sf:gap-1">
-              <SheetTitle data-testid="detail-panel-title">
+          <div className="sf:flex sf:flex-col sf:gap-4">
+            <div className="sf:flex sf:flex-col sf:gap-1 sf:border-b sf:border-border/40 sf:pb-3">
+              <SheetTitle
+                data-testid="detail-panel-title"
+                className="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
+              >
                 {connector.label ?? 'Connector'}
               </SheetTitle>
-              <SheetDescription className="sr-only">
+              <SheetDescription className="sf:sr-only">
                 {connector.id} · {connector.kind}
               </SheetDescription>
             </div>
@@ -281,6 +291,18 @@ export function DetailPanel({
         ) : null}
       </SheetContent>
     </Sheet>
+  );
+}
+
+// Small uppercase-tracked label that sits above each inspector section
+// (Description, Detail). Keeps the panel scannable without competing with the
+// editable text below — muted-foreground at 10px is the same treatment used
+// inside the htmlNode section's "Path" caption.
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="sf:px-2 sf:font-mono sf:text-[10px] sf:font-medium sf:uppercase sf:tracking-widest sf:text-muted-foreground/80">
+      {children}
+    </span>
   );
 }
 

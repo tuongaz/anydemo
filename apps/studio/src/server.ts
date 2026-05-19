@@ -92,10 +92,17 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   // don't churn. Route is unauthenticated and stateless.
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
 
-  // Vendored runtime assets (e.g. Tailwind Play CDN for htmlNode). Served
-  // identically in dev and prod so they don't depend on the web bundle.
-  // The `{[A-Za-z0-9._-]+}` regex constrains :file to a single safe segment,
-  // making traversal (`..`, `/`) impossible by construction.
+  // Vendored runtime assets (e.g. @tailwindcss/browser@4 for htmlNode).
+  // Served identically in dev and prod so they don't depend on the web
+  // bundle. The `{[A-Za-z0-9._-]+}` regex constrains :file to a single safe
+  // segment, making traversal (`..`, `/`) impossible by construction.
+  //
+  // Cache policy:
+  //   prod → year-long immutable (filename is stable, content swap requires
+  //          a redeploy → fingerprinting would just churn the URL)
+  //   dev  → no-store so a vendored swap (`bun run vendor:tailwind-runtime`)
+  //          is picked up on next reload without a hard-reload dance
+  const runtimeCacheControl = mode === 'prod' ? 'public, max-age=31536000, immutable' : 'no-store';
   app.get('/runtime/:file{[A-Za-z0-9._-]+}', async (c) => {
     const file = c.req.param('file');
     const abs = resolvePath(RUNTIME_ASSETS_DIR, file);
@@ -104,7 +111,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     return new Response(f.stream(), {
       headers: {
         'content-type': f.type || 'application/octet-stream',
-        'cache-control': 'public, max-age=31536000, immutable',
+        'cache-control': runtimeCacheControl,
       },
     });
   });
