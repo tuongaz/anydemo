@@ -228,7 +228,7 @@ const ImageNodeSchema = z.object({
 // written yet) and would otherwise reject the whole demo. The US-014 renderer
 // renders a `PlaceholderCard` instead — so a missing htmlPath WARNS (via the
 // placeholder visual) without ERRORING (without failing demo parse).
-const HtmlNodeDataSchema = z.object({
+export const HtmlNodeDataSchema = z.object({
   htmlPath: z.string().min(1).refine(isCleanRelativePath, {
     message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
   }),
