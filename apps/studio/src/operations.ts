@@ -74,6 +74,10 @@ export const NodePatchBodySchema = z
     cornerRadius: z.number().min(0).optional(),
     width: z.number().positive().optional(),
     height: z.number().positive().optional(),
+    // htmlNode-only: when true, the renderer measures content and React Flow
+    // sizes the wrapper around it. mergeNodeUpdates enforces the invariant
+    // that autoSize:true never coexists with persisted width/height.
+    autoSize: z.boolean().optional(),
     shape: z.enum(['rectangle', 'ellipse', 'sticky', 'text']).optional(),
     // iconNode-only: stroke color token. Lands at data.color; DemoSchema's
     // post-merge reparse gates that this is only valid on an iconNode.
@@ -117,6 +121,7 @@ const NODE_DATA_PATCH_KEYS = [
   'cornerRadius',
   'width',
   'height',
+  'autoSize',
   'shape',
   'color',
   'strokeWidth',
