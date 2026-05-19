@@ -57,7 +57,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   // HTML can paint edge-to-edge. Only fields the author has SET land in the
   // style object — `colorTokenStyle` is used so theming stays consistent with
   // every other visual node.
-  const containerStyle: CSSProperties = {
+  //
+  // Chrome (border / bg / radius / font) lives on the INNER wrapper so its
+  // `overflow:hidden` can clip author HTML to the rounded corners without also
+  // clipping the connector handles and resize corners, which paint outside the
+  // node's bounding box on selection (see styles/index.css handle/resize
+  // transforms). Sizing stays on the OUTER wrapper so React Flow's positioned
+  // children (Handle, NodeResizeControl) measure against the right box.
+  const chromeStyle: CSSProperties = {
     ...(data.backgroundColor !== undefined
       ? { backgroundColor: colorTokenStyle(data.backgroundColor, 'node').backgroundColor }
       : {}),
@@ -69,7 +76,6 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
-    ...(userSized ? { width: data.width, height: data.height } : {}),
   };
 
   // US-012: load the Tailwind v4 browser runtime at mount so author HTML's
@@ -130,14 +136,20 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height }
       : {};
 
-  const outerStyle: CSSProperties = { ...containerStyle, ...placeholderFallback };
+  const outerStyle: CSSProperties = {
+    ...(userSized ? { width: data.width, height: data.height } : {}),
+    ...placeholderFallback,
+  };
+
+  // Inner shrink-wraps to the body's natural size only when we're auto-sizing
+  // a loaded htmlNode (body is `inline-block` then). In every other case —
+  // user-sized, or placeholder/loading/error — the outer has an explicit size
+  // and the inner fills it.
+  const innerShrinkWraps = !userSized && content.kind === 'loaded';
 
   return (
     <div
-      className={cn(
-        'sf:group sf:relative sf:overflow-hidden',
-        userSized ? 'sf:h-full sf:w-full' : '',
-      )}
+      className={cn('sf:group sf:relative', userSized ? 'sf:h-full sf:w-full' : '')}
       style={outerStyle}
       data-testid="html-node"
     >
@@ -185,7 +197,16 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         isConnectable={isConnectable}
         className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
-      {body}
+      <div
+        data-testid="html-node-chrome"
+        className={cn(
+          'sf:overflow-hidden',
+          innerShrinkWraps ? 'sf:inline-block' : 'sf:h-full sf:w-full',
+        )}
+        style={chromeStyle}
+      >
+        {body}
+      </div>
       <Handle
         type="source"
         position={Position.Right}

@@ -144,6 +144,18 @@ function getContainerStyle(tree: unknown): CSSProperties {
   return (container.props as { style?: CSSProperties }).style ?? {};
 }
 
+// Chrome (border / bg / radius / font / textColor) lives on the inner wrapper
+// so its `overflow:hidden` clips author HTML to the rounded corners without
+// also clipping the connector handles + resize corners on the outer wrapper.
+function getChromeStyle(tree: unknown): CSSProperties {
+  const chrome = findElement(tree, (el) => {
+    const p = el.props as { 'data-testid'?: string };
+    return p['data-testid'] === 'html-node-chrome';
+  });
+  if (!chrome) throw new Error('html-node-chrome wrapper missing');
+  return (chrome.props as { style?: CSSProperties }).style ?? {};
+}
+
 function findContent(tree: unknown): ReactElementLike | null {
   return findElement(tree, (el) => {
     const p = el.props as { 'data-testid'?: string };
@@ -258,12 +270,12 @@ describe('HtmlNode missing-file state (US-014)', () => {
 });
 
 describe('HtmlNode wrapper style (US-014)', () => {
-  it('omits color tokens from container style when fields are unset', () => {
+  it('omits color tokens from chrome style when fields are unset', () => {
     _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
       kind: 'loaded',
       html: '<p>ok</p>',
     });
-    const style = getContainerStyle(callHtmlNode());
+    const style = getChromeStyle(callHtmlNode());
     expect(style.backgroundColor).toBeUndefined();
     expect(style.borderColor).toBeUndefined();
     expect(style.borderWidth).toBeUndefined();
@@ -271,12 +283,12 @@ describe('HtmlNode wrapper style (US-014)', () => {
     expect(style.borderRadius).toBeUndefined();
   });
 
-  it('applies border + background tokens when the fields are set', () => {
+  it('applies border + background tokens to the chrome wrapper when fields are set', () => {
     _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
       kind: 'loaded',
       html: '<p>ok</p>',
     });
-    const style = getContainerStyle(
+    const style = getChromeStyle(
       callHtmlNode({
         backgroundColor: 'blue',
         borderColor: 'amber',
@@ -310,6 +322,32 @@ describe('HtmlNode wrapper style (US-014)', () => {
     const style = getContainerStyle(callHtmlNode({ width: 480, height: 360 }));
     expect(style.width).toBeUndefined();
     expect(style.height).toBeUndefined();
+  });
+
+  // Regression: previously the OUTER wrapper carried `sf:overflow-hidden`,
+  // which clipped the four connector handles and the four resize corners when
+  // a selected node's CSS transforms pushed them 8px outward (see
+  // styles/index.css). Clipping must live on the INNER chrome wrapper instead.
+  it('keeps overflow-hidden on the inner chrome wrapper, not the outer', () => {
+    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
+      kind: 'loaded',
+      html: '<p>ok</p>',
+    });
+    const tree = callHtmlNode();
+    const outer = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'html-node';
+    });
+    const chrome = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'html-node-chrome';
+    });
+    expect(outer).not.toBeNull();
+    expect(chrome).not.toBeNull();
+    const outerClass = (outer?.props as { className?: string }).className ?? '';
+    const chromeClass = (chrome?.props as { className?: string }).className ?? '';
+    expect(outerClass).not.toContain('sf:overflow-hidden');
+    expect(chromeClass).toContain('sf:overflow-hidden');
   });
 });
 
