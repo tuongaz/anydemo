@@ -40,14 +40,48 @@ Options:
 docker run --rm -d --name seeflow -p 4321:4321 -v "$PWD":/workspace tuongaz/seeflow
 ```
 
-If `docker run` exits **non-zero**, surface stderr to the user and continue to §4. Common causes:
+If `docker run` exits **non-zero**, surface stderr to the user, then attempt the proxy retry in **§3a.1** before falling back to §4. Common causes:
 
 | stderr signal | Likely cause |
 |---|---|
-| `pull access denied` / `manifest unknown` / `failed to resolve` | Image pull failed (network, registry, auth) |
-| `port is already allocated` / `bind: address already in use` | Port 4321 taken by another process |
-| `name "seeflow" is already in use` | Stopped container with same name still exists — tell user: `docker rm -f seeflow` |
-| `Cannot connect to the Docker daemon` | Daemon stopped between §2 and §3 |
+| `pull access denied` / `manifest unknown` / `failed to resolve` | Image pull failed (network, registry, auth) — proxy retry may help |
+| `net/http: TLS handshake timeout` / `i/o timeout` / `dial tcp: lookup ... no such host` | Network egress blocked — proxy retry may help |
+| `port is already allocated` / `bind: address already in use` | Port 4321 taken by another process — proxy will NOT help, skip to §4 |
+| `name "seeflow" is already in use` | Stopped container with same name still exists — tell user: `docker rm -f seeflow`, skip §3a.1 |
+| `Cannot connect to the Docker daemon` | Daemon stopped between §2 and §3 — skip §3a.1, go to §4 |
+
+### 3a.1. Proxy retry (only for network-class failures)
+
+Only run this step when the failure looks network-related (image pull, DNS, TLS, timeout). Skip it for port conflicts, daemon errors, or name collisions — a proxy can't fix those.
+
+First check whether the host shell already exports proxy variables:
+
+```bash
+env | grep -iE '^(https?_proxy|no_proxy)=' || true
+```
+
+**If at least one of `HTTP_PROXY` / `HTTPS_PROXY` is set:** retry once, forwarding the host's proxy env into the container. Use `host.docker.internal` if the proxy URL points at `localhost` / `127.0.0.1` (the container can't reach the host loopback directly).
+
+```bash
+docker rm -f seeflow >/dev/null 2>&1 || true
+docker run --rm -d --name seeflow -p 4321:4321 -v "$PWD":/workspace \
+  ${HTTP_PROXY:+-e HTTP_PROXY="$HTTP_PROXY"} \
+  ${HTTPS_PROXY:+-e HTTPS_PROXY="$HTTPS_PROXY"} \
+  ${NO_PROXY:+-e NO_PROXY="$NO_PROXY"} \
+  ${http_proxy:+-e http_proxy="$http_proxy"} \
+  ${https_proxy:+-e https_proxy="$https_proxy"} \
+  ${no_proxy:+-e no_proxy="$no_proxy"} \
+  tuongaz/seeflow
+```
+
+**If no proxy env vars are set:** ask the user once with `AskUserQuestion`:
+
+> Docker run failed with a network error. Are you behind an HTTP proxy I should retry with?
+>
+> - **No proxy** — skip the retry, fall through to §4.
+> - **Yes — enter URL** — accept a `host:port` or full URL (e.g. `http://proxy.corp:8080`), then run the retry above with that value set for both `HTTP_PROXY` and `HTTPS_PROXY`.
+
+On retry **success** → go to §3b. On retry **failure** → surface the new stderr verbatim and continue to §4. Do **not** loop — one proxy retry maximum.
 
 ### 3b. On success — poll `/health`
 
