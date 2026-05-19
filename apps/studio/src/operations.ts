@@ -175,12 +175,19 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
   // the same patch tried to write them. Writing width/height implicitly
   // flips autoSize to false.
   if (node.type === 'htmlNode') {
+    // The autoSize invariant requires `width`/`height` to be ABSENT from the
+    // serialized JSON when autoSize is true — not present with value
+    // `undefined` (which would serialize as a stray `"width": null` or get
+    // dropped inconsistently across the wire). `delete` is the right tool
+    // here; the rest of the function is hot on read, not write.
     if (updates.autoSize === true) {
       if ('width' in data) {
+        // biome-ignore lint/performance/noDelete: invariant requires key absence on serialize
         delete data.width;
         touchedData = true;
       }
       if ('height' in data) {
+        // biome-ignore lint/performance/noDelete: invariant requires key absence on serialize
         delete data.height;
         touchedData = true;
       }
