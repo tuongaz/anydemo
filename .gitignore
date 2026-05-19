@@ -27,6 +27,7 @@ ralph/
 .claude/ralph-loop.local.md
 ,claude/settings.local.json
 .claude/skills/run-ralph
+.claude/worktrees/
 docs
 apps/cloud/cdk.out
 ralph/prd.json
