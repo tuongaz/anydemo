@@ -39,6 +39,20 @@ export interface ShareMenuProps {
    * only when this callback is set AND `mode === 'edit'`.
    */
   onExportToCloud?: () => void;
+  /**
+   * Controlled `open` state for the inner EmbedDialog. When provided, the menu
+   * defers entirely to the host for embed-state ownership (used by
+   * SeeflowCanvas's imperative `openEmbedDialog()` handle in US-014). When
+   * absent the menu falls back to its own internal state.
+   */
+  embedOpen?: boolean;
+  /**
+   * Controlled `onOpenChange` for the inner EmbedDialog. Pairs with
+   * `embedOpen`; called both when the user clicks the Embed menu item and when
+   * the dialog dismisses (outside-click / ESC / Close). Falls back to internal
+   * state when absent.
+   */
+  onEmbedOpenChange?: (open: boolean) => void;
 }
 
 const SHARE_LABEL = 'Share / download';
@@ -59,10 +73,21 @@ export function ShareMenu({
   onDownloadPdf,
   onDownloadPng,
   onExportToCloud,
+  embedOpen: embedOpenProp,
+  onEmbedOpenChange,
 }: ShareMenuProps) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [downloadingPng, setDownloadingPng] = useState(false);
-  const [embedOpen, setEmbedOpen] = useState(false);
+  const [internalEmbedOpen, setInternalEmbedOpen] = useState(false);
+  const embedControlled = embedOpenProp !== undefined;
+  const embedOpen = embedControlled ? embedOpenProp : internalEmbedOpen;
+  const setEmbedOpen = useCallback(
+    (next: boolean) => {
+      if (!embedControlled) setInternalEmbedOpen(next);
+      onEmbedOpenChange?.(next);
+    },
+    [embedControlled, onEmbedOpenChange],
+  );
 
   const handleDownloadPdf = useCallback(() => {
     if (!onDownloadPdf || downloadingPdf) return;

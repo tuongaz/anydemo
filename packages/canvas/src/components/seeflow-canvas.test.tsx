@@ -15,6 +15,7 @@ import {
   type ClipboardShortcutEventLike,
   FIT_VIEW_OPTIONS,
   SeeflowCanvas,
+  type SeeflowCanvasHandle,
   type SeeflowCanvasProps,
   classifyHandleDropFailure,
   classifyReconnectBodyDrop,
@@ -25,6 +26,7 @@ import {
   resolveFlags,
 } from './seeflow-canvas.tsx';
 import { type MultiResizeUpdate, SelectionResizeOverlay } from './selection-resize-overlay.tsx';
+import { ShareMenu } from './share-menu.tsx';
 import { StyleStrip } from './style-strip.tsx';
 
 // Bun runs apps/web tests without a DOM. The hook-shim pattern (also used by
@@ -47,6 +49,11 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: (cb: () => void, deps?: readonly unknown[]) => void;
+  useImperativeHandle: <T>(
+    ref: React.ForwardedRef<T>,
+    init: () => T,
+    deps?: readonly unknown[],
+  ) => void;
 };
 
 /**
@@ -93,6 +100,20 @@ function renderWithHooks<T>(
     },
     useEffect: (cb: () => void, deps?: readonly unknown[]) => {
       effectSink?.push({ cb, deps });
+    },
+    useImperativeHandle: <T,>(
+      ref: React.ForwardedRef<T>,
+      init: () => T,
+      _deps?: readonly unknown[],
+    ) => {
+      // Imperative handle install — populate the ref synchronously so tests can
+      // assert ref.current after the render call returns.
+      if (ref === null) return;
+      if (typeof ref === 'function') {
+        ref(init());
+        return;
+      }
+      (ref as { current: T | null }).current = init();
     },
   };
   try {
@@ -158,6 +179,7 @@ function callSeeflowCanvas(
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
     effectSink?: CapturedEffect[];
+    ref?: React.ForwardedRef<SeeflowCanvasHandle>;
   } = {},
 ): unknown {
   const { nodeOverrides, connectorOverrides, runtime, ...rest } = overrides;
@@ -185,10 +207,15 @@ function callSeeflowCanvas(
     ...rest,
     runtime: builtRuntime,
   };
-  return renderWithHooks(
-    () => (SeeflowCanvas as unknown as (p: SeeflowCanvasProps) => unknown)(props),
-    hookOptions,
-  );
+  // US-014: SeeflowCanvas is now a forwardRef component, so we invoke `.render`
+  // directly under the hook shim. The optional `ref` flows through so a test
+  // can assert the imperative handle population.
+  const renderFn = (
+    SeeflowCanvas as unknown as {
+      render: (p: SeeflowCanvasProps, r: React.ForwardedRef<SeeflowCanvasHandle>) => unknown;
+    }
+  ).render;
+  return renderWithHooks(() => renderFn(props, hookOptions.ref ?? null), hookOptions);
 }
 
 function makeShapeNode(id: string): DemoNode {
@@ -2897,6 +2924,7 @@ describe('US-027: resolveFlags helper', () => {
       showStatusBadges: true,
       showResizeHandles: true,
       showControls: true,
+      showShareMenu: true,
       enableKeyboard: true,
       enableContextMenu: true,
       enableDragDrop: true,
@@ -2920,6 +2948,7 @@ describe('US-027: resolveFlags helper', () => {
       showStatusBadges: true,
       showResizeHandles: false,
       showControls: true,
+      showShareMenu: true,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,
@@ -2944,6 +2973,7 @@ describe('US-027: resolveFlags helper', () => {
       showStatusBadges: false,
       showResizeHandles: false,
       showControls: false,
+      showShareMenu: false,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,
@@ -3012,5 +3042,68 @@ describe('US-027: resolveFlags helper', () => {
 
   it('respects explicit true even in view mode (override wins over preset)', () => {
     expect(resolveFlags({ mode: 'view', showToolbar: true }).showToolbar).toBe(true);
+  });
+});
+
+describe('US-014: imperative handle + ShareMenu wiring', () => {
+  // Locate the top-right Panel + the ShareMenu inside it. The Panel is a
+  // structural marker; `position="top-right"` is what distinguishes the
+  // share Panel from the existing top-left toolbar/style Panel.
+  function findShareMenu(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => el.type === (ShareMenu as unknown));
+  }
+
+  it('exposes exportPdf, exportPng, openEmbedDialog on the ref handle after mount', () => {
+    const handle: { current: SeeflowCanvasHandle | null } = { current: null };
+    callSeeflowCanvas({}, { ref: handle });
+    expect(handle.current).not.toBeNull();
+    expect(typeof handle.current?.exportPdf).toBe('function');
+    expect(typeof handle.current?.exportPng).toBe('function');
+    expect(typeof handle.current?.openEmbedDialog).toBe('function');
+  });
+
+  it('renders the ShareMenu in edit mode by default', () => {
+    const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter });
+    const menu = findShareMenu(tree);
+    expect(menu).not.toBeNull();
+    // mode is forwarded as 'edit' (not mapped to view) so Embed + Export to
+    // seeflow.dev remain reachable inside the menu's own gating.
+    expect(menu?.props.mode).toBe('edit');
+  });
+
+  it('renders the ShareMenu in view mode by default', () => {
+    const tree = callSeeflowCanvas({ mode: 'view' });
+    const menu = findShareMenu(tree);
+    expect(menu).not.toBeNull();
+    expect(menu?.props.mode).toBe('view');
+  });
+
+  it("does NOT render the ShareMenu when mode === 'mini'", () => {
+    const tree = callSeeflowCanvas({ mode: 'mini' });
+    expect(findShareMenu(tree)).toBeNull();
+  });
+
+  it('does NOT render the ShareMenu when showShareMenu is explicitly false', () => {
+    const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter, showShareMenu: false });
+    expect(findShareMenu(tree)).toBeNull();
+  });
+
+  it('threads projectId + onExportToCloud + the exportApi callbacks into ShareMenu', () => {
+    const onExportToCloud = () => {};
+    const tree = callSeeflowCanvas({
+      mode: 'edit',
+      adapter: noopAdapter,
+      projectId: 'demo-42',
+      onExportToCloud,
+    });
+    const menu = findShareMenu(tree);
+    expect(menu).not.toBeNull();
+    expect(menu?.props.projectId).toBe('demo-42');
+    expect(menu?.props.onExportToCloud).toBe(onExportToCloud);
+    expect(typeof menu?.props.onDownloadPdf).toBe('function');
+    expect(typeof menu?.props.onDownloadPng).toBe('function');
+    // The controlled embed-dialog state lift exposes both prongs.
+    expect(typeof menu?.props.onEmbedOpenChange).toBe('function');
+    expect(menu?.props.embedOpen).toBe(false);
   });
 });

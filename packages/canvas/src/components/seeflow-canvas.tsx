@@ -26,17 +26,21 @@ import {
 import { LayoutDashboard, type LucideProps, Maximize2 } from 'lucide-react';
 import {
   type ComponentType,
+  type ForwardedRef,
   type PointerEvent,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
+  forwardRef,
   useCallback,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from 'react';
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
+import { useCanvasExport } from '../hooks/use-canvas-export.ts';
 import { type AutoLayoutNode, applyLayout } from '../lib/auto-layout.ts';
 import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { cn } from '../lib/cn.ts';
@@ -82,6 +86,7 @@ import {
   type OverlayInputNode,
   SelectionResizeOverlay,
 } from './selection-resize-overlay.tsx';
+import { ShareMenu } from './share-menu.tsx';
 import { type ConnectorStylePatch, type NodeStylePatch, StyleStrip } from './style-strip.tsx';
 
 import '@xyflow/react/dist/style.css';
@@ -121,6 +126,14 @@ export interface CanvasFeatureOverrides {
    * `edit` and `view`, OFF for `mini` (thumbnails want no chrome).
    */
   showControls?: boolean;
+  /**
+   * Gates the top-right `<ShareMenu>` dropdown (Download PDF / PNG / Embed /
+   * Export to seeflow.dev). Default ON for `edit` and `view` (downloads and
+   * embed are useful for both edit and read-only consumers), OFF for `mini`
+   * (thumbnails want no chrome). The menu's own internal rules still filter
+   * items by mode + the presence of each callback / `projectId`.
+   */
+  showShareMenu?: boolean;
   enableKeyboard?: boolean;
   enableContextMenu?: boolean;
   enableDragDrop?: boolean;
@@ -155,6 +168,7 @@ export interface ResolvedCanvasFlags {
   showStatusBadges: boolean;
   showResizeHandles: boolean;
   showControls: boolean;
+  showShareMenu: boolean;
   enableKeyboard: boolean;
   enableContextMenu: boolean;
   enableDragDrop: boolean;
@@ -172,6 +186,7 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showStatusBadges: true,
   showResizeHandles: true,
   showControls: true,
+  showShareMenu: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
@@ -193,6 +208,9 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // View mode keeps the Controls cluster so embedders get zoom-in/zoom-out/
   // fit-view buttons — they're navigation aids, not editing affordances.
   showControls: true,
+  // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
+  // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
+  showShareMenu: true,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -223,6 +241,7 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   showStatusBadges: false,
   showResizeHandles: false,
   showControls: false,
+  showShareMenu: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -252,6 +271,7 @@ export function resolveFlags(
     showStatusBadges: input.showStatusBadges ?? defaults.showStatusBadges,
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
+    showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
@@ -685,6 +705,32 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * → only built-in lucide icons resolve.
    */
   customIcons?: Record<string, ComponentType<LucideProps>>;
+  /**
+   * US-014: opt-in callback that wires the "Export to seeflow.dev" item in
+   * the canvas's built-in ShareMenu. Edit-mode-only (the ShareMenu enforces
+   * the visibility rule internally) so view embedders never see the cloud
+   * upload affordance. Absent → the item is hidden.
+   */
+  onExportToCloud?: () => void;
+}
+
+/**
+ * US-014: imperative handle exposed through `forwardRef`. Lets a host call the
+ * canvas's export actions and open the embed dialog without owning the
+ * underlying state — useful for command palettes / keyboard shortcuts /
+ * external menus where the in-canvas ShareMenu chrome is not the entry point.
+ */
+export interface SeeflowCanvasHandle {
+  /** Capture the viewport and save a PDF. Errors surface inline in the canvas. */
+  exportPdf(): Promise<void>;
+  /** Capture the viewport and save a PNG. Errors surface inline in the canvas. */
+  exportPng(): Promise<void>;
+  /**
+   * Open the embed-snippet dialog programmatically. No-op when the canvas is
+   * not rendering its ShareMenu chrome (e.g. mini mode or
+   * `showShareMenu: false`) since the dialog is mounted through the menu.
+   */
+  openEmbedDialog(): void;
 }
 
 /**
@@ -1534,7 +1580,7 @@ const dataStatusFor = (runs: RunsMap, id: string): NodeStatus | undefined => run
 const dataErrorMessageFor = (runs: RunsMap, id: string): string | undefined =>
   runs?.[id]?.status === 'error' ? runs[id]?.error : undefined;
 
-export function SeeflowCanvas(props: SeeflowCanvasProps) {
+function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowCanvasHandle>) {
   const {
     mode,
     // US-007: `adapter` is forwarded to the built-in DetailPanel so its
@@ -1608,12 +1654,14 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     autoFitView,
     autoFitViewSignal,
     customIcons,
+    onExportToCloud,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
     showStatusBadges,
     showResizeHandles,
     showControls,
+    showShareMenu,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
@@ -1639,6 +1687,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
         showStatusBadges,
         showResizeHandles,
         showControls,
+        showShareMenu,
         enableKeyboard,
         enableContextMenu,
         enableDragDrop,
@@ -1656,6 +1705,7 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
       showStatusBadges,
       showResizeHandles,
       showControls,
+      showShareMenu,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -3555,6 +3605,30 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
   // own space input still types a literal space.
   const [spaceHeld, setSpaceHeld] = useState(false);
   const [spaceDragging, setSpaceDragging] = useState(false);
+  // US-014: open state for the ShareMenu's EmbedDialog, hoisted so the
+  // imperative ref handle (`openEmbedDialog`) can flip it programmatically
+  // even when the host invokes from a command palette / keyboard shortcut. The
+  // ShareMenu still falls back to its own internal state when these props are
+  // absent, so the controlled lift is opt-in.
+  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState(false);
+  // US-014: shared export workflow — fit-view + viewport capture + filename
+  // derivation + dynamic-import of jspdf — exposed both through the ShareMenu
+  // wired below and the imperative ref handle. The hook owns `lastError`
+  // internally so we don't leak the failure state into the canvas's render
+  // path (the ShareMenu surfaces issues inline if/when we wire that later).
+  const exportApi = useCanvasExport({
+    projectId,
+    getReactFlow: () => rfInstanceRef.current,
+  });
+  useImperativeHandle(
+    ref,
+    () => ({
+      exportPdf: exportApi.exportPdf,
+      exportPng: exportApi.exportPng,
+      openEmbedDialog: () => setShareEmbedDialogOpen(true),
+    }),
+    [exportApi.exportPdf, exportApi.exportPng],
+  );
   useEffect(() => {
     // US-027: Space-held pan is a keyboard affordance — gate on the same flag
     // as the ESC chain and the Cmd+C/V handlers above.
@@ -4054,6 +4128,25 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
                 </div>
               </Panel>
             ) : null}
+            {/* US-014: top-right ShareMenu — Download PDF / PNG / Embed /
+            Export to seeflow.dev. Mode is mapped to 'view' for mini since
+            ShareMenu does not accept 'mini'; the Panel itself is hidden in
+            mini via the flag, so this is defensive. EmbedDialog state is
+            hoisted into this component so the imperative ref handle can
+            open it without going through the menu. */}
+            {flags.showShareMenu ? (
+              <Panel position="top-right">
+                <ShareMenu
+                  mode={mode === 'mini' ? 'view' : mode}
+                  projectId={projectId}
+                  onDownloadPdf={exportApi.exportPdf}
+                  onDownloadPng={exportApi.exportPng}
+                  onExportToCloud={onExportToCloud}
+                  embedOpen={shareEmbedDialogOpen}
+                  onEmbedOpenChange={setShareEmbedDialogOpen}
+                />
+              </Panel>
+            ) : null}
           </ReactFlow>
           {ghostRect ? (
             <div
@@ -4343,3 +4436,11 @@ export function SeeflowCanvas(props: SeeflowCanvasProps) {
     </IconRegistryProvider>
   );
 }
+
+/**
+ * US-014: ref-aware wrapper. Hosts use `useRef<SeeflowCanvasHandle>()` +
+ * `ref={canvasRef}` to call `exportPdf` / `exportPng` / `openEmbedDialog`
+ * from a command palette or keyboard shortcut without owning the underlying
+ * state.
+ */
+export const SeeflowCanvas = forwardRef<SeeflowCanvasHandle, SeeflowCanvasProps>(SeeflowCanvasImpl);
