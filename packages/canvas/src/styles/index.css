@@ -269,7 +269,7 @@ layer(base);
   border-style: dashed !important;
 }
 
-.seeflow-canvas-root .react-flow__node.selected::after {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected::after {
   content: "";
   position: absolute;
   inset: calc(-8px / var(--rf-zoom, 1));
@@ -322,31 +322,40 @@ layer(base);
   user-select: text;
 }
 
-/* US-007 selected-node handle transforms */
-.seeflow-canvas-root .react-flow__node.selected .react-flow__handle-top {
+/* US-007 selected-node handle transforms (edit mode only) */
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-top {
   transform: translate(-50%, -50%) translate(0, calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__handle-bottom {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-bottom {
   transform: translate(-50%, 50%) translate(0, calc(8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__handle-left {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-left {
   transform: translate(-50%, -50%) translate(calc(-8px / var(--rf-zoom, 1)), 0);
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__handle-right {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-right {
   transform: translate(50%, -50%) translate(calc(8px / var(--rf-zoom, 1)), 0);
 }
 
-.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.top.left {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.left {
   transform: translate(calc(-8px / var(--rf-zoom, 1)), calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.top.right {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.right {
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.bottom.left {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.bottom.left {
   transform: translate(calc(-8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root .react-flow__node.selected .react-flow__resize-control.handle.bottom.right {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.bottom.right {
   transform: translate(calc(8px / var(--rf-zoom, 1)), calc(8px / var(--rf-zoom, 1)));
+}
+
+/* View + mini modes: keep handles invisible even when the node is selected.
+   The Handle componentry forces `sf:opacity-100!` on selection — this
+   override wins via higher specificity (attribute + descendant chain). */
+.seeflow-canvas-root[data-mode="view"] .react-flow__node.selected .react-flow__handle,
+.seeflow-canvas-root[data-mode="mini"] .react-flow__node.selected .react-flow__handle {
+  opacity: 0 !important;
+  pointer-events: none !important;
 }
 
 /* React Flow Controls panel theming */

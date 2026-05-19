@@ -4718,7 +4718,7 @@ function DetailPanel({
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
   const supportsIconField = inspectableNode !== null && (inspectableNode.type === "playNode" || inspectableNode.type === "stateNode");
   const showIconField = supportsIconField && typeof onIconChange === "function";
-  const currentIcon = showIconField && "icon" in inspectableNode.data ? inspectableNode.data.icon ?? null : null;
+  const currentIcon = supportsIconField && inspectableNode && "icon" in inspectableNode.data ? inspectableNode.data.icon ?? null : null;
   const [width, setWidth] = useState11(() => getStoredDetailPanelWidth());
   const onResizeHandlePointerDown = (e) => {
     e.preventDefault();
@@ -4780,6 +4780,14 @@ function DetailPanel({
                       nodeId: inspectableNode.id,
                       icon: currentIcon,
                       onChange: onIconChange
+                    }
+                  ) : supportsIconField && currentIcon ? /* @__PURE__ */ jsx35(
+                    "span",
+                    {
+                      "data-testid": "detail-panel-icon-readonly",
+                      "aria-hidden": true,
+                      className: "sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground",
+                      children: /* @__PURE__ */ jsx35(Icon, { name: currentIcon, size: 16 })
                     }
                   ) : null,
                   /* @__PURE__ */ jsx35("div", { className: "sf:min-w-0 sf:flex-1", children: /* @__PURE__ */ jsx35(
@@ -8383,6 +8391,7 @@ function SeeflowCanvasImpl(props, ref) {
     "div",
     {
       "data-testid": "seeflow-canvas",
+      "data-mode": mode,
       ref: wrapperRef,
       className: "seeflow-canvas-root sf:relative sf:h-full sf:w-full",
       style: wrapperCursor ? { cursor: wrapperCursor } : void 0,

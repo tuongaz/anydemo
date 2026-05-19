@@ -105,8 +105,11 @@ export function DetailPanel({
     inspectableNode !== null &&
     (inspectableNode.type === 'playNode' || inspectableNode.type === 'stateNode');
   const showIconField = supportsIconField && typeof onIconChange === 'function';
+  // currentIcon is decoupled from showIconField so the read-only fallback
+  // below can render the same icon the node body shows when the canvas is in
+  // view mode (no onIconChange callback wired).
   const currentIcon =
-    showIconField && 'icon' in inspectableNode.data
+    supportsIconField && inspectableNode && 'icon' in inspectableNode.data
       ? ((inspectableNode.data as { icon?: string }).icon ?? null)
       : null;
 
@@ -193,6 +196,14 @@ export function DetailPanel({
                         icon={currentIcon}
                         onChange={onIconChange}
                       />
+                    ) : supportsIconField && currentIcon ? (
+                      <span
+                        data-testid="detail-panel-icon-readonly"
+                        aria-hidden
+                        className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground"
+                      >
+                        <Icon name={currentIcon} size={16} />
+                      </span>
                     ) : null}
                     <div className="sf:min-w-0 sf:flex-1">
                       <EditableField

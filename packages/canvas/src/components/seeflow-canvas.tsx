@@ -3891,6 +3891,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     <IconRegistryProvider value={iconRegistryValue}>
       <div
         data-testid="seeflow-canvas"
+        data-mode={mode}
         ref={wrapperRef}
         className="seeflow-canvas-root sf:relative sf:h-full sf:w-full"
         style={wrapperCursor ? { cursor: wrapperCursor } : undefined}

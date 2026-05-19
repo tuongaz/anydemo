@@ -413,6 +413,44 @@ describe('DetailPanel icon trigger', () => {
     expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
+  it('renders read-only icon span when onIconChange is undefined but node has an icon', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: makePlayNode({ data: { icon: 'database' } } as Partial<DemoNode>),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        // onIconChange omitted → editable trigger hidden, read-only span renders.
+      }),
+    );
+    // No editable trigger
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
+    // Read-only icon present
+    const readOnly = findAll(
+      tree,
+      (el) => el.props['data-testid'] === 'detail-panel-icon-readonly',
+    );
+    expect(readOnly.length).toBe(1);
+  });
+
+  it('omits read-only icon span when node has no icon set', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        demoId: 'd1',
+        node: makePlayNode(), // no icon in data
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+      }),
+    );
+    const readOnly = findAll(
+      tree,
+      (el) => el.props['data-testid'] === 'detail-panel-icon-readonly',
+    );
+    expect(readOnly.length).toBe(0);
+  });
+
   it('icon trigger is hidden for unsupported node types even with onIconChange', () => {
     const shapeNode = {
       id: 's1',
