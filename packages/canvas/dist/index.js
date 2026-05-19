@@ -1,7 +1,10 @@
 // src/lib/color-tokens.ts
 var COLOR_TOKEN_MAP = {
   default: {
-    border: "hsl(var(--border))",
+    // Design system green — matches the canvas's --primary emerald token
+    // (#10b981 / hsl(160 84% 39.4%)). Applied so unstyled nodes carry the
+    // brand color on their border by default.
+    border: "hsl(var(--primary))",
     background: "hsl(var(--card))",
     edge: "hsl(var(--muted-foreground))",
     headerBackground: "hsl(var(--muted))"
@@ -5263,11 +5266,44 @@ function ShareMenu({
   ] });
 }
 
+// src/components/restart-demo-button.tsx
+import { Loader2 as Loader23, RefreshCw } from "lucide-react";
+import { useCallback as useCallback4, useState as useState14 } from "react";
+import { jsx as jsx38, jsxs as jsxs25 } from "react/jsx-runtime";
+function RestartDemoButton({ onRestartDemo }) {
+  const [pending, setPending] = useState14(false);
+  const handleClick = useCallback4(() => {
+    if (pending) return;
+    setPending(true);
+    Promise.resolve(onRestartDemo()).finally(() => {
+      setPending(false);
+    });
+  }, [onRestartDemo, pending]);
+  return /* @__PURE__ */ jsxs25(Tooltip, { children: [
+    /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
+      Button,
+      {
+        "data-testid": "header-restart-demo",
+        type: "button",
+        variant: "ghost",
+        size: "icon",
+        "aria-label": "Restart demo",
+        title: "Restart demo",
+        disabled: pending,
+        onClick: handleClick,
+        className: "sf:h-8 sf:w-8",
+        children: pending ? /* @__PURE__ */ jsx38(Loader23, { className: "sf:h-4 sf:w-4 sf:animate-spin", "aria-hidden": "true" }) : /* @__PURE__ */ jsx38(RefreshCw, { className: "sf:h-4 sf:w-4", "aria-hidden": "true" })
+      }
+    ) }),
+    /* @__PURE__ */ jsx38(TooltipContent, { side: "bottom", children: "Restart demo" })
+  ] });
+}
+
 // src/components/selection-resize-overlay.tsx
 import { useReactFlow } from "@xyflow/react";
 import {
   useRef as useRef5,
-  useState as useState14
+  useState as useState15
 } from "react";
 var SELECTION_OVERLAY_PADDING = 8;
 function computeUnionRect(nodes) {
@@ -5378,8 +5414,8 @@ function SelectionResizeOverlay({
   paddingPx = SELECTION_OVERLAY_PADDING
 }) {
   const reactFlow = useReactFlow();
-  const [dragState, setDragState] = useState14(null);
-  const [previewRect, setPreviewRect] = useState14(null);
+  const [dragState, setDragState] = useState15(null);
+  const [previewRect, setPreviewRect] = useState15(null);
   const shiftHeldRef = useRef5(false);
   const liveDispatchRafRef = useRef5(null);
   if (!selectionEligibleForOverlay(selectedNodes)) return null;
@@ -5504,8 +5540,8 @@ import {
   Sticker as Sticker2,
   Type as Type2
 } from "lucide-react";
-import { useEffect as useEffect8, useState as useState15 } from "react";
-import { Fragment as Fragment7, jsx as jsx38, jsxs as jsxs25 } from "react/jsx-runtime";
+import { useEffect as useEffect8, useState as useState16 } from "react";
+import { Fragment as Fragment7, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
 var DEFAULT_BORDER_SIZE = 3;
@@ -5676,13 +5712,13 @@ function StyleStrip({
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);
     };
-    return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
+    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
       "div",
       {
         "data-testid": "canvas-style-strip",
         className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx38(
+          /* @__PURE__ */ jsx39(
             SwatchButton,
             {
               testId: "style-strip-icon-color",
@@ -5695,8 +5731,8 @@ function StyleStrip({
               onSelect: applyIconColor
             }
           ),
-          showChangeIcon ? /* @__PURE__ */ jsxs25(Tooltip, { children: [
-            /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
+          showChangeIcon ? /* @__PURE__ */ jsxs26(Tooltip, { children: [
+            /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
               "button",
               {
                 type: "button",
@@ -5708,10 +5744,10 @@ function StyleStrip({
                   "sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground",
                   "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
                 ),
-                children: /* @__PURE__ */ jsx38(Sticker2, { className: "sf:h-4 sf:w-4" })
+                children: /* @__PURE__ */ jsx39(Sticker2, { className: "sf:h-4 sf:w-4" })
               }
             ) }),
-            /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: "Change icon" })
+            /* @__PURE__ */ jsx39(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: "Change icon" })
           ] }) : null
         ]
       }
@@ -5740,13 +5776,13 @@ function StyleStrip({
     const previewImageCornerRadius = (n) => {
       for (const node of nodes) onStyleNodePreview?.(node.id, { cornerRadius: n });
     };
-    return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
+    return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
       "div",
       {
         "data-testid": "canvas-style-strip",
         className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
         children: [
-          /* @__PURE__ */ jsx38(
+          /* @__PURE__ */ jsx39(
             SwatchButton,
             {
               testId: "style-strip-image-border-color",
@@ -5759,7 +5795,7 @@ function StyleStrip({
               onSelect: applyImageBorderColor
             }
           ),
-          /* @__PURE__ */ jsx38(
+          /* @__PURE__ */ jsx39(
             PopoverButton,
             {
               testId: "style-strip-image-border-style",
@@ -5767,9 +5803,9 @@ function StyleStrip({
               ariaLabel: "image border style",
               renderIcon: () => {
                 const Icon2 = BORDER_STYLE_OPTIONS.find((o) => o.value === imageBorderStyle)?.icon ?? LineSolidIcon;
-                return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
+                return /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4" });
               },
-              children: /* @__PURE__ */ jsx38(
+              children: /* @__PURE__ */ jsx39(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5780,14 +5816,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx38(
+          /* @__PURE__ */ jsx39(
             PopoverButton,
             {
               testId: "style-strip-image-border-width",
               tooltip: "Border width",
               ariaLabel: "image border width",
-              renderIcon: () => /* @__PURE__ */ jsx38("span", { className: "sf:font-mono sf:text-[10px] sf:tabular-nums", children: imageBorderWidth }),
-              children: /* @__PURE__ */ jsx38(
+              renderIcon: () => /* @__PURE__ */ jsx39("span", { className: "sf:font-mono sf:text-[10px] sf:tabular-nums", children: imageBorderWidth }),
+              children: /* @__PURE__ */ jsx39(
                 SliderControl,
                 {
                   value: firstImage?.data.borderWidth,
@@ -5802,14 +5838,14 @@ function StyleStrip({
               )
             }
           ),
-          /* @__PURE__ */ jsx38(
+          /* @__PURE__ */ jsx39(
             PopoverButton,
             {
               testId: "style-strip-image-corner-radius",
               tooltip: "Corners",
               ariaLabel: "image corner radius",
-              renderIcon: () => /* @__PURE__ */ jsx38(Squircle, { className: "sf:h-4 sf:w-4" }),
-              children: /* @__PURE__ */ jsx38(
+              renderIcon: () => /* @__PURE__ */ jsx39(Squircle, { className: "sf:h-4 sf:w-4" }),
+              children: /* @__PURE__ */ jsx39(
                 SliderControl,
                 {
                   value: firstImage?.data.cornerRadius,
@@ -5834,7 +5870,7 @@ function StyleStrip({
   const renderColorsTrigger = () => {
     if (pureConnector) {
       const edge = COLOR_TOKENS[borderColorActive].edge;
-      return /* @__PURE__ */ jsx38(
+      return /* @__PURE__ */ jsx39(
         "span",
         {
           className: "sf:inline-block sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border",
@@ -5844,7 +5880,7 @@ function StyleStrip({
     }
     const borderHex = COLOR_TOKENS[borderColorActive].border;
     const fillHex = COLOR_TOKENS[backgroundActive].background;
-    return /* @__PURE__ */ jsx38(
+    return /* @__PURE__ */ jsx39(
       "span",
       {
         className: "sf:inline-block sf:h-5 sf:w-5 sf:rounded-md sf:ring-1 sf:ring-border",
@@ -5852,21 +5888,21 @@ function StyleStrip({
       }
     );
   };
-  return /* @__PURE__ */ jsx38(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs25(
+  return /* @__PURE__ */ jsx39(TooltipProvider, { delayDuration: 300, children: /* @__PURE__ */ jsxs26(
     "div",
     {
       "data-testid": "canvas-style-strip",
       className: "sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur",
       children: [
-        !isTextShape ? /* @__PURE__ */ jsx38(
+        !isTextShape ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-colors",
             tooltip: "Colors",
             ariaLabel: "colors",
             renderIcon: renderColorsTrigger,
-            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
-              /* @__PURE__ */ jsx38(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx38(
+            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx39(PopoverSection, { label: colorTooltip, children: /* @__PURE__ */ jsx39(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-border-color",
@@ -5878,7 +5914,7 @@ function StyleStrip({
                   onSelect: applyBorderColor
                 }
               ) }),
-              showFillSection ? /* @__PURE__ */ jsx38(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx38(
+              showFillSection ? /* @__PURE__ */ jsx39(PopoverSection, { label: "Fill", children: /* @__PURE__ */ jsx39(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-fill",
@@ -5893,7 +5929,7 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        showBorderSection ? /* @__PURE__ */ jsx38(
+        showBorderSection ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-border",
@@ -5901,10 +5937,10 @@ function StyleStrip({
             ariaLabel: pureConnector ? "connector" : "border",
             renderIcon: () => {
               const Icon2 = (pureConnector ? CONNECTOR_STYLE_OPTIONS.find((o) => o.value === connectorStyleActive)?.icon : BORDER_STYLE_OPTIONS.find((o) => o.value === borderStyleActiveNode)?.icon) ?? LineSolidIcon;
-              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
+              return /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
-              /* @__PURE__ */ jsx38(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx38(
+            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx39(PopoverSection, { label: "Style", testId: "style-strip-border-style", children: pureConnector ? /* @__PURE__ */ jsx39(
                 IconToggleGroup,
                 {
                   ariaLabel: "Connector style",
@@ -5912,7 +5948,7 @@ function StyleStrip({
                   onChange: (s) => applyBorderStyle(s),
                   options: CONNECTOR_STYLE_OPTIONS
                 }
-              ) : /* @__PURE__ */ jsx38(
+              ) : /* @__PURE__ */ jsx39(
                 IconToggleGroup,
                 {
                   ariaLabel: "Border style",
@@ -5921,7 +5957,7 @@ function StyleStrip({
                   options: BORDER_STYLE_OPTIONS
                 }
               ) }),
-              /* @__PURE__ */ jsx38(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx38(
+              /* @__PURE__ */ jsx39(PopoverSection, { label: "Width", testId: "style-strip-border-size", children: /* @__PURE__ */ jsx39(
                 SliderControl,
                 {
                   value: widthCurrent,
@@ -5937,20 +5973,20 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes || pureConnector ? /* @__PURE__ */ jsx38(
+        hasNodes || pureConnector ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-text",
             tooltip: "Text",
             ariaLabel: "text",
-            renderIcon: () => /* @__PURE__ */ jsx38(Type2, { className: "sf:h-4 sf:w-4" }),
-            children: /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
-              /* @__PURE__ */ jsx38(
+            renderIcon: () => /* @__PURE__ */ jsx39(Type2, { className: "sf:h-4 sf:w-4" }),
+            children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-56 sf:flex-col sf:gap-3", children: [
+              /* @__PURE__ */ jsx39(
                 PopoverSection,
                 {
                   label: "Size",
                   testId: pureConnector ? "style-strip-connector-font-size" : "style-strip-font-size",
-                  children: /* @__PURE__ */ jsx38(
+                  children: /* @__PURE__ */ jsx39(
                     SliderControl,
                     {
                       value: pureConnector ? firstConnector?.fontSize : firstVisualNode?.data.fontSize,
@@ -5966,7 +6002,7 @@ function StyleStrip({
                   )
                 }
               ),
-              showTextColorSection ? /* @__PURE__ */ jsx38(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx38(
+              showTextColorSection ? /* @__PURE__ */ jsx39(PopoverSection, { label: "Color", children: /* @__PURE__ */ jsx39(
                 ColorSwatchGrid,
                 {
                   testId: "style-strip-text-color",
@@ -5981,14 +6017,14 @@ function StyleStrip({
             ] })
           }
         ) : null,
-        hasNodes && !isTextShape ? /* @__PURE__ */ jsx38(
+        hasNodes && !isTextShape ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-corner-radius",
             tooltip: "Corners",
             ariaLabel: "corner radius",
-            renderIcon: () => /* @__PURE__ */ jsx38(Squircle, { className: "sf:h-4 sf:w-4" }),
-            children: /* @__PURE__ */ jsx38(
+            renderIcon: () => /* @__PURE__ */ jsx39(Squircle, { className: "sf:h-4 sf:w-4" }),
+            children: /* @__PURE__ */ jsx39(
               SliderControl,
               {
                 value: firstVisualNode?.data.cornerRadius,
@@ -6004,7 +6040,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx38(
+        pureConnector ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-path",
@@ -6012,9 +6048,9 @@ function StyleStrip({
             ariaLabel: "connector path",
             renderIcon: () => {
               const Icon2 = PATH_OPTIONS.find((o) => o.value === pathActive)?.icon ?? PathCurveIcon;
-              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
+              return /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsx38(
+            children: /* @__PURE__ */ jsx39(
               IconToggleGroup,
               {
                 ariaLabel: "Connector path",
@@ -6025,7 +6061,7 @@ function StyleStrip({
             )
           }
         ) : null,
-        pureConnector ? /* @__PURE__ */ jsx38(
+        pureConnector ? /* @__PURE__ */ jsx39(
           PopoverButton,
           {
             testId: "style-strip-direction",
@@ -6033,9 +6069,9 @@ function StyleStrip({
             ariaLabel: "direction",
             renderIcon: () => {
               const Icon2 = DIRECTION_OPTIONS.find((o) => o.value === directionActive)?.icon ?? ArrowRight;
-              return /* @__PURE__ */ jsx38(Icon2, { className: "sf:h-4 sf:w-4" });
+              return /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4" });
             },
-            children: /* @__PURE__ */ jsx38(
+            children: /* @__PURE__ */ jsx39(
               IconToggleGroup,
               {
                 ariaLabel: "Connector direction",
@@ -6073,11 +6109,11 @@ function SwatchButton({
   innerTestId,
   onSelect
 }) {
-  const [open, setOpen] = useState15(false);
+  const [open, setOpen] = useState16(false);
   const isUnset = activeToken === "default";
-  return /* @__PURE__ */ jsxs25(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs25(Tooltip, { children: [
-      /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
+  return /* @__PURE__ */ jsxs26(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs26(Tooltip, { children: [
+      /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
         "button",
         {
           type: "button",
@@ -6089,13 +6125,13 @@ function SwatchButton({
             "sf:group sf:relative sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors sf:hover:bg-accent sf:hover:text-accent-foreground",
             "sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1"
           ),
-          children: /* @__PURE__ */ jsx38(
+          children: /* @__PURE__ */ jsx39(
             "span",
             {
               "data-testid": innerTestId,
               className: "sf:relative sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border",
               style: swatchTriggerFillStyle(activeToken, previewKind),
-              children: isUnset ? /* @__PURE__ */ jsx38(
+              children: isUnset ? /* @__PURE__ */ jsx39(
                 "span",
                 {
                   "aria-hidden": "true",
@@ -6111,18 +6147,18 @@ function SwatchButton({
           )
         }
       ) }) }),
-      /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
+      /* @__PURE__ */ jsx39(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx38(
+    /* @__PURE__ */ jsx39(
       PopoverContent,
       {
         side: "right",
         align: "start",
         className: "sf:w-auto sf:p-2",
         "data-testid": `${innerTestId}-popover`,
-        children: /* @__PURE__ */ jsx38("div", { className: "sf:grid sf:grid-cols-4 sf:gap-1.5", children: PALETTE_TOKENS.map((token) => {
+        children: /* @__PURE__ */ jsx39("div", { className: "sf:grid sf:grid-cols-4 sf:gap-1.5", children: PALETTE_TOKENS.map((token) => {
           const isActive = activeToken === token;
-          return /* @__PURE__ */ jsx38(
+          return /* @__PURE__ */ jsx39(
             "button",
             {
               type: "button",
@@ -6140,7 +6176,7 @@ function SwatchButton({
                 isActive ? "sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover" : "sf:hover:scale-110"
               ),
               style: swatchPreviewStyle(token, previewKind),
-              children: isActive ? /* @__PURE__ */ jsx38(
+              children: isActive ? /* @__PURE__ */ jsx39(
                 Check,
                 {
                   className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
@@ -6164,7 +6200,7 @@ function ColorSwatchGrid({
   ariaLabel,
   onSelect
 }) {
-  return /* @__PURE__ */ jsx38(
+  return /* @__PURE__ */ jsx39(
     "div",
     {
       "data-testid": testId,
@@ -6173,7 +6209,7 @@ function ColorSwatchGrid({
       className: "sf:grid sf:grid-cols-4 sf:gap-1.5",
       children: PALETTE_TOKENS.map((token) => {
         const isActive = activeToken === token;
-        return /* @__PURE__ */ jsx38(
+        return /* @__PURE__ */ jsx39(
           "button",
           {
             type: "button",
@@ -6188,7 +6224,7 @@ function ColorSwatchGrid({
               isActive ? "sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover" : "sf:hover:scale-110"
             ),
             style: swatchPreviewStyle(token, previewKind),
-            children: isActive ? /* @__PURE__ */ jsx38(
+            children: isActive ? /* @__PURE__ */ jsx39(
               Check,
               {
                 className: "sf:h-3 sf:w-3 sf:drop-shadow-sm",
@@ -6207,8 +6243,8 @@ function PopoverSection({
   testId,
   children
 }) {
-  return /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:flex-col sf:gap-1.5", "data-testid": testId, children: [
-    /* @__PURE__ */ jsx38("div", { className: "sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: label }),
+  return /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:flex-col sf:gap-1.5", "data-testid": testId, children: [
+    /* @__PURE__ */ jsx39("div", { className: "sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground", children: label }),
     children
   ] });
 }
@@ -6219,10 +6255,10 @@ function PopoverButton({
   renderIcon,
   children
 }) {
-  const [open, setOpen] = useState15(false);
-  return /* @__PURE__ */ jsxs25(Popover, { open, onOpenChange: setOpen, children: [
-    /* @__PURE__ */ jsxs25(Tooltip, { children: [
-      /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
+  const [open, setOpen] = useState16(false);
+  return /* @__PURE__ */ jsxs26(Popover, { open, onOpenChange: setOpen, children: [
+    /* @__PURE__ */ jsxs26(Tooltip, { children: [
+      /* @__PURE__ */ jsx39(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
         "button",
         {
           type: "button",
@@ -6236,9 +6272,9 @@ function PopoverButton({
           children: renderIcon()
         }
       ) }) }),
-      /* @__PURE__ */ jsx38(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
+      /* @__PURE__ */ jsx39(TooltipContent, { side: "right", className: "sf:px-2 sf:py-1 sf:text-xs", children: tooltip })
     ] }),
-    /* @__PURE__ */ jsx38(PopoverContent, { side: "right", align: "start", className: "sf:w-auto sf:p-3", children })
+    /* @__PURE__ */ jsx39(PopoverContent, { side: "right", align: "start", className: "sf:w-auto sf:p-3", children })
   ] });
 }
 function SliderControl({
@@ -6253,15 +6289,15 @@ function SliderControl({
   testId
 }) {
   const upstream = value ?? defaultValue;
-  const [local, setLocal] = useState15(upstream);
-  const [picked, setPicked] = useState15(false);
+  const [local, setLocal] = useState16(upstream);
+  const [picked, setPicked] = useState16(false);
   useEffect8(() => {
     setLocal(upstream);
     setPicked(false);
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
-  return /* @__PURE__ */ jsxs25("div", { className: "sf:flex sf:w-48 sf:items-center sf:gap-3", children: [
-    /* @__PURE__ */ jsx38(
+  return /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:w-48 sf:items-center sf:gap-3", children: [
+    /* @__PURE__ */ jsx39(
       Slider,
       {
         min,
@@ -6280,12 +6316,12 @@ function SliderControl({
         className: cn("sf:flex-1", showPlaceholder && "sf:opacity-60")
       }
     ),
-    /* @__PURE__ */ jsx38(
+    /* @__PURE__ */ jsx39(
       "span",
       {
         "data-testid": `${testId}-value`,
         className: "sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground",
-        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs25(Fragment7, { children: [
+        children: showPlaceholder ? "Mixed" : /* @__PURE__ */ jsxs26(Fragment7, { children: [
           local,
           suffix
         ] })
@@ -6313,16 +6349,16 @@ import {
 import { LayoutDashboard, Maximize2 } from "lucide-react";
 import {
   forwardRef as forwardRef11,
-  useCallback as useCallback5,
+  useCallback as useCallback6,
   useEffect as useEffect9,
   useImperativeHandle,
   useMemo as useMemo2,
   useRef as useRef6,
-  useState as useState17
+  useState as useState18
 } from "react";
 
 // src/hooks/use-canvas-export.ts
-import { useCallback as useCallback4, useState as useState16 } from "react";
+import { useCallback as useCallback5, useState as useState17 } from "react";
 
 // src/lib/export-image.ts
 import { toPng } from "html-to-image";
@@ -6366,9 +6402,9 @@ var useCanvasExport = ({
   projectId,
   getReactFlow
 }) => {
-  const [lastError, setLastError] = useState16(null);
-  const clearError = useCallback4(() => setLastError(null), []);
-  const captureViewportFramed = useCallback4(async () => {
+  const [lastError, setLastError] = useState17(null);
+  const clearError = useCallback5(() => setLastError(null), []);
+  const captureViewportFramed = useCallback5(async () => {
     const rf = getReactFlow();
     if (!rf) return null;
     const viewportEl = document.querySelector(".react-flow__viewport");
@@ -6382,7 +6418,7 @@ var useCanvasExport = ({
       rf.setViewport(prev, { duration: 0 });
     }
   }, [getReactFlow]);
-  const exportPng = useCallback4(async () => {
+  const exportPng = useCallback5(async () => {
     setLastError(null);
     try {
       const captured = await captureViewportFramed();
@@ -6392,7 +6428,7 @@ var useCanvasExport = ({
       setLastError(err instanceof Error ? err.message : String(err));
     }
   }, [captureViewportFramed, projectId]);
-  const exportPdf = useCallback4(async () => {
+  const exportPdf = useCallback5(async () => {
     setLastError(null);
     try {
       const captured = await captureViewportFramed();
@@ -6411,7 +6447,7 @@ var useCanvasExport = ({
       setLastError(err instanceof Error ? err.message : String(err));
     }
   }, [captureViewportFramed, projectId]);
-  const capturePreview = useCallback4(async () => {
+  const capturePreview = useCallback5(async () => {
     const captured = await captureViewportFramed();
     return captured?.dataUrl;
   }, [captureViewportFramed]);
@@ -6420,7 +6456,7 @@ var useCanvasExport = ({
 
 // src/components/seeflow-canvas.tsx
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment8, jsx as jsx39, jsxs as jsxs26 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx40, jsxs as jsxs27 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -6429,6 +6465,7 @@ var EDIT_DEFAULTS = {
   showResizeHandles: true,
   showControls: true,
   showShareMenu: true,
+  showRestart: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
@@ -6452,6 +6489,8 @@ var VIEW_DEFAULTS = {
   // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
   // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
   showShareMenu: true,
+  // Restart is a host-side runtime action — embedders never see it.
+  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -6476,6 +6515,7 @@ var MINI_DEFAULTS = {
   showResizeHandles: false,
   showControls: false,
   showShareMenu: false,
+  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -6495,6 +6535,7 @@ function resolveFlags(input) {
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
     showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
+    showRestart: input.showRestart ?? defaults.showRestart,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
@@ -6793,7 +6834,7 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
     const orientedMarkerEnd = fixedNodeIsSource ? reconnectingEdge?.markerEnd : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
-    return /* @__PURE__ */ jsx39(
+    return /* @__PURE__ */ jsx40(
       "path",
       {
         d: path,
@@ -6932,6 +6973,7 @@ function SeeflowCanvasImpl(props, ref) {
     autoFitViewSignal,
     customIcons,
     onExportToCloud,
+    onRestartDemo,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -6939,6 +6981,7 @@ function SeeflowCanvasImpl(props, ref) {
     showResizeHandles,
     showControls,
     showShareMenu,
+    showRestart,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
@@ -6958,6 +7001,7 @@ function SeeflowCanvasImpl(props, ref) {
       showResizeHandles,
       showControls,
       showShareMenu,
+      showRestart,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -6976,6 +7020,7 @@ function SeeflowCanvasImpl(props, ref) {
       showResizeHandles,
       showControls,
       showShareMenu,
+      showRestart,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -7020,14 +7065,14 @@ function SeeflowCanvasImpl(props, ref) {
   const drawShape = activeShape;
   const setDrawShape = onSelectShape;
   const editHandlesRef = useRef6(/* @__PURE__ */ new Map());
-  const registerEditHandle = useCallback5((id, enter) => {
+  const registerEditHandle = useCallback6((id, enter) => {
     editHandlesRef.current.set(id, enter);
     return () => {
       const current = editHandlesRef.current.get(id);
       if (current === enter) editHandlesRef.current.delete(id);
     };
   }, []);
-  const [connecting, setConnecting] = useState17(false);
+  const [connecting, setConnecting] = useState18(false);
   const connectingRef = useRef6(false);
   useEffect9(() => {
     connectingRef.current = connecting;
@@ -7035,12 +7080,12 @@ function SeeflowCanvasImpl(props, ref) {
   const connectCancelledRef = useRef6(false);
   const reconnectCancelledRef = useRef6(false);
   const isReconnectingRef = useRef6(false);
-  const [dropPopover, setDropPopover] = useState17(null);
+  const [dropPopover, setDropPopover] = useState18(null);
   const dropPopoverRef = useRef6(null);
   useEffect9(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
-  const closeDropPopover = useCallback5(() => {
+  const closeDropPopover = useCallback6(() => {
     setDropPopover(null);
   }, []);
   const connectionLineComponent = useMemo2(
@@ -7049,7 +7094,7 @@ function SeeflowCanvasImpl(props, ref) {
   );
   const connectSourceNodeIdRef = useRef6(null);
   const connectTargetNodeIdRef = useRef6(null);
-  const setConnectSource = useCallback5((nodeId) => {
+  const setConnectSource = useCallback6((nodeId) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
       connectSourceNodeIdRef.current = nodeId;
@@ -7066,7 +7111,7 @@ function SeeflowCanvasImpl(props, ref) {
     }
     connectSourceNodeIdRef.current = nodeId;
   }, []);
-  const setConnectTarget = useCallback5((nodeId) => {
+  const setConnectTarget = useCallback6((nodeId) => {
     const wrapper = wrapperRef.current;
     const prev = connectTargetNodeIdRef.current;
     if (prev === nodeId) return;
@@ -7080,7 +7125,7 @@ function SeeflowCanvasImpl(props, ref) {
     }
     connectTargetNodeIdRef.current = nodeId;
   }, []);
-  const clearConnectMarkers = useCallback5(() => {
+  const clearConnectMarkers = useCallback6(() => {
     setConnectSource(null);
     setConnectTarget(null);
   }, [setConnectSource, setConnectTarget]);
@@ -7103,8 +7148,8 @@ function SeeflowCanvasImpl(props, ref) {
       document.removeEventListener("pointermove", onMove);
     };
   }, [connecting, setConnectTarget]);
-  const [drawStart, setDrawStart] = useState17(null);
-  const [drawCurrent, setDrawCurrent] = useState17(null);
+  const [drawStart, setDrawStart] = useState18(null);
+  const [drawCurrent, setDrawCurrent] = useState18(null);
   const drawShapeRef = useRef6(null);
   const drawStartRef = useRef6(null);
   const drawCurrentRef = useRef6(null);
@@ -7112,7 +7157,7 @@ function SeeflowCanvasImpl(props, ref) {
   useEffect9(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
-  const exitDrawMode = useCallback5(() => {
+  const exitDrawMode = useCallback6(() => {
     setDrawShape(null);
     setDrawStart(null);
     setDrawCurrent(null);
@@ -7175,7 +7220,7 @@ function SeeflowCanvasImpl(props, ref) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
-  const onPointerDown = useCallback5((e) => {
+  const onPointerDown = useCallback6((e) => {
     if (!drawShapeRef.current) return;
     const target = e.target;
     if (!target?.classList.contains("react-flow__pane")) return;
@@ -7192,13 +7237,13 @@ function SeeflowCanvasImpl(props, ref) {
     e.preventDefault();
     e.stopPropagation();
   }, []);
-  const onPointerMove = useCallback5((e) => {
+  const onPointerMove = useCallback6((e) => {
     if (!drawingRef.current) return;
     const client = { x: e.clientX, y: e.clientY };
     drawCurrentRef.current = client;
     setDrawCurrent(client);
   }, []);
-  const onPointerUp = useCallback5(
+  const onPointerUp = useCallback6(
     (e) => {
       if (!drawingRef.current) return;
       drawingRef.current = false;
@@ -7231,13 +7276,13 @@ function SeeflowCanvasImpl(props, ref) {
   );
   const draggingRef = useRef6(false);
   const resizingRef = useRef6(false);
-  const flushPendingFit = useCallback5(() => {
+  const flushPendingFit = useCallback6(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
     pendingFitRef.current = false;
     rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, []);
-  const setResizing = useCallback5(
+  const setResizing = useCallback6(
     (on) => {
       resizingRef.current = on;
       if (!on) flushPendingFit();
@@ -7257,10 +7302,10 @@ function SeeflowCanvasImpl(props, ref) {
     rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, [autoFitViewSignal]);
   const contextEnabled = !!onReorderNode || !!onDeleteNode || !!onCopyNode || !!onPasteAt || !!onUnpinEndpoint;
-  const [contextMenuPos, setContextMenuPos] = useState17(null);
-  const [contextOnNode, setContextOnNode] = useState17(false);
-  const [contextNodeType, setContextNodeType] = useState17(null);
-  const [contextEndpoint, setContextEndpoint] = useState17(null);
+  const [contextMenuPos, setContextMenuPos] = useState18(null);
+  const [contextOnNode, setContextOnNode] = useState18(false);
+  const [contextNodeType, setContextNodeType] = useState18(null);
+  const [contextEndpoint, setContextEndpoint] = useState18(null);
   const contextNodeIdRef = useRef6(null);
   const contextTriggerRef = useRef6(null);
   useEffect9(() => {
@@ -7277,7 +7322,7 @@ function SeeflowCanvasImpl(props, ref) {
     });
     trigger.dispatchEvent(evt);
   }, [contextMenuPos]);
-  const handleReorderPick = useCallback5(
+  const handleReorderPick = useCallback6(
     (op) => {
       const id = contextNodeIdRef.current;
       if (!id || !onReorderNode) return;
@@ -7285,29 +7330,29 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onReorderNode]
   );
-  const handleDeletePick = useCallback5(() => {
+  const handleDeletePick = useCallback6(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onDeleteNode) return;
     onDeleteNode(id);
   }, [onDeleteNode]);
-  const handleCopyPick = useCallback5(() => {
+  const handleCopyPick = useCallback6(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onCopyNode) return;
     onCopyNode(id);
   }, [onCopyNode]);
-  const handleChangeIconPick = useCallback5(() => {
+  const handleChangeIconPick = useCallback6(() => {
     const id = contextNodeIdRef.current;
     if (!id || !onRequestIconReplace) return;
     onRequestIconReplace(id);
   }, [onRequestIconReplace]);
-  const handleToggleLockPick = useCallback5(() => {
+  const handleToggleLockPick = useCallback6(() => {
     if (!onToggleNodeLock) return;
     const single = contextNodeIdRef.current;
     const ids = single ? [single] : [...selectedNodeIds];
     if (ids.length === 0) return;
     onToggleNodeLock(ids);
   }, [onToggleNodeLock, selectedNodeIds]);
-  const handleEndpointContextMenu = useCallback5(
+  const handleEndpointContextMenu = useCallback6(
     (connId, kind, pinned, clientX, clientY) => {
       if (!flagsRef.current.enableContextMenu) return;
       contextNodeIdRef.current = null;
@@ -7318,12 +7363,12 @@ function SeeflowCanvasImpl(props, ref) {
     },
     []
   );
-  const handleUnpinPick = useCallback5(() => {
+  const handleUnpinPick = useCallback6(() => {
     const ep = contextEndpoint;
     if (!ep || !onUnpinEndpoint) return;
     onUnpinEndpoint(ep.connectorId, ep.kind);
   }, [contextEndpoint, onUnpinEndpoint]);
-  const handlePastePick = useCallback5(() => {
+  const handlePastePick = useCallback6(() => {
     if (!onPasteAt) return;
     const pos = contextMenuPos;
     const rfInstance = rfInstanceRef.current;
@@ -7452,7 +7497,7 @@ function SeeflowCanvasImpl(props, ref) {
     pendingEditNodeId,
     isEditMode
   ]);
-  const [rfNodes, setRfNodes] = useState17(sourceNodes);
+  const [rfNodes, setRfNodes] = useState18(sourceNodes);
   useEffect9(() => {
     if (draggingRef.current || resizingRef.current) return;
     setRfNodes(sourceNodes);
@@ -7479,7 +7524,7 @@ function SeeflowCanvasImpl(props, ref) {
   const additiveBaseNodeIdsRef = useRef6(/* @__PURE__ */ new Set());
   const additiveBaseEdgeIdsRef = useRef6(/* @__PURE__ */ new Set());
   const tentativeAdditiveBaseRef = useRef6(null);
-  const onNodesChange = useCallback5((changes) => {
+  const onNodesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseNodeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.nodeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
       if (c.type !== "select") return true;
@@ -7520,7 +7565,7 @@ function SeeflowCanvasImpl(props, ref) {
     cb(sel, [...selectedConnIdSetRef.current]);
   }, []);
   const rfEdgesRef = useRef6([]);
-  const onEdgesChange = useCallback5((changes) => {
+  const onEdgesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseEdgeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.edgeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
       if (c.type !== "select") return true;
@@ -7551,7 +7596,7 @@ function SeeflowCanvasImpl(props, ref) {
     selectedConnIdSetRef.current = new Set(sel);
     cb([...selectedIdSetRef.current], sel);
   }, []);
-  const onSelectionStartCb = useCallback5((event) => {
+  const onSelectionStartCb = useCallback6((event) => {
     marqueeActiveRef.current = true;
     const tentative = tentativeAdditiveBaseRef.current;
     const additive = tentative?.shift ?? (event.shiftKey || event.metaKey || event.ctrlKey);
@@ -7560,7 +7605,7 @@ function SeeflowCanvasImpl(props, ref) {
     marqueeSelectedNodeIdsRef.current = new Set(additiveBaseNodeIdsRef.current);
     marqueeSelectedEdgeIdsRef.current = new Set(additiveBaseEdgeIdsRef.current);
   }, []);
-  const onSelectionEndCb = useCallback5(() => {
+  const onSelectionEndCb = useCallback6(() => {
     marqueeActiveRef.current = false;
     tentativeAdditiveBaseRef.current = null;
     const cb = onSelectionChangeRef.current;
@@ -7582,7 +7627,7 @@ function SeeflowCanvasImpl(props, ref) {
     selectedConnIdSetRef.current = new Set(finalEdgeIds);
     cb(finalNodeIds, [...finalEdgeIds]);
   }, []);
-  const onWrapperPointerDownCapture = useCallback5((e) => {
+  const onWrapperPointerDownCapture = useCallback6((e) => {
     tentativeAdditiveBaseRef.current = null;
     if (drawShapeRef.current) return;
     if (e.button !== 0) return;
@@ -7594,7 +7639,7 @@ function SeeflowCanvasImpl(props, ref) {
       edgeIds: new Set(selectedConnIdSetRef.current)
     };
   }, []);
-  const onWrapperContextMenuCapture = useCallback5((e) => {
+  const onWrapperContextMenuCapture = useCallback6((e) => {
     if (!flagsRef.current.enableContextMenu) return;
     const sel = selectedIdSetRef.current;
     if (sel.size < 2) return;
@@ -7609,7 +7654,7 @@ function SeeflowCanvasImpl(props, ref) {
     setContextEndpoint(null);
     setContextMenuPos({ x: e.clientX, y: e.clientY });
   }, []);
-  const onWrapperDragOver = useCallback5(
+  const onWrapperDragOver = useCallback6(
     (e) => {
       const dt = e.dataTransfer;
       if (!dt) return;
@@ -7627,7 +7672,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onCreateImageFromFile, onCreateHtmlNode, flags.enableImageDrop, flags.enableDragDrop]
   );
-  const onWrapperDrop = useCallback5(
+  const onWrapperDrop = useCallback6(
     (e) => {
       const dataTransfer = e.dataTransfer;
       const types = dataTransfer?.types ? Array.from(dataTransfer.types) : [];
@@ -7718,7 +7763,7 @@ function SeeflowCanvasImpl(props, ref) {
   useEffect9(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
-  const internalTidy = useCallback5(() => {
+  const internalTidy = useCallback6(() => {
     const inst = rfInstanceRef.current;
     const current = rfNodesRef.current;
     if (current.length < 2) return;
@@ -7758,7 +7803,7 @@ function SeeflowCanvasImpl(props, ref) {
   const connectStartRef = useRef6(
     null
   );
-  const onConnect = useCallback5(
+  const onConnect = useCallback6(
     (conn) => {
       if (!isEditMode) return;
       if (!onCreateConnector) return;
@@ -7774,7 +7819,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onCreateConnector, isEditMode]
   );
-  const isValidConnection = useCallback5((conn) => {
+  const isValidConnection = useCallback6((conn) => {
     const isTextShape = (id) => {
       if (!id) return false;
       const node = rfNodesRef.current.find((n) => n.id === id);
@@ -7783,7 +7828,7 @@ function SeeflowCanvasImpl(props, ref) {
     };
     return !isTextShape(conn.source) && !isTextShape(conn.target);
   }, []);
-  const onConnectEndCb = useCallback5(
+  const onConnectEndCb = useCallback6(
     (e, connectionState) => {
       setConnecting(false);
       clearConnectMarkers();
@@ -7842,7 +7887,7 @@ function SeeflowCanvasImpl(props, ref) {
     [onCreateConnector, clearConnectMarkers, isValidConnection]
   );
   const reconnectSucceededRef = useRef6(false);
-  const onReconnect = useCallback5(
+  const onReconnect = useCallback6(
     (oldEdge, newConnection) => {
       if (!onReconnectConnector) return;
       const { source, target, sourceHandle, targetHandle } = newConnection;
@@ -7889,7 +7934,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onReconnectConnector]
   );
-  const onReconnectEndCb = useCallback5(
+  const onReconnectEndCb = useCallback6(
     (e, oldEdge, handleType, connectionState) => {
       setConnecting(false);
       clearConnectMarkers();
@@ -7984,9 +8029,9 @@ function SeeflowCanvasImpl(props, ref) {
   const ghostShapeClass = drawShape ? shapeChromeClass(drawShape) : "";
   const ghostShapeStyle = drawShape ? shapeChromeStyle(drawShape) : void 0;
   const ghostTextOutline = drawShape === "text";
-  const [spaceHeld, setSpaceHeld] = useState17(false);
-  const [spaceDragging, setSpaceDragging] = useState17(false);
-  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState17(false);
+  const [spaceHeld, setSpaceHeld] = useState18(false);
+  const [spaceDragging, setSpaceDragging] = useState18(false);
+  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState18(false);
   const exportApi = useCanvasExport({
     projectId,
     getReactFlow: () => rfInstanceRef.current
@@ -8027,7 +8072,7 @@ function SeeflowCanvasImpl(props, ref) {
       window.removeEventListener("keyup", onKeyUp);
     };
   }, [flags.enableKeyboard]);
-  const commitDraggedNodes = useCallback5(
+  const commitDraggedNodes = useCallback6(
     (draggedNodes) => {
       if (draggedNodes.length === 0) return;
       if (!isEditMode) return;
@@ -8051,7 +8096,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onNodePositionChange, onNodePositionsChange, isEditMode]
   );
-  const onNodeDragStopCb = useCallback5(
+  const onNodeDragStopCb = useCallback6(
     (_e, _node, draggedNodes) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
@@ -8059,10 +8104,10 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [commitDraggedNodes, flushPendingFit]
   );
-  const onSelectionDragStartCb = useCallback5(() => {
+  const onSelectionDragStartCb = useCallback6(() => {
     draggingRef.current = true;
   }, []);
-  const onSelectionDragStopCb = useCallback5(
+  const onSelectionDragStopCb = useCallback6(
     (_e, draggedNodes) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
@@ -8070,20 +8115,20 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [commitDraggedNodes, flushPendingFit]
   );
-  const handleNodeClickWithGroupGate = useCallback5(
+  const handleNodeClickWithGroupGate = useCallback6(
     (_e, node) => {
       onNodeClick?.(node.id);
     },
     [onNodeClick]
   );
-  const handlePaneClickWithGroupExit = useCallback5(
+  const handlePaneClickWithGroupExit = useCallback6(
     (e) => {
       onPaneClick?.();
       void e;
     },
     [onPaneClick]
   );
-  const handleEdgeClickWithGroupGate = useCallback5(
+  const handleEdgeClickWithGroupGate = useCallback6(
     (_e, edge) => {
       onConnectorClick?.(edge.id);
     },
@@ -8097,7 +8142,7 @@ function SeeflowCanvasImpl(props, ref) {
   const sidebarDemoId = projectId ?? null;
   const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
   const iconRegistryValue = useMemo2(() => ({ custom: customIcons ?? {} }), [customIcons]);
-  return /* @__PURE__ */ jsx39(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx39(
+  return /* @__PURE__ */ jsx40(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx40(
     "div",
     {
       "data-testid": "seeflow-canvas",
@@ -8125,8 +8170,8 @@ function SeeflowCanvasImpl(props, ref) {
       onContextMenuCapture: onWrapperContextMenuCapture,
       onDragOver: onWrapperDragOver,
       onDrop: onWrapperDrop,
-      children: /* @__PURE__ */ jsxs26(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
-        /* @__PURE__ */ jsxs26(
+      children: /* @__PURE__ */ jsxs27(CanvasPortalContainerProvider, { containerRef: wrapperRef, children: [
+        /* @__PURE__ */ jsxs27(
           ReactFlow,
           {
             nodes: rfNodes,
@@ -8228,11 +8273,11 @@ function SeeflowCanvasImpl(props, ref) {
               setContextMenuPos({ x: e.clientX, y: e.clientY });
             } : void 0,
             children: [
-              /* @__PURE__ */ jsx39(StoreApiBridge, { storeApiRef }),
-              /* @__PURE__ */ jsx39(ZoomBridge, { wrapperRef }),
-              /* @__PURE__ */ jsx39(Background, { gap: 12, size: 0.6 }),
-              flags.showControls ? /* @__PURE__ */ jsxs26(Controls, { showInteractive: false, showFitView: false, children: [
-                /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(StoreApiBridge, { storeApiRef }),
+              /* @__PURE__ */ jsx40(ZoomBridge, { wrapperRef }),
+              /* @__PURE__ */ jsx40(Background, { gap: 12, size: 0.6 }),
+              flags.showControls ? /* @__PURE__ */ jsxs27(Controls, { showInteractive: false, showFitView: false, children: [
+                /* @__PURE__ */ jsx40(
                   ControlButton,
                   {
                     "data-testid": "controls-fit-view",
@@ -8242,10 +8287,10 @@ function SeeflowCanvasImpl(props, ref) {
                     onClick: () => {
                       rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
                     },
-                    children: /* @__PURE__ */ jsx39(Maximize2, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx40(Maximize2, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 ),
-                /* @__PURE__ */ jsx39(
+                /* @__PURE__ */ jsx40(
                   ControlButton,
                   {
                     "data-testid": "controls-tidy",
@@ -8253,19 +8298,19 @@ function SeeflowCanvasImpl(props, ref) {
                     title: "Tidy layout (\u2318\u21E7L)",
                     disabled: !effectiveTidy,
                     onClick: () => effectiveTidy?.(),
-                    children: /* @__PURE__ */ jsx39(LayoutDashboard, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx40(LayoutDashboard, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 )
               ] }) : null,
-              flags.showResizeHandles ? /* @__PURE__ */ jsx39(
+              flags.showResizeHandles ? /* @__PURE__ */ jsx40(
                 SelectionResizeOverlay,
                 {
                   selectedNodes: selectionOverlayNodes,
                   onMultiResize
                 }
               ) : null,
-              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs26("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
-                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx39(
+              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
+                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx40(
                   CanvasToolbar,
                   {
                     activeShape: drawShape,
@@ -8276,7 +8321,7 @@ function SeeflowCanvasImpl(props, ref) {
                     onPickIcon
                   }
                 ) : null,
-                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(
+                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(
                   StyleStrip,
                   {
                     nodes: selectedNodesForStyleStrip,
@@ -8291,22 +8336,25 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 ) : null
               ] }) }) : null,
-              flags.showShareMenu ? /* @__PURE__ */ jsx39(Panel, { position: "top-right", children: /* @__PURE__ */ jsx39(
-                ShareMenu,
-                {
-                  mode: mode === "mini" ? "view" : mode,
-                  projectId,
-                  onDownloadPdf: exportApi.exportPdf,
-                  onDownloadPng: exportApi.exportPng,
-                  onExportToCloud,
-                  embedOpen: shareEmbedDialogOpen,
-                  onEmbedOpenChange: setShareEmbedDialogOpen
-                }
-              ) }) : null
+              flags.showShareMenu || flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(Panel, { position: "top-right", children: /* @__PURE__ */ jsxs27("div", { className: "sf:flex sf:items-center sf:gap-1", children: [
+                flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(RestartDemoButton, { onRestartDemo }) : null,
+                flags.showShareMenu ? /* @__PURE__ */ jsx40(
+                  ShareMenu,
+                  {
+                    mode: mode === "mini" ? "view" : mode,
+                    projectId,
+                    onDownloadPdf: exportApi.exportPdf,
+                    onDownloadPng: exportApi.exportPng,
+                    onExportToCloud,
+                    embedOpen: shareEmbedDialogOpen,
+                    onEmbedOpenChange: setShareEmbedDialogOpen
+                  }
+                ) : null
+              ] }) }) : null
             ]
           }
         ),
-        ghostRect ? /* @__PURE__ */ jsx39(
+        ghostRect ? /* @__PURE__ */ jsx40(
           "div",
           {
             "data-testid": "canvas-draw-ghost",
@@ -8327,7 +8375,7 @@ function SeeflowCanvasImpl(props, ref) {
             children: (() => {
               const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : void 0;
               if (!GhostRenderer) return null;
-              return /* @__PURE__ */ jsx39(
+              return /* @__PURE__ */ jsx40(
                 GhostRenderer,
                 {
                   width: ghostRect.width,
@@ -8340,7 +8388,7 @@ function SeeflowCanvasImpl(props, ref) {
             })()
           }
         ) : null,
-        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs26(
+        flags.enableContextMenu && contextEnabled ? /* @__PURE__ */ jsxs27(
           ContextMenu,
           {
             onOpenChange: (open) => {
@@ -8352,7 +8400,7 @@ function SeeflowCanvasImpl(props, ref) {
               }
             },
             children: [
-              /* @__PURE__ */ jsx39(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx40(
                 "div",
                 {
                   ref: contextTriggerRef,
@@ -8367,8 +8415,8 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsxs26(ContextMenuContent, { "data-testid": "node-context-menu", children: [
-                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsxs27(ContextMenuContent, { "data-testid": "node-context-menu", children: [
+                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "connector-endpoint-context-menu-unpin",
@@ -8376,11 +8424,11 @@ function SeeflowCanvasImpl(props, ref) {
                     children: "Unpin"
                   }
                 ) : null,
-                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs26(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
+                contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs27(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
                   "Copy",
-                  /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: copyShortcut })
+                  /* @__PURE__ */ jsx40(ContextMenuShortcut, { children: copyShortcut })
                 ] }) : null,
-                onPasteAt ? /* @__PURE__ */ jsxs26(
+                onPasteAt ? /* @__PURE__ */ jsxs27(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-paste",
@@ -8388,12 +8436,12 @@ function SeeflowCanvasImpl(props, ref) {
                     onSelect: handlePastePick,
                     children: [
                       "Paste",
-                      /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: pasteShortcut })
+                      /* @__PURE__ */ jsx40(ContextMenuShortcut, { children: pasteShortcut })
                     ]
                   }
                 ) : null,
-                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx39(
+                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-change-icon",
@@ -8401,9 +8449,9 @@ function SeeflowCanvasImpl(props, ref) {
                     children: "Change icon"
                   }
                 ) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
-                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs26(Fragment8, { children: [
-                  /* @__PURE__ */ jsx39(
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
+                contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs27(Fragment8, { children: [
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-front",
@@ -8411,7 +8459,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Bring to front"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-forward",
@@ -8419,7 +8467,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Bring forward"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-backward",
@@ -8427,7 +8475,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Send backward"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-back",
@@ -8436,12 +8484,12 @@ function SeeflowCanvasImpl(props, ref) {
                     }
                   )
                 ] }) : null,
-                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
+                contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
                 contextOnNode && onToggleNodeLock ? (() => {
                   const single = contextNodeIdRef.current;
                   const targetIds = single ? [single] : selectedNodeIds;
                   const label = targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id)) ? "Unlock" : "Lock";
-                  return /* @__PURE__ */ jsx39(
+                  return /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-toggle-lock",
@@ -8451,8 +8499,8 @@ function SeeflowCanvasImpl(props, ref) {
                     }
                   );
                 })() : null,
-                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
-                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx39(
+                contextOnNode && onToggleNodeLock && onDeleteNode ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
+                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-delete",
@@ -8465,7 +8513,7 @@ function SeeflowCanvasImpl(props, ref) {
             ]
           }
         ) : null,
-        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs26(
+        onCreateAndConnectFromPane ? /* @__PURE__ */ jsxs27(
           Popover,
           {
             open: !!dropPopover,
@@ -8473,7 +8521,7 @@ function SeeflowCanvasImpl(props, ref) {
               if (!open) setDropPopover(null);
             },
             children: [
-              /* @__PURE__ */ jsx39(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx40(
                 "div",
                 {
                   "data-testid": "drop-popover-anchor",
@@ -8487,7 +8535,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(
                 PopoverContent,
                 {
                   "data-testid": "drop-popover",
@@ -8498,13 +8546,13 @@ function SeeflowCanvasImpl(props, ref) {
                   onOpenAutoFocus: (e) => {
                     e.preventDefault();
                   },
-                  children: /* @__PURE__ */ jsx39(
+                  children: /* @__PURE__ */ jsx40(
                     "div",
                     {
                       role: "menu",
                       "aria-label": "Create connected node",
                       className: "sf:flex sf:flex-col sf:gap-0.5",
-                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs26(
+                      children: TOOLBAR_SHAPES.map(({ shape, label, Icon: Icon2 }) => /* @__PURE__ */ jsxs27(
                         "button",
                         {
                           type: "button",
@@ -8526,8 +8574,8 @@ function SeeflowCanvasImpl(props, ref) {
                             "sf:focus:bg-accent sf:focus:text-accent-foreground sf:focus:outline-hidden"
                           ),
                           children: [
-                            /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
-                            /* @__PURE__ */ jsx39("span", { children: label })
+                            /* @__PURE__ */ jsx40(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
+                            /* @__PURE__ */ jsx40("span", { children: label })
                           ]
                         },
                         shape
@@ -8539,7 +8587,7 @@ function SeeflowCanvasImpl(props, ref) {
             ]
           }
         ) : null,
-        shouldRenderSidebar ? /* @__PURE__ */ jsx39(
+        shouldRenderSidebar ? /* @__PURE__ */ jsx40(
           DetailPanel,
           {
             demoId: sidebarDemoId,
@@ -8650,6 +8698,7 @@ export {
   PopoverTrigger,
   QueueShape,
   ResizeControls,
+  RestartDemoButton,
   SELECTION_OVERLAY_PADDING,
   SHAPE_CLASS,
   SHAPE_DEFAULT_SIZE,

@@ -12,7 +12,10 @@
       "data": {
         "shape": "user",
         "name": "Customer",
-        "description": "Web / Mobile / Partner"
+        "description": "Web / Mobile / Partner",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -37,7 +40,10 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        }
+        },
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -54,7 +60,10 @@
           "kind": "request"
         },
         "description": "JWT issuance + OAuth2 / OIDC.",
-        "detail": "## Auth Service\n\n- Password login (bcrypt), OAuth2 (Google, Apple), magic-link\n- Access token: 15-min TTL, RS256 signed\n- Refresh token: 30-day TTL in Redis\n\n### Events\n- `auth.login` on success\n- `auth.token_refreshed` on refresh"
+        "detail": "## Auth Service\n\n- Password login (bcrypt), OAuth2 (Google, Apple), magic-link\n- Access token: 15-min TTL, RS256 signed\n- Refresh token: 30-day TTL in Redis\n\n### Events\n- `auth.login` on success\n- `auth.token_refreshed` on refresh",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -71,7 +80,10 @@
           "kind": "request"
         },
         "description": "SKUs, variants, pricing, full-text search.",
-        "detail": "## Product Catalog\n\nSingle source of truth for products and search.\n\n- Products, variants, tiered pricing (B2B / B2C / promo)\n- Elasticsearch full-text search with BM25 ranking\n- Faceted filtering (brand, price, rating, availability)\n\n### Events\n- `product.updated` → re-indexes search"
+        "detail": "## Product Catalog\n\nSingle source of truth for products and search.\n\n- Products, variants, tiered pricing (B2B / B2C / promo)\n- Elasticsearch full-text search with BM25 ranking\n- Faceted filtering (brand, price, rating, availability)\n\n### Events\n- `product.updated` → re-indexes search",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -96,7 +108,10 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        }
+        },
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -121,7 +136,10 @@
             "run"
           ],
           "scriptPath": "scripts/play.ts"
-        }
+        },
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -138,7 +156,10 @@
           "kind": "event"
         },
         "description": "Stripe + PayPal gateway integration.",
-        "detail": "## Payment Service\n\nCharges the customer and records the transaction.\n\n### Triggered by\n- `order.created`\n\n### Steps\n1. Retrieve saved payment method\n2. Authorise charge via Stripe\n3. Capture funds\n4. Persist charge record\n\n### Events Emitted\n- `payment.captured` → Notification Service\n- `payment.failed` → Notification Service"
+        "detail": "## Payment Service\n\nCharges the customer and records the transaction.\n\n### Triggered by\n- `order.created`\n\n### Steps\n1. Retrieve saved payment method\n2. Authorise charge via Stripe\n3. Capture funds\n4. Persist charge record\n\n### Events Emitted\n- `payment.captured` → Notification Service\n- `payment.failed` → Notification Service",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -155,7 +176,10 @@
           "kind": "event"
         },
         "description": "Email + SMS + push via AWS SES / SNS.",
-        "detail": "## Notification Service\n\nDelivers transactional messages.\n\n### Channels\n- **Email** — AWS SES with DKIM/DMARC\n- **SMS** — Twilio for OTP and shipping alerts\n- **Push** — Firebase Cloud Messaging\n\n### Triggered by\n- `payment.captured` — order confirmation\n- `payment.failed` — retry prompt\n- `order.cancelled` — refund notification"
+        "detail": "## Notification Service\n\nDelivers transactional messages.\n\n### Channels\n- **Email** — AWS SES with DKIM/DMARC\n- **SMS** — Twilio for OTP and shipping alerts\n- **Push** — Firebase Cloud Messaging\n\n### Triggered by\n- `payment.captured` — order confirmation\n- `payment.failed` — retry prompt\n- `order.cancelled` — refund notification",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     },
     {
@@ -168,7 +192,10 @@
       "data": {
         "shape": "database",
         "name": "PostgreSQL",
-        "description": "Orders, users, products — primary OLTP store"
+        "description": "Orders, users, products — primary OLTP store",
+        "fontSize": 15,
+        "borderColor": "green",
+        "borderSize": 1
       }
     }
   ],
@@ -247,4 +274,3 @@
     }
   ]
 }
-

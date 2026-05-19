@@ -1,6 +1,5 @@
 import { CommandPalette } from '@/components/command-palette';
 import { ExportDialog } from '@/components/export-dialog';
-import { RestartDemoButton } from '@/components/restart-demo-button';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -2961,12 +2960,6 @@ export function DemoView({
         </div>
       ) : null}
 
-      {onRestartDemo ? (
-        <div className="pointer-events-auto absolute right-3 top-3 z-20 flex items-center gap-1">
-          <RestartDemoButton onRestartDemo={onRestartDemo} />
-        </div>
-      ) : null}
-
       {demo && adapter ? (
         <SeeflowCanvas
           ref={canvasRef}
@@ -2974,6 +2967,7 @@ export function DemoView({
           adapter={adapter}
           projectId={demoId ?? undefined}
           onExportToCloud={demoId ? () => setExportDialogOpen(true) : undefined}
+          onRestartDemo={onRestartDemo}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
           selectedNodeIds={selectedIds}

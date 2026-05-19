@@ -261,6 +261,9 @@ export type { InlineEditProps } from './components/inline-edit.tsx';
 export { ShareMenu } from './components/share-menu.tsx';
 export type { ShareMenuMode, ShareMenuProps } from './components/share-menu.tsx';
 
+export { RestartDemoButton } from './components/restart-demo-button.tsx';
+export type { RestartDemoButtonProps } from './components/restart-demo-button.tsx';
+
 export {
   computeNewRectFromAnchorDrag,
   computeSelectionResizeUpdates,

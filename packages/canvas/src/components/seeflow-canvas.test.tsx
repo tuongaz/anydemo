@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { type Connection, Controls, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
-import { NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
+import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
 import { CloudShape } from '../nodes/shapes/cloud.tsx';
 import { DatabaseShape } from '../nodes/shapes/database.tsx';
 import { QueueShape } from '../nodes/shapes/queue.tsx';
@@ -1022,7 +1022,7 @@ describe('SeeflowCanvas', () => {
       // Defaults mirror what the committed node resolves to via
       // resolveIllustrativeColors with empty data: theme-aware border via the
       // shadcn --border CSS var and the US-021 dark card surface fallback.
-      expect(props.borderColor).toBe('hsl(var(--border))');
+      expect(props.borderColor).toBe(COLOR_TOKENS.default.border);
       expect(props.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
     });
 
@@ -1094,7 +1094,7 @@ describe('SeeflowCanvas', () => {
       };
       expect(props.width).toBe(200);
       expect(props.height).toBe(140);
-      expect(props.borderColor).toBe('hsl(var(--border))');
+      expect(props.borderColor).toBe(COLOR_TOKENS.default.border);
       expect(props.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
     });
 
@@ -2925,6 +2925,7 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: true,
       showControls: true,
       showShareMenu: true,
+      showRestart: true,
       enableKeyboard: true,
       enableContextMenu: true,
       enableDragDrop: true,
@@ -2949,6 +2950,7 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: false,
       showControls: true,
       showShareMenu: true,
+      showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,
@@ -2974,6 +2976,7 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: false,
       showControls: false,
       showShareMenu: false,
+      showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,

@@ -81,6 +81,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
 import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
+import { RestartDemoButton } from './restart-demo-button.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -134,6 +135,14 @@ export interface CanvasFeatureOverrides {
    * items by mode + the presence of each callback / `projectId`.
    */
   showShareMenu?: boolean;
+  /**
+   * Gates the top-right Restart-demo button (rendered next to ShareMenu).
+   * Default ON for `edit`, OFF for `view` and `mini` — restart is a host-side
+   * runtime action and embedders should not be able to mutate demo state.
+   * Even when this is ON, the button only renders if the host provides
+   * {@link SeeflowCanvasProps.onRestartDemo}.
+   */
+  showRestart?: boolean;
   enableKeyboard?: boolean;
   enableContextMenu?: boolean;
   enableDragDrop?: boolean;
@@ -169,6 +178,7 @@ export interface ResolvedCanvasFlags {
   showResizeHandles: boolean;
   showControls: boolean;
   showShareMenu: boolean;
+  showRestart: boolean;
   enableKeyboard: boolean;
   enableContextMenu: boolean;
   enableDragDrop: boolean;
@@ -187,6 +197,7 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showResizeHandles: true,
   showControls: true,
   showShareMenu: true,
+  showRestart: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
@@ -211,6 +222,8 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
   // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
   showShareMenu: true,
+  // Restart is a host-side runtime action — embedders never see it.
+  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -242,6 +255,7 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   showResizeHandles: false,
   showControls: false,
   showShareMenu: false,
+  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -272,6 +286,7 @@ export function resolveFlags(
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
     showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
+    showRestart: input.showRestart ?? defaults.showRestart,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
@@ -712,6 +727,13 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * upload affordance. Absent → the item is hidden.
    */
   onExportToCloud?: () => void;
+  /**
+   * Opt-in callback that wires the top-right Restart-demo button (rendered
+   * alongside the ShareMenu). Edit-mode-only — the `showRestart` flag is OFF
+   * by default in view and mini modes. Absent → the button is hidden even
+   * when `showRestart` is true.
+   */
+  onRestartDemo?: () => Promise<unknown>;
 }
 
 /**
@@ -1663,6 +1685,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     autoFitViewSignal,
     customIcons,
     onExportToCloud,
+    onRestartDemo,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -1670,6 +1693,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     showResizeHandles,
     showControls,
     showShareMenu,
+    showRestart,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
@@ -1696,6 +1720,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         showResizeHandles,
         showControls,
         showShareMenu,
+        showRestart,
         enableKeyboard,
         enableContextMenu,
         enableDragDrop,
@@ -1714,6 +1739,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       showResizeHandles,
       showControls,
       showShareMenu,
+      showRestart,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -4137,23 +4163,30 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 </div>
               </Panel>
             ) : null}
-            {/* US-014: top-right ShareMenu — Download PDF / PNG / Embed /
-            Export to seeflow.dev. Mode is mapped to 'view' for mini since
-            ShareMenu does not accept 'mini'; the Panel itself is hidden in
-            mini via the flag, so this is defensive. EmbedDialog state is
-            hoisted into this component so the imperative ref handle can
-            open it without going through the menu. */}
-            {flags.showShareMenu ? (
+            {/* Top-right action cluster: Restart-demo + ShareMenu. Sharing one
+            Panel keeps them side-by-side so they never overlap. ShareMenu
+            mode is mapped to 'view' for mini defensively (the Panel itself
+            is gated below). EmbedDialog state is hoisted into this
+            component so the imperative ref handle can open it without
+            going through the menu. */}
+            {flags.showShareMenu || (flags.showRestart && onRestartDemo) ? (
               <Panel position="top-right">
-                <ShareMenu
-                  mode={mode === 'mini' ? 'view' : mode}
-                  projectId={projectId}
-                  onDownloadPdf={exportApi.exportPdf}
-                  onDownloadPng={exportApi.exportPng}
-                  onExportToCloud={onExportToCloud}
-                  embedOpen={shareEmbedDialogOpen}
-                  onEmbedOpenChange={setShareEmbedDialogOpen}
-                />
+                <div className="sf:flex sf:items-center sf:gap-1">
+                  {flags.showRestart && onRestartDemo ? (
+                    <RestartDemoButton onRestartDemo={onRestartDemo} />
+                  ) : null}
+                  {flags.showShareMenu ? (
+                    <ShareMenu
+                      mode={mode === 'mini' ? 'view' : mode}
+                      projectId={projectId}
+                      onDownloadPdf={exportApi.exportPdf}
+                      onDownloadPng={exportApi.exportPng}
+                      onExportToCloud={onExportToCloud}
+                      embedOpen={shareEmbedDialogOpen}
+                      onEmbedOpenChange={setShareEmbedDialogOpen}
+                    />
+                  ) : null}
+                </div>
               </Panel>
             ) : null}
           </ReactFlow>
@@ -4183,8 +4216,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               The committed node (ShapeNodeImpl) calls `resolveIllustrativeColors`
               on its `data` to fill defaults; the ghost has no `data`, so we
               inline the same default resolution here: `borderColor` →
-              `colorTokenStyle(undefined, 'node').borderColor` (theme-aware
-              border via `hsl(var(--border))`), `backgroundColor` →
+              `colorTokenStyle(undefined, 'node').borderColor` (the design
+              emerald via `hsl(var(--primary))`), `backgroundColor` →
               `NODE_DEFAULT_BG_WHITE` (US-021 dark card surface fallback).
               US-022: dispatch through `ILLUSTRATIVE_SHAPE_RENDERERS` so adding
               a new illustrative shape only touches the registry. */}

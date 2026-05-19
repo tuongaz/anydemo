@@ -1,13 +1,9 @@
 import { describe, expect, it, mock } from 'bun:test';
-import { RestartDemoButton } from '@/components/restart-demo-button';
-import { Button } from '@seeflow/canvas';
 import { Loader2, RefreshCw } from 'lucide-react';
 import * as React from 'react';
+import { Button } from '../ui/button.tsx';
+import { RestartDemoButton } from './restart-demo-button.tsx';
 
-// Hook-shim renderer — see icon-picker-popover.test.tsx for the full pattern.
-// We can't mount a DOM in apps/web tests, so we stub React's internal dispatcher
-// to return synchronous useState/useCallback/etc and walk the returned element
-// tree to assert on prop wiring.
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
@@ -94,7 +90,6 @@ describe('RestartDemoButton', () => {
     expect(button.props.title).toBe('Restart demo');
     expect(button.props.variant).toBe('ghost');
     expect(button.props.disabled).toBe(false);
-    // Idle state renders the RefreshCw icon (not the Loader2 spinner).
     const refresh = findElement(tree, (el) => el.type === RefreshCw);
     const spinner = findElement(tree, (el) => el.type === Loader2);
     expect(refresh).not.toBeNull();
@@ -113,13 +108,11 @@ describe('RestartDemoButton', () => {
 
   it('shows the spinner and disables the button while pending', () => {
     const onRestartDemo = mock(async () => undefined);
-    // Force the useState initial value to `true` so we render the pending branch.
     const tree = callRestartDemoButton(
       { onRestartDemo },
       {
         useState: <S,>(initial: S | (() => S)) => {
           const value = typeof initial === 'function' ? (initial as () => S)() : initial;
-          // `pending` is the only useState in this component; flip it.
           return [(value as unknown) === false ? (true as unknown as S) : value, () => {}];
         },
       },

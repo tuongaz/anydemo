@@ -6,7 +6,10 @@ const COLOR_TOKEN_MAP: Record<
   { border: string; background: string; edge: string; headerBackground: string }
 > = {
   default: {
-    border: 'hsl(var(--border))',
+    // Design system green — matches the canvas's --primary emerald token
+    // (#10b981 / hsl(160 84% 39.4%)). Applied so unstyled nodes carry the
+    // brand color on their border by default.
+    border: 'hsl(var(--primary))',
     background: 'hsl(var(--card))',
     edge: 'hsl(var(--muted-foreground))',
     headerBackground: 'hsl(var(--muted))',
