@@ -65,6 +65,10 @@ const okResult = (value: unknown): CallToolResult => ({
   content: [{ type: 'text', text: JSON.stringify(value) }],
 });
 
+// Error payloads (e.g. 'unknown demo', 'Failed to write demo file') still say
+// "demo" so the strings match the REST handlers in api.ts byte-for-byte.
+// Renaming requires updating api.ts + ~18 test assertions in lockstep — a
+// separate refactor from this MCP review.
 const errorResult = (text: string): CallToolResult => ({
   isError: true,
   content: [{ type: 'text', text }],
@@ -73,14 +77,14 @@ const errorResult = (text: string): CallToolResult => ({
 // Most MCP tools take a single flowId argument. Defined inline as plain
 // JSON Schema (rather than a one-off Zod schema) because there's no REST
 // counterpart to share with.
-const DEMO_ID_INPUT_SCHEMA = {
+const FLOW_ID_INPUT_SCHEMA = {
   type: 'object',
   properties: { flowId: { type: 'string', minLength: 1 } },
   required: ['flowId'],
   additionalProperties: false,
 } as const;
 
-const requireDemoId = (args: unknown): { flowId: string } | { error: string } => {
+const requireFlowId = (args: unknown): { flowId: string } | { error: string } => {
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
     return { error: 'Invalid arguments: expected an object with flowId' };
   }
@@ -92,7 +96,7 @@ const requireDemoId = (args: unknown): { flowId: string } | { error: string } =>
 };
 
 // {flowId, nodeId} body shape shared by move + reorder + delete inputs.
-const DemoNodeIdBaseSchema = z.object({
+const FlowNodeIdBaseSchema = z.object({
   flowId: z.string().min(1),
   nodeId: z.string().min(1),
 });
@@ -105,11 +109,11 @@ const AddNodeInputSchema = z.object({
   node: z.record(z.unknown()),
 });
 
-const DeleteNodeInputSchema = DemoNodeIdBaseSchema;
+const DeleteNodeInputSchema = FlowNodeIdBaseSchema;
 
 // move_node input: { flowId, nodeId } extended with PositionBodySchema's
 // { x, y } fields so agents see one flat schema.
-const MoveNodeInputSchema = DemoNodeIdBaseSchema.extend({
+const MoveNodeInputSchema = FlowNodeIdBaseSchema.extend({
   x: PositionBodySchema.shape.x,
   y: PositionBodySchema.shape.y,
 });
@@ -118,11 +122,11 @@ const MoveNodeInputSchema = DemoNodeIdBaseSchema.extend({
 // discriminated union extended with flowId/nodeId. Keeps the discriminator
 // on `op` so the emitted JSON Schema is an oneOf the agent can introspect.
 const ReorderNodeInputSchema = z.discriminatedUnion('op', [
-  DemoNodeIdBaseSchema.extend({ op: z.literal('forward') }),
-  DemoNodeIdBaseSchema.extend({ op: z.literal('backward') }),
-  DemoNodeIdBaseSchema.extend({ op: z.literal('toFront') }),
-  DemoNodeIdBaseSchema.extend({ op: z.literal('toBack') }),
-  DemoNodeIdBaseSchema.extend({
+  FlowNodeIdBaseSchema.extend({ op: z.literal('forward') }),
+  FlowNodeIdBaseSchema.extend({ op: z.literal('backward') }),
+  FlowNodeIdBaseSchema.extend({ op: z.literal('toFront') }),
+  FlowNodeIdBaseSchema.extend({ op: z.literal('toBack') }),
+  FlowNodeIdBaseSchema.extend({
     op: z.literal('toIndex'),
     index: z.number().int().nonnegative(),
   }),
@@ -164,7 +168,7 @@ const DeleteConnectorInputSchema = z.object({
 const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'seeflow_list_flows',
-    description: 'List every demo registered with the studio.',
+    description: 'List every flow registered with the studio.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
       const result = listDemosImpl(deps);
@@ -200,10 +204,10 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_get_flow',
-    description: 'Get the full demo definition and on-disk state for a flowId.',
-    inputSchema: DEMO_ID_INPUT_SCHEMA,
+    description: 'Get the full flow definition and on-disk state for a flowId.',
+    inputSchema: FLOW_ID_INPUT_SCHEMA,
     handler: async (args) => {
-      const v = requireDemoId(args);
+      const v = requireFlowId(args);
       if ('error' in v) return errorResult(v.error);
       const result = await getFlowImpl(deps, v.flowId);
       switch (result.kind) {
@@ -218,7 +222,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_register_flow',
-    description: 'Register an existing demo file on disk with the studio.',
+    description: 'Register an existing flow file on disk with the studio.',
     inputSchema: inputSchemaFromZod(RegisterBodySchema),
     handler: async (args) => {
       const parsed = RegisterBodySchema.safeParse(args);
@@ -244,10 +248,10 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_delete_flow',
-    description: 'Unregister a demo from the studio (the on-disk file is left untouched).',
-    inputSchema: DEMO_ID_INPUT_SCHEMA,
+    description: 'Unregister a flow from the studio (the on-disk file is left untouched).',
+    inputSchema: FLOW_ID_INPUT_SCHEMA,
     handler: async (args) => {
-      const v = requireDemoId(args);
+      const v = requireFlowId(args);
       if ('error' in v) return errorResult(v.error);
       const result = deleteFlowImpl(deps, v.flowId);
       switch (result.kind) {
@@ -286,7 +290,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_add_node',
-    description: 'Append a new node to a demo (cascade-safe; id auto-generated when omitted).',
+    description: 'Append a new node to a flow (cascade-safe; id auto-generated when omitted).',
     inputSchema: inputSchemaFromZod(AddNodeInputSchema),
     handler: async (args) => {
       const parsed = AddNodeInputSchema.safeParse(args);
@@ -372,7 +376,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'seeflow_patch_node',
     description:
-      'Update fields on an existing node (position, name, description, detail, colors, border, font, shape, dimensions).',
+      'Update fields on an existing node (position, name, description, detail, icon, colors, border, font, shape, dimensions, autoSize, plus iconNode-only color/strokeWidth/alt).',
     inputSchema: inputSchemaFromZod(PatchNodeInputSchema),
     handler: async (args) => {
       const parsed = PatchNodeInputSchema.safeParse(args);
@@ -402,7 +406,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'seeflow_reorder_node',
     description:
-      'Reorder a node within demo.nodes[] (forward / backward / toFront / toBack / toIndex).',
+      'Reorder a node within flow.nodes[] (forward / backward / toFront / toBack / toIndex).',
     inputSchema: inputSchemaFromZod(ReorderNodeInputSchema),
     handler: async (args) => {
       const parsed = ReorderNodeInputSchema.safeParse(args);
@@ -468,7 +472,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'seeflow_patch_connector',
     description:
-      'Update fields on an existing connector (label, style, color, kind, per-kind payload, reconnect endpoints).',
+      'Update fields on an existing connector (label, style, color, direction, path, borderSize, fontSize, kind, per-kind payload, reconnect endpoints + handles + pins).',
     inputSchema: inputSchemaFromZod(PatchConnectorInputSchema),
     handler: async (args) => {
       const parsed = PatchConnectorInputSchema.safeParse(args);

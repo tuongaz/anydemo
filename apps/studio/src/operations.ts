@@ -28,6 +28,7 @@ import {
   FlowSchema,
   type ResolvedFlow,
   ResolvedFlowSchema,
+  ShapeKindSchema,
   SourceHandleIdSchema,
   StyleSchema,
   TargetHandleIdSchema,
@@ -90,7 +91,7 @@ export const NodePatchBodySchema = z
     // sizes the wrapper around it. mergeNodeUpdates enforces the invariant
     // that autoSize:true never coexists with persisted width/height.
     autoSize: z.boolean().optional(),
-    shape: z.enum(['rectangle', 'ellipse', 'sticky', 'text']).optional(),
+    shape: ShapeKindSchema.optional(),
     // iconNode-only: stroke color token. Lands at data.color; ResolvedFlowSchema's
     // post-merge reparse gates that this is only valid on an iconNode.
     color: ColorTokenSchema.optional(),

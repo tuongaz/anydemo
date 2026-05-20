@@ -163,7 +163,7 @@ const StateNodeSchema = z.object({
 // via inline SVG inside shape-node.tsx). Illustrative shapes share the same
 // shapeNode wrapper and color/border fields but own their own visuals via a
 // per-shape component under `apps/web/src/components/nodes/shapes/`.
-const ShapeKindSchema = z.enum([
+export const ShapeKindSchema = z.enum([
   'rectangle',
   'ellipse',
   'sticky',

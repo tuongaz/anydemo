@@ -637,6 +637,36 @@ describe('seeflow_patch_node', () => {
     expect(expectError(envelope)).toContain('Invalid patch_node arguments');
   });
 
+  // Regression: NodePatchBodySchema.shape used to be a hard-coded 4-value enum
+  // (rectangle/ellipse/sticky/text). After ShapeKindSchema grew the
+  // illustrative variants (database, server, user, queue, cloud), patching to
+  // any of them silently failed at the Zod parse before any IO. Lock the
+  // current enum widening so the next drift caught here is a real one.
+  it('accepts the illustrative shape variants (database/server/user/queue/cloud)', async () => {
+    const shapeDemo = {
+      version: 2,
+      name: 'Shape Patch',
+      nodes: [{ id: 'shape-a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      connectors: [],
+    };
+    const { app } = buildApp();
+    const { demoFile, reg } = await registerFixture(app, shapeDemo);
+
+    for (const next of ['database', 'server', 'user', 'queue', 'cloud'] as const) {
+      const envelope = await callTool(app, 'seeflow_patch_node', {
+        flowId: reg.id,
+        nodeId: 'shape-a',
+        shape: next,
+      });
+      expect(expectOk(envelope)).toEqual({ ok: true });
+
+      const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+        nodes: Array<{ id: string; data: { shape: string } }>;
+      };
+      expect(onDisk.nodes.find((n) => n.id === 'shape-a')?.data.shape).toBe(next);
+    }
+  });
+
   it('returns isError for an unknown flowId', async () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_patch_node', {
