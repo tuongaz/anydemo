@@ -46,19 +46,6 @@ The image ships with a pre-registered **Order Pipeline** demo so you can see the
 npx skills add tuongaz/seeflow
 ```
 
-```bash
-/plugin marketplace add tuongaz/seeflow
-/plugin install seeflow@seeflow
-```
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/tuongaz/seeflow/main/install.sh | bash
-```
-
-**Cursor:** Auto-discovers the plugin via `.cursor-plugin/plugin.json` when this repo is cloned. No manual installation needed — just clone and open in Cursor.
-
----
-
 **Then just ask:**
 
 ```
