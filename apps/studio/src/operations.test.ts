@@ -1,5 +1,50 @@
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'bun:test';
-import { NodePatchBodySchema, mergeNodeUpdates, validateImpl } from './operations.ts';
+import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
+import {
+  NodePatchBodySchema,
+  addNodeImpl,
+  getFlowImpl,
+  mergeNodeUpdates,
+  registerFlowImpl,
+  validateImpl,
+} from './operations.ts';
+import { createRegistry } from './registry.ts';
+
+const STARTER_FLOW = {
+  version: 2,
+  name: 'Test Flow',
+  nodes: [],
+  connectors: [],
+};
+
+interface Setup {
+  deps: { registry: ReturnType<typeof createRegistry> };
+  flowId: string;
+  repoPath: string;
+  flowAbs: string;
+}
+
+async function setupProjectWithFlow(): Promise<Setup> {
+  const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-'));
+  mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+  const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+  writeFileSync(flowAbs, JSON.stringify(STARTER_FLOW));
+
+  const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-reg-'));
+  const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+  const deps = { registry };
+
+  const reg = await registerFlowImpl(deps, {
+    repoPath: repoDir,
+    flowPath: '.seeflow/flow.json',
+  });
+  if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
+
+  return { deps, flowId: reg.data.id, repoPath: repoDir, flowAbs };
+}
 
 describe('NodePatchBodySchema autoSize', () => {
   it('accepts autoSize: true', () => {
@@ -121,3 +166,57 @@ describe('validateImpl', () => {
     if (!r.ok) expect(r.issues.find((i) => i.code === 'orphan_style_node')).toBeDefined();
   });
 });
+
+describe('addNodeImpl + detail externalization', () => {
+  it('writes detail.md and stores file:// ref when detail is provided', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'hello world' },
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok') return;
+    const nodeId = res.data.id;
+
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(existsSync(detailAbs)).toBe(true);
+    expect(readFileSync(detailAbs, 'utf8')).toBe('hello world');
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
+  });
+
+  it('writes empty detail.md and stores file:// ref when detail is omitted', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle' },
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok') return;
+    const nodeId = res.data.id;
+
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(existsSync(detailAbs)).toBe(true);
+    expect(readFileSync(detailAbs, 'utf8')).toBe('');
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
+  });
+
+  it('get_flow returns resolved detail content, not the file:// ref', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'inlined-on-read' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const get = await getFlowImpl(deps, flowId);
+    if (get.kind !== 'ok' || !get.data.flow) throw new Error('get failed');
+    const node = get.data.flow.nodes.find((n) => n.id === add.data.id);
+    expect((node?.data as { detail?: string }).detail).toBe('inlined-on-read');
+  });
+});
+

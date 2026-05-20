@@ -19,6 +19,13 @@ import {
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
+import {
+  EXTERNALIZED_NODE_FIELDS,
+  nodeFileAbsPath,
+  nodeFileRef,
+  removeNodeDir,
+  writeNodeFile,
+} from './node-files.ts';
 import { seeflowHome } from './paths.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
@@ -900,6 +907,29 @@ export async function addNodeImpl(
     newNode.position = { x: 0, y: 0 };
   }
 
+  // Generic spec-driven externalization. For every entry in
+  // EXTERNALIZED_NODE_FIELDS, capture inbound content (default empty string),
+  // replace data[field] with the file:// ref, and queue a write inside the
+  // mutator below — so flow.json only commits when the write succeeded.
+  const externalized: Array<{ absPath: string; content: string }> = [];
+  {
+    const dataIsRecord =
+      newNode.data !== null && typeof newNode.data === 'object' && !Array.isArray(newNode.data);
+    const data: Record<string, unknown> = dataIsRecord
+      ? { ...(newNode.data as Record<string, unknown>) }
+      : {};
+    for (const { field, fileName } of EXTERNALIZED_NODE_FIELDS) {
+      const incoming = data[field];
+      const content = typeof incoming === 'string' ? incoming : '';
+      data[field] = nodeFileRef(newId, fileName);
+      externalized.push({
+        absPath: nodeFileAbsPath(entry.repoPath, newId, fileName),
+        content,
+      });
+    }
+    newNode.data = data;
+  }
+
   // US-015: for htmlNode without a client-supplied htmlPath, allocate the
   // studio-managed `blocks/<id>.html` path and queue a starter-file write.
   // Client-supplied htmlPath wins and we skip the starter file (symmetric
@@ -937,6 +967,13 @@ export async function addNodeImpl(
     fullPath,
     (flow) => {
       flow.nodes.push(newNode);
+      for (const ext of externalized) {
+        try {
+          writeNodeFile(ext.absPath, ext.content);
+        } catch (err) {
+          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+        }
+      }
       if (starterFile) {
         try {
           mkdirSync(dirname(starterFile.absPath), { recursive: true });
