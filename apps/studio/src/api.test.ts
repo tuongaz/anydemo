@@ -544,6 +544,170 @@ describe('POST /api/layout', () => {
   });
 });
 
+describe('POST /api/flows/:id/layout', () => {
+  const layoutFlow = {
+    version: 2,
+    name: 'Layout By Id',
+    nodes: [
+      {
+        id: 'api',
+        type: 'playNode',
+        data: {
+          name: 'API',
+          kind: 'service',
+          stateSource: { kind: 'request' },
+          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
+        },
+      },
+      {
+        id: 'db',
+        type: 'stateNode',
+        data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
+      },
+    ],
+    connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'db' }],
+  };
+
+  const buildLayoutApp = () => {
+    const bus = createEventBus();
+    const registry = createRegistry({ path: tmpRegistry() });
+    const app = createApp({
+      mode: 'prod',
+      staticRoot: './dist/web',
+      registry,
+      events: bus,
+      disableWatcher: true,
+    });
+    return { app, registry, bus };
+  };
+
+  const registerLayoutFlow = async (
+    app: ReturnType<typeof buildLayoutApp>['app'],
+    demo: unknown = layoutFlow,
+  ) => {
+    const repoPath = tmpRepoWithDemo(demo);
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+    ).json()) as { id: string };
+    return { id: reg.id, repoPath, stylePath: join(repoPath, '.seeflow', 'style.json') };
+  };
+
+  it('writes style.json and returns { ok: true } for a registered flow', async () => {
+    const { app, bus } = buildLayoutApp();
+    const { id, stylePath } = await registerLayoutFlow(app);
+    const captured: string[] = [];
+    bus.subscribe(id, (e) => captured.push(e.type));
+
+    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { ok: boolean; nodes?: unknown; connectors?: unknown };
+    expect(json).toEqual({ ok: true });
+
+    expect(existsSync(stylePath)).toBe(true);
+    const style = JSON.parse(readFileSync(stylePath, 'utf8')) as {
+      nodes: Record<string, { position: { x: number; y: number } }>;
+      connectors: Record<string, { sourceHandle: string; targetHandle: string }>;
+    };
+    expect(style.nodes.api?.position).toBeDefined();
+    expect(style.nodes.db?.position).toBeDefined();
+    expect(style.connectors.c1).toEqual({ sourceHandle: 'r', targetHandle: 'l' });
+
+    expect(captured).toEqual(['flow:reload']);
+  });
+
+  it('honours { options: { direction: "DOWN" } } in the body', async () => {
+    const { app } = buildLayoutApp();
+    const { id, stylePath } = await registerLayoutFlow(app);
+
+    const res = await post(app, `/api/flows/${id}/layout`, { options: { direction: 'DOWN' } });
+    expect(res.status).toBe(200);
+
+    const style = JSON.parse(readFileSync(stylePath, 'utf8')) as {
+      connectors: Record<string, { sourceHandle: string; targetHandle: string }>;
+    };
+    // DOWN routes top-to-bottom, so handles flip to b→t.
+    expect(style.connectors.c1).toEqual({ sourceHandle: 'b', targetHandle: 't' });
+  });
+
+  it('treats a malformed body as 400 without writing style.json', async () => {
+    const { app } = buildLayoutApp();
+    const { id, stylePath } = await registerLayoutFlow(app);
+
+    const res = await app.request(`/api/flows/${id}/layout`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: 'not-json',
+    });
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe('Body must be valid JSON');
+    expect(existsSync(stylePath)).toBe(false);
+  });
+
+  it('returns 404 for an unknown flow id', async () => {
+    const { app } = buildLayoutApp();
+    const res = await app.request('/api/flows/nope/layout', { method: 'POST' });
+    expect(res.status).toBe(404);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe('unknown demo');
+  });
+
+  it('returns 404 when flow.json was removed after register', async () => {
+    const { app } = buildLayoutApp();
+    const { id, repoPath } = await registerLayoutFlow(app);
+    unlinkSync(join(repoPath, '.seeflow', 'flow.json'));
+
+    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    expect(res.status).toBe(404);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toMatch(/Flow file not found/);
+  });
+
+  it('returns 400 when flow.json on disk is not valid JSON', async () => {
+    const { app } = buildLayoutApp();
+    const { id, repoPath } = await registerLayoutFlow(app);
+    // Corrupt the file after register so it loads at register-time but fails
+    // on the layout call.
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), '{ not json');
+
+    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    expect(res.status).toBe(400);
+    const json = (await res.json()) as { error: string };
+    expect(json.error).toBe('Flow file is not valid JSON');
+  });
+
+  it('returns 200 { ok: false, issues } when flow.json fails schema', async () => {
+    const { app } = buildLayoutApp();
+    const { id, repoPath, stylePath } = await registerLayoutFlow(app);
+    // Drop required field to force a schema failure.
+    writeFileSync(
+      join(repoPath, '.seeflow', 'flow.json'),
+      JSON.stringify({ version: 1, nodes: [], connectors: [] }),
+    );
+
+    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      issues: Array<{ scope: string; message: string }>;
+    };
+    expect(json.ok).toBe(false);
+    expect(json.issues.length).toBeGreaterThan(0);
+    expect(json.issues[0]?.scope).toBe('flow');
+    // No write should happen on schema failure.
+    expect(existsSync(stylePath)).toBe(false);
+  });
+
+  it('leaves no .tmp straggler after a successful write', async () => {
+    const { app } = buildLayoutApp();
+    const { id, repoPath } = await registerLayoutFlow(app);
+
+    await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    const entries = readdirSync(join(repoPath, '.seeflow'));
+    expect(entries.some((name) => name.startsWith('style.json.tmp'))).toBe(false);
+  });
+});
+
 describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();

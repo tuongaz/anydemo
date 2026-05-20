@@ -63,7 +63,7 @@ Every functional node id in `flow.json` MUST appear under `nodes` with at least 
 
 ### Position + handle generation
 
-Positions and connector handles come from `POST /api/layout`. The skill calls this endpoint in Phase 3 and Phase 5; the response (`{ nodes, connectors }`) is written verbatim to `style.json`. The endpoint runs ELK's layered Sugiyama algorithm with generous spacing for connector labels (220 px between layers, 140 px between siblings) and assigns handles geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges.
+Positions and connector handles come from `POST /api/flows/<id>/layout`. The studio reads `flow.json` from disk, runs ELK, and writes `style.json` adjacent to it — the skill never authors that file directly. The skill hits this endpoint after register (Phase 3), after each splice (Phase 5), and after the final Phase 7 dry-run. The endpoint runs ELK's layered Sugiyama algorithm with generous spacing for connector labels (220 px between layers, 140 px between siblings) and assigns handles geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges.
 
 Do not author positions by hand. Manual entries in `style.json` are still honoured at render time if a user drags a node in the canvas, but the skill always overwrites them on the next `/seeflow` run for that slug.
 

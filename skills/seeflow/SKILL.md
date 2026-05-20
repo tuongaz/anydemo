@@ -139,23 +139,12 @@ Paths:
 - `stylePath = .seeflow/<slug>/style.json`
 
 1. Build **`flow.json`** from the node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
-2. `mkdir -p $flowDir` then write `flow.json`. Generate **`style.json`** by POSTing the flow to `/api/layout` — the studio runs ELK and returns positions + handle assignments:
-   ```bash
-   LAYOUT=$(curl -fsS -X POST "$STUDIO_URL/api/layout" \
-     -H 'content-type: application/json' \
-     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
-   echo "$LAYOUT" | jq -e '.ok' >/dev/null \
-     || { echo "$LAYOUT" | jq '.issues' >&2; exit 1; }
-   echo "$LAYOUT" | jq '{nodes, connectors}' > "$flowDir/style.json"
-   ```
-   `style.json` is mandatory — never skip it. Manual position fields are still honoured if present, but the skill always writes the layout response verbatim.
+2. `mkdir -p $flowDir` then write `flow.json`.
 3. Validate via the studio API (the **only** validator):
    ```bash
    RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
      -H 'content-type: application/json' \
-     -d "$(jq -n --slurpfile a "$flowDir/flow.json" \
-                 --slurpfile s "$flowDir/style.json" \
-                 '{flow: $a[0], style: $s[0]}')")
+     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
    echo "$RESULT" | jq -e '.ok' >/dev/null \
      || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
    ```
@@ -165,7 +154,13 @@ Paths:
    bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
    ```
    Stash the returned `id` and `slug`. The canvas URL is `$STUDIO_URL/d/<slug>`.
-5. Open the canvas in the user's browser, then ask for review:
+5. **Generate `style.json` via the studio.** POST to `/api/flows/<id>/layout`; the studio reads `flow.json` from disk, runs ELK, and writes `style.json` next to it. The skill never touches `style.json` directly — manual `position` fields on nodes in `flow.json` are still honoured but everything else comes from this call.
+   ```bash
+   curl -fsS -X POST "$STUDIO_URL/api/flows/$id/layout" \
+     | jq -e '.ok' >/dev/null \
+     || { echo "layout failed for $id" >&2; exit 1; }
+   ```
+6. Open the canvas in the user's browser, then ask for review:
    ```bash
    URL="$STUDIO_URL/d/<slug>"
    (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
@@ -226,18 +221,15 @@ Full agent prompts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-de
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
-3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `$flowDir/style.json`** via `/api/layout` — full reflow over the post-splice graph, response written verbatim. Existing positions are recomputed; never preserved across re-runs.
+3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `style.json`** by POSTing to `/api/flows/<id>/layout` — the studio re-reads `flow.json`, runs a full ELK reflow over the post-splice graph, and overwrites `style.json` on disk. Existing positions are recomputed; never preserved across re-runs.
 
    ```bash
-   LAYOUT=$(curl -fsS -X POST "$STUDIO_URL/api/layout" \
-     -H 'content-type: application/json' \
-     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
-   echo "$LAYOUT" | jq -e '.ok' >/dev/null \
-     || { echo "$LAYOUT" | jq '.issues' >&2; exit 1; }
-   echo "$LAYOUT" | jq '{nodes, connectors}' > "$flowDir/style.json"
+   curl -fsS -X POST "$STUDIO_URL/api/flows/$id/layout" \
+     | jq -e '.ok' >/dev/null \
+     || { echo "layout failed for $id" >&2; exit 1; }
    ```
 
-   The style file is mandatory; never delete it.
+   The style file is mandatory; the studio owns it.
 4. **Validate via the studio API** (no local validator exists):
 
 ```bash
@@ -288,7 +280,15 @@ The script:
 - Drains SSE for `node:done` / `node:error` / `node:status` events. SSE outcome takes precedence.
 - Hard ceiling: ~2 minutes. Emits `{ok, plays, statuses, skipped}`.
 
-**Interpret the JSON.** On `ok: true` → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done. On `ok: false`:
+**Interpret the JSON.** On `ok: true` → **refresh layout one last time** so the canvas the user is told to open reflects the final, run-validated graph (any `newTriggerNodes` synthesized in Phase 4 are already in `flow.json`; this guarantees their positions are fresh):
+
+```bash
+curl -fsS -X POST "$STUDIO_URL/api/flows/$id/layout" \
+  | jq -e '.ok' >/dev/null \
+  || { echo "layout failed for $id" >&2; exit 1; }
+```
+
+Then print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done. On `ok: false`:
 
 1. Identify failing nodes from `plays[*].error` / `statuses[*].outcome`.
 2. Propose a concrete fix ("play-checkout.ts: `ECONNREFUSED` on port 3001 — start the app first").

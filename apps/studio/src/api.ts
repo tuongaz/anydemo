@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -36,6 +36,7 @@ import {
   reorderNodeImpl,
   resolveFilePath,
   validateImpl,
+  writeFileAtomic,
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
 import {
@@ -676,6 +677,85 @@ export function createApi(options: ApiOptions): Hono {
       case 'notFound':
         return c.json({ ok: false, error: 'not found' }, 404);
     }
+  });
+
+  // POST /api/flows/:id/layout — registered-flow ELK layout. Reads flow.json
+  // from disk via the registry entry, computes layout, writes style.json
+  // atomically next to flow.json, and broadcasts flow:reload so any open
+  // canvas refreshes. Body is empty or `{ options? }`. Response on success is
+  // just `{ ok: true }` — the layout is already on disk. On schema failure
+  // returns `{ ok: false, issues }` mirroring /api/validate; on missing flow
+  // file / unknown id / bad JSON / write failure returns HTTP 4xx/5xx.
+  api.post('/flows/:id/layout', async (c) => {
+    const id = c.req.param('id');
+    const entry = registry.getById(id);
+    if (!entry) return c.json({ error: 'unknown demo' }, 404);
+
+    const flowAbs = resolveFilePath(entry.repoPath, entry.flowPath);
+    if (!existsSync(flowAbs)) return c.json({ error: `Flow file not found: ${flowAbs}` }, 404);
+
+    let raw: unknown;
+    try {
+      raw = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    } catch (err) {
+      return c.json(
+        {
+          error: 'Flow file is not valid JSON',
+          detail: err instanceof Error ? err.message : String(err),
+        },
+        400,
+      );
+    }
+
+    const flowParse = FlowSchema.safeParse(raw);
+    if (!flowParse.success) {
+      return c.json({
+        ok: false as const,
+        issues: flowParse.error.issues.map((i) => ({
+          scope: 'flow' as const,
+          path: [...i.path],
+          message: i.message,
+          code: i.code,
+        })),
+      });
+    }
+
+    // Empty body is valid — the skill always uses defaults. Only parse if the
+    // caller actually sent something.
+    let options: LayoutOptions | undefined;
+    const text = await c.req.text();
+    if (text.length > 0) {
+      try {
+        const parsed = JSON.parse(text) as { options?: LayoutOptions };
+        options = parsed?.options;
+      } catch {
+        return c.json({ error: 'Body must be valid JSON' }, 400);
+      }
+    }
+
+    const flow = flowParse.data;
+    const result = await computeLayout(
+      flow.nodes.map((n) => ({
+        id: n.id,
+        type: n.type,
+        // Only `shape` matters for layout (floating-annotation detection +
+        // shape-specific sizing). Other Flow data fields are irrelevant.
+        data: n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
+      })),
+      flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
+      options,
+    );
+
+    const styleAbs = join(dirname(flowAbs), 'style.json');
+    try {
+      writeFileAtomic(styleAbs, `${JSON.stringify(result, null, 2)}\n`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.json({ error: `Failed to write style file: ${msg}` }, 500);
+    }
+
+    events?.broadcast({ type: 'flow:reload', flowId: id, payload: {} });
+    return c.json({ ok: true as const });
   });
 
   api.post('/flows/:id/play/:nodeId', async (c) => {
