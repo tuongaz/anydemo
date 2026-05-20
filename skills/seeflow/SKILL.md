@@ -67,13 +67,13 @@ curl --max-time 0.5 -fsS "$STUDIO_URL/health"
 ```
 
 - **200** → continue to Phase 0.5.
-- **Anything else** → ask the user to start the studio in another terminal:
+- **Anything else** → tell the user the studio isn't running and that you'll start it for them, then run (background is the default since the CLI auto-detaches; `--yes` skips npx's "OK to proceed?" prompt):
 
   ```bash
-  npx tuongaz/seeflow start
+  npx --yes tuongaz/seeflow start
   ```
 
-  Wait for confirmation, re-probe once. If still unreachable, surface the error and stop. Never start the studio yourself.
+  The command returns once the studio is up. Re-probe `/health` once to confirm. If still unreachable, surface the error and stop.
 
 ## Phase 0.5 — read the project wiki
 

@@ -1,11 +1,12 @@
 #!/usr/bin/env bun
-import { cpSync, existsSync } from 'node:fs';
-import { isAbsolute, join, resolve } from 'node:path';
+import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { createEventBus } from './events.ts';
 import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
+  DEFAULT_CONFIG,
   clearPid,
   defaultPidPath,
   isPidAlive,
@@ -36,6 +37,12 @@ const flagValue = (name: string): string | undefined => {
 };
 
 const hasFlag = (name: string): boolean => argv.includes(`--${name}`);
+
+const DEBUG = hasFlag('debug') || process.env.SEEFLOW_DEBUG === '1';
+const dbg = (msg: string) => {
+  if (DEBUG) console.error(`[debug] ${msg}`);
+};
+const daemonLogPath = () => join(seeflowHome(), 'seeflow.log');
 
 if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
   printHelp();
@@ -70,7 +77,9 @@ Commands:
 
 Options (start):
   --port <n>        Listen on port n (default: 4321)
-  --daemon          Start in background and exit
+  --foreground      Run attached to the terminal (default: background)
+  --daemon          Deprecated alias — background is already the default
+  --debug           Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log
 
 Options (register):
   --path <dir>      Path to repo root (default: current directory)
@@ -80,7 +89,8 @@ Options (register):
 
 Examples:
   npx @tuongaz/seeflow start
-  npx @tuongaz/seeflow start --port 8080 --daemon
+  npx @tuongaz/seeflow start --port 8080
+  npx @tuongaz/seeflow start --foreground
   npx @tuongaz/seeflow register --path ./my-app
   npx @tuongaz/seeflow stop
 `.trim(),
@@ -90,13 +100,26 @@ Examples:
 async function runStart() {
   const config = readConfig();
   const portArg = flagValue('port');
-  const port = portArg ? Number(portArg) : config.port;
+  // --port wins; otherwise always fall back to the schema default (not the
+  // last persisted value) so a previous run's port doesn't silently stick.
+  const port = portArg ? Number(portArg) : DEFAULT_CONFIG.port;
   if (!Number.isFinite(port) || port <= 0) {
     console.error(`Invalid --port: ${portArg}`);
     process.exit(1);
   }
 
-  if (hasFlag('daemon')) {
+  // Default to background. `--foreground` (or `--no-daemon`) keeps us attached
+  // to the terminal; `--daemon` is a no-op alias kept for backwards compat. The
+  // SEEFLOW_DAEMON env var marks the spawned child, so it must always run in
+  // the foreground to avoid infinite re-spawning.
+  const isDaemonChild = process.env.SEEFLOW_DAEMON === '1';
+  const wantsForeground = hasFlag('foreground') || hasFlag('no-daemon');
+  dbg(
+    `runStart port=${port} host=${config.host} mode=${
+      isDaemonChild ? 'daemon-child' : wantsForeground ? 'foreground' : 'background'
+    }`,
+  );
+  if (!isDaemonChild && !wantsForeground) {
     await spawnDaemon(port, config.host);
     return;
   }
@@ -169,6 +192,7 @@ async function seedExample(registry: Registry, exampleName: string) {
 
 async function spawnDaemon(port: number, host: string) {
   const url = `http://${host}:${port}`;
+  dbg(`probing existing studio at ${url}/health`);
   if (await healthOk(url)) {
     console.log(`Studio already running at ${url}`);
     return;
@@ -177,22 +201,60 @@ async function spawnDaemon(port: number, host: string) {
   const proc = spawnDetachedStudio(port);
   writePid(proc.pid);
   writeConfig({ port, host });
+  dbg(`spawned daemon pid=${proc.pid}${proc.logPath ? ` log=${proc.logPath}` : ''}`);
 
   if (!(await waitForHealth(url, HEALTH_TIMEOUT_MS))) {
     console.error(`Timed out waiting for studio at ${url}/health`);
+    reportDaemonFailure(proc.logPath);
     process.exit(1);
   }
   console.log(`SeeFlow Studio started in background on ${url} (pid ${proc.pid})`);
+  if (proc.logPath) console.log(`Daemon log: ${proc.logPath}`);
 }
 
-function spawnDetachedStudio(port: number): { pid: number } {
+function spawnDetachedStudio(port: number): { pid: number; logPath?: string } {
+  let stdout: 'ignore' | number = 'ignore';
+  let stderr: 'ignore' | number = 'ignore';
+  let logPath: string | undefined;
+  if (DEBUG) {
+    logPath = daemonLogPath();
+    mkdirSync(dirname(logPath), { recursive: true });
+    const fd = openSync(logPath, 'a');
+    // Bun owns the fd once spawn runs; we close our handle after spawn returns.
+    stdout = fd;
+    stderr = fd;
+  }
+  const cmd = [process.execPath, import.meta.path, 'start', `--port=${port}`];
+  if (DEBUG) cmd.push('--debug');
   const proc = Bun.spawn({
-    cmd: [process.execPath, import.meta.path, 'start', `--port=${port}`],
-    stdio: ['ignore', 'ignore', 'ignore'],
-    env: { ...process.env, SEEFLOW_DAEMON: '1' },
+    cmd,
+    stdio: ['ignore', stdout, stderr],
+    env: {
+      ...process.env,
+      SEEFLOW_DAEMON: '1',
+      ...(DEBUG ? { SEEFLOW_DEBUG: '1' } : {}),
+    },
   });
   proc.unref();
-  return { pid: proc.pid };
+  if (typeof stdout === 'number') closeSync(stdout);
+  return { pid: proc.pid, logPath };
+}
+
+function reportDaemonFailure(logPath: string | undefined) {
+  if (!logPath) {
+    console.error('Hint: rerun with --debug to capture the daemon output.');
+    return;
+  }
+  let log: string;
+  try {
+    log = readFileSync(logPath, 'utf8');
+  } catch (err) {
+    console.error(`(could not read ${logPath}: ${err instanceof Error ? err.message : err})`);
+    return;
+  }
+  const tail = log.split('\n').slice(-50).join('\n');
+  console.error(`\nLast lines of ${logPath}:`);
+  console.error(tail || '(log is empty — daemon exited before writing anything)');
 }
 
 function runStop() {
@@ -321,8 +383,12 @@ async function healthOk(url: string): Promise<boolean> {
 
 async function waitForHealth(url: string, timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
+  let probe = 0;
   while (Date.now() < deadline) {
-    if (await healthOk(url)) return true;
+    probe++;
+    const ok = await healthOk(url);
+    dbg(`health probe #${probe} → ${ok ? 'ok' : 'no'} (${url}/health)`);
+    if (ok) return true;
     await Bun.sleep(HEALTH_POLL_INTERVAL_MS);
   }
   return false;
