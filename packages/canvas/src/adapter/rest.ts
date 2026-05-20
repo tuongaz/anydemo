@@ -1,9 +1,9 @@
 // REST implementation of CanvasAdapter. Mirrors the canonical studio endpoints
 // so embedders that don't override `fetch` get the same wire-level behavior as
 // the in-app studio (POST/PATCH/DELETE on /api/flows/:flowId/{nodes,connectors}
-// + POST /api/projects/:flowId/files/upload). The error shape (JSON body with
-// optional `error` field, falling back to a `METHOD URL → status` string) lets
-// embedder rollback paths use a single catch handler.
+// + POST /api/projects/:flowId/nodes/:nodeId/files/upload). The error shape
+// (JSON body with optional `error` field, falling back to a `METHOD URL →
+// status` string) lets embedder rollback paths use a single catch handler.
 
 import type {
   CanvasAdapter,

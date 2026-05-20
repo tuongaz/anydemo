@@ -134,7 +134,7 @@ function resolveProjectFile(
   return { kind: 'ok', absPath: realTarget, seeflowRoot: realRoot };
 }
 
-// Allowed extensions for /files/upload. Lowercased; matched after dropping the
+// Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the
 // leading `.`. Stored as a Set so future expansion (PDF, video) is one-edit.
 const UPLOAD_ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
 const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
@@ -611,10 +611,10 @@ export function createApi(options: ApiOptions): Hono {
 
   // POST /api/projects/:id/nodes/:nodeId/files/upload — accept a multipart
   // image upload and persist it under `<project>/.seeflow/nodes/<nodeId>/`.
-  // Same multipart shape, allowlist, dedupe, and 5 MB cap as the legacy
-  // `/files/upload` endpoint — the only difference is the destination folder
-  // is scoped to the node, so delete_node's removeNodeDir cascade cleans up
-  // the asset along with the node row.
+  // Multipart shape: `file` (Blob) and optional `filename` (the original OS
+  // name). Allowlist + 5 MB cap guard against arbitrary uploads; the
+  // destination folder is scoped to the node, so delete_node's removeNodeDir
+  // cascade cleans up the asset along with the node row.
   api.post('/projects/:id/nodes/:nodeId/files/upload', async (c) => {
     const projectId = c.req.param('id');
     const nodeId = c.req.param('nodeId');

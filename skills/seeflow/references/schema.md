@@ -181,10 +181,10 @@ Single Lucide glyph. Decorative only.
 
 ### `htmlNode`
 
-Escape-hatch for content no curated node covers: legends, data tables, rich annotations, custom UI widgets. Renderer fetches the HTML file, injects Tailwind Play CDN (utility classes work), then **sanitises before painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:` URLs).
+Escape-hatch for content no curated node covers: legends, data tables, rich annotations, custom UI widgets. The studio externalizes the content to `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in `flow.json`; the renderer injects Tailwind Play CDN (utility classes work) and **sanitises before painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:` URLs).
 
-**Required fields:**
-- `htmlPath` — relative path under `.seeflow/`. No leading `/`, no `..`. E.g. `checkout-flow/legend.html`.
+**Fields:**
+- `html` (optional) — inline HTML content. Pass the markup as a string when calling `seeflow_add_node` / `seeflow_patch_node`; the studio writes it to `nodes/<id>/view.html` and persists `data.html = "file://nodes/<id>/view.html"`. On read the value is inlined back to the actual HTML string. Omitting `html` writes an empty file.
 
 **Optional styling fields (same as shapeNode):**
 `width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`, `icon`
@@ -194,7 +194,7 @@ Escape-hatch for content no curated node covers: legends, data tables, rich anno
 ```json
 { "id": "legend", "type": "htmlNode", "position": { "x": 50, "y": 600 },
   "data": {
-    "htmlPath": "checkout-flow/legend.html",
+    "html": "<div class=\"p-4\">…legend markup…</div>",
     "width": 400, "height": 120,
     "backgroundColor": "slate",
     "cornerRadius": 8,
@@ -203,17 +203,17 @@ Escape-hatch for content no curated node covers: legends, data tables, rich anno
 }
 ```
 
-HTML file — write to `$flowDir/<name>.html`. Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Inline styles for anything Tailwind can't cover. See `examples/html-node-example.html`.
+Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Inline styles for anything Tailwind can't cover. To edit the markup outside Claude, open `<project>/.seeflow/nodes/<id>/view.html` directly — saves trigger a live reload.
 
 **When NOT to use:** If a `shapeNode` with a label, an `iconNode`, or a `stateNode` covers the content, prefer those — they participate in theming and status updates automatically.
 
 ### `imageNode`
 
-Decorative image under `.seeflow/`.
+Decorative image. Uploads land in the node's own folder: `<project>/.seeflow/nodes/<id>/<filename>`, and `data.path` must start with that folder. The studio's per-node upload endpoint enforces this; `delete_node` cascades the folder cleanup.
 
 ```json
-{ "id": "logo", "type": "imageNode", "position": { "x": 0, "y": 0 },
-  "data": { "path": "checkout-flow/logo.png", "alt": "Stripe logo" } }
+{ "id": "node-Logo01abcd", "type": "imageNode", "position": { "x": 0, "y": 0 },
+  "data": { "path": "nodes/node-Logo01abcd/logo.png", "alt": "Stripe logo" } }
 ```
 
 ## Connectors
