@@ -25,6 +25,9 @@ export function Header({
       >
         <Workflow size={18} strokeWidth={2.25} className="text-emerald-400" />
         SeeFlow
+        <span className="ml-1 text-[10px] font-normal tracking-normal text-muted-foreground/70">
+          v{__APP_VERSION__}
+        </span>
       </button>
       <div className="flex items-center gap-3">
         <ProjectSwitcher

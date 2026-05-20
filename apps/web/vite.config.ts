@@ -1,6 +1,11 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+
+const studioPkg = JSON.parse(
+  readFileSync(path.resolve(__dirname, '../studio/package.json'), 'utf8'),
+) as { version: string };
 
 export default defineConfig(({ command }) => {
   const isDev = command === 'serve';
@@ -15,6 +20,9 @@ export default defineConfig(({ command }) => {
 
   return {
     plugins: [react()],
+    define: {
+      __APP_VERSION__: JSON.stringify(studioPkg.version),
+    },
     resolve: {
       alias: [
         { find: '@', replacement: path.resolve(__dirname, './src') },
