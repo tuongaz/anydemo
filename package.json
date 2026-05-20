@@ -5,7 +5,8 @@
   "license": "MIT",
   "type": "module",
   "bin": {
-    "seeflow": "apps/studio/bin/seeflow"
+    "seeflow": "apps/studio/bin/seeflow",
+    "seeflow-mcp": "apps/studio/bin/seeflow-mcp"
   },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
@@ -24,7 +25,6 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
-    "@tuongaz/seeflow": "workspace:*",
     "concurrently": "^9.2.1",
     "typescript": "^5.6.3"
   }

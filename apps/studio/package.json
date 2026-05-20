@@ -38,8 +38,7 @@
     "start": "bun run src/cli.ts start",
     "test": "bun test",
     "build:web": "cd ../web && bun run build",
-    "vendor:tailwind-runtime": "cp ../../node_modules/@tailwindcss/browser/dist/index.global.js public/runtime/tailwind.js",
-    "prepublishOnly": "bun run vendor:tailwind-runtime && bun run build:web && cp ../../README.md ./README.md"
+    "vendor:tailwind-runtime": "cp ../../node_modules/@tailwindcss/browser/dist/index.global.js public/runtime/tailwind.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

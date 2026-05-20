@@ -121,11 +121,9 @@ docker.buildx: ## Build multi-arch image (linux/amd64,linux/arm64) without pushi
 docker.push: ## Build and push multi-arch image to the registry
 	docker buildx build --platform linux/amd64,linux/arm64 -t $(DOCKER_IMAGE):$(DOCKER_TAG) --push .
 
-OTP ?=
-
 deploy: gh.deploy ## Alias for gh.deploy
 
-gh.deploy: ## Bump patch version, commit+tag (triggers npm publish), then deploy viewer to S3
+gh.deploy: ## Bump patch version, commit+tag (triggers Docker publish), then deploy viewer to S3
 	@PKG=apps/studio/package.json; \
 	OLD=$$(bun -e "console.log(require('./$$PKG').version)"); \
 	NEW=$$(echo "$$OLD" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
@@ -138,14 +136,5 @@ gh.deploy: ## Bump patch version, commit+tag (triggers npm publish), then deploy
 	git tag v$$NEW; \
 	git push origin v$$NEW; \
 	gh workflow run deploy.yml --repo tuongaz/seeflow-viewer; \
-	echo "Tag v$$NEW pushed — npm publish running at: https://github.com/tuongaz/seeflow/actions/workflows/publish.yml"; \
+	echo "Tag v$$NEW pushed — Docker publish running at: https://github.com/tuongaz/seeflow/actions/workflows/docker.yml"; \
 	echo "Viewer deploy running at: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"
-
-release: ## Publish @tuongaz/seeflow to npm (NPM_TOKEN=<tok> make release; add OTP=<code> if 2FA is required)
-	@test -n "$(NPM_TOKEN)" || (echo "ERROR: NPM_TOKEN is not set" >&2; exit 1)
-	@PKG=apps/studio/package.json; \
-	OLD=$$(bun -e "console.log(require('./$$PKG').version)"); \
-	NEW=$$(echo "$$OLD" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
-	echo "Bumping version $$OLD -> $$NEW"; \
-	bun -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('./$$PKG'));p.version='$$NEW';fs.writeFileSync('./$$PKG',JSON.stringify(p,null,'\t')+'\n')"; \
-	cd apps/studio && npm publish --access public --//registry.npmjs.org/:_authToken=$(NPM_TOKEN) $(if $(OTP),--otp $(OTP),)
