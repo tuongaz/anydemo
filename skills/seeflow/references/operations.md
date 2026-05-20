@@ -4,7 +4,7 @@
 
 | Failure | Response |
 |---|---|
-| Studio `/health` fails | Ask the user to run `npx tuongaz/seeflow start` in another terminal, then re-probe once. No silent retry, no self-start. |
+| Studio `/health` fails | Ask the user to run `npx -y @tuongaz/seeflow start` in another terminal, then re-probe once. No silent retry, no self-start. |
 | Sub-agent unparseable output | Retry that single agent once with parse error; if still failing, surface and stop. Do **not** restart its parallel sibling. |
 | Schema validation fails (Phase 5) | Feed Zod issues back to relevant designer. Max 3 retries. |
 | Register 400 (Phase 6) | Show body; ask "fix-and-retry / stop". |

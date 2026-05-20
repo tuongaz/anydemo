@@ -1,0 +1,88 @@
+name: Publish to npm
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  id-token: write # required for npm provenance
+
+jobs:
+  publish:
+    name: Publish @tuongaz/seeflow to npm
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Node (for npm publish)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Verify tag matches package version
+        env:
+          GIT_REF: ${{ github.ref }}
+        run: |
+          tag="${GIT_REF#refs/tags/v}"
+          pkg=$(node -p "require('./apps/studio/package.json').version")
+          echo "Tag version: $tag"
+          echo "Package version: $pkg"
+          if [ "$tag" != "$pkg" ]; then
+            echo "ERROR: tag v$tag does not match apps/studio/package.json version $pkg" >&2
+            echo "Bump apps/studio/package.json to $tag, commit, then re-tag." >&2
+            exit 1
+          fi
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Test
+        run: bun test
+
+      - name: Build web bundle
+        run: cd apps/web && bun run build
+
+      - name: Verify web bundle landed in apps/studio/dist/web
+        run: |
+          test -f apps/studio/dist/web/index.html || {
+            echo "ERROR: apps/studio/dist/web/index.html missing after build" >&2
+            exit 1
+          }
+
+      - name: Stage README for npm package
+        run: cp README.md apps/studio/README.md
+
+      - name: Publish to npm with provenance
+        working-directory: apps/studio
+        # --ignore-scripts skips prepublishOnly because we already built the
+        # web bundle and staged the README in earlier steps.
+        run: npm publish --provenance --access public --ignore-scripts
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Summary
+        env:
+          GIT_REF: ${{ github.ref }}
+        run: |
+          tag="${GIT_REF#refs/tags/v}"
+          echo "Published @tuongaz/seeflow@${tag} to https://www.npmjs.com/package/@tuongaz/seeflow" >> "$GITHUB_STEP_SUMMARY"

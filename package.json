@@ -4,10 +4,6 @@
   "version": "0.0.0",
   "license": "MIT",
   "type": "module",
-  "bin": {
-    "seeflow": "apps/studio/bin/seeflow",
-    "seeflow-mcp": "apps/studio/bin/seeflow-mcp"
-  },
   "workspaces": ["apps/*", "packages/*"],
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",

@@ -123,7 +123,7 @@ docker.push: ## Build and push multi-arch image to the registry
 
 deploy: gh.deploy ## Alias for gh.deploy
 
-gh.deploy: ## Bump patch version, commit+tag (triggers Docker publish), then deploy viewer to S3
+gh.deploy: ## Bump patch version, commit+tag (triggers npm publish), then deploy viewer to S3
 	@PKG=apps/studio/package.json; \
 	OLD=$$(bun -e "console.log(require('./$$PKG').version)"); \
 	NEW=$$(echo "$$OLD" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
@@ -136,5 +136,5 @@ gh.deploy: ## Bump patch version, commit+tag (triggers Docker publish), then dep
 	git tag v$$NEW; \
 	git push origin v$$NEW; \
 	gh workflow run deploy.yml --repo tuongaz/seeflow-viewer; \
-	echo "Tag v$$NEW pushed — Docker publish running at: https://github.com/tuongaz/seeflow/actions/workflows/docker.yml"; \
+	echo "Tag v$$NEW pushed — npm publish running at: https://github.com/tuongaz/seeflow/actions/workflows/publish.yml"; \
 	echo "Viewer deploy running at: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"

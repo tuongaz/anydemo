@@ -73,7 +73,7 @@ function printHelp() {
 seeflow — local studio for file-defined interactive demos
 
 Usage:
-  npx tuongaz/seeflow <command> [options]
+  npx -y @tuongaz/seeflow <command> [options]
 
 Commands:
   start             Start the SeeFlow Studio server (default port 4321)
@@ -98,11 +98,11 @@ Options (register):
   --no-start        Fail if studio is not already running
 
 Examples:
-  npx tuongaz/seeflow start
-  npx tuongaz/seeflow start --port 8080
-  npx tuongaz/seeflow start --foreground
-  npx tuongaz/seeflow register --path ./my-app
-  npx tuongaz/seeflow stop
+  npx -y @tuongaz/seeflow start
+  npx -y @tuongaz/seeflow start --port 8080
+  npx -y @tuongaz/seeflow start --foreground
+  npx -y @tuongaz/seeflow register --path ./my-app
+  npx -y @tuongaz/seeflow stop
 `.trim(),
   );
 }

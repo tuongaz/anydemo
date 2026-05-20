@@ -82,7 +82,7 @@ After both return:
 - **Studio !200** → tell the user the studio isn't running and that you'll start it. **Warn that the first launch can take a minute or two** while `npx` downloads the package; subsequent starts are fast. Then run (background is the default — the CLI auto-detaches; `--yes` skips npx's prompt):
 
   ```bash
-  npx --yes tuongaz/seeflow start
+  npx -y @tuongaz/seeflow start
   ```
 
   Re-probe `/health` once to confirm. If still unreachable, surface the error and stop. The `WIKI.md` read already completed in parallel — no need to repeat it.
