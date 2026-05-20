@@ -23,6 +23,8 @@ import { createStatusRunner } from './status-runner.ts';
 const DEFAULT_FLOW_PATH = '.seeflow/flow.json';
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 150;
+const STOP_TIMEOUT_MS = 5_000;
+const STOP_POLL_INTERVAL_MS = 100;
 
 const argv = process.argv.slice(2);
 const sub = argv[0];
@@ -44,12 +46,16 @@ const dbg = (msg: string) => {
 };
 const daemonLogPath = () => join(seeflowHome(), 'seeflow.log');
 
-if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
+if (argv.includes('--version') || argv.includes('-v')) {
+  await printVersion();
+} else if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
   printHelp();
+} else if (sub === 'version') {
+  await printVersion();
 } else if (sub === 'start') {
   await runStart();
 } else if (sub === 'stop') {
-  runStop();
+  await runStop();
 } else if (sub === 'register') {
   await runRegister();
 } else if (['unregister', 'list'].includes(sub)) {
@@ -73,7 +79,11 @@ Commands:
   start             Start the SeeFlow Studio server (default port 4321)
   stop              Stop a background studio instance
   register          Register a demo repo with the running studio
+  version           Print the CLI version
   help              Show this help message
+
+Global options:
+  --version, -v     Print the CLI version and exit
 
 Options (start):
   --port <n>        Listen on port n (default: 4321)
@@ -257,7 +267,13 @@ function reportDaemonFailure(logPath: string | undefined) {
   console.error(tail || '(log is empty — daemon exited before writing anything)');
 }
 
-function runStop() {
+async function printVersion() {
+  const pkgPath = join(import.meta.dir, '../package.json');
+  const pkg = (await Bun.file(pkgPath).json()) as { version?: string };
+  console.log(pkg.version ?? 'unknown');
+}
+
+async function runStop() {
   const pid = readPid();
   if (!pid) {
     console.log(`No studio running (no pid file at ${defaultPidPath()}).`);
@@ -268,13 +284,52 @@ function runStop() {
     clearPid();
     return;
   }
+
   try {
     process.kill(pid, 'SIGTERM');
-    console.log(`Sent SIGTERM to studio (pid ${pid}).`);
   } catch (err) {
-    console.error(`Failed to stop pid ${pid}: ${String(err)}`);
+    if (isEsrch(err)) {
+      console.log(`Studio (pid ${pid}) was already gone.`);
+      clearPid();
+      return;
+    }
+    console.error(`Failed to signal pid ${pid}: ${String(err)}`);
     process.exit(1);
   }
+
+  if (await waitForExit(pid, STOP_TIMEOUT_MS)) {
+    console.log(`Stopped studio (pid ${pid}).`);
+    clearPid();
+    return;
+  }
+
+  // Still alive after timeout — escalate.
+  try {
+    process.kill(pid, 'SIGKILL');
+  } catch (err) {
+    if (isEsrch(err)) {
+      console.log(`Stopped studio (pid ${pid}).`);
+      clearPid();
+      return;
+    }
+    console.error(`Failed to force-kill pid ${pid}: ${String(err)}`);
+    process.exit(1);
+  }
+  console.warn(`Force-killed studio (pid ${pid}) after ${STOP_TIMEOUT_MS}ms.`);
+  clearPid();
+}
+
+async function waitForExit(pid: number, timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isPidAlive(pid)) return true;
+    await Bun.sleep(STOP_POLL_INTERVAL_MS);
+  }
+  return !isPidAlive(pid);
+}
+
+function isEsrch(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: string }).code === 'ESRCH';
 }
 
 async function runRegister() {
