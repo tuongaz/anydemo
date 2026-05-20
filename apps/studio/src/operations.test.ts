@@ -1,7 +1,7 @@
+import { describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { describe, expect, it } from 'bun:test';
 import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
 import {
   NodePatchBodySchema,
@@ -314,4 +314,3 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
     expect(existsSync(join(repoPath, '.seeflow', 'nodes', nodeId))).toBe(false);
   });
 });
-

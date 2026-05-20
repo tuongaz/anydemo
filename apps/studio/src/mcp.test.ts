@@ -396,6 +396,105 @@ describe('seeflow_add_node', () => {
     });
     expect(expectError(envelope)).toBe('unknown demo');
   });
+
+  it('externalizes detail to nodes/<id>/detail.md when provided', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    const envelope = await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: {
+        id: 'with-detail',
+        type: 'shapeNode',
+        data: { shape: 'rectangle', detail: 'hello' },
+      },
+    });
+    expect(expectOk(envelope)).toMatchObject({ ok: true });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'with-detail');
+    expect(node?.data.detail).toBe('file://nodes/with-detail/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
+    ).toBe('hello');
+  });
+
+  it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: {
+        id: 'no-detail',
+        type: 'shapeNode',
+        data: { shape: 'rectangle' },
+      },
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'no-detail');
+    expect(node?.data.detail).toBe('file://nodes/no-detail/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
+    ).toBe('');
+  });
+});
+
+describe('seeflow_patch_node + detail externalization', () => {
+  it('writes patch.detail to detail.md and keeps the file:// ref', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: { id: 'n1', type: 'shapeNode', data: { shape: 'rectangle' } },
+    });
+    await callTool(app, 'seeflow_patch_node', {
+      flowId: reg.id,
+      nodeId: 'n1',
+      detail: 'patched',
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'n1');
+    expect(node?.data.detail).toBe('file://nodes/n1/detail.md');
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe(
+      'patched',
+    );
+  });
+
+  it('empties detail.md when patch.detail is empty, keeps the file:// ref', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: {
+        id: 'n1',
+        type: 'shapeNode',
+        data: { shape: 'rectangle', detail: 'starts non-empty' },
+      },
+    });
+    await callTool(app, 'seeflow_patch_node', {
+      flowId: reg.id,
+      nodeId: 'n1',
+      detail: '',
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'n1');
+    expect(node?.data.detail).toBe('file://nodes/n1/detail.md');
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe('');
+  });
 });
 
 describe('seeflow_delete_node', () => {
@@ -413,6 +512,29 @@ describe('seeflow_delete_node', () => {
     expect(onDisk.nodes.map((n) => n.id)).toEqual(['a', 'c']);
     // Both a-to-b and b-to-c referenced node 'b' — cascade-removed.
     expect(onDisk.connectors).toEqual([]);
+  });
+
+  it('cascades the nodes/<id>/ folder along with the node row', async () => {
+    const { app } = buildApp();
+    const { repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: {
+        id: 'gone',
+        type: 'shapeNode',
+        data: { shape: 'rectangle', detail: 'bye' },
+      },
+    });
+    const folder = join(repoPath, '.seeflow', 'nodes', 'gone');
+    expect(existsSync(folder)).toBe(true);
+
+    const envelope = await callTool(app, 'seeflow_delete_node', {
+      flowId: reg.id,
+      nodeId: 'gone',
+    });
+    expect(expectOk(envelope)).toEqual({ ok: true });
+    expect(existsSync(folder)).toBe(false);
   });
 
   it('errors with the node id in the message for an unknown nodeId', async () => {

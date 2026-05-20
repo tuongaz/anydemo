@@ -7,14 +7,7 @@
 // Helpers extracted in US-003: node lifecycle (add/delete/move/reorder).
 // Future stories add patch_node + connector helpers alongside these.
 
-import {
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  statSync,
-  unlinkSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { writeFileAtomic } from './atomic-write.ts';
@@ -149,9 +142,7 @@ const NODE_DATA_PATCH_KEYS = [
   'detail',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
-const EXTERNALIZED_FIELD_NAMES = new Set<string>(
-  EXTERNALIZED_NODE_FIELDS.map((e) => e.field),
-);
+const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
 
 export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePatchBody): void => {
   if (updates.position !== undefined) {
@@ -1131,8 +1122,12 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const externalizedWrites: Array<{ absPath: string; ref: string; field: string; content: string }> =
-    [];
+  const externalizedWrites: Array<{
+    absPath: string;
+    ref: string;
+    field: string;
+    content: string;
+  }> = [];
   for (const { field, fileName } of EXTERNALIZED_NODE_FIELDS) {
     const incoming = (updates as Record<string, unknown>)[field];
     if (incoming === undefined) continue;
@@ -1144,36 +1139,33 @@ export async function patchNodeImpl(
     });
   }
 
-  return mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' } | { kind: 'writeFailed'; message: string }>(
-    deps,
-    flowId,
-    fullPath,
-    (flow) => {
-      const node = flow.nodes.find((n) => n.id === nodeId);
-      if (!node) return { kind: 'unknownNode' };
-      mergeNodeUpdates(node, updates);
-      if (externalizedWrites.length > 0) {
-        const dataAny = node.data;
-        const data: Record<string, unknown> =
-          dataAny && typeof dataAny === 'object' && !Array.isArray(dataAny)
-            ? (dataAny as Record<string, unknown>)
-            : {};
-        for (const w of externalizedWrites) {
-          try {
-            writeNodeFile(w.absPath, w.content);
-          } catch (err) {
-            return {
-              kind: 'writeFailed',
-              message: err instanceof Error ? err.message : String(err),
-            };
-          }
-          data[w.field] = w.ref;
+  return mutateMergedFlowAndBroadcast<
+    { kind: 'unknownNode' } | { kind: 'writeFailed'; message: string }
+  >(deps, flowId, fullPath, (flow) => {
+    const node = flow.nodes.find((n) => n.id === nodeId);
+    if (!node) return { kind: 'unknownNode' };
+    mergeNodeUpdates(node, updates);
+    if (externalizedWrites.length > 0) {
+      const dataAny = node.data;
+      const data: Record<string, unknown> =
+        dataAny && typeof dataAny === 'object' && !Array.isArray(dataAny)
+          ? (dataAny as Record<string, unknown>)
+          : {};
+      for (const w of externalizedWrites) {
+        try {
+          writeNodeFile(w.absPath, w.content);
+        } catch (err) {
+          return {
+            kind: 'writeFailed',
+            message: err instanceof Error ? err.message : String(err),
+          };
         }
-        node.data = data;
+        data[w.field] = w.ref;
       }
-      return { kind: 'ok' };
-    },
-  );
+      node.data = data;
+    }
+    return { kind: 'ok' };
+  });
 }
 
 // Reorder a node within demo.nodes[] (changes paint order in the canvas).

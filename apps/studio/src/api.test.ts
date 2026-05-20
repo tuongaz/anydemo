@@ -2096,6 +2096,61 @@ describe('POST /api/flows/:id/nodes', () => {
     expect(res.status).toBe(404);
   });
 
+  it('externalizes detail to nodes/<id>/detail.md when provided', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+      id: 'with-detail',
+      type: 'shapeNode',
+      data: { shape: 'rectangle', detail: 'hello world' },
+    });
+    expect(res.status).toBe(200);
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'with-detail');
+    expect(node?.data.detail).toBe('file://nodes/with-detail/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
+    ).toBe('hello world');
+  });
+
+  it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    await post(app, `/api/flows/${reg.id}/nodes`, {
+      id: 'no-detail',
+      type: 'shapeNode',
+      data: { shape: 'rectangle' },
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'no-detail');
+    expect(node?.data.detail).toBe('file://nodes/no-detail/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
+    ).toBe('');
+  });
+
   // US-015: when an htmlNode is drop-created without a client-supplied htmlPath,
   // the backend allocates `blocks/<id>.html`, writes the starter file with the
   // 'Edit me' card markup, and persists the path on the node.
@@ -2335,6 +2390,29 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     ).json()) as { id: string };
     const res = await app.request(`/api/flows/${reg.id}/nodes/missing`, { method: 'DELETE' });
     expect(res.status).toBe(404);
+  });
+
+  it('cascades the nodes/<id>/ folder along with the node row', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    await post(app, `/api/flows/${reg.id}/nodes`, {
+      id: 'gone',
+      type: 'shapeNode',
+      data: { shape: 'rectangle', detail: 'temp' },
+    });
+    const folder = join(repoPath, '.seeflow', 'nodes', 'gone');
+    expect(existsSync(folder)).toBe(true);
+
+    const res = await app.request(`/api/flows/${reg.id}/nodes/gone`, { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(existsSync(folder)).toBe(false);
   });
 
   describe('htmlNode managed file delete (US-016)', () => {
