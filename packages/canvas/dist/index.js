@@ -1471,11 +1471,13 @@ var createRestAdapter = (options) => {
     async deleteConnector(connectorId) {
       await requestJson(fetchImpl, "DELETE", `${demoBase}/connectors/${connectorId}`);
     },
-    async uploadImage(file, filename) {
+    async uploadImage(nodeId, file, filename) {
       const form = new FormData();
       form.append("file", file);
       form.append("filename", filename);
-      const url = `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/upload`;
+      const url = `${baseUrl}/api/projects/${encodeURIComponent(
+        flowId
+      )}/nodes/${encodeURIComponent(nodeId)}/files/upload`;
       const res = await fetchImpl(url, { method: "POST", body: form });
       if (!res.ok) {
         let errorBody = null;

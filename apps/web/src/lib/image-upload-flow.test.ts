@@ -17,11 +17,16 @@ const stubFile = (name = 'pic.png', type = 'image/png'): File =>
   new File([new Uint8Array([0])], name, { type });
 
 const buildDeps = (overrides?: {
-  upload?: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
+  upload?: (
+    projectId: string,
+    nodeId: string,
+    file: File,
+    filename: string,
+  ) => Promise<{ path: string }>;
   createNode?: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
 }) => {
   const overrideEvents: OverrideEvent[] = [];
-  const uploadCalls: { projectId: string; file: File; filename: string }[] = [];
+  const uploadCalls: { projectId: string; nodeId: string; file: File; filename: string }[] = [];
   const createCalls: { flowId: string; body: NodeCreateInput }[] = [];
   const deleteCalls: { flowId: string; nodeId: string }[] = [];
   const undoCalls: { do: () => Promise<void>; undo: () => Promise<void> }[] = [];
@@ -31,9 +36,9 @@ const buildDeps = (overrides?: {
   const deps = {
     upload:
       overrides?.upload ??
-      (async (projectId: string, file: File, filename: string) => {
-        uploadCalls.push({ projectId, file, filename });
-        return { path: `assets/${filename.toLowerCase()}` };
+      (async (projectId: string, nodeId: string, file: File, filename: string) => {
+        uploadCalls.push({ projectId, nodeId, file, filename });
+        return { path: `nodes/${nodeId}/${filename.toLowerCase()}` };
       }),
     createNode:
       overrides?.createNode ??
@@ -153,7 +158,7 @@ describe('performImageDropUpload (US-008)', () => {
     expect(ctx.createCalls[0]?.body.type).toBe('imageNode');
     expect(ctx.createCalls[0]?.body.position).toEqual({ x: 100, y: 200 });
     const data = ctx.createCalls[0]?.body.data as Record<string, unknown>;
-    expect(data.path).toBe('assets/hero.png');
+    expect(data.path).toBe('nodes/node-test-1/hero.png');
     expect(data.alt).toBe('Hero.png');
     expect(data.width).toBe(320);
     expect(data.height).toBe(180);

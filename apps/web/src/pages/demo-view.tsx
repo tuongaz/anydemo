@@ -1627,7 +1627,8 @@ export function DemoView({
       void performImageDropUpload(
         { ...args, flowId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
-          upload: (_projectId, file, filename) => adapter.uploadImage(file, filename),
+          upload: (_projectId, nodeId, file, filename) =>
+            adapter.uploadImage(nodeId, file, filename),
           createNode: async (_demoId, body) => {
             const { id } = await adapter.createNode(body);
             return { id };

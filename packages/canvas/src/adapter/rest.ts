@@ -116,13 +116,16 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${demoBase}/connectors/${connectorId}`);
     },
 
-    async uploadImage(file: File, filename: string): Promise<UploadImageResult> {
+    async uploadImage(nodeId: string, file: File, filename: string): Promise<UploadImageResult> {
       const form = new FormData();
       form.append('file', file);
       form.append('filename', filename);
       // Browser sets the multipart boundary automatically — never pass an
-      // explicit `content-type` header (matches `uploadImageFile` in api.ts).
-      const url = `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/upload`;
+      // explicit `content-type` header. Scoped to the node so the per-node
+      // folder convention (and delete_node cascade) covers the upload too.
+      const url = `${baseUrl}/api/projects/${encodeURIComponent(
+        flowId,
+      )}/nodes/${encodeURIComponent(nodeId)}/files/upload`;
       const res = await fetchImpl(url, { method: 'POST', body: form });
       if (!res.ok) {
         let errorBody: { error?: string } | null = null;

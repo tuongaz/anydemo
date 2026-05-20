@@ -141,15 +141,17 @@ describe('createRestAdapter (US-024)', () => {
     expect(JSON.parse(String(calls[0]?.body))).toEqual({ op: 'toFront' });
   });
 
-  it('uploadImage POSTs FormData to /api/projects/:id/files/upload', async () => {
-    const { impl, calls } = stubFetch(() => stubResponse({ path: 'assets/pic.png' }));
+  it('uploadImage POSTs FormData to the per-node /files/upload endpoint', async () => {
+    const { impl, calls } = stubFetch(() =>
+      stubResponse({ path: 'nodes/node-Abcdef1234/pic.png' }),
+    );
     const adapter = createRestAdapter({ baseUrl: '', flowId: 'project-77', fetch: impl });
 
     const file = new File([new Uint8Array([1, 2, 3])], 'Pic.png', { type: 'image/png' });
-    const result = await adapter.uploadImage(file, 'pic.png');
+    const result = await adapter.uploadImage('node-Abcdef1234', file, 'pic.png');
 
-    expect(result).toEqual({ path: 'assets/pic.png' });
-    expect(calls[0]?.url).toBe('/api/projects/project-77/files/upload');
+    expect(result).toEqual({ path: 'nodes/node-Abcdef1234/pic.png' });
+    expect(calls[0]?.url).toBe('/api/projects/project-77/nodes/node-Abcdef1234/files/upload');
     expect(calls[0]?.method).toBe('POST');
     // FormData body — must NOT have an explicit content-type header.
     expect(calls[0]?.headers?.['content-type']).toBeUndefined();

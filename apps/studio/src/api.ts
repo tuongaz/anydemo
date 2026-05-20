@@ -675,66 +675,6 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ path: `nodes/${nodeId}/${finalName}` });
   });
 
-  // POST /api/projects/:id/files/upload — accept a multipart image upload and
-  // persist it under `<project>/.seeflow/assets/`. The frontend (US-008 OS
-  // drop) sends `file` (Blob) and optionally `filename` (the original OS name)
-  // in a multipart form; we sanitize the filename to a lowercased slug,
-  // dedupe with `-2`, `-3` suffixes inside the assets dir, and return the
-  // demo-relative path. Allowlist + 5 MB cap guard against arbitrary uploads.
-  api.post('/projects/:id/files/upload', async (c) => {
-    const projectId = c.req.param('id');
-    const entry = registry.getById(projectId);
-    if (!entry) return c.json({ error: 'unknown project' }, 404);
-
-    let form: FormData;
-    try {
-      form = await c.req.formData();
-    } catch {
-      return c.json({ error: 'Body must be valid multipart form-data' }, 400);
-    }
-
-    const fileField = form.get('file');
-    if (!(fileField instanceof File)) {
-      return c.json({ error: 'Missing file field' }, 400);
-    }
-    if (fileField.size > UPLOAD_MAX_BYTES) {
-      return c.json({ error: 'file too large', maxBytes: UPLOAD_MAX_BYTES }, 413);
-    }
-
-    const suggestedRaw = form.get('filename');
-    const suggested =
-      typeof suggestedRaw === 'string' && suggestedRaw.length > 0 ? suggestedRaw : fileField.name;
-    const sanitized = sanitizeUploadFilename(suggested);
-    if (!sanitized) {
-      return c.json({ error: 'invalid filename or extension' }, 400);
-    }
-
-    const assetsDir = join(entry.repoPath, '.seeflow', 'assets');
-    try {
-      mkdirSync(assetsDir, { recursive: true });
-    } catch (err) {
-      return c.json(
-        {
-          error: `Failed to create assets dir: ${err instanceof Error ? err.message : String(err)}`,
-        },
-        500,
-      );
-    }
-
-    const finalName = pickUploadFilename(assetsDir, sanitized.base, sanitized.ext);
-    const absPath = join(assetsDir, finalName);
-    try {
-      await Bun.write(absPath, fileField);
-    } catch (err) {
-      return c.json(
-        { error: `Failed to write file: ${err instanceof Error ? err.message : String(err)}` },
-        500,
-      );
-    }
-
-    return c.json({ path: `assets/${finalName}` });
-  });
-
   api.delete('/flows/:id', (c) => {
     const result = deleteFlowImpl({ registry, watcher }, c.req.param('id'));
     switch (result.kind) {

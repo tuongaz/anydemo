@@ -46,7 +46,12 @@ export interface PerformImageDropUploadArgs {
 }
 
 export interface PerformImageDropUploadDeps {
-  upload: (projectId: string, file: File, filename: string) => Promise<{ path: string }>;
+  upload: (
+    projectId: string,
+    nodeId: string,
+    file: File,
+    filename: string,
+  ) => Promise<{ path: string }>;
   createNode: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
   deleteNode: (flowId: string, nodeId: string) => Promise<{ ok: true }>;
   setOverride: (id: string, partial: Partial<FlowNode>) => void;
@@ -145,7 +150,7 @@ export const performImageDropUpload = async (
 
   let path: string;
   try {
-    const result = await deps.upload(flowId, file, originalFilename);
+    const result = await deps.upload(flowId, nodeId, file, originalFilename);
     path = result.path;
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
