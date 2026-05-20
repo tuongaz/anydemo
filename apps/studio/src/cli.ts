@@ -48,11 +48,11 @@ const daemonLogPath = () => join(seeflowHome(), 'seeflow.log');
 
 if (argv.includes('--version') || argv.includes('-v')) {
   await printVersion();
-} else if (!sub || sub === 'help' || sub === '--help' || sub === '-h') {
+} else if (sub === 'help' || sub === '--help' || sub === '-h') {
   printHelp();
 } else if (sub === 'version') {
   await printVersion();
-} else if (sub === 'start') {
+} else if (!sub || sub === 'start' || sub.startsWith('-')) {
   await runStart();
 } else if (sub === 'stop') {
   await runStop();
@@ -73,10 +73,10 @@ function printHelp() {
 seeflow — local studio for file-defined interactive demos
 
 Usage:
-  npx -y @tuongaz/seeflow@latest <command> [options]
+  npx -y @tuongaz/seeflow@latest [command] [options]
 
 Commands:
-  start             Start the SeeFlow Studio server (default port 4321)
+  start             Start the SeeFlow Studio server (default port 4321) — default when no command is given
   stop              Stop a background studio instance
   register          Register a demo repo with the running studio
   version           Print the CLI version
@@ -98,8 +98,8 @@ Options (register):
   --no-start        Fail if studio is not already running
 
 Examples:
-  npx -y @tuongaz/seeflow@latest start
-  npx -y @tuongaz/seeflow@latest start --port 8080
+  npx -y @tuongaz/seeflow@latest
+  npx -y @tuongaz/seeflow@latest --port 8080
   npx -y @tuongaz/seeflow@latest start --foreground
   npx -y @tuongaz/seeflow@latest register --path ./my-app
   npx -y @tuongaz/seeflow@latest stop
