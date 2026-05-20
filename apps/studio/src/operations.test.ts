@@ -8,6 +8,7 @@ import {
   addNodeImpl,
   getFlowImpl,
   mergeNodeUpdates,
+  patchNodeImpl,
   registerFlowImpl,
   validateImpl,
 } from './operations.ts';
@@ -217,6 +218,80 @@ describe('addNodeImpl + detail externalization', () => {
     if (get.kind !== 'ok' || !get.data.flow) throw new Error('get failed');
     const node = get.data.flow.nodes.find((n) => n.id === add.data.id);
     expect((node?.data as { detail?: string }).detail).toBe('inlined-on-read');
+  });
+});
+
+describe('patchNodeImpl + detail externalization', () => {
+  it('writes detail content to detail.md and keeps file:// ref in flow.json', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const patch = await patchNodeImpl(deps, flowId, nodeId, { detail: 'new content' });
+    expect(patch.kind).toBe('ok');
+
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(readFileSync(detailAbs, 'utf8')).toBe('new content');
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
+  });
+
+  it('empty-string detail empties the file but keeps the file:// ref', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'starts non-empty' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const patch = await patchNodeImpl(deps, flowId, nodeId, { detail: '' });
+    expect(patch.kind).toBe('ok');
+
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(readFileSync(detailAbs, 'utf8')).toBe('');
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
+  });
+
+  it('empty-string description still clears the inline field (unchanged behavior)', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', description: 'starts' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    await patchNodeImpl(deps, flowId, nodeId, { description: '' });
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect('description' in node.data).toBe(false);
+  });
+
+  it('patching an unrelated field preserves the detail file:// ref round-trip', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'survive' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    await patchNodeImpl(deps, flowId, nodeId, { name: 'A renamed' });
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
+    expect(node.data.name).toBe('A renamed');
   });
 });
 

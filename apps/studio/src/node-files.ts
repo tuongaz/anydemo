@@ -1,6 +1,6 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { writeFileAtomic } from './operations.ts';
+import { writeFileAtomic } from './atomic-write.ts';
 
 export const EXTERNALIZED_NODE_FIELDS = [{ field: 'detail', fileName: 'detail.md' }] as const;
 

@@ -11,13 +11,13 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  renameSync,
   statSync,
   unlinkSync,
   writeFileSync,
 } from 'node:fs';
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
+import { writeFileAtomic } from './atomic-write.ts';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
   EXTERNALIZED_NODE_FIELDS,
@@ -149,6 +149,10 @@ const NODE_DATA_PATCH_KEYS = [
   'detail',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
+const EXTERNALIZED_FIELD_NAMES = new Set<string>(
+  EXTERNALIZED_NODE_FIELDS.map((e) => e.field),
+);
+
 export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePatchBody): void => {
   if (updates.position !== undefined) {
     node.position = updates.position;
@@ -161,6 +165,10 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
   let touchedData = false;
   for (const key of NODE_DATA_PATCH_KEYS) {
     if (updates[key] === undefined) continue;
+    // Externalized fields (detail, ...) flow through patchNodeImpl's own
+    // pre-process — keep merge out of it so the file:// ref on disk stays
+    // stable and the file is the source of truth for content.
+    if (EXTERNALIZED_FIELD_NAMES.has(key)) continue;
     // Empty string on the two free-text metadata fields is the documented
     // clear-on-serialize signal — strip the key instead of writing "" to disk
     // so flow.json stays compact and round-tripping a cleared node doesn't
@@ -463,20 +471,7 @@ export const withFlowWriteLock = <T>(flowId: string, fn: () => Promise<T>): Prom
  * editor diffs clean (single fs.watch event for the rename) and means a crash
  * during write can never corrupt the original.
  */
-export const writeFileAtomic = (filePath: string, content: string): void => {
-  const tempPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
-  try {
-    writeFileSync(tempPath, content);
-    renameSync(tempPath, filePath);
-  } catch (err) {
-    try {
-      if (existsSync(tempPath)) unlinkSync(tempPath);
-    } catch {
-      // best-effort cleanup
-    }
-    throw err;
-  }
-};
+export { writeFileAtomic } from './atomic-write.ts';
 
 /**
  * Read flow.json + optional style.json, return the raw parsed JSON so
@@ -1126,12 +1121,49 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  return mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' }>(deps, flowId, fullPath, (flow) => {
-    const node = flow.nodes.find((n) => n.id === nodeId);
-    if (!node) return { kind: 'unknownNode' };
-    mergeNodeUpdates(node, updates);
-    return { kind: 'ok' };
-  });
+  const externalizedWrites: Array<{ absPath: string; ref: string; field: string; content: string }> =
+    [];
+  for (const { field, fileName } of EXTERNALIZED_NODE_FIELDS) {
+    const incoming = (updates as Record<string, unknown>)[field];
+    if (incoming === undefined) continue;
+    externalizedWrites.push({
+      absPath: nodeFileAbsPath(entry.repoPath, nodeId, fileName),
+      ref: nodeFileRef(nodeId, fileName),
+      field,
+      content: typeof incoming === 'string' ? incoming : '',
+    });
+  }
+
+  return mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' } | { kind: 'writeFailed'; message: string }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
+      const node = flow.nodes.find((n) => n.id === nodeId);
+      if (!node) return { kind: 'unknownNode' };
+      mergeNodeUpdates(node, updates);
+      if (externalizedWrites.length > 0) {
+        const dataAny = node.data;
+        const data: Record<string, unknown> =
+          dataAny && typeof dataAny === 'object' && !Array.isArray(dataAny)
+            ? (dataAny as Record<string, unknown>)
+            : {};
+        for (const w of externalizedWrites) {
+          try {
+            writeNodeFile(w.absPath, w.content);
+          } catch (err) {
+            return {
+              kind: 'writeFailed',
+              message: err instanceof Error ? err.message : String(err),
+            };
+          }
+          data[w.field] = w.ref;
+        }
+        node.data = data;
+      }
+      return { kind: 'ok' };
+    },
+  );
 }
 
 // Reorder a node within demo.nodes[] (changes paint order in the canvas).

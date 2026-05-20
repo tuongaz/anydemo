@@ -1913,7 +1913,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
   // unchanged. Empty string on either field is the documented clear-on-
   // serialize signal — mergeNodeUpdates strips the key so the on-disk demo
   // stays compact.
-  it('persists description + detail fields to data on patch', async () => {
+  it('persists description inline + externalizes detail to nodes/<id>/detail.md', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -1935,10 +1935,13 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.description).toBe('short body');
-    expect(node?.data.detail).toBe('multi-line\nnotes about the node');
+    expect(node?.data.detail).toBe('file://nodes/api-checkout/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
+    ).toBe('multi-line\nnotes about the node');
   });
 
-  it('strips description / detail on disk when empty string is patched', async () => {
+  it('strips description on empty; empties detail.md but keeps the file:// ref', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -1965,9 +1968,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.description).toBeUndefined();
-    expect(node?.data.detail).toBeUndefined();
     expect('description' in (node?.data ?? {})).toBe(false);
-    expect('detail' in (node?.data ?? {})).toBe(false);
+    expect(node?.data.detail).toBe('file://nodes/api-checkout/detail.md');
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
+    ).toBe('');
   });
 
   // US-009: persist an icon name, then clear it via null. NodePatchBodySchema
