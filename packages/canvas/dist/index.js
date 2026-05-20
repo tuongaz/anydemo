@@ -6693,10 +6693,21 @@ var viewportExportFilter = (node) => {
   if (node.classList.contains("react-flow__panel")) return false;
   return true;
 };
+var CANVAS_BACKGROUND_FALLBACK = "#0a0a0c";
+var resolveCanvasBackground = (element) => {
+  let current = element;
+  while (current && !current.classList.contains("seeflow-canvas-root")) {
+    current = current.parentElement;
+  }
+  if (!current) return CANVAS_BACKGROUND_FALLBACK;
+  const token = getComputedStyle(current).getPropertyValue("--bg-canvas").trim();
+  return token.length > 0 ? token : CANVAS_BACKGROUND_FALLBACK;
+};
 var captureViewportPng = async (element) => {
   const dataUrl = await toPng(element, {
     cacheBust: true,
-    filter: viewportExportFilter
+    filter: viewportExportFilter,
+    backgroundColor: resolveCanvasBackground(element)
   });
   const dims = await new Promise((resolve, reject) => {
     const img = new Image();
