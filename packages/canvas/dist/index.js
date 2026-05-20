@@ -94,42 +94,6 @@ var ICON_REGISTRY = buildRegistry();
 var ICON_FALLBACK_NAME = "help-circle";
 var ICON_NAMES = Object.keys(ICON_REGISTRY).sort();
 
-// src/lib/auto-layout.ts
-import dagre from "dagre";
-var DEFAULTS = { direction: "LR", nodesep: 60, ranksep: 140 };
-var applyLayout = (nodes, edges, opts) => {
-  const out = /* @__PURE__ */ new Map();
-  if (nodes.length === 0) return out;
-  if (nodes.length === 1) {
-    const only = nodes[0];
-    if (only) out.set(only.id, { x: only.position.x, y: only.position.y });
-    return out;
-  }
-  const direction = opts?.direction ?? DEFAULTS.direction;
-  const nodesep = opts?.nodesep ?? DEFAULTS.nodesep;
-  const ranksep = opts?.ranksep ?? DEFAULTS.ranksep;
-  const g = new dagre.graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: direction, nodesep, ranksep });
-  g.setDefaultEdgeLabel(() => ({}));
-  const ids = /* @__PURE__ */ new Set();
-  for (const n of nodes) {
-    g.setNode(n.id, { width: n.width, height: n.height });
-    ids.add(n.id);
-  }
-  let edgeCounter = 0;
-  for (const e of edges) {
-    if (!ids.has(e.source) || !ids.has(e.target)) continue;
-    g.setEdge(e.source, e.target, {}, `e${edgeCounter++}`);
-  }
-  dagre.layout(g);
-  for (const n of nodes) {
-    const laid = g.node(n.id);
-    if (!laid) continue;
-    out.set(n.id, { x: laid.x - n.width / 2, y: laid.y - n.height / 2 });
-  }
-  return out;
-};
-
 // src/lib/canvas-drop.ts
 var IMAGE_DROP_EXTS = [
   ".png",
@@ -1550,6 +1514,10 @@ var createRestAdapter = (options) => {
         `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
         { path }
       );
+    },
+    async computeLayout(nodes, edges) {
+      const res = await requestJson(fetchImpl, "POST", `${baseUrl}/api/layout`, { nodes, edges });
+      return { nodes: res.nodes, connectors: res.connectors };
     }
   };
 };
@@ -8161,41 +8129,57 @@ function SeeflowCanvasImpl(props, ref) {
   useEffect9(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
-  const internalTidy = useCallback6(() => {
-    const inst = rfInstanceRef.current;
-    const current = rfNodesRef.current;
-    if (current.length < 2) return;
-    const layoutNodes = current.map((n) => {
-      const measured = inst?.getInternalNode(n.id)?.measured;
-      const dataAny = n.data;
-      const width = measured?.width ?? dataAny.width ?? 200;
-      const height = measured?.height ?? dataAny.height ?? 120;
-      return { id: n.id, width, height, position: n.position };
-    });
-    const layoutEdges = rfEdgesRef.current.map((e) => ({ source: e.source, target: e.target }));
-    const next = applyLayout(layoutNodes, layoutEdges);
-    let prevMinX = Number.POSITIVE_INFINITY;
-    let prevMinY = Number.POSITIVE_INFINITY;
-    let nextMinX = Number.POSITIVE_INFINITY;
-    let nextMinY = Number.POSITIVE_INFINITY;
-    for (const ln of layoutNodes) {
-      if (ln.position.x < prevMinX) prevMinX = ln.position.x;
-      if (ln.position.y < prevMinY) prevMinY = ln.position.y;
-      const np = next.get(ln.id);
-      if (!np) continue;
-      if (np.x < nextMinX) nextMinX = np.x;
-      if (np.y < nextMinY) nextMinY = np.y;
-    }
-    const offsetX = Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
-    const offsetY = Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
-    setRfNodes(
-      (prev) => prev.map((n) => {
-        const np = next.get(n.id);
-        if (!np) return n;
-        return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
-      })
-    );
-  }, []);
+  const adapterMaybe = props.adapter ?? null;
+  const internalTidy = useMemo2(() => {
+    if (!adapterMaybe?.computeLayout) return void 0;
+    return async () => {
+      const inst = rfInstanceRef.current;
+      const current = rfNodesRef.current;
+      if (current.length < 2) return;
+      const layoutNodes = current.map((n) => {
+        const measured = inst?.getInternalNode(n.id)?.measured;
+        const dataAny = n.data;
+        const width = measured?.width ?? dataAny.width ?? 200;
+        const height = measured?.height ?? dataAny.height ?? 120;
+        return { id: n.id, type: n.type, width, height };
+      });
+      const livePositions = /* @__PURE__ */ new Map();
+      for (const n of current) livePositions.set(n.id, n.position);
+      const layoutEdges = rfEdgesRef.current.map((e) => ({
+        id: e.id,
+        source: e.source,
+        target: e.target
+      }));
+      const compute = adapterMaybe.computeLayout;
+      if (!compute) return;
+      const result = await compute(layoutNodes, layoutEdges);
+      const next = /* @__PURE__ */ new Map();
+      for (const [id, entry] of Object.entries(result.nodes)) next.set(id, entry.position);
+      let prevMinX = Number.POSITIVE_INFINITY;
+      let prevMinY = Number.POSITIVE_INFINITY;
+      let nextMinX = Number.POSITIVE_INFINITY;
+      let nextMinY = Number.POSITIVE_INFINITY;
+      for (const ln of layoutNodes) {
+        const prev = livePositions.get(ln.id);
+        if (!prev) continue;
+        if (prev.x < prevMinX) prevMinX = prev.x;
+        if (prev.y < prevMinY) prevMinY = prev.y;
+        const np = next.get(ln.id);
+        if (!np) continue;
+        if (np.x < nextMinX) nextMinX = np.x;
+        if (np.y < nextMinY) nextMinY = np.y;
+      }
+      const offsetX = Number.isFinite(prevMinX) && Number.isFinite(nextMinX) ? prevMinX - nextMinX : 0;
+      const offsetY = Number.isFinite(prevMinY) && Number.isFinite(nextMinY) ? prevMinY - nextMinY : 0;
+      setRfNodes(
+        (prev) => prev.map((n) => {
+          const np = next.get(n.id);
+          if (!np) return n;
+          return { ...n, position: { x: np.x + offsetX, y: np.y + offsetY } };
+        })
+      );
+    };
+  }, [adapterMaybe]);
   const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
   const connectSucceededRef = useRef8(false);
   const connectStartRef = useRef8(
@@ -9139,7 +9123,6 @@ export {
   TooltipProvider,
   TooltipTrigger,
   UserShape,
-  applyLayout,
   applyNudge,
   buildIconInsertPayload,
   buildNewImageData,
