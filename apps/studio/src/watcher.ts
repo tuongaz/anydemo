@@ -72,6 +72,22 @@ interface WatchHandle {
 const resolveFilePath = (repoPath: string, flowPath: string): string =>
   isAbsolute(flowPath) ? flowPath : join(repoPath, flowPath);
 
+// `file://` refs in flow.json resolve against `<project>/.seeflow/` per the
+// skill spec — not against the flow file's own directory. Walk up from the
+// flow's parent looking for an ancestor named `.seeflow`. Fallback to the
+// flow's parent for flows registered outside the `.seeflow/` convention.
+const computeSeeflowRoot = (flowPath: string): string => {
+  const flowDir = dirname(flowPath);
+  let current = flowDir;
+  while (true) {
+    if (basename(current) === '.seeflow') return current;
+    const parent = dirname(current);
+    if (parent === current) break;
+    current = parent;
+  }
+  return flowDir;
+};
+
 const isCleanRelativePath = (p: string): boolean => {
   if (!p) return false;
   // Reject data URLs early — the pre-launch hard-cut (US-004) replaces
@@ -136,8 +152,9 @@ export function readMergedFlow(flowPath: string): ReadMergedFlowResult {
     return { ...empty, error: `Flow file not found: ${flowPath}` };
   }
 
-  const seeflowRoot = dirname(flowPath);
-  const stylePath = join(seeflowRoot, 'style.json');
+  const flowDir = dirname(flowPath);
+  const seeflowRoot = computeSeeflowRoot(flowPath);
+  const stylePath = join(flowDir, 'style.json');
 
   let rawFlow: unknown;
   try {
@@ -320,7 +337,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     const handle = handles.get(flowId);
     if (handle) {
       const allRefs = [...result.fileRefs, ...result.staticRefs];
-      reconcileFileWatchers(flowId, handle, dirname(filePath), allRefs);
+      reconcileFileWatchers(flowId, handle, computeSeeflowRoot(filePath), allRefs);
     }
 
     return next;
