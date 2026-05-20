@@ -9,7 +9,6 @@ import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
 import { useHtmlContent } from '../lib/use-html-content.ts';
 import type { HtmlNodeData } from '../types.ts';
 import { Icon } from '../ui/icon.tsx';
-import { LockBadge } from './lock-badge.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -162,7 +161,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     >
       {observerActive ? <AutoSizeObserver nodeId={id} measureRef={measureRef} /> : null}
       <ResizeControls
-        visible={!!selected && !!data.onResize && !data.locked}
+        visible={!!selected && !!data.onResize}
         cornerVariant="visible"
         minWidth={MIN_W}
         minHeight={MIN_H}
@@ -170,12 +169,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
-      {selected &&
-      !data.locked &&
-      !autoSize &&
-      !isResizing &&
-      typeof data.onFitToContent === 'function' ? (
+      {selected && !autoSize && !isResizing && typeof data.onFitToContent === 'function' ? (
         <button
           type="button"
           data-testid="html-node-fit-to-content"

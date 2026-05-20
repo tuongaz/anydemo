@@ -24,12 +24,6 @@ export interface ScalableNode {
   width?: number;
   /** Optional rendered height; passes through unchanged when absent. */
   height?: number;
-  /**
-   * Optional discriminator + payload — only `data.locked` is read here. The
-   * helper preserves every other field via spread so callers can keep using
-   * their concrete node type (e.g. React Flow's `Node<DemoNodeData>`).
-   */
-  data?: { locked?: boolean };
 }
 
 export interface ScaleNodesOptions {
@@ -56,10 +50,9 @@ export interface ScaleNodesOptions {
  *   w' = w * sx
  *   h' = h * sy
  *
- * Nodes with `data.locked === true` pass through unchanged so a single locked
- * child cannot be moved or resized by a group/multi-select scale. A zero-size
- * `oldRect` (either axis) returns the input nodes unchanged — there is no
- * meaningful "scale from a degenerate rect" so we avoid division by zero.
+ * A zero-size `oldRect` (either axis) returns the input nodes unchanged —
+ * there is no meaningful "scale from a degenerate rect" so we avoid division
+ * by zero.
  */
 export function scaleNodesWithinRect<T extends ScalableNode>(
   nodes: readonly T[],
@@ -80,7 +73,6 @@ export function scaleNodesWithinRect<T extends ScalableNode>(
   }
 
   return nodes.map((n) => {
-    if (n.data?.locked === true) return { ...n };
     const x = newRect.x + (n.position.x - oldRect.x) * sx;
     const y = newRect.y + (n.position.y - oldRect.y) * sy;
     const next: T = {

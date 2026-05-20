@@ -26,7 +26,7 @@ import { type Rect, type ScalableNode, scaleNodesWithinRect } from '../lib/scale
 export interface OverlayInputNode {
   id: string;
   position: { x: number; y: number };
-  data: { width?: number; height?: number; locked?: boolean };
+  data: { width?: number; height?: number };
 }
 
 /** Per-node update emitted at resize-stop. */
@@ -149,9 +149,7 @@ export function computeNewRectFromAnchorDrag(
 /**
  * Pure resize-stop computation: scale `nodes` from `oldRect` → `newRect`
  * (via the shared helper) and return just the per-node fields the parent
- * needs to PATCH. Locked nodes are filtered out — the helper already passes
- * them through unchanged, so we drop them from the dispatched update set to
- * avoid no-op PATCHes and keep the parent's undo entry compact.
+ * needs to PATCH.
  */
 export function computeSelectionResizeUpdates(
   nodes: readonly OverlayInputNode[],
@@ -164,15 +162,10 @@ export function computeSelectionResizeUpdates(
     position: { x: n.position.x, y: n.position.y },
     width: n.data.width,
     height: n.data.height,
-    data: { locked: n.data.locked },
   }));
   const scaled = scaleNodesWithinRect(scalable, oldRect, newRect, options);
   const updates: MultiResizeUpdate[] = [];
-  for (let i = 0; i < scaled.length; i++) {
-    const src = nodes[i];
-    const out = scaled[i];
-    if (!src || !out) continue;
-    if (src.data.locked === true) continue;
+  for (const out of scaled) {
     const u: MultiResizeUpdate = { id: out.id, position: out.position };
     if (out.width !== undefined) u.width = out.width;
     if (out.height !== undefined) u.height = out.height;

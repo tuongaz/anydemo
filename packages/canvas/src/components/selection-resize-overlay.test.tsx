@@ -14,11 +14,10 @@ const node = (
   y: number,
   width?: number,
   height?: number,
-  extra: { locked?: boolean } = {},
 ): OverlayInputNode => ({
   id,
   position: { x, y },
-  data: { width, height, locked: extra.locked },
+  data: { width, height },
 });
 
 describe('computeUnionRect', () => {
@@ -134,15 +133,6 @@ describe('computeSelectionResizeUpdates', () => {
       { id: 'a', position: { x: 20, y: 20 }, width: 40, height: 40 },
       { id: 'b', position: { x: 100, y: 100 }, width: 40, height: 40 },
     ]);
-  });
-
-  it('filters out locked nodes (no PATCH for a node that didn’t move)', () => {
-    const updates = computeSelectionResizeUpdates(
-      [node('a', 10, 10, 20, 20), node('b', 50, 50, 20, 20, { locked: true })],
-      { x: 0, y: 0, width: 100, height: 100 },
-      { x: 0, y: 0, width: 200, height: 200 },
-    );
-    expect(updates).toEqual([{ id: 'a', position: { x: 20, y: 20 }, width: 40, height: 40 }]);
   });
 
   it('passes lockAspectRatio through to scaleNodesWithinRect', () => {

@@ -10,7 +10,6 @@ import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import type { ShapeKind, ShapeNodeData } from '../types.ts';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -512,7 +511,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
     >
       {illustrativeOverlay}
       <ResizeControls
-        visible={!!selected && !!data.onResize && !isEditing && !data.locked}
+        visible={!!selected && !!data.onResize && !isEditing}
         cornerVariant="visible"
         minWidth={80}
         minHeight={40}
@@ -520,7 +519,6 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
       {/* US-003: text shapes are pure annotations — no connect handles. */}
       {!isText && (
         <Handle

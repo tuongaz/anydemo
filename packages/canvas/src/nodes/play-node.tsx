@@ -9,7 +9,6 @@ import type { NodeData, NodeStatus, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { type VisualStatus, deriveVisualStatus } from './lib/visual-status.ts';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusBadge } from './status-badge.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -174,7 +173,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
   // See state-node.tsx for the full rationale. The on-node icon trigger only
   // appears when an icon is already set; adding an icon to a bare node is the
   // sidebar's job.
-  const iconEditable = !!data.onIconChange && !!selected && !data.locked && !!data.icon;
+  const iconEditable = !!data.onIconChange && !!selected && !!data.icon;
   // When data.width/height are unset, we own sizing — pin a default width so a
   // long label/description wraps inside the node instead of stretching it.
   // `isResizing` is NOT in this check: see state-node.tsx for the full
@@ -254,7 +253,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
       onDoubleClick={handleWrapperDoubleClick}
     >
       <ResizeControls
-        visible={!!selected && !!data.onResize && !data.locked}
+        visible={!!selected && !!data.onResize}
         cornerVariant="visible"
         minWidth={MIN_W}
         minHeight={MIN_H}
@@ -262,7 +261,6 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
       <Handle
         type="target"
         position={Position.Top}

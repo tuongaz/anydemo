@@ -5,7 +5,6 @@ import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { ICON_REGISTRY } from '../lib/icon-registry.ts';
 import type { IconNodeData } from '../types.ts';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
@@ -92,7 +91,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
       onDoubleClick={handleDoubleClick}
     >
       <ResizeControls
-        visible={!!selected && !!data.onResize && !isEditing && !data.locked}
+        visible={!!selected && !!data.onResize && !isEditing}
         cornerVariant="visible"
         minWidth={MIN_W}
         minHeight={MIN_H}
@@ -100,7 +99,6 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
       <Handle
         type="target"
         position={Position.Top}

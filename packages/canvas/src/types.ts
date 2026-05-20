@@ -25,7 +25,6 @@ export interface NodeVisual {
   fontSize?: number;
   textColor?: ColorToken;
   cornerRadius?: number;
-  locked?: boolean;
 }
 
 export interface NodeDescription {
@@ -80,7 +79,6 @@ export interface IconNodeData extends NodeDescription {
   height?: number;
   alt?: string;
   name?: string;
-  locked?: boolean;
 }
 
 export interface HtmlNodeData extends NodeVisual, NodeDescription {

@@ -7,7 +7,6 @@ import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { NodeData, NodeStatus, StatusReport } from '../types.ts';
 import { Icon } from '../ui/icon.tsx';
 import { deriveVisualStatus } from './lib/visual-status.ts';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusIconPill } from './status-icon-pill.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -33,9 +32,9 @@ export type StateNodeData = NodeData & {
   onNameChange?: (nodeId: string, name: string) => void;
   onDescriptionChange?: (nodeId: string, description: string) => void;
   /**
-   * When wired (only in edit mode, only for selected + unlocked nodes), the
-   * icon in the header becomes a popover trigger. The picker emits `null` for
-   * the "No icon" tile, which clears the field on disk. Mirrors the same
+   * When wired (only in edit mode, only for selected nodes), the icon in the
+   * header becomes a popover trigger. The picker emits `null` for the
+   * "No icon" tile, which clears the field on disk. Mirrors the same
    * read-only gate used by onNameChange / onDescriptionChange.
    */
   onIconChange?: (nodeId: string, icon: string | null) => void;
@@ -65,10 +64,10 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
   const descEditable = !!data.onDescriptionChange;
   // Icon becomes a popover trigger only when (a) the node is selected so the
   // affordance is scoped to the user's current focus, (b) onIconChange is
-  // wired (edit mode, supported type), (c) the node isn't locked, and (d) an
-  // icon is already present — adding an icon when there is none is the
-  // sidebar's job, so the on-node trigger never appears in the empty state.
-  const iconEditable = !!data.onIconChange && !!selected && !data.locked && !!data.icon;
+  // wired (edit mode, supported type), and (c) an icon is already present —
+  // adding an icon when there is none is the sidebar's job, so the on-node
+  // trigger never appears in the empty state.
+  const iconEditable = !!data.onIconChange && !!selected && !!data.icon;
   // When data.width/height are unset, we own sizing — pin a default width so a
   // long label/description wraps inside the node instead of stretching it.
   // `isResizing` is NOT in this check: on mousedown of the resize handle with
@@ -145,7 +144,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
       onDoubleClick={handleWrapperDoubleClick}
     >
       <ResizeControls
-        visible={!!selected && !!data.onResize && !data.locked}
+        visible={!!selected && !!data.onResize}
         cornerVariant="visible"
         minWidth={MIN_W}
         minHeight={MIN_H}
@@ -153,7 +152,6 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
       <Handle
         type="target"
         position={Position.Top}

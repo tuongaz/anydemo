@@ -140,7 +140,7 @@ function findHeaderPopover(tree: unknown): ReactElementLike | null {
 }
 
 describe('StateNode editable header icon', () => {
-  it('wraps the icon in a popover trigger button when selected + onIconChange wired + not locked', () => {
+  it('wraps the icon in a popover trigger button when selected + onIconChange wired', () => {
     const tree = callStateNode({ icon: 'server', onIconChange: () => {} }, { selected: true });
     const popover = findHeaderPopover(tree);
     expect(popover).not.toBeNull();
@@ -157,15 +157,6 @@ describe('StateNode editable header icon', () => {
     const tree = callStateNode({ icon: 'server', onIconChange: () => {} });
     expect(findHeaderPopover(tree)).toBeNull();
     // Icon still renders, just without the popover wrapper.
-    expect(findHeaderIcon(tree)).not.toBeNull();
-  });
-
-  it('falls back to a static Icon when the node is locked even if selected', () => {
-    const tree = callStateNode(
-      { icon: 'server', onIconChange: () => {}, locked: true },
-      { selected: true },
-    );
-    expect(findHeaderPopover(tree)).toBeNull();
     expect(findHeaderIcon(tree)).not.toBeNull();
   });
 

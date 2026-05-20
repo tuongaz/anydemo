@@ -3,7 +3,7 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip';
 import * as React from 'react';
 import { TooltipContent } from './tooltip.tsx';
 
-// US-019: the side panel's tooltips (Fill, Border, Lock, …) live inside
+// The side panel's tooltips (Fill, Border, …) live inside
 // xyflow's `<Panel>` which is a sibling of the zoom/pan-transformed
 // `.react-flow__viewport`. Radix Tooltip uses Floating UI with `position:
 // fixed`, and a `position:fixed` element becomes anchored to the nearest
@@ -99,8 +99,8 @@ describe('US-019: TooltipContent portal-mounts to document.body', () => {
   });
 
   it('forwards children through the Portal wrapper to Content', () => {
-    const tree = renderTooltipContent({ children: 'Lock' });
+    const tree = renderTooltipContent({ children: 'Border' });
     const content = findElement(tree, (el) => el.type === (TooltipPrimitive.Content as unknown));
-    expect(content?.props.children).toBe('Lock');
+    expect(content?.props.children).toBe('Border');
   });
 });

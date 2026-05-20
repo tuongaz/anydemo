@@ -27,10 +27,6 @@ export const ColorTokenSchema = z.enum([
 
 // Visual fields shared by every node type (functional + decorative). All
 // optional — existing demo files predate them and must continue to parse.
-// US-019: `locked` freezes a node in place (no drag / resize / delete) and
-// renders a lock badge on its top-right corner. Absent → unlocked default.
-// Mirrored explicitly into IconNodeDataSchema below
-// since that variant doesn't spread this base shape.
 const NodeVisualBaseShape = {
   width: z.number().positive().optional(),
   height: z.number().positive().optional(),
@@ -41,7 +37,6 @@ const NodeVisualBaseShape = {
   fontSize: z.number().positive().optional(),
   textColor: ColorTokenSchema.optional(),
   cornerRadius: z.number().min(0).optional(),
-  locked: z.boolean().optional(),
 };
 
 // Consolidated three-field metadata shared by every node variant. `description`
@@ -267,9 +262,6 @@ const IconNodeDataSchema = z.object({
   // `alt` (screen-reader text). Absent / empty → no caption rendered and the
   // node's bounding box is byte-identical to the unlabeled layout.
   name: z.string().optional(),
-  // US-019: lock state mirror of NodeVisualBaseShape.locked. IconNode does
-  // not spread the visual base so we declare it here explicitly.
-  locked: z.boolean().optional(),
   ...NodeDescriptionBaseShape,
 });
 
@@ -658,7 +650,6 @@ const NodeStyleSchema = z
     fontSize: z.number().positive().optional(),
     textColor: ColorTokenSchema.optional(),
     cornerRadius: z.number().min(0).optional(),
-    locked: z.boolean().optional(),
     // imageNode-specific
     borderWidth: z.number().min(1).max(8).optional(),
     // iconNode-specific

@@ -71,8 +71,6 @@ export interface NodePatch {
    * required.
    */
   icon?: string | null;
-  /** Lock state. true freezes the node; false unlocks. */
-  locked?: boolean;
   /** Short body text rendered on the canvas and as light-bold in the sidebar. */
   description?: string;
   /** Long-form sidebar-only body text. */

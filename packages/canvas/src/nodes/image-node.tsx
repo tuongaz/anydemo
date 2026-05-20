@@ -4,7 +4,6 @@ import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { fileUrl } from '../lib/file-url.ts';
 import type { ImageNodeData } from '../types.ts';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
@@ -92,7 +91,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
       data-testid="image-node"
     >
       <ResizeControls
-        visible={!!selected && !!data.onResize && !data.locked}
+        visible={!!selected && !!data.onResize}
         cornerVariant="visible"
         minWidth={MIN_W}
         minHeight={MIN_H}
@@ -100,7 +99,6 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {data.locked ? <LockBadge /> : null}
       <Handle
         type="target"
         position={Position.Top}

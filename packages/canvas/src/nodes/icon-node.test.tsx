@@ -4,7 +4,6 @@ import * as React from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { ICON_REGISTRY } from '../lib/icon-registry.ts';
 import { ICON_FALLBACK_NAME, IconNode } from './icon-node.tsx';
-import { LockBadge } from './lock-badge.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 
 // Bun runs apps/web tests without a DOM, and React Flow's `<Handle>` reads
@@ -438,36 +437,6 @@ describe('IconNode', () => {
     expect(byId.get('r')?.props.position).toBe(Position.Right);
     expect(byId.get('b')?.props.type).toBe('source');
     expect(byId.get('b')?.props.position).toBe(Position.Bottom);
-  });
-
-  it('renders LockBadge and disables ResizeControls when data.locked is true (US-019)', () => {
-    // Unlocked baseline: ResizeControls visible (when selected) and no badge.
-    const unlocked = callIconNode({ icon: 'shopping-cart', onResize: () => {} }, {
-      selected: true,
-    } as Partial<NodeProps>);
-    expect(findAll(unlocked, (el) => el.type === LockBadge)).toHaveLength(0);
-    const unlockedControls = findElement(unlocked, (type) => type === ResizeControls);
-    expect((unlockedControls?.props as { visible: boolean }).visible).toBe(true);
-
-    // Locked: badge renders and ResizeControls switch to invisible/hidden.
-    const locked = callIconNode({ icon: 'shopping-cart', onResize: () => {}, locked: true }, {
-      selected: true,
-    } as Partial<NodeProps>);
-    expect(findAll(locked, (el) => el.type === LockBadge)).toHaveLength(1);
-    const lockedControls = findElement(locked, (type) => type === ResizeControls);
-    expect((lockedControls?.props as { visible: boolean }).visible).toBe(false);
-  });
-
-  it('does NOT render LockBadge when data.locked is absent or false (US-019)', () => {
-    expect(
-      findAll(callIconNode({ icon: 'shopping-cart' }), (el) => el.type === LockBadge),
-    ).toHaveLength(0);
-    expect(
-      findAll(
-        callIconNode({ icon: 'shopping-cart', locked: false }),
-        (el) => el.type === LockBadge,
-      ),
-    ).toHaveLength(0);
   });
 
   it('dblclick is a no-op (and does NOT stop propagation) when onNameChange is absent (US-004)', () => {

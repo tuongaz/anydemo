@@ -337,71 +337,6 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.nodes).toHaveLength(3);
   });
 
-  it('round-trips locked on every node kind (US-019)', () => {
-    const demo = {
-      version: 2 as const,
-      name: 'lockable',
-      nodes: [
-        {
-          id: 'p',
-          type: 'playNode' as const,
-          position: { x: 0, y: 0 },
-          data: {
-            name: 'P',
-            kind: 'svc',
-            stateSource: { kind: 'request' as const },
-            playAction: {
-              kind: 'script' as const,
-              interpreter: 'bun',
-              scriptPath: 'scripts/play.ts',
-            },
-            locked: true,
-          },
-        },
-        {
-          id: 's',
-          type: 'stateNode' as const,
-          position: { x: 0, y: 100 },
-          data: {
-            name: 'S',
-            kind: 'worker',
-            stateSource: { kind: 'event' as const },
-            locked: false,
-          },
-        },
-        {
-          id: 'shape',
-          type: 'shapeNode' as const,
-          position: { x: 0, y: 200 },
-          data: { shape: 'rectangle' as const, locked: true },
-        },
-        {
-          id: 'img',
-          type: 'imageNode' as const,
-          position: { x: 0, y: 300 },
-          data: { path: 'assets/locked.png', locked: true },
-        },
-        {
-          id: 'icon',
-          type: 'iconNode' as const,
-          position: { x: 0, y: 400 },
-          data: { icon: 'lock', locked: true },
-        },
-      ],
-      connectors: [],
-    };
-    const result = ResolvedFlowSchema.safeParse(demo);
-    if (!result.success) {
-      throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-    }
-    const byId = new Map(result.data.nodes.map((n) => [n.id, n]));
-    expect((byId.get('p')?.data as { locked?: boolean }).locked).toBe(true);
-    expect((byId.get('s')?.data as { locked?: boolean }).locked).toBe(false);
-    expect((byId.get('shape')?.data as { locked?: boolean }).locked).toBe(true);
-    expect((byId.get('img')?.data as { locked?: boolean }).locked).toBe(true);
-    expect((byId.get('icon')?.data as { locked?: boolean }).locked).toBe(true);
-  });
-
   it('accepts nodes that omit the new visual fields entirely (backwards compatible)', () => {
     const demo = {
       version: 2 as const,
@@ -1667,7 +1602,6 @@ describe('ResolvedFlowSchema', () => {
               borderStyle: 'dashed' as const,
               fontSize: 14,
               cornerRadius: 8,
-              locked: true,
             },
           },
         ],
@@ -1689,7 +1623,6 @@ describe('ResolvedFlowSchema', () => {
       expect(node.data.borderStyle).toBe('dashed');
       expect(node.data.fontSize).toBe(14);
       expect(node.data.cornerRadius).toBe(8);
-      expect(node.data.locked).toBe(true);
     });
 
     it('round-trips description / detail on an htmlNode', () => {
@@ -2384,7 +2317,6 @@ describe('StyleSchema', () => {
           height: 50,
           borderColor: 'blue',
           fontSize: 14,
-          locked: false,
         },
       },
     });

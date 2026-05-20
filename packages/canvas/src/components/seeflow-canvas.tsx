@@ -674,14 +674,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onUnpinEndpoint?: (connectorId: string, kind: 'source' | 'target') => void;
   /**
-   * US-019: flip the lock state for a batch of nodes as one undo entry.
-   * Wiring this enables the right-click "Lock"/"Unlock" menu item. The
-   * parent's existing mixed-selection convention applies: if ANY id is
-   * unlocked the batch locks all; only when ALL are already locked does
-   * the batch unlock. Absent → the menu item is hidden.
-   */
-  onToggleNodeLock?: (nodeIds: string[]) => void;
-  /**
    * US-003: bottom-toolbar draw-mode state, lifted to the parent so the page-
    * level keyboard handler (`resolveToolShortcut` in demo-view.tsx) and the
    * future command palette can drive tool switches without the canvas owning
@@ -1714,7 +1706,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onRequestIconReplace,
     onPinEndpoint,
     onUnpinEndpoint,
-    onToggleNodeLock,
     activeShape,
     onSelectShape,
     disableSidebar,
@@ -2396,18 +2387,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onRequestIconReplace(id);
   }, [onRequestIconReplace]);
 
-  // US-019: flip the lock state from the right-click menu. Single-node
-  // right-click acts on the right-clicked id; multi-selection right-click
-  // (contextNodeIdRef cleared by `onWrapperContextMenuCapture`) acts on the
-  // whole selection — same as the old Cmd/Ctrl+Shift+L shortcut used to.
-  const handleToggleLockPick = useCallback(() => {
-    if (!onToggleNodeLock) return;
-    const single = contextNodeIdRef.current;
-    const ids = single ? [single] : [...selectedNodeIds];
-    if (ids.length === 0) return;
-    onToggleNodeLock(ids);
-  }, [onToggleNodeLock, selectedNodeIds]);
-
   // US-007: right-click on a visible endpoint dot opens the canvas's
   // context menu in "endpoint mode". The dot calls into this from its own
   // onContextMenu, which we route through edge.data so editable-edge can
@@ -2466,18 +2445,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // is mirrored back via onSelectionChange so the parent's arrays remain the
   // source of truth — sourceNodes/rfEdges are recomputed off these sets.
   const selectedNodeIdSet = useMemo(() => new Set(selectedNodeIds), [selectedNodeIds]);
-  // US-013: how many of the currently-selected nodes are groups (eligible
-  // US-019: lock-aware predicates the right-click menu consumes. A single
-  // node right-click checks the right-clicked id; a multi-selection
-  // right-click checks every selected id and switches the menu label:
-  // "Lock" when ANY is unlocked, "Unlock" only when ALL are locked.
-  const lockedNodeIdSet = useMemo(() => {
-    const s = new Set<string>();
-    for (const n of nodes) {
-      if ((n.data as { locked?: boolean }).locked === true) s.add(n.id);
-    }
-    return s;
-  }, [nodes]);
   const selectedConnectorIdSet = useMemo(
     () => new Set(selectedConnectorIds),
     [selectedConnectorIds],
@@ -2485,11 +2452,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
   // US-007: payload for the multi-select bounding-box resize overlay. Reduces
   // the canvas's `nodes` prop down to the minimum shape `<SelectionResizeOverlay>`
-  // needs (id + position + parentId + width/height/locked) and applies any
-  // optimistic position/data overrides so the overlay rect tracks the live
-  // canvas, not the server snapshot. The overlay decides presence internally
-  // (≥ 2 selected AND not all sharing a single parent) so we pass through
-  // unconditionally — empty / ineligible selections render nothing.
+  // needs (id + position + parentId + width/height) and applies any optimistic
+  // position/data overrides so the overlay rect tracks the live canvas, not the
+  // server snapshot. The overlay decides presence internally (≥ 2 selected AND
+  // not all sharing a single parent) so we pass through unconditionally —
+  // empty / ineligible selections render nothing.
   const selectionOverlayNodes = useMemo<OverlayInputNode[]>(() => {
     if (selectedNodeIds.length < 2) return [];
     const overrides = nodeOverrides;
@@ -2501,16 +2468,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const oData = (override?.data ?? {}) as {
         width?: number;
         height?: number;
-        locked?: boolean;
       };
-      const bData = base.data as { width?: number; height?: number; locked?: boolean };
+      const bData = base.data as { width?: number; height?: number };
       overlayInputs.push({
         id,
         position: override?.position ?? base.position,
         data: {
           width: oData.width ?? bData.width,
           height: oData.height ?? bData.height,
-          locked: oData.locked ?? bData.locked,
         },
       });
     }
@@ -2624,12 +2589,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // xyflow's reconnect path snaps via the always-present `.source`/
       // `.target` DOM classes, not the Handle's `isConnectable` prop.
       if (!selectedNodeIdSet.has(merged.id)) node.connectable = false;
-      // US-019: locked nodes cannot be dragged. xyflow's per-node
-      // `draggable: false` overrides the global `nodesDraggable` so the
-      // node body (and any group children) ignore pointer-down → drag
-      // gestures. Selection, right-click, and hover affordances keep
-      // working — only the drag is gated.
-      if ((merged.data as { locked?: boolean }).locked === true) node.draggable = false;
       return node;
     };
     const fromServer = nodes.map((n) => buildNode(mergeNodeOverride(n, nodeOverrides?.[n.id])));
@@ -4451,43 +4410,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     </ContextMenuItem>
                   </>
                 ) : null}
-                {contextOnNode && onReorderNode && (onToggleNodeLock || onDeleteNode) ? (
-                  <ContextMenuSeparator />
-                ) : null}
-                {contextOnNode && onToggleNodeLock
-                  ? (() => {
-                      // Label echoes the keyboard-shortcut's mixed-selection rule
-                      // (see onToggleNodeLock JSDoc): "Unlock" only when EVERY
-                      // target id is already locked; otherwise "Lock".
-                      const single = contextNodeIdRef.current;
-                      const targetIds = single ? [single] : selectedNodeIds;
-                      const label =
-                        targetIds.length > 0 && targetIds.every((id) => lockedNodeIdSet.has(id))
-                          ? 'Unlock'
-                          : 'Lock';
-                      return (
-                        <ContextMenuItem
-                          data-testid="node-context-menu-toggle-lock"
-                          onSelect={handleToggleLockPick}
-                          disabled={targetIds.length === 0}
-                        >
-                          {label}
-                        </ContextMenuItem>
-                      );
-                    })()
-                  : null}
-                {contextOnNode && onToggleNodeLock && onDeleteNode ? (
-                  <ContextMenuSeparator />
-                ) : null}
+                {contextOnNode && onReorderNode && onDeleteNode ? <ContextMenuSeparator /> : null}
                 {contextOnNode && onDeleteNode ? (
                   <ContextMenuItem
                     data-testid="node-context-menu-delete"
                     onSelect={handleDeletePick}
-                    disabled={
-                      contextNodeIdRef.current
-                        ? lockedNodeIdSet.has(contextNodeIdRef.current)
-                        : false
-                    }
                   >
                     Delete
                   </ContextMenuItem>

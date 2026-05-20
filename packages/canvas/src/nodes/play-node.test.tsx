@@ -319,7 +319,7 @@ function findHeaderPopover(tree: unknown): ReactElementLike | null {
 }
 
 describe('PlayNode editable header icon', () => {
-  it('wraps the icon in a popover trigger button when selected + onIconChange wired + not locked', () => {
+  it('wraps the icon in a popover trigger button when selected + onIconChange wired', () => {
     const tree = callPlayNode({ icon: 'database', onIconChange: () => {} }, { selected: true });
     const popover = findHeaderPopover(tree);
     expect(popover).not.toBeNull();
@@ -334,15 +334,6 @@ describe('PlayNode editable header icon', () => {
 
   it('falls back to a static Icon when the node is not selected', () => {
     const tree = callPlayNode({ icon: 'database', onIconChange: () => {} });
-    expect(findHeaderPopover(tree)).toBeNull();
-    expect(findHeaderIcon(tree)).not.toBeNull();
-  });
-
-  it('falls back to a static Icon when the node is locked even if selected', () => {
-    const tree = callPlayNode(
-      { icon: 'database', onIconChange: () => {}, locked: true },
-      { selected: true },
-    );
     expect(findHeaderPopover(tree)).toBeNull();
     expect(findHeaderIcon(tree)).not.toBeNull();
   });

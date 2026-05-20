@@ -4,7 +4,6 @@ export { ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, IconNode } from './icon-node.tsx
 export type { IconNodeRuntimeData, IconNodeType } from './icon-node.tsx';
 export { IMAGE_DEFAULT_SIZE, ImageNode } from './image-node.tsx';
 export type { ImageNodeRuntimeData, ImageNodeType } from './image-node.tsx';
-export { LockBadge } from './lock-badge.tsx';
 export { PlaceholderCard } from './placeholder-card.tsx';
 export { PlayNode } from './play-node.tsx';
 export type { PlayNodeData, PlayNodeType } from './play-node.tsx';

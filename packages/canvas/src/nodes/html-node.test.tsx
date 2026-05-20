@@ -488,13 +488,6 @@ describe('HtmlNode fit-to-content button', () => {
     expect(findFitButton(tree)).toBeNull();
   });
 
-  it('is hidden when locked', () => {
-    const tree = callHtmlNode({ ...userSizedData, onFitToContent: () => {}, locked: true }, {
-      selected: true,
-    } as Partial<NodeProps>);
-    expect(findFitButton(tree)).toBeNull();
-  });
-
   it('is hidden when autoSize is already true', () => {
     const tree = callHtmlNode({ autoSize: true, onFitToContent: () => {} }, {
       selected: true,
@@ -507,7 +500,7 @@ describe('HtmlNode fit-to-content button', () => {
     expect(findFitButton(tree)).toBeNull();
   });
 
-  it('is visible when selected + unlocked + user-sized + callback wired', () => {
+  it('is visible when selected + user-sized + callback wired', () => {
     const tree = callHtmlNode({ ...userSizedData, onFitToContent: () => {} }, {
       selected: true,
     } as Partial<NodeProps>);

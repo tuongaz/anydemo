@@ -832,64 +832,6 @@ export function DemoView({
     [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
-  // US-019: toggle the lock state of one or more nodes as a single undo
-  // entry. Locking flips data.locked → true (which disables drag/resize/
-  // delete and shows the lock badge); unlocking flips it back to false.
-  // Mixed selections: if ANY node is unlocked, lock all; if ALL are locked,
-  // unlock all. Mirrors onStyleNodes' batch pattern so one Cmd+Z reverts the
-  // whole batch.
-  const onToggleNodeLock = useCallback(
-    (nodeIds: string[]) => {
-      if (!flowId || !adapter) return;
-      if (nodeIds.length === 0) return;
-      const targets = nodeIds
-        .map((id) => {
-          const node = demoNodes?.find((n) => n.id === id);
-          if (!node) return null;
-          const data = node.data as { locked?: boolean };
-          return { id, prev: data.locked === true };
-        })
-        .filter((t): t is { id: string; prev: boolean } => t !== null);
-      if (targets.length === 0) return;
-      // Mixed-selection convention: lock-if-any-unlocked, otherwise unlock-all.
-      const nextLocked = targets.some((t) => !t.prev);
-      const changed = targets.filter((t) => t.prev !== nextLocked);
-      if (changed.length === 0) return;
-      for (const t of changed) {
-        setNodeOverride(t.id, { data: { locked: nextLocked } } as Partial<FlowNode>);
-      }
-      setEditError(null);
-      markMutation();
-      pushUndo({
-        do: async () => {
-          await Promise.allSettled(
-            changed.map((t) => adapter.updateNode(t.id, { locked: nextLocked })),
-          );
-        },
-        undo: async () => {
-          await Promise.allSettled(
-            changed.map((t) => adapter.updateNode(t.id, { locked: t.prev })),
-          );
-        },
-      });
-      Promise.all(
-        changed.map(async (t) => {
-          try {
-            await adapter.updateNode(t.id, { locked: nextLocked });
-            return null;
-          } catch (err) {
-            dropNodeOverride(t.id);
-            return err instanceof Error ? err.message : String(err);
-          }
-        }),
-      ).then((errs) => {
-        const first = errs.find((e): e is string => e !== null);
-        if (first) setEditError(first);
-      });
-    },
-    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
-  );
-
   // Style-tab edit on a connector: color, edge style, direction. Cast through
   // Partial<Connector> because the discriminated union over `kind` rejects
   // bare partials at the type level (we never change kind here, so the cast
@@ -961,10 +903,6 @@ export function DemoView({
       if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
-      // US-019: locked nodes opt out of every delete path. Silent no-op —
-      // the right-click menu also disables the Delete item for a locked
-      // node so this branch only fires from a stale callback.
-      if ((node.data as { locked?: boolean }).locked === true) return;
       // Snapshot the node + every cascaded connector BEFORE the delete API
       // call, so undo can recreate them all (preserving original ids and
       // adjacency order). The server cascades via the same source/target
@@ -1118,20 +1056,8 @@ export function DemoView({
     (nodeIds: string[], connectorIds: string[]) => {
       if (!flowId || !adapter) return;
       if (nodeIds.length === 0 && connectorIds.length === 0) return;
-      const expandedNodeIds = nodeIds;
-      // US-019: skip locked nodes silently. Locked nodes opt out of every
-      // delete path (right-click, Delete key, batch). Their cascaded
-      // connectors are still pruned only if the OTHER endpoint is also
-      // going away, so a connector between an unlocked doomed node and a
-      // locked survivor disappears with the unlocked node as usual.
-      const lockedNodeIdSet = new Set(
-        (demoNodes ?? [])
-          .filter((n) => (n.data as { locked?: boolean }).locked === true)
-          .map((n) => n.id),
-      );
-      const filteredNodeIds = expandedNodeIds.filter((id) => !lockedNodeIdSet.has(id));
-      const cascadingNodeIdSet = new Set(filteredNodeIds);
-      const nodeSnapshots = filteredNodeIds
+      const cascadingNodeIdSet = new Set(nodeIds);
+      const nodeSnapshots = nodeIds
         .map((id) => demoNodes?.find((n) => n.id === id))
         .filter((n): n is FlowNode => !!n);
       // Cascaded connectors: any connector whose source/target is in the
@@ -1142,15 +1068,12 @@ export function DemoView({
       );
       // Explicit connector deletes: only ids NOT covered by a node cascade.
       // Otherwise the duplicate delete produces a server-side 404 for the
-      // connector that's already gone. US-019: also skip connectors whose
-      // BOTH endpoints are locked nodes — same "silent skip" policy as the
-      // node filter above.
+      // connector that's already gone.
       const cascadedConnIdSet = new Set(cascadedConnectors.map((c) => c.id));
       const explicitConnSnapshots = connectorIds
         .map((id) => demoConnectors?.find((c) => c.id === id))
         .filter((c): c is Connector => !!c)
-        .filter((c) => !cascadedConnIdSet.has(c.id))
-        .filter((c) => !(lockedNodeIdSet.has(c.source) && lockedNodeIdSet.has(c.target)));
+        .filter((c) => !cascadedConnIdSet.has(c.id));
       if (
         nodeSnapshots.length === 0 &&
         cascadedConnectors.length === 0 &&
@@ -3068,7 +2991,6 @@ export function DemoView({
           onPasteAt={onPasteNodes}
           onCopySelection={flowId ? onCopyNodes : undefined}
           onPasteSelection={flowId ? () => onPasteNodes(null) : undefined}
-          onToggleNodeLock={flowId ? onToggleNodeLock : undefined}
           hasClipboard={hasClipboard}
           selectedNodes={selectedNodes}
           selectedConnectors={selectedConnectorsList}

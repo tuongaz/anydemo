@@ -1266,18 +1266,13 @@ describe('SeeflowCanvas', () => {
       id: string,
       pos: { x: number; y: number },
       dims: { width: number; height: number },
-      extra: { locked?: boolean } = {},
     ): FlowNode {
-      const node: FlowNode = {
+      return {
         id,
         type: 'shapeNode',
         position: pos,
         data: { name: id, shape: 'rectangle', width: dims.width, height: dims.height },
       };
-      if (extra.locked !== undefined) {
-        (node.data as { locked?: boolean }).locked = extra.locked;
-      }
-      return node;
     }
 
     function findOverlay(props: LegacyOverrides): {
@@ -1302,7 +1297,7 @@ describe('SeeflowCanvas', () => {
       const selected = overlay.props.selectedNodes as ReadonlyArray<{
         id: string;
         position: { x: number; y: number };
-        data: { width?: number; height?: number; locked?: boolean };
+        data: { width?: number; height?: number };
       }>;
       expect(selected.map((n) => n.id)).toEqual(['a', 'b']);
       expect(selected[0]?.data.width).toBe(50);
@@ -1353,7 +1348,7 @@ describe('SeeflowCanvas', () => {
         nodeOverrides: {
           a: {
             position: { x: 25, y: 30 },
-            data: { width: 70, height: 70, locked: true },
+            data: { width: 70, height: 70 },
           } as Partial<FlowNode>,
         },
       });
@@ -1361,11 +1356,11 @@ describe('SeeflowCanvas', () => {
       const selected = overlay.props.selectedNodes as ReadonlyArray<{
         id: string;
         position: { x: number; y: number };
-        data: { width?: number; height?: number; locked?: boolean };
+        data: { width?: number; height?: number };
       }>;
       const a = selected.find((n) => n.id === 'a');
       expect(a?.position).toEqual({ x: 25, y: 30 });
-      expect(a?.data).toEqual({ width: 70, height: 70, locked: true });
+      expect(a?.data).toEqual({ width: 70, height: 70 });
     });
   });
 
@@ -1640,166 +1635,6 @@ describe('SeeflowCanvas', () => {
         onCopySelection: (ids) => copyCalls.push(ids),
       });
       expect(copyCalls).toEqual([['n-1']]);
-    });
-  });
-
-  describe('US-018: right-click on a locked node opens the node context menu', () => {
-    // The bug fix lives in lock-badge.tsx (the badge dropped its
-    // `pointer-events-none` so contextmenu events on the visible badge area
-    // bubble through the DOM to the xyflow node wrapper instead of falling
-    // through to the pane). The canvas-level tests below pin the wiring +
-    // menu render contract so a future change can't silently break it.
-    const findByTestId = (tree: unknown, id: string) =>
-      findElement(tree, (el) => (el.props as { 'data-testid'?: unknown })['data-testid'] === id);
-
-    function lockedShape(id: string): FlowNode {
-      return {
-        id,
-        type: 'shapeNode',
-        position: { x: 0, y: 0 },
-        data: { name: id, shape: 'rectangle', locked: true },
-      };
-    }
-
-    it('wires onNodeContextMenu (NOT just onPaneContextMenu) when context callbacks are present', () => {
-      // The contextEnabled gate requires at least one context-menu callback
-      // before the canvas registers either handler on the ReactFlow root. With
-      // a callback wired, BOTH handlers must be present — without
-      // onNodeContextMenu, right-clicks on any node fall through to the pane
-      // handler regardless of the LockBadge pointer-events fix.
-      const tree = callSeeflowCanvas({
-        nodes: [lockedShape('a')],
-        selectedNodeIds: ['a'],
-        onPasteAt: () => {},
-        onCopyNode: () => {},
-      });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found');
-      expect(typeof rf.props.onNodeContextMenu).toBe('function');
-      expect(typeof rf.props.onPaneContextMenu).toBe('function');
-    });
-
-    it('onNodeContextMenu calls preventDefault and does not throw for a locked node', () => {
-      // Synthetic invocation of xyflow's per-node contextmenu callback with a
-      // locked-node payload. The handler must e.preventDefault() to suppress
-      // the browser's native menu and set up the Radix trigger state.
-      const tree = callSeeflowCanvas({
-        nodes: [lockedShape('a')],
-        selectedNodeIds: ['a'],
-        onPasteAt: () => {},
-        onCopyNode: () => {},
-      });
-      const rf = findElement(tree, (el) => el.type === ReactFlow);
-      if (!rf) throw new Error('ReactFlow element not found');
-      const onNodeContextMenu = rf.props.onNodeContextMenu as (
-        e: { preventDefault: () => void; clientX: number; clientY: number },
-        node: { id: string; type: string },
-      ) => void;
-      let prevented = false;
-      const event = {
-        preventDefault: () => {
-          prevented = true;
-        },
-        clientX: 120,
-        clientY: 80,
-      };
-      onNodeContextMenu(event, { id: 'a', type: 'shapeNode' });
-      expect(prevented).toBe(true);
-    });
-
-    it('Delete menu item is disabled when the right-clicked node id is locked', () => {
-      // Regression: locked nodes must not be deletable via the menu's Delete
-      // item. The item still renders (so the user sees the affordance), but is
-      // disabled so the click is a no-op. handleDeletePick reads
-      // contextNodeIdRef which the test populates via refSink — slot mapping
-      // for refs is order-dependent on declaration site, so we capture every
-      // ref and find the one initialised with null + later set to a node id.
-      const refSink: { current: unknown }[] = [];
-      const useStateOverrides: unknown[] = [];
-      // activeGroupId removed; contextMenuPos now at slot 4, contextOnNode at slot 5.
-      useStateOverrides[4] = { x: 100, y: 100 };
-      useStateOverrides[5] = true;
-      const tree = callSeeflowCanvas(
-        {
-          nodes: [lockedShape('a')],
-          selectedNodeIds: ['a'],
-          onDeleteNode: () => {},
-          onPasteAt: () => {},
-        },
-        { useStateOverrides, refSink },
-      );
-      // contextNodeIdRef is the only useRef<string | null>(null) in the
-      // handler stack — find it and set it to the locked node id so the
-      // Delete-disabled gate fires.
-      for (const ref of refSink) {
-        if (ref.current === null) {
-          ref.current = 'a';
-        }
-      }
-      // Re-render with the populated ref so the gate sees the locked id.
-      const useStateOverrides2: unknown[] = [];
-      useStateOverrides2[4] = { x: 100, y: 100 };
-      useStateOverrides2[5] = true;
-      const refSink2: { current: unknown }[] = [];
-      const tree2 = callSeeflowCanvas(
-        {
-          nodes: [lockedShape('a')],
-          selectedNodeIds: ['a'],
-          onDeleteNode: () => {},
-          onPasteAt: () => {},
-        },
-        { useStateOverrides: useStateOverrides2, refSink: refSink2 },
-      );
-      // Inject the locked id into every ref so contextNodeIdRef.current === 'a'
-      // by the time the menu items render. The refs that don't match the
-      // expected shape just get an ignored mutation.
-      for (const ref of refSink2) {
-        if (ref.current === null) ref.current = 'a';
-      }
-      // Note: in the hook-shim, refSink populates DURING render — we can't
-      // mutate it before render to influence THIS render. Instead, the test
-      // exercises the rendered tree from tree2; the gate read `contextNodeIdRef.current`
-      // at render time = null (initial). To assert the disabled behavior we
-      // rely on the runtime path: the disabled prop is computed from the
-      // ref at render time, so without a mid-render mutation we can't pin
-      // "disabled === true" here. Instead, pin the structural invariant: the
-      // Delete item carries a `disabled` prop sourced from lockedNodeIdSet.
-      const deleteItem = findByTestId(tree, 'node-context-menu-delete');
-      expect(deleteItem).not.toBeNull();
-      // The prop is a computed boolean read from contextNodeIdRef — assert it
-      // exists in the props shape (typeof) so future refactors that drop the
-      // disabled gate trip this test.
-      expect(typeof deleteItem?.props.disabled).toBe('boolean');
-      // Silence unused-var lints — the second render path is documentary.
-      expect(tree2).toBeDefined();
-    });
-
-    it('with contextOnNode false (pane right-click), the menu only shows Paste — NOT node items', () => {
-      // Regression baseline: this is the BUG-MODE menu state — what users
-      // currently see when right-clicking a locked node (because of the
-      // LockBadge pointer-events-none issue, contextOnNode stays false).
-      // After the fix, contextOnNode is true for locked-node right-clicks so
-      // Copy/Unlock/Delete all render. The pane-right-click path (which
-      // intentionally produces this menu) is unchanged.
-      const useStateOverrides: unknown[] = [];
-      useStateOverrides[4] = { x: 100, y: 100 };
-      useStateOverrides[5] = false; // contextOnNode: false (pane-mode)
-      const tree = callSeeflowCanvas(
-        {
-          nodes: [lockedShape('a')],
-          selectedNodeIds: ['a'],
-          onCopyNode: () => {},
-          onDeleteNode: () => {},
-          onPasteAt: () => {},
-        },
-        { useStateOverrides },
-      );
-      // Paste renders (pane menu has Paste).
-      expect(findByTestId(tree, 'node-context-menu-paste')).not.toBeNull();
-      // Node-level items are HIDDEN — Copy and Delete are both gated on
-      // contextOnNode.
-      expect(findByTestId(tree, 'node-context-menu-copy')).toBeNull();
-      expect(findByTestId(tree, 'node-context-menu-delete')).toBeNull();
     });
   });
 

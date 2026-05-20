@@ -105,9 +105,6 @@ export const NodePatchBodySchema = z
     // clears the field (mergeNodeUpdates strips the key from disk) — mirrors
     // the empty-string clear convention used for description / detail.
     icon: z.string().min(1).nullable().optional(),
-    // US-019: lock state. Lands at data.locked; persists across save/reload.
-    // Absent → unlocked default (no badge, all gestures work).
-    locked: z.boolean().optional(),
     // Three-field consolidation: free-text metadata on every node variant.
     // Empty string on `description` or `detail` is the documented clear-on-
     // serialize signal — `mergeNodeUpdates` strips the key from disk.
@@ -139,7 +136,6 @@ const NODE_DATA_PATCH_KEYS = [
   'strokeWidth',
   'alt',
   'icon',
-  'locked',
   'description',
   'detail',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
