@@ -35,10 +35,16 @@ export default defineConfig(({ command }) => {
     server: {
       port: 5173,
       strictPort: true,
-      host: 'localhost',
+      // Bind to all interfaces so Tailscale peers can reach Vite for HMR +
+      // asset requests. Hono (on 4321) proxies the page itself, but the HMR
+      // client connects to Vite directly.
+      host: true,
       hmr: {
-        host: 'localhost',
-        port: 5173,
+        // No `host`: Vite's HMR client defaults to location.hostname, so a
+        // page loaded over Tailscale dials ws://<tailscale-host>:5173 instead
+        // of ws://localhost:5173. clientPort pins the dialed port to 5173 so
+        // the page's origin port (4321) doesn't leak into the WS URL.
+        clientPort: 5173,
         protocol: 'ws',
       },
     },
