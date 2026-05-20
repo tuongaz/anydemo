@@ -53,7 +53,7 @@ type EditField = 'name' | 'description' | null;
 
 const MIN_W = 100;
 const MIN_H = 44;
-const DEFAULT_W = 200;
+const DEFAULT_W = 250;
 
 function PlayButton({
   visualStatus,
@@ -278,7 +278,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-2 sf:py-2"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-3 sf:py-3"
         data-testid="node-header"
       >
         {data.icon ? (
@@ -374,7 +374,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
         </div>
       </div>
       <div
-        className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1"
+        className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2"
         data-testid="node-content"
         data-resizing={isResizing ? 'true' : undefined}
       >
@@ -404,7 +404,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
       </div>
       {data.statusReport && (
         <div
-          className="sf:flex sf:items-center sf:px-2 sf:pb-1"
+          className="sf:flex sf:items-center sf:px-3 sf:pb-2"
           data-testid="play-node-status-badge"
         >
           <StatusBadge

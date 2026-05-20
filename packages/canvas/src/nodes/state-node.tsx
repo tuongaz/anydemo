@@ -49,7 +49,7 @@ type EditField = 'name' | 'description' | null;
 // React Flow so the user can't shrink the node below its readable content.
 const MIN_W = 100;
 const MIN_H = 44;
-const DEFAULT_W = 200;
+const DEFAULT_W = 250;
 
 function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNodeType>) {
   const status = data.status ?? 'idle';
@@ -169,7 +169,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-2 sf:py-2"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-3 sf:py-3"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="node-header"
       >
@@ -268,7 +268,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
         </div>
       </div>
       <div
-        className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1"
+        className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2"
         data-testid="node-content"
         // While resizing, NodeResizer mutates wrapper dims live; we don't need
         // a special class but suppress noise from the linter about isResizing.

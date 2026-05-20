@@ -63,8 +63,8 @@ describe('buildNewImageData', () => {
 });
 
 describe('constants', () => {
-  it('NEW_NODE_BORDER_WIDTH = 3', () => {
-    expect(NEW_NODE_BORDER_WIDTH).toBe(3);
+  it('NEW_NODE_BORDER_WIDTH = 1', () => {
+    expect(NEW_NODE_BORDER_WIDTH).toBe(1);
   });
 
   it('NEW_NODE_FONT_SIZE = 17', () => {

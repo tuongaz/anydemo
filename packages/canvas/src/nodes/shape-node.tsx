@@ -421,7 +421,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
   const headerBodyContent = (
     <>
       <div
-        className="sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-2 sf:py-1.5"
+        className="sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-3 sf:py-2.5"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="shape-node-header"
       >
@@ -455,7 +455,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
         </div>
       </div>
       <div
-        className="sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1.5"
+        className="sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2.5"
         data-testid="shape-node-body"
       >
         {editing === 'description' && descEditable ? (

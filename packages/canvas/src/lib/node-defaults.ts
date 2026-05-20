@@ -26,7 +26,7 @@ import type { NodeStylePatch } from '../components/style-strip.tsx';
 import type { ShapeKind } from '../types.ts';
 
 /** Default border thickness for new nodes. */
-export const NEW_NODE_BORDER_WIDTH = 3;
+export const NEW_NODE_BORDER_WIDTH = 1;
 /** Default label font size for new nodes. */
 export const NEW_NODE_FONT_SIZE = 17;
 
