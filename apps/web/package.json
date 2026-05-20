@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.2",
-    "@seeflow/canvas": "workspace:*",
+    "@seeflow/canvas": "file:../../packages/canvas",
     "@xyflow/react": "^12.3.5",
     "fflate": "^0.8.2",
     "html-to-image": "^1.11.13",
