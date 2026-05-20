@@ -1174,6 +1174,12 @@ type HtmlNodeRuntimeData = HtmlNodeData & {
         x: number;
         y: number;
     }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
     setResizing?: (on: boolean) => void;
     /**
      * US-014: project id injected into every node's runtime data by demo-canvas
@@ -1206,6 +1212,12 @@ type IconNodeRuntimeData = IconNodeData & {
         x: number;
         y: number;
     }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
     setResizing?: (on: boolean) => void;
     onNameChange?: (nodeId: string, name: string) => void;
 } & Record<string, unknown>;
@@ -1219,6 +1231,12 @@ declare const IconNode: React.MemoExoticComponent<typeof IconNodeImpl>;
 
 type ImageNodeRuntimeData = ImageNodeData & {
     onResize?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
         width: number;
         height: number;
         x: number;
@@ -1299,6 +1317,12 @@ type PlayNodeData = NodeData & {
         x: number;
         y: number;
     }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
     setResizing?: (on: boolean) => void;
     onNameChange?: (nodeId: string, name: string) => void;
     onDescriptionChange?: (nodeId: string, description: string) => void;
@@ -1348,6 +1372,12 @@ declare function ResizeControls({ visible, minWidth, minHeight, onResizeStart, o
 
 type ShapeNodeRuntimeData = ShapeNodeData & {
     onResize?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
         width: number;
         height: number;
         x: number;
@@ -1444,6 +1474,12 @@ type StateNodeData = NodeData & {
         x: number;
         y: number;
     }) => void;
+    onResizeEnd?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
     setResizing?: (on: boolean) => void;
     onNameChange?: (nodeId: string, name: string) => void;
     onDescriptionChange?: (nodeId: string, description: string) => void;
@@ -1535,6 +1571,14 @@ declare function StatusIconPill({ visualStatus, summary, 'data-testid': testId, 
  */
 declare function useResizeGesture(args: {
     onResize?: (dims: ResizeParams) => void;
+    /**
+     * End-only callback. Fires once at mouse release with the FINAL dims, when
+     * actual movement happened (zero-movement click is guarded out). Use this
+     * for persistence (backend PATCH + undo push) so a single drag produces one
+     * round-trip instead of one per tick. Fires AFTER the back-compat end-fired
+     * `onResize` call below, BEFORE `onResizeFinal`.
+     */
+    onResizeEnd?: (dims: ResizeParams) => void;
     /**
      * End-only callback. Fires once at mouse release with the FINAL dims and the
      * ORIGINAL dims captured at resize-start. Use this for batched mutations
@@ -2341,12 +2385,31 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
         };
     }[]) => void;
     /**
-     * Fired once per resize-stop with the node's final dimensions AND position.
+     * Fired on EVERY resize tick during the drag (per-tick). Use this for
+     * optimistic local updates (e.g. setNodeOverride) that need to keep the
+     * dragged dims in sync mid-gesture. Do NOT call the backend or push undo
+     * entries from here — those belong in `onNodeResizeEnd` so one drag
+     * produces one PATCH instead of one per tick.
+     *
      * Wiring this enables NodeResizer's resize handles inside each custom node.
      * US-012: top/left handle drags shift x/y so the opposite corner stays
      * anchored — persistence must store both the new size and new position.
      */
     onNodeResize?: (nodeId: string, dims: {
+        width: number;
+        height: number;
+        x: number;
+        y: number;
+    }) => void;
+    /**
+     * Fired ONCE at resize-stop (mouse release) with the final dimensions AND
+     * position, only when the gesture actually moved (a click on the handle
+     * with no movement is guarded out inside `useResizeGesture`). Host should
+     * do persistence here: backend PATCH + undo push. Pairs with `onNodeResize`
+     * (per-tick optimistic) — together they give live visual feedback during
+     * the drag with a single round-trip at the end.
+     */
+    onNodeResizeEnd?: (nodeId: string, dims: {
         width: number;
         height: number;
         x: number;

@@ -689,15 +689,19 @@ function ResizeControls({
 // src/nodes/use-resize-gesture.ts
 import { useCallback, useEffect as useEffect2, useRef as useRef2, useState as useState2 } from "react";
 function useResizeGesture(args) {
-  const { onResize, onResizeFinal, setResizing } = args;
+  const { onResize, onResizeEnd: userOnResizeEnd, onResizeFinal, setResizing } = args;
   const [isResizing, setIsResizing] = useState2(false);
   const startRef = useRef2(null);
   const onResizeRef = useRef2(onResize);
+  const userOnResizeEndRef = useRef2(userOnResizeEnd);
   const onResizeFinalRef = useRef2(onResizeFinal);
   const setResizingRef = useRef2(setResizing);
   useEffect2(() => {
     onResizeRef.current = onResize;
   }, [onResize]);
+  useEffect2(() => {
+    userOnResizeEndRef.current = userOnResizeEnd;
+  }, [userOnResizeEnd]);
   useEffect2(() => {
     onResizeFinalRef.current = onResizeFinal;
   }, [onResizeFinal]);
@@ -726,6 +730,12 @@ function useResizeGesture(args) {
       return;
     }
     onResizeRef.current?.({
+      x: params.x,
+      y: params.y,
+      width: params.width,
+      height: params.height
+    });
+    userOnResizeEndRef.current?.({
       x: params.x,
       y: params.y,
       width: params.width,
@@ -760,6 +770,7 @@ var WARNED_NAMES = /* @__PURE__ */ new Set();
 function IconNodeImpl({ id, data, selected, isConnectable }) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const sized = data.width !== void 0 || data.height !== void 0;
@@ -1761,6 +1772,7 @@ var HANDLE_CLASS2 = "sf:opacity-0 sf:transition-opacity";
 function HtmlNodeImpl({ id, data, selected, isConnectable }) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const autoSize = data.autoSize ?? true;
@@ -1944,6 +1956,7 @@ var HANDLE_CLASS3 = "sf:opacity-0 sf:transition-opacity";
 function ImageNodeImpl({ id, data, selected, isConnectable }) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const sized = data.width !== void 0 || data.height !== void 0;
@@ -2466,6 +2479,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
   const buttonLabel = visualStatus === "active" ? "Running\u2026" : visualStatus === "success" ? "Succeeded, run again" : visualStatus === "error" ? data.errorMessage ? `Failed: ${data.errorMessage}` : "Failed, run again" : "Play";
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const [editing, setEditing] = useState6(null);
@@ -3204,6 +3218,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
   const size = SHAPE_DEFAULT_SIZE[shape];
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const [editing, setEditing] = useState7(() => {
@@ -3553,6 +3568,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
   const description = data.description ?? data.kind;
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
   const [editing, setEditing] = useState8(null);
@@ -7236,6 +7252,7 @@ function SeeflowCanvasImpl(props, ref) {
     onNodePositionChange,
     onNodePositionsChange,
     onNodeResize,
+    onNodeResizeEnd,
     onHtmlNodeFitToContent,
     onMultiResize,
     onNodeNameChange,
@@ -7745,6 +7762,7 @@ function SeeflowCanvasImpl(props, ref) {
           statusReport: statusByNode?.[merged.id],
           onPlay: onPlayNode,
           onResize: onNodeResize,
+          onResizeEnd: onNodeResizeEnd,
           setResizing,
           // htmlNode-only: routed through to the renderer's fit-to-content
           // button. Gated on type so other node variants don't pick up an
@@ -7806,6 +7824,7 @@ function SeeflowCanvasImpl(props, ref) {
     statusByNode,
     onPlayNode,
     onNodeResize,
+    onNodeResizeEnd,
     onHtmlNodeFitToContent,
     setResizing,
     nodeOverrides,
@@ -7855,8 +7874,26 @@ function SeeflowCanvasImpl(props, ref) {
       if (c.type === "select") explicitlyToggled.add(c.id);
     }
     const next = applyNodeChanges(filteredChanges, rfNodesRef.current);
+    const dimensionTouched = /* @__PURE__ */ new Set();
+    if (resizingRef.current) {
+      for (const c of filteredChanges) {
+        if (c.type === "dimensions") dimensionTouched.add(c.id);
+      }
+    }
+    const sized = dimensionTouched.size === 0 ? next : next.map((n) => {
+      if (!dimensionTouched.has(n.id)) return n;
+      if (n.width === void 0 && n.height === void 0) return n;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          ...n.width !== void 0 ? { width: n.width } : {},
+          ...n.height !== void 0 ? { height: n.height } : {}
+        }
+      };
+    });
     const pinned = selectedIdSetRef.current;
-    const repinned = marqueeActiveRef.current ? next : pinned.size === 0 ? next : next.map((n) => {
+    const repinned = marqueeActiveRef.current ? sized : pinned.size === 0 ? sized : sized.map((n) => {
       if (pinned.has(n.id) && !explicitlyToggled.has(n.id) && !n.selected) {
         return { ...n, selected: true };
       }
