@@ -67,7 +67,7 @@ curl --max-time 0.5 -fsS "$STUDIO_URL/health"
 ```
 
 - **200** → continue to Phase 0.5.
-- **Anything else** → tell the user the studio isn't running and that you'll start it for them, then run (background is the default since the CLI auto-detaches; `--yes` skips npx's "OK to proceed?" prompt):
+- **Anything else** → tell the user the studio isn't running and that you'll start it for them. **Warn them the first launch can take a minute or two** while `npx` downloads the package and the studio installs its dependencies; subsequent starts are fast. Then run (background is the default since the CLI auto-detaches; `--yes` skips npx's "OK to proceed?" prompt):
 
   ```bash
   npx --yes tuongaz/seeflow start
