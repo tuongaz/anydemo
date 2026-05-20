@@ -1328,7 +1328,7 @@ var rememberConnectorStyle = (prefix, patch) => {
 };
 
 // src/lib/node-defaults.ts
-var NEW_NODE_BORDER_WIDTH = 3;
+var NEW_NODE_BORDER_WIDTH = 1;
 var NEW_NODE_FONT_SIZE = 17;
 var pick = (patch, keys) => {
   if (!patch) return {};
@@ -2396,7 +2396,7 @@ function StatusBadge({ state, summary, "data-testid": testId }) {
 import { Fragment as Fragment2, jsx as jsx14, jsxs as jsxs7 } from "react/jsx-runtime";
 var MIN_W4 = 100;
 var MIN_H4 = 44;
-var DEFAULT_W = 200;
+var DEFAULT_W = 250;
 function PlayButton({
   visualStatus,
   disabled,
@@ -2576,7 +2576,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsxs7(
           "div",
           {
-            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-2 sf:py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-3 sf:py-3",
             "data-testid": "node-header",
             children: [
               data.icon ? iconEditable && data.onIconChange ? /* @__PURE__ */ jsx14(
@@ -2683,7 +2683,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsx14(
           "div",
           {
-            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
+            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
             children: editing === "description" && descEditable ? /* @__PURE__ */ jsx14(
@@ -2715,7 +2715,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
         data.statusReport && /* @__PURE__ */ jsx14(
           "div",
           {
-            className: "sf:flex sf:items-center sf:px-2 sf:pb-1",
+            className: "sf:flex sf:items-center sf:px-3 sf:pb-2",
             "data-testid": "play-node-status-badge",
             children: /* @__PURE__ */ jsx14(
               StatusBadge,
@@ -3358,7 +3358,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     /* @__PURE__ */ jsx20(
       "div",
       {
-        className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-2 sf:py-1.5",
+        className: "sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-3 sf:py-2.5",
         style: colorTokenStyle(data.backgroundColor, "node-header"),
         "data-testid": "shape-node-header",
         children: /* @__PURE__ */ jsx20(
@@ -3397,7 +3397,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     /* @__PURE__ */ jsx20(
       "div",
       {
-        className: "sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1.5",
+        className: "sf:relative sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2.5",
         "data-testid": "shape-node-body",
         children: editing === "description" && descEditable ? /* @__PURE__ */ jsx20(
           InlineEdit,
@@ -3570,7 +3570,7 @@ function StatusIconPill({
 import { jsx as jsx22, jsxs as jsxs15 } from "react/jsx-runtime";
 var MIN_W5 = 100;
 var MIN_H5 = 44;
-var DEFAULT_W2 = 200;
+var DEFAULT_W2 = 250;
 function StateNodeImpl({ id, data, selected, isConnectable }) {
   const status = data.status ?? "idle";
   const visualStatus = deriveVisualStatus(data.status, data.statusReport);
@@ -3665,7 +3665,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsxs15(
           "div",
           {
-            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-2 sf:py-2",
+            className: "sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:px-3 sf:py-3",
             style: colorTokenStyle(data.backgroundColor, "node-header"),
             "data-testid": "node-header",
             children: [
@@ -3769,7 +3769,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
         /* @__PURE__ */ jsx22(
           "div",
           {
-            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-2 sf:py-1",
+            className: "sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2",
             "data-testid": "node-content",
             "data-resizing": isResizing ? "true" : void 0,
             children: editing === "description" && descEditable ? /* @__PURE__ */ jsx22(

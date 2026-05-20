@@ -828,7 +828,7 @@ declare const rememberConnectorStyle: (prefix: string, patch: ConnectorStylePatc
  */
 
 /** Default border thickness for new nodes. */
-declare const NEW_NODE_BORDER_WIDTH = 3;
+declare const NEW_NODE_BORDER_WIDTH = 1;
 /** Default label font size for new nodes. */
 declare const NEW_NODE_FONT_SIZE = 17;
 interface ShapeDataDefaults {
