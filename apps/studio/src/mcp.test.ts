@@ -125,6 +125,16 @@ describe('POST /mcp tools/list', () => {
     ]);
   });
 
+  it('every tool inputSchema has type: "object" (MCP spec)', async () => {
+    const { app } = buildApp();
+    const envelope = await mcpRequest(app, 'tools/list', {});
+    const tools = envelope.result?.tools ?? [];
+    expect(tools.length).toBeGreaterThan(0);
+    for (const t of tools) {
+      expect(t.inputSchema?.type).toBe('object');
+    }
+  });
+
   it('emits inputSchemas derived from the Zod bodies for register + create_project', async () => {
     const { app } = buildApp();
     const envelope = await mcpRequest(app, 'tools/list', {});

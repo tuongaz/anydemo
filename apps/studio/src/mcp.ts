@@ -55,10 +55,15 @@ export interface McpTool {
 // default. The MCP `tools/list` response carries `inputSchema` inline, so
 // stripping the wrapper keeps the wire payload tidy without losing any of
 // the actual shape constraints.
+//
+// MCP clients validate that every `inputSchema.type === "object"`. Plain
+// `z.object(...)` schemas already produce that, but `z.discriminatedUnion`
+// emits `{anyOf: [...]}` with no top-level `type` — so we force it on.
+// Every tool argument is an object envelope, so this is always correct.
 const inputSchemaFromZod = (schema: ZodTypeAny): Record<string, unknown> => {
   const json = zodToJsonSchema(schema, { $refStrategy: 'none' }) as Record<string, unknown>;
   const { $schema: _$schema, ...rest } = json;
-  return rest;
+  return rest.type === 'object' ? rest : { type: 'object', ...rest };
 };
 
 const okResult = (value: unknown): CallToolResult => ({
