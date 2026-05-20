@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -37,6 +38,7 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Verify tag matches package version
+        if: github.event_name == 'push'
         env:
           GIT_REF: ${{ github.ref }}
         run: |
