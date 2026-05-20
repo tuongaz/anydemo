@@ -6,7 +6,6 @@ import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { debouncedResizeObserver } from '../lib/debounced-resize-observer.ts';
 import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
 import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
-import { useHtmlContent } from '../lib/use-html-content.ts';
 import type { HtmlNodeData } from '../types.ts';
 import { Icon } from '../ui/icon.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
@@ -23,20 +22,6 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
-  /**
-   * US-014: project id injected into every node's runtime data by demo-canvas
-   * so the renderer can build a project-scoped file URL. Mirrors the same
-   * field on `ImageNodeRuntimeData` (US-004). Not persisted to disk —
-   * `htmlPath` is the only on-disk reference.
-   */
-  projectId?: string;
-  /**
-   * Optional override for the file-serving URL prefix. Mirrors the same field
-   * on `ImageNodeRuntimeData`. Threaded down from `<SeeflowCanvas>` so
-   * embedders (e.g. the public viewer) can point file fetches at a different
-   * host/route shape than the default `/api/projects`. Not persisted to disk.
-   */
-  fileBaseUrl?: string;
   // When wired (edit mode only), the renderer's "Fit to content" button calls
   // this. The host's handler PATCHes { autoSize: true } through the adapter,
   // which strips width/height server-side per the autoSize invariant.
@@ -97,16 +82,16 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   }, []);
 
   const measureRef = useRef<HTMLDivElement | null>(null);
-  const content = useHtmlContent(data.projectId, data.htmlPath, data.fileBaseUrl);
-  // Observer is mounted only when auto-sizing + content is loaded. Keeping
-  // the `useReactFlow()` call inside a sub-component (rather than at the top
-  // of HtmlNodeImpl) lets the hook-shim renderer in tests avoid touching
-  // xyflow's StoreContext — the sub-component appears as a React element in
-  // the tree but is never actually rendered by the shim.
-  const observerActive = autoSize && content.kind === 'loaded';
+  // Content is inlined into `data.html` by the studio's file-ref resolver —
+  // no async fetch needed at render time. Empty string means the author
+  // hasn't written anything yet; the placeholder card surfaces that state.
+  const html = data.html ?? '';
+  const hasContent = html.length > 0;
+  // Observer is mounted only when auto-sizing + content is non-empty.
+  const observerActive = autoSize && hasContent;
 
   let body: ReactNode;
-  if (content.kind === 'loaded') {
+  if (hasContent) {
     // US-013 / US-014: the trust boundary lives in `injectSanitizedHtml` —
     // every site that mounts untrusted author HTML threads through that
     // helper. The sanitizer drops <script>, <style>, <iframe>, on*=
@@ -120,7 +105,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       <div
         data-testid="html-node-content"
         className="sf:h-full sf:w-full sf:overflow-auto"
-        {...injectSanitizedHtml(content.html)}
+        {...injectSanitizedHtml(html)}
       />
     ) : (
       <div
@@ -128,22 +113,18 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         data-testid="html-node-content"
         className="sf:inline-block"
         style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
-        {...injectSanitizedHtml(content.html)}
+        {...injectSanitizedHtml(html)}
       />
     );
-  } else if (content.kind === 'missing') {
-    body = <PlaceholderCard message={`Missing: ${data.htmlPath}`} variant="destructive" />;
-  } else if (content.kind === 'error') {
-    body = <PlaceholderCard message={`Error: ${content.message}`} variant="destructive" />;
   } else {
-    body = <PlaceholderCard message="Loading…" />;
+    body = <PlaceholderCard message="Empty htmlNode — write to view.html" />;
   }
 
-  // While auto-size content hasn't loaded yet, the measuring container isn't
-  // present, so React Flow has nothing to size to. Fall back to
-  // HTML_DEFAULT_SIZE for the placeholder card's bounding box.
+  // While there's no content, the measuring container isn't present, so
+  // React Flow has nothing to size to. Fall back to HTML_DEFAULT_SIZE for the
+  // placeholder card's bounding box.
   const placeholderFallback =
-    !userSized && content.kind !== 'loaded'
+    !userSized && !hasContent
       ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height }
       : {};
 
@@ -153,10 +134,10 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   };
 
   // Inner shrink-wraps to the body's natural size only when we're auto-sizing
-  // a loaded htmlNode (body is `inline-block` then). In every other case —
-  // user-sized, or placeholder/loading/error — the outer has an explicit size
-  // and the inner fills it.
-  const innerShrinkWraps = !userSized && content.kind === 'loaded';
+  // a non-empty htmlNode (body is `inline-block` then). In every other case —
+  // user-sized, or empty placeholder — the outer has an explicit size and the
+  // inner fills it.
+  const innerShrinkWraps = !userSized && hasContent;
 
   return (
     <div

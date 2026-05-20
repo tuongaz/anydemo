@@ -860,7 +860,7 @@ describe('ResolvedFlowSchema', () => {
 
   // US-004: ImageNodeDataSchema hard-cut from a `data:image/...` URL to a
   // relative `path` under `<project>/.seeflow/`. The renderer resolves it via
-  // the file-serving endpoint added in US-001. Path-safety mirrors htmlPath:
+  // the file-serving endpoint added in US-001. Path-safety:
   // no absolute paths, no `..` traversal, no leading slash.
   it('parses a demo containing one imageNode with data.path (US-004)', () => {
     const demo = {
@@ -1552,13 +1552,11 @@ describe('ResolvedFlowSchema', () => {
     });
   });
 
-  // US-011 (illustrative-shapes-htmlnode): htmlNode is the new escape-hatch
-  // node type — references author-written HTML at `<project>/.seeflow/<htmlPath>`.
-  // `htmlPath` shares the path-safety refine used by imageNode.path; the schema
-  // intentionally does NOT validate file existence (the US-014 renderer shows a
-  // placeholder when the file is missing).
-  describe('htmlNode (US-011 illustrative-shapes-htmlnode)', () => {
-    it('parses a minimal htmlNode with only the required htmlPath', () => {
+  // htmlNode carries author-written HTML inline via `data.html`. The studio
+  // externalizes content to `<project>/.seeflow/nodes/<id>/view.html` and
+  // stores a `file://` ref in flow.json; the file-ref resolver inlines on read.
+  describe('htmlNode', () => {
+    it('parses a minimal htmlNode with optional html (omitted)', () => {
       const demo = {
         version: 2 as const,
         name: 'html-demo',
@@ -1567,7 +1565,7 @@ describe('ResolvedFlowSchema', () => {
             id: 'html-1',
             type: 'htmlNode' as const,
             position: { x: 10, y: 20 },
-            data: { htmlPath: 'blocks/html-1.html' },
+            data: {},
           },
         ],
         connectors: [],
@@ -1578,8 +1576,20 @@ describe('ResolvedFlowSchema', () => {
       }
       const node = result.data.nodes[0];
       if (node?.type !== 'htmlNode') throw new Error('expected htmlNode');
-      expect(node.data.htmlPath).toBe('blocks/html-1.html');
+      expect(node.data.html).toBeUndefined();
       expect(node.data.name).toBeUndefined();
+    });
+
+    it('accepts html as free-form content', () => {
+      const result = HtmlNodeDataSchema.safeParse({ html: '<div>hi</div>' });
+      expect(result.success).toBe(true);
+    });
+
+    it('accepts html as a file:// ref (round-trip from disk)', () => {
+      const result = HtmlNodeDataSchema.safeParse({
+        html: 'file://nodes/node-abc/view.html',
+      });
+      expect(result.success).toBe(true);
     });
 
     it('round-trips an htmlNode with label + every NodeVisualBaseShape field', () => {
@@ -1592,7 +1602,7 @@ describe('ResolvedFlowSchema', () => {
             type: 'htmlNode' as const,
             position: { x: 0, y: 0 },
             data: {
-              htmlPath: 'blocks/card.html',
+              html: '<p>card</p>',
               name: 'Promo card',
               width: 320,
               height: 200,
@@ -1613,7 +1623,7 @@ describe('ResolvedFlowSchema', () => {
       }
       const node = result.data.nodes[0];
       if (node?.type !== 'htmlNode') throw new Error('expected htmlNode');
-      expect(node.data.htmlPath).toBe('blocks/card.html');
+      expect(node.data.html).toBe('<p>card</p>');
       expect(node.data.name).toBe('Promo card');
       expect(node.data.width).toBe(320);
       expect(node.data.height).toBe(200);
@@ -1635,7 +1645,7 @@ describe('ResolvedFlowSchema', () => {
             type: 'htmlNode' as const,
             position: { x: 0, y: 0 },
             data: {
-              htmlPath: 'blocks/x.html',
+              html: '<p>x</p>',
               description: 'short body',
               detail: 'multi-line\nnotes',
             },
@@ -1649,102 +1659,6 @@ describe('ResolvedFlowSchema', () => {
       }
       const serialized = JSON.parse(JSON.stringify(parsed.data)) as unknown;
       expect(serialized).toEqual(demo);
-    });
-
-    it('rejects an htmlNode whose htmlPath is absolute', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'bad-abs',
-        nodes: [
-          {
-            id: 'html-1',
-            type: 'htmlNode' as const,
-            position: { x: 0, y: 0 },
-            data: { htmlPath: '/etc/passwd' },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      const issue = result.error.issues.find((i) => i.path.includes('htmlPath'));
-      expect(issue).toBeDefined();
-    });
-
-    it('rejects an htmlNode whose htmlPath uses `..` traversal', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'bad-traversal',
-        nodes: [
-          {
-            id: 'html-1',
-            type: 'htmlNode' as const,
-            position: { x: 0, y: 0 },
-            data: { htmlPath: '../../etc/passwd' },
-          },
-        ],
-        connectors: [],
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      expect(result.success).toBe(false);
-      if (result.success) return;
-      const issue = result.error.issues.find((i) => i.path.includes('htmlPath'));
-      expect(issue).toBeDefined();
-    });
-
-    it('rejects an htmlNode whose htmlPath uses a Windows drive-letter root', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'bad-drive',
-        nodes: [
-          {
-            id: 'html-1',
-            type: 'htmlNode' as const,
-            position: { x: 0, y: 0 },
-            data: { htmlPath: 'C:\\Windows\\System32\\foo.html' },
-          },
-        ],
-        connectors: [],
-      };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
-    });
-
-    it('rejects an htmlNode with an empty htmlPath', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'empty-path',
-        nodes: [
-          {
-            id: 'html-1',
-            type: 'htmlNode' as const,
-            position: { x: 0, y: 0 },
-            data: { htmlPath: '' },
-          },
-        ],
-        connectors: [],
-      };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
-    });
-
-    it('does NOT enforce file existence — missing htmlPath files parse cleanly (renderer shows placeholder)', () => {
-      // Schema is pure: file existence is intentionally NOT validated here so
-      // missing files render a placeholder (US-014) instead of breaking the
-      // entire demo at parse time.
-      const demo = {
-        version: 2 as const,
-        name: 'missing-on-disk',
-        nodes: [
-          {
-            id: 'html-1',
-            type: 'htmlNode' as const,
-            position: { x: 0, y: 0 },
-            data: { htmlPath: 'blocks/never-written.html' },
-          },
-        ],
-        connectors: [],
-      };
-      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
     });
 
     it('accepts an htmlNode as a connector endpoint (source AND target)', () => {
@@ -1762,7 +1676,7 @@ describe('ResolvedFlowSchema', () => {
             id: 'html-1',
             type: 'htmlNode' as const,
             position: { x: 100, y: 0 },
-            data: { htmlPath: 'blocks/note.html' },
+            data: { html: '<p>note</p>' },
           },
         ],
         connectors: [
@@ -2140,14 +2054,14 @@ describe('ResolvedFlowSchema', () => {
 
 describe('HtmlNodeDataSchema autoSize', () => {
   it('parses with autoSize: true and no width/height', () => {
-    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html', autoSize: true });
+    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>', autoSize: true });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.autoSize).toBe(true);
   });
 
   it('parses with autoSize: false plus width/height', () => {
     const r = HtmlNodeDataSchema.safeParse({
-      htmlPath: 'snip.html',
+      html: '<p>x</p>',
       autoSize: false,
       width: 480,
       height: 320,
@@ -2161,13 +2075,13 @@ describe('HtmlNodeDataSchema autoSize', () => {
   });
 
   it('parses with autoSize absent (field is optional)', () => {
-    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html' });
+    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>' });
     expect(r.success).toBe(true);
     if (r.success) expect(r.data.autoSize).toBeUndefined();
   });
 
   it('rejects non-boolean autoSize', () => {
-    const r = HtmlNodeDataSchema.safeParse({ htmlPath: 'snip.html', autoSize: 'yes' });
+    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>', autoSize: 'yes' });
     expect(r.success).toBe(false);
   });
 });

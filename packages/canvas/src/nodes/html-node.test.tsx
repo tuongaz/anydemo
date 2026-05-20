@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import { Window } from 'happy-dom';
 
 // Install a happy-dom DOMParser globally BEFORE the sanitizer + renderer are
@@ -12,9 +12,6 @@ const { HtmlNode } = await import('./html-node.tsx');
 const { PlaceholderCard } = await import('./placeholder-card.tsx');
 const { Icon } = await import('../ui/icon.tsx');
 const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
-const { _setHtmlContentForTest, _clearHtmlContentCacheForTest } = await import(
-  '../lib/use-html-content.ts'
-);
 
 import { Handle, type NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
@@ -101,8 +98,6 @@ function findElement(
   return null;
 }
 
-const SAMPLE_PROJECT_ID = 'p1';
-const SAMPLE_PATH = 'blocks/sample.html';
 const INNER_HTML_PROP = 'dangerously' + 'SetInnerHTML';
 
 function readInnerHtml(el: ReactElementLike | null): string | undefined {
@@ -119,7 +114,7 @@ function callHtmlNode(
   const props = {
     id: 'h1',
     type: 'htmlNode',
-    data: { htmlPath: SAMPLE_PATH, projectId: SAMPLE_PROJECT_ID, ...data },
+    data: { html: '<p>ok</p>', ...data },
     selected: false,
     isConnectable: true,
     xPos: 0,
@@ -171,110 +166,58 @@ function findPlaceholder(tree: unknown): ReactElementLike | null {
   return findElement(tree, (el) => el.type === PlaceholderCard);
 }
 
-beforeEach(() => {
-  _clearHtmlContentCacheForTest();
-});
-
-afterEach(() => {
-  _clearHtmlContentCacheForTest();
-});
-
-describe('HtmlNode connect handles (US-014)', () => {
+describe('HtmlNode connect handles', () => {
   it('renders all four <Handle> elements when isConnectable is true', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const tree = callHtmlNode();
     const handles = findAll(tree, (el) => el.type === Handle);
     expect(handles).toHaveLength(4);
   });
 
   it('still renders four handles when selected (opacity toggle, not gated render)', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const tree = callHtmlNode({}, { selected: true } as Partial<NodeProps>);
     const handles = findAll(tree, (el) => el.type === Handle);
     expect(handles).toHaveLength(4);
   });
 });
 
-describe('HtmlNode content render (US-014)', () => {
-  it('renders sanitized author HTML when content is loaded', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p class="rounded-lg">hello</p>',
-    });
-    const tree = callHtmlNode();
+describe('HtmlNode content render', () => {
+  it('renders sanitized author HTML when data.html is non-empty', () => {
+    const tree = callHtmlNode({ html: '<p class="rounded-lg">hello</p>' });
     const content = findContent(tree);
     expect(content).not.toBeNull();
     expect(readInnerHtml(content)).toBe('<p class="rounded-lg">hello</p>');
   });
 
   it('strips <script> tags from author HTML before injection', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>safe</p><script>alert(1)</script>',
-    });
-    const tree = callHtmlNode();
+    const tree = callHtmlNode({ html: '<p>safe</p><script>alert(1)</script>' });
     expect(readInnerHtml(findContent(tree))).toBe('<p>safe</p>');
   });
 
   it('strips on*= event-handler attributes', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<button onclick="alert(1)">x</button>',
-    });
-    const tree = callHtmlNode();
+    const tree = callHtmlNode({ html: '<button onclick="alert(1)">x</button>' });
     expect(readInnerHtml(findContent(tree))).toBe('<button>x</button>');
   });
 });
 
-describe('HtmlNode missing-file state (US-014)', () => {
-  it('renders PlaceholderCard with "Missing: <path>" when kind is missing', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, { kind: 'missing' });
-    const tree = callHtmlNode();
-    const placeholder = findPlaceholder(tree);
-    expect(placeholder).not.toBeNull();
-    const props = placeholder?.props as { message?: string; variant?: string };
-    expect(props.message).toBe(`Missing: ${SAMPLE_PATH}`);
-    expect(props.variant).toBe('destructive');
-    // No injected content element in the missing-file branch.
-    expect(findContent(tree)).toBeNull();
-  });
-
-  it('renders an error PlaceholderCard when kind is error', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'error',
-      message: 'network down',
-    });
-    const tree = callHtmlNode();
-    const placeholder = findPlaceholder(tree);
-    expect(placeholder).not.toBeNull();
-    const props = placeholder?.props as { message?: string; variant?: string };
-    expect(props.message).toBe('Error: network down');
-    expect(props.variant).toBe('destructive');
-  });
-
-  it('renders a loading PlaceholderCard before the cache primes', () => {
-    // No `_setHtmlContentForTest` call — the cache is empty, so the lazy
-    // useState initializer falls back to { kind: 'loading' }.
-    const tree = callHtmlNode();
+describe('HtmlNode empty content state', () => {
+  it('renders PlaceholderCard when html is empty', () => {
+    const tree = callHtmlNode({ html: '' });
     const placeholder = findPlaceholder(tree);
     expect(placeholder).not.toBeNull();
     const props = placeholder?.props as { message?: string };
-    expect(props.message).toBe('Loading…');
+    expect(props.message).toContain('Empty htmlNode');
+    expect(findContent(tree)).toBeNull();
+  });
+
+  it('renders PlaceholderCard when html is undefined', () => {
+    const tree = callHtmlNode({ html: undefined });
+    const placeholder = findPlaceholder(tree);
+    expect(placeholder).not.toBeNull();
   });
 });
 
-describe('HtmlNode wrapper style (US-014)', () => {
+describe('HtmlNode wrapper style', () => {
   it('omits color tokens from chrome style when fields are unset', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const style = getChromeStyle(callHtmlNode());
     expect(style.backgroundColor).toBeUndefined();
     expect(style.borderColor).toBeUndefined();
@@ -284,10 +227,6 @@ describe('HtmlNode wrapper style (US-014)', () => {
   });
 
   it('applies border + background tokens to the chrome wrapper when fields are set', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const style = getChromeStyle(
       callHtmlNode({
         backgroundColor: 'blue',
@@ -304,21 +243,16 @@ describe('HtmlNode wrapper style (US-014)', () => {
     expect(style.borderRadius).toBe(8);
   });
 
-  it('falls back to default width/height during auto-size placeholder phase (content not loaded)', () => {
-    // No _setHtmlContentForTest — cache empty → content.kind stays 'loading'.
-    // In auto-size mode the measuring container isn't present, so React Flow
-    // has nothing to size to; the renderer pins HTML_DEFAULT_SIZE so the
-    // placeholder card has a sensible bounding box.
-    const style = getContainerStyle(callHtmlNode());
+  it('falls back to default width/height during empty-content phase (auto-size, no content yet)', () => {
+    // In auto-size mode the measuring container isn't present when html is
+    // empty, so React Flow has nothing to size to; the renderer pins
+    // HTML_DEFAULT_SIZE so the placeholder card has a sensible bounding box.
+    const style = getContainerStyle(callHtmlNode({ html: '' }));
     expect(style.width).toBe(320);
     expect(style.height).toBe(200);
   });
 
   it('omits default width/height once the author has sized the node', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const style = getContainerStyle(callHtmlNode({ width: 480, height: 360 }));
     expect(style.width).toBeUndefined();
     expect(style.height).toBeUndefined();
@@ -329,10 +263,6 @@ describe('HtmlNode wrapper style (US-014)', () => {
   // a selected node's CSS transforms pushed them 8px outward (see
   // styles/index.css). Clipping must live on the INNER chrome wrapper instead.
   it('keeps overflow-hidden on the inner chrome wrapper, not the outer', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const tree = callHtmlNode();
     const outer = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
@@ -351,12 +281,8 @@ describe('HtmlNode wrapper style (US-014)', () => {
   });
 });
 
-describe('HtmlNode label (US-014)', () => {
+describe('HtmlNode label', () => {
   it('renders a label element below the content when data.name is set', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const tree = callHtmlNode({ name: 'Welcome card' });
     const label = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
@@ -367,10 +293,6 @@ describe('HtmlNode label (US-014)', () => {
   });
 
   it('omits the label element when data.name is absent', () => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
     const tree = callHtmlNode();
     const label = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
@@ -387,14 +309,7 @@ function findLabel(tree: unknown): ReactElementLike | null {
   });
 }
 
-describe('HtmlNode caption icon (US-007)', () => {
-  beforeEach(() => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>ok</p>',
-    });
-  });
-
+describe('HtmlNode caption icon', () => {
   it('renders an Icon inline with the caption when data.icon is set', () => {
     const tree = callHtmlNode({ name: 'Welcome card', icon: 'sparkles' });
     const label = findLabel(tree);
@@ -416,20 +331,11 @@ describe('HtmlNode caption icon (US-007)', () => {
     const tree = callHtmlNode({ name: 'Welcome card' });
     const label = findLabel(tree);
     if (!label) throw new Error('expected html-node-label');
-    // Legacy structure: the label div's children is the raw name string,
-    // not a flex-wrapper div with a nested span.
     expect((label.props as { children?: unknown }).children).toBe('Welcome card');
   });
 });
 
 describe('HtmlNode autoSize', () => {
-  beforeEach(() => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>hello</p>',
-    });
-  });
-
   it('defaults to auto-size when data.autoSize is undefined and renders the measuring container', () => {
     const tree = callHtmlNode();
     const measure = findContent(tree);
@@ -454,7 +360,6 @@ describe('HtmlNode autoSize', () => {
     const body = findContent(tree);
     expect(body).not.toBeNull();
     const innerStyle = (body?.props as { style?: CSSProperties }).style ?? {};
-    // In user-sized mode the inner has no maxWidth cap — outer owns dims.
     expect(innerStyle.maxWidth).toBeUndefined();
     const outerStyle = getContainerStyle(tree);
     expect(outerStyle.width).toBe(480);
@@ -463,13 +368,6 @@ describe('HtmlNode autoSize', () => {
 });
 
 describe('HtmlNode fit-to-content button', () => {
-  beforeEach(() => {
-    _setHtmlContentForTest(SAMPLE_PROJECT_ID, SAMPLE_PATH, {
-      kind: 'loaded',
-      html: '<p>x</p>',
-    });
-  });
-
   const userSizedData = {
     autoSize: false,
     width: 480,

@@ -70,7 +70,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'htmlNode',
-      data: { htmlPath: 'a.html' },
+      data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { width: 480, height: 320 });
     expect(node.data).toMatchObject({ autoSize: false, width: 480, height: 320 });
@@ -80,7 +80,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'htmlNode',
-      data: { htmlPath: 'a.html', autoSize: false, width: 480, height: 320 },
+      data: { html: '<p>a</p>', autoSize: false, width: 480, height: 320 },
     };
     mergeNodeUpdates(node, { autoSize: true });
     const data = node.data as Record<string, unknown>;
@@ -95,7 +95,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'htmlNode',
-      data: { htmlPath: 'a.html' },
+      data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { autoSize: true, width: 500, height: 300 });
     const data = node.data as Record<string, unknown>;
@@ -108,7 +108,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'htmlNode',
-      data: { htmlPath: 'a.html' },
+      data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { autoSize: false });
     expect((node.data as Record<string, unknown>).autoSize).toBe(false);

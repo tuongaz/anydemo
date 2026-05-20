@@ -169,27 +169,9 @@ describe('createWatcher', () => {
   // ---------------------------------------------------------------------------
 
   // Build a demo with one playNode that also carries a forward-compatible
-  // `htmlPath` on its data (Zod strips the key from the parsed Flow, but
-  // collectReferencedPaths reads the raw JSON pre-strip).
-  const demoWithHtmlPath = (htmlPath: string) => ({
-    version: 2,
-    name: 'Watch Files',
-    nodes: [
-      {
-        id: 'h1',
-        type: 'playNode',
-        data: {
-          name: 'A',
-          kind: 'svc',
-          stateSource: { kind: 'request' },
-          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-          htmlPath,
-        },
-      },
-    ],
-    connectors: [],
-  });
-
+  // `path` on its data (imageNode-style path, the only field
+  // collectReferencedPaths still cares about — htmlNode content rides on the
+  // file:// resolver now).
   const demoWithImagePath = (imgPath: string) => ({
     version: 2,
     name: 'Watch Files',
@@ -207,39 +189,6 @@ describe('createWatcher', () => {
       },
     ],
     connectors: [],
-  });
-
-  it('emits file:changed when an htmlNode-referenced file is edited', async () => {
-    const reg = createRegistry({ path: tmpRegistryPath() });
-    const repoPath = tmpRepo(demoWithHtmlPath('blocks/h1.html'));
-    mkdirSync(join(repoPath, '.seeflow', 'blocks'));
-    const htmlPath = join(repoPath, '.seeflow', 'blocks', 'h1.html');
-    writeFileSync(htmlPath, '<div>v1</div>');
-
-    const entry = reg.upsert({
-      name: 'Watch Files',
-      repoPath,
-      flowPath: '.seeflow/flow.json',
-    });
-    const events = createEventBus();
-    const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
-
-    const fileEvents: StudioEvent[] = [];
-    events.subscribe(entry.id, (e) => {
-      if (e.type === 'file:changed') fileEvents.push(e);
-    });
-
-    watcher.watch(entry.id);
-    expect(watcher.referencedPaths(entry.id)).toEqual(['blocks/h1.html']);
-
-    await wait(30);
-    writeFileSync(htmlPath, '<div>v2</div>');
-    await wait(150);
-
-    expect(fileEvents.length).toBeGreaterThanOrEqual(1);
-    const payload = fileEvents.at(-1)?.payload as { path: string };
-    expect(payload.path).toBe('blocks/h1.html');
-    watcher.closeAll();
   });
 
   it('emits file:changed when an imageNode-referenced path file is edited', async () => {
@@ -288,24 +237,24 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
-    mkdirSync(join(repoPath, '.seeflow', 'blocks'));
-    writeFileSync(join(repoPath, '.seeflow', 'blocks', 'h1.html'), '<div>v1</div>');
+    mkdirSync(join(repoPath, '.seeflow', 'assets'));
+    writeFileSync(join(repoPath, '.seeflow', 'assets', 'logo.png'), 'placeholder');
     writeFileSync(
       join(repoPath, '.seeflow', 'flow.json'),
-      JSON.stringify(demoWithHtmlPath('blocks/h1.html')),
+      JSON.stringify(demoWithImagePath('assets/logo.png')),
     );
     await wait(120);
 
-    expect(watcher.referencedPaths(entry.id)).toEqual(['blocks/h1.html']);
+    expect(watcher.referencedPaths(entry.id)).toEqual(['assets/logo.png']);
     watcher.closeAll();
   });
 
   it('removes paths from the watch set when a referencing node is removed', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
-    const repoPath = tmpRepo(demoWithHtmlPath('blocks/h1.html'));
-    mkdirSync(join(repoPath, '.seeflow', 'blocks'));
-    const htmlPath = join(repoPath, '.seeflow', 'blocks', 'h1.html');
-    writeFileSync(htmlPath, '<div>v1</div>');
+    const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
+    mkdirSync(join(repoPath, '.seeflow', 'assets'));
+    const imgPath = join(repoPath, '.seeflow', 'assets', 'logo.png');
+    writeFileSync(imgPath, 'placeholder-v1');
 
     const entry = reg.upsert({
       name: 'Watch Files',
@@ -321,7 +270,7 @@ describe('createWatcher', () => {
     });
 
     watcher.watch(entry.id);
-    expect(watcher.referencedPaths(entry.id)).toEqual(['blocks/h1.html']);
+    expect(watcher.referencedPaths(entry.id)).toEqual(['assets/logo.png']);
 
     // Drop the referencing node from the demo via a write to flow.json.
     writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
@@ -329,7 +278,7 @@ describe('createWatcher', () => {
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
     fileEvents.length = 0;
-    writeFileSync(htmlPath, '<div>v2</div>');
+    writeFileSync(imgPath, 'placeholder-v2');
     await wait(120);
     expect(fileEvents.length).toBe(0);
     watcher.closeAll();
@@ -348,7 +297,7 @@ describe('createWatcher', () => {
             kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-            htmlPath: '/etc/passwd',
+            path: '/etc/passwd',
           },
         },
         {
@@ -359,7 +308,7 @@ describe('createWatcher', () => {
             kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-            htmlPath: '../secrets.html',
+            path: '../secrets.png',
           },
         },
         {

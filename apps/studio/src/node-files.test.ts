@@ -28,6 +28,11 @@ describe('node-files path helpers', () => {
       EXTERNALIZED_NODE_FIELDS.some((e) => e.field === 'detail' && e.fileName === 'detail.md'),
     ).toBe(true);
   });
+  it('exposes detail and html entries', () => {
+    const fields = EXTERNALIZED_NODE_FIELDS.map((e) => e.field);
+    expect(fields).toContain('detail');
+    expect(fields).toContain('html');
+  });
 });
 
 describe('writeNodeFile / removeNodeDir', () => {

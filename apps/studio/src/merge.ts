@@ -52,7 +52,7 @@ const NODE_DATA_FLOW_KEYS = new Set([
   'shape',
   'path',
   'alt',
-  'htmlPath',
+  'html',
 ]);
 
 const NODE_STYLE_KEYS = new Set([

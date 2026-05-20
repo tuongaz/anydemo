@@ -2151,49 +2151,10 @@ describe('POST /api/flows/:id/nodes', () => {
     ).toBe('');
   });
 
-  // US-015: when an htmlNode is drop-created without a client-supplied htmlPath,
-  // the backend allocates `blocks/<id>.html`, writes the starter file with the
-  // 'Edit me' card markup, and persists the path on the node.
-  describe('htmlNode starter-file (US-015)', () => {
-    it('writes blocks/<id>.html with starter content and persists htmlPath', async () => {
-      const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
-      const reg = (await (
-        await post(app, '/api/flows/register', {
-          repoPath,
-          flowPath: '.seeflow/flow.json',
-        })
-      ).json()) as { id: string };
-
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
-        type: 'htmlNode',
-        data: {},
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        ok: boolean;
-        id: string;
-        node: { type: string; data: { htmlPath: string } };
-      };
-      expect(body.ok).toBe(true);
-      expect(body.id).toMatch(/^node-/);
-      expect(body.node.type).toBe('htmlNode');
-      expect(body.node.data.htmlPath).toBe(`blocks/${body.id}.html`);
-
-      const starter = readFileSync(join(repoPath, '.seeflow', 'blocks', `${body.id}.html`), 'utf8');
-      expect(starter).toContain('Edit me');
-      expect(starter).toContain(`blocks/${body.id}.html`);
-      expect(starter).toContain('class="text-center"');
-
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
-        nodes: Array<{ id: string; type: string; data: { htmlPath?: string } }>;
-      };
-      const persisted = onDisk.nodes.find((n) => n.id === body.id);
-      expect(persisted?.type).toBe('htmlNode');
-      expect(persisted?.data.htmlPath).toBe(`blocks/${body.id}.html`);
-    });
-
-    it('respects caller-provided id when allocating blocks/<id>.html', async () => {
+  // htmlNode externalization: every htmlNode write lands in
+  // `nodes/<id>/view.html`; flow.json carries the file:// ref.
+  describe('htmlNode html externalization', () => {
+    it('writes nodes/<id>/view.html (empty) and persists file:// ref when html is omitted', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
@@ -2209,66 +2170,68 @@ describe('POST /api/flows/:id/nodes', () => {
         data: {},
       });
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
-      expect(body.id).toBe('hero-block');
-      expect(body.node.data.htmlPath).toBe('blocks/hero-block.html');
 
-      const starter = readFileSync(join(repoPath, '.seeflow', 'blocks', 'hero-block.html'), 'utf8');
-      expect(starter).toContain('blocks/hero-block.html');
-    });
-
-    it('preserves a client-supplied htmlPath and skips the starter file', async () => {
-      const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
-      const reg = (await (
-        await post(app, '/api/flows/register', {
-          repoPath,
-          flowPath: '.seeflow/flow.json',
-        })
-      ).json()) as { id: string };
-
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
-        type: 'htmlNode',
-        data: { htmlPath: 'custom/hero.html' },
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { id: string; node: { data: { htmlPath: string } } };
-      expect(body.node.data.htmlPath).toBe('custom/hero.html');
-
-      // No starter file should have been written under blocks/.
-      const blocksDir = join(repoPath, '.seeflow', 'blocks');
-      let blocksExists = true;
-      try {
-        readdirSync(blocksDir);
-      } catch {
-        blocksExists = false;
-      }
-      expect(blocksExists).toBe(false);
-    });
-
-    it('preserves other data fields when filling in htmlPath', async () => {
-      const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
-      const reg = (await (
-        await post(app, '/api/flows/register', {
-          repoPath,
-          flowPath: '.seeflow/flow.json',
-        })
-      ).json()) as { id: string };
-
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
-        type: 'htmlNode',
-        data: { name: 'Pricing card', width: 280, height: 160 },
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as {
-        id: string;
-        node: { data: { htmlPath: string; name: string; width: number; height: number } };
+      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+        nodes: Array<{ id: string; type: string; data: { html?: string } }>;
       };
-      expect(body.node.data.name).toBe('Pricing card');
-      expect(body.node.data.width).toBe(280);
-      expect(body.node.data.height).toBe(160);
-      expect(body.node.data.htmlPath).toBe(`blocks/${body.id}.html`);
+      const persisted = onDisk.nodes.find((n) => n.id === 'hero-block');
+      expect(persisted?.data.html).toBe('file://nodes/hero-block/view.html');
+      expect(
+        readFileSync(join(repoPath, '.seeflow', 'nodes', 'hero-block', 'view.html'), 'utf8'),
+      ).toBe('');
+    });
+
+    it('writes nodes/<id>/view.html with content when html is provided', async () => {
+      const { app } = buildApp();
+      const repoPath = tmpRepoWithDemo();
+      const reg = (await (
+        await post(app, '/api/flows/register', {
+          repoPath,
+          flowPath: '.seeflow/flow.json',
+        })
+      ).json()) as { id: string };
+
+      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+        id: 'with-content',
+        type: 'htmlNode',
+        data: { html: '<p>inline</p>' },
+      });
+      expect(res.status).toBe(200);
+
+      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+        nodes: Array<{ id: string; data: { html?: string } }>;
+      };
+      const persisted = onDisk.nodes.find((n) => n.id === 'with-content');
+      expect(persisted?.data.html).toBe('file://nodes/with-content/view.html');
+      expect(
+        readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-content', 'view.html'), 'utf8'),
+      ).toBe('<p>inline</p>');
+    });
+
+    it('preserves other data fields when externalizing html', async () => {
+      const { app } = buildApp();
+      const repoPath = tmpRepoWithDemo();
+      const reg = (await (
+        await post(app, '/api/flows/register', {
+          repoPath,
+          flowPath: '.seeflow/flow.json',
+        })
+      ).json()) as { id: string };
+
+      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+        id: 'pricing',
+        type: 'htmlNode',
+        data: { name: 'Pricing card', icon: 'tag' },
+      });
+      expect(res.status).toBe(200);
+
+      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+        nodes: Array<{ id: string; data: { name?: string; icon?: string; html?: string } }>;
+      };
+      const persisted = onDisk.nodes.find((n) => n.id === 'pricing');
+      expect(persisted?.data.name).toBe('Pricing card');
+      expect(persisted?.data.icon).toBe('tag');
+      expect(persisted?.data.html).toBe('file://nodes/pricing/view.html');
     });
   });
 });
@@ -2415,8 +2378,8 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     expect(existsSync(folder)).toBe(false);
   });
 
-  describe('htmlNode managed file delete (US-016)', () => {
-    it('removes blocks/<id>.html when the htmlPath matches the studio-managed shape', async () => {
+  describe('htmlNode per-node folder cascade', () => {
+    it('removes nodes/<id>/view.html and the whole folder on delete', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
@@ -2428,19 +2391,21 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
 
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
+          id: 'cascade-html',
           type: 'htmlNode',
-          data: {},
+          data: { html: '<p>x</p>' },
         })
-      ).json()) as { id: string; node: { data: { htmlPath: string } } };
-      const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
-      expect(existsSync(blockFile)).toBe(true);
+      ).json()) as { id: string };
+      const viewFile = join(repoPath, '.seeflow', 'nodes', created.id, 'view.html');
+      expect(existsSync(viewFile)).toBe(true);
 
       const res = await app.request(`/api/flows/${reg.id}/nodes/${created.id}`, {
         method: 'DELETE',
       });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
-      expect(existsSync(blockFile)).toBe(false);
+      expect(existsSync(viewFile)).toBe(false);
+      expect(existsSync(join(repoPath, '.seeflow', 'nodes', created.id))).toBe(false);
 
       const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
         nodes: Array<{ id: string }>;
@@ -2448,70 +2413,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       expect(onDisk.nodes.find((n) => n.id === created.id)).toBeUndefined();
     });
 
-    it('leaves a hand-edited htmlPath file alone when the path does not match blocks/<id>.html', async () => {
-      const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
-      const reg = (await (
-        await post(app, '/api/flows/register', {
-          repoPath,
-          flowPath: '.seeflow/flow.json',
-        })
-      ).json()) as { id: string };
-
-      const customDir = join(repoPath, '.seeflow', 'custom');
-      mkdirSync(customDir, { recursive: true });
-      const customFile = join(customDir, 'hero.html');
-      writeFileSync(customFile, '<div>hand-edited</div>');
-
-      const created = (await (
-        await post(app, `/api/flows/${reg.id}/nodes`, {
-          type: 'htmlNode',
-          data: { htmlPath: 'custom/hero.html' },
-        })
-      ).json()) as { id: string; node: { data: { htmlPath: string } } };
-      expect(created.node.data.htmlPath).toBe('custom/hero.html');
-
-      const res = await app.request(`/api/flows/${reg.id}/nodes/${created.id}`, {
-        method: 'DELETE',
-      });
-      expect(res.status).toBe(200);
-      expect(existsSync(customFile)).toBe(true);
-      expect(readFileSync(customFile, 'utf8')).toBe('<div>hand-edited</div>');
-    });
-
-    it('soft-fails when the managed file is already missing', async () => {
-      const { app } = buildApp();
-      const repoPath = tmpRepoWithDemo();
-      const reg = (await (
-        await post(app, '/api/flows/register', {
-          repoPath,
-          flowPath: '.seeflow/flow.json',
-        })
-      ).json()) as { id: string };
-
-      const created = (await (
-        await post(app, `/api/flows/${reg.id}/nodes`, {
-          type: 'htmlNode',
-          data: {},
-        })
-      ).json()) as { id: string };
-      const blockFile = join(repoPath, '.seeflow', 'blocks', `${created.id}.html`);
-      unlinkSync(blockFile);
-      expect(existsSync(blockFile)).toBe(false);
-
-      const res = await app.request(`/api/flows/${reg.id}/nodes/${created.id}`, {
-        method: 'DELETE',
-      });
-      expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
-
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
-        nodes: Array<{ id: string }>;
-      };
-      expect(onDisk.nodes.find((n) => n.id === created.id)).toBeUndefined();
-    });
-
-    it('does not touch other htmlNode-shaped files in blocks/ when an unrelated node is deleted', async () => {
+    it('does not touch other htmlNode folders when an unrelated node is deleted', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
@@ -2523,18 +2425,20 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
 
       const first = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
+          id: 'first-html',
           type: 'htmlNode',
-          data: {},
+          data: { html: '<p>1</p>' },
         })
       ).json()) as { id: string };
       const second = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
+          id: 'second-html',
           type: 'htmlNode',
-          data: {},
+          data: { html: '<p>2</p>' },
         })
       ).json()) as { id: string };
-      const firstFile = join(repoPath, '.seeflow', 'blocks', `${first.id}.html`);
-      const secondFile = join(repoPath, '.seeflow', 'blocks', `${second.id}.html`);
+      const firstFile = join(repoPath, '.seeflow', 'nodes', first.id, 'view.html');
+      const secondFile = join(repoPath, '.seeflow', 'nodes', second.id, 'view.html');
       expect(existsSync(firstFile)).toBe(true);
       expect(existsSync(secondFile)).toBe(true);
 

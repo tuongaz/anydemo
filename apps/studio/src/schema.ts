@@ -190,7 +190,7 @@ const ShapeNodeSchema = z.object({
 
 // Decorative image node — references a file under `<project>/.seeflow/` by
 // relative path (US-004 hard-cut from base64 data URLs to path-backed files).
-// `path` is the same kind of relative path as `htmlPath` on htmlNode: rooted
+// `path` is a relative path under `<project>/.seeflow/` for imageNode uploads: rooted
 // at `.seeflow/`, no leading slash, no `..` segments. The renderer fetches via
 // `GET /api/projects/:id/files/:path`.
 const ImageNodeDataSchema = z.object({
@@ -210,23 +210,16 @@ const ImageNodeSchema = z.object({
 });
 
 // US-011 (illustrative-shapes-htmlnode): htmlNode is the escape-hatch node type
-// for content the curated nodes don't cover — references author-written HTML at
-// `<project>/.seeflow/<htmlPath>`. The renderer fetches via the file-serving
-// endpoint and sanitizes before injecting (US-013/US-014). `htmlPath` uses the
-// same path-safety refine as imageNode.path: relative under `.seeflow/`, no
-// absolute root, no `..` traversal. Spreads NodeVisualBaseShape so authors can
-// theme the wrapper (border / background / radius / font) with the same fields
+// for content the curated nodes don't cover — carries author-written HTML
+// inline via `data.html`. The studio externalizes the content to
+// `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in
+// flow.json; the resolver inlines the content back on read so consumers see
+// the resolved HTML string. The renderer sanitizes before injection
+// (US-013/US-014). Spreads NodeVisualBaseShape so authors can theme the
+// wrapper (border / background / radius / font) with the same fields
 // available on every other visual node.
-//
-// File existence is INTENTIONALLY not validated at the schema level. Missing
-// files are a normal authoring state (author drops a node, file hasn't been
-// written yet) and would otherwise reject the whole demo. The US-014 renderer
-// renders a `PlaceholderCard` instead — so a missing htmlPath WARNS (via the
-// placeholder visual) without ERRORING (without failing demo parse).
 export const HtmlNodeDataSchema = z.object({
-  htmlPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
-  }),
+  html: z.string().optional(),
   name: z.string().optional(),
   // Decorative caption glyph. Lucide icon name (kebab-case) resolved by the
   // canvas <Icon> primitive; rendered inline with the caption when set.
@@ -504,9 +497,7 @@ const FlowIconNodeDataSchema = z
 
 const FlowHtmlNodeDataSchema = z
   .object({
-    htmlPath: z.string().min(1).refine(isCleanRelativePath, {
-      message: 'htmlPath must be a relative path under .seeflow/ (no absolute / traversal)',
-    }),
+    html: z.string().optional(),
     name: z.string().optional(),
     icon: z.string().optional(),
     ...NodeDescriptionBaseShape,

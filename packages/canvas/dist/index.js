@@ -1516,7 +1516,7 @@ var createRestAdapter = (options) => {
 // src/nodes/html-node.tsx
 import { Handle as Handle2, Position as Position2, useUpdateNodeInternals } from "@xyflow/react";
 import { Maximize2 } from "lucide-react";
-import { memo as memo2, useEffect as useEffect4, useRef as useRef3 } from "react";
+import { memo as memo2, useEffect as useEffect3, useRef as useRef3 } from "react";
 
 // src/lib/debounced-resize-observer.ts
 function debouncedResizeObserver(el, delayMs, onSettle) {
@@ -1606,121 +1606,6 @@ function ensureTailwindLoaded() {
   document.head.appendChild(script);
 }
 
-// src/lib/use-html-content.ts
-import { useEffect as useEffect3, useState as useState4 } from "react";
-
-// src/lib/file-watch-bus.ts
-var defaultFactory = (url) => {
-  if (typeof EventSource === "undefined") return null;
-  return new EventSource(url);
-};
-var buses = /* @__PURE__ */ new Map();
-var factoryOverride = null;
-function subscribeFileChanged(projectId, listener) {
-  let entry = buses.get(projectId);
-  if (!entry) {
-    const factory = factoryOverride ?? defaultFactory;
-    const source = factory(`/api/events?flowId=${encodeURIComponent(projectId)}`);
-    if (!source) {
-      return () => {
-      };
-    }
-    const newEntry = { source, listeners: /* @__PURE__ */ new Set(), refCount: 0 };
-    source.addEventListener("file:changed", (e) => {
-      let path = void 0;
-      try {
-        const parsed = JSON.parse(e.data);
-        path = parsed.path;
-      } catch {
-        return;
-      }
-      if (typeof path !== "string") return;
-      for (const l of newEntry.listeners) l(path);
-    });
-    buses.set(projectId, newEntry);
-    entry = newEntry;
-  }
-  entry.listeners.add(listener);
-  entry.refCount += 1;
-  return () => {
-    const current = buses.get(projectId);
-    if (!current) return;
-    current.listeners.delete(listener);
-    current.refCount -= 1;
-    if (current.refCount === 0) {
-      current.source.close();
-      buses.delete(projectId);
-    }
-  };
-}
-
-// src/lib/use-html-content.ts
-var cache = /* @__PURE__ */ new Map();
-var cacheKey = (projectId, htmlPath) => `${projectId}::${htmlPath}`;
-function useHtmlContent(projectId, htmlPath, fileBaseUrl) {
-  const [state, setState] = useState4(() => {
-    if (!projectId || !htmlPath) return { kind: "loading" };
-    return cache.get(cacheKey(projectId, htmlPath)) ?? { kind: "loading" };
-  });
-  useEffect3(() => {
-    if (!projectId || !htmlPath) {
-      setState({ kind: "loading" });
-      return;
-    }
-    const key = cacheKey(projectId, htmlPath);
-    let cancelled = false;
-    const cached = cache.get(key);
-    if (cached) {
-      setState(cached);
-    } else {
-      setState({ kind: "loading" });
-    }
-    const run = async () => {
-      try {
-        const res = await fetch(fileUrl(projectId, htmlPath, fileBaseUrl));
-        if (cancelled) return;
-        if (res.status === 404) {
-          const missing = { kind: "missing" };
-          cache.set(key, missing);
-          setState(missing);
-          return;
-        }
-        if (!res.ok) {
-          const err = {
-            kind: "error",
-            message: `GET ${htmlPath} \u2192 ${res.status}`
-          };
-          cache.set(key, err);
-          setState(err);
-          return;
-        }
-        const html = await res.text();
-        if (cancelled) return;
-        const loaded = { kind: "loaded", html };
-        cache.set(key, loaded);
-        setState(loaded);
-      } catch (e) {
-        if (cancelled) return;
-        const err = {
-          kind: "error",
-          message: e instanceof Error ? e.message : String(e)
-        };
-        cache.set(key, err);
-        setState(err);
-      }
-    };
-    run();
-    const unsubscribe = subscribeFileChanged(projectId, (changedPath) => {
-      if (changedPath === htmlPath) run();
-    });
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [projectId, htmlPath, fileBaseUrl]);
-  return state;
-}
-
 // src/ui/icon.tsx
 import {
   createContext,
@@ -1786,20 +1671,21 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
     ...data.fontSize !== void 0 ? { fontSize: `${data.fontSize}px` } : {},
     ...colorTokenStyle(data.textColor, "text")
   };
-  useEffect4(() => {
+  useEffect3(() => {
     ensureTailwindLoaded();
   }, []);
   const measureRef = useRef3(null);
-  const content = useHtmlContent(data.projectId, data.htmlPath, data.fileBaseUrl);
-  const observerActive = autoSize && content.kind === "loaded";
+  const html = data.html ?? "";
+  const hasContent = html.length > 0;
+  const observerActive = autoSize && hasContent;
   let body;
-  if (content.kind === "loaded") {
+  if (hasContent) {
     body = userSized ? /* @__PURE__ */ jsx6(
       "div",
       {
         "data-testid": "html-node-content",
         className: "sf:h-full sf:w-full sf:overflow-auto",
-        ...injectSanitizedHtml(content.html)
+        ...injectSanitizedHtml(html)
       }
     ) : /* @__PURE__ */ jsx6(
       "div",
@@ -1808,22 +1694,18 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
         "data-testid": "html-node-content",
         className: "sf:inline-block",
         style: { maxWidth: 800, maxHeight: 600, overflow: "auto" },
-        ...injectSanitizedHtml(content.html)
+        ...injectSanitizedHtml(html)
       }
     );
-  } else if (content.kind === "missing") {
-    body = /* @__PURE__ */ jsx6(PlaceholderCard, { message: `Missing: ${data.htmlPath}`, variant: "destructive" });
-  } else if (content.kind === "error") {
-    body = /* @__PURE__ */ jsx6(PlaceholderCard, { message: `Error: ${content.message}`, variant: "destructive" });
   } else {
-    body = /* @__PURE__ */ jsx6(PlaceholderCard, { message: "Loading\u2026" });
+    body = /* @__PURE__ */ jsx6(PlaceholderCard, { message: "Empty htmlNode \u2014 write to view.html" });
   }
-  const placeholderFallback = !userSized && content.kind !== "loaded" ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height } : {};
+  const placeholderFallback = !userSized && !hasContent ? { width: HTML_DEFAULT_SIZE.width, height: HTML_DEFAULT_SIZE.height } : {};
   const outerStyle = {
     ...userSized ? { width: data.width, height: data.height } : {},
     ...placeholderFallback
   };
-  const innerShrinkWraps = !userSized && content.kind === "loaded";
+  const innerShrinkWraps = !userSized && hasContent;
   return /* @__PURE__ */ jsxs3(
     "div",
     {
@@ -1931,7 +1813,7 @@ function AutoSizeObserver({
   measureRef
 }) {
   const updateNodeInternals = useUpdateNodeInternals();
-  useEffect4(() => {
+  useEffect3(() => {
     const el = measureRef.current;
     if (el === null) return;
     return debouncedResizeObserver(el, 150, () => {
@@ -2077,11 +1959,11 @@ var ImageNode = memo3(ImageNodeImpl, arePropsEqual3);
 // src/nodes/play-node.tsx
 import { Handle as Handle4, Position as Position4 } from "@xyflow/react";
 import { AlertCircle, Check, Play } from "lucide-react";
-import { memo as memo4, useState as useState6 } from "react";
+import { memo as memo4, useState as useState5 } from "react";
 
 // src/components/icon-picker-popover.tsx
 import { Ban } from "lucide-react";
-import { useEffect as useEffect5, useMemo, useState as useState5 } from "react";
+import { useEffect as useEffect4, useMemo, useState as useState4 } from "react";
 
 // src/ui/popover.tsx
 import * as PopoverPrimitive from "@radix-ui/react-popover";
@@ -2142,9 +2024,9 @@ function IconPickerPopover({
   onPick,
   clearable = true
 }) {
-  const [query, setQuery] = useState5("");
+  const [query, setQuery] = useState4("");
   const recents = useMemo(() => open ? getRecents() : [], [open]);
-  useEffect5(() => {
+  useEffect4(() => {
     if (!open) setQuery("");
   }, [open]);
   return /* @__PURE__ */ jsxs5(Popover, { open, onOpenChange, children: [
@@ -2181,7 +2063,7 @@ function IconPickerBody({
   const filtered = useMemo(() => filterIcons(ICON_NAMES, query), [query]);
   const showRecents = query.trim() === "" && recents.length > 0;
   const showNoIconTile = clearable && query.trim() === "";
-  const [scrollTop, setScrollTop] = useState5(0);
+  const [scrollTop, setScrollTop] = useState4(0);
   const totalRows = Math.max(1, Math.ceil(filtered.length / COLS));
   const totalHeight = totalRows * ROW_HEIGHT;
   const visibleRowCount = Math.ceil(LIST_HEIGHT / ROW_HEIGHT) + OVERSCAN * 2;
@@ -2482,8 +2364,8 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState6(null);
-  const [iconPickerOpen, setIconPickerOpen] = useState6(false);
+  const [editing, setEditing] = useState5(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState5(false);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
   const iconEditable = !!data.onIconChange && !!selected && !!data.icon;
@@ -2751,7 +2633,7 @@ var PlayNode = memo4(PlayNodeImpl, arePropsEqual4);
 import { Handle as Handle5, Position as Position5 } from "@xyflow/react";
 import {
   memo as memo5,
-  useState as useState7
+  useState as useState6
 } from "react";
 
 // src/nodes/shapes/types.ts
@@ -3221,7 +3103,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState7(() => {
+  const [editing, setEditing] = useState6(() => {
     if (!data.autoEditOnMount) return null;
     const startsAsDescription = data.shape === "ellipse" || data.shape === "sticky" || data.shape === "rectangle" && (data.name === void 0 || data.name === "");
     return startsAsDescription ? "description" : "name";
@@ -3507,7 +3389,7 @@ var ShapeNode = memo5(ShapeNodeImpl, arePropsEqual5);
 
 // src/nodes/state-node.tsx
 import { Handle as Handle6, Position as Position6 } from "@xyflow/react";
-import { memo as memo6, useState as useState8 } from "react";
+import { memo as memo6, useState as useState7 } from "react";
 
 // src/nodes/status-icon-pill.tsx
 import { AlertTriangle, Check as Check2, Radar } from "lucide-react";
@@ -3571,8 +3453,8 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing
   });
-  const [editing, setEditing] = useState8(null);
-  const [iconPickerOpen, setIconPickerOpen] = useState8(false);
+  const [editing, setEditing] = useState7(null);
+  const [iconPickerOpen, setIconPickerOpen] = useState7(false);
   const nameEditable = !!data.onNameChange;
   const descEditable = !!data.onDescriptionChange;
   const iconEditable = !!data.onIconChange && !!selected && !!data.icon;
@@ -3828,7 +3710,7 @@ import {
   getSmoothStepPath,
   useInternalNode
 } from "@xyflow/react";
-import { useEffect as useEffect6, useRef as useRef4, useState as useState9 } from "react";
+import { useEffect as useEffect5, useRef as useRef4, useState as useState8 } from "react";
 import { Fragment as Fragment4, jsx as jsx22, jsxs as jsxs16 } from "react/jsx-runtime";
 function shouldFireEdgeHandoff(prev, next) {
   return next === "success" && prev !== "success";
@@ -3882,13 +3764,13 @@ function EditableEdge({
   interactionWidth,
   data
 }) {
-  const [editing, setEditing] = useState9(false);
+  const [editing, setEditing] = useState8(false);
   const sourceNode = useInternalNode(source);
   const targetNode = useInternalNode(target);
   const sourceData = sourceNode?.data ?? {};
   const sourceVisualStatus = deriveVisualStatus(sourceData.status, sourceData.statusReport);
   const prevSourceVisualStatusRef = useRef4(void 0);
-  useEffect6(() => {
+  useEffect5(() => {
     const prev = prevSourceVisualStatusRef.current;
     prevSourceVisualStatusRef.current = sourceVisualStatus;
     if (!shouldFireEdgeHandoff(prev, sourceVisualStatus)) return;
@@ -3949,7 +3831,7 @@ function EditableEdge({
   const targetSide = endpoints.target.side;
   const sourceShift = shiftAnchorForSide(sX, sY, sourceSide);
   const targetShift = shiftAnchorForSide(tX, tY, targetSide);
-  useEffect6(() => {
+  useEffect5(() => {
     const wrapper = document.querySelector(
       `.react-flow__edge[data-id="${CSS.escape(id)}"]`
     );
@@ -3987,7 +3869,7 @@ function EditableEdge({
   const fontSize = data?.fontSize;
   const fontSizeStyle = typeof fontSize === "number" ? { fontSize: `${fontSize}px` } : void 0;
   const registerEditHandle = data?.registerEditHandle;
-  useEffect6(() => {
+  useEffect5(() => {
     if (!registerEditHandle || !editable) return;
     return registerEditHandle(id, () => setEditing(true));
   }, [id, registerEditHandle, editable]);
@@ -4620,7 +4502,7 @@ import {
   Type,
   User
 } from "lucide-react";
-import { useState as useState10 } from "react";
+import { useState as useState9 } from "react";
 import { jsx as jsx33, jsxs as jsxs22 } from "react/jsx-runtime";
 var HTML_BLOCK_DND_TYPE = "application/x-seeflow-create-html-block";
 var TOP_PRIMARY_SHAPES = [
@@ -4664,7 +4546,7 @@ function CanvasToolbar({
   onCloseIconPicker,
   onPickIcon
 }) {
-  const [shapePickerOpen, setShapePickerOpen] = useState10(false);
+  const [shapePickerOpen, setShapePickerOpen] = useState9(false);
   const illustrativeActive = activeShape !== null && ILLUSTRATIVE_SHAPES2.some((s) => s.shape === activeShape);
   const renderShapeButton = ({ shape, commandId, Icon: Icon2 }) => {
     const active = activeShape === shape;
@@ -4793,9 +4675,9 @@ function CanvasToolbar({
 // src/components/detail-panel.tsx
 import { FolderOpen, ImagePlus, PencilLine } from "lucide-react";
 import {
-  useEffect as useEffect7,
+  useEffect as useEffect6,
   useRef as useRef5,
-  useState as useState11
+  useState as useState10
 } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -4824,7 +4706,7 @@ function DetailPanel({
   const supportsIconField = inspectableNode !== null && (inspectableNode.type === "playNode" || inspectableNode.type === "stateNode");
   const showIconField = supportsIconField && typeof onIconChange === "function";
   const currentIcon = supportsIconField && inspectableNode && "icon" in inspectableNode.data ? inspectableNode.data.icon ?? null : null;
-  const [width, setWidth] = useState11(() => getStoredDetailPanelWidth());
+  const [width, setWidth] = useState10(() => getStoredDetailPanelWidth());
   const onResizeHandlePointerDown = (e) => {
     e.preventDefault();
     startResizeGesture(width, e.clientX, {
@@ -4949,7 +4831,13 @@ function DetailPanel({
                     textClassName: "sf:text-sm sf:leading-relaxed sf:text-foreground/90"
                   }
                 ),
-                inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx34(HtmlNodeSection, { adapter, htmlPath: inspectableNode.data.htmlPath }) : null
+                inspectableNode.type === "htmlNode" && flowId ? /* @__PURE__ */ jsx34(
+                  HtmlNodeSection,
+                  {
+                    adapter,
+                    htmlPath: `nodes/${inspectableNode.id}/view.html`
+                  }
+                ) : null
               ] })
             ] }) : connector ? /* @__PURE__ */ jsxs23("div", { className: "sf:flex sf:flex-col sf:gap-4", children: [
               /* @__PURE__ */ jsxs23("div", { className: "sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12", children: [
@@ -4986,10 +4874,10 @@ function EditableField({
   textClassName,
   markdown = false
 }) {
-  const [isEditing, setIsEditing] = useState11(false);
+  const [isEditing, setIsEditing] = useState10(false);
   const editorRef = useRef5(null);
   const cancelOnBlurRef = useRef5(false);
-  useEffect7(() => {
+  useEffect6(() => {
     if (!isEditing) return;
     const el = editorRef.current;
     if (!el) return;
@@ -5111,7 +4999,7 @@ function TitleIconTrigger({
   icon,
   onChange
 }) {
-  const [open, setOpen] = useState11(false);
+  const [open, setOpen] = useState10(false);
   return /* @__PURE__ */ jsx34(
     IconPickerPopover,
     {
@@ -5143,7 +5031,7 @@ function HtmlNodeSection({
   adapter,
   htmlPath
 }) {
-  const [status, setStatus] = useState11({ kind: "idle" });
+  const [status, setStatus] = useState10({ kind: "idle" });
   const canOpen = typeof adapter?.openFile === "function";
   const canReveal = typeof adapter?.revealFile === "function";
   const dispatch = async (action) => {
@@ -5372,7 +5260,7 @@ function SummaryRow({ label, value }) {
 }
 
 // src/components/embed-dialog.tsx
-import { useCallback as useCallback2, useRef as useRef6, useState as useState12 } from "react";
+import { useCallback as useCallback2, useRef as useRef6, useState as useState11 } from "react";
 
 // src/lib/build-embed-snippet.ts
 var EMBED_HOST = "https://seeflow.dev/embed";
@@ -5401,7 +5289,7 @@ var CLOSE_LABEL = "Close";
 var COPIED_RESET_MS = 1500;
 function EmbedDialog({ open, onOpenChange, projectId }) {
   const snippet = buildEmbedSnippet(buildEmbedUrl(projectId));
-  const [copyStatus, setCopyStatus] = useState12("idle");
+  const [copyStatus, setCopyStatus] = useState11("idle");
   const textareaRef = useRef6(null);
   const handleCopy = useCallback2(async () => {
     try {
@@ -5460,7 +5348,7 @@ function EmbedDialog({ open, onOpenChange, projectId }) {
 
 // src/components/share-menu.tsx
 import { FileDown, Image as ImageIcon, Loader2, Share2, Square as Square2, Upload } from "lucide-react";
-import { useCallback as useCallback3, useState as useState13 } from "react";
+import { useCallback as useCallback3, useState as useState12 } from "react";
 import { Fragment as Fragment6, jsx as jsx36, jsxs as jsxs25 } from "react/jsx-runtime";
 var SHARE_LABEL = "Share / download";
 var DOWNLOAD_PDF_LABEL = "Download PDF";
@@ -5477,9 +5365,9 @@ function ShareMenu({
   embedOpen: embedOpenProp,
   onEmbedOpenChange
 }) {
-  const [downloadingPdf, setDownloadingPdf] = useState13(false);
-  const [downloadingPng, setDownloadingPng] = useState13(false);
-  const [internalEmbedOpen, setInternalEmbedOpen] = useState13(false);
+  const [downloadingPdf, setDownloadingPdf] = useState12(false);
+  const [downloadingPng, setDownloadingPng] = useState12(false);
+  const [internalEmbedOpen, setInternalEmbedOpen] = useState12(false);
   const embedControlled = embedOpenProp !== void 0;
   const embedOpen = embedControlled ? embedOpenProp : internalEmbedOpen;
   const setEmbedOpen = useCallback3(
@@ -5597,10 +5485,10 @@ function ShareMenu({
 
 // src/components/restart-demo-button.tsx
 import { Loader2 as Loader22, RefreshCw } from "lucide-react";
-import { useCallback as useCallback4, useState as useState14 } from "react";
+import { useCallback as useCallback4, useState as useState13 } from "react";
 import { jsx as jsx37, jsxs as jsxs26 } from "react/jsx-runtime";
 function RestartDemoButton({ onRestartDemo }) {
-  const [pending, setPending] = useState14(false);
+  const [pending, setPending] = useState13(false);
   const handleClick = useCallback4(() => {
     if (pending) return;
     setPending(true);
@@ -5632,7 +5520,7 @@ function RestartDemoButton({ onRestartDemo }) {
 import { useReactFlow } from "@xyflow/react";
 import {
   useRef as useRef7,
-  useState as useState15
+  useState as useState14
 } from "react";
 var SELECTION_OVERLAY_PADDING = 8;
 function computeUnionRect(nodes) {
@@ -5738,8 +5626,8 @@ function SelectionResizeOverlay({
   paddingPx = SELECTION_OVERLAY_PADDING
 }) {
   const reactFlow = useReactFlow();
-  const [dragState, setDragState] = useState15(null);
-  const [previewRect, setPreviewRect] = useState15(null);
+  const [dragState, setDragState] = useState14(null);
+  const [previewRect, setPreviewRect] = useState14(null);
   const shiftHeldRef = useRef7(false);
   const liveDispatchRafRef = useRef7(null);
   if (!selectionEligibleForOverlay(selectedNodes)) return null;
@@ -5864,7 +5752,7 @@ import {
   Sticker as Sticker2,
   Type as Type2
 } from "lucide-react";
-import { useEffect as useEffect8, useState as useState16 } from "react";
+import { useEffect as useEffect7, useState as useState15 } from "react";
 import { Fragment as Fragment7, jsx as jsx38, jsxs as jsxs27 } from "react/jsx-runtime";
 var NODE_FONT_SIZE_DEFAULT = 22;
 var CONNECTOR_FONT_SIZE_DEFAULT = 11;
@@ -6433,7 +6321,7 @@ function SwatchButton({
   innerTestId,
   onSelect
 }) {
-  const [open, setOpen] = useState16(false);
+  const [open, setOpen] = useState15(false);
   const isUnset = activeToken === "default";
   return /* @__PURE__ */ jsxs27(Popover, { open, onOpenChange: setOpen, children: [
     /* @__PURE__ */ jsxs27(Tooltip, { children: [
@@ -6579,7 +6467,7 @@ function PopoverButton({
   renderIcon,
   children
 }) {
-  const [open, setOpen] = useState16(false);
+  const [open, setOpen] = useState15(false);
   return /* @__PURE__ */ jsxs27(Popover, { open, onOpenChange: setOpen, children: [
     /* @__PURE__ */ jsxs27(Tooltip, { children: [
       /* @__PURE__ */ jsx38(TooltipTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(PopoverTrigger, { asChild: true, children: /* @__PURE__ */ jsx38(
@@ -6613,9 +6501,9 @@ function SliderControl({
   testId
 }) {
   const upstream = value ?? defaultValue;
-  const [local, setLocal] = useState16(upstream);
-  const [picked, setPicked] = useState16(false);
-  useEffect8(() => {
+  const [local, setLocal] = useState15(upstream);
+  const [picked, setPicked] = useState15(false);
+  useEffect7(() => {
     setLocal(upstream);
     setPicked(false);
   }, [upstream]);
@@ -6674,15 +6562,15 @@ import { LayoutDashboard, Maximize2 as Maximize22 } from "lucide-react";
 import {
   forwardRef as forwardRef11,
   useCallback as useCallback6,
-  useEffect as useEffect9,
+  useEffect as useEffect8,
   useImperativeHandle,
   useMemo as useMemo2,
   useRef as useRef8,
-  useState as useState18
+  useState as useState17
 } from "react";
 
 // src/hooks/use-canvas-export.ts
-import { useCallback as useCallback5, useState as useState17 } from "react";
+import { useCallback as useCallback5, useState as useState16 } from "react";
 
 // src/lib/export-image.ts
 import { toPng } from "html-to-image";
@@ -6737,7 +6625,7 @@ var useCanvasExport = ({
   projectId,
   getReactFlow
 }) => {
-  const [lastError, setLastError] = useState17(null);
+  const [lastError, setLastError] = useState16(null);
   const clearError = useCallback5(() => setLastError(null), []);
   const captureViewportFramed = useCallback5(async () => {
     const rf = getReactFlow();
@@ -7196,7 +7084,7 @@ var POSITION_BY_SIDE_LINE = {
 };
 function StoreApiBridge({ storeApiRef }) {
   const storeApi = useStoreApi();
-  useEffect9(() => {
+  useEffect8(() => {
     storeApiRef.current = storeApi;
     return () => {
       if (storeApiRef.current === storeApi) storeApiRef.current = null;
@@ -7379,7 +7267,7 @@ function SeeflowCanvasImpl(props, ref) {
   );
   const isEditMode = mode === "edit";
   const flagsRef = useRef8(flags);
-  useEffect9(() => {
+  useEffect8(() => {
     flagsRef.current = flags;
   }, [flags]);
   const effectiveAutoFitView = autoFitView ?? (mode === "mini" ? true : void 0);
@@ -7398,7 +7286,7 @@ function SeeflowCanvasImpl(props, ref) {
   const signalEffectMountedRef = useRef8(false);
   const resolvedAutoFitViewRef = useRef8(resolvedAutoFitView);
   resolvedAutoFitViewRef.current = resolvedAutoFitView;
-  useEffect9(() => {
+  useEffect8(() => {
     if (didMountFitRef.current) return;
     if (!resolvedAutoFitView.onMount) return;
     if (nodes.length === 0) return;
@@ -7418,17 +7306,17 @@ function SeeflowCanvasImpl(props, ref) {
       if (current === enter) editHandlesRef.current.delete(id);
     };
   }, []);
-  const [connecting, setConnecting] = useState18(false);
+  const [connecting, setConnecting] = useState17(false);
   const connectingRef = useRef8(false);
-  useEffect9(() => {
+  useEffect8(() => {
     connectingRef.current = connecting;
   }, [connecting]);
   const connectCancelledRef = useRef8(false);
   const reconnectCancelledRef = useRef8(false);
   const isReconnectingRef = useRef8(false);
-  const [dropPopover, setDropPopover] = useState18(null);
+  const [dropPopover, setDropPopover] = useState17(null);
   const dropPopoverRef = useRef8(null);
-  useEffect9(() => {
+  useEffect8(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
   const closeDropPopover = useCallback6(() => {
@@ -7475,7 +7363,7 @@ function SeeflowCanvasImpl(props, ref) {
     setConnectSource(null);
     setConnectTarget(null);
   }, [setConnectSource, setConnectTarget]);
-  useEffect9(() => {
+  useEffect8(() => {
     if (!connecting) {
       setConnectTarget(null);
       return;
@@ -7494,13 +7382,13 @@ function SeeflowCanvasImpl(props, ref) {
       document.removeEventListener("pointermove", onMove);
     };
   }, [connecting, setConnectTarget]);
-  const [drawStart, setDrawStart] = useState18(null);
-  const [drawCurrent, setDrawCurrent] = useState18(null);
+  const [drawStart, setDrawStart] = useState17(null);
+  const [drawCurrent, setDrawCurrent] = useState17(null);
   const drawShapeRef = useRef8(null);
   const drawStartRef = useRef8(null);
   const drawCurrentRef = useRef8(null);
   const drawingRef = useRef8(false);
-  useEffect9(() => {
+  useEffect8(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
   const exitDrawMode = useCallback6(() => {
@@ -7512,7 +7400,7 @@ function SeeflowCanvasImpl(props, ref) {
     drawCurrentRef.current = null;
     drawingRef.current = false;
   }, [setDrawShape]);
-  useEffect9(() => {
+  useEffect8(() => {
     if (!flags.enableKeyboard) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
@@ -7551,7 +7439,7 @@ function SeeflowCanvasImpl(props, ref) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [exitDrawMode, flags.enableKeyboard]);
-  useEffect9(() => {
+  useEffect8(() => {
     if (!flags.enableKeyboard) return;
     const onKey = (e) => {
       handleClipboardShortcut({
@@ -7636,7 +7524,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [flushPendingFit]
   );
-  useEffect9(() => {
+  useEffect8(() => {
     if (!signalEffectMountedRef.current) {
       signalEffectMountedRef.current = true;
       return;
@@ -7649,13 +7537,13 @@ function SeeflowCanvasImpl(props, ref) {
     rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
   }, [autoFitViewSignal]);
   const contextEnabled = !!onReorderNode || !!onDeleteNode || !!onCopyNode || !!onPasteAt || !!onUnpinEndpoint;
-  const [contextMenuPos, setContextMenuPos] = useState18(null);
-  const [contextOnNode, setContextOnNode] = useState18(false);
-  const [contextNodeType, setContextNodeType] = useState18(null);
-  const [contextEndpoint, setContextEndpoint] = useState18(null);
+  const [contextMenuPos, setContextMenuPos] = useState17(null);
+  const [contextOnNode, setContextOnNode] = useState17(false);
+  const [contextNodeType, setContextNodeType] = useState17(null);
+  const [contextEndpoint, setContextEndpoint] = useState17(null);
   const contextNodeIdRef = useRef8(null);
   const contextTriggerRef = useRef8(null);
-  useEffect9(() => {
+  useEffect8(() => {
     if (!contextMenuPos) return;
     const trigger = contextTriggerRef.current;
     if (!trigger) return;
@@ -7846,24 +7734,24 @@ function SeeflowCanvasImpl(props, ref) {
     pendingEditNodeId,
     isEditMode
   ]);
-  const [rfNodes, setRfNodes] = useState18(sourceNodes);
-  useEffect9(() => {
+  const [rfNodes, setRfNodes] = useState17(sourceNodes);
+  useEffect8(() => {
     if (draggingRef.current || resizingRef.current) return;
     setRfNodes(sourceNodes);
   }, [sourceNodes]);
-  useEffect9(() => {
+  useEffect8(() => {
     rfNodesRef.current = rfNodes;
   }, [rfNodes]);
   const selectedIdSetRef = useRef8(selectedNodeIdSet);
-  useEffect9(() => {
+  useEffect8(() => {
     selectedIdSetRef.current = selectedNodeIdSet;
   }, [selectedNodeIdSet]);
   const onSelectionChangeRef = useRef8(onSelectionChange);
-  useEffect9(() => {
+  useEffect8(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
   const selectedConnIdSetRef = useRef8(selectedConnectorIdSet);
-  useEffect9(() => {
+  useEffect8(() => {
     selectedConnIdSetRef.current = selectedConnectorIdSet;
   }, [selectedConnectorIdSet]);
   const rfNodesRef = useRef8(sourceNodes);
@@ -8127,7 +8015,7 @@ function SeeflowCanvasImpl(props, ref) {
     registerEditHandle,
     isEditMode
   ]);
-  useEffect9(() => {
+  useEffect8(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
   const adapterMaybe = props.adapter ?? null;
@@ -8412,9 +8300,9 @@ function SeeflowCanvasImpl(props, ref) {
   const ghostShapeClass = drawShape ? shapeChromeClass(drawShape) : "";
   const ghostShapeStyle = drawShape ? shapeChromeStyle(drawShape) : void 0;
   const ghostTextOutline = drawShape === "text";
-  const [spaceHeld, setSpaceHeld] = useState18(false);
-  const [spaceDragging, setSpaceDragging] = useState18(false);
-  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState18(false);
+  const [spaceHeld, setSpaceHeld] = useState17(false);
+  const [spaceDragging, setSpaceDragging] = useState17(false);
+  const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState17(false);
   const exportApi = useCanvasExport({
     projectId,
     getReactFlow: () => rfInstanceRef.current
@@ -8429,7 +8317,7 @@ function SeeflowCanvasImpl(props, ref) {
     }),
     [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview]
   );
-  useEffect9(() => {
+  useEffect8(() => {
     if (!flags.enableKeyboard) return;
     const isEditable = (el) => {
       if (!el) return false;

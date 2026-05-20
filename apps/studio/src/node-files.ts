@@ -2,7 +2,27 @@ import { mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
 
-export const EXTERNALIZED_NODE_FIELDS = [{ field: 'detail', fileName: 'detail.md' }] as const;
+// Spec for fields that the studio externalizes to disk under
+// `<project>/.seeflow/nodes/<id>/<fileName>`. `nodeTypes` (when present)
+// scopes the spec entry to specific node types; absent means "applies to
+// every node type". Adding a future text field is one line.
+export interface ExternalizedFieldSpec {
+  field: string;
+  fileName: string;
+  nodeTypes?: readonly string[];
+}
+
+export const EXTERNALIZED_NODE_FIELDS: readonly ExternalizedFieldSpec[] = [
+  { field: 'detail', fileName: 'detail.md' },
+  { field: 'html', fileName: 'view.html', nodeTypes: ['htmlNode'] },
+];
+
+export const externalizedFieldsForNodeType = (
+  nodeType: unknown,
+): readonly ExternalizedFieldSpec[] => {
+  if (typeof nodeType !== 'string') return EXTERNALIZED_NODE_FIELDS.filter((e) => !e.nodeTypes);
+  return EXTERNALIZED_NODE_FIELDS.filter((e) => !e.nodeTypes || e.nodeTypes.includes(nodeType));
+};
 
 export type ExternalizedFieldName = (typeof EXTERNALIZED_NODE_FIELDS)[number]['field'];
 

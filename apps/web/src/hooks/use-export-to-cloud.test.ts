@@ -152,8 +152,7 @@ describe('exportToCloud', () => {
     expect(entries['files/assets/img.png']).toEqual(pngBytes);
   });
 
-  it('fetches htmlNode files and includes them under files/ in the zip', async () => {
-    const htmlBytes = new Uint8Array([60, 104, 116, 109, 108, 62]);
+  it('inlines htmlNode content into flow.json without bundling files/ (resolver inlined it)', async () => {
     const demo: Flow = {
       version: 2,
       name: 'Html Flow',
@@ -162,7 +161,7 @@ describe('exportToCloud', () => {
           id: 'n1',
           type: 'htmlNode',
           position: { x: 0, y: 0 },
-          data: { htmlPath: 'blocks/widget.html', name: 'Widget' },
+          data: { html: '<p>inlined</p>', name: 'Widget' },
         },
       ],
       connectors: [],
@@ -173,9 +172,6 @@ describe('exportToCloud', () => {
     installMock((url, init) => {
       requests.push(url);
       if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(demo) };
-      if (url.includes('/api/projects/') && url.includes('/files/')) {
-        return { status: 200, body: null, binary: htmlBytes };
-      }
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -186,10 +182,14 @@ describe('exportToCloud', () => {
 
     await exportToCloud('proj-1', 'test@example.com', 'Html Flow', 'public');
 
-    expect(requests[1]).toContain('/api/projects/proj-1/files/blocks/widget.html');
+    // No file bundling needed for htmlNode — content rides inside flow.json.
+    expect(requests.some((u) => u.includes('/files/'))).toBe(false);
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
-    expect('files/blocks/widget.html' in entries).toBe(true);
+    expect('flow.json' in entries).toBe(true);
+    // The inlined HTML round-trips through the zip's flow.json.
+    const flowText = new TextDecoder().decode(entries['flow.json']);
+    expect(flowText).toContain('inlined');
   });
 
   it('deduplicates file paths when multiple nodes reference the same file', async () => {

@@ -74,7 +74,7 @@ interface IconNodeData extends NodeDescription {
     name?: string;
 }
 interface HtmlNodeData extends NodeVisual, NodeDescription {
-    htmlPath: string;
+    html?: string;
     name?: string;
     icon?: string;
     autoSize?: boolean;
@@ -1181,20 +1181,6 @@ type HtmlNodeRuntimeData = HtmlNodeData & {
         y: number;
     }) => void;
     setResizing?: (on: boolean) => void;
-    /**
-     * US-014: project id injected into every node's runtime data by demo-canvas
-     * so the renderer can build a project-scoped file URL. Mirrors the same
-     * field on `ImageNodeRuntimeData` (US-004). Not persisted to disk —
-     * `htmlPath` is the only on-disk reference.
-     */
-    projectId?: string;
-    /**
-     * Optional override for the file-serving URL prefix. Mirrors the same field
-     * on `ImageNodeRuntimeData`. Threaded down from `<SeeflowCanvas>` so
-     * embedders (e.g. the public viewer) can point file fetches at a different
-     * host/route shape than the default `/api/projects`. Not persisted to disk.
-     */
-    fileBaseUrl?: string;
     onFitToContent?: (nodeId: string) => void;
 } & Record<string, unknown>;
 type HtmlNodeType = Node<HtmlNodeRuntimeData, 'htmlNode'>;

@@ -19,16 +19,15 @@ export async function exportToCloud(
   }
   const demo = detail.flow;
 
-  // Deduplicate paths across imageNode and htmlNode references
+  // Bundle imageNode binaries. Text-content fields (detail, htmlNode html)
+  // ride on the file:// resolver and are already inlined in the flow JSON,
+  // so no separate bundling is needed for them.
   const seen = new Set<string>();
   const filePaths: string[] = [];
   for (const node of demo.nodes) {
     if (node.type === 'imageNode' && node.data.path && !seen.has(node.data.path)) {
       seen.add(node.data.path);
       filePaths.push(node.data.path);
-    } else if (node.type === 'htmlNode' && node.data.htmlPath && !seen.has(node.data.htmlPath)) {
-      seen.add(node.data.htmlPath);
-      filePaths.push(node.data.htmlPath);
     }
   }
 

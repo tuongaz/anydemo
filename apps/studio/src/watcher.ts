@@ -71,7 +71,8 @@ export interface FlowWatcher {
   ): void;
   /**
    * Relative paths (under `<project>/.seeflow/`) currently being watched
-   * because they're referenced by a node's `data.htmlPath` or `data.path`.
+   * because they're referenced by a node's `data.path` (imageNode). htmlNode
+   * content rides on the file:// resolver via `data.html`, not this list.
    * Sorted for stable assertion order. Used by tests.
    */
   referencedPaths(flowId: string): string[];
@@ -91,7 +92,7 @@ interface WatchHandle {
   filePath: string;
   /**
    * Per-directory file watchers for files referenced by node data
-   * (`htmlPath`, imageNode `path`). Each directory watcher dispatches to
+   * (imageNode `path`). Each directory watcher dispatches to
    * specific basenames in its `files` map.
    */
   fileWatchers: Map<string, FileWatchEntry>;
@@ -129,10 +130,11 @@ const isCleanRelativePath = (p: string): boolean => {
 };
 
 /**
- * Walk raw flow JSON (pre-schema-parse) collecting referenced file
- * paths: `nodes[].data.htmlPath` (htmlNode) and `nodes[].data.path`
- * (imageNode). Operates on the raw JSON so the watcher works before those
- * fields are formally validated.
+ * Walk raw flow JSON (pre-schema-parse) collecting referenced file paths:
+ * `nodes[].data.path` (imageNode). htmlNode content now flows through the
+ * `file://nodes/<id>/view.html` ref handled by the file-ref resolver, so it
+ * does NOT need a separate fs.watch entry here. Operates on the raw JSON so
+ * the watcher works before those fields are formally validated.
  */
 const collectReferencedPaths = (raw: unknown): string[] => {
   if (!raw || typeof raw !== 'object') return [];
@@ -143,12 +145,10 @@ const collectReferencedPaths = (raw: unknown): string[] => {
     if (!node || typeof node !== 'object') continue;
     const data = (node as { data?: unknown }).data;
     if (!data || typeof data !== 'object') continue;
-    const d = data as { htmlPath?: unknown; path?: unknown };
-    for (const candidate of [d.htmlPath, d.path]) {
-      if (typeof candidate !== 'string') continue;
-      if (!isCleanRelativePath(candidate)) continue;
-      out.add(candidate);
-    }
+    const d = data as { path?: unknown };
+    if (typeof d.path !== 'string') continue;
+    if (!isCleanRelativePath(d.path)) continue;
+    out.add(d.path);
   }
   return [...out];
 };
@@ -164,7 +164,7 @@ export interface ReadMergedFlowResult {
   error: string | null;
   /** Sorted relative paths under `<seeflowRoot>` resolved via file://. */
   fileRefs: string[];
-  /** Flow file paths referenced via htmlPath / imageNode.path. */
+  /** Flow file paths referenced via imageNode.path. */
   staticRefs: string[];
 }
 
@@ -394,7 +394,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
 
     snapshots.set(flowId, next);
 
-    // Reconcile the referenced-file watch set: htmlPath/imageNode.path from
+    // Reconcile the referenced-file watch set: imageNode.path from
     // flow + any file:// targets that resolved cleanly. Schema errors
     // shouldn't drop the watch set — the user is mid-edit and the referenced
     // files are still valid targets, so this reconciles whenever the JSON

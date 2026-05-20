@@ -260,7 +260,10 @@ export function DetailPanel({
               />
 
               {inspectableNode.type === 'htmlNode' && flowId ? (
-                <HtmlNodeSection adapter={adapter} htmlPath={inspectableNode.data.htmlPath} />
+                <HtmlNodeSection
+                  adapter={adapter}
+                  htmlPath={`nodes/${inspectableNode.id}/view.html`}
+                />
               ) : null}
             </div>
           </div>

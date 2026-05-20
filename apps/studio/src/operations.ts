@@ -14,6 +14,7 @@ import { writeFileAtomic } from './atomic-write.ts';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
   EXTERNALIZED_NODE_FIELDS,
+  externalizedFieldsForNodeType,
   nodeFileAbsPath,
   nodeFileRef,
   removeNodeDir,
@@ -893,10 +894,10 @@ export async function addNodeImpl(
     newNode.position = { x: 0, y: 0 };
   }
 
-  // Generic spec-driven externalization. For every entry in
-  // EXTERNALIZED_NODE_FIELDS, capture inbound content (default empty string),
-  // replace data[field] with the file:// ref, and queue a write inside the
-  // mutator below — so flow.json only commits when the write succeeded.
+  // Generic spec-driven externalization. For each spec entry that applies to
+  // this node type, capture inbound content (default empty string), replace
+  // data[field] with the file:// ref, and queue a write inside the mutator
+  // below — so flow.json only commits when the write succeeded.
   const externalized: Array<{ absPath: string; content: string }> = [];
   {
     const dataIsRecord =
@@ -904,7 +905,7 @@ export async function addNodeImpl(
     const data: Record<string, unknown> = dataIsRecord
       ? { ...(newNode.data as Record<string, unknown>) }
       : {};
-    for (const { field, fileName } of EXTERNALIZED_NODE_FIELDS) {
+    for (const { field, fileName } of externalizedFieldsForNodeType(newNode.type)) {
       const incoming = data[field];
       const content = typeof incoming === 'string' ? incoming : '';
       data[field] = nodeFileRef(newId, fileName);
@@ -914,34 +915,6 @@ export async function addNodeImpl(
       });
     }
     newNode.data = data;
-  }
-
-  // US-015: for htmlNode without a client-supplied htmlPath, allocate the
-  // studio-managed `blocks/<id>.html` path and queue a starter-file write.
-  // Client-supplied htmlPath wins and we skip the starter file (symmetric
-  // with US-016's hand-edited-path leave-alone rule).
-  let starterFile: { absPath: string; content: string } | undefined;
-  if (newNode.type === 'htmlNode') {
-    const dataIsRecord =
-      newNode.data !== null && typeof newNode.data === 'object' && !Array.isArray(newNode.data);
-    const existingData: Record<string, unknown> = dataIsRecord
-      ? { ...(newNode.data as Record<string, unknown>) }
-      : {};
-    const clientProvidedHtmlPath =
-      typeof existingData.htmlPath === 'string' && existingData.htmlPath.length > 0;
-    if (!clientProvidedHtmlPath) {
-      const htmlPath = `blocks/${newId}.html`;
-      existingData.htmlPath = htmlPath;
-      newNode.data = existingData;
-      starterFile = {
-        absPath: join(entry.repoPath, '.seeflow', htmlPath),
-        content: buildHtmlNodeStarter(newId),
-      };
-    } else if (!dataIsRecord) {
-      // Coerce non-object data into the spread'd record so the schema parse
-      // sees the right shape — shouldn't happen in practice but keeps types honest.
-      newNode.data = existingData;
-    }
   }
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -960,14 +933,6 @@ export async function addNodeImpl(
           return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
         }
       }
-      if (starterFile) {
-        try {
-          mkdirSync(dirname(starterFile.absPath), { recursive: true });
-          writeFileAtomic(starterFile.absPath, starterFile.content);
-        } catch (err) {
-          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
-        }
-      }
       return { kind: 'ok' };
     },
   );
@@ -976,26 +941,12 @@ export async function addNodeImpl(
   return result;
 }
 
-// US-015: starter HTML content for studio-created htmlNodes. Centered 'Edit me'
-// card with a `blocks/<id>.html` subtitle — matches the design's Section 6
-// markup exactly so the renderer paints a useful first impression while the
-// author hasn't yet edited the file.
-const buildHtmlNodeStarter = (nodeId: string): string =>
-  `<div class="flex h-full w-full items-center justify-center rounded-lg border border-slate-300 bg-white p-4 text-slate-900">
-  <div class="text-center">
-    <div class="font-semibold">Edit me</div>
-    <div class="text-xs text-slate-500">blocks/${nodeId}.html</div>
-  </div>
-</div>
-`;
-
 // Remove a node and cascade-delete every connector touching it in a single
 // atomic write. Final ResolvedFlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
-// US-016: when the removed node is an htmlNode whose data.htmlPath matches the
-// studio-managed shape `blocks/<id>.html`, the companion file is removed AFTER
-// the flow.json write succeeds. Hand-edited paths are left alone (symmetric
-// with US-015's "client-supplied htmlPath wins, no starter file written").
+// After the flow.json write, `removeNodeDir` cascades the node's whole
+// `<project>/.seeflow/nodes/<id>/` folder — covering detail.md, view.html,
+// and any imageNode upload that lived there.
 export async function deleteNodeImpl(
   deps: OperationsDeps,
   flowId: string,
@@ -1007,8 +958,6 @@ export async function deleteNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  let managedHtmlAbsPath: string | undefined;
-
   const result = await mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' }>(
     deps,
     flowId,
@@ -1016,8 +965,6 @@ export async function deleteNodeImpl(
     (flow) => {
       const idx = flow.nodes.findIndex((n) => n.id === nodeId);
       if (idx < 0) return { kind: 'unknownNode' };
-      const removed = flow.nodes[idx];
-      managedHtmlAbsPath = managedHtmlNodePath(entry.repoPath, nodeId, removed);
       flow.nodes.splice(idx, 1);
       flow.connectors = flow.connectors.filter(
         (cn) => cn.source !== nodeId && cn.target !== nodeId,
@@ -1025,21 +972,6 @@ export async function deleteNodeImpl(
       return { kind: 'ok' };
     },
   );
-
-  if (result.kind === 'ok' && managedHtmlAbsPath) {
-    try {
-      unlinkSync(managedHtmlAbsPath);
-    } catch (err) {
-      const code = (err as NodeJS.ErrnoException | undefined)?.code;
-      if (code !== 'ENOENT') {
-        console.warn(
-          `[operations] failed to remove managed htmlNode file ${managedHtmlAbsPath}: ${
-            err instanceof Error ? err.message : String(err)
-          }`,
-        );
-      }
-    }
-  }
 
   if (result.kind === 'ok') {
     try {
@@ -1053,23 +985,6 @@ export async function deleteNodeImpl(
 
   return result;
 }
-
-// US-016: only delete the companion file when the htmlPath matches the
-// studio-managed shape `blocks/<id>.html` exactly. Hand-edited paths
-// (`custom/hero.html`, an absolute path, anything else) are left alone so
-// authors don't lose work they pointed the node at.
-const managedHtmlNodePath = (
-  repoPath: string,
-  nodeId: string,
-  removed: Record<string, unknown> | undefined,
-): string | undefined => {
-  if (!removed || removed.type !== 'htmlNode') return undefined;
-  const data = removed.data;
-  if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
-  const htmlPath = (data as Record<string, unknown>).htmlPath;
-  if (htmlPath !== `blocks/${nodeId}.html`) return undefined;
-  return join(repoPath, '.seeflow', htmlPath);
-};
 
 // Move a single node by writing { x, y } back to its `position` on disk.
 // Mutates the *raw* parsed JSON so any unknown forward-compat fields the
@@ -1122,28 +1037,27 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const externalizedWrites: Array<{
-    absPath: string;
-    ref: string;
-    field: string;
-    content: string;
-  }> = [];
-  for (const { field, fileName } of EXTERNALIZED_NODE_FIELDS) {
-    const incoming = (updates as Record<string, unknown>)[field];
-    if (incoming === undefined) continue;
-    externalizedWrites.push({
-      absPath: nodeFileAbsPath(entry.repoPath, nodeId, fileName),
-      ref: nodeFileRef(nodeId, fileName),
-      field,
-      content: typeof incoming === 'string' ? incoming : '',
-    });
-  }
-
   return mutateMergedFlowAndBroadcast<
     { kind: 'unknownNode' } | { kind: 'writeFailed'; message: string }
   >(deps, flowId, fullPath, (flow) => {
     const node = flow.nodes.find((n) => n.id === nodeId);
     if (!node) return { kind: 'unknownNode' };
+    const externalizedWrites: Array<{
+      absPath: string;
+      ref: string;
+      field: string;
+      content: string;
+    }> = [];
+    for (const { field, fileName } of externalizedFieldsForNodeType(node.type)) {
+      const incoming = (updates as Record<string, unknown>)[field];
+      if (incoming === undefined) continue;
+      externalizedWrites.push({
+        absPath: nodeFileAbsPath(entry.repoPath, nodeId, fileName),
+        ref: nodeFileRef(nodeId, fileName),
+        field,
+        content: typeof incoming === 'string' ? incoming : '',
+      });
+    }
     mergeNodeUpdates(node, updates);
     if (externalizedWrites.length > 0) {
       const dataAny = node.data;
