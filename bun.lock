@@ -27,7 +27,7 @@
       },
       "dependencies": {
         "@modelcontextprotocol/sdk": "^1.29.0",
-        "dagre": "^0.8.5",
+        "elkjs": "^0.11.1",
         "hono": "^4.6.14",
         "zod": "^3.23.8",
         "zod-to-json-schema": "^3.25.2",
@@ -35,7 +35,6 @@
       "devDependencies": {
         "@tailwindcss/browser": "^4.3.0",
         "@types/bun": "^1.1.14",
-        "@types/dagre": "^0.7.54",
         "typescript": "^5.6.3",
       },
     },
@@ -86,7 +85,6 @@
         "class-variance-authority": "^0.7.0",
         "clsx": "^2.1.1",
         "cmdk": "^1.0.0",
-        "dagre": "^0.8.5",
         "html-to-image": "^1.11.13",
         "jspdf": "^4.2.1",
         "tailwind-merge": "^2.5.4",
@@ -95,7 +93,6 @@
         "@tailwindcss/cli": "^4.3.0",
         "@tailwindcss/postcss": "^4.3.0",
         "@types/bun": "^1.1.0",
-        "@types/dagre": "^0.7.54",
         "@types/react": "^18.3.12",
         "autoprefixer": "^10.4.20",
         "happy-dom": "^20.9.0",
@@ -497,8 +494,6 @@
 
     "@types/d3-zoom": ["@types/d3-zoom@3.0.8", "", { "dependencies": { "@types/d3-interpolate": "*", "@types/d3-selection": "*" } }, "sha512-iqMC4/YlFCSlO8+2Ii1GGGliCAY4XdeG748w5vQUbevlbDu0zSjH/+jojorQVBK/se0j6DUFNPBGSqD3YWYnDw=="],
 
-    "@types/dagre": ["@types/dagre@0.7.54", "", {}, "sha512-QjcRY+adGbYvBFS7cwv5txhVIwX1XXIUswWl+kSQTbI6NjgZydrZkEKX/etzVd7i+bCsCb40Z/xlBY5eoFuvWQ=="],
-
     "@types/debug": ["@types/debug@4.1.13", "", { "dependencies": { "@types/ms": "*" } }, "sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
@@ -682,6 +677,8 @@
     "ee-first": ["ee-first@1.1.1", "", {}, "sha512-WMwm9LhRUo+WUaRN+vRuETqG89IgZphVSNkdFgeb6sS/E4OrDIN7t48CAewSHXc6C8lefD8KKfr5vY61brQlow=="],
 
     "electron-to-chromium": ["electron-to-chromium@1.5.356", "", {}, "sha512-9NgFd7m5t5MCJ5rUSjJITUXAH9mEGlrlofnMf4YEr+pz6JlP7cWmTAH+JFmbPnaSW8koVTkuW7pacORWAnA5Yw=="],
+
+    "elkjs": ["elkjs@0.11.1", "", {}, "sha512-zxxR9k+rx5ktMwT/FwyLdPCrq7xN6e4VGGHH8hA01vVYKjTFik7nHOxBnAYtrgYUB1RpAiLvA1/U2YraWxyKKg=="],
 
     "emoji-regex": ["emoji-regex@8.0.0", "", {}, "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A=="],
 

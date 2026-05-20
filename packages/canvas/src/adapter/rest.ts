@@ -9,6 +9,9 @@ import type {
   CanvasAdapter,
   ConnectorCreateInput,
   ConnectorPatch,
+  LayoutEdgeInput,
+  LayoutNodeInput,
+  LayoutResult,
   NodeCreateInput,
   NodePatch,
   PlayNodeResult,
@@ -153,6 +156,18 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
         { path },
       );
+    },
+
+    async computeLayout(
+      nodes: readonly LayoutNodeInput[],
+      edges: readonly LayoutEdgeInput[],
+    ): Promise<LayoutResult> {
+      const res = await requestJson<{
+        ok: true;
+        nodes: LayoutResult['nodes'];
+        connectors: LayoutResult['connectors'];
+      }>(fetchImpl, 'POST', `${baseUrl}/api/layout`, { nodes, edges });
+      return { nodes: res.nodes, connectors: res.connectors };
     },
   };
 };

@@ -1,6 +1,6 @@
-import dagre from 'dagre';
 import { z } from 'zod';
-import { ResolvedFlowSchema } from './schema.ts';
+import { type LayoutEdge, type LayoutNode, computeLayout } from './layout.ts';
+import { type FlowNode, ResolvedFlowSchema } from './schema.ts';
 
 // Pure-compute helpers backing the three diagram-pipeline endpoints. No file
 // I/O lives here — the skill writes responses to disk on the user's machine.
@@ -153,7 +153,7 @@ const slugify = (raw: string): string =>
     .replace(/^-+|-+$/g, '')
     .slice(0, 80);
 
-export const assembleDemo = (req: AssembleRequest): AssembleResult => {
+export const assembleDemo = async (req: AssembleRequest): Promise<AssembleResult> => {
   const stats: AssembleStats = {
     nodesIn: req.wiring.nodes.length,
     connectorsIn: req.wiring.connectors.length,
@@ -170,7 +170,7 @@ export const assembleDemo = (req: AssembleRequest): AssembleResult => {
   const nodes = normalizeNodes(req.wiring.nodes, positions, stats);
   const nodeIds = new Set(nodes.map((n) => n.id as string));
   const connectors = normalizeConnectors(req.wiring.connectors, nodeIds, stats);
-  const positionedNodes = autoLayout(nodes, connectors, stats);
+  const positionedNodes = await autoLayout(nodes, connectors, stats);
 
   stats.nodesOut = positionedNodes.length;
   stats.connectorsOut = connectors.length;
@@ -235,89 +235,49 @@ const normalizeConnectors = (
   return [...seen.values()];
 };
 
-// Dagre-based auto-layout — exactly the algorithm the web canvas's "Tidy
-// layout" button runs (apps/web/src/lib/auto-layout.ts), so pressing Tidy on
-// a freshly-assembled demo never reshuffles the diagram.
-//
-//   • Direction: left-to-right (LR) — Actors on the left, data stores on the
-//     right, matching the lifecycle-lane intent of the layout-arranger agent.
-//   • `nodesep` / `ranksep` defaults give connectors a bit of extra length so
-//     edge labels fit and the canvas reads at a glance.
-//   • Sticky / text shape nodes stay pinned to their input position — they
-//     are floating annotations, not part of the flow graph.
-const LAYOUT_NODESEP = 60;
-const LAYOUT_RANKSEP = 140;
-const LAYOUT_DEFAULT_W = 200;
-const LAYOUT_DEFAULT_H = 120;
-
+// ELK-backed auto-layout. Delegates to `computeLayout` in layout.ts, the
+// same engine that backs POST /api/layout and the canvas Tidy button — so
+// pressing Tidy on a freshly-assembled demo doesn't reshuffle the diagram.
+// Single-flow-node graphs short-circuit so callers can pin standalone
+// nodes via `layout.positions`.
 const isFloatingAnnotation = (n: Record<string, unknown>): boolean => {
   if (n.type !== 'shapeNode') return false;
   const shape = (n.data as { shape?: string } | undefined)?.shape;
   return shape === 'sticky' || shape === 'text';
 };
 
-const nodeDimensions = (n: Record<string, unknown>): { w: number; h: number } => {
-  const data = (n.data ?? {}) as { width?: number; height?: number; shape?: string };
-  const w =
-    typeof data.width === 'number'
-      ? data.width
-      : n.type === 'shapeNode' && data.shape === 'text'
-        ? 160
-        : LAYOUT_DEFAULT_W;
-  let h = LAYOUT_DEFAULT_H;
-  if (typeof data.height === 'number') h = data.height;
-  else if (n.type === 'shapeNode' && data.shape === 'text') h = 40;
-  else if (n.type === 'shapeNode' && data.shape === 'sticky') h = 180;
-  else if (n.type === 'imageNode') h = 150;
-  return { w, h };
-};
-
-const autoLayout = (
+const autoLayout = async (
   nodes: ReadonlyArray<Record<string, unknown>>,
   connectors: ReadonlyArray<Record<string, unknown>>,
   stats: AssembleStats,
-): Array<Record<string, unknown>> => {
+): Promise<Array<Record<string, unknown>>> => {
   if (nodes.length === 0) return [];
 
   const flowNodes = nodes.filter((n) => !isFloatingAnnotation(n));
-  // A single flow node has no layout to compute — keep its input position so
-  // callers can pin standalone nodes via `layout.positions`.
   if (flowNodes.length <= 1) return [...nodes];
 
-  const g = new dagre.graphlib.Graph({ multigraph: true });
-  g.setGraph({ rankdir: 'LR', nodesep: LAYOUT_NODESEP, ranksep: LAYOUT_RANKSEP });
-  g.setDefaultEdgeLabel(() => ({}));
+  const layoutNodes: LayoutNode[] = nodes.map((n) => ({
+    id: n.id as string,
+    type: n.type as FlowNode['type'],
+    data: n.data as LayoutNode['data'],
+  }));
+  const layoutEdges: LayoutEdge[] = connectors
+    .filter((c) => c.source !== c.target)
+    .map((c, idx) => ({
+      id: (c.id as string | undefined) ?? `e${idx}`,
+      source: c.source as string,
+      target: c.target as string,
+    }));
 
-  const flowIds = new Set<string>();
-  const dims = new Map<string, { w: number; h: number }>();
-  for (const n of flowNodes) {
-    const id = n.id as string;
-    const { w, h } = nodeDimensions(n);
-    g.setNode(id, { width: w, height: h });
-    flowIds.add(id);
-    dims.set(id, { w, h });
-  }
-
-  let edgeCounter = 0;
-  for (const c of connectors) {
-    const s = c.source as string;
-    const t = c.target as string;
-    if (!flowIds.has(s) || !flowIds.has(t) || s === t) continue;
-    // multigraph + unique edge name preserves parallel connectors.
-    g.setEdge(s, t, {}, `e${edgeCounter++}`);
-  }
-
-  dagre.layout(g);
+  const result = await computeLayout(layoutNodes, layoutEdges);
 
   const snap = (v: number) => Math.round(v / GRID) * GRID;
   return nodes.map((n) => {
     if (isFloatingAnnotation(n)) return n;
     const id = n.id as string;
-    const laid = g.node(id);
-    const d = dims.get(id);
-    if (!laid || !d) return n;
-    // dagre returns center coords; convert to top-left for React Flow.
-    const snapped = { x: snap(laid.x - d.w / 2), y: snap(laid.y - d.h / 2) };
+    const laid = result.nodes[id]?.position;
+    if (!laid) return n;
+    const snapped = { x: snap(laid.x), y: snap(laid.y) };
     const prev = (n.position as { x: number; y: number } | undefined) ?? { x: 0, y: 0 };
     if (snapped.x !== prev.x || snapped.y !== prev.y) stats.positionsShifted++;
     return { ...n, position: snapped };

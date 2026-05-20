@@ -107,6 +107,38 @@ Free-form bullets. Things that bit the skill last time:
 - The `orders` factory truncates `sku` to 8 chars — longer skus 500.
 - `bun test` fails on a cold `node_modules` — run `bun install` first.
 
+## Tech stack
+
+Flat bullet list of detected `techId`s. Stable identifiers from
+`references/tech/README.md` — one per ref file.
+
+- docker-compose
+- google-pubsub
+- gcs
+- golang
+
+## Tech stack adaptations
+
+Per-`techId` project-specific overrides. **Always wins over the general
+guidance in `references/tech/<techId>.md`**. Populate only what is
+genuinely project-specific — empty subsections are noise.
+
+### google-pubsub
+
+- Helpers: `pkg/eventbus/publish.go::Publish(ctx, topic, msg)`,
+  `pkg/eventbus/consume.go::Subscribe(ctx, sub, fn)`
+- Local emulator: docker-compose service `pubsub-emulator` on `:8085`
+- Conventions:
+  - Every message carries attribute `tenant_id` (middleware-validated).
+  - Topic naming: `<env>.<domain>.<event>` e.g. `dev.orders.created`.
+- Fixtures: `tests/fixtures/pubsub/order-created.json`
+
+### postgres
+
+- Helpers: repository pattern in `internal/db/repo/*` — never INSERT directly.
+- Migrations: `db/migrations/*.sql`, applied by `make db-migrate`.
+- Fixtures: `tests/fixtures/db/*.sql` loaded by `tests/setup.ts`.
+
 ## Flows already created
 
 | Slug | Purpose | Last updated |
@@ -126,6 +158,10 @@ re-running drift:
 3. **Merge** bullet lists by union — keep prior bullets unless they are
    contradicted by a new discovery, in which case replace the bullet
    and note the date in parens (`port is 3001 (updated 2026-05-19)`).
+   `## Tech stack` is a pure union of `techId`s — never drop one.
+   `## Tech stack adaptations` is merged per-`techId`: union the bullet
+   lists under each `techId`, replace a bullet only when contradicted
+   (date the change in parens).
 4. **Reuse** existing wording when re-stating the same fact; do not
    rewrite paragraphs purely for stylistic reasons.
 5. **Cap** total file size at ~6KB. If it grows past that, push the
@@ -171,10 +207,49 @@ the file. Shape:
     ],
     "gotchas": [
       "Port 3001 hardcoded in src/server.ts; env override ignored on macOS Sonoma."
-    ]
+    ],
+    "techStack": ["docker-compose", "google-pubsub", "gcs", "golang"],
+    "techAdaptations": {
+      "google-pubsub": {
+        "helpers": [
+          "pkg/eventbus/publish.go::Publish(ctx, topic, msg)",
+          "pkg/eventbus/consume.go::Subscribe(ctx, sub, fn)"
+        ],
+        "emulator": "docker-compose service `pubsub-emulator` on :8085",
+        "conventions": [
+          "every message carries attribute `tenant_id` (middleware-validated)",
+          "topic naming: <env>.<domain>.<event> e.g. dev.orders.created"
+        ],
+        "fixtures": ["tests/fixtures/pubsub/order-created.json"]
+      }
+    }
   }
 }
 ```
 
 Every field is optional — emit only what you learned. The orchestrator
 applies the merging rules above.
+
+### `techStack` and `techAdaptations` contract
+
+- **`techStack`** *(string[])* — stable `techId`s from
+  `references/tech/README.md`. One entry per detected tech. No
+  `evidence` field — the matching signal is implicit in the ref.
+- **`techAdaptations`** *(object, keyed by `techId`)* — project-specific
+  overrides the orchestrator forwards to play/status/node-planner so
+  they prefer project conventions over the ref's general templates.
+  Every child field is optional; emit only what you actually found:
+  - `helpers` *(string[])* — file paths or symbol references to
+    existing publisher/consumer/uploader/repository helpers the play
+    or status script should reuse.
+  - `emulator` *(string)* — one-line how-to: which compose service or
+    env var wires up local mode for this tech.
+  - `conventions` *(string[])* — naming patterns, required attributes,
+    validation rules that scripts must comply with.
+  - `fixtures` *(string[])* — paths to realistic payloads the scripts
+    should copy from instead of inventing.
+  - `gotchas` *(string[])* — tech-specific quirks discovered this run.
+  Omit a `techId` entirely if no adaptation was found — empty entries
+  are noise. **Phase 7 polish updates this section** whenever a play
+  or status script discovers a new project-specific fact about a
+  detected tech.

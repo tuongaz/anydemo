@@ -92,6 +92,7 @@ Discoverer must:
 - Catalogue **fixtures, factories, mock-data helpers, seed commands, file-drop watchers** — anything that gives play-scripts a realistic payload without inventing one
 - Map **data entry paths** for each major resource (preferred API vs avoid-direct-insert)
 - Capture **gotchas** worth remembering across runs
+- Detect **tech stack** via `references/tech/README.md` signal table and emit `wikiUpdates.techStack`; for each detected `techId`, search the repo for project-specific helpers / wrappers / fixtures / conventions and emit `wikiUpdates.techAdaptations.<techId>`
 - Emit `wikiUpdates` so the orchestrator can refresh `.seeflow/WIKI.md`
 
 Output schema and field list: `references/wiki-format.md` (the `wikiUpdates` contract section).
@@ -100,9 +101,11 @@ On unparseable output: retry once with the validation error. If still failing, s
 
 **At the end of Phase 1, merge `wikiUpdates` into `<project>/.seeflow/WIKI.md`** following the merging rules in `references/wiki-format.md`. Create the parent `.seeflow/` directory if missing.
 
+**Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Stash the resolved paths plus the matching `## Tech stack adaptations` entries — both get forwarded into the Phase 2 / 4 launch prompts so sub-agents read only the relevant refs (~3–5 per flow).
+
 ## Phase 2 — plan nodes
 
-Launch `seeflow-node-planner` with the context brief. No tools — pure reasoning. Two mandatory passes:
+Launch `seeflow-node-planner` with the context brief, the resolved tech-ref paths, and the matching `techAdaptations` entries. No tools — pure reasoning. The planner reads each ref's **Node modelling** section and treats `techAdaptations` as the project-specific override. Two mandatory passes:
 
 - **Resource nodes first** — every DB, queue, event bus, cache, file store, and external SaaS touched by the flow gets its own `stateNode`.
 - **Abstraction rules** — one node per service / workflow / worker / queue / DB (exceptions: independently-meaningful pipeline stages, fan-out consumers, branches).
@@ -136,9 +139,17 @@ Paths:
 - `stylePath = .seeflow/<slug>/style.json`
 
 1. Build **`flow.json`** from the node draft — omit `playAction`, `statusAction`, `resetAction`. Keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root — those live in `style.json`.
-2. Build **`style.json`** — every functional node id MUST have at least a `position` entry. Generate positions deterministically per `references/schema.md`.
-3. `mkdir -p $flowDir` then write **both** files. The style file is mandatory — never skip it.
-4. Validate via the studio API (the **only** validator):
+2. `mkdir -p $flowDir` then write `flow.json`. Generate **`style.json`** by POSTing the flow to `/api/layout` — the studio runs ELK and returns positions + handle assignments:
+   ```bash
+   LAYOUT=$(curl -fsS -X POST "$STUDIO_URL/api/layout" \
+     -H 'content-type: application/json' \
+     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
+   echo "$LAYOUT" | jq -e '.ok' >/dev/null \
+     || { echo "$LAYOUT" | jq '.issues' >&2; exit 1; }
+   echo "$LAYOUT" | jq '{nodes, connectors}' > "$flowDir/style.json"
+   ```
+   `style.json` is mandatory — never skip it. Manual position fields are still honoured if present, but the skill always writes the layout response verbatim.
+3. Validate via the studio API (the **only** validator):
    ```bash
    RESULT=$(curl -fsS -X POST "$STUDIO_URL/api/validate" \
      -H 'content-type: application/json' \
@@ -149,12 +160,12 @@ Paths:
      || { echo "$RESULT" | jq '.issues' >&2; exit 1; }
    ```
    On failure: fix field-level issues in-place (no re-run of node-planner), retry.
-5. Register:
+4. Register:
    ```bash
    bun skills/seeflow/scripts/register.ts --path "$repoPath" --flow "$flowPath"
    ```
    Stash the returned `id` and `slug`. The canvas URL is `$STUDIO_URL/d/<slug>`.
-6. Open the canvas in the user's browser, then ask for review:
+5. Open the canvas in the user's browser, then ask for review:
    ```bash
    URL="$STUDIO_URL/d/<slug>"
    (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
@@ -166,7 +177,7 @@ Paths:
 
 ## Phase 4 — design Play + Status (parallel)
 
-Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (single message, two `Task` calls). Both receive: context brief + node draft + edit target. Tools: `Read, Grep, Glob, LS`.
+Launch `seeflow-play-designer` and `seeflow-status-designer` **in parallel** (single message, two `Task` calls). Both receive: context brief + node draft + edit target + the resolved tech-ref paths + the matching `techAdaptations` entries. The designers read each ref's **Play** / **Status** section as a starting point and treat `techAdaptations` as the project-specific override (reuse the helper, follow the convention, copy the fixture). Tools: `Read, Grep, Glob, LS`.
 
 `seeflow-play-designer` returns:
 
@@ -215,7 +226,18 @@ Full agent prompts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-de
 
 1. **Splice** `newTriggerNodes` into `nodeDraft.nodes` (add any required connectors).
 2. **Merge** each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody` — orchestrator metadata, not schema fields. Collect `nodeId`s where `validationSafe: false` into `unsafeNodeIds`.
-3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `$flowDir/style.json`** — add `position` entries for any spliced trigger nodes (preserve existing positions for nodes that survived). The style file is mandatory; never delete it.
+3. **Write** merged flow to `$flowDir/flow.json` (data-only). **Refresh `$flowDir/style.json`** via `/api/layout` — full reflow over the post-splice graph, response written verbatim. Existing positions are recomputed; never preserved across re-runs.
+
+   ```bash
+   LAYOUT=$(curl -fsS -X POST "$STUDIO_URL/api/layout" \
+     -H 'content-type: application/json' \
+     -d "$(jq -n --slurpfile a "$flowDir/flow.json" '{flow: $a[0]}')")
+   echo "$LAYOUT" | jq -e '.ok' >/dev/null \
+     || { echo "$LAYOUT" | jq '.issues' >&2; exit 1; }
+   echo "$LAYOUT" | jq '{nodes, connectors}' > "$flowDir/style.json"
+   ```
+
+   The style file is mandatory; never delete it.
 4. **Validate via the studio API** (no local validator exists):
 
 ```bash
@@ -279,6 +301,8 @@ Never re-run `register.ts` in the fix-up loop.
 
 When Phases 6-7 surfaced a fact the next run would want — a port mismatch, a fixture path you had to discover, a required env var the discoverer missed, a working seed command, a data-entry path you ended up using — append a `Gotchas` bullet or update the relevant section in `<project>/.seeflow/WIKI.md`. Also append the new flow to the "Flows already created" table with today's date and a one-line purpose. Follow `references/wiki-format.md`. If nothing new was learned, skip — empty updates are noise.
 
+**If the learning is tech-specific** — a helper you discovered mid-flow (e.g. `pkg/eventbus/publish.go::Publish`), a convention you had to comply with (every message needs a `tenant_id` attribute), an emulator quirk, a fixture path that saved a play script from inventing — update the matching `## Tech stack adaptations` → `### <techId>` subsection, **not** just `## Gotchas`. This is what makes the next `/seeflow` run reuse the work seamlessly. If the discoverer missed a tech entirely, also append the `techId` to `## Tech stack`.
+
 ## Operations
 
 | Topic | File |
@@ -287,5 +311,6 @@ When Phases 6-7 surfaced a fact the next run would want — a port mismatch, a f
 | `flow.json` + `style.json` schema, node types, connectors, actions, `StatusReport` | `references/schema.md` |
 | Core rules — no mocks, bigger picture, match language | `references/core-rules.md` |
 | `WIKI.md` format, lifecycle, merging rules, `wikiUpdates` contract | `references/wiki-format.md` |
+| Tech-specific best practices (per-tech refs + signal table) | `references/tech/README.md` |
 | Phase 4 plan-presentation template (`+/~/-` diff convention) | `references/plan-format.md` |
 | Sub-agent prompts and worked examples | `agents/seeflow-discoverer.md`, `agents/seeflow-node-planner.md`, `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md` |

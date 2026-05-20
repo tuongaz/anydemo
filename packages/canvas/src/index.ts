@@ -70,14 +70,6 @@ export { ICON_FALLBACK_NAME, ICON_NAMES, ICON_REGISTRY } from './lib/icon-regist
 // ----------------------------------------------------------------------------
 // 4. Helpers
 // ----------------------------------------------------------------------------
-export { applyLayout } from './lib/auto-layout.ts';
-export type {
-  AutoLayoutEdge,
-  AutoLayoutNode,
-  AutoLayoutOptions,
-  LayoutDirection,
-} from './lib/auto-layout.ts';
-
 export {
   clampImageDims,
   computeImageDims,
@@ -197,6 +189,11 @@ export type {
   CanvasRuntime,
   ConnectorCreateInput,
   ConnectorPatch,
+  LayoutEdgeInput,
+  LayoutNodeInput,
+  LayoutResult,
+  LayoutSourceHandle,
+  LayoutTargetHandle,
   NodeCreateInput,
   NodeKind,
   NodePatch,

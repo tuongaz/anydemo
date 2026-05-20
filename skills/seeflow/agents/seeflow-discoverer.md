@@ -159,6 +159,32 @@ prefer the dedicated tools (`LS`, `Read`, `Glob`, `Grep`) when they fit.
    silently assumes, build artifacts that must be present before tests
    pass, fixture quirks (truncated fields, required orderings),
    platform-specific surprises. Surface in `wikiUpdates.gotchas`.
+9a. **Detect tech stack.** Read `references/tech/README.md` (the signal
+    → ref lookup tables). For each signal that matches the repo, push
+    the corresponding `techId` into `wikiUpdates.techStack`. Cheap-
+    before-deep: `Glob` for filenames, `Grep -l` for import strings.
+    Do not `Read` whole files just to confirm a tech. `techStack` is a
+    flat string array — no evidence field, the matching signal is
+    implicit in the ref.
+9b. **Find project-specific tech adaptations.** For each detected
+    `techId`, search the repo for things the play/status designers
+    should reuse instead of inventing:
+    - **Helpers** — publisher / consumer / uploader / repository
+      wrappers around the official client (`Grep` for `Publish(`,
+      `Subscribe(`, `Upload(`, `Repo.*`, `client.<Topic|Bucket|Table>`).
+    - **Emulator wiring** — compose service + port, env var that
+      switches local vs cloud, any `*_EMULATOR_HOST` override.
+    - **Conventions** — required attributes / headers / naming
+      patterns the codebase enforces (validation middleware, schema
+      checks, repository invariants).
+    - **Fixtures** — paths to realistic payloads, message envelopes,
+      seed rows for this tech.
+    Emit each as `wikiUpdates.techAdaptations.<techId>` with the
+    relevant fields populated (see contract in `references/wiki-format.md`).
+    **Omit a `techId` entirely if you found nothing project-specific
+    — empty entries are noise.** This is the load-bearing step: next
+    run's play/status designers prefer these over the ref's default
+    templates.
 10. **Triangulate scope.** Decide which entities the user *clearly* means
     to show and which they *clearly* do not. When in doubt, prefer
     inclusion in `rootEntities` and call out the ambiguity in
@@ -229,7 +255,16 @@ prefer the dedicated tools (`LS`, `Read`, `Glob`, `Grep`) when they fit.
     ],
     "gotchas": [
       "Port 3001 hardcoded in src/server.ts; env override ignored on macOS Sonoma."
-    ]
+    ],
+    "techStack": ["docker-compose", "google-pubsub", "gcs", "golang"],
+    "techAdaptations": {
+      "google-pubsub": {
+        "helpers": ["pkg/eventbus/publish.go::Publish(ctx, topic, msg)"],
+        "emulator": "docker-compose service `pubsub-emulator` on :8085",
+        "conventions": ["every message carries attribute `tenant_id`"],
+        "fixtures": ["tests/fixtures/pubsub/order-created.json"]
+      }
+    }
   },
   "existingDemo": null
 }

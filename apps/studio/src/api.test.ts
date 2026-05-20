@@ -429,6 +429,121 @@ describe('POST /api/diagram/assemble', () => {
   });
 });
 
+describe('POST /api/layout', () => {
+  const sampleFlow = {
+    version: 2,
+    name: 'Layout Demo',
+    nodes: [
+      {
+        id: 'api',
+        type: 'playNode',
+        data: {
+          name: 'API',
+          kind: 'service',
+          stateSource: { kind: 'request' },
+          playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
+        },
+      },
+      {
+        id: 'db',
+        type: 'stateNode',
+        data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
+      },
+    ],
+    connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'db' }],
+  };
+
+  it('returns positions + handles for a valid flow', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/layout', { flow: sampleFlow });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      nodes: Record<string, { position: { x: number; y: number } }>;
+      connectors: Record<string, { sourceHandle: string; targetHandle: string }>;
+    };
+    expect(json.ok).toBe(true);
+    expect(json.nodes.api?.position).toBeDefined();
+    expect(json.nodes.db?.position).toBeDefined();
+    expect(json.connectors.c1).toEqual({ sourceHandle: 'r', targetHandle: 'l' });
+  });
+
+  it('returns ok:false + issues when the flow fails schema parsing', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/layout', { flow: { version: 1, nodes: [], connectors: [] } });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      issues: Array<{ scope: string; message: string }>;
+    };
+    expect(json.ok).toBe(false);
+    expect(json.issues.length).toBeGreaterThan(0);
+    expect(json.issues[0]?.scope).toBe('flow');
+  });
+
+  it('returns ok:false with a connectors.source issue when a connector points to an unknown node', async () => {
+    const { app } = buildApp();
+    const bad = {
+      ...sampleFlow,
+      connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'ghost' }],
+    };
+    const res = await post(app, '/api/layout', { flow: bad });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      issues: Array<{ path: (string | number)[]; message: string }>;
+    };
+    expect(json.ok).toBe(false);
+    expect(json.issues.some((i) => i.path.includes('target') || i.message.includes('ghost'))).toBe(
+      true,
+    );
+  });
+
+  it('returns 400 when the body has no flow field', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/layout', { options: { direction: 'RIGHT' } });
+    expect(res.status).toBe(400);
+  });
+
+  it('accepts the structural { nodes, edges } shape (Tidy-button input)', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/layout', {
+      nodes: [
+        { id: 'a', type: 'playNode', width: 220, height: 100 },
+        { id: 'b', type: 'playNode', width: 220, height: 100 },
+      ],
+      edges: [{ id: 'e1', source: 'a', target: 'b' }],
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      nodes: Record<string, { position: { x: number; y: number } }>;
+      connectors: Record<string, { sourceHandle: string; targetHandle: string }>;
+    };
+    expect(json.ok).toBe(true);
+    expect(json.nodes.a?.position).toBeDefined();
+    expect(json.nodes.b?.position).toBeDefined();
+    expect(json.connectors.e1).toEqual({ sourceHandle: 'r', targetHandle: 'l' });
+  });
+
+  it('honours the direction option', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/layout', {
+      flow: sampleFlow,
+      options: { direction: 'DOWN' },
+    });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      ok: boolean;
+      connectors: Record<string, { sourceHandle: string; targetHandle: string }>;
+    };
+    expect(json.ok).toBe(true);
+    // With DOWN direction, the source ends up above the target, so handles
+    // route via bottom→top instead of right→left.
+    expect(json.connectors.c1).toEqual({ sourceHandle: 'b', targetHandle: 't' });
+  });
+});
+
 describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();

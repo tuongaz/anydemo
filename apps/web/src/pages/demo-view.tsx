@@ -18,17 +18,16 @@ import type {
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import {
-  type AutoLayoutNode,
   type CommandId,
   type ConnectorStylePatch,
   DEFAULT_STORAGE_PREFIX,
   ICON_DEFAULT_SIZE,
+  type LayoutNodeInput,
   type NodeStylePatch,
   type ReorderOp,
   SHAPE_DEFAULT_SIZE,
   SeeflowCanvas,
   type SeeflowCanvasHandle,
-  applyLayout,
   applyNudge,
   buildNewShapeData,
   computeIconInsertPosition,
@@ -2253,16 +2252,17 @@ export function DemoView({
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // US-026: auto-layout (Tidy). Resolve scope, snapshot prev positions, run
-  // dagre, optimistically override every moved node, fan-out PATCHes via
-  // Promise.allSettled, and push ONE undo entry that reverts the whole batch.
-  // Width/height feed dagre's spacing; we read measured dims from the live
-  // React Flow internals when available so resized nodes get accurate gutters,
-  // falling back to data.width/data.height (then 200×120) when the canvas
-  // hasn't reported a size yet.
+  // US-026: auto-layout (Tidy). Resolve scope, snapshot prev positions, ask
+  // the adapter for an ELK-backed layout, optimistically override every
+  // moved node, fan-out PATCHes via Promise.allSettled, and push ONE undo
+  // entry that reverts the whole batch. Width/height feed ELK's spacing; we
+  // read measured dims from the live React Flow internals when available so
+  // resized nodes get accurate gutters, falling back to data.width/data.height
+  // (then 200×120) when the canvas hasn't reported a size yet.
   const onTidy = useCallback(
-    (scope: 'all' | 'selection') => {
+    async (scope: 'all' | 'selection') => {
       if (!flowId || !adapter || !demoNodes) return;
+      if (!adapter.computeLayout) return;
       const overrides = nodePending.overrides;
       const inst = rfInstanceRef.current;
       const selectedSet = scope === 'selection' ? new Set(selectedIdsRef.current) : null;
@@ -2275,20 +2275,29 @@ export function DemoView({
         (c) => includedIdSet.has(c.source) && includedIdSet.has(c.target),
       );
 
-      const layoutNodes: AutoLayoutNode[] = includedNodes.map((n) => {
+      // Snapshot live positions before the layout call so the offset-anchor
+      // math below can use the dimensions we actually fed into ELK.
+      const livePositions = new Map<string, Position>();
+      const layoutNodes: LayoutNodeInput[] = includedNodes.map((n) => {
         const livePos = overrides[n.id]?.position ?? n.position;
+        livePositions.set(n.id, livePos);
         const internal = inst?.getInternalNode(n.id);
         const measured = internal?.measured;
         const dataAny = n.data as { width?: number; height?: number };
         const width = measured?.width ?? dataAny.width ?? 200;
         const height = measured?.height ?? dataAny.height ?? 120;
-        return { id: n.id, width, height, position: livePos };
+        return { id: n.id, type: n.type as LayoutNodeInput['type'], width, height };
       });
       const layoutEdges = includedConnectors.map((c) => ({
+        id: c.id,
         source: c.source,
         target: c.target,
       }));
-      const next = applyLayout(layoutNodes, layoutEdges);
+      const result = await adapter.computeLayout(layoutNodes, layoutEdges);
+      const next = new Map<string, { x: number; y: number }>();
+      for (const [id, entry] of Object.entries(result.nodes)) {
+        next.set(id, entry.position);
+      }
 
       // Anchor the laid-out group to its current visual top-left so a
       // selection-scoped Tidy doesn't teleport the cluster across the canvas.
@@ -2297,8 +2306,10 @@ export function DemoView({
       let nextMinX = Number.POSITIVE_INFINITY;
       let nextMinY = Number.POSITIVE_INFINITY;
       for (const ln of layoutNodes) {
-        if (ln.position.x < prevMinX) prevMinX = ln.position.x;
-        if (ln.position.y < prevMinY) prevMinY = ln.position.y;
+        const prev = livePositions.get(ln.id);
+        if (!prev) continue;
+        if (prev.x < prevMinX) prevMinX = prev.x;
+        if (prev.y < prevMinY) prevMinY = prev.y;
         const np = next.get(ln.id);
         if (!np) continue;
         if (np.x < nextMinX) nextMinX = np.x;
@@ -2313,13 +2324,14 @@ export function DemoView({
       // capture a per-id prev snapshot for the single batched undo entry.
       const moves: { id: string; prev: Position; next: Position }[] = [];
       for (const ln of layoutNodes) {
+        const prev = livePositions.get(ln.id);
         const np = next.get(ln.id);
-        if (!np) continue;
+        if (!prev || !np) continue;
         const targetPos = { x: np.x + offsetX, y: np.y + offsetY };
-        const dx = targetPos.x - ln.position.x;
-        const dy = targetPos.y - ln.position.y;
+        const dx = targetPos.x - prev.x;
+        const dy = targetPos.y - prev.y;
         if (Math.abs(dx) < 1 && Math.abs(dy) < 1) continue;
-        moves.push({ id: ln.id, prev: ln.position, next: targetPos });
+        moves.push({ id: ln.id, prev, next: targetPos });
       }
       if (moves.length === 0) return;
 

@@ -142,6 +142,38 @@ export interface UpdateNodePositionResult {
   position: { x: number; y: number };
 }
 
+/**
+ * Tidy-button input. Adapter-facing shape used by both the canvas Tidy
+ * handler and the studio's /api/layout endpoint. Decoupled from FlowSchema
+ * so callers can supply DOM-measured dimensions without round-tripping the
+ * whole node payload.
+ */
+export interface LayoutNodeInput {
+  id: string;
+  type: NodeKind;
+  width: number;
+  height: number;
+}
+
+export interface LayoutEdgeInput {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export type LayoutSourceHandle = 'r' | 'b';
+export type LayoutTargetHandle = 't' | 'l';
+
+export interface LayoutResult {
+  /** New positions keyed by node id. */
+  nodes: Record<string, { position: { x: number; y: number } }>;
+  /** New handle assignments keyed by connector id. */
+  connectors: Record<
+    string,
+    { sourceHandle: LayoutSourceHandle; targetHandle: LayoutTargetHandle }
+  >;
+}
+
 export interface UploadImageResult {
   path: string;
 }
@@ -213,4 +245,15 @@ export interface CanvasAdapter {
   openFile?(path: string): Promise<void>;
   /** Optional: ask the host to reveal the given project-scoped file in its OS file manager. */
   revealFile?(path: string): Promise<void>;
+  /**
+   * Tidy / auto-layout. Returns fresh positions for every input node and a
+   * handle assignment for every edge that survived the layout. The canvas
+   * applies these via the usual `updateNodePosition` + connector pin patches.
+   * Adapters that route to the studio's `POST /api/layout` get this for
+   * free; standalone embedders may implement their own engine.
+   */
+  computeLayout?(
+    nodes: readonly LayoutNodeInput[],
+    edges: readonly LayoutEdgeInput[],
+  ): Promise<LayoutResult>;
 }

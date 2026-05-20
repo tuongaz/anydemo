@@ -61,13 +61,11 @@ Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files 
 
 Every functional node id in `flow.json` MUST appear under `nodes` with at least a `position`. A missing connector entry → handle/style defaults apply. Do not delete `style.json` even if the only content is positions — the studio relies on it.
 
-### Deterministic position generation
+### Position + handle generation
 
-When designers don't supply positions, generate them deterministically:
+Positions and connector handles come from `POST /api/layout`. The skill calls this endpoint in Phase 3 and Phase 5; the response (`{ nodes, connectors }`) is written verbatim to `style.json`. The endpoint runs ELK's layered Sugiyama algorithm with generous spacing for connector labels (220 px between layers, 140 px between siblings) and assigns handles geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges.
 
-- Layer nodes by connector graph depth from the trigger (longest-path layering), left-to-right.
-- Default spacing: 280 px horizontal between layers, 160 px vertical between siblings.
-- Decorative nodes (shape/icon/image) follow their nearest functional neighbour.
+Do not author positions by hand. Manual entries in `style.json` are still honoured at render time if a user drags a node in the canvas, but the skill always overwrites them on the next `/seeflow` run for that slug.
 
 ## Node types
 

@@ -12,6 +12,7 @@ import {
   validateDemo,
 } from './diagram.ts';
 import type { EventBus } from './events.ts';
+import { type LayoutOptions, computeLayout } from './layout.ts';
 import {
   ConnectorPatchBodySchema,
   CreateProjectBodySchema,
@@ -47,7 +48,7 @@ import {
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
-import { ResolvedFlowSchema } from './schema.ts';
+import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
 import { readMergedFlow } from './watcher.ts';
@@ -320,7 +321,106 @@ export function createApi(options: ApiOptions): Hono {
     if (!parsed.success) {
       return c.json({ error: 'Invalid assemble body', issues: parsed.error.issues }, 400);
     }
-    return c.json(assembleDemo(parsed.data));
+    return c.json(await assembleDemo(parsed.data));
+  });
+
+  // POST /api/layout — stateless ELK layout. Two request shapes:
+  //   1. `{ flow, options? }` — skill (Phase 3 + Phase 5). Flow is validated
+  //      through FlowSchema; failure returns `{ ok: false, issues }` matching
+  //      /api/validate's shape.
+  //   2. `{ nodes, edges, options? }` — canvas Tidy button. Loose structural
+  //      input (id + type + measured width/height per node, id + source +
+  //      target per edge). Skips FlowSchema validation since Tidy has DOM
+  //      sizes but not full node data payloads.
+  // Both return `{ ok: true, nodes, connectors }` — positions keyed by node
+  // id, handle assignments keyed by connector id. Pure compute; no
+  // persistence.
+  api.post('/layout', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Body must be valid JSON' }, 400);
+    }
+    if (!body || typeof body !== 'object') {
+      return c.json(
+        { error: 'Body must be { flow, options? } or { nodes, edges, options? }' },
+        400,
+      );
+    }
+    const options = (body as { options?: LayoutOptions }).options;
+
+    if ('flow' in body) {
+      const flowParse = FlowSchema.safeParse((body as { flow: unknown }).flow);
+      if (!flowParse.success) {
+        return c.json({
+          ok: false as const,
+          issues: flowParse.error.issues.map((i) => ({
+            scope: 'flow' as const,
+            path: [...i.path],
+            message: i.message,
+            code: i.code,
+          })),
+        });
+      }
+      const flow = flowParse.data;
+      const result = await computeLayout(
+        flow.nodes.map((n) => ({
+          id: n.id,
+          type: n.type,
+          // Only `shape` matters for layout (floating-annotation detection +
+          // shape-specific sizing). Other Flow data fields are irrelevant.
+          data:
+            n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
+        })),
+        flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
+        options,
+      );
+      return c.json({ ok: true as const, nodes: result.nodes, connectors: result.connectors });
+    }
+
+    if ('nodes' in body && 'edges' in body) {
+      const { nodes, edges } = body as { nodes: unknown; edges: unknown };
+      if (!Array.isArray(nodes) || !Array.isArray(edges)) {
+        return c.json({ error: '`nodes` and `edges` must be arrays' }, 400);
+      }
+      // Trust the caller-supplied structural input — Tidy already measures
+      // DOM dimensions, so we use them verbatim. Any malformed entry is
+      // dropped silently rather than failing the whole layout.
+      const layoutNodes = nodes
+        .filter(
+          (n): n is { id: string; type: string; width?: number; height?: number } =>
+            n && typeof n === 'object' && typeof (n as { id?: unknown }).id === 'string',
+        )
+        .map((n) => ({
+          id: n.id,
+          type: n.type as
+            | 'playNode'
+            | 'stateNode'
+            | 'shapeNode'
+            | 'imageNode'
+            | 'iconNode'
+            | 'htmlNode',
+          data:
+            typeof n.width === 'number' && typeof n.height === 'number'
+              ? { width: n.width, height: n.height }
+              : undefined,
+        }));
+      const layoutEdges = edges
+        .filter(
+          (e): e is { id: string; source: string; target: string } =>
+            e &&
+            typeof e === 'object' &&
+            typeof (e as { id?: unknown }).id === 'string' &&
+            typeof (e as { source?: unknown }).source === 'string' &&
+            typeof (e as { target?: unknown }).target === 'string',
+        )
+        .map((e) => ({ id: e.id, source: e.source, target: e.target }));
+      const result = await computeLayout(layoutNodes, layoutEdges, options);
+      return c.json({ ok: true as const, nodes: result.nodes, connectors: result.connectors });
+    }
+
+    return c.json({ error: 'Body must be { flow, options? } or { nodes, edges, options? }' }, 400);
   });
 
   // POST /api/projects — UI-driven "Create new project" flow (US-020). Two

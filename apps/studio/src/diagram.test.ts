@@ -70,8 +70,8 @@ const connector = (source: string, target: string) => ({
 });
 
 describe('assembleDemo auto-layout', () => {
-  test('clustered LLM positions are reflowed so no two nodes overlap', () => {
-    const result = assembleDemo({
+  test('clustered LLM positions are reflowed so no two nodes overlap', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           // All five within 60px of each other — would all overlap under the
@@ -102,8 +102,8 @@ describe('assembleDemo auto-layout', () => {
     }
   });
 
-  test('linear chain A→B→C lays out left-to-right with widening x and same y', () => {
-    const result = assembleDemo({
+  test('linear chain A→B→C lays out left-to-right with widening x and same y', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [playNode('A', 0, 0), stateNode('B', 0, 0), stateNode('C', 0, 0)],
         connectors: [connector('A', 'B'), connector('B', 'C')],
@@ -121,8 +121,8 @@ describe('assembleDemo auto-layout', () => {
     expect(b.position.y).toBe(c.position.y);
   });
 
-  test('connectors are long enough to fit label text (>= ~120px between rectangles)', () => {
-    const result = assembleDemo({
+  test('connectors are long enough to fit label text (>= ~120px between rectangles)', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [playNode('A', 0, 0), stateNode('B', 0, 0)],
         connectors: [connector('A', 'B')],
@@ -136,8 +136,8 @@ describe('assembleDemo auto-layout', () => {
     expect(gap).toBeGreaterThanOrEqual(120);
   });
 
-  test('fan-out parent → C1/C2/C3 places children in the same column, distinct rows', () => {
-    const result = assembleDemo({
+  test('fan-out parent → C1/C2/C3 places children in the same column, distinct rows', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           playNode('P', 0, 0),
@@ -158,13 +158,12 @@ describe('assembleDemo auto-layout', () => {
     expect(new Set([c1.position.y, c2.position.y, c3.position.y]).size).toBe(3);
   });
 
-  test('two disconnected components lay out without overlap', () => {
-    // dagre lays disconnected components into a single graph, so it doesn't
-    // force them into strictly-separated vertical bands the way the previous
-    // hand-rolled layout did. The contract guaranteed by the algorithm — and
-    // matched by the canvas's Tidy button — is non-overlap, which is what we
+  test('two disconnected components lay out without overlap', async () => {
+    // The layered ELK engine lays each connected component independently
+    // (separateConnectedComponents: true) and stacks them. The contract
+    // matched by the canvas's Tidy button is non-overlap, which is what we
     // assert here. (US-026 parity.)
-    const result = assembleDemo({
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           playNode('A1', 0, 0),
@@ -186,8 +185,8 @@ describe('assembleDemo auto-layout', () => {
     }
   });
 
-  test('cycles do not crash and produce a layered layout', () => {
-    const result = assembleDemo({
+  test('cycles do not crash and produce a layered layout', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [playNode('A', 0, 0), stateNode('B', 0, 0), stateNode('C', 0, 0)],
         // A -> B -> C -> A
@@ -206,8 +205,8 @@ describe('assembleDemo auto-layout', () => {
     }
   });
 
-  test('all output positions are on the 24px grid', () => {
-    const result = assembleDemo({
+  test('all output positions are on the 24px grid', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           playNode('A', 11, 23),
@@ -224,8 +223,8 @@ describe('assembleDemo auto-layout', () => {
     }
   });
 
-  test('sticky and text shape nodes keep their input position (floating annotations)', () => {
-    const result = assembleDemo({
+  test('sticky and text shape nodes keep their input position (floating annotations)', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           playNode('A', 0, 0),
@@ -251,13 +250,13 @@ describe('assembleDemo auto-layout', () => {
     expect(byId.get('caption')?.position).toEqual({ x: 1440, y: 600 });
   });
 
-  test('siblings in the same rank get distinct y values', () => {
+  test('siblings in the same rank get distinct y values', async () => {
     // dagre's barycenter heuristic places same-rank siblings at distinct y
     // values but does NOT preserve the input y ordering — by design, since
     // the heuristic minimizes edge crossings instead. The Tidy button has the
     // same characteristic, which is why this assertion only checks
     // distinctness, not order.
-    const result = assembleDemo({
+    const result = await assembleDemo({
       wiring: {
         nodes: [
           playNode('P', 0, 0),
@@ -276,8 +275,8 @@ describe('assembleDemo auto-layout', () => {
     expect(new Set([top.position.y, mid.position.y, bot.position.y]).size).toBe(3);
   });
 
-  test('single-node graph still honors an explicit layout position', () => {
-    const result = assembleDemo({
+  test('single-node graph still honors an explicit layout position', async () => {
+    const result = await assembleDemo({
       wiring: {
         nodes: [{ id: 'n1', position: { x: 0, y: 0 } }],
         connectors: [],
