@@ -1,7 +1,7 @@
-# Phase 4 plan-presentation template
+# Phase 5 plan-presentation template
 
 This is the canonical format the `seeflow` skill renders to the user
-at the end of Phase 4 (synthesis + schema validation), before writing any
+at the end of Phase 5 (synthesis + schema validation), before writing any
 files. It is the user's **last chance** to redirect before disk writes,
 register, and end-to-end validation.
 
@@ -137,6 +137,6 @@ Reply 'go' to write, or describe what to change.
 ```
 
 This is load-bearing — the orchestrator waits for `go` (case-insensitive)
-before transitioning to Phase 5. Any other reply is treated as a change
-request and loops back to Phase 2 (for node/connector tweaks) or Phase 3
-(for Play / status tweaks).
+before transitioning to Phase 6 (write files + re-register). Any other
+reply is treated as a change request and loops back to Phase 2 (for
+node/connector tweaks) or Phase 4 (for Play / status tweaks).

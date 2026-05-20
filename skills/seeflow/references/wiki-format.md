@@ -12,10 +12,14 @@ run should be able to skip a lot of grep work by reading it.
 ## Lifecycle
 
 - **Read** at the start of every `/seeflow` run (Phase 0.5 in `SKILL.md`).
-- **Pass** the contents into the discoverer launching prompt as
-  `wikiContext` so it can avoid re-discovering known facts.
-- **Update** at the end of Phase 1, merging the discoverer's `wikiUpdates`
-  into the file.
+- **Pass** the contents into both `seeflow-code-analyzer` and
+  `seeflow-system-analyzer` launching prompts as `wikiContext` so they
+  can avoid re-discovering known facts.
+- **Update** during Phase 1 → Phase 2, merging each agent's `wikiUpdates`
+  into the file as soon as that agent returns. The system-analyzer is
+  the heavy contributor here — every fact it learns about boot, setup,
+  ports, env vars, fixtures, gotchas, and tech adaptations MUST be
+  persisted on this step.
 - **Update again** after Phase 6 / Phase 7 if a play or status script
   uncovered a new gotcha (port mismatch, hidden env var, fixture
   factory, surprising auth).
@@ -168,10 +172,15 @@ re-running drift:
    oldest "Gotchas" bullets into a collapsed `<details>` block dated
    with the year they were captured.
 
-## `wikiUpdates` contract (discoverer → orchestrator)
+## `wikiUpdates` contract (Phase 1 agents → orchestrator)
 
-The discoverer surfaces structured updates the orchestrator merges into
-the file. Shape:
+Both `seeflow-code-analyzer` and `seeflow-system-analyzer` surface
+structured updates the orchestrator merges into the file. The
+system-analyzer owns the bulk of the payload (`runtimeProfile`,
+`localDevSetup`, `integrationTests`, `fixtures`, `factories`,
+`seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`); the
+code-analyzer contributes `techStack` and the `knownEndpoints` array.
+Combined shape:
 
 ```json
 {

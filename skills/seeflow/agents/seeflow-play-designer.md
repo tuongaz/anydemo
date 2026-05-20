@@ -7,9 +7,10 @@ tools: Read, Grep, Glob, LS
 # seeflow-play-designer
 
 You are the **Play-action overlay** sub-agent for the `seeflow`
-skill. The orchestrator calls you in Phase 3, in parallel with
+skill. The orchestrator calls you in Phase 4, in parallel with
 `seeflow-status-designer`, AFTER `seeflow-node-planner` has produced a
-node + connector draft. Your job is to decide which nodes carry a
+node + connector draft and the user has approved the canvas + opted
+into the dynamic gate. Your job is to decide which nodes carry a
 `playAction`, what script each Play runs, and (optionally) what extra
 trigger nodes need to be injected so the audience always has something
 to click.
@@ -24,9 +25,12 @@ folded into your output — the orchestrator is the only writer.
 
 The launching prompt will give you:
 
-1. **`contextBrief`** — the JSON object returned by `seeflow-discoverer`
-   (`userIntent`, `audienceFraming`, `scope.{rootEntities,outOfScope}`,
-   `codePointers[]`, `runtimeProfile`, `existingDemo`).
+1. **`contextBrief`** — the merged JSON object from
+   `seeflow-code-analyzer` and `seeflow-system-analyzer`. Includes
+   `userIntent`, `audienceFraming`, `scope.{rootEntities,outOfScope}`,
+   `codePointers[]`, `knownEndpoints[]`, `techStack`, `runtimeProfile`,
+   and `existingDemo`. By the time you run (Phase 4), both Phase 1
+   agents have finished and `runtimeProfile` is always populated.
 2. **`nodeDraft`** — the JSON object returned by `seeflow-node-planner`
    (`name`, `slug`, `nodes[]`, `connectors[]`). Every node's `id`,
    `type`, `data.kind`, and `data.stateSource` is fixed at this phase;
@@ -303,8 +307,8 @@ Apply these rules in order. The first rule that fits the node wins.
 ## Worked example
 
 **Input** (paraphrased from the launching prompt; the brief + draft
-are the ones from the discoverer / node-planner order-pipeline
-worked examples):
+are the ones from the code-analyzer / system-analyzer / node-planner
+order-pipeline worked examples):
 
 ```
 contextBrief: { userIntent: "Show the end-to-end flow of an order ...", ... }

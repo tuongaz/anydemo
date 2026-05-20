@@ -119,5 +119,7 @@ most natural for that tech — the sub-agent will port to the project's
 2. Copy `_template.md` to `references/tech/<techId>.md` and fill it in.
 3. Add a row to the matching category table above with the signal that
    detects the tech.
-4. No other wiring needed — discoverer/orchestrator pick it up from the
-   table automatically.
+4. No other wiring needed — the Phase 1 agents (`seeflow-code-analyzer`
+   for detection, `seeflow-system-analyzer` for project-specific
+   adaptations) and the orchestrator pick it up from the table
+   automatically.

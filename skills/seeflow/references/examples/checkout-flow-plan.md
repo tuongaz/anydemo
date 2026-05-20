@@ -1,10 +1,10 @@
 # Worked example — checkout-flow plan
 
-This is what Phase 4 emits to the user for a fresh "show how checkout works"
+This is what Phase 5 emits to the user for a fresh "show how checkout works"
 prompt against a hypothetical e-commerce project. Use it as a reference for
 the level of detail (and brevity) the canonical plan format calls for.
 
-The example assumes the discoverer found:
+The example assumes Phase 1 discovery (code-analyzer + system-analyzer) found:
 
 - `src/checkout/api.ts` — Express handler for `POST /checkout`.
 - `src/payments/stripe.ts` — Stripe charge integration (sync HTTP call).

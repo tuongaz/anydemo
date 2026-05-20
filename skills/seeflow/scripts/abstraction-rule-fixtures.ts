@@ -8,7 +8,7 @@
  * consistency of the contract itself.
  *
  * Each fixture pairs:
- *   - a synthetic discoverer brief (`contextBrief`) — the planner's input
+ *   - a synthetic Phase 1 brief (`contextBrief`) — the planner's input
  *   - the `expected` node-count + node-name-set + trigger pick a correct
  *     planner would emit, plus free-text `rationaleNotes` documenting the
  *     justification the planner should cite in `oneNodeRationale`.

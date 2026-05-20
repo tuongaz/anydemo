@@ -5,7 +5,7 @@
 | Failure | Response |
 |---|---|
 | Studio `/health` fails | Ask the user to run `npx tuongaz/seeflow start` in another terminal, then re-probe once. No silent retry, no self-start. |
-| Sub-agent unparseable output | Retry once with parse error; if still failing, surface and stop. |
+| Sub-agent unparseable output | Retry that single agent once with parse error; if still failing, surface and stop. Do **not** restart its parallel sibling. |
 | Schema validation fails (Phase 5) | Feed Zod issues back to relevant designer. Max 3 retries. |
 | Register 400 (Phase 6) | Show body; ask "fix-and-retry / stop". |
 | Register 4xx/5xx other | Show body; stop. |
@@ -33,8 +33,9 @@ Never invent endpoints. Surface anything outside this table to the user.
 
 | Agent | Tools | Used for |
 |---|---|---|
-| `seeflow-discoverer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1: explore codebase, return context brief |
-| `seeflow-node-planner` | none (pure reasoning) | Phase 2: pick nodes + connectors |
+| `seeflow-code-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1 (parallel): user-prompt-specific brief — scope, code pointers, endpoints, tech stack, edit-case |
+| `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `WIKI.md` |
+| `seeflow-node-planner` | none (pure reasoning) | Phase 2: pick nodes + connectors (starts as soon as code-analyzer returns) |
 | `seeflow-play-designer` | `Read, Grep, Glob, LS` | Phase 4: design playActions + script bodies |
 | `seeflow-status-designer` | `Read, Grep, Glob, LS` | Phase 4: design statusActions + script bodies |
 
@@ -50,7 +51,9 @@ Bun scripts shipped with the skill, invoked from phase steps:
 
 | Script | Purpose | Invoked in |
 |---|---|---|
-| `scripts/register.ts` | POST to `/api/flows/register` with `{name, repoPath, flowPath}` | Phase 3, Phase 6 |
+| `scripts/register.ts` | POST to `/api/flows/register` with `{name, repoPath, flowPath}`. Prints `{id, slug}` on success | Phase 3, Phase 6 |
+| `scripts/validate.ts` | POST `{flow, style?}` to `/api/validate`. Exits 1 + prints issues on failure | Phase 3, Phase 5 |
+| `scripts/refresh-layout.ts` | POST to `/api/flows/<id>/layout` to rebuild `style.json` via ELK | Phase 3, Phase 5, Phase 7 |
 | `scripts/validate-end-to-end.ts` | GET flow, open SSE, fire plays, await results | Phase 7 |
 | `scripts/unregister.ts` | DELETE a registered flow (rollback) | rollback only |
 | `scripts/studio-config.ts` | Resolve `$STUDIO_URL` from env + `~/.seeflow/config.json` | shared helper |
