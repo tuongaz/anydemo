@@ -747,14 +747,26 @@ export function createApi(options: ApiOptions): Hono {
     );
 
     const styleAbs = join(dirname(flowAbs), 'style.json');
+    const styleContent = `${JSON.stringify(result, null, 2)}\n`;
     try {
-      writeFileAtomic(styleAbs, `${JSON.stringify(result, null, 2)}\n`);
+      writeFileAtomic(styleAbs, styleContent);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return c.json({ error: `Failed to write style file: ${msg}` }, 500);
     }
 
-    events?.broadcast({ type: 'flow:reload', flowId: id, payload: {} });
+    // Reparse + notifyWritten: the watcher seeds its snapshot AND broadcasts
+    // flow:reload with the new merged payload directly, while suppressing the
+    // fs-watcher echo that the style.json write would otherwise trigger.
+    const snap = watcher?.reparse(id);
+    if (watcher && snap) {
+      const flowContent = readFileSync(flowAbs, 'utf8');
+      watcher.notifyWritten(id, snap, flowContent, styleContent);
+    } else {
+      // No watcher (test harness, or watch() hasn't been called yet) — emit a
+      // bare flow:reload so any subscribers still react.
+      events?.broadcast({ type: 'flow:reload', flowId: id, payload: {} });
+    }
     return c.json({ ok: true as const });
   });
 

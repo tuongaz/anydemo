@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { type FSWatcher, existsSync, readFileSync, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { EventBus } from './events.ts';
@@ -7,6 +8,20 @@ import type { Registry } from './registry.ts';
 import { type Flow, FlowSchema, type ResolvedFlow, StyleSchema } from './schema.ts';
 
 const DEFAULT_DEBOUNCE_MS = 100;
+
+/** Max recent self-write hashes retained per flow for own-echo suppression. */
+const WRITTEN_HASH_RING_SIZE = 4;
+
+const sha256Hex = (s: string): string => createHash('sha256').update(s).digest('hex');
+
+/**
+ * Canonical "what's on disk for this flow" string used for own-write
+ * dedupe. Combines flow.json and style.json bytes so a self-write that
+ * touches either file is recognized; a NUL separator keeps the boundary
+ * unambiguous. `styleContent` is `''` when style.json doesn't exist.
+ */
+const combinedContent = (flowContent: string, styleContent: string): string =>
+  `${flowContent}\0${styleContent}`;
 
 export interface FlowSnapshot {
   /** Last successfully parsed flow, if we ever saw one. */
@@ -41,6 +56,19 @@ export interface FlowWatcher {
   closeAll(): void;
   /** Force a reparse synchronously. Useful for tests + initial load. */
   reparse(flowId: string): FlowSnapshot | null;
+  /**
+   * Record a snapshot that the server just wrote and broadcast flow:reload
+   * directly from it. Stores the file-content hash so the upcoming fs-watcher
+   * echo for this same write is suppressed (see startWatch's debounce
+   * callback). `flowContent` / `styleContent` are the exact bytes written —
+   * pass `''` for style when style.json was deleted or doesn't exist.
+   */
+  notifyWritten(
+    flowId: string,
+    snap: FlowSnapshot,
+    flowContent: string,
+    styleContent: string,
+  ): void;
   /**
    * Relative paths (under `<project>/.seeflow/`) currently being watched
    * because they're referenced by a node's `data.htmlPath` or `data.path`.
@@ -227,6 +255,43 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
 
   const handles = new Map<string, WatchHandle>();
   const snapshots = new Map<string, FlowSnapshot>();
+  /**
+   * Ring buffer of recent self-write content hashes per flow. The fs watcher
+   * computes the same hash on its debounced callback and short-circuits when
+   * it matches — that's how a server-initiated PATCH avoids re-broadcasting
+   * itself on top of the direct notifyWritten broadcast.
+   */
+  const writtenHashes = new Map<string, string[]>();
+
+  const rememberWrittenHash = (flowId: string, hash: string): void => {
+    const ring = writtenHashes.get(flowId);
+    if (!ring) {
+      writtenHashes.set(flowId, [hash]);
+      return;
+    }
+    ring.push(hash);
+    if (ring.length > WRITTEN_HASH_RING_SIZE) ring.shift();
+  };
+
+  const isOwnWriteEcho = (flowId: string, hash: string): boolean =>
+    writtenHashes.get(flowId)?.includes(hash) ?? false;
+
+  /**
+   * Read flow.json + style.json bytes at this moment so the fs callback can
+   * compute the same combined hash that notifyWritten recorded. Missing
+   * style.json maps to empty string — matches notifyWritten's contract.
+   */
+  const readCombinedFromDisk = (flowPath: string): string | null => {
+    let flowContent: string;
+    try {
+      flowContent = readFileSync(flowPath, 'utf8');
+    } catch {
+      return null;
+    }
+    const stylePath = join(dirname(flowPath), 'style.json');
+    const styleContent = existsSync(stylePath) ? readFileSync(stylePath, 'utf8') : '';
+    return combinedContent(flowContent, styleContent);
+  };
 
   // Reconcile the file-watch set for `flowId` against the desired referenced
   // paths. Closes watchers for dirs that disappeared, updates the basename
@@ -385,6 +450,11 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
         if (handle.debounceTimer) clearTimeout(handle.debounceTimer);
         handle.debounceTimer = setTimeout(() => {
           handle.debounceTimer = null;
+          // Own-write dedupe: if the on-disk bytes match what the server just
+          // wrote (recent hash in the ring), this is our own echo — drop it.
+          // notifyWritten already broadcast and seeded the snapshot.
+          const combined = readCombinedFromDisk(filePath);
+          if (combined !== null && isOwnWriteEcho(flowId, sha256Hex(combined))) return;
           const snap = reparse(flowId);
           if (snap) broadcastReload(flowId, snap);
         }, debounceMs);
@@ -436,8 +506,14 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
       }
       handles.clear();
       snapshots.clear();
+      writtenHashes.clear();
     },
     reparse,
+    notifyWritten(flowId, snap, flowContent, styleContent) {
+      snapshots.set(flowId, snap);
+      rememberWrittenHash(flowId, sha256Hex(combinedContent(flowContent, styleContent)));
+      broadcastReload(flowId, snap);
+    },
     referencedPaths(flowId) {
       const h = handles.get(flowId);
       if (!h) return [];

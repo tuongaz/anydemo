@@ -458,4 +458,156 @@ describe('createWatcher', () => {
     expect(payload.path).toBe('crn-retained/details/data.md');
     watcher.closeAll();
   });
+
+  it('notifyWritten broadcasts flow:reload directly from the supplied snap', () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo();
+    const entry = reg.upsert({
+      name: 'Watch Me',
+      repoPath,
+      flowPath: '.seeflow/flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
+
+    const received: StudioEvent[] = [];
+    events.subscribe(entry.id, (e) => {
+      if (e.type === 'flow:reload') received.push(e);
+    });
+
+    watcher.watch(entry.id);
+    // Drop the seed broadcast(s) from startWatch so we can inspect notifyWritten alone.
+    received.length = 0;
+
+    const snap = watcher.snapshot(entry.id);
+    expect(snap?.valid).toBe(true);
+    const flow = snap?.flow;
+    expect(flow).not.toBeNull();
+    if (!flow) throw new Error('expected flow');
+
+    watcher.notifyWritten(
+      entry.id,
+      { flow, valid: true, error: null, filePath: snap?.filePath ?? '', parsedAt: Date.now() },
+      JSON.stringify(VALID_DEMO),
+      '',
+    );
+
+    expect(received).toHaveLength(1);
+    expect(received[0]?.type).toBe('flow:reload');
+    expect((received[0]?.payload as { valid: boolean }).valid).toBe(true);
+    watcher.closeAll();
+  });
+
+  it('suppresses the fs-watcher echo when on-disk content matches a recent notifyWritten', async () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo();
+    const entry = reg.upsert({
+      name: 'Watch Me',
+      repoPath,
+      flowPath: '.seeflow/flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
+
+    const received: StudioEvent[] = [];
+    events.subscribe(entry.id, (e) => {
+      if (e.type === 'flow:reload') received.push(e);
+    });
+
+    watcher.watch(entry.id);
+    await wait(50);
+    received.length = 0;
+
+    // Simulate a server-side write: change the file AND record the hash via notifyWritten.
+    const nextDemo = { ...VALID_DEMO, name: 'Renamed' };
+    const nextContent = JSON.stringify(nextDemo);
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), nextContent);
+    const snap = watcher.reparse(entry.id);
+    expect(snap?.valid).toBe(true);
+    if (!snap) throw new Error('expected snap');
+    watcher.notifyWritten(entry.id, snap, nextContent, '');
+
+    // notifyWritten broadcast counts as one event; the fs-watcher debounce that
+    // follows should be suppressed because the on-disk content hash matches.
+    await wait(150);
+    expect(received).toHaveLength(1);
+    watcher.closeAll();
+  });
+
+  it('still broadcasts when the fs-watcher echo content does NOT match any recent self-write', async () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo();
+    const entry = reg.upsert({
+      name: 'Watch Me',
+      repoPath,
+      flowPath: '.seeflow/flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
+
+    const received: StudioEvent[] = [];
+    events.subscribe(entry.id, (e) => {
+      if (e.type === 'flow:reload') received.push(e);
+    });
+
+    watcher.watch(entry.id);
+    await wait(50);
+
+    // Server says "I wrote A" but the on-disk content is actually B (e.g. the
+    // user saved over it from their editor between our write and the fs
+    // callback). The fs-watcher echo must NOT be suppressed.
+    const serverContent = JSON.stringify({ ...VALID_DEMO, name: 'Server' });
+    const snap = watcher.snapshot(entry.id);
+    if (!snap) throw new Error('expected snap');
+    watcher.notifyWritten(entry.id, snap, serverContent, '');
+    received.length = 0;
+
+    const externalContent = JSON.stringify({ ...VALID_DEMO, name: 'External' });
+    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), externalContent);
+    await wait(150);
+
+    expect(received.length).toBeGreaterThanOrEqual(1);
+    const last = received.at(-1);
+    expect((last?.payload as { valid: boolean; flow: { name: string } }).flow.name).toBe(
+      'External',
+    );
+    watcher.closeAll();
+  });
+
+  it('hash ring holds the last 4 self-writes so back-to-back writes still suppress', async () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo();
+    const entry = reg.upsert({
+      name: 'Watch Me',
+      repoPath,
+      flowPath: '.seeflow/flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
+
+    const received: StudioEvent[] = [];
+    events.subscribe(entry.id, (e) => {
+      if (e.type === 'flow:reload') received.push(e);
+    });
+
+    watcher.watch(entry.id);
+    await wait(50);
+    received.length = 0;
+
+    // Four back-to-back writes — each gets recorded; each fs echo gets suppressed.
+    for (let i = 0; i < 4; i++) {
+      const content = JSON.stringify({ ...VALID_DEMO, name: `v${i}` });
+      writeFileSync(join(repoPath, '.seeflow', 'flow.json'), content);
+      const snap = watcher.reparse(entry.id);
+      if (!snap) throw new Error('expected snap');
+      watcher.notifyWritten(entry.id, snap, content, '');
+    }
+
+    await wait(150);
+    // Exactly the 4 notifyWritten broadcasts; the fs-watcher debounce coalesces
+    // the file changes into at most one callback, which then sees the latest
+    // hash in the ring and suppresses.
+    expect(received).toHaveLength(4);
+    watcher.closeAll();
+  });
 });

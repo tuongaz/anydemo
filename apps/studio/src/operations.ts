@@ -522,8 +522,18 @@ type MutateMergedFlowMutator<E> = (flow: {
   connectors: Array<Record<string, unknown>>;
 }) => { kind: 'ok' } | E;
 
+type MutateMergedFlowOk = {
+  kind: 'ok';
+  /** Validated post-write merged flow — hand straight to watcher.notifyWritten. */
+  snap: FlowSnapshot;
+  /** Exact bytes written to flow.json — used for own-write hash dedupe. */
+  flowContent: string;
+  /** Exact bytes written to style.json, or '' when style.json was deleted / never existed. */
+  styleContent: string;
+};
+
 type MutateMergedFlowResult<E> =
-  | { kind: 'ok' }
+  | MutateMergedFlowOk
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
   | { kind: 'writeFailed'; message: string }
@@ -550,7 +560,9 @@ export async function mutateMergedFlow<E extends { kind: string }>(
   };
 
   const outcome = mutator(merged);
-  if (outcome.kind !== 'ok') return outcome;
+  // E is generic — TS can't prove the narrowed branch isn't `{ kind: 'ok' }`,
+  // so we cast. By convention, E never reuses `'ok'` as a discriminant.
+  if (outcome.kind !== 'ok') return outcome as E;
 
   // Final ResolvedFlowSchema parse so per-kind invariants (event needs eventName, etc.)
   // surface honestly instead of being silently papered over.
@@ -571,8 +583,13 @@ export async function mutateMergedFlow<E extends { kind: string }>(
     (!style.nodes || Object.keys(style.nodes as Record<string, unknown>).length === 0) &&
     (!style.connectors || Object.keys(style.connectors as Record<string, unknown>).length === 0);
 
+  // Pre-compute the bytes we're about to write so the caller can hand them
+  // straight to watcher.notifyWritten without re-reading the file.
+  const flowContent = `${JSON.stringify(flow, null, 2)}\n`;
+  const styleContent = styleIsEmpty ? '' : `${JSON.stringify(style, null, 2)}\n`;
+
   try {
-    writeFileAtomic(flowPath, `${JSON.stringify(flow, null, 2)}\n`);
+    writeFileAtomic(flowPath, flowContent);
   } catch (err) {
     return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
   }
@@ -581,13 +598,48 @@ export async function mutateMergedFlow<E extends { kind: string }>(
     if (styleIsEmpty) {
       if (existsSync(stylePath)) unlinkSync(stylePath);
     } else {
-      writeFileAtomic(stylePath, `${JSON.stringify(style, null, 2)}\n`);
+      writeFileAtomic(stylePath, styleContent);
     }
   } catch (err) {
     return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
   }
 
-  return { kind: 'ok' };
+  const snap: FlowSnapshot = {
+    flow: finalParse.data as ResolvedFlow,
+    valid: true,
+    error: null,
+    filePath: flowPath,
+    parsedAt: Date.now(),
+  };
+  return { kind: 'ok', snap, flowContent, styleContent };
+}
+
+/**
+ * Wrap a mutation in the write lock AND broadcast a flow:reload directly
+ * from the post-write snapshot. Every mutation endpoint that updates flow
+ * state should go through this so:
+ *   1. The watcher's content-hash dedupe suppresses the fs-watcher echo for
+ *      this same write — no double broadcast, no double reparse.
+ *   2. The SSE event reaches the client without waiting for the fs debounce.
+ *
+ * For mutators whose ok branch carries no payload, `E` should be `never`.
+ */
+export async function mutateMergedFlowAndBroadcast<E extends { kind: string }>(
+  deps: OperationsDeps,
+  flowId: string,
+  flowPath: string,
+  mutator: MutateMergedFlowMutator<E>,
+): Promise<MutateMergedFlowResult<E>> {
+  return withFlowWriteLock(flowId, async () => {
+    const result = await mutateMergedFlow(flowPath, mutator);
+    if (result.kind === 'ok') {
+      // E is generic, so TS can't prove the ok branch is MutateMergedFlowOk —
+      // cast here, parallel to the cast inside mutateMergedFlow itself.
+      const ok = result as MutateMergedFlowOk;
+      deps.watcher?.notifyWritten(flowId, ok.snap, ok.flowContent, ok.styleContent);
+    }
+    return result;
+  });
 }
 
 export const reorderNodes = (
@@ -877,8 +929,11 @@ export async function addNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const result = await withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'writeFailed'; message: string }>(fullPath, (flow) => {
+  const result = await mutateMergedFlowAndBroadcast<{ kind: 'writeFailed'; message: string }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       flow.nodes.push(newNode);
       if (starterFile) {
         try {
@@ -889,7 +944,7 @@ export async function addNodeImpl(
         }
       }
       return { kind: 'ok' };
-    }),
+    },
   );
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId, node: newNode } };
@@ -929,8 +984,11 @@ export async function deleteNodeImpl(
 
   let managedHtmlAbsPath: string | undefined;
 
-  const result = await withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
+  const result = await mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       const idx = flow.nodes.findIndex((n) => n.id === nodeId);
       if (idx < 0) return { kind: 'unknownNode' };
       const removed = flow.nodes[idx];
@@ -940,7 +998,7 @@ export async function deleteNodeImpl(
         (cn) => cn.source !== nodeId && cn.target !== nodeId,
       );
       return { kind: 'ok' };
-    }),
+    },
   );
 
   if (result.kind === 'ok' && managedHtmlAbsPath) {
@@ -993,19 +1051,21 @@ export async function moveNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const result = await withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
+  const result = await mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       const node = flow.nodes.find((n) => n.id === nodeId) as
         | { id: string; position?: { x: number; y: number } }
         | undefined;
       if (!node) return { kind: 'unknownNode' };
       node.position = { x: position.x, y: position.y };
       return { kind: 'ok' };
-    }),
+    },
   );
 
   if (result.kind === 'ok') {
-    deps.watcher?.reparse(flowId);
     return { kind: 'ok', data: { position: { x: position.x, y: position.y } } };
   }
   return result;
@@ -1027,14 +1087,12 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  return withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownNode' }>(fullPath, (flow) => {
-      const node = flow.nodes.find((n) => n.id === nodeId);
-      if (!node) return { kind: 'unknownNode' };
-      mergeNodeUpdates(node, updates);
-      return { kind: 'ok' };
-    }),
-  );
+  return mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' }>(deps, flowId, fullPath, (flow) => {
+    const node = flow.nodes.find((n) => n.id === nodeId);
+    if (!node) return { kind: 'unknownNode' };
+    mergeNodeUpdates(node, updates);
+    return { kind: 'ok' };
+  });
 }
 
 // Reorder a node within demo.nodes[] (changes paint order in the canvas).
@@ -1052,14 +1110,17 @@ export async function reorderNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const result = await withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownNode' } | { kind: 'noop' }>(fullPath, (flow) => {
+  const result = await mutateMergedFlowAndBroadcast<{ kind: 'unknownNode' } | { kind: 'noop' }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       const fromIdx = flow.nodes.findIndex((n) => n.id === nodeId);
       if (fromIdx < 0) return { kind: 'unknownNode' };
       const moved = reorderNodes(flow.nodes, fromIdx, body);
       if (!moved) return { kind: 'noop' };
       return { kind: 'ok' };
-    }),
+    },
   );
 
   if (result.kind === 'noop') return { kind: 'ok' };
@@ -1090,12 +1151,10 @@ export async function addConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const result = await withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<never>(fullPath, (flow) => {
-      flow.connectors.push(newConn);
-      return { kind: 'ok' };
-    }),
-  );
+  const result = await mutateMergedFlowAndBroadcast<never>(deps, flowId, fullPath, (flow) => {
+    flow.connectors.push(newConn);
+    return { kind: 'ok' };
+  });
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId } };
   return result;
@@ -1122,13 +1181,16 @@ export async function patchConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  return withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownConnector' }>(fullPath, (flow) => {
+  return mutateMergedFlowAndBroadcast<{ kind: 'unknownConnector' }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       const conn = flow.connectors.find((cn) => cn.id === connectorId);
       if (!conn) return { kind: 'unknownConnector' };
       mergeConnectorUpdates(conn, updates);
       return { kind: 'ok' };
-    }),
+    },
   );
 }
 
@@ -1146,13 +1208,16 @@ export async function deleteConnectorImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  return withFlowWriteLock(flowId, () =>
-    mutateMergedFlow<{ kind: 'unknownConnector' }>(fullPath, (flow) => {
+  return mutateMergedFlowAndBroadcast<{ kind: 'unknownConnector' }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
       const idx = flow.connectors.findIndex((cn) => cn.id === connectorId);
       if (idx < 0) return { kind: 'unknownConnector' };
       flow.connectors.splice(idx, 1);
       return { kind: 'ok' };
-    }),
+    },
   );
 }
 

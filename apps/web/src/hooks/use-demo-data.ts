@@ -6,6 +6,13 @@ export interface UseDemoDataResult {
   loading: boolean;
   error: string | null;
   refresh: () => void;
+  /**
+   * Push a freshly received detail into state without a GET. Wired to the
+   * SSE `flow:reload` handler so mutation echoes apply the new snapshot
+   * directly — the watcher already broadcast the validated state, so a
+   * follow-up fetch would just duplicate that work.
+   */
+  applyDetail: (next: FlowDetail) => void;
 }
 
 export const useDemoData = (id: string | null): UseDemoDataResult => {
@@ -28,6 +35,11 @@ export const useDemoData = (id: string | null): UseDemoDataResult => {
       .finally(() => setLoading(false));
   }, [id]);
 
+  const applyDetail = useCallback((next: FlowDetail) => {
+    setDetail(next);
+    setError(null);
+  }, []);
+
   useEffect(() => {
     if (!id) {
       setDetail(null);
@@ -37,5 +49,5 @@ export const useDemoData = (id: string | null): UseDemoDataResult => {
     refresh();
   }, [id, refresh]);
 
-  return { detail, loading, error, refresh };
+  return { detail, loading, error, refresh, applyDetail };
 };

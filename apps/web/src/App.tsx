@@ -4,8 +4,8 @@ import { useDemos } from '@/hooks/use-demos';
 import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
-import { useStudioEvents } from '@/hooks/use-studio-events';
-import { type CreateProjectResult, playNode, restartFlow } from '@/lib/api';
+import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
+import { type CreateProjectResult, type FlowDetail, playNode, restartFlow } from '@/lib/api';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { navigate, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
@@ -21,13 +21,13 @@ const matchDemoSlug = (pathname: string): string | null => {
 
 export function App() {
   const pathname = usePathname();
-  const { demos, refresh: refreshDemos } = useDemos();
+  const { demos, refresh: refreshFlows } = useDemos();
   const slug = matchDemoSlug(pathname);
 
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
   const flowId = currentSummary?.id ?? null;
 
-  const { detail, loading, refresh: refreshDetail } = useDemoData(flowId);
+  const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(flowId);
   const { runs, apply: applyRun } = useNodeRuns(flowId);
   const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
   const {
@@ -36,13 +36,56 @@ export function App() {
     reset: resetNodeStatuses,
   } = useNodeStatuses(flowId);
 
-  const onReload = useCallback(() => {
-    // The studio kills the previous status batch on every flow:reload, so
-    // the prior `statusByNode` entries are stale by the time we get here.
+  // hello fires on initial connect AND every reconnect. Treat it as a
+  // catch-up signal: refetch detail + the demos list, since either could
+  // have drifted during the disconnect window. Also reset the per-node
+  // status map because the studio kills its status batch on reconnect.
+  const onHello = useCallback(() => {
     resetNodeStatuses();
     refreshDetail();
-    refreshDemos();
-  }, [refreshDetail, refreshDemos, resetNodeStatuses]);
+    refreshFlows();
+  }, [refreshDetail, refreshFlows, resetNodeStatuses]);
+
+  // Steady-state: the watcher pushes the new merged snapshot inline with
+  // each flow:reload event, so we apply it directly. No follow-up GET.
+  // The demos list is intentionally NOT refreshed here — a position/edit
+  // mutation can't change name/slug, and metadata changes route through
+  // their own paths (project create/unregister + hello catch-up).
+  //
+  // `detail` is deliberately NOT in the dep array: every applyDetail call
+  // would otherwise re-create this callback, which would re-run
+  // useStudioEvents's effect, close + reopen the EventSource, fire hello,
+  // and trigger refreshDetail in a tight loop. filePath is unused on the
+  // client and the previous-detail flow fallback is only relevant when an
+  // invalid edit lands — rare enough that the closure-snapshot stale-detail
+  // is acceptable.
+  const onFlowReload = useCallback(
+    (payload: FlowReloadPayload) => {
+      if (!flowId || !currentSummary) return;
+      const base = {
+        id: flowId,
+        slug: currentSummary.slug,
+        filePath: '',
+      };
+      const next: FlowDetail = payload.valid
+        ? {
+            ...base,
+            name: payload.flow.name ?? currentSummary.name,
+            flow: payload.flow,
+            valid: true,
+            error: null,
+          }
+        : {
+            ...base,
+            name: currentSummary.name,
+            flow: null,
+            valid: false,
+            error: payload.error,
+          };
+      applyDetail(next);
+    },
+    [flowId, currentSummary, applyDetail],
+  );
 
   const onEvent = useCallback(
     (event: Parameters<typeof applyRun>[0]) => {
@@ -57,7 +100,7 @@ export function App() {
   // per-node badge + sidebar status section. It threads through DemoView →
   // DemoCanvas / DetailPanel; the renderers in those files are wired in US-007.
 
-  useStudioEvents(flowId, { onReload, onEvent });
+  useStudioEvents(flowId, { onHello, onFlowReload, onEvent });
 
   const onRestartDemo = useCallback(async (): Promise<void> => {
     if (!flowId) return;
@@ -71,17 +114,17 @@ export function App() {
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
       writeLastProjectId(result.id);
-      refreshDemos();
+      refreshFlows();
     },
-    [refreshDemos],
+    [refreshFlows],
   );
 
   const onProjectUnregistered = useCallback(
     async (id: string) => {
-      await refreshDemos();
+      await refreshFlows();
       if (flowId === id) navigate('/');
     },
-    [refreshDemos, flowId],
+    [refreshFlows, flowId],
   );
 
   // On '/', skip the picker when there's nothing to pick: jump straight in if
