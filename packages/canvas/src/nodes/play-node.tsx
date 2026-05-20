@@ -35,6 +35,10 @@ export type PlayNodeData = NodeData & {
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
   setResizing?: (on: boolean) => void;
   onNameChange?: (nodeId: string, name: string) => void;
   onDescriptionChange?: (nodeId: string, description: string) => void;
@@ -164,6 +168,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
           : 'Play';
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
   });
   const [editing, setEditing] = useState<EditField>(null);

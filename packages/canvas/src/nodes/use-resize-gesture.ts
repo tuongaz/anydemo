@@ -33,6 +33,14 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 export function useResizeGesture(args: {
   onResize?: (dims: ResizeParams) => void;
   /**
+   * End-only callback. Fires once at mouse release with the FINAL dims, when
+   * actual movement happened (zero-movement click is guarded out). Use this
+   * for persistence (backend PATCH + undo push) so a single drag produces one
+   * round-trip instead of one per tick. Fires AFTER the back-compat end-fired
+   * `onResize` call below, BEFORE `onResizeFinal`.
+   */
+  onResizeEnd?: (dims: ResizeParams) => void;
+  /**
    * End-only callback. Fires once at mouse release with the FINAL dims and the
    * ORIGINAL dims captured at resize-start. Use this for batched mutations
    * that shouldn't run on every tick (e.g. group child scaling, where the
@@ -43,7 +51,9 @@ export function useResizeGesture(args: {
   onResizeFinal?: (dims: ResizeParams, start: ResizeParams) => void;
   setResizing?: (on: boolean) => void;
 }) {
-  const { onResize, onResizeFinal, setResizing } = args;
+  // Destructure with rename so the input `onResizeEnd` doesn't collide with
+  // the returned xyflow `OnResizeEnd` handler below.
+  const { onResize, onResizeEnd: userOnResizeEnd, onResizeFinal, setResizing } = args;
   const [isResizing, setIsResizing] = useState(false);
   const startRef = useRef<ResizeParams | null>(null);
 
@@ -52,11 +62,15 @@ export function useResizeGesture(args: {
   // depends on these references — see the top-of-file note for why a fresh
   // reference per render breaks the gesture mid-drag.
   const onResizeRef = useRef(onResize);
+  const userOnResizeEndRef = useRef(userOnResizeEnd);
   const onResizeFinalRef = useRef(onResizeFinal);
   const setResizingRef = useRef(setResizing);
   useEffect(() => {
     onResizeRef.current = onResize;
   }, [onResize]);
+  useEffect(() => {
+    userOnResizeEndRef.current = userOnResizeEnd;
+  }, [userOnResizeEnd]);
   useEffect(() => {
     onResizeFinalRef.current = onResizeFinal;
   }, [onResizeFinal]);
@@ -100,6 +114,16 @@ export function useResizeGesture(args: {
     // path. Same-dims dispatch is idempotent under the coalesced-undo +
     // overrides design — no visual double-update.
     onResizeRef.current?.({
+      x: params.x,
+      y: params.y,
+      width: params.width,
+      height: params.height,
+    });
+    // End-only callback for persistence (backend PATCH + undo). Fires once
+    // per real-movement gesture so one drag = one round-trip instead of one
+    // per tick. Guarded by the same zero-movement check above — a click on
+    // the handle without movement does not persist.
+    userOnResizeEndRef.current?.({
       x: params.x,
       y: params.y,
       width: params.width,

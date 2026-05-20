@@ -382,12 +382,29 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onNodePositionsChange?: (updates: { id: string; position: { x: number; y: number } }[]) => void;
   /**
-   * Fired once per resize-stop with the node's final dimensions AND position.
+   * Fired on EVERY resize tick during the drag (per-tick). Use this for
+   * optimistic local updates (e.g. setNodeOverride) that need to keep the
+   * dragged dims in sync mid-gesture. Do NOT call the backend or push undo
+   * entries from here — those belong in `onNodeResizeEnd` so one drag
+   * produces one PATCH instead of one per tick.
+   *
    * Wiring this enables NodeResizer's resize handles inside each custom node.
    * US-012: top/left handle drags shift x/y so the opposite corner stays
    * anchored — persistence must store both the new size and new position.
    */
   onNodeResize?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
+  /**
+   * Fired ONCE at resize-stop (mouse release) with the final dimensions AND
+   * position, only when the gesture actually moved (a click on the handle
+   * with no movement is guarded out inside `useResizeGesture`). Host should
+   * do persistence here: backend PATCH + undo push. Pairs with `onNodeResize`
+   * (per-tick optimistic) — together they give live visual feedback during
+   * the drag with a single round-trip at the end.
+   */
+  onNodeResizeEnd?: (
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
@@ -1666,6 +1683,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodePositionChange,
     onNodePositionsChange,
     onNodeResize,
+    onNodeResizeEnd,
     onHtmlNodeFitToContent,
     onMultiResize,
     onNodeNameChange,
@@ -2516,6 +2534,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           statusReport: statusByNode?.[merged.id],
           onPlay: onPlayNode,
           onResize: onNodeResize,
+          onResizeEnd: onNodeResizeEnd,
           setResizing,
           // htmlNode-only: routed through to the renderer's fit-to-content
           // button. Gated on type so other node variants don't pick up an
@@ -2618,6 +2637,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     statusByNode,
     onPlayNode,
     onNodeResize,
+    onNodeResizeEnd,
     onHtmlNodeFitToContent,
     setResizing,
     nodeOverrides,
@@ -2754,6 +2774,34 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // applyNodeChanges on the current snapshot. We feed the same result to
     // setRfNodes below so the rendered nodes match what we're propagating.
     const next = applyNodeChanges(filteredChanges, rfNodesRef.current);
+    // Live body resize: applyNodeChanges updates n.width/n.height on the
+    // outer wrapper but leaves n.data alone. Renderers (state-node, shape-
+    // node, ...) read data.width/data.height to compute `sized` — without it
+    // a previously-unsized node's inner stays at DEFAULT_W mid-drag (only the
+    // wrapper grows). Mirror n.width/n.height into data ONLY while a user-
+    // driven resize is in flight; xyflow's measurement-driven dimension ticks
+    // outside a gesture must NOT promote an auto-sized node to a fixed one.
+    const dimensionTouched = new Set<string>();
+    if (resizingRef.current) {
+      for (const c of filteredChanges) {
+        if (c.type === 'dimensions') dimensionTouched.add(c.id);
+      }
+    }
+    const sized =
+      dimensionTouched.size === 0
+        ? next
+        : next.map((n) => {
+            if (!dimensionTouched.has(n.id)) return n;
+            if (n.width === undefined && n.height === undefined) return n;
+            return {
+              ...n,
+              data: {
+                ...n.data,
+                ...(n.width !== undefined ? { width: n.width } : {}),
+                ...(n.height !== undefined ? { height: n.height } : {}),
+              },
+            };
+          });
     const pinned = selectedIdSetRef.current;
     // Resize/dimension changes can transiently drop the `selected` flag —
     // restore it for nodes in `pinned` that the user didn't explicitly toggle
@@ -2762,10 +2810,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // the marquee is actively changing selection; re-pinning previously-
     // selected nodes would fight the user's new marquee selection.
     const repinned = marqueeActiveRef.current
-      ? next
+      ? sized
       : pinned.size === 0
-        ? next
-        : next.map((n) => {
+        ? sized
+        : sized.map((n) => {
             if (pinned.has(n.id) && !explicitlyToggled.has(n.id) && !n.selected) {
               return { ...n, selected: true };
             }

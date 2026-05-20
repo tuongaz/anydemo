@@ -496,12 +496,30 @@ export function DemoView({
     [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
+  // Per-tick resize callback. Fires on every mouse-move during the gesture.
+  // Local optimistic update only — backend PATCH + undo push live in
+  // onNodeResizeEnd so a single drag produces one round-trip instead of one
+  // per tick. The override keeps the dragged footprint pinned across
+  // re-renders inside the host's `visibleNodes` pipeline so the SSE round-trip
+  // at the end has nothing to fight.
   const onNodeResize = useCallback(
+    (nodeId: string, dims: { width: number; height: number; x: number; y: number }) => {
+      setNodeOverride(nodeId, {
+        position: { x: dims.x, y: dims.y },
+        data: { width: dims.width, height: dims.height },
+      } as Partial<FlowNode>);
+    },
+    [setNodeOverride],
+  );
+
+  // End-only resize callback. Fires once at mouse release with final dims.
+  // US-012: top/left handle drags shift x/y so the opposite corner stays
+  // anchored — persistence stores both new size and new position so undo
+  // reverts cleanly.
+  const onNodeResizeEnd = useCallback(
     (nodeId: string, dims: { width: number; height: number; x: number; y: number }) => {
       if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
-      // US-012: capture both prior size AND prior position so a top/left
-      // handle resize (which moves x/y) reverts cleanly on undo.
       const prev = node
         ? {
             width: node.data.width,
@@ -514,11 +532,10 @@ export function DemoView({
         height: dims.height,
         position: { x: dims.x, y: dims.y },
       };
-      // Optimistic: keep the resized footprint AND new position pinned through
-      // the PATCH round-trip + SSE echo. Without the position override, when
-      // resizingRef clears and `setRfNodes(sourceNodes)` runs, the node would
-      // snap back to its pre-drag position with the new size — visible as
-      // the node "sliding across" the canvas after a top/left handle resize.
+      // Re-assert the optimistic override at final dims (per-tick already set
+      // it, but the final dims may differ from the last tick xyflow
+      // dispatched). Keeps the resized footprint pinned through the PATCH
+      // round-trip + SSE echo.
       setNodeOverride(nodeId, {
         position: next.position,
         data: { width: next.width, height: next.height },
@@ -2967,6 +2984,7 @@ export function DemoView({
           onNodePositionChange={onNodePositionChange}
           onNodePositionsChange={onNodePositionsChange}
           onNodeResize={onNodeResize}
+          onNodeResizeEnd={onNodeResizeEnd}
           onHtmlNodeFitToContent={onHtmlNodeFitToContent}
           onMultiResize={onMultiResize}
           onNodeNameChange={onNodeNameChange}

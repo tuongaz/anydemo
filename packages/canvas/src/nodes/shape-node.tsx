@@ -35,6 +35,10 @@ export type ShapeNodeRuntimeData = ShapeNodeData & {
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
   setResizing?: (on: boolean) => void;
   /** Persist a new name (PATCH /nodes/:id { name }). Optional for shape nodes. */
   onNameChange?: (nodeId: string, name: string) => void;
@@ -189,6 +193,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
   const size = SHAPE_DEFAULT_SIZE[shape];
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
   });
   // US-015: a freshly drop-popover-created node opens directly in label-edit

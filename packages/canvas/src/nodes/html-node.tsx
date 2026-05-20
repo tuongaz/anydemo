@@ -18,6 +18,10 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
   setResizing?: (on: boolean) => void;
   /**
    * US-014: project id injected into every node's runtime data by demo-canvas
@@ -50,6 +54,7 @@ const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeType>) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
   });
   // autoSize defaults to true (field absent → auto-size is the default for

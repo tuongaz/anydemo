@@ -13,6 +13,10 @@ export type IconNodeRuntimeData = IconNodeData & {
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
   setResizing?: (on: boolean) => void;
   // Persist the inline-edited name (PATCH /nodes/:id { name }).
   // Mirrors the shape-node name-edit path; demo-view's onNodeNameChange
@@ -48,6 +52,7 @@ const WARNED_NAMES = new Set<string>();
 function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeType>) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
   });
   // `isResizing` deliberately excluded: see state-node.tsx for the full

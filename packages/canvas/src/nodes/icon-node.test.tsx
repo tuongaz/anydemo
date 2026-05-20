@@ -235,6 +235,87 @@ describe('IconNode', () => {
     expect(onResize).toHaveBeenCalledWith('n1', { width: 100, height: 80, x: 10, y: 20 });
   });
 
+  it('fires data.onResize on every tick AND data.onResizeEnd once at gesture end (live resize)', () => {
+    const onResize = mock(() => {});
+    const onResizeEnd = mock(() => {});
+    const setResizing = mock(() => {});
+    const tree = callIconNode({ icon: 'shopping-cart', onResize, onResizeEnd, setResizing }, {
+      selected: true,
+    } as Partial<NodeProps>);
+    const controls = findElement(tree, (type) => type === ResizeControls);
+    if (!controls) throw new Error('ResizeControls not found in IconNode tree');
+    const props = controls.props as {
+      onResizeStart: (
+        e: unknown,
+        params: { x: number; y: number; width: number; height: number },
+      ) => void;
+      onResize: (
+        e: unknown,
+        params: { x: number; y: number; width: number; height: number },
+      ) => void;
+      onResizeEnd: (
+        e: unknown,
+        params: { x: number; y: number; width: number; height: number },
+      ) => void;
+    };
+
+    const start = { x: 10, y: 20, width: 100, height: 80 };
+    props.onResizeStart(undefined, start);
+
+    // Two per-tick ticks simulating mouse-move during the drag.
+    props.onResize(undefined, { x: 10, y: 20, width: 120, height: 90 });
+    props.onResize(undefined, { x: 10, y: 20, width: 140, height: 100 });
+
+    // Gesture end with final dims.
+    props.onResizeEnd(undefined, { x: 10, y: 20, width: 140, height: 100 });
+
+    // Per-tick onResize fired on each move PLUS once at end (back-compat
+    // dispatch inside useResizeGesture). 3 total when there were 2 moves.
+    expect(onResize).toHaveBeenCalledTimes(3);
+    expect(onResize).toHaveBeenLastCalledWith('n1', {
+      x: 10,
+      y: 20,
+      width: 140,
+      height: 100,
+    });
+
+    // onResizeEnd fires exactly ONCE per real-movement gesture.
+    expect(onResizeEnd).toHaveBeenCalledTimes(1);
+    expect(onResizeEnd).toHaveBeenCalledWith('n1', {
+      x: 10,
+      y: 20,
+      width: 140,
+      height: 100,
+    });
+  });
+
+  it('does NOT fire data.onResizeEnd on zero-movement click (click-without-drag)', () => {
+    const onResizeEnd = mock(() => {});
+    const setResizing = mock(() => {});
+    const tree = callIconNode(
+      { icon: 'shopping-cart', onResize: () => {}, onResizeEnd, setResizing },
+      { selected: true } as Partial<NodeProps>,
+    );
+    const controls = findElement(tree, (type) => type === ResizeControls);
+    if (!controls) throw new Error('ResizeControls not found in IconNode tree');
+    const props = controls.props as {
+      onResizeStart: (
+        e: unknown,
+        params: { x: number; y: number; width: number; height: number },
+      ) => void;
+      onResizeEnd: (
+        e: unknown,
+        params: { x: number; y: number; width: number; height: number },
+      ) => void;
+    };
+
+    const dims = { x: 10, y: 20, width: 100, height: 80 };
+    props.onResizeStart(undefined, dims);
+    props.onResizeEnd(undefined, dims);
+
+    expect(onResizeEnd).not.toHaveBeenCalled();
+  });
+
   it('does NOT call data.onResize when start and end dimensions are identical (US-021 click without drag)', () => {
     // React Flow fires onResizeStart + onResizeEnd unconditionally — even
     // for a mousedown+mouseup with no movement. Without the click-vs-drag
