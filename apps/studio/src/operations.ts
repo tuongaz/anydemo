@@ -1050,6 +1050,16 @@ export async function deleteNodeImpl(
     }
   }
 
+  if (result.kind === 'ok') {
+    try {
+      removeNodeDir(entry.repoPath, nodeId);
+    } catch (err) {
+      // Best-effort: flow.json is already written and the orphan folder is
+      // recoverable manually. ids are random so a future add_node won't collide.
+      console.error(`[seeflow] failed to remove nodes/${nodeId}/`, err);
+    }
+  }
+
   return result;
 }
 

@@ -6,6 +6,7 @@ import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
 import {
   NodePatchBodySchema,
   addNodeImpl,
+  deleteNodeImpl,
   getFlowImpl,
   mergeNodeUpdates,
   patchNodeImpl,
@@ -292,6 +293,25 @@ describe('patchNodeImpl + detail externalization', () => {
     const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
     expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
     expect(node.data.name).toBe('A renamed');
+  });
+});
+
+describe('deleteNodeImpl + per-node folder cascade', () => {
+  it('removes nodes/<id>/ folder after flow.json write', async () => {
+    const { deps, flowId, repoPath } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'bye' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(existsSync(detailAbs)).toBe(true);
+
+    const del = await deleteNodeImpl(deps, flowId, nodeId);
+    expect(del.kind).toBe('ok');
+    expect(existsSync(detailAbs)).toBe(false);
+    expect(existsSync(join(repoPath, '.seeflow', 'nodes', nodeId))).toBe(false);
   });
 });
 
