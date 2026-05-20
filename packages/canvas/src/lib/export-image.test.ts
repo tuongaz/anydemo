@@ -8,7 +8,15 @@ const window = new Window();
 const doc = window.document;
 (globalThis as { Element?: unknown }).Element = window.Element;
 
-const { viewportExportFilter } = await import('./export-image.ts');
+// jsdom-style globals required by resolveCanvasBackground (getComputedStyle).
+(globalThis as { getComputedStyle?: unknown }).getComputedStyle =
+  window.getComputedStyle.bind(window);
+// happy-dom 20.9 references `window.SyntaxError` from its selector parser; Bun's
+// `Window` impl doesn't define it, so any getComputedStyle / closest call throws
+// `undefined is not a constructor` without this patch.
+(window as unknown as { SyntaxError: typeof SyntaxError }).SyntaxError = SyntaxError;
+
+const { resolveCanvasBackground, viewportExportFilter } = await import('./export-image.ts');
 
 const makeEl = (tag: string, className?: string) => {
   const el = doc.createElement(tag);
@@ -52,5 +60,42 @@ describe('viewportExportFilter (US-009)', () => {
     const edgePath = makeEl('path', 'react-flow__edge-path');
     expect(viewportExportFilter(nodeWrapper as unknown as Node)).toBe(true);
     expect(viewportExportFilter(edgePath as unknown as Node)).toBe(true);
+  });
+});
+
+describe('resolveCanvasBackground', () => {
+  it('returns the --bg-canvas token from the nearest .seeflow-canvas-root', () => {
+    const root = makeEl('div', 'seeflow-canvas-root');
+    root.setAttribute('style', '--bg-canvas: #123456');
+    const viewport = makeEl('div', 'react-flow__viewport');
+    root.appendChild(viewport);
+    doc.body.appendChild(root);
+    try {
+      expect(resolveCanvasBackground(viewport as unknown as Element)).toBe('#123456');
+    } finally {
+      doc.body.removeChild(root);
+    }
+  });
+
+  it('falls back to #0a0a0c when no .seeflow-canvas-root ancestor exists', () => {
+    const orphan = makeEl('div', 'react-flow__viewport');
+    doc.body.appendChild(orphan);
+    try {
+      expect(resolveCanvasBackground(orphan as unknown as Element)).toBe('#0a0a0c');
+    } finally {
+      doc.body.removeChild(orphan);
+    }
+  });
+
+  it('falls back to #0a0a0c when the ancestor exists but the token is empty', () => {
+    const root = makeEl('div', 'seeflow-canvas-root');
+    const viewport = makeEl('div', 'react-flow__viewport');
+    root.appendChild(viewport);
+    doc.body.appendChild(root);
+    try {
+      expect(resolveCanvasBackground(viewport as unknown as Element)).toBe('#0a0a0c');
+    } finally {
+      doc.body.removeChild(root);
+    }
   });
 });
