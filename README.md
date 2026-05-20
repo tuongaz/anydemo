@@ -19,7 +19,7 @@ The SeeFlow plugin reads your codebase, understands your architecture, and gener
 ### 1. Start the studio
 
 ```bash
-npx -y @tuongaz/seeflow start
+npx -y @tuongaz/seeflow@latest start
 # then open http://localhost:4321
 ```
 
@@ -69,7 +69,7 @@ The plugin scans your routes and database connections, generates `flow.json`, wi
 
 ## Docker reference
 
-> ⚠️ Docker is the non-preferred path. Play/Status scripts execute inside the container and cannot reach host services or host binaries, so interactive nodes generated against your local app will not work. Prefer `npx -y @tuongaz/seeflow start` for the full experience.
+> ⚠️ Docker is the non-preferred path. Play/Status scripts execute inside the container and cannot reach host services or host binaries, so interactive nodes generated against your local app will not work. Prefer `npx -y @tuongaz/seeflow@latest start` for the full experience.
 
 The image is published on [Docker Hub](https://hub.docker.com/r/tuongaz/seeflow). See Quick Start above for the basic `docker run`.
 
@@ -104,7 +104,7 @@ SeeFlow ships an MCP server so any MCP-aware editor can list, register, and edit
 **Claude Code:**
 
 ```bash
-claude mcp add seeflow -- npx -y -p @tuongaz/seeflow seeflow-mcp
+claude mcp add seeflow -- npx -y -p @tuongaz/seeflow@latest seeflow-mcp
 ```
 
 **Via `.mcp.json`** (Cursor, Windsurf, etc.):
@@ -114,7 +114,7 @@ claude mcp add seeflow -- npx -y -p @tuongaz/seeflow seeflow-mcp
   "mcpServers": {
     "seeflow": {
       "command": "npx",
-      "args": ["-y", "-p", "@tuongaz/seeflow", "seeflow-mcp"]
+      "args": ["-y", "-p", "@tuongaz/seeflow@latest", "seeflow-mcp"]
     }
   }
 }
