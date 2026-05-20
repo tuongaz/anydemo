@@ -497,3 +497,104 @@ describe('POST /api/projects/:id/files/upload', () => {
     expect(existsSync(join(repoDir, '.seeflow', 'assets', 'icon.svg'))).toBe(true);
   });
 });
+
+describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
+  const buildUploadFixture = () => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-node-upload-repo-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    writeFileSync(join(repoDir, '.seeflow', 'flow.json'), '{"version":2}');
+
+    const registry = createRegistry({
+      path: join(mkdtempSync(join(tmpdir(), 'seeflow-node-upload-reg-')), 'registry.json'),
+    });
+    const entry = registry.upsert({
+      name: 'Node Upload Test',
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    const app = createApp({
+      mode: 'prod',
+      staticRoot: './dist/web',
+      registry,
+      disableWatcher: true,
+    });
+    return { app, projectId: entry.id, repoDir };
+  };
+
+  const PNG_BYTES = Uint8Array.from([
+    0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1f, 0x15, 0xc4,
+    0x89, 0x00, 0x00, 0x00, 0x0d, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9c, 0x63, 0x00, 0x01, 0x00, 0x00,
+    0x05, 0x00, 0x01, 0x0d, 0x0a, 0x2d, 0xb4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4e, 0x44, 0xae,
+    0x42, 0x60, 0x82,
+  ]);
+
+  const NODE_ID = 'node-Abcdef1234';
+
+  const formPost = (path: string, form: FormData): Request =>
+    new Request(`http://test${path}`, { method: 'POST', body: form });
+
+  it('writes the file to nodes/<nodeId>/ and returns the path', async () => {
+    const { app, projectId, repoDir } = buildUploadFixture();
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'logo.png', { type: 'image/png' }));
+    const res = await app.fetch(
+      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { path: string };
+    expect(body.path).toBe(`nodes/${NODE_ID}/logo.png`);
+    expect(existsSync(join(repoDir, '.seeflow', 'nodes', NODE_ID, 'logo.png'))).toBe(true);
+  });
+
+  it('rejects an invalid nodeId shape', async () => {
+    const { app, projectId } = buildUploadFixture();
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'x.png', { type: 'image/png' }));
+    const res = await app.fetch(
+      formPost(`/api/projects/${projectId}/nodes/bogus/files/upload`, form),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects disallowed extensions', async () => {
+    const { app, projectId } = buildUploadFixture();
+    const form = new FormData();
+    form.set(
+      'file',
+      new File([new TextEncoder().encode('x')], 'evil.sh', { type: 'text/x-shellscript' }),
+    );
+    const res = await app.fetch(
+      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
+    );
+    expect(res.status).toBe(400);
+  });
+
+  it('dedupes within the node folder with -2/-3 suffix', async () => {
+    const { app, projectId, repoDir } = buildUploadFixture();
+    const upload = async () => {
+      const form = new FormData();
+      form.set('file', new File([PNG_BYTES], 'a.png', { type: 'image/png' }));
+      const res = await app.fetch(
+        formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
+      );
+      return (await res.json()) as { path: string };
+    };
+    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a.png`);
+    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-2.png`);
+    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-3.png`);
+    expect(existsSync(join(repoDir, '.seeflow', 'nodes', NODE_ID, 'a.png'))).toBe(true);
+    expect(existsSync(join(repoDir, '.seeflow', 'nodes', NODE_ID, 'a-2.png'))).toBe(true);
+    expect(existsSync(join(repoDir, '.seeflow', 'nodes', NODE_ID, 'a-3.png'))).toBe(true);
+  });
+
+  it('returns 404 for an unknown projectId', async () => {
+    const { app } = buildUploadFixture();
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'pic.png', { type: 'image/png' }));
+    const res = await app.fetch(
+      formPost(`/api/projects/does-not-exist/nodes/${NODE_ID}/files/upload`, form),
+    );
+    expect(res.status).toBe(404);
+  });
+});

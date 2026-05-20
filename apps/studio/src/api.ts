@@ -609,6 +609,72 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true, absPath: resolved.absPath });
   });
 
+  // POST /api/projects/:id/nodes/:nodeId/files/upload — accept a multipart
+  // image upload and persist it under `<project>/.seeflow/nodes/<nodeId>/`.
+  // Same multipart shape, allowlist, dedupe, and 5 MB cap as the legacy
+  // `/files/upload` endpoint — the only difference is the destination folder
+  // is scoped to the node, so delete_node's removeNodeDir cascade cleans up
+  // the asset along with the node row.
+  api.post('/projects/:id/nodes/:nodeId/files/upload', async (c) => {
+    const projectId = c.req.param('id');
+    const nodeId = c.req.param('nodeId');
+    const entry = registry.getById(projectId);
+    if (!entry) return c.json({ error: 'unknown project' }, 404);
+
+    // node id shape: `node-<10 base62 chars>` (matches shortId() output).
+    if (!/^node-[A-Za-z0-9]{10}$/.test(nodeId)) {
+      return c.json({ error: 'invalid nodeId' }, 400);
+    }
+
+    let form: FormData;
+    try {
+      form = await c.req.formData();
+    } catch {
+      return c.json({ error: 'Body must be valid multipart form-data' }, 400);
+    }
+
+    const fileField = form.get('file');
+    if (!(fileField instanceof File)) {
+      return c.json({ error: 'Missing file field' }, 400);
+    }
+    if (fileField.size > UPLOAD_MAX_BYTES) {
+      return c.json({ error: 'file too large', maxBytes: UPLOAD_MAX_BYTES }, 413);
+    }
+
+    const suggestedRaw = form.get('filename');
+    const suggested =
+      typeof suggestedRaw === 'string' && suggestedRaw.length > 0 ? suggestedRaw : fileField.name;
+    const sanitized = sanitizeUploadFilename(suggested);
+    if (!sanitized) {
+      return c.json({ error: 'invalid filename or extension' }, 400);
+    }
+
+    const nodeDir = join(entry.repoPath, '.seeflow', 'nodes', nodeId);
+    try {
+      mkdirSync(nodeDir, { recursive: true });
+    } catch (err) {
+      return c.json(
+        {
+          error: `Failed to create node dir: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        500,
+      );
+    }
+
+    const finalName = pickUploadFilename(nodeDir, sanitized.base, sanitized.ext);
+    const absPath = join(nodeDir, finalName);
+    try {
+      await Bun.write(absPath, fileField);
+    } catch (err) {
+      return c.json(
+        { error: `Failed to write file: ${err instanceof Error ? err.message : String(err)}` },
+        500,
+      );
+    }
+
+    return c.json({ path: `nodes/${nodeId}/${finalName}` });
+  });
+
   // POST /api/projects/:id/files/upload — accept a multipart image upload and
   // persist it under `<project>/.seeflow/assets/`. The frontend (US-008 OS
   // drop) sends `file` (Blob) and optionally `filename` (the original OS name)
