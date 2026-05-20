@@ -26,6 +26,7 @@ import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
 import type { FlowEntry, Registry } from './registry.ts';
 import { type ResolvedFlow, type StatusAction, StatusReportSchema } from './schema.ts';
+import { shortId } from './short-id.ts';
 import { readMergedFlow } from './watcher.ts';
 
 export interface StatusRunner {
@@ -193,7 +194,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
       return undefined;
     }
 
-    const runId = crypto.randomUUID();
+    const runId = shortId();
     const env = buildChildEnv({
       SEEFLOW_DEMO_ID: flowId,
       SEEFLOW_NODE_ID: nodeId,

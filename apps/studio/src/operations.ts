@@ -34,6 +34,7 @@ import {
   TargetHandleIdSchema,
 } from './schema.ts';
 import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
+import { shortId } from './short-id.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
 const DEFAULT_FLOW_RELATIVE_PATH = '.seeflow/flow.json';
@@ -890,7 +891,7 @@ export async function addNodeImpl(
 
   const newNode = { ...nodeBody };
   if (typeof newNode.id !== 'string' || newNode.id.length === 0) {
-    newNode.id = `node-${crypto.randomUUID()}`;
+    newNode.id = `node-${shortId()}`;
   }
   const newId = newNode.id as string;
   // Default position so the post-merge ResolvedFlowSchema parse passes. Position lives
@@ -1142,7 +1143,7 @@ export async function addConnectorImpl(
 
   const newConn = { ...connBody };
   if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
-    newConn.id = `conn-${crypto.randomUUID()}`;
+    newConn.id = `conn-${shortId()}`;
   }
   if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
     newConn.kind = 'default';

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { seeflowHome } from './paths.ts';
+import { shortId } from './short-id.ts';
 
 export interface FlowEntry {
   id: string;
@@ -121,7 +122,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
         persist();
         return updated;
       }
-      const id = crypto.randomUUID();
+      const id = shortId();
       const slug = uniqueSlug(slugify(input.name));
       const entry: FlowEntry = {
         id,

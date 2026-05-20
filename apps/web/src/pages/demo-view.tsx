@@ -17,6 +17,7 @@ import type {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
+import { shortId } from '@/lib/short-id';
 import {
   type CommandId,
   type ConnectorStylePatch,
@@ -1418,7 +1419,7 @@ export function DemoView({
       // Generate the id client-side so the optimistic override and the
       // server echo share an id — the SSE-driven prune drops the override
       // cleanly once they match (mirrors `onCreateConnector`).
-      const id = `node-${crypto.randomUUID()}`;
+      const id = `node-${shortId()}`;
       // US-024: fresh shapes start with borderSize=1 + fontSize=12 (text
       // variant gets fontSize only — no border, per US-003). Existing nodes
       // on disk that lack these fields keep their renderer-side fallbacks.
@@ -1476,7 +1477,7 @@ export function DemoView({
     (iconName: string, position: Position) => {
       if (!flowId || !adapter) return;
       setEditError(null);
-      const id = `node-${crypto.randomUUID()}`;
+      const id = `node-${shortId()}`;
       const data = {
         icon: iconName,
         width: ICON_DEFAULT_SIZE.width,
@@ -1538,7 +1539,7 @@ export function DemoView({
     (args: { position: Position }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
-      const id = `node-${crypto.randomUUID()}`;
+      const id = `node-${shortId()}`;
       const htmlPath = `blocks/${id}.html`;
       const payload = {
         id,
@@ -1673,7 +1674,7 @@ export function DemoView({
       if (!flowId || !adapter) return;
       // Generate the id client-side so the optimistic override and the server
       // echo share an id (mirrors `onCreateShapeNode`).
-      const nodeId = `node-${crypto.randomUUID()}`;
+      const nodeId = `node-${shortId()}`;
       runImageUpload({ nodeId, ...args });
     },
     [flowId, adapter, runImageUpload],
@@ -1811,7 +1812,7 @@ export function DemoView({
   const onCreateConnector = useCallback(
     (source: string, target: string, options?: { targetPin?: EdgePin }) => {
       if (!flowId || !adapter) return;
-      const id = `conn-${crypto.randomUUID()}`;
+      const id = `conn-${shortId()}`;
       // US-025: by default every new connector is floating — both endpoints
       // carry *HandleAutoPicked: true and no handle ids. When the body-drop
       // fallback projected the cursor onto the target node's perimeter, we
@@ -1886,8 +1887,8 @@ export function DemoView({
     }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
-      const newNodeId = `node-${crypto.randomUUID()}`;
-      const newConnId = `conn-${crypto.randomUUID()}`;
+      const newNodeId = `node-${shortId()}`;
+      const newConnId = `conn-${shortId()}`;
       const dims = SHAPE_DEFAULT_SIZE[shape];
       // US-024: shape defaults (borderSize=1 + fontSize=12; text variant
       // skips border) — same path the toolbar drag-create uses. Last-used
@@ -2008,8 +2009,8 @@ export function DemoView({
         nodes: payload.nodes,
         connectors: payload.connectors,
         flowPos,
-        nodeIdGen: () => `node-${crypto.randomUUID()}`,
-        connectorIdGen: () => `conn-${crypto.randomUUID()}`,
+        nodeIdGen: () => `node-${shortId()}`,
+        connectorIdGen: () => `conn-${shortId()}`,
       });
 
       // Optimistic overrides — render the pasted entities immediately while

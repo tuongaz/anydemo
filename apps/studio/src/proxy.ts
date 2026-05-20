@@ -17,6 +17,7 @@ import { join, resolve, sep } from 'node:path';
 import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
 import type { PlayAction, ResetAction } from './schema.ts';
+import { shortId } from './short-id.ts';
 
 export interface PlayResult {
   /** Correlates this run across SSE events + the synchronous response. */
@@ -154,7 +155,7 @@ export async function stopAllPlays(flowId: string): Promise<void> {
 export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
   const { events, flowId, nodeId, cwd, action } = options;
   const spawner = options.spawner ?? defaultProcessSpawner;
-  const runId = crypto.randomUUID();
+  const runId = shortId();
 
   const resolved = resolveScript(cwd, action.scriptPath);
   if (!resolved.ok) {

@@ -396,7 +396,7 @@ const SCENARIOS: ParityScenario[] = [
         },
       };
     },
-    // Registry-generated id is non-deterministic (crypto.randomUUID). Strip
+    // Registry-generated id is non-deterministic (shortId). Strip
     // it before the equality check — slug, scaffolded flag, and the on-disk
     // bytes (smuggled in as __demoFileBytes) are the meaningful invariants.
     normalizeResponse: (body) => {
