@@ -445,6 +445,76 @@ describe('seeflow_add_node', () => {
   });
 });
 
+describe('seeflow_add_node + html externalization (htmlNode)', () => {
+  it('externalizes html to nodes/<id>/view.html when provided', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: {
+        id: 'html-mcp',
+        type: 'htmlNode',
+        data: { html: '<p>via mcp</p>' },
+      },
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { html?: string } }>;
+    };
+    const node = onDisk.nodes.find((n) => n.id === 'html-mcp');
+    expect(node?.data.html).toBe('file://nodes/html-mcp/view.html');
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-mcp', 'view.html'), 'utf8')).toBe(
+      '<p>via mcp</p>',
+    );
+  });
+
+  it('writes empty view.html and file:// ref when html is omitted on htmlNode', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: { id: 'html-empty', type: 'htmlNode', data: {} },
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { html?: string } }>;
+    };
+    expect(onDisk.nodes.find((n) => n.id === 'html-empty')?.data.html).toBe(
+      'file://nodes/html-empty/view.html',
+    );
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-empty', 'view.html'), 'utf8'),
+    ).toBe('');
+  });
+});
+
+describe('seeflow_patch_node + html externalization (htmlNode)', () => {
+  it('writes patch.html to view.html and keeps the file:// ref', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: { id: 'h1', type: 'htmlNode', data: { html: 'init' } },
+    });
+    await callTool(app, 'seeflow_patch_node', {
+      flowId: reg.id,
+      nodeId: 'h1',
+      html: '<p>patched</p>',
+    });
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { html?: string } }>;
+    };
+    expect(onDisk.nodes.find((n) => n.id === 'h1')?.data.html).toBe('file://nodes/h1/view.html');
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'h1', 'view.html'), 'utf8')).toBe(
+      '<p>patched</p>',
+    );
+  });
+});
+
 describe('seeflow_patch_node + detail externalization', () => {
   it('writes patch.detail to detail.md and keeps the file:// ref', async () => {
     const { app } = buildApp();

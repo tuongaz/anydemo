@@ -2010,6 +2010,37 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     expect(node?.data.icon).toBeUndefined();
     expect('icon' in (node?.data ?? {})).toBe(false);
   });
+
+  it('patches html on an htmlNode by writing nodes/<id>/view.html', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    await post(app, `/api/flows/${reg.id}/nodes`, {
+      id: 'html-patch',
+      type: 'htmlNode',
+      data: { html: 'initial' },
+    });
+    const res = await patch(app, `/api/flows/${reg.id}/nodes/html-patch`, {
+      html: '<p>via PATCH</p>',
+    });
+    expect(res.status).toBe(200);
+
+    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+      nodes: Array<{ id: string; data: { html?: string } }>;
+    };
+    expect(onDisk.nodes.find((n) => n.id === 'html-patch')?.data.html).toBe(
+      'file://nodes/html-patch/view.html',
+    );
+    expect(
+      readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-patch', 'view.html'), 'utf8'),
+    ).toBe('<p>via PATCH</p>');
+  });
 });
 
 describe('POST /api/flows/:id/nodes', () => {

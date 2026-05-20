@@ -295,7 +295,8 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   },
   {
     name: 'seeflow_add_node',
-    description: 'Append a new node to a flow (cascade-safe; id auto-generated when omitted).',
+    description:
+      'Append a new node to a flow (cascade-safe; id auto-generated when omitted). Text content fields (detail on every node; html on htmlNode) are auto-externalized to <project>/.seeflow/nodes/<id>/ and stored as file:// refs in flow.json; reads inline the resolved content transparently.',
     inputSchema: inputSchemaFromZod(AddNodeInputSchema),
     handler: async (args) => {
       const parsed = AddNodeInputSchema.safeParse(args);
@@ -381,7 +382,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
   {
     name: 'seeflow_patch_node',
     description:
-      'Update fields on an existing node (position, name, description, detail, icon, colors, border, font, shape, dimensions, autoSize, plus iconNode-only color/strokeWidth/alt).',
+      'Update fields on an existing node (position, name, description, detail, icon, colors, border, font, shape, dimensions, autoSize, plus iconNode-only color/strokeWidth/alt). Setting detail (every node) or html (htmlNode) writes the content to <project>/.seeflow/nodes/<id>/{detail.md|view.html}; the file:// ref on the node persists. Empty-string detail empties the file but keeps the ref.',
     inputSchema: inputSchemaFromZod(PatchNodeInputSchema),
     handler: async (args) => {
       const parsed = PatchNodeInputSchema.safeParse(args);

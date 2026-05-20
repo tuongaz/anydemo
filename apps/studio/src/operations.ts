@@ -113,6 +113,10 @@ export const NodePatchBodySchema = z
     // serialize signal — `mergeNodeUpdates` strips the key from disk.
     description: z.string().optional(),
     detail: z.string().optional(),
+    // htmlNode-only: inline HTML content. Externalized to
+    // `<project>/.seeflow/nodes/<id>/view.html` by patchNodeImpl; the file://
+    // ref on the node persists. Empty string empties the file but keeps the ref.
+    html: z.string().optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -141,6 +145,7 @@ const NODE_DATA_PATCH_KEYS = [
   'icon',
   'description',
   'detail',
+  'html',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
