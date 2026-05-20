@@ -91,7 +91,7 @@ SeeFlow ships an MCP server so any MCP-aware editor can list, register, and edit
 **Claude Code:**
 
 ```bash
-claude mcp add seeflow -- npx -y -p @tuongaz/seeflow@latest seeflow-mcp
+claude mcp add seeflow -- npx -y --package=@tuongaz/seeflow@latest seeflow-mcp
 ```
 
 **Via `.mcp.json`** (Cursor, Windsurf, etc.):
@@ -101,7 +101,7 @@ claude mcp add seeflow -- npx -y -p @tuongaz/seeflow@latest seeflow-mcp
   "mcpServers": {
     "seeflow": {
       "command": "npx",
-      "args": ["-y", "-p", "@tuongaz/seeflow@latest", "seeflow-mcp"]
+      "args": ["-y", "--package=@tuongaz/seeflow@latest", "seeflow-mcp"]
     }
   }
 }
