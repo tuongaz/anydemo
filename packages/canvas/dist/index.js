@@ -583,7 +583,7 @@ function InlineEdit({
       onDoubleClick: (e) => e.stopPropagation(),
       style,
       className: cn(
-        "nodrag nopan nowheel block w-full bg-transparent p-0 text-inherit outline-none",
+        "nodrag nopan nowheel sf:block sf:w-full sf:bg-transparent sf:p-0 sf:text-inherit sf:outline-none",
         "sf:whitespace-pre-wrap sf:wrap-break-word",
         empty2 && placeholder ? "inline-edit-empty" : "",
         shake ? "inline-edit-shake" : "",
