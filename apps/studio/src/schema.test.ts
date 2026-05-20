@@ -872,7 +872,7 @@ describe('ResolvedFlowSchema', () => {
           type: 'imageNode' as const,
           position: { x: 10, y: 20 },
           data: {
-            path: 'assets/pixel.png',
+            path: 'nodes/img-1/pixel.png',
             alt: 'pixel',
             width: 200,
             height: 150,
@@ -887,7 +887,7 @@ describe('ResolvedFlowSchema', () => {
     }
     const node = result.data.nodes[0];
     if (node?.type !== 'imageNode') throw new Error('expected imageNode');
-    expect(node.data.path).toBe('assets/pixel.png');
+    expect(node.data.path).toBe('nodes/img-1/pixel.png');
     expect(node.data.alt).toBe('pixel');
   });
 
@@ -946,6 +946,40 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
+  it('rejects an imageNode whose path is outside its nodes/<id>/ folder', () => {
+    const result = ResolvedFlowSchema.safeParse({
+      version: 2 as const,
+      name: 'wrong-folder',
+      nodes: [
+        {
+          id: 'node-abc',
+          type: 'imageNode' as const,
+          position: { x: 0, y: 0 },
+          data: { path: 'assets/foo.png' },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts an imageNode whose path is under its own nodes/<id>/ folder', () => {
+    const result = ResolvedFlowSchema.safeParse({
+      version: 2 as const,
+      name: 'good-folder',
+      nodes: [
+        {
+          id: 'node-abc',
+          type: 'imageNode' as const,
+          position: { x: 0, y: 0 },
+          data: { path: 'nodes/node-abc/foo.png' },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
   // US-014: image nodes gain an optional `borderWidth` (1–8). `borderColor`
   // + `borderStyle` already come via NodeVisualBaseShape — these tests pin
   // the new field's accept/reject behavior alongside back-compat for unset fields.
@@ -959,7 +993,7 @@ describe('ResolvedFlowSchema', () => {
           type: 'imageNode' as const,
           position: { x: 0, y: 0 },
           data: {
-            path: 'assets/pixel.png',
+            path: 'nodes/img-1/pixel.png',
             borderColor: 'blue' as const,
             borderWidth: 4,
             borderStyle: 'dashed' as const,
@@ -988,7 +1022,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'img-1',
           type: 'imageNode' as const,
           position: { x: 0, y: 0 },
-          data: { path: 'assets/pixel.png' },
+          data: { path: 'nodes/img-1/pixel.png' },
         },
       ],
       connectors: [],
@@ -1005,7 +1039,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('rejects an image node with borderWidth outside the 1–8 range (US-014)', () => {
-    const basePath = 'assets/pixel.png';
+    const basePath = 'nodes/img-1/pixel.png';
     const tooSmall = {
       version: 2 as const,
       name: 'bad-w',
@@ -1043,7 +1077,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'img-1',
           type: 'imageNode' as const,
           position: { x: 100, y: 0 },
-          data: { path: 'assets/pixel.png' },
+          data: { path: 'nodes/img-1/pixel.png' },
         },
       ],
       connectors: [{ id: 'c1', source: 's', target: 'img-1', kind: 'default' as const }],
@@ -1474,7 +1508,7 @@ describe('ResolvedFlowSchema', () => {
             type: 'imageNode',
             position: { x: 0, y: 0 },
             data: {
-              path: 'assets/captioned.png',
+              path: 'nodes/n-image/captioned.png',
               description: 'short body',
               detail: 'long-form notes',
             },

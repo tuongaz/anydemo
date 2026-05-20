@@ -411,6 +411,21 @@ export const ResolvedFlowSchema = z
         });
       }
     });
+    // imageNode upload paths must live under the node's own
+    // `nodes/<id>/` folder so delete_node's removeNodeDir cascade is the
+    // single source of cleanup.
+    resolved.nodes.forEach((node, idx) => {
+      if (node.type !== 'imageNode') return;
+      const path = (node.data as { path?: string }).path;
+      const expected = `nodes/${node.id}/`;
+      if (typeof path === 'string' && !path.startsWith(expected)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['nodes', idx, 'data', 'path'],
+          message: `imageNode path must start with "${expected}"`,
+        });
+      }
+    });
   });
 
 export type ResolvedFlow = z.infer<typeof ResolvedFlowSchema>;
