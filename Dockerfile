@@ -12,7 +12,6 @@ WORKDIR /src
 COPY package.json bun.lock ./
 COPY apps/studio/package.json apps/studio/package.json
 COPY apps/web/package.json apps/web/package.json
-COPY packages/sdk/package.json packages/sdk/package.json
 # apps/web depends on @seeflow/canvas via `file:../../packages/canvas`. Bun
 # copies the source at install time (vs. symlinking workspace deps), so the
 # canvas dir — including the committed dist/ — must exist before the install,
