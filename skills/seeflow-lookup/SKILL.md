@@ -1,11 +1,11 @@
 ---
-name: seeflow-design
-description: Use when an AI agent or user needs to consult a SeeFlow flow as architectural ground truth — exploring how a system works ("how does X work", "show me the flow"), gathering context before implementation ("what already handles X", "where should this code go"), making scope/design decisions ("what depends on Y"), or onboarding to a `.seeflow/`-equipped repo. Read-only; never mutates flows.
+name: seeflow-lookup
+description: Read-only lookup over registered SeeFlow flows. Use when an agent or user needs to consult an existing flow as architectural ground truth — "how does X work", "show me the flow", "what already handles X", "where should this code go", "what depends on Y" — or when onboarding to a `.seeflow/`-equipped repo. Never creates or mutates flows; for that, use `/seeflow`.
 ---
 
-# seeflow-design
+# seeflow-lookup
 
-Consult registered SeeFlow flows as architectural ground truth. Read-only counterpart to `/seeflow` — that skill *creates* flows from code; this one *reads* them when an agent is writing code or making decisions.
+Look up registered SeeFlow flows and consult them as architectural ground truth. Read-only counterpart to `/seeflow` — that skill *creates and edits* flows; this one *queries* them when an agent is writing code or making decisions.
 
 ## When NOT to invoke
 

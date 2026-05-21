@@ -3,7 +3,7 @@ import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-describe('seeflow-design <-> CLI help', () => {
+describe('seeflow-lookup <-> CLI help', () => {
   it('tells the agent to consult `seeflow help` as the source of truth', () => {
     const skill = readFileSync(resolve(__dirname, '../SKILL.md'), 'utf8');
     expect(skill).toContain('seeflow help');

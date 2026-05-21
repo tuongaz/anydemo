@@ -54,16 +54,16 @@ npx skills add tuongaz/seeflow
 
 The plugin scans your routes and database connections, generates `flow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
 
-### `/seeflow-design` — consult an existing flow
+### `/seeflow-lookup` — consult an existing flow
 
 Once a flow is registered, agents can read it back as architectural ground truth:
 
 ```
-/seeflow-design list                                    # catalog of registered flows
-/seeflow-design flow <id>                               # nodes + connectors (no detail content)
-/seeflow-design node <flowId> <nodeId>                  # single node with detail/html inlined
-/seeflow-design flow <id> --full                        # everything inlined
-/seeflow-design node <flowId> <nodeId> --with-scripts   # adds play.ts / status.ts bodies
+/seeflow-lookup list                                    # catalog of registered flows
+/seeflow-lookup flow <id>                               # nodes + connectors (no detail content)
+/seeflow-lookup node <flowId> <nodeId>                  # single node with detail/html inlined
+/seeflow-lookup flow <id> --full                        # everything inlined
+/seeflow-lookup node <flowId> <nodeId> --with-scripts   # adds play.ts / status.ts bodies
 ```
 
 Read-only. JSON output. Start cheapest (`list`) and drill in.

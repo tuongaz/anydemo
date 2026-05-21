@@ -2,7 +2,7 @@
   "name": "seeflow",
   "displayName": "SeeFlow",
   "version": "0.1.0",
-  "description": "Turn natural-language prompts into registered, validated SeeFlow flows (`seeflow`), and consult registered flows as architectural ground truth (`seeflow-design`). Ships two description-triggered skills.",
+  "description": "Turn natural-language prompts into registered, validated SeeFlow flows (`seeflow`), and look up existing flows as architectural ground truth (`seeflow-lookup`). Ships two description-triggered skills.",
   "author": {
     "name": "SeeFlow"
   },
