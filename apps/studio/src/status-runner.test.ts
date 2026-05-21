@@ -76,6 +76,7 @@ function makeFakeSpawner(configFor: (index: number, opts: SpawnOptions) => FakeS
 function makeFakeRegistry(entries: FlowEntry[]): Registry {
   const map = new Map(entries.map((e) => [e.id, e]));
   return {
+    path: '/tmp/fake-registry.json',
     list: () => [...map.values()],
     getById: (id) => map.get(id),
     getBySlug: () => undefined,
@@ -85,6 +86,9 @@ function makeFakeRegistry(entries: FlowEntry[]): Registry {
       throw new Error('not implemented in fake');
     },
     remove: () => false,
+    onChange: () => () => {},
+    reload: () => {},
+    isOwnWrite: () => false,
   };
 }
 
@@ -433,6 +437,7 @@ describe('createStatusRunner', () => {
     let entry = entryWithStatus;
     const runner = createStatusRunner({
       registry: {
+        path: '/tmp/fake-registry.json',
         list: () => [entry],
         getById: () => entry,
         getBySlug: () => undefined,
@@ -442,6 +447,9 @@ describe('createStatusRunner', () => {
           throw new Error('nope');
         },
         remove: () => false,
+        onChange: () => () => {},
+        reload: () => {},
+        isOwnWrite: () => false,
       },
       events: bus,
       spawner,

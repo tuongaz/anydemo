@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
@@ -25,6 +26,8 @@ export interface RegisterInput {
 }
 
 export interface Registry {
+  /** Resolved path of the registry file on disk. */
+  readonly path: string;
   list(): FlowEntry[];
   getById(id: string): FlowEntry | undefined;
   getBySlug(slug: string): FlowEntry | undefined;
@@ -32,6 +35,12 @@ export interface Registry {
   getByRepoPathAndFlowPath(repoPath: string, flowPath: string): FlowEntry | undefined;
   upsert(input: RegisterInput): FlowEntry;
   remove(id: string): boolean;
+  /** Subscribe to external changes detected via reload(). Returns unsubscribe. */
+  onChange(fn: () => void): () => void;
+  /** Drop the in-memory cache and re-read from disk. Fires onChange listeners. */
+  reload(): void;
+  /** True when `contents` matches a hash this registry recently persisted. */
+  isOwnWrite(contents: string): boolean;
 }
 
 export function defaultRegistryPath(): string {
@@ -46,45 +55,60 @@ export function slugify(name: string): string {
   return slug || 'demo';
 }
 
+const OWN_WRITE_RING_SIZE = 4;
+
 export function createRegistry(options: { path?: string } = {}): Registry {
   const path = options.path ?? defaultRegistryPath();
   const entries = new Map<string, FlowEntry>();
+  const writtenHashes: string[] = [];
+  const listeners = new Set<() => void>();
 
-  if (existsSync(path)) {
+  const sha256 = (s: string): string =>
+    createHash('sha256').update(s).digest('hex');
+
+  const rememberWrite = (contents: string) => {
+    writtenHashes.push(sha256(contents));
+    if (writtenHashes.length > OWN_WRITE_RING_SIZE) writtenHashes.shift();
+  };
+
+  const loadFromDisk = () => {
+    entries.clear();
+    if (!existsSync(path)) return;
     try {
       const parsed = JSON.parse(readFileSync(path, 'utf8'));
-      if (Array.isArray(parsed)) {
-        for (const e of parsed) {
-          if (
-            e &&
-            typeof e.id === 'string' &&
-            typeof e.slug === 'string' &&
-            typeof e.repoPath === 'string'
-          ) {
-            if (typeof e.flowPath !== 'string') {
-              console.warn(
-                `[registry] ignoring legacy entry ${e.id} (${e.slug}) — pre-split format, please re-register`,
-              );
-              continue;
-            }
-            const entry = e as FlowEntry;
-            // Drop a malformed description silently — old registry files
-            // can't have one, and external tampering shouldn't crash load.
-            if (entry.description !== undefined && typeof entry.description !== 'string') {
-              entry.description = undefined;
-            }
-            entries.set(entry.id, entry);
+      if (!Array.isArray(parsed)) return;
+      for (const e of parsed) {
+        if (
+          e &&
+          typeof e.id === 'string' &&
+          typeof e.slug === 'string' &&
+          typeof e.repoPath === 'string'
+        ) {
+          if (typeof e.flowPath !== 'string') {
+            console.warn(
+              `[registry] ignoring legacy entry ${e.id} (${e.slug}) — pre-split format, please re-register`,
+            );
+            continue;
           }
+          const entry = e as FlowEntry;
+          if (entry.description !== undefined && typeof entry.description !== 'string') {
+            entry.description = undefined;
+          }
+          entries.set(entry.id, entry);
         }
       }
     } catch (err) {
       console.error(`[registry] failed to load ${path}, starting empty:`, err);
     }
-  }
+  };
+
+  loadFromDisk();
 
   const persist = () => {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileAtomic(path, JSON.stringify([...entries.values()], null, 2));
+    const contents = JSON.stringify([...entries.values()], null, 2);
+    rememberWrite(contents);
+    writeFileAtomic(path, contents);
   };
 
   const findByRepoPath = (repoPath: string): FlowEntry | undefined => {
@@ -110,6 +134,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
   };
 
   return {
+    path,
     list: () => [...entries.values()],
     getById: (id) => entries.get(id),
     getBySlug: (slug) => [...entries.values()].find((e) => e.slug === slug),
@@ -155,6 +180,25 @@ export function createRegistry(options: { path?: string } = {}): Registry {
       const removed = entries.delete(id);
       if (removed) persist();
       return removed;
+    },
+    onChange(fn) {
+      listeners.add(fn);
+      return () => {
+        listeners.delete(fn);
+      };
+    },
+    reload() {
+      loadFromDisk();
+      for (const fn of listeners) {
+        try {
+          fn();
+        } catch (err) {
+          console.error('[registry] onChange listener threw:', err);
+        }
+      }
+    },
+    isOwnWrite(contents) {
+      return writtenHashes.includes(sha256(contents));
     },
   };
 }

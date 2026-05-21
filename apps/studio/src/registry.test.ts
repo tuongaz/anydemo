@@ -250,6 +250,68 @@ describe('createRegistry', () => {
   });
 });
 
+describe('onChange subscription', () => {
+  it('records the hash of every persisted state for own-echo dedupe', () => {
+    const path = tmpRegistryPath();
+    const registry = createRegistry({ path });
+
+    registry.upsert({
+      name: 'a',
+      repoPath: '/tmp/a',
+      flowPath: '.seeflow/flow.json',
+    });
+    const persisted = readFileSync(path, 'utf8');
+
+    expect(registry.isOwnWrite(persisted)).toBe(true);
+    expect(registry.isOwnWrite('[]')).toBe(false);
+  });
+
+  it('fires onChange listeners when reload() is called', () => {
+    const path = tmpRegistryPath();
+    const registry = createRegistry({ path });
+    const observed: number[] = [];
+    const unsub = registry.onChange(() => observed.push(registry.list().length));
+
+    writeFileSync(
+      path,
+      JSON.stringify(
+        [
+          {
+            id: 'a',
+            slug: 'a',
+            name: 'a',
+            repoPath: '/tmp/a',
+            flowPath: '.seeflow/flow.json',
+            lastModified: 0,
+            valid: true,
+          },
+          {
+            id: 'b',
+            slug: 'b',
+            name: 'b',
+            repoPath: '/tmp/b',
+            flowPath: '.seeflow/flow.json',
+            lastModified: 0,
+            valid: true,
+          },
+        ],
+        null,
+        2,
+      ),
+    );
+
+    registry.reload();
+    expect(observed).toEqual([2]);
+    unsub();
+  });
+
+  it('exposes the resolved path on disk', () => {
+    const path = tmpRegistryPath();
+    const registry = createRegistry({ path });
+    expect(registry.path).toBe(path);
+  });
+});
+
 describe('atomic registry writes', () => {
   it('never leaves the registry file in a half-written state', async () => {
     const path = tmpRegistryPath();
