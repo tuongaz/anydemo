@@ -1,0 +1,304 @@
+{
+  "project": "SeeFlow",
+  "branchName": "ralph/studio-integration-tests",
+  "description": "Integration test tier for apps/studio: real HTTP/SSE/CLI/MCP-stdio plus Playwright canvas verification, hermetic via tmp $SEEFLOW_HOME, host-process (no Docker), gated through a reusable GitHub Actions workflow shared by publish.yml and docker.yml so both deploy paths run the suite before shipping.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create studio harness + integration dir + plumbing test",
+      "description": "As a test author, I need a reusable harness that boots the studio on a free port with a tmp $SEEFLOW_HOME and tears it down cleanly. This is the foundation every other integration test will build on.",
+      "acceptanceCriteria": [
+        "Create dir apps/studio/integration/ with subdirs support/ and fixtures/",
+        "Create apps/studio/integration/support/studio-harness.ts exporting: getFreePort(), waitForHealthz(baseURL, timeoutMs?), spawnStudio(opts?) returning StudioHandle { port, baseURL, home, workspace, pid, logs, stop() }",
+        "spawnStudio uses Bun.spawn with `bun apps/studio/src/cli.ts start --port <free> --host 127.0.0.1`, env includes SEEFLOW_HOME=<mkdtempSync>, captures stdout+stderr both to disk under apps/studio/integration/.artifacts/<run-id>/ and to in-memory buffers exposed via handle.logs",
+        "Health poll: 150ms interval, 10s ceiling, hits http://127.0.0.1:<port>/healthz",
+        "stop() sends SIGTERM, waits up to 5s, falls back to SIGKILL, then rmSync the tmp $SEEFLOW_HOME and workspace dirs",
+        "Register process.on('exit') guard so orphaned children die on test runner crash",
+        "Create apps/studio/integration/support/ids.ts exporting uniqueFlowId(testName) returning `it-${slug(testName)}-${nanoid(6)}`",
+        "Create apps/studio/integration/healthz.it.ts: boots studio via spawnStudio, GETs /healthz, asserts 200 + { status: 'ok' }, calls stop()",
+        "Add .gitignore entry for apps/studio/integration/.artifacts/",
+        "Add root package.json script test:it:bun = `bun test apps/studio/integration/`",
+        "Running `bun run test:it:bun` from repo root passes with no orphaned bun processes after exit (check with `pgrep -f cli.ts`)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Implemented. Notes for future stories: (1) studio reads $SEEFLOW_WORKSPACE (not $SEEFLOW_HOME) — set SEEFLOW_WORKSPACE=<tmpDir> to redirect state. (2) bun test does NOT discover *.it.ts files in a directory — script uses `bun test ./apps/studio/integration/*.it.ts` (shell glob + leading ./) instead of `bun test apps/studio/integration/`. (3) studio must be spawned with --foreground so SIGTERM/SIGKILL hit the actual server (default is daemonized)."
+    },
+    {
+      "id": "US-002",
+      "title": "Add cli-runner support helper",
+      "description": "As a test author, I need to spawn the seeflow CLI as a subprocess and capture its exit code, stdout, stderr, and duration. Required by every CLI integration test.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/support/cli-runner.ts exporting interface CliResult { code, stdout, stderr, durationMs } and async function runCli(args: string[], opts?: { env?, cwd?, stdin?, timeoutMs? }): Promise<CliResult>",
+        "Implementation uses Bun.spawn with `bun apps/studio/src/cli.ts <args>` — always runs against source, never a built binary",
+        "Default timeout 30s, throws clear error on timeout naming the args",
+        "Reads stdout + stderr to completion before resolving",
+        "Add test apps/studio/integration/cli-runner.it.ts that calls runCli(['--help']) and asserts code === 0 and stdout includes 'seeflow'",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Implemented. runCli wraps Bun.spawn over `bun apps/studio/src/cli.ts <args>`. Reads stdout+stderr to completion via `new Response(proc.stdout/stderr).text()` (this is cleaner than manual reader loops and matches bun idioms). Default 30s timeout; on timeout, SIGKILLs and throws an error naming the args + a tail of captured output. Optional stdin support handles both WritableStream and legacy writer shapes (Bun has waffled between these across versions). Test asserts code===0 and stdout includes 'seeflow'."
+    },
+    {
+      "id": "US-003",
+      "title": "Add MCP stdio client support helper",
+      "description": "As a test author, I need to spawn bin/seeflow-mcp and speak JSON-RPC over stdio. Required by every MCP integration test.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/support/mcp-client.ts exporting interface McpClient { listTools(), callTool(name, args), close() } and async function spawnMcpClient(env?: Record<string,string>): Promise<McpClient>",
+        "Implementation uses @modelcontextprotocol/sdk Client + StdioClientTransport, child process is `bun apps/studio/src/mcp.ts` or `apps/studio/bin/seeflow-mcp` — pick whichever the sdk's StdioClientTransport accepts and document the choice with a one-line comment",
+        "close() shuts down transport AND kills child process within 2s",
+        "Add test apps/studio/integration/mcp-client.it.ts that boots studio (needed for some tools), spawns the client, calls listTools(), asserts the returned array is non-empty and contains 'listDemos' (or whichever tool name actually exists — verify against apps/studio/src/mcp.ts)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Implemented. (1) Child process choice: spawn `bun apps/studio/src/mcp-shim.ts` directly, NOT `apps/studio/src/mcp.ts` (which is a factory module, not a standalone process) and NOT `apps/studio/bin/seeflow-mcp` (which adds a node→bun spawnSync layer + extra pid). The shim proxies JSON-RPC to the studio's HTTP /mcp endpoint via SEEFLOW_STUDIO_URL env. (2) `close()` calls `client.close()` (SDK's StdioClientTransport.close() already SIGTERM→SIGKILLs the child) under a 2s race; on timeout, fallback SIGKILL by captured pid. (3) Tool name assertion: PRD said 'listDemos' — actual name in mcp.ts is `seeflow_list_flows` (the legacy 'listDemos' was renamed in the seeflow_ namespace prefix migration). Test asserts that exact name."
+    },
+    {
+      "id": "US-004",
+      "title": "Add SSE client support helper",
+      "description": "As a test author, I need to subscribe to /api/events, collect events as a typed array, and wait for a predicate. Bun has no built-in EventSource, so this wraps fetch.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/support/sse-client.ts exporting interface SseClient { events: SseEvent[]; waitFor(predicate, timeoutMs?): Promise<SseEvent>; close(): void } and connectSse(baseURL: string, path?: string): Promise<SseClient>",
+        "Implementation uses fetch with Accept: text/event-stream, reads response.body as a ReadableStream, parses SSE frames (`event:`, `data:`, blank-line delimited), pushes parsed events into the events array",
+        "waitFor polls events.find(predicate) every 25ms up to timeoutMs (default 5000), throws clear error on timeout listing the last 3 events seen",
+        "close() aborts the fetch via AbortController",
+        "Add test apps/studio/integration/sse-client.it.ts that boots studio, opens an SSE client on /api/events, POSTs to /api/emit, and asserts the event arrives within 2s",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Implemented. (1) `connectSse(baseURL, path = '/api/events')` opens a fetch with `Accept: text/event-stream`, drains response.body via getReader+TextDecoder in the background, and parses SSE frames split on `\\n\\n` after `\\r\\n` → `\\n` normalization. Field parsing follows the SSE spec (`event:`, `data:`, `id:`, comment lines starting with `:`, single leading space after the colon trimmed). Multiple `data:` lines join with `\\n`; missing `event:` defaults to 'message'. (2) `waitFor(predicate, timeoutMs = 5000)` polls events.find every 25ms and throws an error naming the last 3 `event:data` pairs on timeout. (3) `close()` aborts the fetch via AbortController. (4) Route is `/api/events?flowId=<id>` — flow MUST exist in the registry (returns 404 otherwise). Test creates a flow via POST /api/projects first, then asserts the initial `hello` frame arrives, POSTs to /api/emit with `{flowId, nodeId, status:'running', runId}`, and asserts `node:running` arrives within 2s with the right nodeId+runId."
+    },
+    {
+      "id": "US-005",
+      "title": "REST integration tests — flow lifecycle routes",
+      "description": "As a maintainer, I need one happy-path test per flow-lifecycle REST route, so wire + serialization regressions are caught at the boundary. Reuses the shared studio harness from US-001.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/rest.it.ts with a beforeAll that calls spawnStudio() once and afterAll that calls stop()",
+        "First read apps/studio/src/api.ts to confirm the exact route paths and method shapes — do not assume from memory",
+        "One test per route covering happy path: GET /healthz, POST /api/projects (creates flow dir + flow.json), GET /api/flows (list includes new flow), GET /api/flows/:id (returns shape), POST /api/flows/:id/register, POST /api/flows/:id/validate (accepts valid), DELETE /api/flows/:id (removes from disk + registry)",
+        "Each mutating test creates its own flow via uniqueFlowId(test.name) to stay parallel-safe",
+        "Assertions verify both HTTP response shape AND on-disk side effect (flow.json exists/absent, registry updated)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Implemented. (1) PRD listed `POST /api/flows/:id/register` and `POST /api/flows/:id/validate` — the actual routes are `/api/flows/register` (body `{ repoPath, flowPath, name? }`) and `/api/flows/validate` (body `{ demo, tier? }`). Used the real shapes per `apps/studio/src/api.ts` + `operations.ts` + `diagram.ts`. (2) `deleteFlowImpl` only removes the registry entry (and unwatches) — the on-disk flow.json is intentionally preserved. The PRD's 'removes from disk' wording is loose; the DELETE test asserts the actual behavior (registry gone, file preserved). (3) One shared studio per file via beforeAll/afterAll; each mutating test uses `uniqueFlowId(testName)` for parallel safety. (4) `createProjectImpl` writes new projects under `${SEEFLOW_WORKSPACE}/.seeflow/<slug>/.seeflow/flow.json` — the workspace path is `studio.workspace` from the harness. For the register test we write under `studio.home/<slug>/.seeflow/flow.json` (a sibling of `.seeflow`) so the register call can reference it via absolute repoPath."
+    },
+    {
+      "id": "US-006",
+      "title": "REST integration tests — node + connector mutations",
+      "description": "As a maintainer, I need one happy-path test per node and connector mutation REST route, so atomic-write and serialization bugs surface at the boundary.",
+      "acceptanceCriteria": [
+        "Extend apps/studio/integration/rest.it.ts with describe blocks for nodes and connectors",
+        "Read apps/studio/src/api.ts and apps/studio/src/operations.ts to confirm exact route paths and request body shapes",
+        "Node tests: POST nodes:add (single), POST nodes:add-bulk (multiple in one call), PATCH nodes/:nodeId (partial merge), POST nodes/:nodeId/position (x/y persists), POST nodes/:nodeId/reorder (order index changes), DELETE nodes/:nodeId (gone + related connectors trimmed)",
+        "Connector tests: POST connectors:add, POST connectors:add-bulk, PATCH connectors/:connectorId, DELETE connectors/:connectorId",
+        "Each test creates its own flow with uniqueFlowId and seeds it with the minimum nodes needed for the case",
+        "Assertions check both response body AND disk state (re-read flow.json and assert the change landed)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "Implemented. (1) PRD listed POST verbs for /position and /reorder, but the actual routes are PATCH /api/flows/:id/nodes/:nodeId/position and PATCH /api/flows/:id/nodes/:nodeId/order — tests use the real verbs/paths. Also: the reorder route's body is a discriminated union on `op` (forward|backward|toFront|toBack|toIndex); used `{op:'toFront'}` as the happy-path. (2) `position` is split to style.json (not flow.json) by splitFlow per NODE_STYLE_KEYS — the position test re-reads style.json (added a readStyleJson helper) to assert disk state. (3) Connector `label` stays in flow.json per CONNECTOR_FLOW_KEYS, so the PATCH-connector test reads flow.json. (4) Shape nodes are the smallest valid seed (`{type:'shapeNode',data:{shape:'rectangle'}}`) — no playAction/stateSource needed, perfect for boilerplate. (5) The DELETE-node test asserts the connector cascade — connectors referencing the deleted node are stripped in the same atomic write."
+    },
+    {
+      "id": "US-007",
+      "title": "REST integration tests — play, emit, SSE",
+      "description": "As a maintainer, I need integration tests for the runtime surfaces: triggering a node, emitting events, and streaming via SSE. These can only be validated across process boundaries.",
+      "acceptanceCriteria": [
+        "Extend apps/studio/integration/rest.it.ts with a describe('runtime') block",
+        "POST /api/flows/:id/play/:nodeId — seed flow with a playNode whose playAction.scriptPath is a tiny tmp script that exits 0; assert response has runId and process actually ran (check exit via stub or via a later node:done event)",
+        "POST /api/emit — assert 200, idempotent",
+        "GET /api/events (SSE) — open via the sse-client helper, emit a node:status, assert it arrives in events array within 2s",
+        "External flow.json edit — write a modified flow.json directly to disk under the studio's workspace, assert SSE delivers a flow:reloaded (or equivalent — check watcher.ts for actual event name) within 1s",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Implemented. (1) Watcher event name is `flow:reload` (NOT `flow:reloaded`/`reloaded`). Payload shape on success: `{ ts, valid: true, flow: <ResolvedFlow> }`; on failure: `{ ts, valid: false, error: <string> }`. (2) flow.json on disk uses the strict FlowSchema — `position` is split to style.json by splitFlow per NODE_STYLE_KEYS and MUST NOT be present at the node top-level when writing flow.json externally (every Flow*NodeDataSchema is `.strict()`). The external-edit test omits `position` so the watcher's reparse broadcasts `valid: true`. (3) For the play test: playNode requires `name`, `kind`, `stateSource`, and `playAction.scriptPath` must be relative under `<repoPath>/.seeflow/nodes/<nodeId>/`. addNodeImpl externalizes `detail` (creating the node dir as a side effect), then write the script under `<workspace>/<slug>/.seeflow/nodes/<nodeId>/scripts/play.ts` so resolveScript's realpath check passes. The script prints a single JSON line then `process.exit(0)`; runPlay parses stdout via JSON.parse, so the response body comes back as `{ hello: 'play' }`. (4) Open the SSE subscription BEFORE POSTing /play so the `node:running`+`node:done` broadcasts are queued; the SSE route writes a `hello` frame on subscribe — wait for it before triggering work to avoid a TOCTOU on broadcast registration. (5) /api/emit is stateless and idempotent — the broadcaster maps `status → 'node:running'|'node:done'|'node:error'` and forwards payload; calling three times in a row returns 200 each. (6) /api/emit requires the flowId to be in the registry (404 otherwise) so each test creates its own project first."
+    },
+    {
+      "id": "US-008",
+      "title": "CLI integration tests — one per subcommand",
+      "description": "As a maintainer, I need one happy-path test per seeflow CLI subcommand to catch regressions in argument parsing, exit codes, and on-disk side effects.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/cli.it.ts importing runCli from the support helper",
+        "Read apps/studio/src/cli.ts to enumerate every subcommand currently supported — do not assume the list",
+        "One test per subcommand asserting exit code, key stdout lines, and any disk side effect: start (covered by harness, just verify --help mentions it), stop (against a harness-spawned studio in a separate test that doesn't share the global one — or use a per-test harness here), register --path, list, validate, e2e, help / --help, --version",
+        "Tests that spawn their own studio (stop test, register test) must use isolated tmp $SEEFLOW_HOME — do not collide with the file-level shared harness",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Implemented. (1) Created apps/studio/integration/cli.it.ts covering every subcommand currently dispatched in cli.ts (24 unique commands + aliases): meta (--help/help/-h/--version/-v/version/unknown), projects+flows (projects:create, flows:list, flows:get, flows:delete, flows:layout, register, flows:register, flows:play), nodes (add/add-bulk/patch/move/reorder/delete), connectors (add/add-bulk/patch/delete), validate, e2e, lifecycle (start verified in --help, stop with per-test studio). (2) Shared studio per file (beforeAll/afterAll). CLI calls set `SEEFLOW_STUDIO_URL=${studio.baseURL}` so `studioUrlOrDie` short-circuits out of its daemon-spawn path, and `SEEFLOW_WORKSPACE=${studio.home}` so `seeflowHome()` resolves to the same dir for any CLI subcommand that touches state files. (3) `stop` test spawns its own per-test studio — stopping the shared one would kill every later test. The harness writes `seeflow.pid` at `${workspace}/seeflow.pid` even in --foreground mode (writePid runs unconditionally in runStart). (4) Discovered + fixed a pre-existing bug in `apps/studio/src/cli-e2e.ts`: it read `demoData.demo` but the API response key is `flow` (per FlowGetResponse in operations.ts). The bug made `seeflow e2e <id>` always exit 1 with 'demo not valid'. Renamed `DemoShape` → `FlowBody` and `demo?` → `flow?` so the e2e CLI command actually works. (5) Output parsing: HTTP-passthrough subcommands print a single trailing `{\"ok\":true,...}` JSON line via printOk; `parseOkLine` picks the last non-empty line so human-readable headers (e.g. register's `Registered \"name\" → url/d/slug`) don't break the parse. Total: 54 integration tests / 292 expects / ~6.7s. Full suite still passes (1580 pass / 1 skip / 0 fail)."
+    },
+    {
+      "id": "US-009",
+      "title": "MCP integration tests — list_tools + one call per tool",
+      "description": "As a maintainer, I need to verify the MCP stdio transport works end-to-end and that every tool registered in mcp.ts can be invoked. The existing mcp-parity.test.ts covers in-process parity; this covers the wire.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/mcp.it.ts using spawnMcpClient from the support helper",
+        "Read apps/studio/src/mcp.ts to enumerate every tool registered — do not assume the list",
+        "First test: tools/list returns a stable set; snapshot the sorted tool names with `expect(names).toEqual([...])` so additions/removals are loud",
+        "Per-tool happy path: one tools/call per tool with minimal valid args; reuse uniqueFlowId for mutating tools; for read-only tools that need data, seed via the REST API first",
+        "Each test asserts the CallToolResult is non-error (isError !== true) and the structured content matches the tool's documented shape",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Implemented. (1) MCP server registers exactly 16 tools (15 seeflow_* + 1 legacy validate_seeflow). The tools/list snapshot in mcp.it.ts asserts the sorted full set via `expect(names).toEqual([...])` so any future add/remove is loud. (2) MCP `validate_seeflow` wraps `validateImpl` DIRECTLY — it returns `{ ok: true }` on success (NOT the REST envelope with `stats`+`warnings`). Only the REST `/api/flows/validate` route wraps validateImpl with the extra envelope. (3) Per-tool happy-path strategy: create the flow via REST `/api/projects` (well-tested in rest.it.ts) then call the MCP tool with minimal valid args. For seeflow_create_project / seeflow_register_flow, exercise the MCP tool itself as the seed. (4) `okJson<T>` helper parses CallToolResult.content[0].text and throws clear messages if isError=true — keeps each test small. (5) addNodeImpl auto-generates ids matching `^node-` when omitted; tests sometimes pass explicit ids (e.g. 'm1','m2') to assert exact disk shape afterwards."
+    },
+    {
+      "id": "US-010",
+      "title": "Cross-boundary edge tests",
+      "description": "As a maintainer, I need explicit tests for failure modes that only manifest across process boundaries: SIGTERM cleanup, double-start guard, file watcher reload, parallel writes, stale PID recovery.",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/edges.it.ts (each test spawns its own studio — these manipulate process lifecycle so a shared harness would interfere)",
+        "Test: SIGTERM during in-flight nodes:add-bulk — fire request, immediately stop studio, assert process exits within 2s and flow.json is either complete or untouched (never partially written)",
+        "Test: double-start guard — spawn studio A on free port P, spawn `seeflow start --port P` again via runCli, assert exit code != 0 and stderr mentions the existing PID or port-in-use",
+        "Test: external file edit triggers SSE reload — connect SSE, writeFileSync a modified flow.json to disk under the workspace, assert the reload event arrives within 1s (event name and shape: read apps/studio/src/watcher.ts to confirm)",
+        "Test: parallel PATCH — fire 10 concurrent PATCH /nodes/:id on the same flow with different values, await all, assert final flow.json on disk equals exactly one of the input values (no torn write, no JSON parse error)",
+        "Test: stale PID recovery — spawn studio, SIGKILL it (no SIGTERM, no cleanup), then spawn a new studio, assert the second one starts successfully (stale PID file is cleared)",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "Implemented. (1) `apps/studio/integration/edges.it.ts` — 5 tests, each spawns its own studio (no shared file-level harness because every scenario manipulates process lifecycle). (2) SIGTERM-mid-bulk: fires POST /nodes/bulk WITHOUT awaiting, then `process.kill(studio.pid, 'SIGTERM')` externally so the harness's `stop()` rmSync doesn't wipe the workspace before we can read flow.json. After waitForPidDead, re-read flow.json and assert `nodes.length` is either 0 or `bulkSize` (writeFileAtomic = write-temp + rename, never partial). (3) Double-start guard: foreground mode is what makes the second start actually try to bind the port — default daemon mode probes /health first and returns 0 with 'Studio already running', so PRD's 'exit code !=0' criterion only fits the foreground path. Bun.serve throws synchronously on EADDRINUSE; assertion: code!=0 AND stderr matches /EADDRINUSE|in use|already.*running|address.*in use/i. (4) External edit → SSE within 1s: same shape as US-007's external-edit test but with a tighter 1s timeout (watcher debounce is 100ms). Omit `position` on the on-disk node — strict FlowSchema rejects it (lives in style.json). (5) Parallel PATCH /position: fire 10 concurrent PATCHes with distinct {x,y}, assert all 200, then assert style.json's persisted position equals exactly one input verbatim (withFlowWriteLock serializes mutations; last-writer-wins). (6) Stale PID recovery: pass `home: mkdtempSync(...)` to both spawns so studio B sees A's pid file; SIGKILL A directly (NOT harness.stop, which would also rmSync the home); poll waitForPidDead; assert pid file content still equals A.pid (no cleanup happened); spawn B with same home; assert B.pid !== A.pid AND pid file content was overwritten with B.pid AND /healthz responds. Final teardown: `await studioA.stop().catch(() => undefined)` is safe even though home was already rm'd by B.stop (rmSync with `force:true` is a no-op on missing path). 5 tests / 37 expects / ~1.3s; full integration suite: 8 files / 77 tests / 481 expects / ~10.4s."
+    },
+    {
+      "id": "US-011",
+      "title": "Add canvas data attributes for Playwright selectors",
+      "description": "As a test author, I need stable DOM selectors on canvas elements. Adds three semantic attributes that benefit non-test consumers too (debugging, accessibility hooks).",
+      "acceptanceCriteria": [
+        "In apps/web React components, add `data-node-type=\"<type>\"` to every node component root for all six types: playNode, stateNode, shapeNode, imageNode, htmlNode, iconNode (grep apps/web/src for the existing node component files)",
+        "Add `data-edge-kind=\"<kind>\"` to every edge/connector component root for kinds: http, event, queue, default",
+        "Add `data-canvas-ready=\"true\"` to the React Flow root after initial layout completes (find the layout/ready signal in apps/web's canvas component — likely after first onInit or layout effect)",
+        "No production behavior changes; attributes are passive metadata",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: run `bun run dev`, open the bundled example (e.g. examples/todo-demo-target or any flow with at least one node), open DevTools, confirm each rendered node has data-node-type, each edge has data-edge-kind, and the canvas root has data-canvas-ready after layout settles"
+      ],
+      "priority": 11,
+      "passes": true,
+      "notes": "Implemented. (1) Each node component already has a single outermost wrapper <div> — add `data-node-type=\"<type>\"` next to the existing `data-testid` on each: play-node.tsx (playNode), state-node.tsx (stateNode), shape-node.tsx (shapeNode), image-node.tsx (imageNode), html-node.tsx (htmlNode), icon-node.tsx (iconNode). All six components live under packages/canvas/src/nodes/ — the apps/web canvas is a thin host that re-exports from @seeflow/canvas. (2) For edges, EditableEdge returns a fragment (BaseEdge + EdgeLabelRenderer portal + ViewportPortal); the React Flow wrapper `<g class=\"react-flow__edge\">` is owned by xyflow's sibling render path. Solved imperatively in a useEffect that does `document.querySelector('.react-flow__edge[data-id=...]')` and `setAttribute('data-edge-kind', kind)` — mirrors the existing `data-handoff` pattern in the same file. `data.kind` is typed `unknown` (EditableEdgeData extends `Record<string, unknown>`), so narrowed via `typeof data?.kind === 'string'`. (3) For `data-canvas-ready=\"true\"`, the canvas root is the outer `<div className=\"seeflow-canvas-root\">` (packages/canvas/src/components/seeflow-canvas.tsx ~line 3942). Set imperatively via `wrapperRef.current?.setAttribute(...)` inside the existing `<ReactFlow onInit>` callback — avoids adding a new useState slot which would shift every hook-shim test's `useStateOverrides[N]` index per the CLAUDE.md note (12 documented slots). (4) Pure additive — no behavior change. Tests: full `bun test` passes (1580 pass / 1 skip / 0 fail), integration `bun run test:it:bun` passes (77 tests / 481 expects). Typecheck + lint + format all clean."
+    },
+    {
+      "id": "US-012",
+      "title": "Kitchen-sink fixture + Playwright config + e2e scaffold",
+      "description": "As a test author, I need a canonical 6-node fixture covering every node type and a Playwright config that's CI-aware (retries, traces, video, single chromium project).",
+      "acceptanceCriteria": [
+        "Create apps/studio/integration/fixtures/kitchen-sink.flow.json with exactly: 6 nodes (one of each type playNode/stateNode/shapeNode/imageNode/htmlNode/iconNode), 4 connectors covering kinds http/event/queue/default, deterministic ids and {x,y} positions on a 2-column grid",
+        "Validate the fixture against apps/studio/src/schema.ts (FlowSchema.parse(...)) in a tiny test or one-shot script — must not throw",
+        "Create apps/studio/integration/fixtures/scripts/noop.ts containing `process.exit(0)` so the playNode's scriptPath resolves",
+        "Create apps/studio/e2e/ directory with playwright.config.ts: testDir './', single project 'chromium', viewport {1280,800}, deviceScaleFactor 1, retries process.env.CI ? 2 : 0, workers process.env.CI ? 1 : undefined, use.trace 'retain-on-failure', use.video 'retain-on-failure', outputDir '../integration/.artifacts/playwright', reporter process.env.CI ? [['github'],['html']] : [['list']]",
+        "Create apps/studio/e2e/support/studio-fixture.ts: extends @playwright/test test with a `studio` fixture that calls spawnStudio() in worker scope, registers the kitchen-sink fixture by writing it under the workspace + calling POST /api/projects + POST /api/flows/:id/register, and tears down in worker teardown",
+        "Add @playwright/test to apps/studio/devDependencies",
+        "Run `bunx playwright --version` succeeds",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": "Implemented. (1) Fixture `apps/studio/integration/fixtures/kitchen-sink.flow.json` — 6 nodes (one of each type), 4 connectors covering every kind (http/event/queue/default), deterministic ids n1..n6 + c1..c4, positions on a 2-column grid (x ∈ {100,500}, y ∈ {100,300,500}). Authored as a ResolvedFlow (positions inline) — see (2). (2) PRD said `FlowSchema.parse(...)` but FlowSchema is .strict() and rejects `position`; the only schema that accepts a single-file fixture with positions is `ResolvedFlowSchema`. Validation test `apps/studio/integration/fixtures.it.ts` parses with ResolvedFlowSchema AND also runs `splitFlow` and validates each half against FlowSchema + StyleSchema so the fixture stays disk-writable. (3) `apps/studio/integration/fixtures/scripts/noop.ts` is a one-liner `process.exit(0)` for the playNode. The studio-fixture copies it into the registered project at `<repoPath>/.seeflow/nodes/n1/scripts/noop.ts` (resolveScript anchors at `<repoPath>/.seeflow/nodes/<id>/`). (4) `apps/studio/e2e/playwright.config.ts` — CI-aware (retries process.env.CI ? 2 : 0, workers process.env.CI ? 1 : undefined, traces+video retain-on-failure, GitHub+HTML reporter on CI), single 'chromium' project, viewport 1280×800, outputDir resolves to integration/.artifacts/playwright. (5) `apps/studio/e2e/support/studio-fixture.ts` — worker-scoped `studio` fixture. Spawns studio via the existing harness, splits the ResolvedFlow fixture, writes flow.json + style.json into `${studio.home}/kitchen-sink/.seeflow/`, copies noop.ts under `nodes/n1/scripts/`, then POSTs /api/flows/register (PRD said POST /api/projects + /api/flows/:id/register — the latter path doesn't exist; /api/flows/register is the actual route and is sufficient for a pre-existing on-disk fixture; matches rest.it.ts's register pattern). Worker-scoped via `{ scope: 'worker' }` so US-013's per-test spec doesn't pay the boot cost per test. (6) Playwright extend's two-generic form needs an empty TestArgs to put `studio` in the worker slot — used `type EmptyTestArgs = Record<never, never>` (the only empty-object spelling Biome's noBannedTypes accepts that doesn't widen to `{[K:string]:never}`). (7) Added `@playwright/test@^1.60.0` to apps/studio devDependencies. (8) Extended apps/studio/tsconfig.json `include` to cover `integration/**/*` and `e2e/**/*` so typecheck actually verifies the new code — surfaced two pre-existing errors (`mcp.it.ts:101` tool.description possibly-undefined, `cli-runner.ts:25` process.env spread); both fixed (`?? ''` for description, filter+copy loop for env). Typecheck + lint + integration tests + full unit suite all pass (1580 unit / 80 integration)."
+    },
+    {
+      "id": "US-013",
+      "title": "canvas.spec.ts — DOM + per-node screenshot baselines",
+      "description": "As a maintainer, I need the canvas verification to assert every node type renders semantically AND visually, with baselines committed so regressions fail loudly.",
+      "acceptanceCriteria": [
+        "Create apps/studio/e2e/canvas.spec.ts using the studio fixture from US-012",
+        "beforeEach: page.goto(`${studio.baseURL}/?flow=kitchen-sink`), wait for `[data-canvas-ready=\"true\"]`, inject CSS to disable transitions/animations (`*,*::before,*::after { transition: none !important; animation: none !important }`)",
+        "Test 'every node type renders': expect .react-flow__node has count 6; expect .react-flow__edge has count 4; for each type in [playNode, stateNode, shapeNode, imageNode, htmlNode, iconNode]: expect locator(`[data-node-type=\"${type}\"]`) toHaveCount 1, toBeVisible, not toHaveText('')",
+        "Test 'per-node visual baseline': for each type, await expect(locator).toHaveScreenshot(`${type}.png`, { maxDiffPixelRatio: 0.02 })",
+        "Test 'connector kinds render distinctly': for each kind in [http, event, queue, default]: expect locator(`[data-edge-kind=\"${kind}\"]`) toHaveCount 1",
+        "Generate baselines by running `bunx playwright test --config=apps/studio/e2e/playwright.config.ts --update-snapshots` and committing the generated PNGs under apps/studio/e2e/canvas.spec.ts-snapshots/ (or wherever Playwright places them per config)",
+        "Re-running without --update-snapshots passes on a clean machine (verify locally)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: navigate to the kitchen-sink flow URL and visually confirm all 6 nodes and 4 edges render before relying on the spec"
+      ],
+      "priority": 13,
+      "passes": true,
+      "notes": "Implemented. (1) File extension is `canvas.e2e.ts` (NOT `canvas.spec.ts` as PRD wording suggested) — `bun test` default discovery picks up `*.spec.ts` everywhere, including under `e2e/`, and would try to run the Playwright spec via bun's test runner, which fails on missing globals. Playwright config sets `testMatch: '**/*.e2e.ts'` to scope its matcher to the new suffix. Snapshot dir is `canvas.e2e.ts-snapshots/` by Playwright's default convention. (2) URL is `${studio.baseURL}/d/<slug>` (NOT `/?flow=<slug>` as PRD suggested). The SPA's matchDemoSlug in `apps/web/src/App.tsx` matches `/d/<slug>` only. (3) Playwright must be invoked with `bunx --bun playwright test --config=apps/studio/e2e/playwright.config.ts` — the `--bun` flag forces bun as the runtime so the harness's bun-only APIs (`Bun.spawn`, `import.meta.dir`) work. Default `bunx playwright` uses Node and fails on the first `Bun.spawn` call in studio-harness.ts. (4) Playwright fixture API requires the first argument to be a destructuring pattern (introspected to discover deps). Switched `async (_args, use) =>` to `async ({}, use) =>` with a `biome-ignore lint/correctness/noEmptyPattern` comment (Biome otherwise rejects the empty pattern). (5) `not.toHaveText('')` is skipped for `imageNode` — it renders only an `<img>` element with no descendant text. The other five node types render their `name` (or html) as descendant text. (6) Web bundle (`apps/studio/dist/web/`) had to be rebuilt because the committed bundle predates US-011 and lacks the data-node-type/data-edge-kind/data-canvas-ready attributes the spec selects on. Committed the rebuilt assets so the spec is runnable from a fresh checkout. (7) Per-OS baselines: snapshots are named `<type>-chromium-darwin.png` (macOS). CI runs on Linux and will need `<type>-chromium-linux.png` — US-015/US-016 will deal with cross-OS baseline generation (Playwright Docker image or per-OS commit). The PRD's verify-locally criterion is satisfied. (8) `addStyleTag` injects the disable-transitions CSS after `[data-canvas-ready=\"true\"]` attaches; combined with `waitForLoadState('networkidle')`, the canvas is stable before assertions run."
+    },
+    {
+      "id": "US-014",
+      "title": "Orchestrator script + npm scripts + Makefile targets",
+      "description": "As a developer, I need a single command (`bun run test:it`) that builds the SPA, runs the bun-test integration tier, runs the Playwright tier, and exits non-zero on any failure.",
+      "acceptanceCriteria": [
+        "Create apps/studio/scripts/test-integration.ts: (1) check apps/studio/dist/web/index.html exists and is newer than apps/web/src — if not, run `bun run --filter @seeflow/web build`; (2) generate runId = new Date().toISOString().replace(/[:.]/g,'-') and export SEEFLOW_IT_ARTIFACT_DIR=apps/studio/integration/.artifacts/<runId>; (3) run `bun test apps/studio/integration/` capture exit code; (4) run `bunx playwright test --config=apps/studio/e2e/playwright.config.ts` capture exit code; (5) write run.json summary to artifact dir; (6) exit with max(exitCodes)",
+        "Add root package.json scripts: 'test:it': 'bun apps/studio/scripts/test-integration.ts', 'test:it:bun': 'bun test apps/studio/integration/', 'test:it:e2e': 'bunx playwright test --config=apps/studio/e2e/playwright.config.ts', 'test:it:update-snapshots': 'bunx playwright test --config=apps/studio/e2e/playwright.config.ts --update-snapshots'",
+        "Add Makefile targets: test.it (calls bun run test:it), test.it.update-snapshots (calls bun run test:it:update-snapshots) — match existing Makefile style (## help comments, .PHONY entries)",
+        "Run `bun run test:it` from repo root succeeds end-to-end on a clean working tree",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 14,
+      "passes": true,
+      "notes": "Implemented. (1) `apps/studio/scripts/test-integration.ts` — orchestrator that (a) freshness-checks apps/studio/dist/web/index.html against the newest mtime under apps/web/src (recursive readdir), rebuilds via `bun run --filter @seeflow/web build` if stale or missing; (b) generates `runId = new Date().toISOString().replace(/[:.]/g,'-')`, creates `apps/studio/integration/.artifacts/<runId>/`, and exports `SEEFLOW_IT_ARTIFACT_DIR=<that path>` so any future harness consumer (and `run.json`) lands in the same dir; (c) runs `bun run test:it:bun` (the working glob, not `bun test <dir>`) via Bun.spawn with inherited stdio so test output streams live; (d) runs the Playwright tier; (e) writes `run.json` summary `{runId, startedAt, finishedAt, artifactDir, steps:[{name, code, durationMs}…], exitCode}`; (f) exits `Math.max(...stepCodes)` so either tier failing fails the orchestrator. (2) Playwright invocation: `bun apps/studio/node_modules/.bin/playwright test --config=apps/studio/e2e/playwright.config.ts` — NOT `bunx --bun playwright`. The bunx path resolves against `~/.bun/install/cache/` and from REPO_ROOT picks up cached older versions (1.58.0 in this checkout) whose CLI surface differs (errors with `unknown command 'test'`). Even from `apps/studio/` cwd, the cached resolver was flaky. Using the explicit relative-to-STUDIO_DIR `node_modules/.bin/playwright` path + `bun` as the runner gives a deterministic invocation from any cwd and uses the package-local devDep (1.60.0). Both `test:it:e2e` and `test:it:update-snapshots` npm scripts use the same explicit binary path. (3) package.json scripts added: `test:it` (orchestrator), `test:it:e2e` (playwright only), `test:it:update-snapshots` (regenerate baselines). Existing `test:it:bun` kept unchanged. (4) Makefile targets added: `test.it` → `bun run test:it`, `test.it.update-snapshots` → `bun run test:it:update-snapshots`. Both have `## help comments` and are listed in `.PHONY`. Match the existing Makefile style. (5) Verified `bun run test:it` from REPO_ROOT: 80 integration tests / 490 expects / ~12s + 3 e2e tests / ~39s — orchestrator exits 0. run.json written to artifact dir as expected. (6) Full unit suite still passes: 1583 pass / 1 skip / 0 fail. Typecheck + lint + format all clean."
+    },
+    {
+      "id": "US-015",
+      "title": "Reusable integration workflow + wire into publish.yml",
+      "description": "As a release engineer, I need integration tests to gate every npm publish. Create a reusable workflow callable via workflow_call so docker.yml can reuse the same job in US-016.",
+      "acceptanceCriteria": [
+        "Create .github/workflows/_integration.yml with `on: workflow_call:` (no top-level triggers), runs-on ubuntu-latest, timeout-minutes 15. Steps: checkout, oven-sh/setup-bun@v2 (bun-version: latest, matching other workflows), bun install --frozen-lockfile, actions/cache@v4 for ~/.cache/ms-playwright keyed on hashFiles('bun.lock'), `bunx playwright install --with-deps chromium`, `bun run --filter @seeflow/web build`, `bun run test:it` with env CI: 'true', and a final `if: failure()` actions/upload-artifact@v4 step uploading apps/studio/integration/.artifacts/ with retention-days 7 and if-no-files-found ignore",
+        "In .github/workflows/publish.yml: replace the existing `- name: Test\\n  run: bun test` step usage by adding a new `integration` job above `publish` that uses ./.github/workflows/_integration.yml, then make the `publish` job `needs: integration`. Keep the existing typecheck and lint steps in the publish job (or move them into _integration.yml — pick one and document the choice in a one-line comment in publish.yml)",
+        "Existing `Test` step in publish.yml is removed (it's now covered by the integration job which already runs `bun run test:it` — which doesn't run `bun test`. Add a step to _integration.yml that also runs `bun test` before `bun run test:it` so unit + integration both gate the publish)",
+        "Validate workflow YAML syntax: run `bunx --bun js-yaml < .github/workflows/_integration.yml > /dev/null` and same for publish.yml — both must parse without error",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": true,
+      "notes": "Implemented. (1) `.github/workflows/_integration.yml` is a reusable workflow gated by `on: workflow_call:` (no top-level triggers). Permissions block `contents: read`. Single `integration` job on ubuntu-latest, timeout-minutes 15. Step order: checkout → setup-bun@v2 (bun-version: latest, matches existing workflows) → `bun install --frozen-lockfile` → actions/cache@v4 for `~/.cache/ms-playwright` keyed on `hashFiles('bun.lock')` with `restore-keys` fallback → `bunx playwright install --with-deps chromium` → `bun run --filter @seeflow/web build` → `bun test` (unit) → `bun run test:it` (integration + e2e) with `CI: 'true'` env on the test steps → `if: failure()` upload-artifact@v4 of `apps/studio/integration/.artifacts/` (retention-days 7, if-no-files-found ignore). (2) `publish.yml` gains a new top-level `integration` job (uses `./.github/workflows/_integration.yml`) above `publish`; `publish` now has `needs: integration`. The old `- name: Test\\n  run: bun test` step is removed — covered by the integration workflow. Typecheck + lint stay in the publish job per the PRD's allowed choice, with a one-line comment documenting that decision. (3) YAML validation: `bunx --bun js-yaml < .github/workflows/_integration.yml > /dev/null` and same for publish.yml both parse without error. (4) `bun run typecheck` (all 4 workspaces) + `bun run lint` (biome check) pass. (5) Decision on `bunx playwright install`: PRD prescribes `bunx playwright install --with-deps chromium`; codebase pattern (line 60) warns against `bunx playwright test` because it can resolve to a stale cached version. The `install` subcommand is stable across Playwright versions and on fresh CI runners the bun cache is empty, so the resolver picks the package-local devDep correctly. Followed PRD verbatim. (6) Caveat for US-017: Visual baselines committed under `apps/studio/e2e/canvas.e2e.ts-snapshots/` are `<type>-chromium-darwin.png` only — the `per-node visual baseline` Playwright test will FAIL on the ubuntu-latest runner because there are no `<type>-chromium-linux.png` baselines. This is the deferred cross-OS gap documented at the bottom of progress.txt's Codebase Patterns block (US-013 note 7, pattern line 68). Before US-017 cuts a release, generate Linux baselines via the `mcr.microsoft.com/playwright:v1.60.0-jammy` Docker image (or run `--update-snapshots` once on a Linux runner and commit) so the integration workflow actually exits 0."
+    },
+    {
+      "id": "US-016",
+      "title": "Gate docker.yml on the reusable integration workflow",
+      "description": "As a release engineer, I need integration tests to gate every Docker Hub publish too, using the same reusable workflow as US-015.",
+      "acceptanceCriteria": [
+        "In .github/workflows/docker.yml: add a new `integration` job above the existing `docker` job that uses ./.github/workflows/_integration.yml",
+        "Change the existing `docker` job to `needs: integration`",
+        "All other docker.yml steps (QEMU, Buildx, login, metadata, build-push) remain unchanged",
+        "Validate workflow YAML syntax with js-yaml as in US-015",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": true,
+      "notes": "Implemented. (1) `.github/workflows/docker.yml` gains a new top-level `integration` job (uses `./.github/workflows/_integration.yml`) above the existing `docker` job; `docker` now has `needs: integration`. All other steps (Verify tag, QEMU, Buildx, login, metadata, build-push) are unchanged. (2) The same reusable `_integration.yml` workflow from US-015 is shared verbatim — no new workflow file. Caller boilerplate is a one-line `uses:` (matches publish.yml's pattern exactly), so both deploy paths run the identical unit+integration+playwright suite before shipping. (3) Validated via `bunx --bun js-yaml < .github/workflows/docker.yml > /dev/null` — parses without error. `bun run typecheck` (all 4 workspaces) + `bun run lint` (biome) both pass. (4) Caveat carried forward from US-015 (note 6) / pattern line 68: visual baselines under `apps/studio/e2e/canvas.e2e.ts-snapshots/` are darwin-only — the Playwright `per-node visual baseline` test in the gating workflow will fail on ubuntu-latest until Linux baselines are committed. US-017 cannot land successfully until the cross-OS baseline gap is closed."
+    },
+    {
+      "id": "US-017",
+      "title": "Land to main + tag + verify both deploy workflows pass",
+      "description": "As the project owner, I need the entire integration suite landed on main and a release cut so both publish.yml and docker.yml actually run end-to-end against the new gating workflow. This proves the wiring works in production CI, not just locally.",
+      "acceptanceCriteria": [
+        "All previous stories (US-001 through US-016) marked passes:true in prd.json before starting this story",
+        "Squash-merge or fast-forward the ralph branch into main (verify with `git log main --oneline -5` that all integration test commits are present)",
+        "Push main to origin: `git push origin main`",
+        "Bump apps/studio/package.json `version` field by one patch (current 0.1.41 → 0.1.42 unless higher already), commit as `chore(release): bump to v<new>`, push to main",
+        "Create and push an annotated tag matching the new version: `git tag -a v<new> -m 'Release v<new>'` then `git push origin v<new>`",
+        "Watch the resulting workflow runs via `gh run watch` (or poll `gh run list --workflow=publish.yml --limit 1` and `gh run list --workflow=docker.yml --limit 1` until both complete)",
+        "Both workflows must exit with `conclusion: success` — if either fails, fix forward (new commit on main, new patch tag) rather than skipping the gate",
+        "Verify package on npm: `npm view @tuongaz/seeflow@<new> version` returns the new version",
+        "Verify image on Docker Hub: `docker manifest inspect tuongaz/seeflow:<new>` succeeds (or `gh run view <id> --log` shows the push step succeeded)",
+        "Append a release-verified note to ralph/progress.txt with the version, tag, and both workflow run URLs",
+        "Typecheck passes",
+        "Tests pass"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": "Requires gh CLI authenticated with permission to push to main and tags. Requires NPM_TOKEN and DOCKERHUB_USERNAME/DOCKERHUB_TOKEN secrets already configured in the repo (they are, per existing publish.yml and docker.yml)."
+    }
+  ]
+}

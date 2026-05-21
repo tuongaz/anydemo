@@ -146,6 +146,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
       style={containerStyle}
       data-status={status}
       data-testid="state-node"
+      data-node-type="stateNode"
       onDoubleClick={handleWrapperDoubleClick}
     >
       <ResizeControls

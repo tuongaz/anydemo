@@ -63,7 +63,7 @@ interface NodeShape {
   };
 }
 
-interface DemoShape {
+interface FlowBody {
   nodes?: NodeShape[];
 }
 
@@ -71,7 +71,11 @@ interface FlowGetResponse {
   id?: string;
   valid?: boolean;
   error?: string | null;
-  demo?: DemoShape | null;
+  // GET /api/flows/:id returns the resolved flow under the `flow` key (see
+  // FlowGetResponse in operations.ts). Older versions of this file used `demo`,
+  // which left the validator effectively broken (every call returned `ok:false`
+  // with "demo not valid"). Renamed to match the wire format.
+  flow?: FlowBody | null;
 }
 
 interface SseEvent {
@@ -200,21 +204,21 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
     };
   }
   const demoData = (await demoRes.json()) as FlowGetResponse;
-  if (!demoData.valid || !demoData.demo) {
+  if (!demoData.valid || !demoData.flow) {
     return {
       ok: false,
       plays,
       statuses,
       skipped: [
         {
-          nodeId: '<demo>',
-          reason: `demo not valid: ${demoData.error ?? '<no error>'}`,
+          nodeId: '<flow>',
+          reason: `flow not valid: ${demoData.error ?? '<no error>'}`,
         },
       ],
     };
   }
 
-  const nodes = demoData.demo.nodes ?? [];
+  const nodes = demoData.flow.nodes ?? [];
 
   const skipSet = new Set(options.skipNodes ?? []);
   const playTargets: string[] = [];

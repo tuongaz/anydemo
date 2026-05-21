@@ -29,8 +29,11 @@ export type ExternalizedFieldName = (typeof EXTERNALIZED_NODE_FIELDS)[number]['f
 export const nodeFileRelPath = (nodeId: string, fileName: string): string =>
   `nodes/${nodeId}/${fileName}`;
 
-export const nodeFileRef = (nodeId: string, fileName: string): string =>
-  `file://${nodeFileRelPath(nodeId, fileName)}`;
+// Node-relative ref: the resolver knows the enclosing node id from the flow.json
+// shape (nodes[i].id), so the on-disk string only needs the filename. Kept as a
+// 2-arg helper so call sites don't change shape and the spec stays explicit
+// that the file lives under the given node.
+export const nodeFileRef = (_nodeId: string, fileName: string): string => `file://${fileName}`;
 
 export const nodeFileAbsPath = (repoPath: string, nodeId: string, fileName: string): string =>
   join(repoPath, '.seeflow', nodeFileRelPath(nodeId, fileName));

@@ -94,6 +94,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
       className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="image-node"
+      data-node-type="imageNode"
     >
       <ResizeControls
         visible={!!selected && !!data.onResize}

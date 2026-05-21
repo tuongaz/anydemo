@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createEventBus } from './events.ts';
 import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
 import {
   NodePatchBodySchema,
@@ -12,11 +13,13 @@ import {
   deleteNodeImpl,
   getFlowImpl,
   mergeNodeUpdates,
+  moveNodeImpl,
   patchNodeImpl,
   registerFlowImpl,
   validateImpl,
 } from './operations.ts';
 import { createRegistry } from './registry.ts';
+import { createWatcher } from './watcher.ts';
 
 const STARTER_FLOW = {
   version: 2,
@@ -555,5 +558,88 @@ describe('NodePatchBodySchema — action overlays', () => {
   it('rejects unknown top-level keys (strict guarantee preserved)', () => {
     const parsed = NodePatchBodySchema.safeParse({ bogus: 1 });
     expect(parsed.success).toBe(false);
+  });
+});
+
+// Regression: the post-mutation snapshot fed to watcher.notifyWritten must be
+// the file://-resolved shape (matching the watcher's own seed via readMergedFlow),
+// not the raw merged flow where data.detail / data.html are still
+// `file://...` strings. Pre-fix, the first PATCH-style write would clobber the
+// resolved snapshot with the unresolved one, and the client's next read served
+// `data.detail === "file://detail.md"`.
+describe('mutateMergedFlow snapshot resolves file:// refs', () => {
+  async function setupWithWatcher() {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-mut-snap-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+    writeFileSync(flowAbs, JSON.stringify(STARTER_FLOW));
+
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-mut-snap-reg-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry, events, debounceMs: 10 });
+    const deps = { registry, watcher };
+
+    const reg = await registerFlowImpl(deps, {
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
+    watcher.watch(reg.data.id);
+    return { deps, watcher, flowId: reg.data.id, repoPath: repoDir };
+  }
+
+  it('moveNodeImpl leaves the snapshot with detail.md content inlined, not the file:// ref', async () => {
+    const { deps, watcher, flowId } = await setupWithWatcher();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: '# resolved' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const move = await moveNodeImpl(deps, flowId, nodeId, { x: 42, y: 84 });
+    expect(move.kind).toBe('ok');
+
+    const snap = watcher.snapshot(flowId);
+    const node = snap?.flow?.nodes.find((n) => n.id === nodeId);
+    expect((node?.data as { detail?: string }).detail).toBe('# resolved');
+  });
+
+  it('patchNodeImpl (non-externalized field) keeps detail.md content inlined in the snapshot', async () => {
+    const { deps, watcher, flowId } = await setupWithWatcher();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: 'keep me' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const patch = await patchNodeImpl(deps, flowId, nodeId, { name: 'A renamed' });
+    expect(patch.kind).toBe('ok');
+
+    const snap = watcher.snapshot(flowId);
+    const node = snap?.flow?.nodes.find((n) => n.id === nodeId);
+    expect((node?.data as { detail?: string }).detail).toBe('keep me');
+  });
+
+  it('moveNodeImpl on an htmlNode leaves view.html content inlined in the snapshot', async () => {
+    const { deps, watcher, flowId } = await setupWithWatcher();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'htmlNode',
+      data: { html: '<p>hello</p>', autoSize: true },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const move = await moveNodeImpl(deps, flowId, nodeId, { x: 12, y: 24 });
+    expect(move.kind).toBe('ok');
+
+    const snap = watcher.snapshot(flowId);
+    const node = snap?.flow?.nodes.find((n) => n.id === nodeId);
+    expect((node?.data as { html?: string }).html).toBe('<p>hello</p>');
+    // detail is externalized for every node type (including htmlNode), so the
+    // same resolution must apply to it too — initialized to empty by addNode.
+    expect((node?.data as { detail?: string }).detail).toBe('');
   });
 });

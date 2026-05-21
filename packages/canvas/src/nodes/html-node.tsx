@@ -144,6 +144,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       className={cn('sf:group sf:relative', userSized ? 'sf:h-full sf:w-full' : '')}
       style={outerStyle}
       data-testid="html-node"
+      data-node-type="htmlNode"
     >
       {observerActive ? <AutoSizeObserver nodeId={id} measureRef={measureRef} /> : null}
       <ResizeControls

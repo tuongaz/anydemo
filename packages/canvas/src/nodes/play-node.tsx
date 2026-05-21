@@ -255,6 +255,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
       style={containerStyle}
       data-status={status ?? 'idle'}
       data-testid="play-node"
+      data-node-type="playNode"
       onDoubleClick={handleWrapperDoubleClick}
     >
       <ResizeControls

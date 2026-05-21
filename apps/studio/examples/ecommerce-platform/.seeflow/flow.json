@@ -21,7 +21,7 @@
           "kind": "request"
         },
         "description": "Auth, rate-limiting, routing.",
-        "detail": "file://nodes/node-CbwYqb7NfB/detail.md",
+        "detail": "file://detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -42,7 +42,7 @@
           "kind": "request"
         },
         "description": "JWT issuance + OAuth2 / OIDC.",
-        "detail": "file://nodes/node-3zFtHg6ENc/detail.md"
+        "detail": "file://detail.md"
       }
     },
     {
@@ -55,7 +55,7 @@
           "kind": "request"
         },
         "description": "SKUs, variants, pricing, full-text search.",
-        "detail": "file://nodes/node-kwBY8YPmYM/detail.md"
+        "detail": "file://detail.md"
       }
     },
     {
@@ -68,7 +68,7 @@
           "kind": "request"
         },
         "description": "Add/remove items, apply coupons, checkout.",
-        "detail": "file://nodes/node-5F424NWbEu/detail.md",
+        "detail": "file://detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -89,7 +89,7 @@
           "kind": "event"
         },
         "description": "pending → confirmed → shipped → delivered.",
-        "detail": "file://nodes/node-yKrg9DV5fJ/detail.md",
+        "detail": "file://detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -110,7 +110,7 @@
           "kind": "event"
         },
         "description": "Stripe + PayPal gateway integration.",
-        "detail": "file://nodes/node-mPqan8rFYN/detail.md"
+        "detail": "file://detail.md"
       }
     },
     {
@@ -123,7 +123,7 @@
           "kind": "event"
         },
         "description": "Email + SMS + push via AWS SES / SNS.",
-        "detail": "file://nodes/node-fkptXw7uvs/detail.md"
+        "detail": "file://detail.md"
       }
     },
     {
@@ -140,7 +140,7 @@
       "type": "htmlNode",
       "data": {
         "name": "Platform Health",
-        "html": "file://nodes/node-XwygzfKPZ5/view.html"
+        "html": "file://view.html"
       }
     }
   ],

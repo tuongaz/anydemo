@@ -417,7 +417,7 @@ describe('seeflow_add_node', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
-    expect(node?.data.detail).toBe('file://nodes/with-detail/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
     ).toBe('hello');
@@ -440,7 +440,7 @@ describe('seeflow_add_node', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
-    expect(node?.data.detail).toBe('file://nodes/no-detail/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
     ).toBe('');
@@ -465,7 +465,7 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'html-mcp');
-    expect(node?.data.html).toBe('file://nodes/html-mcp/view.html');
+    expect(node?.data.html).toBe('file://view.html');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-mcp', 'view.html'), 'utf8')).toBe(
       '<p>via mcp</p>',
     );
@@ -483,9 +483,7 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
-    expect(onDisk.nodes.find((n) => n.id === 'html-empty')?.data.html).toBe(
-      'file://nodes/html-empty/view.html',
-    );
+    expect(onDisk.nodes.find((n) => n.id === 'html-empty')?.data.html).toBe('file://view.html');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-empty', 'view.html'), 'utf8'),
     ).toBe('');
@@ -510,7 +508,7 @@ describe('seeflow_patch_node + html externalization (htmlNode)', () => {
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
-    expect(onDisk.nodes.find((n) => n.id === 'h1')?.data.html).toBe('file://nodes/h1/view.html');
+    expect(onDisk.nodes.find((n) => n.id === 'h1')?.data.html).toBe('file://view.html');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'h1', 'view.html'), 'utf8')).toBe(
       '<p>patched</p>',
     );
@@ -536,7 +534,7 @@ describe('seeflow_patch_node + detail externalization', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
-    expect(node?.data.detail).toBe('file://nodes/n1/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe(
       'patched',
     );
@@ -564,7 +562,7 @@ describe('seeflow_patch_node + detail externalization', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
-    expect(node?.data.detail).toBe('file://nodes/n1/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe('');
   });
 });

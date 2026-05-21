@@ -1,0 +1,569 @@
+import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { runCli } from './support/cli-runner.ts';
+import { uniqueFlowId } from './support/ids.ts';
+import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
+
+// One shared studio per file for the HTTP-passthrough subcommands. The CLI
+// is pointed at it via SEEFLOW_STUDIO_URL so studioUrlOrDie short-circuits
+// out of its daemon-spawn path. SEEFLOW_WORKSPACE also matches so that any
+// CLI subcommand that touches the on-disk state directory (config / pid /
+// project dirs) sees the same files the studio sees. The `stop` test in
+// the bottom describe block spawns its own per-test studio because stopping
+// the shared one would torpedo every later test in the file.
+let studio: StudioHandle;
+let cliEnv: Record<string, string>;
+
+beforeAll(async () => {
+  studio = await spawnStudio();
+  cliEnv = {
+    SEEFLOW_STUDIO_URL: studio.baseURL,
+    SEEFLOW_WORKSPACE: studio.home,
+  };
+});
+
+afterAll(async () => {
+  if (studio) await studio.stop();
+});
+
+interface OkLine {
+  ok: boolean;
+  [k: string]: unknown;
+}
+
+interface CreateProjectResponse {
+  id: string;
+  slug: string;
+  scaffolded: boolean;
+}
+
+interface FlowListItem {
+  id: string;
+  slug: string;
+  name: string;
+}
+
+// HTTP-passthrough subcommands print a single line `{"ok":true,...}` via
+// printOk(). Some commands also log human-friendly lines (register, stop)
+// — those are split-line + non-JSON, so callers pick the line they need.
+function parseOkLine(stdout: string): OkLine {
+  const trimmed = stdout.trim();
+  // The last non-empty line is the JSON envelope.
+  const lines = trimmed.split('\n').filter((l) => l.trim().length > 0);
+  const last = lines[lines.length - 1];
+  if (!last) throw new Error(`No output to parse from CLI stdout: ${JSON.stringify(stdout)}`);
+  return JSON.parse(last) as OkLine;
+}
+
+async function createProject(name: string): Promise<CreateProjectResponse> {
+  const res = await fetch(`${studio.baseURL}/api/projects`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ name }),
+  });
+  expect(res.status).toBe(200);
+  return (await res.json()) as CreateProjectResponse;
+}
+
+async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
+  const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/nodes/bulk`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
+    }),
+  });
+  expect(res.status).toBe(200);
+}
+
+describe('integration: CLI — meta (help / version / unknown)', () => {
+  it('--help exits 0 and lists every supported subcommand', async () => {
+    const r = await runCli(['--help']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('seeflow');
+    // Spot-check every subcommand dispatched in cli.ts is documented.
+    for (const cmd of [
+      'start',
+      'stop',
+      'register',
+      'flows:register',
+      'projects:create',
+      'flows:list',
+      'flows:get',
+      'flows:delete',
+      'flows:layout',
+      'flows:play',
+      'nodes:add',
+      'nodes:add-bulk',
+      'nodes:patch',
+      'nodes:move',
+      'nodes:reorder',
+      'nodes:delete',
+      'connectors:add',
+      'connectors:add-bulk',
+      'connectors:patch',
+      'connectors:delete',
+      'validate',
+      'e2e',
+      'version',
+      'help',
+    ]) {
+      expect(r.stdout).toContain(cmd);
+    }
+  });
+
+  it('help (subcommand form) exits 0 and prints the help banner', async () => {
+    const r = await runCli(['help']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('seeflow');
+    expect(r.stdout).toContain('start');
+  });
+
+  it('-h (short form) exits 0 and prints the help banner', async () => {
+    const r = await runCli(['-h']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('seeflow');
+  });
+
+  it('--version prints a semver-like version line and exits 0', async () => {
+    const r = await runCli(['--version']);
+    expect(r.code).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('-v (short form) prints a semver-like version line', async () => {
+    const r = await runCli(['-v']);
+    expect(r.code).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('version (subcommand form) prints a semver-like version line', async () => {
+    const r = await runCli(['version']);
+    expect(r.code).toBe(0);
+    expect(r.stdout.trim()).toMatch(/^\d+\.\d+\.\d+/);
+  });
+
+  it('unknown subcommand exits non-zero with an explanation to stderr', async () => {
+    const r = await runCli(['this-subcommand-does-not-exist']);
+    expect(r.code).not.toBe(0);
+    expect(r.stderr).toContain('Unknown subcommand');
+    // Help banner is also dumped so the user sees recovery options.
+    expect(r.stdout).toContain('seeflow');
+  });
+});
+
+describe('integration: CLI — projects + flows', () => {
+  it('projects:create creates a new project on disk and prints ok', async () => {
+    const name = uniqueFlowId('cli-projects-create');
+    const r = await runCli(['projects:create', '--name', name], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout);
+    expect(body.ok).toBe(true);
+    expect(typeof body.id).toBe('string');
+    expect(typeof body.slug).toBe('string');
+
+    const slug = body.slug as string;
+    const flowPath = join(studio.workspace, slug, '.seeflow', 'flow.json');
+    expect(existsSync(flowPath)).toBe(true);
+  });
+
+  it('flows:list returns the registry as { ok, flows: [...] }', async () => {
+    const name = uniqueFlowId('cli-flows-list');
+    const created = await createProject(name);
+
+    const r = await runCli(['flows:list'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & { flows: FlowListItem[] };
+    expect(body.ok).toBe(true);
+    expect(Array.isArray(body.flows)).toBe(true);
+    expect(body.flows.find((f) => f.id === created.id)).toBeDefined();
+  });
+
+  it('flows:get returns the shape for a registered flow', async () => {
+    const name = uniqueFlowId('cli-flows-get');
+    const created = await createProject(name);
+
+    const r = await runCli(['flows:get', created.id], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout);
+    expect(body.ok).toBe(true);
+    expect(body.id).toBe(created.id);
+    expect(body.slug).toBe(created.slug);
+    expect(body.name).toBe(name);
+    expect(body.valid).toBe(true);
+  });
+
+  it('flows:delete removes the flow from the registry', async () => {
+    const name = uniqueFlowId('cli-flows-delete');
+    const created = await createProject(name);
+
+    const r = await runCli(['flows:delete', created.id], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
+    expect(list.find((f) => f.id === created.id)).toBeUndefined();
+  });
+
+  it('flows:layout writes a layout to style.json and prints ok', async () => {
+    // An empty layout body is the canonical "use defaults" call. The route
+    // requires the flow.json on disk to be valid, so a freshly scaffolded
+    // empty project (0 nodes / 0 connectors) is enough to exercise the path.
+    const name = uniqueFlowId('cli-flows-layout');
+    const created = await createProject(name);
+
+    const r = await runCli(['flows:layout', created.id, '--json', JSON.stringify({})], {
+      env: cliEnv,
+    });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+  });
+
+  it('register --path registers an on-disk flow.json with the studio', async () => {
+    const slug = uniqueFlowId('cli-register');
+    const repoPath = join(studio.home, slug);
+    mkdirSync(join(repoPath, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(repoPath, '.seeflow', 'flow.json'),
+      `${JSON.stringify({ version: 2, name: slug, nodes: [], connectors: [] }, null, 2)}\n`,
+    );
+
+    const r = await runCli(['register', '--path', repoPath], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`Registered "${slug}"`);
+    expect(r.stdout).toContain('/d/');
+
+    const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
+    expect(list.find((f) => f.name === slug)).toBeDefined();
+  });
+
+  it('flows:register is an alias of register (same on-disk + registry effect)', async () => {
+    const slug = uniqueFlowId('cli-flows-register');
+    const repoPath = join(studio.home, slug);
+    mkdirSync(join(repoPath, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(repoPath, '.seeflow', 'flow.json'),
+      `${JSON.stringify({ version: 2, name: slug, nodes: [], connectors: [] }, null, 2)}\n`,
+    );
+
+    const r = await runCli(['flows:register', '--path', repoPath], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain(`Registered "${slug}"`);
+
+    const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
+    expect(list.find((f) => f.name === slug)).toBeDefined();
+  });
+
+  it('flows:play triggers a playNode and prints { ok, runId, status, body }', async () => {
+    // Mirrors rest.it.ts US-007: seed a playNode whose scriptPath resolves
+    // under <repoPath>/.seeflow/nodes/<id>/, then drop a tiny script that
+    // prints a JSON line and exits 0. CLI's flows:play POSTs to /play and
+    // the response is printed via printOk → `{"ok":true, runId, status, body}`.
+    const created = await createProject(uniqueFlowId('cli-flows-play'));
+    const nodeId = 'cli-play-1';
+    const addRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: nodeId,
+        type: 'playNode',
+        data: {
+          name: 'Play',
+          kind: 'http',
+          stateSource: { kind: 'request' },
+          playAction: {
+            kind: 'script',
+            interpreter: 'bun',
+            scriptPath: 'scripts/play.ts',
+          },
+        },
+      }),
+    });
+    expect(addRes.status).toBe(200);
+
+    const scriptDir = join(studio.workspace, created.slug, '.seeflow', 'nodes', nodeId, 'scripts');
+    mkdirSync(scriptDir, { recursive: true });
+    writeFileSync(
+      join(scriptDir, 'play.ts'),
+      'console.log(JSON.stringify({ hello: "cli-play" }));\nprocess.exit(0);\n',
+    );
+
+    const r = await runCli(['flows:play', created.id, nodeId], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & {
+      runId: string;
+      status: number;
+      body: { hello?: string };
+    };
+    expect(body.ok).toBe(true);
+    expect(typeof body.runId).toBe('string');
+    expect(body.status).toBe(200);
+    expect(body.body).toEqual({ hello: 'cli-play' });
+  });
+});
+
+describe('integration: CLI — nodes', () => {
+  it('nodes:add adds a single node and prints { ok, id, node }', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-add'));
+    const r = await runCli(
+      [
+        'nodes:add',
+        created.id,
+        '--json',
+        JSON.stringify({ type: 'shapeNode', data: { shape: 'rectangle' } }),
+      ],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout);
+    expect(body.ok).toBe(true);
+    expect(typeof body.id).toBe('string');
+    expect((body.id as string).startsWith('node-')).toBe(true);
+  });
+
+  it('nodes:add-bulk adds many nodes in one call', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-add-bulk'));
+    const r = await runCli(
+      [
+        'nodes:add-bulk',
+        created.id,
+        '--json',
+        JSON.stringify({
+          nodes: [
+            { id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } },
+            { id: 'b', type: 'shapeNode', data: { shape: 'ellipse' } },
+          ],
+        }),
+      ],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & { nodes: Array<{ id: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+  });
+
+  it('nodes:patch partial-merges into node.data', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-patch'));
+    await seedShapeNodes(created.id, ['p1']);
+
+    const r = await runCli(
+      ['nodes:patch', created.id, 'p1', '--json', JSON.stringify({ name: 'CLI patched' })],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${created.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string; data?: { name?: string } }> };
+    };
+    expect(get.flow.nodes.find((n) => n.id === 'p1')?.data?.name).toBe('CLI patched');
+  });
+
+  it('nodes:move persists x/y to style.json (echoed in response)', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-move'));
+    await seedShapeNodes(created.id, ['m1']);
+
+    const r = await runCli(['nodes:move', created.id, 'm1', '--x', '123', '--y', '456'], {
+      env: cliEnv,
+    });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & { position: { x: number; y: number } };
+    expect(body.ok).toBe(true);
+    expect(body.position).toEqual({ x: 123, y: 456 });
+  });
+
+  it('nodes:reorder moves a node within flow.nodes[]', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-reorder'));
+    await seedShapeNodes(created.id, ['a', 'b', 'c']);
+
+    const r = await runCli(['nodes:reorder', created.id, 'a', '--op', 'toFront'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${created.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string }> };
+    };
+    expect(get.flow.nodes.map((n) => n.id)).toEqual(['b', 'c', 'a']);
+  });
+
+  it('nodes:delete removes the node from the flow', async () => {
+    const created = await createProject(uniqueFlowId('cli-nodes-delete'));
+    await seedShapeNodes(created.id, ['d1', 'd2']);
+
+    const r = await runCli(['nodes:delete', created.id, 'd1'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${created.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string }> };
+    };
+    expect(get.flow.nodes.map((n) => n.id)).toEqual(['d2']);
+  });
+});
+
+describe('integration: CLI — connectors', () => {
+  it('connectors:add adds a single connector', async () => {
+    const created = await createProject(uniqueFlowId('cli-connectors-add'));
+    await seedShapeNodes(created.id, ['a', 'b']);
+
+    const r = await runCli(
+      [
+        'connectors:add',
+        created.id,
+        '--json',
+        JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+      ],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout);
+    expect(body.ok).toBe(true);
+    expect(body.id).toBe('c1');
+  });
+
+  it('connectors:add-bulk adds many connectors in one call', async () => {
+    const created = await createProject(uniqueFlowId('cli-connectors-add-bulk'));
+    await seedShapeNodes(created.id, ['a', 'b']);
+
+    const r = await runCli(
+      [
+        'connectors:add-bulk',
+        created.id,
+        '--json',
+        JSON.stringify({
+          connectors: [
+            { id: 'c1', source: 'a', target: 'b', kind: 'default' },
+            { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.cli' },
+          ],
+        }),
+      ],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & { connectors: Array<{ id: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
+  });
+
+  it('connectors:patch partial-merges a connector field', async () => {
+    const created = await createProject(uniqueFlowId('cli-connectors-patch'));
+    await seedShapeNodes(created.id, ['a', 'b']);
+    await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+    });
+
+    const r = await runCli(
+      [
+        'connectors:patch',
+        created.id,
+        'c1',
+        '--json',
+        JSON.stringify({ label: 'cli-patched-edge' }),
+      ],
+      { env: cliEnv },
+    );
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${created.id}`)).json()) as {
+      flow: { connectors: Array<{ id: string; label?: string }> };
+    };
+    expect(get.flow.connectors.find((c) => c.id === 'c1')?.label).toBe('cli-patched-edge');
+  });
+
+  it('connectors:delete removes the connector', async () => {
+    const created = await createProject(uniqueFlowId('cli-connectors-delete'));
+    await seedShapeNodes(created.id, ['a', 'b']);
+    await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+    });
+
+    const r = await runCli(['connectors:delete', created.id, 'c1'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${created.id}`)).json()) as {
+      flow: { connectors: Array<{ id: string }> };
+    };
+    expect(get.flow.connectors.find((c) => c.id === 'c1')).toBeUndefined();
+  });
+});
+
+describe('integration: CLI — validate', () => {
+  it('validate --file accepts a structurally valid flow.json', async () => {
+    const slug = uniqueFlowId('cli-validate');
+    const tmpPath = join(studio.home, `${slug}.flow.json`);
+    writeFileSync(
+      tmpPath,
+      `${JSON.stringify({ version: 2, name: slug, nodes: [], connectors: [] }, null, 2)}\n`,
+    );
+
+    const r = await runCli(['validate', '--file', tmpPath], { env: cliEnv });
+    expect(r.code).toBe(0);
+    expect(parseOkLine(r.stdout).ok).toBe(true);
+  });
+});
+
+describe('integration: CLI — e2e', () => {
+  // e2e iterates every playNode + statusNode and runs them. With no
+  // playNodes/statusNodes, both arrays are empty and the validator
+  // vacuously passes — sufficient as a smoke test for the subcommand wiring
+  // (arg parsing, SSE channel open, hard-ceiling, printOk).
+  it('e2e <flowId> runs against a flow with no play/status nodes and exits ok', async () => {
+    const created = await createProject(uniqueFlowId('cli-e2e'));
+    const r = await runCli(['e2e', created.id], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & {
+      plays: unknown[];
+      statuses: unknown[];
+    };
+    expect(body.ok).toBe(true);
+    expect(body.plays).toEqual([]);
+    expect(body.statuses).toEqual([]);
+  });
+});
+
+describe('integration: CLI — lifecycle (start / stop)', () => {
+  it('start is documented in --help', async () => {
+    const r = await runCli(['--help']);
+    expect(r.code).toBe(0);
+    expect(r.stdout).toContain('start');
+    expect(r.stdout).toContain('--foreground');
+  });
+
+  it('stop signals a running studio and clears the pid file', async () => {
+    // Spawn a dedicated studio for this test — using the shared one would
+    // kill every later test in the file. The harness writes the pid file
+    // at ${workspace}/seeflow.pid even in --foreground mode (writePid runs
+    // unconditionally in runStart after the foreground branch).
+    const own = await spawnStudio();
+    const pidPath = join(own.workspace, 'seeflow.pid');
+    expect(existsSync(pidPath)).toBe(true);
+    expect(own.pid).toBeGreaterThan(0);
+
+    try {
+      const r = await runCli(['stop'], {
+        env: {
+          SEEFLOW_WORKSPACE: own.home,
+        },
+      });
+      expect(r.code).toBe(0);
+      expect(r.stdout).toContain('Stopped studio');
+      expect(r.stdout).toContain(String(own.pid));
+
+      // pid file cleared by clearPid().
+      expect(existsSync(pidPath)).toBe(false);
+    } finally {
+      // Defensive: own.stop() is idempotent — sends SIGTERM, but if the
+      // process is already gone (from CLI stop above) it's a fast no-op
+      // followed by the home-dir rmSync.
+      await own.stop();
+    }
+  });
+});
