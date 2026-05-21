@@ -80,7 +80,6 @@ async function runDocker(): Promise<number> {
     'node_modules:/work/node_modules',
     'apps-studio-node_modules:/work/apps/studio/node_modules',
     'apps-web-node_modules:/work/apps/web/node_modules',
-    'packages-sdk-node_modules:/work/packages/sdk/node_modules',
     'packages-canvas-node_modules:/work/packages/canvas/node_modules',
   ].flatMap((spec) => ['-v', `seeflow-e2e-${spec}`]);
 

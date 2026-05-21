@@ -20,7 +20,7 @@
     },
     "apps/studio": {
       "name": "@tuongaz/seeflow",
-      "version": "0.1.42",
+      "version": "0.1.47",
       "bin": {
         "seeflow": "bin/seeflow",
         "seeflow-mcp": "bin/seeflow-mcp",
@@ -110,13 +110,6 @@
         "react-dom": "*",
         "react-markdown": "^10",
         "remark-gfm": "^4",
-      },
-    },
-    "packages/sdk": {
-      "name": "@seeflow/sdk",
-      "version": "0.0.0",
-      "devDependencies": {
-        "typescript": "^5.6.3",
       },
     },
   },
@@ -434,8 +427,6 @@
     "@rollup/rollup-win32-x64-msvc": ["@rollup/rollup-win32-x64-msvc@4.60.4", "", { "os": "win32", "cpu": "x64" }, "sha512-QVTUovf40zgTqlFVrKA1uXMVvU2QWEFWfAH8Wdc48IxLvrJMQVMBRjuQyUpzZCDkakImib9eVazbWlC6ksWtJw=="],
 
     "@seeflow/canvas": ["@seeflow/canvas@workspace:packages/canvas"],
-
-    "@seeflow/sdk": ["@seeflow/sdk@workspace:packages/sdk"],
 
     "@seeflow/web": ["@seeflow/web@workspace:apps/web"],
 

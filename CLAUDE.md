@@ -6,7 +6,6 @@ Local studio that hosts file-defined demos as React Flow canvases wired to a run
 
 - `apps/studio/` — Bun + Hono backend + CLI (`seeflow`)
 - `apps/web/` — Vite + React + React Flow SPA
-- `packages/sdk/` — `emit()` helper
 - `skills/`, `commands/`, `.claude-plugin/` — Claude Code plugin (at repo root) that generates demos
 
 ## Toolchain
