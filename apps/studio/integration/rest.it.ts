@@ -54,6 +54,26 @@ interface ValidateReport {
   warnings: Array<{ kind: string; path?: string; message: string }>;
 }
 
+interface OnDiskFlow {
+  version: number;
+  name: string;
+  nodes: Array<{ id: string; type: string; data?: Record<string, unknown> }>;
+  connectors: Array<{
+    id: string;
+    source: string;
+    target: string;
+    kind: string;
+    label?: string;
+    eventName?: string;
+    queueName?: string;
+  }>;
+}
+
+interface OnDiskStyle {
+  nodes?: Record<string, { position?: { x: number; y: number } } & Record<string, unknown>>;
+  connectors?: Record<string, Record<string, unknown>>;
+}
+
 async function createProject(name: string): Promise<CreateProjectResponse> {
   const res = await fetch(`${studio.baseURL}/api/projects`, {
     method: 'POST',
@@ -62,6 +82,40 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
   });
   expect(res.status).toBe(200);
   return (await res.json()) as CreateProjectResponse;
+}
+
+async function readFlowJson(slug: string): Promise<OnDiskFlow> {
+  const path = join(studio.workspace, slug, '.seeflow', 'flow.json');
+  return JSON.parse(await Bun.file(path).text()) as OnDiskFlow;
+}
+
+async function readStyleJson(slug: string): Promise<OnDiskStyle> {
+  const path = join(studio.workspace, slug, '.seeflow', 'style.json');
+  if (!existsSync(path)) return {};
+  return JSON.parse(await Bun.file(path).text()) as OnDiskStyle;
+}
+
+async function postJson(path: string, body: unknown): Promise<Response> {
+  return fetch(`${studio.baseURL}${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchJson(path: string, body: unknown): Promise<Response> {
+  return fetch(`${studio.baseURL}${path}`, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
+  const res = await postJson(`/api/flows/${flowId}/nodes/bulk`, {
+    nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
+  });
+  expect(res.status).toBe(200);
 }
 
 describe('integration: REST — flow lifecycle', () => {
@@ -215,6 +269,241 @@ describe('integration: REST — flow lifecycle', () => {
 
       // Disk: flow.json is intentionally preserved.
       expect(existsSync(flowPath)).toBe(true);
+    });
+  });
+});
+
+describe('integration: REST — nodes', () => {
+  describe('POST /api/flows/:id/nodes', () => {
+    it('adds a single node and persists to flow.json', async () => {
+      const created = await createProject(uniqueFlowId('node-add'));
+      const res = await postJson(`/api/flows/${created.id}/nodes`, {
+        type: 'shapeNode',
+        data: { shape: 'rectangle', name: 'Note' },
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ok: boolean;
+        id: string;
+        node: Record<string, unknown>;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.id).toMatch(/^node-/);
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.nodes).toHaveLength(1);
+      expect(onDisk.nodes[0]?.id).toBe(body.id);
+      expect(onDisk.nodes[0]?.type).toBe('shapeNode');
+      expect(onDisk.nodes[0]?.data?.shape).toBe('rectangle');
+      expect(onDisk.nodes[0]?.data?.name).toBe('Note');
+    });
+  });
+
+  describe('POST /api/flows/:id/nodes/bulk', () => {
+    it('adds many nodes in one transactional write', async () => {
+      const created = await createProject(uniqueFlowId('node-bulk'));
+      const res = await postJson(`/api/flows/${created.id}/nodes/bulk`, {
+        nodes: [
+          { id: 'b1', type: 'shapeNode', data: { shape: 'rectangle', name: 'B1' } },
+          { id: 'b2', type: 'shapeNode', data: { shape: 'ellipse', name: 'B2' } },
+          { id: 'b3', type: 'shapeNode', data: { shape: 'sticky', name: 'B3' } },
+        ],
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ok: boolean;
+        nodes: Array<{ id: string; node: Record<string, unknown> }>;
+      };
+      expect(body.ok).toBe(true);
+      expect(body.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
+    });
+  });
+
+  describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
+    it('partial-merges into node.data and re-validates the whole flow', async () => {
+      const created = await createProject(uniqueFlowId('node-patch'));
+      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+        id: 'p1',
+        type: 'shapeNode',
+        data: { shape: 'rectangle', name: 'Original' },
+      });
+      expect(addRes.status).toBe(200);
+
+      const res = await patchJson(`/api/flows/${created.id}/nodes/p1`, { name: 'Updated' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      const onDisk = await readFlowJson(created.slug);
+      const node = onDisk.nodes.find((n) => n.id === 'p1');
+      expect(node?.data?.name).toBe('Updated');
+      // The non-patched field still survives the round-trip.
+      expect(node?.data?.shape).toBe('rectangle');
+    });
+  });
+
+  describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
+    // splitFlow routes `position` to style.json, so the disk-side assertion
+    // reads style.json (not flow.json). The response body echoes the new
+    // position so the canvas can confirm the write without re-fetching.
+    it('persists x/y to style.json and echoes the new position', async () => {
+      const created = await createProject(uniqueFlowId('node-position'));
+      await postJson(`/api/flows/${created.id}/nodes`, {
+        id: 'pos1',
+        type: 'shapeNode',
+        data: { shape: 'rectangle' },
+      });
+
+      const res = await patchJson(`/api/flows/${created.id}/nodes/pos1/position`, {
+        x: 123,
+        y: 456,
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; position: { x: number; y: number } };
+      expect(body.ok).toBe(true);
+      expect(body.position).toEqual({ x: 123, y: 456 });
+
+      const style = await readStyleJson(created.slug);
+      expect(style.nodes?.pos1?.position).toEqual({ x: 123, y: 456 });
+    });
+  });
+
+  describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
+    it('moves a node within flow.nodes[] (toFront)', async () => {
+      const created = await createProject(uniqueFlowId('node-order'));
+      await seedShapeNodes(created.id, ['a', 'b', 'c']);
+
+      const res = await patchJson(`/api/flows/${created.id}/nodes/a/order`, { op: 'toFront' });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.nodes.map((n) => n.id)).toEqual(['b', 'c', 'a']);
+    });
+  });
+
+  describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
+    it('removes the node and cascades adjacent connectors in one write', async () => {
+      const created = await createProject(uniqueFlowId('node-delete'));
+      await seedShapeNodes(created.id, ['a', 'b']);
+      const connRes = await postJson(`/api/flows/${created.id}/connectors/bulk`, {
+        connectors: [
+          { id: 'a-b', source: 'a', target: 'b', kind: 'default' },
+          { id: 'b-a', source: 'b', target: 'a', kind: 'default' },
+        ],
+      });
+      expect(connRes.status).toBe(200);
+
+      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/a`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.nodes.map((n) => n.id)).toEqual(['b']);
+      // Both connectors referenced 'a' → both cascade out.
+      expect(onDisk.connectors).toEqual([]);
+    });
+  });
+});
+
+describe('integration: REST — connectors', () => {
+  describe('POST /api/flows/:id/connectors', () => {
+    it('adds a single connector and persists to flow.json', async () => {
+      const created = await createProject(uniqueFlowId('conn-add'));
+      await seedShapeNodes(created.id, ['a', 'b']);
+
+      const res = await postJson(`/api/flows/${created.id}/connectors`, {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        kind: 'default',
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; id: string };
+      expect(body.ok).toBe(true);
+      expect(body.id).toBe('c1');
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.connectors).toHaveLength(1);
+      expect(onDisk.connectors[0]).toMatchObject({
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        kind: 'default',
+      });
+    });
+  });
+
+  describe('POST /api/flows/:id/connectors/bulk', () => {
+    it('adds many connectors in one transactional write', async () => {
+      const created = await createProject(uniqueFlowId('conn-bulk'));
+      await seedShapeNodes(created.id, ['a', 'b']);
+
+      const res = await postJson(`/api/flows/${created.id}/connectors/bulk`, {
+        connectors: [
+          { id: 'c1', source: 'a', target: 'b', kind: 'default' },
+          { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.one' },
+        ],
+      });
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; connectors: Array<{ id: string }> };
+      expect(body.ok).toBe(true);
+      expect(body.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
+      expect(onDisk.connectors[1]).toMatchObject({ kind: 'event', eventName: 'evt.one' });
+    });
+  });
+
+  describe('PATCH /api/flows/:id/connectors/:connId', () => {
+    it('partial-merges into the connector', async () => {
+      const created = await createProject(uniqueFlowId('conn-patch'));
+      await seedShapeNodes(created.id, ['a', 'b']);
+      await postJson(`/api/flows/${created.id}/connectors`, {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        kind: 'default',
+      });
+
+      const res = await patchJson(`/api/flows/${created.id}/connectors/c1`, {
+        label: 'flow-step',
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      // `label` lives in flow.json per CONNECTOR_FLOW_KEYS.
+      const onDisk = await readFlowJson(created.slug);
+      const conn = onDisk.connectors.find((c) => c.id === 'c1');
+      expect(conn?.label).toBe('flow-step');
+    });
+  });
+
+  describe('DELETE /api/flows/:id/connectors/:connId', () => {
+    it('removes the connector from flow.json (nodes are untouched)', async () => {
+      const created = await createProject(uniqueFlowId('conn-delete'));
+      await seedShapeNodes(created.id, ['a', 'b']);
+      await postJson(`/api/flows/${created.id}/connectors`, {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        kind: 'default',
+      });
+
+      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors/c1`, {
+        method: 'DELETE',
+      });
+      expect(res.status).toBe(200);
+      expect(await res.json()).toEqual({ ok: true });
+
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.connectors).toEqual([]);
+      expect(onDisk.nodes.map((n) => n.id)).toEqual(['a', 'b']);
     });
   });
 });
