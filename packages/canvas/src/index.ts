@@ -18,6 +18,7 @@
 // 1. Schema types
 // ----------------------------------------------------------------------------
 export type {
+  CanvasMode,
   ColorToken,
   Connector,
   ConnectorBase,
@@ -224,10 +225,12 @@ export * from './ui/index.ts';
 export {
   CanvasToolbar,
   HTML_BLOCK_DND_TYPE,
+  TOOLBAR_MODES,
   TOOLBAR_SHAPES,
 } from './components/canvas-toolbar.tsx';
 export type {
   CanvasToolbarProps,
+  ToolbarModeEntry,
   ToolbarShapeEntry,
 } from './components/canvas-toolbar.tsx';
 

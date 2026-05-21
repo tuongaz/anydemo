@@ -19,6 +19,7 @@ import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { shortId } from '@/lib/short-id';
 import {
+  type CanvasMode,
   type CommandId,
   type ConnectorStylePatch,
   DEFAULT_STORAGE_PREFIX,
@@ -203,17 +204,16 @@ export function DemoView({
   // overrides aren't a fit because the entire array order is what changes.
   const [nodeOrderOverride, setNodeOrderOverride] = useState<string[] | null>(null);
   const [editError, setEditError] = useState<string | null>(null);
-  // US-003: bottom-toolbar draw-mode state lives on the page so the global
-  // bare-key keyboard handler (V/R/O/T/S/D) and the upcoming command palette
-  // can drive tool switches. SeeflowCanvas reads `activeShape` and calls
-  // `setActiveShape` from props — its toolbar wiring is unchanged.
-  const [activeShape, setActiveShape] = useState<ShapeKind | null>(null);
-  // Mirror into a ref so the bare-key keydown effect reads the live value
-  // without re-binding the listener every time the shape toggles.
-  const activeShapeRef = useRef<ShapeKind | null>(null);
+  // Canvas mode (Select / Hand / Draw) lives on the page so the global bare-
+  // key handler (V/H/R/O/T/S/D) and the command palette can drive tool
+  // switches. SeeflowCanvas reads `canvasMode` and calls `setCanvasMode` from
+  // props — its toolbar wiring is unchanged. Mirror into a ref so the bare-
+  // key keydown effect reads the live value without re-binding.
+  const [canvasMode, setCanvasMode] = useState<CanvasMode>({ kind: 'select' });
+  const canvasModeRef = useRef<CanvasMode>({ kind: 'select' });
   useEffect(() => {
-    activeShapeRef.current = activeShape;
-  }, [activeShape]);
+    canvasModeRef.current = canvasMode;
+  }, [canvasMode]);
   // US-006: command-palette open state. The Cmd/Ctrl+P chord flips this true
   // and the (placeholder) dialog renders gated on it. Full UI lands in US-007.
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -2349,12 +2349,11 @@ export function DemoView({
     onTidy(scope);
   }, [onTidy]);
 
-  // US-003: bare-key tool-switch shortcuts (V/R/O/T/S/D). Mirrors the
-  // Figma/Miro convention — pressing a letter alone arms the matching toolbar
-  // value, pressing it again exits draw mode (same toggle as clicking the
-  // already-active toolbar button in canvas-toolbar.tsx). The pure resolver
-  // (`resolveToolShortcut`) handles modifier rejection so any chord (Cmd+V
-  // paste, Cmd+D duplicate, Shift+letter typing) falls through unchanged.
+  // Bare-key tool-switch shortcuts (V/H/R/O/T/S/D). Mirrors the Figma/Miro
+  // convention — pressing a letter alone arms the matching tool, pressing it
+  // again exits to Select (same toggle as the toolbar button click). The pure
+  // resolver (`resolveToolShortcut`) handles modifier rejection so chords
+  // (Cmd+V paste, Cmd+D duplicate, Shift+letter typing) fall through.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       // Skip while focus is in any text-editing element so InlineEdit / inputs
@@ -2367,33 +2366,44 @@ export function DemoView({
       if (document.querySelector('[data-testid="inline-edit-input"]')) return;
       const resolved = resolveToolShortcut(e);
       if (resolved === null) return;
-      // 'select' is the pan/select baseline: arm null. Any shape: arm that
-      // shape, or toggle off if it's already active (matches the toolbar
-      // button's click behavior at canvas-toolbar.tsx:112).
-      const nextShape = resolved === 'select' ? null : resolved;
-      if (activeShapeRef.current === nextShape) {
-        setActiveShape(null);
+      const current = canvasModeRef.current;
+      if (resolved === 'select') {
+        // V always arms Select. No toggle (you can't unselect the neutral).
+        if (current.kind !== 'select') setCanvasMode({ kind: 'select' });
         return;
       }
-      setActiveShape(nextShape);
+      if (resolved === 'hand') {
+        // H toggles Hand on/off, exiting to Select on second press.
+        setCanvasMode(current.kind === 'hand' ? { kind: 'select' } : { kind: 'hand' });
+        return;
+      }
+      // A shape key: toggle into / out of Draw for that shape.
+      if (current.kind === 'draw' && current.shape === resolved) {
+        setCanvasMode({ kind: 'select' });
+        return;
+      }
+      setCanvasMode({ kind: 'draw', shape: resolved });
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
 
-  // US-004: bare Escape → deselect + exit draw mode. Intentionally does NOT
-  // preventDefault so dialogs / popovers that listen for Escape elsewhere keep
-  // firing — only the deselect/exit-draw side-effects run. InlineEdit's own
-  // Escape-to-cancel still wins because we skip on any editable target or
-  // mounted inline-edit input.
+  // Hierarchical Escape: (1) from Hand/Draw, exit to Select; (2) from Select
+  // with a non-empty selection, clear the selection; (3) from Select with no
+  // selection, no-op (let other handlers see it). Intentionally does NOT
+  // preventDefault so dialogs / popovers that listen for Escape keep firing.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (isEditableElement(document.activeElement)) return;
       if (document.querySelector('[data-testid="inline-edit-input"]')) return;
+      const current = canvasModeRef.current;
+      if (current.kind !== 'select') {
+        setCanvasMode({ kind: 'select' });
+        return;
+      }
       if (selectedIdsRef.current.length > 0) setSelectedIds([]);
       if (selectedConnectorIdsRef.current.length > 0) setSelectedConnectorIds([]);
-      if (activeShapeRef.current !== null) setActiveShape(null);
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
@@ -2451,22 +2461,25 @@ export function DemoView({
     (id: CommandId): void => {
       switch (id) {
         case 'tool.select':
-          setActiveShape(null);
+          setCanvasMode({ kind: 'select' });
+          return;
+        case 'tool.hand':
+          setCanvasMode({ kind: 'hand' });
           return;
         case 'tool.rectangle':
-          setActiveShape('rectangle');
+          setCanvasMode({ kind: 'draw', shape: 'rectangle' });
           return;
         case 'tool.ellipse':
-          setActiveShape('ellipse');
+          setCanvasMode({ kind: 'draw', shape: 'ellipse' });
           return;
         case 'tool.text':
-          setActiveShape('text');
+          setCanvasMode({ kind: 'draw', shape: 'text' });
           return;
         case 'tool.sticky':
-          setActiveShape('sticky');
+          setCanvasMode({ kind: 'draw', shape: 'sticky' });
           return;
         case 'tool.database':
-          setActiveShape('database');
+          setCanvasMode({ kind: 'draw', shape: 'database' });
           return;
         case 'edit.undo': {
           if (!canUndo) return;
@@ -2566,7 +2579,7 @@ export function DemoView({
         case 'selection.deselect':
           if (selectedIdsRef.current.length > 0) setSelectedIds([]);
           if (selectedConnectorIdsRef.current.length > 0) setSelectedConnectorIds([]);
-          if (activeShapeRef.current !== null) setActiveShape(null);
+          if (canvasModeRef.current.kind !== 'select') setCanvasMode({ kind: 'select' });
           return;
         case 'help.commandPalette':
           setPaletteOpen(true);
@@ -3016,8 +3029,8 @@ export function DemoView({
           onTidy={demoNodes ? onToolbarTidy : undefined}
           onCreateAndConnectFromPane={onCreateAndConnectFromPane}
           pendingEditNodeId={pendingEditNodeId}
-          activeShape={activeShape}
-          onSelectShape={setActiveShape}
+          canvasMode={canvasMode}
+          onCanvasModeChange={setCanvasMode}
           statusReport={sidebarStatusReport}
           onNameChange={onNodeNameChange}
           onDescriptionChange={onNodeDescriptionChange}

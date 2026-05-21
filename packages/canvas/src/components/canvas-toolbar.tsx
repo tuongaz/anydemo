@@ -3,6 +3,8 @@ import {
   Cloud,
   Columns3,
   Database,
+  Hand,
+  MousePointer2,
   Server,
   Shapes,
   Square,
@@ -14,7 +16,7 @@ import {
 import { useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { type CommandId, getCommandTooltip } from '../lib/keyboard-shortcuts.ts';
-import type { ShapeKind } from '../types.ts';
+import type { CanvasMode, ShapeKind } from '../types.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
 
@@ -29,10 +31,14 @@ import { IconPickerPopover } from './icon-picker-popover.tsx';
 export const HTML_BLOCK_DND_TYPE = 'application/x-seeflow-create-html-block';
 
 export interface CanvasToolbarProps {
-  /** Currently armed draw shape, or null when not in draw mode. */
-  activeShape: ShapeKind | null;
-  /** Toggles draw mode for the given shape; pass null to exit. */
-  onSelectShape: (shape: ShapeKind | null) => void;
+  /**
+   * Current canvas interaction mode. The toolbar is a radio group over this
+   * value — Select is the neutral default, Hand locks node interaction, Draw
+   * carries the armed shape for click/drag-to-create.
+   */
+  mode: CanvasMode;
+  /** Switch to the given mode. Toolbar buttons emit one of the three kinds. */
+  onModeChange: (next: CanvasMode) => void;
   /**
    * US-013 (icon picker): controlled-open state for the insert-icon popover.
    * The Insert icon button anchors the IconPickerPopover; the toolbar's parent
@@ -49,7 +55,31 @@ export interface CanvasToolbarProps {
    * the Insert icon button is hidden.
    */
   onPickIcon?: (name: string) => void;
+  /**
+   * When false, hide every shape-creation affordance (rectangle/ellipse/text/
+   * sticky tiles, Shape picker, Insert icon) and render only the Select/Hand
+   * mode group. Used by view-mode embeds that still want the navigation tools
+   * without exposing draw-to-create. Defaults to true so existing edit-mode
+   * consumers keep the full toolbar.
+   */
+  showShapeTools?: boolean;
 }
+
+export interface ToolbarModeEntry {
+  kind: 'select' | 'hand';
+  label: string;
+  commandId: CommandId;
+  Icon: typeof MousePointer2;
+}
+
+// Mode tiles at the top of the toolbar. Select is the always-lit neutral
+// default; Hand is a true exclusive mode (node interaction is suspended).
+// Re-click semantics: Select-on-Select is a no-op (you can't unselect neutral);
+// Hand-on-Hand exits to Select.
+export const TOOLBAR_MODES: ToolbarModeEntry[] = [
+  { kind: 'select', label: 'Select', commandId: 'tool.select', Icon: MousePointer2 },
+  { kind: 'hand', label: 'Hand', commandId: 'tool.hand', Icon: Hand },
+];
 
 export interface ToolbarShapeEntry {
   shape: ShapeKind;
@@ -115,19 +145,54 @@ const SHAPE_PICKER_LABEL = 'Shape';
 // demo-canvas.tsx so all canvas-view actions (zoom, fit, auto align) live in
 // one consistent place. The keyboard shortcut (⌘⇧L) is unchanged.
 export function CanvasToolbar({
-  activeShape,
-  onSelectShape,
+  mode,
+  onModeChange,
   iconPickerOpen,
   onOpenIconPicker,
   onCloseIconPicker,
   onPickIcon,
+  showShapeTools = true,
 }: CanvasToolbarProps) {
   // The illustrative-shape picker is self-contained — open state lives in
   // the toolbar since there's no insert/replace mode duality like the icon
   // picker has.
   const [shapePickerOpen, setShapePickerOpen] = useState(false);
+  const activeShape: ShapeKind | null = mode.kind === 'draw' ? mode.shape : null;
   const illustrativeActive =
     activeShape !== null && ILLUSTRATIVE_SHAPES.some((s) => s.shape === activeShape);
+
+  const renderModeButton = ({ kind, commandId, Icon }: ToolbarModeEntry) => {
+    const active = mode.kind === kind;
+    const tooltip = getCommandTooltip(commandId);
+    return (
+      <button
+        key={kind}
+        type="button"
+        data-testid={`toolbar-mode-${kind}`}
+        data-active={active ? 'true' : 'false'}
+        aria-pressed={active}
+        aria-label={tooltip}
+        title={tooltip}
+        onClick={() => {
+          // Select-on-Select is a no-op (you can't unselect the neutral state).
+          // Hand-on-Hand exits to Select. New mode click switches.
+          if (active) {
+            if (kind === 'hand') onModeChange({ kind: 'select' });
+            return;
+          }
+          onModeChange({ kind });
+        }}
+        className={cn(
+          'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+          active
+            ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50 sf:shadow-[0_0_0_1px_hsl(var(--primary)/0.5)_inset]'
+            : 'sf:hover:bg-muted sf:hover:text-foreground',
+        )}
+      >
+        <Icon className="sf:h-4 sf:w-4" />
+      </button>
+    );
+  };
 
   const renderShapeButton = ({ shape, commandId, Icon }: ToolbarShapeEntry) => {
     const active = activeShape === shape;
@@ -141,7 +206,9 @@ export function CanvasToolbar({
         aria-pressed={active}
         aria-label={tooltip}
         title={tooltip}
-        onClick={() => onSelectShape(active ? null : shape)}
+        onClick={() =>
+          active ? onModeChange({ kind: 'select' }) : onModeChange({ kind: 'draw', shape })
+        }
         className={cn(
           'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
           active
@@ -159,106 +226,112 @@ export function CanvasToolbar({
       data-testid="canvas-toolbar"
       className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-card sf:p-1 sf:shadow-md sf:backdrop-blur"
     >
-      {TOP_PRIMARY_SHAPES.map(renderShapeButton)}
-      <Popover open={shapePickerOpen} onOpenChange={setShapePickerOpen}>
-        <PopoverTrigger asChild>
-          <button
-            type="button"
-            data-testid="toolbar-shape-picker"
-            aria-label={SHAPE_PICKER_LABEL}
-            aria-pressed={shapePickerOpen || illustrativeActive}
-            title={SHAPE_PICKER_LABEL}
-            className={cn(
-              'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
-              shapePickerOpen || illustrativeActive
-                ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
-                : 'sf:hover:bg-muted sf:hover:text-foreground',
-            )}
-          >
-            <Shapes className="sf:h-4 sf:w-4" aria-hidden="true" />
-          </button>
-        </PopoverTrigger>
-        <PopoverContent
-          align="start"
-          side="right"
-          sideOffset={6}
-          className="sf:w-auto sf:p-1"
-          data-testid="shape-picker-popover"
-          onOpenAutoFocus={(e) => {
-            // Keep keyboard focus on the canvas so the wrapper-level ESC
-            // handler still works — mirrors the drop-popover convention.
-            e.preventDefault();
-          }}
-        >
-          <div role="menu" aria-label="More shapes" className="sf:flex sf:flex-col sf:gap-0.5">
-            {ILLUSTRATIVE_SHAPES.map(({ shape, label, commandId, Icon }) => {
-              const active = activeShape === shape;
-              const tooltip = getCommandTooltip(commandId);
-              return (
+      {TOOLBAR_MODES.map(renderModeButton)}
+      {showShapeTools ? (
+        <>
+          <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />
+          {TOP_PRIMARY_SHAPES.map(renderShapeButton)}
+          <Popover open={shapePickerOpen} onOpenChange={setShapePickerOpen}>
+            <PopoverTrigger asChild>
+              <button
+                type="button"
+                data-testid="toolbar-shape-picker"
+                aria-label={SHAPE_PICKER_LABEL}
+                aria-pressed={shapePickerOpen || illustrativeActive}
+                title={SHAPE_PICKER_LABEL}
+                className={cn(
+                  'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+                  shapePickerOpen || illustrativeActive
+                    ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
+                    : 'sf:hover:bg-muted sf:hover:text-foreground',
+                )}
+              >
+                <Shapes className="sf:h-4 sf:w-4" aria-hidden="true" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent
+              align="start"
+              side="right"
+              sideOffset={6}
+              className="sf:w-auto sf:p-1"
+              data-testid="shape-picker-popover"
+              onOpenAutoFocus={(e) => {
+                // Keep keyboard focus on the canvas so the wrapper-level ESC
+                // handler still works — mirrors the drop-popover convention.
+                e.preventDefault();
+              }}
+            >
+              <div role="menu" aria-label="More shapes" className="sf:flex sf:flex-col sf:gap-0.5">
+                {ILLUSTRATIVE_SHAPES.map(({ shape, label, commandId, Icon }) => {
+                  const active = activeShape === shape;
+                  const tooltip = getCommandTooltip(commandId);
+                  return (
+                    <button
+                      key={shape}
+                      type="button"
+                      role="menuitem"
+                      data-testid={`shape-picker-${shape}`}
+                      data-active={active ? 'true' : 'false'}
+                      aria-pressed={active}
+                      aria-label={tooltip}
+                      title={tooltip}
+                      onClick={() => {
+                        onModeChange(active ? { kind: 'select' } : { kind: 'draw', shape });
+                        setShapePickerOpen(false);
+                      }}
+                      className={cn(
+                        'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
+                        active
+                          ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
+                          : 'sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden',
+                      )}
+                    >
+                      <Icon className="sf:h-4 sf:w-4 sf:text-muted-foreground" aria-hidden="true" />
+                      <span>{label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </PopoverContent>
+          </Popover>
+          {onPickIcon ? (
+            <IconPickerPopover
+              open={iconPickerOpen ?? false}
+              onOpenChange={(next) => {
+                if (next) onOpenIconPicker?.();
+                else onCloseIconPicker?.();
+              }}
+              anchor={
                 <button
-                  key={shape}
                   type="button"
-                  role="menuitem"
-                  data-testid={`shape-picker-${shape}`}
-                  data-active={active ? 'true' : 'false'}
-                  aria-pressed={active}
-                  aria-label={tooltip}
-                  title={tooltip}
-                  onClick={() => {
-                    onSelectShape(active ? null : shape);
-                    setShapePickerOpen(false);
-                  }}
+                  data-testid="toolbar-insert-icon"
+                  aria-label={INSERT_ICON_LABEL}
+                  aria-pressed={iconPickerOpen ?? false}
+                  title={INSERT_ICON_LABEL}
                   className={cn(
-                    'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
-                    active
+                    'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+                    iconPickerOpen
                       ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
-                      : 'sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden',
+                      : 'sf:hover:bg-muted sf:hover:text-foreground',
                   )}
                 >
-                  <Icon className="sf:h-4 sf:w-4 sf:text-muted-foreground" aria-hidden="true" />
-                  <span>{label}</span>
+                  <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />
                 </button>
-              );
-            })}
-          </div>
-        </PopoverContent>
-      </Popover>
-      {onPickIcon ? (
-        <IconPickerPopover
-          open={iconPickerOpen ?? false}
-          onOpenChange={(next) => {
-            if (next) onOpenIconPicker?.();
-            else onCloseIconPicker?.();
-          }}
-          anchor={
-            <button
-              type="button"
-              data-testid="toolbar-insert-icon"
-              aria-label={INSERT_ICON_LABEL}
-              aria-pressed={iconPickerOpen ?? false}
-              title={INSERT_ICON_LABEL}
-              className={cn(
-                'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
-                iconPickerOpen
-                  ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
-                  : 'sf:hover:bg-muted sf:hover:text-foreground',
-              )}
-            >
-              <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />
-            </button>
-          }
-          // Toolbar inserts a new iconNode — "no icon" has no meaning here, so
-          // the picker hides the synthetic No-icon tile. With `clearable=false`
-          // the picker only ever emits real names; the guard below is a
-          // type narrowing for the widened `(name: string | null)` signature.
-          clearable={false}
-          onPick={(name) => {
-            if (name !== null) onPickIcon(name);
-          }}
-        />
+              }
+              // Toolbar inserts a new iconNode — "no icon" has no meaning here, so
+              // the picker hides the synthetic No-icon tile. With `clearable=false`
+              // the picker only ever emits real names; the guard below is a
+              // type narrowing for the widened `(name: string | null)` signature.
+              clearable={false}
+              onPick={(name) => {
+                if (name !== null) onPickIcon(name);
+              }}
+            />
+          ) : null}
+          <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />
+          {SECONDARY_PRIMARY_SHAPES.map(renderShapeButton)}
+        </>
       ) : null}
-      <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />
-      {SECONDARY_PRIMARY_SHAPES.map(renderShapeButton)}
     </div>
   );
 }

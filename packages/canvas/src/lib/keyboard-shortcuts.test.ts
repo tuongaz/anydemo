@@ -403,6 +403,7 @@ describe('COMMANDS registry (US-002)', () => {
   // only way to enforce "no duplicates, no missing" without losing type info.
   const expectedIds: readonly CommandId[] = [
     'tool.select',
+    'tool.hand',
     'tool.rectangle',
     'tool.ellipse',
     'tool.text',
@@ -466,6 +467,10 @@ describe('COMMANDS registry (US-002)', () => {
     const select = COMMANDS.find((c) => c.id === 'tool.select');
     // Bare 'V' renders the same on every platform.
     expect(select?.shortcut).toBe('V');
+
+    const hand = COMMANDS.find((c) => c.id === 'tool.hand');
+    // Bare 'H' renders the same on every platform.
+    expect(hand?.shortcut).toBe('H');
   });
 });
 
@@ -475,6 +480,7 @@ describe('resolveToolShortcut (US-003)', () => {
   // bare-key family never shadows Cmd+V (paste), Cmd+D (duplicate), etc.
   const tools: ReadonlyArray<{ key: string; tool: NonNullable<ToolShortcutResult> }> = [
     { key: 'v', tool: 'select' },
+    { key: 'h', tool: 'hand' },
     { key: 'r', tool: 'rectangle' },
     { key: 'o', tool: 'ellipse' },
     { key: 't', tool: 'text' },

@@ -61,6 +61,7 @@ export const formatShortcut = (parts: ShortcutParts, isMac: boolean = IS_MAC): s
 
 export type CommandId =
   | 'tool.select'
+  | 'tool.hand'
   | 'tool.rectangle'
   | 'tool.ellipse'
   | 'tool.text'
@@ -124,9 +125,16 @@ export const COMMANDS: readonly CommandDef[] = [
   {
     id: 'tool.select',
     label: 'Select tool',
-    description: 'Switch to the selection / pan tool',
+    description: 'Switch to the selection tool',
     category: 'Tools',
     shortcut: formatShortcut({ key: 'V' }),
+  },
+  {
+    id: 'tool.hand',
+    label: 'Hand tool',
+    description: 'Pan the canvas; node interaction is suspended while armed',
+    category: 'Tools',
+    shortcut: formatShortcut({ key: 'H' }),
   },
   {
     id: 'tool.rectangle',
@@ -475,13 +483,15 @@ export const resolveClipboardChord = ({
 // these bindings are intentionally bare-only so they don't collide with Cmd+V
 // (paste), Cmd+D (duplicate), Shift+letter (inputs), etc. Uppercase variants
 // resolve identically (key.toLowerCase normalization).
-export type ToolShortcutResult = 'select' | ShapeKind | null;
+export type ToolShortcutResult = 'select' | 'hand' | ShapeKind | null;
 
 export const resolveToolShortcut = (e: ModifierEvent): ToolShortcutResult => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null;
   switch (e.key.toLowerCase()) {
     case 'v':
       return 'select';
+    case 'h':
+      return 'hand';
     case 'r':
       return 'rectangle';
     case 'o':

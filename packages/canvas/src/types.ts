@@ -60,6 +60,12 @@ export type ShapeKind =
   | 'queue'
   | 'cloud';
 
+// Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
+// `select` is the neutral default — click/marquee selects, pane-drag pans.
+// `hand` locks node interaction; left-drag pans (cursor: grab/grabbing).
+// `draw` carries the armed shape for click/drag-to-create gestures.
+export type CanvasMode = { kind: 'select' } | { kind: 'hand' } | { kind: 'draw'; shape: ShapeKind };
+
 export interface ShapeNodeData extends NodeVisual, NodeDescription {
   shape: ShapeKind;
   name?: string;

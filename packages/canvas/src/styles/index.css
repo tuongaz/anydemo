@@ -111,6 +111,19 @@ layer(base);
   display: none;
 }
 
+/* Hand mode: cursor over the pane is `grab` while idle and `grabbing` during
+ * an active pan drag. React Flow doesn't expose a built-in cursor hook for
+ * Hand mode, so we paint it via the wrapper's `data-canvas-mode="hand"`
+ * attribute (set by `<SeeflowCanvas>` from `canvasMode.kind`). The wrapper-
+ * level inline cursor in seeflow-canvas.tsx covers the chrome around the
+ * pane; this rule handles the pane itself. */
+.seeflow-canvas-root[data-canvas-mode="hand"] .react-flow__pane {
+  cursor: grab;
+}
+.seeflow-canvas-root[data-canvas-mode="hand"] .react-flow__pane:active {
+  cursor: grabbing;
+}
+
 @keyframes seeflow-ping-fast {
   0% {
     transform: scale(1);

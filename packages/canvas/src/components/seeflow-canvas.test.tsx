@@ -198,12 +198,11 @@ function callSeeflowCanvas(
     connectors: [],
     selectedNodeIds: [],
     selectedConnectorIds: [],
-    // US-003: drawShape state was lifted to demo-view; tests can either pass
-    // `activeShape` directly or override the parent setter. Defaults keep the
-    // canvas in select-mode (no shape armed) so legacy tests see the same
-    // behavior they did when drawShape was internal state.
-    activeShape: null,
-    onSelectShape: () => {},
+    // Canvas mode (Select/Hand/Draw) is lifted to demo-view; tests pass
+    // `canvasMode` directly. Defaults keep the canvas in Select-mode so legacy
+    // tests see the same behavior they did when drawShape was internal state.
+    canvasMode: { kind: 'select' },
+    onCanvasModeChange: () => {},
     ...rest,
     runtime: builtRuntime,
   };
@@ -697,15 +696,45 @@ describe('SeeflowCanvas', () => {
     // gesture. If any of these regresses, the gesture stops landing in our
     // handlers and drag-to-create silently breaks.
     it('disables xyflow gesture handling on the empty pane when in draw mode', () => {
-      // US-003: drawShape state was lifted to demo-view, so we drive draw
-      // mode via the `activeShape` prop instead of patching a useState slot.
-      const tree = callSeeflowCanvas({ activeShape: 'rectangle' });
+      // Draw mode is driven via the `canvasMode` prop (state lives in
+      // demo-view), so the test patches the prop directly.
+      const tree = callSeeflowCanvas({ canvasMode: { kind: 'draw', shape: 'rectangle' } });
       const rf = findElement(tree, (el) => el.type === ReactFlow);
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       expect(rf.props.selectionOnDrag).toBe(false);
       expect(rf.props.panOnDrag).toBe(false);
       expect(rf.props.nodesDraggable).toBe(false);
       expect(rf.props.elementsSelectable).toBe(false);
+    });
+
+    // Hand mode locks node interaction the same way Draw does, but promotes
+    // left-click to pan ([0,1,2]) so the user can grab anywhere on the pane.
+    // The four selection/draggable flags must flip false (so node clicks don't
+    // sneak through), and the wrapper exposes `data-canvas-mode="hand"` for
+    // the cursor CSS in src/styles/index.css.
+    it('locks node interaction and promotes left-drag to pan when in Hand mode', () => {
+      const tree = callSeeflowCanvas({ canvasMode: { kind: 'hand' } });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+      expect(rf.props.nodesDraggable).toBe(false);
+      expect(rf.props.nodesConnectable).toBe(false);
+      expect(rf.props.elementsSelectable).toBe(false);
+      expect(rf.props.selectionOnDrag).toBe(false);
+      expect(rf.props.panOnDrag).toEqual([0, 1, 2]);
+    });
+
+    it('exposes data-canvas-mode on the wrapper for cursor CSS', () => {
+      const tree = callSeeflowCanvas({ canvasMode: { kind: 'hand' } });
+      const wrapper = findElement(tree, (el) => el.props['data-testid'] === 'seeflow-canvas');
+      expect(wrapper?.props['data-canvas-mode']).toBe('hand');
+
+      const tree2 = callSeeflowCanvas({ canvasMode: { kind: 'select' } });
+      const wrapper2 = findElement(tree2, (el) => el.props['data-testid'] === 'seeflow-canvas');
+      expect(wrapper2?.props['data-canvas-mode']).toBe('select');
+
+      const tree3 = callSeeflowCanvas({ canvasMode: { kind: 'draw', shape: 'rectangle' } });
+      const wrapper3 = findElement(tree3, (el) => el.props['data-testid'] === 'seeflow-canvas');
+      expect(wrapper3?.props['data-canvas-mode']).toBe('draw');
     });
 
     // Index-coupled ref capture so the test can pre-set drawShapeRef /
@@ -756,7 +785,7 @@ describe('SeeflowCanvas', () => {
         captured.push({ shape, pos, size });
       };
       const tree = callSeeflowCanvas(
-        { onCreateShapeNode, activeShape: 'rectangle' },
+        { onCreateShapeNode, canvasMode: { kind: 'draw', shape: 'rectangle' } },
         {
           // US-003: drawShape state lives in demo-view now, so we pass
           // `activeShape` via props. The gesture handler reads
@@ -864,7 +893,7 @@ describe('SeeflowCanvas', () => {
       }> = [];
       const tree = callSeeflowCanvas(
         {
-          activeShape: 'ellipse',
+          canvasMode: { kind: 'draw', shape: 'ellipse' },
           onCreateShapeNode: (shape, pos, size) => {
             captured.push({
               shape: shape as string,
@@ -976,7 +1005,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'database' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -999,7 +1031,10 @@ describe('SeeflowCanvas', () => {
       // 200 wide, 140 tall (matches database SHAPE_DEFAULT_SIZE for an at-
       // template ghost — the cylinder reads proportional).
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'database' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1031,7 +1066,7 @@ describe('SeeflowCanvas', () => {
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
       const tree = callSeeflowCanvas(
-        { activeShape: 'rectangle' },
+        { canvasMode: { kind: 'draw', shape: 'rectangle' } },
         { useStateOverrides: overrides },
       );
       const ghost = findElement(
@@ -1059,7 +1094,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'server' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1076,7 +1114,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'server' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1102,7 +1143,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'database' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'database' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1121,7 +1165,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'user' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1138,7 +1185,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'server' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'server' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1157,7 +1207,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'queue' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1174,7 +1227,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'user' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'user' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1193,7 +1249,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'cloud' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'cloud' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -1210,7 +1269,10 @@ describe('SeeflowCanvas', () => {
       const overrides: unknown[] = [];
       overrides[2] = { x: 100, y: 100 };
       overrides[3] = { x: 300, y: 240 };
-      const tree = callSeeflowCanvas({ activeShape: 'queue' }, { useStateOverrides: overrides });
+      const tree = callSeeflowCanvas(
+        { canvasMode: { kind: 'draw', shape: 'queue' } },
+        { useStateOverrides: overrides },
+      );
       const ghost = findElement(
         tree,
         (el) =>
@@ -2105,6 +2167,25 @@ describe('SeeflowCanvas', () => {
       expect(rf.props.nodesConnectable).toBe(false);
     });
 
+    it('view mode renders a modes-only toolbar (Select + Hand, no shape tiles)', () => {
+      // View mode embedders get the Select/Hand navigation tools so users can
+      // toggle between marquee-select and pan-everywhere modes the same way
+      // they'd expect in Miro/Figma. The toolbar still renders, but
+      // showShapeTools=false hides the shape tiles + icon picker (asserted via
+      // the toolbar prop since the child render isn't expanded in this shim).
+      const tree = callSeeflowCanvas({ mode: 'view', adapter: undefined });
+      const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
+      expect(toolbar).not.toBeNull();
+      expect(toolbar?.props.showShapeTools).toBe(false);
+      expect(toolbar?.props.mode).toEqual({ kind: 'select' });
+    });
+
+    it('mini mode renders no toolbar at all', () => {
+      const tree = callSeeflowCanvas({ mode: 'mini', adapter: undefined });
+      const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
+      expect(toolbar).toBeNull();
+    });
+
     it('ReactFlow root disables deleteKeyCode in view mode', () => {
       // xyflow has no global `edgesDeletable` flag; the only path to delete
       // is the delete-key chord. Setting it null leaves the user with no
@@ -2148,14 +2229,19 @@ describe('SeeflowCanvas', () => {
       expect(rf.props.onPaneContextMenu).toBeUndefined();
     });
 
-    it('CanvasToolbar is hidden in view mode even when onCreateShapeNode is wired', () => {
+    it('CanvasToolbar in view mode shows only Select + Hand, even when onCreateShapeNode is wired', () => {
+      // The Select + Hand navigation tools always render in view mode (the
+      // toolbar is no longer hidden outright). The shape-creation affordances
+      // stay hidden regardless of whether the host wires onCreateShapeNode —
+      // view mode is read-only, so draw-to-create has no useful endpoint.
       const tree = callSeeflowCanvas({
         mode: 'view',
         adapter: undefined,
         onCreateShapeNode: () => {},
       });
       const toolbar = findElement(tree, (el) => el.type === CanvasToolbar);
-      expect(toolbar).toBeNull();
+      expect(toolbar).not.toBeNull();
+      expect(toolbar?.props.showShapeTools).toBe(false);
     });
 
     it('StyleStrip is hidden in view mode even when style handlers are wired', () => {
@@ -2776,7 +2862,10 @@ describe('US-027: resolveFlags helper', () => {
     // monitoring still surfaces), selection + local-state node drag, and
     // the bottom-left Controls cluster (zoom-in/out/fit/tidy navigation aids).
     expect(resolveFlags({ mode: 'view' })).toEqual({
-      showToolbar: false,
+      // View mode renders a slimmed-down toolbar (Select + Hand only) so the
+      // outer flag stays on; SeeflowCanvas hides shape tiles via its
+      // showShapeTools={isEditMode} pass-through.
+      showToolbar: true,
       showStyleStrip: false,
       showDetailPanel: false,
       showStatusBadges: true,
@@ -2861,8 +2950,10 @@ describe('US-027: resolveFlags helper', () => {
     });
     expect(resolved.enableKeyboard).toBe(true);
     expect(resolved.showStatusBadges).toBe(true);
-    // Other view defaults stay view-off.
-    expect(resolved.showToolbar).toBe(false);
+    // Other view defaults stay view-off (the toolbar is now visible in view
+    // mode, but only as the Select + Hand navigation pair — see the
+    // showShapeTools gate in SeeflowCanvas).
+    expect(resolved.showStyleStrip).toBe(false);
     expect(resolved.enableContextMenu).toBe(false);
   });
 

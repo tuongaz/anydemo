@@ -67,6 +67,7 @@ import {
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import { StateNode } from '../nodes/state-node.tsx';
 import type {
+  CanvasMode,
   Connector,
   EdgePin,
   FlowNode,
@@ -227,7 +228,11 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
 };
 
 const VIEW_DEFAULTS: ResolvedCanvasFlags = {
-  showToolbar: false,
+  // View mode renders a slimmed-down toolbar with only the Select + Hand
+  // navigation tools — no shape-creation affordances. The actual shape-tool
+  // hiding happens via `showShapeTools` threaded into <CanvasToolbar> below;
+  // this flag just gates the toolbar's outer Panel.
+  showToolbar: true,
   showStyleStrip: false,
   showDetailPanel: false,
   // View mode keeps status badges (driven by SSE) so the canvas can serve as
@@ -692,15 +697,16 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onUnpinEndpoint?: (connectorId: string, kind: 'source' | 'target') => void;
   /**
-   * US-003: bottom-toolbar draw-mode state, lifted to the parent so the page-
-   * level keyboard handler (`resolveToolShortcut` in demo-view.tsx) and the
-   * future command palette can drive tool switches without the canvas owning
-   * the state. The toolbar inside the canvas still reads `activeShape` and
-   * calls `onSelectShape` exactly like before — only the source-of-truth
-   * moved up one level.
+   * Canvas interaction mode, lifted to the parent so the page-level keyboard
+   * handler (`resolveToolShortcut` in demo-view.tsx) and the command palette
+   * can drive tool switches without the canvas owning the state. Distinct from
+   * the chrome `mode` prop above (`edit`/`view`/`mini`) — this controls
+   * Select/Hand/Draw tool state. Modes: `select` (neutral default;
+   * click/marquee selects, pane-drag pans), `hand` (locks node interaction;
+   * left-drag pans), `draw` (carries the armed shape).
    */
-  activeShape: ShapeKind | null;
-  onSelectShape: (shape: ShapeKind | null) => void;
+  canvasMode: CanvasMode;
+  onCanvasModeChange: (next: CanvasMode) => void;
   /**
    * US-007: hide the built-in DetailPanel sidebar entirely. View-mode embeds
    * and hosts that supply their own inspector set this to true. When false (or
@@ -1725,8 +1731,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onRequestIconReplace,
     onPinEndpoint,
     onUnpinEndpoint,
-    activeShape,
-    onSelectShape,
+    canvasMode,
+    onCanvasModeChange,
     disableSidebar,
     statusReport,
     onNameChange,
@@ -1886,13 +1892,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // US-006: handle to the React Flow store (registered by <StoreApiBridge>).
   // Used to call `cancelConnection` when ESC cancels an in-flight connection.
   const storeApiRef = useRef<StoreApi | null>(null);
-  // US-003: draw-mode state is owned by the parent (demo-view.tsx) so the
-  // page-level keyboard handler and command palette can drive tool switches.
-  // We alias the props inside this file to preserve the existing `drawShape` /
-  // `setDrawShape` naming used throughout — minimal diff against the prior
-  // local `useState` implementation.
-  const drawShape = activeShape;
-  const setDrawShape = onSelectShape;
+  // Canvas mode is owned by the parent (demo-view.tsx) so the page-level
+  // keyboard handler and command palette can drive tool switches. Derive the
+  // legacy `drawShape` view (the armed shape, or null when not drawing) so
+  // existing gesture/cursor code keeps reading the same value. `handMode` is
+  // the new flag for the four React Flow lock-down props.
+  const drawShape: ShapeKind | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
+  const handMode = canvasMode.kind === 'hand';
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
   // US-018: per-edge imperative handle map. Each EditableEdge registers its
@@ -2085,14 +2091,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, [drawShape]);
 
   const exitDrawMode = useCallback(() => {
-    setDrawShape(null);
+    onCanvasModeChange({ kind: 'select' });
     setDrawStart(null);
     setDrawCurrent(null);
     drawShapeRef.current = null;
     drawStartRef.current = null;
     drawCurrentRef.current = null;
     drawingRef.current = false;
-  }, [setDrawShape]);
+  }, [onCanvasModeChange]);
 
   // US-006: ESC priority chain. A single window-level keydown listener handles
   // all in-progress cancellations in most-specific-first order, with early
@@ -3911,14 +3917,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     [onConnectorClick],
   );
 
-  // Cursor for the wrapper. Draw mode → crosshair (own gesture). Space-held →
-  // grab while idle, grabbing while a Space-pan drag is in flight. Else
-  // default arrow — US-010 made primary-mouse drag a marquee gesture, but the
-  // default cursor is the design-tool norm for the rubber-band so we don't
-  // override it.
+  // Cursor for the wrapper. Draw mode → crosshair (own gesture). Hand mode →
+  // grab while idle, grabbing while a pan drag is in flight. Space-held has
+  // the same grab/grabbing pair as Hand. Else default arrow — US-010 made
+  // primary-mouse drag a marquee gesture, but the default cursor is the
+  // design-tool norm for the rubber-band so we don't override it.
   const wrapperCursor = drawShape
     ? 'crosshair'
-    : spaceHeld
+    : handMode || spaceHeld
       ? spaceDragging
         ? 'grabbing'
         : 'grab'
@@ -3953,6 +3959,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       <div
         data-testid="seeflow-canvas"
         data-mode={mode}
+        data-canvas-mode={canvasMode.kind}
         ref={wrapperRef}
         className="seeflow-canvas-root sf:relative sf:h-full sf:w-full"
         style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
@@ -4001,12 +4008,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // alive (local-state-only repositioning). commitDraggedNodes above
             // gates the actual PATCH dispatch.
             nodesDraggable={
-              (isEditMode ? !!onNodePositionChange : true) && !drawShape && flags.enableNodeMove
+              (isEditMode ? !!onNodePositionChange : true) &&
+              !drawShape &&
+              !handMode &&
+              flags.enableNodeMove
             }
             // US-027: view mode → handles are never connectable. Both the global
             // and per-node connectable flags are gated; combined with the onConnect
             // early return this is a triple-gate against stray edge creation.
-            nodesConnectable={isEditMode && !!onCreateConnector && !drawShape}
+            // Hand mode locks connection-drag too — any pane click pans instead.
+            nodesConnectable={isEditMode && !!onCreateConnector && !drawShape && !handMode}
             // US-027: in view mode we disable keyboard-driven deletion entirely
             // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
             // flag — the per-edge `deletable` defaults to true and only the
@@ -4083,7 +4094,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // (US-005) and US-014 pins every node above every edge regardless
             // of selection — no extra node-vs-node elevation needed.
             elevateNodesOnSelect={false}
-            elementsSelectable={!drawShape && flags.enableSelection}
+            elementsSelectable={!drawShape && !handMode && flags.enableSelection}
             // US-018: dragging an unselected node moves it WITHOUT auto-selecting
             // (and therefore without opening the detail panel). React Flow defaults
             // this to true; an explicit click (mousedown + mouseup without
@@ -4110,10 +4121,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // selectionKeyCode=null suppresses xyflow's modifier-marquee fallback
             // (default would be 'Shift') since selectionOnDrag already covers
             // marquee — keeping shift free for additive multi-select via click.
-            selectionOnDrag={!drawShape && flags.enableSelection}
+            selectionOnDrag={!drawShape && !handMode && flags.enableSelection}
             // US-027: panning gated on the resolved flag. Draw mode still wins
-            // (toolbar shape gesture owns primary-drag).
-            panOnDrag={drawShape ? false : flags.enablePan ? [1, 2] : false}
+            // (toolbar shape gesture owns primary-drag). Hand mode promotes
+            // left-click to pan ([0,1,2]) so the cursor matches the affordance.
+            panOnDrag={drawShape ? false : handMode ? [0, 1, 2] : flags.enablePan ? [1, 2] : false}
             selectionMode={SelectionMode.Partial}
             selectionKeyCode={null}
             multiSelectionKeyCode={drawShape ? null : ['Meta', 'Shift']}
@@ -4274,18 +4286,28 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onMultiResize={onMultiResize}
               />
             ) : null}
-            {(flags.showToolbar && onCreateShapeNode) ||
-            (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
+            {flags.showToolbar || (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
               <Panel position="top-left">
                 <div className="sf:flex sf:flex-col sf:gap-2">
-                  {flags.showToolbar && onCreateShapeNode ? (
+                  {flags.showToolbar ? (
+                    // View mode renders the toolbar with only Select + Hand
+                    // (no shape-creation affordances). Edit mode threads in the
+                    // shape-creation tiles + icon picker by also providing
+                    // onCreateShapeNode, which is the same prop that gates the
+                    // drag-create flow lower down. Mini mode has showToolbar
+                    // false in VIEW_DEFAULTS' sibling MINI_DEFAULTS — no toolbar.
                     <CanvasToolbar
-                      activeShape={drawShape}
-                      onSelectShape={setDrawShape}
+                      mode={canvasMode}
+                      onModeChange={onCanvasModeChange}
                       iconPickerOpen={iconPickerOpen ?? false}
                       onOpenIconPicker={onOpenIconPicker}
                       onCloseIconPicker={onCloseIconPicker}
                       onPickIcon={onPickIcon}
+                      // Hide shape buttons + icon picker outside edit mode (or
+                      // when the host can't create shapes anyway). The Select +
+                      // Hand navigation tools always remain so view-mode embeds
+                      // get a Miro/Figma-style tool toggle.
+                      showShapeTools={isEditMode && !!onCreateShapeNode}
                     />
                   ) : null}
                   {flags.showStyleStrip && onStyleNode && onStyleConnector ? (
