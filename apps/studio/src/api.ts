@@ -23,26 +23,8 @@ import {
   RegisterBodySchema,
   ReorderBodySchema,
   type ValidateBody,
-  addConnectorImpl,
-  addConnectorsBulkImpl,
-  addNodeImpl,
-  addNodesBulkImpl,
-  createProjectImpl,
-  deleteConnectorImpl,
-  deleteFlowImpl,
-  deleteNodeImpl,
-  getFlowGraphImpl,
-  getFlowImpl,
-  getNodeImpl,
-  listDemosImpl,
-  listFlowsSummaryImpl,
-  moveNodeImpl,
-  patchConnectorImpl,
-  patchNodeImpl,
-  registerFlowImpl,
-  reorderNodeImpl,
+  createOperations,
   resolveFilePath,
-  validateImpl,
   writeFileAtomic,
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
@@ -223,6 +205,7 @@ export function createApi(options: ApiOptions): Hono {
   const processSpawner = options.processSpawner;
   const proxy = options.proxy ?? defaultProxyFacade;
   const projectBaseDir = options.projectBaseDir;
+  const ops = createOperations({ registry, watcher, projectBaseDir });
   const api = new Hono();
 
   api.post('/flows/register', async (c) => {
@@ -238,7 +221,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid register body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await registerFlowImpl({ registry, watcher }, parsed.data);
+    const result = await ops.registerFlow(parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -293,7 +276,7 @@ export function createApi(options: ApiOptions): Hono {
     if (!body || typeof body !== 'object' || !('flow' in body)) {
       return c.json({ error: 'Body must be { flow, style? }' }, 400);
     }
-    return c.json(validateImpl(body as ValidateBody));
+    return c.json(ops.validate(body as ValidateBody));
   });
 
   // POST /api/diagram/propose-scope — Phase 2 helper. The skill POSTs the
@@ -455,7 +438,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid create project body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await createProjectImpl({ registry, watcher, projectBaseDir }, parsed.data);
+    const result = await ops.createProject(parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -474,7 +457,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/flows', (c) => {
-    const result = listDemosImpl({ registry });
+    const result = ops.listFlows();
     return c.json(result.data);
   });
 
@@ -482,12 +465,12 @@ export function createApi(options: ApiOptions): Hono {
   // watcher snapshot when available so author edits to flow.json show up
   // immediately; falls back to the registry copy persisted at register time.
   api.get('/flows/summary', (c) => {
-    const result = listFlowsSummaryImpl({ registry, watcher });
+    const result = ops.listFlowsSummary();
     return c.json(result.data);
   });
 
   api.get('/flows/:id', async (c) => {
-    const result = await getFlowImpl({ registry, watcher }, c.req.param('id'));
+    const result = await ops.getFlow(c.req.param('id'));
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -501,7 +484,7 @@ export function createApi(options: ApiOptions): Hono {
   // Flow skeleton without per-node file content (detail.md / view.html).
   // Pairs with GET /flows/:id/nodes/:nodeId for full per-node detail.
   api.get('/flows/:id/graph', async (c) => {
-    const result = await getFlowGraphImpl({ registry, watcher }, c.req.param('id'));
+    const result = await ops.getFlowGraph(c.req.param('id'));
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -517,11 +500,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/flows/:id/nodes/:nodeId', async (c) => {
-    const result = await getNodeImpl(
-      { registry, watcher },
-      c.req.param('id'),
-      c.req.param('nodeId'),
-    );
+    const result = await ops.getNode(c.req.param('id'), c.req.param('nodeId'));
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -731,7 +710,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.delete('/flows/:id', (c) => {
-    const result = deleteFlowImpl({ registry, watcher }, c.req.param('id'));
+    const result = ops.deleteFlow(c.req.param('id'));
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -985,7 +964,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid position body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await moveNodeImpl({ registry, watcher }, id, nodeId, parsed.data);
+    const result = await ops.moveNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, position: result.data.position });
@@ -1026,7 +1005,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid reorder body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await reorderNodeImpl({ registry, watcher }, id, nodeId, parsed.data);
+    const result = await ops.reorderNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -1067,7 +1046,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid node patch body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await patchNodeImpl({ registry, watcher }, id, nodeId, parsed.data);
+    const result = await ops.patchNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -1102,7 +1081,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Body must be an object' }, 400);
     }
 
-    const result = await addNodeImpl({ registry, watcher }, id, body as Record<string, unknown>);
+    const result = await ops.addNode(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, id: result.data.id, node: result.data.node });
@@ -1137,7 +1116,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid bulk nodes body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await addNodesBulkImpl({ registry, watcher }, id, parsed.data);
+    const result = await ops.addNodesBulk(id, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, nodes: result.data.nodes });
@@ -1167,7 +1146,7 @@ export function createApi(options: ApiOptions): Hono {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');
 
-    const result = await deleteNodeImpl({ registry, watcher }, id, nodeId);
+    const result = await ops.deleteNode(id, nodeId);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -1208,7 +1187,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid connector patch body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await patchConnectorImpl({ registry, watcher }, id, connId, parsed.data);
+    const result = await ops.patchConnector(id, connId, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -1244,11 +1223,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Body must be an object' }, 400);
     }
 
-    const result = await addConnectorImpl(
-      { registry, watcher },
-      id,
-      body as Record<string, unknown>,
-    );
+    const result = await ops.addConnector(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, id: result.data.id });
@@ -1282,7 +1257,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid bulk connectors body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await addConnectorsBulkImpl({ registry, watcher }, id, parsed.data);
+    const result = await ops.addConnectorsBulk(id, parsed.data);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true, connectors: result.data.connectors });
@@ -1309,7 +1284,7 @@ export function createApi(options: ApiOptions): Hono {
     const id = c.req.param('id');
     const connId = c.req.param('connId');
 
-    const result = await deleteConnectorImpl({ registry, watcher }, id, connId);
+    const result = await ops.deleteConnector(id, connId);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
