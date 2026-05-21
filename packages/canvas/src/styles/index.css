@@ -449,3 +449,43 @@ layer(base);
 .seeflow-canvas-root .react-flow__controls-button svg {
   fill: currentColor;
 }
+
+/* Cursor-tracking glow overlay. Bright dots aligned with the React Flow
+   <Background gap={12} size={0.6} /> grid, masked by a radial gradient
+   centered on (--mx, --my). The component writes --mx/--my, background-
+   position, and background-size; this rule supplies the geometry and the
+   leave-fade transition. */
+.seeflow-canvas-root .glow-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+
+  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 0.6px, transparent 1px);
+
+  --mx: 50%;
+  --my: 50%;
+  -webkit-mask-image: radial-gradient(
+    circle 240px at var(--mx) var(--my),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 35%,
+    rgba(0, 0, 0, 0) 100%
+  );
+  mask-image: radial-gradient(
+    circle 240px at var(--mx) var(--my),
+    rgba(0, 0, 0, 1) 0%,
+    rgba(0, 0, 0, 0.6) 35%,
+    rgba(0, 0, 0, 0) 100%
+  );
+
+  opacity: 0;
+  /* Fade-in stays snappy (120ms, see [data-active='true'] below) so a fresh
+     mousemove lights up immediately. Fade-out is slow (800ms) and runs when
+     `data-active` flips back to `false` from either mouseleave or the 1.2s
+     idle timer in createGlowHandlers — the glow lingers and dissipates. */
+  transition: opacity 800ms ease-out;
+}
+.seeflow-canvas-root .glow-overlay[data-active='true'] {
+  opacity: 1;
+  transition: opacity 120ms ease-out;
+}

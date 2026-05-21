@@ -87,6 +87,7 @@ import { Popover, PopoverAnchor, PopoverContent } from '../ui/popover.tsx';
 import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
+import { GlowOverlay } from './glow-overlay.tsx';
 import { RestartDemoButton } from './restart-demo-button.tsx';
 import {
   type MultiResizeUpdate,
@@ -4216,6 +4217,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             <StoreApiBridge storeApiRef={storeApiRef} />
             <ZoomBridge wrapperRef={wrapperRef} />
             <Background gap={12} size={0.6} />
+            <GlowOverlay />
             {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
             is hidden so we can render a Lucide-styled button that calls
             fitView with the documented options (padding 0.15, duration 300).

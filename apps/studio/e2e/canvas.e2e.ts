@@ -66,4 +66,24 @@ test.describe('canvas — kitchen-sink fixture', () => {
       await expect(page.locator(`[data-edge-kind="${kind}"]`)).toHaveCount(1);
     }
   });
+
+  test('mouse glow overlay activates on hover and deactivates on leave', async ({ page }) => {
+    const overlay = page.locator('[data-testid="canvas-glow-overlay"]');
+    await expect(overlay).toHaveAttribute('data-active', 'false');
+
+    // Hovering the pane fires mousemove on .react-flow__pane, which the
+    // overlay subscribes to. DISABLE_MOTION_CSS in beforeEach strips the
+    // opacity transition, so the change is immediate — no polling delay
+    // needed beyond toHaveCSS's built-in retry.
+    await page.locator('.react-flow__pane').first().hover();
+    await expect(overlay).toHaveAttribute('data-active', 'true');
+    await expect(overlay).toHaveCSS('opacity', '1');
+
+    // Move the cursor to the top-left of the page, which is outside the
+    // React Flow pane (header chrome occupies that area), to trigger
+    // mouseleave on the pane.
+    await page.mouse.move(0, 0);
+    await expect(overlay).toHaveAttribute('data-active', 'false');
+    await expect(overlay).toHaveCSS('opacity', '0');
+  });
 });
