@@ -54,6 +54,20 @@ npx skills add tuongaz/seeflow
 
 The plugin scans your routes and database connections, generates `flow.json`, wires up demo scripts, and opens the canvas at localhost:4321.
 
+### `/seeflow-wiki` — consult an existing flow
+
+Once a flow is registered, agents can read it back as architectural ground truth:
+
+```
+/seeflow-wiki list                                    # catalog of registered flows
+/seeflow-wiki flow <id>                               # nodes + connectors (no detail content)
+/seeflow-wiki node <flowId> <nodeId>                  # single node with detail/html inlined
+/seeflow-wiki flow <id> --full                        # everything inlined
+/seeflow-wiki node <flowId> <nodeId> --with-scripts   # adds play.ts / status.ts bodies
+```
+
+Read-only. JSON output. Start cheapest (`list`) and drill in.
+
 ## Docker reference
 
 > ⚠️ Docker is the non-preferred path. Play/Status scripts execute inside the container and cannot reach host services or host binaries, so interactive nodes generated against your local app will not work. Prefer `npx -y @tuongaz/seeflow@latest start` for the full experience.
