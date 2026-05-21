@@ -253,8 +253,9 @@ describe('seeflow CLI new subcommands', () => {
         ],
       });
       const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], studio.env);
-      expect(r.code).toBe(1);
-      expect(r.stderr).toMatch(/Studio returned \d+/);
+      expect(r.code).toBe(4);
+      expect(r.stderr).toContain('Duplicate id in batch');
+      expect(r.stderr).toContain('"code":"duplicateIdInBatch"');
     } finally {
       studio.stop();
     }

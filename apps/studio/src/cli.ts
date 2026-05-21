@@ -14,6 +14,13 @@ import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
+  ConnectorPatchBodySchema,
+  ConnectorsBulkBodySchema,
+  NodePatchBodySchema,
+  NodesBulkBodySchema,
+  ReorderBodySchema,
+} from './operations.ts';
+import {
   DEFAULT_CONFIG,
   clearPid,
   defaultPidPath,
@@ -657,19 +664,24 @@ async function runFlowsPlay() {
 async function runNodesAdd() {
   const flowId = requireArg(1, '<flowId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/nodes`, body);
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    printError('Body must be an object');
+  }
+  const ops = createCliOperations();
+  const result = await ops.addNode(flowId, body as Record<string, unknown>);
+  printOutcome(result);
 }
 
 async function runNodesAddBulk() {
   const flowId = requireArg(1, '<flowId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/nodes/bulk`, body);
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const parsed = NodesBulkBodySchema.safeParse(body);
+  if (!parsed.success) {
+    printError(`Invalid nodes:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
+  }
+  const ops = createCliOperations();
+  const result = await ops.addNodesBulk(flowId, parsed.data);
+  printOutcome(result);
 }
 
 async function runNodesGet() {
@@ -684,13 +696,13 @@ async function runNodesPatch() {
   const flowId = requireArg(1, '<flowId>');
   const nodeId = requireArg(2, '<nodeId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await patchJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
-    body,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const parsed = NodePatchBodySchema.safeParse(body);
+  if (!parsed.success) {
+    printError(`Invalid nodes:patch body: ${JSON.stringify(parsed.error.issues)}`);
+  }
+  const ops = createCliOperations();
+  const result = await ops.patchNode(flowId, nodeId, parsed.data);
+  printOutcome(result);
 }
 
 async function runNodesMove() {
@@ -706,13 +718,9 @@ async function runNodesMove() {
   if (!Number.isFinite(x) || !Number.isFinite(y)) {
     printError('--x and --y must be finite numbers');
   }
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await patchJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}/position`,
-    { x, y },
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const ops = createCliOperations();
+  const result = await ops.moveNode(flowId, nodeId, { x, y });
+  printOutcome(result);
 }
 
 async function runNodesReorder() {
@@ -720,7 +728,7 @@ async function runNodesReorder() {
   const nodeId = requireArg(2, '<nodeId>');
   const op = flagValue('op');
   if (!op) printError('nodes:reorder requires --op forward|backward|toFront|toBack|toIndex');
-  let body: Record<string, unknown> = { op };
+  let raw: Record<string, unknown> = { op };
   if (op === 'toIndex') {
     const idxRaw = flagValue('index');
     if (idxRaw === undefined) printError('nodes:reorder --op toIndex requires --index <n>');
@@ -728,26 +736,23 @@ async function runNodesReorder() {
     if (!Number.isInteger(index) || index < 0) {
       printError('--index must be a non-negative integer');
     }
-    body = { op, index };
+    raw = { op, index };
   }
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await patchJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}/order`,
-    body,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const parsed = ReorderBodySchema.safeParse(raw);
+  if (!parsed.success) {
+    printError(`Invalid nodes:reorder body: ${JSON.stringify(parsed.error.issues)}`);
+  }
+  const ops = createCliOperations();
+  const result = await ops.reorderNode(flowId, nodeId, parsed.data);
+  printOutcome(result);
 }
 
 async function runNodesDelete() {
   const flowId = requireArg(1, '<flowId>');
   const nodeId = requireArg(2, '<nodeId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await deleteRequest(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const ops = createCliOperations();
+  const result = await ops.deleteNode(flowId, nodeId);
+  printOutcome(result);
 }
 
 async function runConnectorsAdd() {
