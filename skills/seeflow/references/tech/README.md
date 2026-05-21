@@ -23,7 +23,7 @@ own helpers, fixtures, and conventions (captured in
 3. **Sub-agents** read only the forwarded refs (typically 3–5 per flow),
    then reconcile against the `techAdaptations` block. **Project
    conventions override the ref's templates.**
-4. **Phase 7 polish** writes any new project-specific learnings back into
+4. **Phase 6 polish** writes any new project-specific learnings back into
    `techAdaptations` so the next `/seeflow` run reuses them.
 
 Stable `techId` = the ref's filename stem (e.g. `google-pubsub`,

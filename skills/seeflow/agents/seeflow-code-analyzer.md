@@ -33,10 +33,6 @@ codebase, so your half of the brief must stand on its own.
    hints. **Treat it as authoritative for what it covers** — don't
    re-grep to "verify" known endpoints unless code obviously
    contradicts. May be `null` on first run.
-5. **`techSignalIndex`** *(optional)* — pre-resolved subset of
-   `references/tech/README.md` signal tables passed by the orchestrator.
-   Use it to cheap-detect `techStack`. If absent, read
-   `skills/seeflow/references/tech/README.md` directly.
 
 ## Allowed tools
 
@@ -73,8 +69,8 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
    / config file per entity. Each `why` is one line. Do not paste code
    into the brief.
 6. **Detect tech stack (cheap pass).** Walk the signal table in
-   `references/tech/README.md` (or `techSignalIndex` if passed). For
-   each signal that matches, push the `techId` into `techStack`.
+   `references/tech/README.md`. For each signal that matches, push
+   the `techId` into `techStack`.
    `Glob` for filenames, `Grep -l` for import strings. Do **not**
    `Read` whole files to confirm a tech — the matching signal is
    implicit. **Do not** also emit `techAdaptations`; that's the

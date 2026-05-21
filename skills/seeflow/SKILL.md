@@ -74,7 +74,7 @@ Full text in `references/core-rules.md`:
 
 ## Phase 0 — pre-flight (parallel)
 
-Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note.
+Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
 
 In a single message:
 
@@ -188,7 +188,7 @@ If the play-designer emitted `newTriggerNodes`, batch them via `nodes:add-bulk` 
 
 **Must run. Do not skip or simulate.**
 
-Run the `e2e` subcommand for the flow. Pass `--skip-nodes` when `unsafeNodeIds` from Phase 4 is non-empty (third-party or paid actions); skipped nodes appear in `skipped[]`, not as failures. Body / flag details: `$SEEFLOW help e2e`.
+Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of any Phase 4 overlays whose `validationSafe === false` (third-party or paid actions); skipped nodes appear in `skipped[]`, not as failures. Body / flag details: `$SEEFLOW help e2e`.
 
 **`ok: true`** → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done.
 

@@ -11,7 +11,7 @@ run should be able to skip a lot of grep work by reading it.
 
 ## Lifecycle
 
-- **Read** at the start of every `/seeflow` run (Phase 0.5 in `SKILL.md`).
+- **Read** at the start of every `/seeflow` run (Phase 0 in `SKILL.md`).
 - **Pass** the contents into both `seeflow-code-analyzer` and
   `seeflow-system-analyzer` launching prompts as `wikiContext` so they
   can avoid re-discovering known facts.
