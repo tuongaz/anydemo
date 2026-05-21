@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { writeFileAtomic } from './atomic-write.ts';
 import { seeflowHome } from './paths.ts';
 import { shortId } from './short-id.ts';
 
@@ -83,7 +84,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
 
   const persist = () => {
     mkdirSync(dirname(path), { recursive: true });
-    writeFileSync(path, JSON.stringify([...entries.values()], null, 2));
+    writeFileAtomic(path, JSON.stringify([...entries.values()], null, 2));
   };
 
   const findByRepoPath = (repoPath: string): FlowEntry | undefined => {

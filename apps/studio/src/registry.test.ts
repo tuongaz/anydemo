@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createRegistry, slugify } from './registry.ts';
@@ -247,5 +247,30 @@ describe('createRegistry', () => {
     );
     const reg = createRegistry({ path });
     expect(reg.list()[0]?.description).toBeUndefined();
+  });
+});
+
+describe('atomic registry writes', () => {
+  it('never leaves the registry file in a half-written state', async () => {
+    const path = tmpRegistryPath();
+    const registry = createRegistry({ path });
+
+    const writes = Array.from({ length: 50 }, (_, i) =>
+      Promise.resolve().then(() =>
+        registry.upsert({
+          name: `flow-${i}`,
+          repoPath: `/tmp/repo-${i}`,
+          flowPath: '.seeflow/flow.json',
+        }),
+      ),
+    );
+    const reads = Array.from({ length: 50 }, () =>
+      Promise.resolve().then(() => {
+        if (!existsSync(path)) return;
+        const content = readFileSync(path, 'utf8');
+        expect(() => JSON.parse(content)).not.toThrow();
+      }),
+    );
+    await Promise.all([...writes, ...reads]);
   });
 });
