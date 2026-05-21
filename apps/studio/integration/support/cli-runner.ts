@@ -22,7 +22,11 @@ export interface RunCliOptions {
 
 export async function runCli(args: string[], opts: RunCliOptions = {}): Promise<CliResult> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  const env: Record<string, string> = { ...process.env, ...(opts.env ?? {}) };
+  const env: Record<string, string> = {};
+  for (const [k, v] of Object.entries(process.env)) {
+    if (typeof v === 'string') env[k] = v;
+  }
+  for (const [k, v] of Object.entries(opts.env ?? {})) env[k] = v;
   const startedAt = performance.now();
 
   const proc = Bun.spawn({

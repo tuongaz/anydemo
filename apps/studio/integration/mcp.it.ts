@@ -98,7 +98,7 @@ describe('integration: MCP — tools/list', () => {
   it('every tool advertises an object-typed inputSchema', async () => {
     const result = await client.listTools();
     for (const tool of result.tools) {
-      expect(tool.description.length).toBeGreaterThan(0);
+      expect((tool.description ?? '').length).toBeGreaterThan(0);
       expect((tool.inputSchema as { type?: string }).type).toBe('object');
     }
   });
