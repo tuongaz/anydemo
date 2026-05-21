@@ -12,29 +12,11 @@ import {
   CreateProjectBodySchema,
   NodePatchBodySchema,
   NodesBulkBodySchema,
-  type OperationsDeps,
+  type Operations,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
-  addConnectorImpl,
-  addConnectorsBulkImpl,
-  addNodeImpl,
-  addNodesBulkImpl,
-  createProjectImpl,
-  deleteConnectorImpl,
-  deleteFlowImpl,
-  deleteNodeImpl,
-  getFlowGraphImpl,
-  getFlowImpl,
-  getNodeImpl,
-  listDemosImpl,
-  listFlowsSummaryImpl,
-  moveNodeImpl,
-  patchConnectorImpl,
-  patchNodeImpl,
-  registerFlowImpl,
-  reorderNodeImpl,
-  validateImpl,
+  createOperations,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
 import type { FlowWatcher } from './watcher.ts';
@@ -190,13 +172,13 @@ const DeleteConnectorInputSchema = z.object({
   connectorId: z.string().min(1),
 });
 
-const buildTools = (deps: OperationsDeps): McpTool[] => [
+const buildTools = (ops: Operations): McpTool[] => [
   {
     name: 'seeflow_list_flows',
     description: 'List every flow registered with the studio.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
-      const result = listDemosImpl(deps);
+      const result = ops.listFlows();
       return okResult(result.data);
     },
   },
@@ -208,7 +190,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       'seeflow_get_flow_graph or seeflow_get_node.',
     inputSchema: { type: 'object', properties: {}, additionalProperties: false },
     handler: async () => {
-      const result = listFlowsSummaryImpl(deps);
+      const result = ops.listFlowsSummary();
       return okResult(result.data);
     },
   },
@@ -232,7 +214,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!body || !('flow' in body)) {
         return errorResult('Body must include `flow`');
       }
-      const result = validateImpl({
+      const result = ops.validate({
         flow: body.flow,
         style: body.style as unknown,
       });
@@ -246,7 +228,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     handler: async (args) => {
       const v = requireFlowId(args);
       if ('error' in v) return errorResult(v.error);
-      const result = await getFlowImpl(deps, v.flowId);
+      const result = await ops.getFlow(v.flowId);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
@@ -267,7 +249,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     handler: async (args) => {
       const v = requireFlowId(args);
       if ('error' in v) return errorResult(v.error);
-      const result = await getFlowGraphImpl(deps, v.flowId);
+      const result = await ops.getFlowGraph(v.flowId);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
@@ -309,7 +291,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (typeof nodeId !== 'string' || nodeId.length === 0) {
         return errorResult('Invalid arguments: nodeId must be a non-empty string');
       }
-      const result = await getNodeImpl(deps, flowId, nodeId);
+      const result = await ops.getNode(flowId, nodeId);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
@@ -337,7 +319,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid register body: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const result = await registerFlowImpl(deps, parsed.data);
+      const result = await ops.registerFlow(parsed.data);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
@@ -361,7 +343,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     handler: async (args) => {
       const v = requireFlowId(args);
       if ('error' in v) return errorResult(v.error);
-      const result = deleteFlowImpl(deps, v.flowId);
+      const result = ops.deleteFlow(v.flowId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -379,7 +361,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid create project body: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const result = await createProjectImpl(deps, parsed.data);
+      const result = await ops.createProject(parsed.data);
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
@@ -407,7 +389,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         return errorResult(`Invalid add_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
       const { flowId, node } = parsed.data;
-      const result = await addNodeImpl(deps, flowId, node);
+      const result = await ops.addNode(flowId, node);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id, node: result.data.node });
@@ -435,7 +417,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         return errorResult(`Invalid add_nodes arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
       const { flowId, nodes } = parsed.data;
-      const result = await addNodesBulkImpl(deps, flowId, { nodes });
+      const result = await ops.addNodesBulk(flowId, { nodes });
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, nodes: result.data.nodes });
@@ -466,7 +448,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         return errorResult(`Invalid delete_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
       const { flowId, nodeId } = parsed.data;
-      const result = await deleteNodeImpl(deps, flowId, nodeId);
+      const result = await ops.deleteNode(flowId, nodeId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -495,7 +477,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         return errorResult(`Invalid move_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
       const { flowId, nodeId, x, y } = parsed.data;
-      const result = await moveNodeImpl(deps, flowId, nodeId, { x, y });
+      const result = await ops.moveNode(flowId, nodeId, { x, y });
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, position: result.data.position });
@@ -525,7 +507,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         return errorResult(`Invalid patch_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
       const { flowId, nodeId, ...updates } = parsed.data;
-      const result = await patchNodeImpl(deps, flowId, nodeId, updates);
+      const result = await ops.patchNode(flowId, nodeId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -561,7 +543,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
       // reorderNodeImpl receives the same discriminated union the REST route
       // does — keeps a single source of truth for op semantics.
       const reorderBody = ReorderBodySchema.parse(body);
-      const result = await reorderNodeImpl(deps, flowId, nodeId, reorderBody);
+      const result = await ops.reorderNode(flowId, nodeId, reorderBody);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -593,7 +575,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         );
       }
       const { flowId, connector } = parsed.data;
-      const result = await addConnectorImpl(deps, flowId, connector);
+      const result = await ops.addConnector(flowId, connector);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id });
@@ -623,7 +605,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         );
       }
       const { flowId, connectors } = parsed.data;
-      const result = await addConnectorsBulkImpl(deps, flowId, { connectors });
+      const result = await ops.addConnectorsBulk(flowId, { connectors });
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, connectors: result.data.connectors });
@@ -657,7 +639,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         );
       }
       const { flowId, connectorId, ...updates } = parsed.data;
-      const result = await patchConnectorImpl(deps, flowId, connectorId, updates);
+      const result = await ops.patchConnector(flowId, connectorId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -688,7 +670,7 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
         );
       }
       const { flowId, connectorId } = parsed.data;
-      const result = await deleteConnectorImpl(deps, flowId, connectorId);
+      const result = await ops.deleteConnector(flowId, connectorId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -716,11 +698,12 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
  * mcp-shim.ts) — every request builds its own server in stateless mode.
  */
 export function createMcpServer(options: CreateMcpServerOptions): Server {
-  const tools = buildTools({
+  const ops = createOperations({
     registry: options.registry,
     watcher: options.watcher,
     projectBaseDir: options.projectBaseDir,
   });
+  const tools = buildTools(ops);
 
   const server = new Server({ name: 'seeflow', version: '0.1.0' }, { capabilities: { tools: {} } });
 
