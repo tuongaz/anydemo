@@ -1,0 +1,65 @@
+name: Integration Tests
+
+# Reusable workflow gated by `workflow_call:` (no top-level triggers).
+# Called from publish.yml (US-015) and docker.yml (US-016) so every deploy
+# path runs the unit + integration tiers before shipping.
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: Unit + integration (bun + playwright)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Cache Playwright browsers
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: |
+            playwright-${{ runner.os }}-
+
+      - name: Install Playwright browsers
+        run: bunx playwright install --with-deps chromium
+
+      - name: Build web bundle
+        run: bun run --filter @seeflow/web build
+
+      # Run unit tests first so a fast suite failure short-circuits the slower
+      # integration tier. `bun run test:it` only runs the integration files
+      # under apps/studio/integration/ + the playwright e2e tier — it does not
+      # repeat `bun test`, so we add it explicitly here per US-015.
+      - name: Unit tests
+        env:
+          CI: 'true'
+        run: bun test
+
+      - name: Integration tests (bun + playwright)
+        env:
+          CI: 'true'
+        run: bun run test:it
+
+      - name: Upload integration artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: integration-artifacts
+          path: apps/studio/integration/.artifacts/
+          retention-days: 7
+          if-no-files-found: ignore
