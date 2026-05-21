@@ -1493,6 +1493,48 @@ describe('GET /api/events', () => {
   });
 });
 
+describe('GET /api/registry/events', () => {
+  it('opens an SSE stream and delivers the initial hello frame', async () => {
+    const registry = createRegistry({ path: tmpRegistry() });
+    const events = createEventBus();
+    const app = createApp({
+      mode: 'prod',
+      staticRoot: './dist/web',
+      registry,
+      events,
+      disableWatcher: true,
+    });
+
+    const res = await app.request('/api/registry/events');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/event-stream');
+
+    const reader = res.body?.getReader();
+    if (!reader) throw new Error('SSE body missing');
+    const { value } = await reader.read();
+    const text = new TextDecoder().decode(value);
+    expect(text).toContain('event: hello');
+    expect(text).toContain('"channel":"registry"');
+
+    await reader.cancel();
+  });
+
+  it('routes broadcasts on the __registry__ channel through to subscribers', () => {
+    const events = createEventBus();
+    let seen = 0;
+    const unsub = events.subscribe('__registry__', (e) => {
+      if (e.type === 'registry:reload') seen += 1;
+    });
+    events.broadcast({
+      type: 'registry:reload',
+      flowId: '__registry__',
+      payload: {},
+    });
+    expect(seen).toBe(1);
+    unsub();
+  });
+});
+
 describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
   const patch = (app: ReturnType<typeof buildApp>['app'], path: string, body: unknown) =>
     app.request(path, {

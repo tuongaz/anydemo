@@ -8,6 +8,10 @@ import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
 import { createMcpServer } from './mcp.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
+import {
+  type RegistryWatcher,
+  createRegistryWatcher,
+} from './registry-watcher.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
@@ -33,6 +37,8 @@ export interface CreateAppOptions {
   events?: EventBus;
   /** Inject a watcher; defaults to one wired to the registry + event bus. */
   watcher?: FlowWatcher;
+  /** Inject a registry-watcher; defaults to one wired to the registry + event bus. */
+  registryWatcher?: RegistryWatcher;
   /** Skip starting fs.watch on registered demos. Useful for tests. */
   watchAllOnBoot?: boolean;
   /** Disable file watching entirely (no fs handles leaked). Useful for tests. */
@@ -74,12 +80,18 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const watcher = options.disableWatcher
     ? undefined
     : (options.watcher ?? createWatcher({ registry, events }));
+  const registryWatcher = options.disableWatcher
+    ? undefined
+    : (options.registryWatcher ?? createRegistryWatcher({ registry, events }));
   const statusRunner =
     options.statusRunner ??
     createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
     watcher.watchAll();
+  }
+  if (registryWatcher && (options.watchAllOnBoot ?? true)) {
+    registryWatcher.start();
   }
 
   const app = new Hono();

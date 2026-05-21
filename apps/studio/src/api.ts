@@ -1394,5 +1394,60 @@ export function createApi(options: ApiOptions): Hono {
     });
   });
 
+  // Global registry channel — broadcasts `registry:reload` when an external
+  // process (e.g. the CLI) writes to ~/.seeflow/registry.json. Subscribers
+  // re-fetch the flow list. The channel id is the internal sentinel from
+  // registry-watcher.ts (kept inline to avoid leaking the constant into
+  // every SSE consumer).
+  api.get('/registry/events', (c) => {
+    if (!events) return c.json({ error: 'events not enabled' }, 500);
+
+    return streamSSE(c, async (stream) => {
+      let active = true;
+      const queue: Array<{ event: string; data: string }> = [];
+      let resume: (() => void) | null = null;
+
+      const wake = () => {
+        if (resume) {
+          const r = resume;
+          resume = null;
+          r();
+        }
+      };
+
+      const unsubscribe = events.subscribe('__registry__', (e) => {
+        queue.push({ event: e.type, data: JSON.stringify({ ts: e.ts }) });
+        wake();
+      });
+
+      stream.onAbort(() => {
+        active = false;
+        unsubscribe();
+        wake();
+      });
+
+      await stream.writeSSE({
+        event: 'hello',
+        data: JSON.stringify({ channel: 'registry', ts: Date.now() }),
+      });
+
+      try {
+        while (active) {
+          while (queue.length > 0) {
+            const next = queue.shift();
+            if (!next) break;
+            await stream.writeSSE(next);
+          }
+          if (!active) break;
+          await new Promise<void>((r) => {
+            resume = r;
+          });
+        }
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
   return api;
 }
