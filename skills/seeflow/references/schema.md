@@ -188,7 +188,7 @@ Single Lucide glyph. Decorative only.
 Escape-hatch for content no curated node covers: legends, data tables, rich annotations, custom UI widgets. The studio externalizes the content to `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in `flow.json`; the renderer injects Tailwind Play CDN (utility classes work) and **sanitises before painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:` URLs).
 
 **Fields:**
-- `html` (optional) — inline HTML content. Pass the markup as a string when calling `seeflow_add_node` / `seeflow_patch_node`; the studio writes it to `nodes/<id>/view.html` and persists `data.html = "file://nodes/<id>/view.html"`. On read the value is inlined back to the actual HTML string. Omitting `html` writes an empty file.
+- `html` (optional) — inline HTML content. Pass the markup as a string when calling `nodes:add` / `nodes:patch`; the studio writes it to `nodes/<id>/view.html` and persists `data.html = "file://nodes/<id>/view.html"`. On read the value is inlined back to the actual HTML string. Omitting `html` writes an empty file.
 
 **Optional styling fields (same as shapeNode):**
 `width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`, `icon`

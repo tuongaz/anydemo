@@ -11,9 +11,9 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 
 ## When NOT to invoke
 
-- Editing nodes on an existing flow → use the canvas, or hit the CLI directly (`seeflow nodes:patch …`).
-- Deleting a flow → `seeflow flows:delete <flowId>`.
-- Re-laying out an existing flow without semantic changes → `seeflow flows:layout <flowId>`.
+- Editing nodes on an existing flow → use the canvas, or hit the CLI directly (`nodes:patch`).
+- Deleting a flow → `flows:delete`.
+- Re-laying out an existing flow without semantic changes → `flows:layout`.
 - Empty project (nothing to analyze) → ask the user first.
 - Debugging a single broken Play/Status script → edit in-place, re-run Phase 6.
 
@@ -31,7 +31,7 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 | `$repoPath` | `$PWD`. |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
-**Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. CLI output is `{"ok":true,…}` on stdout, plain text on stderr, exit `0`/`1`. Full subcommand reference: `references/cli.md`.
+**Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. **Don't memorise CLI syntax** — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
 ## Pipeline
 
@@ -82,14 +82,7 @@ In a single message:
 2. Read `<project>/.seeflow/WIKI.md` if present → `wikiContext` (else `null`). Format: `references/wiki-format.md`.
 
 - **200** → Phase 1.
-- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then:
-
-  ```bash
-  # Uses installed `seeflow` if present, else npx fallback (see Conventions).
-  seeflow start
-  ```
-
-  Re-probe `/health` once. If still unreachable, surface and stop.
+- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, surface and stop.
 
 ## Phase 1 — discover (parallel)
 
@@ -140,28 +133,14 @@ Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,targe
 
 ## Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via four CLI calls. No `flow.json` authoring.
+The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
 
-```bash
-# 1. Create the project. Returns {id, slug}.
-PROJECT_JSON=$(seeflow projects:create --name "<flowName>")
-id=$(echo "$PROJECT_JSON" | jq -r '.id')
-slug=$(echo "$PROJECT_JSON" | jq -r '.slug')
+1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result.
+2. `nodes:add-bulk` — bulk-seed nodes. Strip `rationales` from the planner output first; forward only the `nodes` array (re-wrapped per the body schema).
+3. `connectors:add-bulk` — bulk-seed connectors.
+4. `flows:layout` — run ELK and write `style.json`.
 
-# 2. Bulk-add nodes. Strip `rationales` from the planner output first; pass
-#    only `nodes` (re-wrapped as the bulk body shape).
-echo "$NODES_PAYLOAD" > /tmp/sf-nodes-$id.json     # body: {"nodes":[…]}
-seeflow nodes:add-bulk "$id" --file /tmp/sf-nodes-$id.json
-
-# 3. Bulk-add connectors.
-echo "$CONNECTORS_PAYLOAD" > /tmp/sf-conns-$id.json  # body: {"connectors":[…]}
-seeflow connectors:add-bulk "$id" --file /tmp/sf-conns-$id.json
-
-# 4. Layout (ELK).
-seeflow flows:layout "$id"
-```
-
-Each CLI call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
+Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
 Open the canvas and ask, surfacing the planner's `rationales` per node:
 
@@ -199,23 +178,9 @@ For each overlay returned by Phase 4 (parallelise the writes when the script bod
 
 1. Write `scriptFile.body` to `scriptFile.path` (Write tool).
 2. `chmod` per `scriptFile.chmod` (default 755).
-3. `seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`.
+3. Call `nodes:patch` with the overlay's `patch` body. (Body shape: `$SEEFLOW help nodes:patch`.)
 
-If the play-designer emitted `newTriggerNodes`, batch them:
-
-```bash
-echo "$TRIGGER_NODES_JSON" > /tmp/sf-triggers-$id.json
-seeflow nodes:add-bulk "$id" --file /tmp/sf-triggers-$id.json
-
-echo "$TRIGGER_CONNS_JSON" > /tmp/sf-trigger-conns-$id.json
-seeflow connectors:add-bulk "$id" --file /tmp/sf-trigger-conns-$id.json
-```
-
-Then re-layout:
-
-```bash
-seeflow flows:layout "$id"
-```
+If the play-designer emitted `newTriggerNodes`, batch them via `nodes:add-bulk` + `connectors:add-bulk`, then re-run `flows:layout`. (Body shapes: `$SEEFLOW help <command>`.)
 
 **Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule).
 
@@ -223,13 +188,7 @@ seeflow flows:layout "$id"
 
 **Must run. Do not skip or simulate.**
 
-```bash
-seeflow e2e "$id" [--skip-nodes <id1>,<id2>]
-```
-
-Pass `--skip-nodes` when `unsafeNodeIds` from Phase 4 is non-empty (third-party or paid actions). Skipped nodes appear in `skipped[]`, not as failures.
-
-The CLI GETs `/api/flows/<id>`, opens SSE at `/api/events?flowId=<id>`, POSTs each safe play, then drains `node:done|error|status` events (SSE outcome wins). Hard ceiling ~2 min. Output: `{ok, plays, statuses, skipped}`.
+Run the `e2e` subcommand for the flow. Pass `--skip-nodes` when `unsafeNodeIds` from Phase 4 is non-empty (third-party or paid actions); skipped nodes appear in `skipped[]`, not as failures. Body / flag details: `$SEEFLOW help e2e`.
 
 **`ok: true`** → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done.
 
@@ -238,7 +197,7 @@ The CLI GETs `/api/flows/<id>`, opens SSE at `/api/events?flowId=<id>`, POSTs ea
 1. Identify failing nodes from `plays[*].error` / `statuses[*].outcome`.
 2. **Parallel fix-up (Phase 1 rule):** one sub-agent per failing script, single message. A single agent fixing N scripts cross-contaminates.
 3. Each agent gets the script path (under `.seeflow/nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
-4. Edit in-place, re-run `seeflow e2e`. **Max 2 retries**, then ask retry / stop.
+4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then ask retry / stop.
 
 ### Polish WIKI.md with anything learned
 
@@ -250,7 +209,7 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 
 | Topic | File |
 |---|---|
-| CLI subcommand reference | `references/cli.md` |
+| CLI resolver + discovery via `$SEEFLOW help` | `references/cli.md` |
 | Error handling, retry caps, sub-agent table | `references/operations.md` |
 | Schema, per-node file convention, action shapes | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
