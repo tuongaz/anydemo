@@ -1,8 +1,5 @@
 node_modules/
 dist/
-!apps/studio/dist/
-apps/studio/dist/*
-!apps/studio/dist/web
 !packages/canvas/dist/
 packages/canvas/dist/*
 !packages/canvas/dist/index.js
