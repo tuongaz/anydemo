@@ -48,9 +48,35 @@ const SCRIPT_PATH_ESCAPE = 'scriptPath escapes project root';
 
 type Resolved = { ok: true; absPath: string } | { ok: false };
 
-// Resolve `<cwd>/.seeflow/<scriptPath>` and verify via realpath it stays inside
-// the `.seeflow` root. Mirrors `resolveProjectFile` in api.ts.
-function resolveScript(cwd: string, scriptPath: string): Resolved {
+// Resolve `<cwd>/.seeflow/nodes/<nodeId>/<scriptPath>` and verify via realpath
+// it stays inside the node folder. The per-node anchor means scriptPath is
+// "scripts/play.ts" — no node id leaks into its own path.
+function resolveScript(cwd: string, nodeId: string, scriptPath: string): Resolved {
+  const nodeRoot = join(cwd, '.seeflow', 'nodes', nodeId);
+  let realRoot: string;
+  try {
+    realRoot = realpathSync(nodeRoot);
+  } catch {
+    return { ok: false };
+  }
+  const target = resolve(nodeRoot, scriptPath);
+  let realTarget: string;
+  try {
+    realTarget = realpathSync(target);
+  } catch {
+    return { ok: false };
+  }
+  const rootWithSep = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
+  if (realTarget !== realRoot && !realTarget.startsWith(rootWithSep)) {
+    return { ok: false };
+  }
+  return { ok: true, absPath: realTarget };
+}
+
+// Legacy anchor for resetAction (kept until resetAction gets its own design
+// round). Same realpath escape check as resolveScript, but rooted at
+// <cwd>/.seeflow/ rather than a per-node folder.
+function resolveResetScript(cwd: string, scriptPath: string): Resolved {
   const seeflowRoot = join(cwd, '.seeflow');
   let realRoot: string;
   try {
@@ -157,7 +183,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
   const spawner = options.spawner ?? defaultProcessSpawner;
   const runId = shortId();
 
-  const resolved = resolveScript(cwd, action.scriptPath);
+  const resolved = resolveScript(cwd, nodeId, action.scriptPath);
   if (!resolved.ok) {
     events.broadcast({
       type: 'node:error',
@@ -304,7 +330,9 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
   const { events, flowId, cwd, action } = options;
   const spawner = options.spawner ?? defaultProcessSpawner;
 
-  const resolved = resolveScript(cwd, action.scriptPath);
+  // resetAction stays anchored at .seeflow/ for now — design defers per-node
+  // resetAction to a later round (decision #7). Mirrors the previous behaviour.
+  const resolved = resolveResetScript(cwd, action.scriptPath);
   if (!resolved.ok) {
     events.broadcast({
       type: 'demo:reset',

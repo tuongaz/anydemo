@@ -16,8 +16,8 @@
  * report. A solicited kill (restart / stop / maxLifetimeMs) is silent on exit.
  *
  * Defense-in-depth on scriptPath mirrors proxy.ts:`resolveScript` — realpath
- * the resolved file against `<repoPath>/.seeflow/` so a symlink-escape can't
- * spawn arbitrary scripts outside the project.
+ * the resolved file against `<repoPath>/.seeflow/nodes/<nodeId>/` so a
+ * symlink-escape can't spawn arbitrary scripts outside the node folder.
  */
 
 import { existsSync, realpathSync } from 'node:fs';
@@ -62,15 +62,15 @@ interface TrackedHandle {
 
 type ResolvedScript = { ok: true; absPath: string } | { ok: false };
 
-function resolveScript(repoPath: string, scriptPath: string): ResolvedScript {
-  const seeflowRoot = join(repoPath, '.seeflow');
+function resolveScript(repoPath: string, nodeId: string, scriptPath: string): ResolvedScript {
+  const nodeRoot = join(repoPath, '.seeflow', 'nodes', nodeId);
   let realRoot: string;
   try {
-    realRoot = realpathSync(seeflowRoot);
+    realRoot = realpathSync(nodeRoot);
   } catch {
     return { ok: false };
   }
-  const target = resolve(seeflowRoot, scriptPath);
+  const target = resolve(nodeRoot, scriptPath);
   let realTarget: string;
   try {
     realTarget = realpathSync(target);
@@ -179,7 +179,7 @@ export function createStatusRunner(options: CreateStatusRunnerOptions): StatusRu
   ): TrackedHandle | undefined {
     const { nodeId, action } = sn;
 
-    const resolved = resolveScript(repoPath, action.scriptPath);
+    const resolved = resolveScript(repoPath, nodeId, action.scriptPath);
     if (!resolved.ok) {
       events.broadcast({
         type: 'node:status',
