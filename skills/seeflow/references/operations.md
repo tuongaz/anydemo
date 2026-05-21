@@ -4,7 +4,7 @@
 
 | Failure | Response |
 |---|---|
-| Studio `/health` fails | Ask the user to run `npx -y @tuongaz/seeflow@latest start` in another terminal, then re-probe once. No silent retry, no self-start. |
+| Studio `/health` fails | Ask the user to run `seeflow start` (resolved per the Conventions table in `SKILL.md` — installed binary if present, else `npx -y @tuongaz/seeflow@latest start`) in another terminal, then re-probe once. No silent retry, no self-start. |
 | Sub-agent unparseable output | Retry that single agent once with parse error; if still failing, surface and stop. Do **not** restart its parallel sibling. |
 | CLI exits with `badSchema` (any phase) | Feed `issues[]` back to the agent that produced the payload (planner in P3, designer in P5). Max 3 retries per node. |
 | CLI exits with `idAlreadyExists` / `duplicateIdInBatch` | Dedupe / rename / delete the existing item; do not retry blind. |

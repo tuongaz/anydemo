@@ -4,7 +4,9 @@ Every flow-management op is a `seeflow <sub>` invocation. The CLI ships with
 `@tuongaz/seeflow` — version sync is automatic. Bodies arrive via exactly one
 of `--file <path>`, `--stdin`, or `--json '<inline>'`. Output is
 `{"ok":true,…}` to stdout on success, plain text to stderr on failure, exit
-`0`/`1`. Invoke as `npx -y @tuongaz/seeflow@latest <sub> …`.
+`0`/`1`. Invoke as the locally installed `seeflow <sub> …` when
+`command -v seeflow` resolves; otherwise `npx -y @tuongaz/seeflow@latest <sub> …`
+(see the Conventions table in `SKILL.md`).
 
 ## Discovery
 

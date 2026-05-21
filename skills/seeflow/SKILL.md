@@ -29,7 +29,7 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 |---|---|
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
 | `$repoPath` | `$PWD`. |
-| `seeflow` | `npx -y @tuongaz/seeflow@latest`. Every CLI invocation below is shorthand for that. |
+| `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
 **Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. CLI output is `{"ok":true,…}` on stdout, plain text on stderr, exit `0`/`1`. Full subcommand reference: `references/cli.md`.
 
@@ -82,10 +82,11 @@ In a single message:
 2. Read `<project>/.seeflow/WIKI.md` if present → `wikiContext` (else `null`). Format: `references/wiki-format.md`.
 
 - **200** → Phase 1.
-- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two while npx downloads, then:
+- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then:
 
   ```bash
-  npx -y @tuongaz/seeflow@latest start
+  # Uses installed `seeflow` if present, else npx fallback (see Conventions).
+  seeflow start
   ```
 
   Re-probe `/health` once. If still unreachable, surface and stop.
