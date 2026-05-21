@@ -17,6 +17,7 @@ import {
   addConnectorsBulkImpl,
   addNodeImpl,
   addNodesBulkImpl,
+  createOperations,
   deleteNodeImpl,
   getFlowGraphImpl,
   getFlowImpl,
@@ -861,5 +862,47 @@ describe('getNodeImpl', () => {
     expect(result.kind).toBe('ok');
     if (result.kind !== 'ok') return;
     expect((result.data.node.data as { html?: string }).html).toBe('<p>resolved html</p>');
+  });
+});
+
+describe('createOperations factory', () => {
+  it('exposes every *Impl as a method that delegates to the underlying function', async () => {
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-'));
+    const path = join(registryDir, 'registry.json');
+    writeFileSync(path, '[]');
+    const registry = createRegistry({ path });
+    const ops = createOperations({ registry });
+
+    const result = ops.listFlows();
+    expect(result.data).toEqual([]);
+  });
+
+  it('does not silently expose play-style ops on the handle', () => {
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-no-play-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const ops = createOperations({ registry });
+    expect('play' in ops).toBe(false);
+  });
+
+  it('drives full register → list round-trip through the handle', async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-repo-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.seeflow', 'flow.json'),
+      JSON.stringify({ ...STARTER_FLOW, name: 'Factory Round-Trip' }),
+    );
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-reg-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const ops = createOperations({ registry });
+
+    const reg = await ops.registerFlow({
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    expect(reg.kind).toBe('ok');
+
+    const flows = ops.listFlows();
+    expect(flows.data.length).toBe(1);
+    expect(flows.data[0]?.name).toBe('Factory Round-Trip');
   });
 });

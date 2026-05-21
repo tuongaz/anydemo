@@ -1681,3 +1681,97 @@ export function validateImpl(body: ValidateBody): ValidateOutcome {
 
   return issues.length === 0 ? { ok: true } : { ok: false, issues };
 }
+
+// ---------------------------------------------------------------------------
+// createOperations — thin handle that exposes every *Impl as a bound method.
+// Consumers (api.ts, mcp.ts, cli.ts) construct one of these at startup so they
+// don't re-thread `deps` through every call site. No behaviour change — every
+// method delegates to the existing *Impl function.
+// ---------------------------------------------------------------------------
+
+export interface Operations {
+  listFlows(): ReturnType<typeof listDemosImpl>;
+  listFlowsSummary(): ReturnType<typeof listFlowsSummaryImpl>;
+  getFlow(id: string): ReturnType<typeof getFlowImpl>;
+  getFlowGraph(id: string): ReturnType<typeof getFlowGraphImpl>;
+  getNode(flowId: string, nodeId: string): ReturnType<typeof getNodeImpl>;
+  addNode(
+    flowId: string,
+    body: Record<string, unknown>,
+  ): ReturnType<typeof addNodeImpl>;
+  addNodesBulk(
+    flowId: string,
+    body: Parameters<typeof addNodesBulkImpl>[2],
+  ): ReturnType<typeof addNodesBulkImpl>;
+  patchNode(
+    flowId: string,
+    nodeId: string,
+    body: Parameters<typeof patchNodeImpl>[3],
+  ): ReturnType<typeof patchNodeImpl>;
+  moveNode(
+    flowId: string,
+    nodeId: string,
+    body: Parameters<typeof moveNodeImpl>[3],
+  ): ReturnType<typeof moveNodeImpl>;
+  reorderNode(
+    flowId: string,
+    nodeId: string,
+    body: Parameters<typeof reorderNodeImpl>[3],
+  ): ReturnType<typeof reorderNodeImpl>;
+  deleteNode(flowId: string, nodeId: string): ReturnType<typeof deleteNodeImpl>;
+  addConnector(
+    flowId: string,
+    body: Record<string, unknown>,
+  ): ReturnType<typeof addConnectorImpl>;
+  addConnectorsBulk(
+    flowId: string,
+    body: Parameters<typeof addConnectorsBulkImpl>[2],
+  ): ReturnType<typeof addConnectorsBulkImpl>;
+  patchConnector(
+    flowId: string,
+    connectorId: string,
+    body: Parameters<typeof patchConnectorImpl>[3],
+  ): ReturnType<typeof patchConnectorImpl>;
+  deleteConnector(
+    flowId: string,
+    connectorId: string,
+  ): ReturnType<typeof deleteConnectorImpl>;
+  registerFlow(
+    body: Parameters<typeof registerFlowImpl>[1],
+  ): ReturnType<typeof registerFlowImpl>;
+  createProject(
+    body: Parameters<typeof createProjectImpl>[1],
+  ): ReturnType<typeof createProjectImpl>;
+  deleteFlow(id: string): ReturnType<typeof deleteFlowImpl>;
+  validate(body: ValidateBody): ReturnType<typeof validateImpl>;
+}
+
+export function createOperations(deps: OperationsDeps): Operations {
+  return {
+    listFlows: () => listDemosImpl(deps),
+    listFlowsSummary: () => listFlowsSummaryImpl(deps),
+    getFlow: (id) => getFlowImpl(deps, id),
+    getFlowGraph: (id) => getFlowGraphImpl(deps, id),
+    getNode: (flowId, nodeId) => getNodeImpl(deps, flowId, nodeId),
+    addNode: (flowId, body) => addNodeImpl(deps, flowId, body),
+    addNodesBulk: (flowId, body) => addNodesBulkImpl(deps, flowId, body),
+    patchNode: (flowId, nodeId, body) =>
+      patchNodeImpl(deps, flowId, nodeId, body),
+    moveNode: (flowId, nodeId, body) =>
+      moveNodeImpl(deps, flowId, nodeId, body),
+    reorderNode: (flowId, nodeId, body) =>
+      reorderNodeImpl(deps, flowId, nodeId, body),
+    deleteNode: (flowId, nodeId) => deleteNodeImpl(deps, flowId, nodeId),
+    addConnector: (flowId, body) => addConnectorImpl(deps, flowId, body),
+    addConnectorsBulk: (flowId, body) =>
+      addConnectorsBulkImpl(deps, flowId, body),
+    patchConnector: (flowId, connectorId, body) =>
+      patchConnectorImpl(deps, flowId, connectorId, body),
+    deleteConnector: (flowId, connectorId) =>
+      deleteConnectorImpl(deps, flowId, connectorId),
+    registerFlow: (body) => registerFlowImpl(deps, body),
+    createProject: (body) => createProjectImpl(deps, body),
+    deleteFlow: (id) => deleteFlowImpl(deps, id),
+    validate: (body) => validateImpl(body),
+  };
+}
