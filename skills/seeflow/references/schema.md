@@ -2,8 +2,8 @@
 
 The on-disk format is split into two files:
 
-- **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema; every write is validated server-side by the studio's post-merge `ResolvedFlowSchema` reparse.
-- **`style.json`** — keyed map of presentation overrides (positions, colors, sizes). **Studio-owned end-to-end.** The skill never authors it directly — `seeflow flows:layout <flowId>` runs ELK and writes positions; the canvas writes user-drag overrides.
+- **`flow.json`** — pure semantic data. Ids, types, names, kinds, icons, descriptions, details, state sources, actions, connector kinds + sources/targets/labels. The strict schema rejects every presentation field; every write is validated server-side by the studio's post-merge `ResolvedFlowSchema` reparse.
+- **`style.json`** — every presentation field: positions, handles, border / background / text colors, sizes, corner radii, font sizes, connector style/direction/path/color. **Studio-owned end-to-end.** The skill never authors it directly — `seeflow flows:layout <flowId>` runs ELK and writes positions/handles, and the canvas writes user-drag and per-node visual overrides. The renderer applies sensible defaults (1 px solid border in the default theme color) when a style entry is absent, so the skill leaves visuals out and the canvas paints correctly.
 
 The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together.
 
@@ -74,18 +74,6 @@ Hand-authored `file://<relative-path>` strings still work for forward-compat; pa
 ```
 
 Written by `seeflow flows:layout <flowId>` (ELK) and by user drags in the canvas. Positions + handles are derived geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges. The skill never writes this file.
-
-## Default node style
-
-Every `playNode`, `stateNode`, and `shapeNode` created by the skill carries:
-
-```json
-"borderSize": 1,
-"borderStyle": "solid",
-"borderColor": "default"
-```
-
-`iconNode` is unboxed (no border). User edits in the canvas override these.
 
 ## Node types
 
@@ -182,8 +170,8 @@ Decorative / illustrative. No actions or live state.
 Single Lucide glyph. Decorative only.
 
 ```json
-{ "id": "user-icon", "type": "iconNode", "position": { "x": 0, "y": 200 },
-  "data": { "icon": "User", "name": "Customer", "width": 64, "height": 64 } }
+{ "id": "user-icon", "type": "iconNode",
+  "data": { "icon": "User", "name": "Customer" } }
 ```
 
 ### `htmlNode`
@@ -193,18 +181,14 @@ Escape-hatch for content no curated node covers: legends, data tables, rich anno
 **Fields:**
 - `html` (optional) — inline HTML content. Pass the markup as a string when calling `nodes:add` / `nodes:patch`; the studio writes it to `nodes/<id>/view.html` and persists `data.html = "file://nodes/<id>/view.html"`. On read the value is inlined back to the actual HTML string. Omitting `html` writes an empty file.
 
-**Optional styling fields (same as shapeNode):**
-`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`, `name` (caption below node), `description`, `detail`, `icon`
+**Optional semantic fields** (the only htmlNode `data` keys the skill emits): `name` (caption below node), `description`, `detail`, `icon`.
 
-**Default size:** 320 × 200 px.
+**Presentation** (`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`) lives in `style.json` and is studio-owned — the renderer applies defaults (320 × 200 px) when style.json has no entry, the canvas writes resize / theming edits.
 
 ```json
-{ "id": "legend", "type": "htmlNode", "position": { "x": 50, "y": 600 },
+{ "id": "legend", "type": "htmlNode",
   "data": {
     "html": "<div class=\"p-4\">…legend markup…</div>",
-    "width": 400, "height": 120,
-    "backgroundColor": "slate",
-    "cornerRadius": 8,
     "name": "Legend"
   }
 }
@@ -219,7 +203,7 @@ Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Inlin
 Decorative image. Uploads land in the node's own folder: `<project>/.seeflow/nodes/<id>/<filename>`, and `data.path` must start with that folder. The studio's per-node upload endpoint enforces this; `delete_node` cascades the folder cleanup.
 
 ```json
-{ "id": "node-Logo01abcd", "type": "imageNode", "position": { "x": 0, "y": 0 },
+{ "id": "node-Logo01abcd", "type": "imageNode",
   "data": { "path": "nodes/node-Logo01abcd/logo.png", "alt": "Stripe logo" } }
 ```
 
