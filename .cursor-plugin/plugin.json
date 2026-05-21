@@ -2,7 +2,7 @@
   "name": "seeflow",
   "displayName": "SeeFlow",
   "version": "0.1.0",
-  "description": "Turn natural-language prompts into registered, validated SeeFlow flows. Ships one description-triggered skill (seeflow) that orchestrates four sub-agents and a small set of bun scripts.",
+  "description": "Turn natural-language prompts into registered, validated SeeFlow flows (`seeflow`), and consult registered flows as architectural ground truth (`seeflow-wiki`). Ships two description-triggered skills.",
   "author": {
     "name": "SeeFlow"
   },
