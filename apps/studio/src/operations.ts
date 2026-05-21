@@ -300,6 +300,21 @@ export type AddNodeOutcome =
   | { kind: 'badSchema'; issues: ZodIssue[] }
   | { kind: 'writeFailed'; message: string };
 
+// Bulk add: ok payload carries every created node so the caller can read
+// server-assigned ids back. duplicateIdInBatch fires when two items in the
+// same request share an id; idAlreadyExists fires when a request id collides
+// with a node already on disk. Both are pre-write rejections, no rollback
+// needed. writeFailed/badSchema cover the post-mutation failure modes.
+export type AddNodesBulkOutcome =
+  | { kind: 'ok'; data: { nodes: Array<{ id: string; node: Record<string, unknown> }> } }
+  | { kind: 'flowNotFound' }
+  | { kind: 'fileNotFound'; path: string }
+  | { kind: 'badJson'; message: string }
+  | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'duplicateIdInBatch'; id: string }
+  | { kind: 'idAlreadyExists'; id: string }
+  | { kind: 'writeFailed'; message: string };
+
 export type DeleteNodeOutcome =
   | { kind: 'ok' }
   | { kind: 'flowNotFound' }
@@ -415,12 +430,37 @@ export const mergeConnectorUpdates = (
   }
 };
 
+// Bulk-add envelopes. Body shape gated here; per-item shape is implicit and
+// enforced by ResolvedFlowSchema after the whole batch is merged in — same
+// pattern the singular add endpoints already rely on. The 100-item cap keeps
+// one SSE broadcast payload reasonable; the LLM caller is meant to chunk if
+// it ever needs more.
+const BULK_MAX_ITEMS = 100;
+export const NodesBulkBodySchema = z.object({
+  nodes: z.array(z.record(z.unknown())).min(1).max(BULK_MAX_ITEMS),
+});
+export type NodesBulkBody = z.infer<typeof NodesBulkBodySchema>;
+export const ConnectorsBulkBodySchema = z.object({
+  connectors: z.array(z.record(z.unknown())).min(1).max(BULK_MAX_ITEMS),
+});
+export type ConnectorsBulkBody = z.infer<typeof ConnectorsBulkBodySchema>;
+
 export type AddConnectorOutcome =
   | { kind: 'ok'; data: { id: string } }
   | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'writeFailed'; message: string };
+
+export type AddConnectorsBulkOutcome =
+  | { kind: 'ok'; data: { connectors: Array<{ id: string }> } }
+  | { kind: 'flowNotFound' }
+  | { kind: 'fileNotFound'; path: string }
+  | { kind: 'badJson'; message: string }
+  | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'duplicateIdInBatch'; id: string }
+  | { kind: 'idAlreadyExists'; id: string }
   | { kind: 'writeFailed'; message: string };
 
 export type PatchConnectorOutcome =
@@ -946,6 +986,109 @@ export async function addNodeImpl(
   return result;
 }
 
+// Bulk add — N nodes in one read-validate-write-broadcast cycle. Transactional:
+// any single item failing the post-mutation ResolvedFlowSchema parse rolls
+// back the whole batch (nothing on flow.json, no per-node folders created).
+// Per-node externalization runs per item exactly like the singular path; the
+// queued file writes all happen inside the mutator so a writeFailed on item
+// K leaves items 0..K-1 with stranded folders — same shape as the singular
+// path's writeFailed, but amplified by N. Caller is expected to retry.
+export async function addNodesBulkImpl(
+  deps: OperationsDeps,
+  flowId: string,
+  body: NodesBulkBody,
+): Promise<AddNodesBulkOutcome> {
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
+
+  // Pre-allocate ids + capture externalization writes per item. Doing this
+  // outside the mutator means the duplicateIdInBatch check runs before any
+  // disk IO; the collide-with-existing check happens inside the mutator where
+  // it can see the freshly-read flow.nodes.
+  const prepared: Array<{
+    id: string;
+    node: Record<string, unknown>;
+    externalized: Array<{ absPath: string; content: string }>;
+  }> = [];
+  const idsInBatch = new Set<string>();
+  for (const item of body.nodes) {
+    const newNode = { ...item };
+    if (typeof newNode.id !== 'string' || newNode.id.length === 0) {
+      newNode.id = `node-${shortId()}`;
+    }
+    const newId = newNode.id as string;
+    if (idsInBatch.has(newId)) return { kind: 'duplicateIdInBatch', id: newId };
+    idsInBatch.add(newId);
+    if (!newNode.position || typeof newNode.position !== 'object') {
+      newNode.position = { x: 0, y: 0 };
+    }
+    const externalized: Array<{ absPath: string; content: string }> = [];
+    const dataIsRecord =
+      newNode.data !== null && typeof newNode.data === 'object' && !Array.isArray(newNode.data);
+    const data: Record<string, unknown> = dataIsRecord
+      ? { ...(newNode.data as Record<string, unknown>) }
+      : {};
+    for (const { field, fileName } of externalizedFieldsForNodeType(newNode.type)) {
+      const incoming = data[field];
+      const content = typeof incoming === 'string' ? incoming : '';
+      data[field] = nodeFileRef(newId, fileName);
+      externalized.push({
+        absPath: nodeFileAbsPath(entry.repoPath, newId, fileName),
+        content,
+      });
+    }
+    newNode.data = data;
+    prepared.push({ id: newId, node: newNode, externalized });
+  }
+
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
+  if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
+
+  const result = await mutateMergedFlowAndBroadcast<
+    { kind: 'idAlreadyExists'; id: string } | { kind: 'writeFailed'; message: string }
+  >(deps, flowId, fullPath, (flow) => {
+    const existing = new Set(
+      flow.nodes
+        .map((n) => (typeof n.id === 'string' ? n.id : null))
+        .filter((id): id is string => id !== null),
+    );
+    for (const p of prepared) {
+      if (existing.has(p.id)) return { kind: 'idAlreadyExists', id: p.id };
+    }
+    for (const p of prepared) {
+      flow.nodes.push(p.node);
+    }
+    for (const p of prepared) {
+      for (const ext of p.externalized) {
+        try {
+          writeNodeFile(ext.absPath, ext.content);
+        } catch (err) {
+          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+        }
+      }
+    }
+    return { kind: 'ok' };
+  });
+
+  if (result.kind === 'ok') {
+    return {
+      kind: 'ok',
+      data: { nodes: prepared.map((p) => ({ id: p.id, node: p.node })) },
+    };
+  }
+
+  // Non-ok branch: the post-mutation ResolvedFlowSchema parse (or a later
+  // writeFailed) ran AFTER the mutator already wrote per-node folders. The
+  // collide-with-existing check ran first inside the mutator, so any folder
+  // at `nodes/<prepared.id>/` was created by this call — safe to cascade.
+  // The idAlreadyExists branch returns before any writeNodeFile, so we still
+  // try to remove (it's a no-op when the folder doesn't exist).
+  for (const p of prepared) {
+    removeNodeDir(entry.repoPath, p.id);
+  }
+  return result;
+}
+
 // Remove a node and cascade-delete every connector touching it in a single
 // atomic write. Final ResolvedFlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
@@ -1149,6 +1292,64 @@ export async function addConnectorImpl(
   });
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId } };
+  return result;
+}
+
+// Bulk add — N connectors in one read-validate-write-broadcast cycle. Same
+// transactional shape as addNodesBulkImpl: any single connector failing the
+// post-mutation ResolvedFlowSchema parse (dangling source/target, missing
+// kind-specific field) rolls back the whole batch. No per-item externalization
+// to manage — connectors don't own per-node folders.
+export async function addConnectorsBulkImpl(
+  deps: OperationsDeps,
+  flowId: string,
+  body: ConnectorsBulkBody,
+): Promise<AddConnectorsBulkOutcome> {
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
+
+  const prepared: Array<{ id: string; conn: Record<string, unknown> }> = [];
+  const idsInBatch = new Set<string>();
+  for (const item of body.connectors) {
+    const newConn = { ...item };
+    if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
+      newConn.id = `conn-${shortId()}`;
+    }
+    if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
+      newConn.kind = 'default';
+    }
+    const newId = newConn.id as string;
+    if (idsInBatch.has(newId)) return { kind: 'duplicateIdInBatch', id: newId };
+    idsInBatch.add(newId);
+    prepared.push({ id: newId, conn: newConn });
+  }
+
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
+  if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
+
+  const result = await mutateMergedFlowAndBroadcast<{ kind: 'idAlreadyExists'; id: string }>(
+    deps,
+    flowId,
+    fullPath,
+    (flow) => {
+      const existing = new Set(
+        flow.connectors
+          .map((c) => (typeof c.id === 'string' ? c.id : null))
+          .filter((id): id is string => id !== null),
+      );
+      for (const p of prepared) {
+        if (existing.has(p.id)) return { kind: 'idAlreadyExists', id: p.id };
+      }
+      for (const p of prepared) {
+        flow.connectors.push(p.conn);
+      }
+      return { kind: 'ok' };
+    },
+  );
+
+  if (result.kind === 'ok') {
+    return { kind: 'ok', data: { connectors: prepared.map((p) => ({ id: p.id })) } };
+  }
   return result;
 }
 
