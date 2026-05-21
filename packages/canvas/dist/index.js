@@ -6575,17 +6575,17 @@ import {
   applyNodeChanges,
   getBezierPath as getBezierPath2,
   getSmoothStepPath as getSmoothStepPath2,
-  useStore,
+  useStore as useStore2,
   useStoreApi
 } from "@xyflow/react";
 import { LayoutDashboard, Maximize2 as Maximize22 } from "lucide-react";
 import {
   forwardRef as forwardRef11,
   useCallback as useCallback6,
-  useEffect as useEffect8,
+  useEffect as useEffect9,
   useImperativeHandle,
   useMemo as useMemo2,
-  useRef as useRef8,
+  useRef as useRef9,
   useState as useState17
 } from "react";
 
@@ -6697,9 +6697,78 @@ var useCanvasExport = ({
   return { exportPdf, exportPng, capturePreview, lastError, clearError };
 };
 
+// src/components/glow-overlay.tsx
+import { useStore } from "@xyflow/react";
+import { useEffect as useEffect8, useRef as useRef8 } from "react";
+import { jsx as jsx39 } from "react/jsx-runtime";
+var BASE_GAP_PX = 12;
+var DEFAULT_IDLE_FADE_MS = 1200;
+function createGlowHandlers(el, opts = {}) {
+  const idleMs = opts.idleMs ?? DEFAULT_IDLE_FADE_MS;
+  let idleTimer;
+  const clearIdle = () => {
+    if (idleTimer !== void 0) {
+      clearTimeout(idleTimer);
+      idleTimer = void 0;
+    }
+  };
+  const onMove = (e) => {
+    const rect = el.getBoundingClientRect();
+    el.style.setProperty("--mx", `${e.clientX - rect.left}px`);
+    el.style.setProperty("--my", `${e.clientY - rect.top}px`);
+    el.dataset.active = "true";
+    clearIdle();
+    idleTimer = setTimeout(() => {
+      el.dataset.active = "false";
+      idleTimer = void 0;
+    }, idleMs);
+  };
+  const onLeave = () => {
+    clearIdle();
+    el.dataset.active = "false";
+  };
+  return { onMove, onLeave, dispose: clearIdle };
+}
+function GlowOverlay() {
+  const ref = useRef8(null);
+  const transform = useStore(
+    (s) => s.transform,
+    (a, b) => a[0] === b[0] && a[1] === b[1] && a[2] === b[2]
+  );
+  const [x, y, zoom] = transform;
+  const scaledGap = BASE_GAP_PX * zoom;
+  useEffect8(() => {
+    const el = ref.current;
+    if (!el) return;
+    const pane = el.parentElement?.querySelector(".react-flow__pane");
+    if (!pane) return;
+    const { onMove, onLeave, dispose } = createGlowHandlers(el);
+    pane.addEventListener("mousemove", onMove);
+    pane.addEventListener("mouseleave", onLeave);
+    return () => {
+      pane.removeEventListener("mousemove", onMove);
+      pane.removeEventListener("mouseleave", onLeave);
+      dispose();
+    };
+  }, []);
+  return /* @__PURE__ */ jsx39(
+    "div",
+    {
+      ref,
+      className: "glow-overlay",
+      "data-active": "false",
+      "data-testid": "canvas-glow-overlay",
+      style: {
+        backgroundPosition: `${x}px ${y}px`,
+        backgroundSize: `${scaledGap}px ${scaledGap}px`
+      }
+    }
+  );
+}
+
 // src/components/seeflow-canvas.tsx
 import "@xyflow/react/dist/style.css";
-import { Fragment as Fragment8, jsx as jsx39, jsxs as jsxs28 } from "react/jsx-runtime";
+import { Fragment as Fragment8, jsx as jsx40, jsxs as jsxs28 } from "react/jsx-runtime";
 var EDIT_DEFAULTS = {
   showToolbar: true,
   showStyleStrip: true,
@@ -6931,21 +7000,21 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
     toPosition,
     connectionLineStyle
   }) {
-    const reconnectingEdge = useStore(
+    const reconnectingEdge = useStore2(
       (s) => isReconnectingRef.current ? s.edges.find((e) => e.reconnectable === true) ?? null : null
     );
     const data = reconnectingEdge?.data;
-    const fixedNodeId = useStore((s) => {
+    const fixedNodeId = useStore2((s) => {
       const conn = s.connection;
       return conn?.fromHandle?.nodeId ?? null;
     });
-    const sourceNode = useStore(
+    const sourceNode = useStore2(
       (s) => reconnectingEdge?.source ? s.nodeLookup.get(reconnectingEdge.source) ?? null : null
     );
-    const targetNode = useStore(
+    const targetNode = useStore2(
       (s) => reconnectingEdge?.target ? s.nodeLookup.get(reconnectingEdge.target) ?? null : null
     );
-    const fromNodeFromStore = useStore(
+    const fromNodeFromStore = useStore2(
       (s) => fixedNodeId ? s.nodeLookup.get(fixedNodeId) ?? null : null
     );
     const fixedNodeIsSource = reconnectingEdge?.source === fixedNodeId;
@@ -6987,9 +7056,9 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
         }
       }
     }
-    const zoom = useStore((s) => s.transform[2]);
-    const nodeMap = useStore((s) => s.nodeLookup);
-    const xyflowToNodeId = useStore((s) => s.connection.toHandle?.nodeId ?? null);
+    const zoom = useStore2((s) => s.transform[2]);
+    const nodeMap = useStore2((s) => s.nodeLookup);
+    const xyflowToNodeId = useStore2((s) => s.connection.toHandle?.nodeId ?? null);
     let effectiveToX = toX;
     let effectiveToY = toY;
     let effectiveToPosition = toPosition;
@@ -7078,12 +7147,12 @@ var buildReconnectAwareConnectionLine = (isReconnectingRef) => {
       targetPosition: effectiveToPosition
     });
     const style = reconnectingEdge?.style ?? connectionLineStyle ?? void 0;
-    const rfId = useStore((s) => s.rfId);
+    const rfId = useStore2((s) => s.rfId);
     const orientedMarkerStart = fixedNodeIsSource ? reconnectingEdge?.markerStart : reconnectingEdge?.markerEnd;
     const orientedMarkerEnd = fixedNodeIsSource ? reconnectingEdge?.markerEnd : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
-    return /* @__PURE__ */ jsx39(
+    return /* @__PURE__ */ jsx40(
       "path",
       {
         d: path,
@@ -7104,7 +7173,7 @@ var POSITION_BY_SIDE_LINE = {
 };
 function StoreApiBridge({ storeApiRef }) {
   const storeApi = useStoreApi();
-  useEffect8(() => {
+  useEffect9(() => {
     storeApiRef.current = storeApi;
     return () => {
       if (storeApiRef.current === storeApi) storeApiRef.current = null;
@@ -7113,7 +7182,7 @@ function StoreApiBridge({ storeApiRef }) {
   return null;
 }
 function ZoomBridge({ wrapperRef }) {
-  const zoom = useStore((s) => s.transform[2]);
+  const zoom = useStore2((s) => s.transform[2]);
   const wrapper = wrapperRef.current;
   if (wrapper) wrapper.style.setProperty("--rf-zoom", String(zoom));
   return null;
@@ -7286,8 +7355,8 @@ function SeeflowCanvasImpl(props, ref) {
     ]
   );
   const isEditMode = mode === "edit";
-  const flagsRef = useRef8(flags);
-  useEffect8(() => {
+  const flagsRef = useRef9(flags);
+  useEffect9(() => {
     flagsRef.current = flags;
   }, [flags]);
   const effectiveAutoFitView = autoFitView ?? (mode === "mini" ? true : void 0);
@@ -7299,14 +7368,14 @@ function SeeflowCanvasImpl(props, ref) {
   const statusByNode = runtime?.statuses;
   const nodeOverrides = runtime?.pendingOverrides?.nodes;
   const connectorOverrides = runtime?.pendingOverrides?.connectors;
-  const wrapperRef = useRef8(null);
-  const rfInstanceRef = useRef8(null);
-  const didMountFitRef = useRef8(false);
-  const pendingFitRef = useRef8(false);
-  const signalEffectMountedRef = useRef8(false);
-  const resolvedAutoFitViewRef = useRef8(resolvedAutoFitView);
+  const wrapperRef = useRef9(null);
+  const rfInstanceRef = useRef9(null);
+  const didMountFitRef = useRef9(false);
+  const pendingFitRef = useRef9(false);
+  const signalEffectMountedRef = useRef9(false);
+  const resolvedAutoFitViewRef = useRef9(resolvedAutoFitView);
   resolvedAutoFitViewRef.current = resolvedAutoFitView;
-  useEffect8(() => {
+  useEffect9(() => {
     if (didMountFitRef.current) return;
     if (!resolvedAutoFitView.onMount) return;
     if (nodes.length === 0) return;
@@ -7315,10 +7384,10 @@ function SeeflowCanvasImpl(props, ref) {
     rfInstance.fitView(FIT_VIEW_OPTIONS);
     didMountFitRef.current = true;
   }, [nodes, resolvedAutoFitView.onMount]);
-  const storeApiRef = useRef8(null);
+  const storeApiRef = useRef9(null);
   const drawShape = activeShape;
   const setDrawShape = onSelectShape;
-  const editHandlesRef = useRef8(/* @__PURE__ */ new Map());
+  const editHandlesRef = useRef9(/* @__PURE__ */ new Map());
   const registerEditHandle = useCallback6((id, enter) => {
     editHandlesRef.current.set(id, enter);
     return () => {
@@ -7327,16 +7396,16 @@ function SeeflowCanvasImpl(props, ref) {
     };
   }, []);
   const [connecting, setConnecting] = useState17(false);
-  const connectingRef = useRef8(false);
-  useEffect8(() => {
+  const connectingRef = useRef9(false);
+  useEffect9(() => {
     connectingRef.current = connecting;
   }, [connecting]);
-  const connectCancelledRef = useRef8(false);
-  const reconnectCancelledRef = useRef8(false);
-  const isReconnectingRef = useRef8(false);
+  const connectCancelledRef = useRef9(false);
+  const reconnectCancelledRef = useRef9(false);
+  const isReconnectingRef = useRef9(false);
   const [dropPopover, setDropPopover] = useState17(null);
-  const dropPopoverRef = useRef8(null);
-  useEffect8(() => {
+  const dropPopoverRef = useRef9(null);
+  useEffect9(() => {
     dropPopoverRef.current = dropPopover;
   }, [dropPopover]);
   const closeDropPopover = useCallback6(() => {
@@ -7346,8 +7415,8 @@ function SeeflowCanvasImpl(props, ref) {
     () => buildReconnectAwareConnectionLine(isReconnectingRef),
     []
   );
-  const connectSourceNodeIdRef = useRef8(null);
-  const connectTargetNodeIdRef = useRef8(null);
+  const connectSourceNodeIdRef = useRef9(null);
+  const connectTargetNodeIdRef = useRef9(null);
   const setConnectSource = useCallback6((nodeId) => {
     const wrapper = wrapperRef.current;
     if (!wrapper) {
@@ -7383,7 +7452,7 @@ function SeeflowCanvasImpl(props, ref) {
     setConnectSource(null);
     setConnectTarget(null);
   }, [setConnectSource, setConnectTarget]);
-  useEffect8(() => {
+  useEffect9(() => {
     if (!connecting) {
       setConnectTarget(null);
       return;
@@ -7404,11 +7473,11 @@ function SeeflowCanvasImpl(props, ref) {
   }, [connecting, setConnectTarget]);
   const [drawStart, setDrawStart] = useState17(null);
   const [drawCurrent, setDrawCurrent] = useState17(null);
-  const drawShapeRef = useRef8(null);
-  const drawStartRef = useRef8(null);
-  const drawCurrentRef = useRef8(null);
-  const drawingRef = useRef8(false);
-  useEffect8(() => {
+  const drawShapeRef = useRef9(null);
+  const drawStartRef = useRef9(null);
+  const drawCurrentRef = useRef9(null);
+  const drawingRef = useRef9(false);
+  useEffect9(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
   const exitDrawMode = useCallback6(() => {
@@ -7420,7 +7489,7 @@ function SeeflowCanvasImpl(props, ref) {
     drawCurrentRef.current = null;
     drawingRef.current = false;
   }, [setDrawShape]);
-  useEffect8(() => {
+  useEffect9(() => {
     if (!flags.enableKeyboard) return;
     const onKey = (e) => {
       if (e.key !== "Escape") return;
@@ -7459,7 +7528,7 @@ function SeeflowCanvasImpl(props, ref) {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [exitDrawMode, flags.enableKeyboard]);
-  useEffect8(() => {
+  useEffect9(() => {
     if (!flags.enableKeyboard) return;
     const onKey = (e) => {
       handleClipboardShortcut({
@@ -7528,9 +7597,9 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [exitDrawMode, onCreateShapeNode]
   );
-  const draggingRef = useRef8(false);
-  const resizingRef = useRef8(false);
-  const viewModePositionsRef = useRef8(/* @__PURE__ */ new Map());
+  const draggingRef = useRef9(false);
+  const resizingRef = useRef9(false);
+  const viewModePositionsRef = useRef9(/* @__PURE__ */ new Map());
   const flushPendingFit = useCallback6(() => {
     if (!pendingFitRef.current) return;
     if (resizingRef.current || draggingRef.current) return;
@@ -7544,7 +7613,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [flushPendingFit]
   );
-  useEffect8(() => {
+  useEffect9(() => {
     if (!signalEffectMountedRef.current) {
       signalEffectMountedRef.current = true;
       return;
@@ -7561,9 +7630,9 @@ function SeeflowCanvasImpl(props, ref) {
   const [contextOnNode, setContextOnNode] = useState17(false);
   const [contextNodeType, setContextNodeType] = useState17(null);
   const [contextEndpoint, setContextEndpoint] = useState17(null);
-  const contextNodeIdRef = useRef8(null);
-  const contextTriggerRef = useRef8(null);
-  useEffect8(() => {
+  const contextNodeIdRef = useRef9(null);
+  const contextTriggerRef = useRef9(null);
+  useEffect9(() => {
     if (!contextMenuPos) return;
     const trigger = contextTriggerRef.current;
     if (!trigger) return;
@@ -7755,32 +7824,32 @@ function SeeflowCanvasImpl(props, ref) {
     isEditMode
   ]);
   const [rfNodes, setRfNodes] = useState17(sourceNodes);
-  useEffect8(() => {
+  useEffect9(() => {
     if (draggingRef.current || resizingRef.current) return;
     setRfNodes(sourceNodes);
   }, [sourceNodes]);
-  useEffect8(() => {
+  useEffect9(() => {
     rfNodesRef.current = rfNodes;
   }, [rfNodes]);
-  const selectedIdSetRef = useRef8(selectedNodeIdSet);
-  useEffect8(() => {
+  const selectedIdSetRef = useRef9(selectedNodeIdSet);
+  useEffect9(() => {
     selectedIdSetRef.current = selectedNodeIdSet;
   }, [selectedNodeIdSet]);
-  const onSelectionChangeRef = useRef8(onSelectionChange);
-  useEffect8(() => {
+  const onSelectionChangeRef = useRef9(onSelectionChange);
+  useEffect9(() => {
     onSelectionChangeRef.current = onSelectionChange;
   }, [onSelectionChange]);
-  const selectedConnIdSetRef = useRef8(selectedConnectorIdSet);
-  useEffect8(() => {
+  const selectedConnIdSetRef = useRef9(selectedConnectorIdSet);
+  useEffect9(() => {
     selectedConnIdSetRef.current = selectedConnectorIdSet;
   }, [selectedConnectorIdSet]);
-  const rfNodesRef = useRef8(sourceNodes);
-  const marqueeActiveRef = useRef8(false);
-  const marqueeSelectedNodeIdsRef = useRef8(/* @__PURE__ */ new Set());
-  const marqueeSelectedEdgeIdsRef = useRef8(/* @__PURE__ */ new Set());
-  const additiveBaseNodeIdsRef = useRef8(/* @__PURE__ */ new Set());
-  const additiveBaseEdgeIdsRef = useRef8(/* @__PURE__ */ new Set());
-  const tentativeAdditiveBaseRef = useRef8(null);
+  const rfNodesRef = useRef9(sourceNodes);
+  const marqueeActiveRef = useRef9(false);
+  const marqueeSelectedNodeIdsRef = useRef9(/* @__PURE__ */ new Set());
+  const marqueeSelectedEdgeIdsRef = useRef9(/* @__PURE__ */ new Set());
+  const additiveBaseNodeIdsRef = useRef9(/* @__PURE__ */ new Set());
+  const additiveBaseEdgeIdsRef = useRef9(/* @__PURE__ */ new Set());
+  const tentativeAdditiveBaseRef = useRef9(null);
   const onNodesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseNodeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.nodeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -7839,7 +7908,7 @@ function SeeflowCanvasImpl(props, ref) {
     selectedIdSetRef.current = new Set(sel);
     cb(sel, [...selectedConnIdSetRef.current]);
   }, []);
-  const rfEdgesRef = useRef8([]);
+  const rfEdgesRef = useRef9([]);
   const onEdgesChange = useCallback6((changes) => {
     const activeAdditiveBase = marqueeActiveRef.current ? additiveBaseEdgeIdsRef.current : tentativeAdditiveBaseRef.current?.shift ? tentativeAdditiveBaseRef.current.edgeIds : null;
     const filteredChanges = activeAdditiveBase && activeAdditiveBase.size > 0 ? changes.filter((c) => {
@@ -8035,7 +8104,7 @@ function SeeflowCanvasImpl(props, ref) {
     registerEditHandle,
     isEditMode
   ]);
-  useEffect8(() => {
+  useEffect9(() => {
     rfEdgesRef.current = rfEdges;
   }, [rfEdges]);
   const adapterMaybe = props.adapter ?? null;
@@ -8090,8 +8159,8 @@ function SeeflowCanvasImpl(props, ref) {
     };
   }, [adapterMaybe]);
   const effectiveTidy = onTidy ?? (!isEditMode ? internalTidy : void 0);
-  const connectSucceededRef = useRef8(false);
-  const connectStartRef = useRef8(
+  const connectSucceededRef = useRef9(false);
+  const connectStartRef = useRef9(
     null
   );
   const onConnect = useCallback6(
@@ -8177,7 +8246,7 @@ function SeeflowCanvasImpl(props, ref) {
     },
     [onCreateConnector, clearConnectMarkers, isValidConnection]
   );
-  const reconnectSucceededRef = useRef8(false);
+  const reconnectSucceededRef = useRef9(false);
   const onReconnect = useCallback6(
     (oldEdge, newConnection) => {
       if (!onReconnectConnector) return;
@@ -8337,7 +8406,7 @@ function SeeflowCanvasImpl(props, ref) {
     }),
     [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview]
   );
-  useEffect8(() => {
+  useEffect9(() => {
     if (!flags.enableKeyboard) return;
     const isEditable = (el) => {
       if (!el) return false;
@@ -8439,7 +8508,7 @@ function SeeflowCanvasImpl(props, ref) {
   const sidebarDemoId = projectId ?? null;
   const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
   const iconRegistryValue = useMemo2(() => ({ custom: customIcons ?? {} }), [customIcons]);
-  return /* @__PURE__ */ jsx39(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx39(
+  return /* @__PURE__ */ jsx40(IconRegistryProvider, { value: iconRegistryValue, children: /* @__PURE__ */ jsx40(
     "div",
     {
       "data-testid": "seeflow-canvas",
@@ -8572,11 +8641,12 @@ function SeeflowCanvasImpl(props, ref) {
               setContextMenuPos({ x: e.clientX, y: e.clientY });
             } : void 0,
             children: [
-              /* @__PURE__ */ jsx39(StoreApiBridge, { storeApiRef }),
-              /* @__PURE__ */ jsx39(ZoomBridge, { wrapperRef }),
-              /* @__PURE__ */ jsx39(Background, { gap: 12, size: 0.6 }),
+              /* @__PURE__ */ jsx40(StoreApiBridge, { storeApiRef }),
+              /* @__PURE__ */ jsx40(ZoomBridge, { wrapperRef }),
+              /* @__PURE__ */ jsx40(Background, { gap: 12, size: 0.6 }),
+              /* @__PURE__ */ jsx40(GlowOverlay, {}),
               flags.showControls ? /* @__PURE__ */ jsxs28(Controls, { showInteractive: false, showFitView: false, children: [
-                /* @__PURE__ */ jsx39(
+                /* @__PURE__ */ jsx40(
                   ControlButton,
                   {
                     "data-testid": "controls-fit-view",
@@ -8586,10 +8656,10 @@ function SeeflowCanvasImpl(props, ref) {
                     onClick: () => {
                       rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
                     },
-                    children: /* @__PURE__ */ jsx39(Maximize22, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx40(Maximize22, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 ),
-                /* @__PURE__ */ jsx39(
+                /* @__PURE__ */ jsx40(
                   ControlButton,
                   {
                     "data-testid": "controls-tidy",
@@ -8597,19 +8667,19 @@ function SeeflowCanvasImpl(props, ref) {
                     title: "Tidy layout (\u2318\u21E7L)",
                     disabled: !effectiveTidy,
                     onClick: () => effectiveTidy?.(),
-                    children: /* @__PURE__ */ jsx39(LayoutDashboard, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
+                    children: /* @__PURE__ */ jsx40(LayoutDashboard, { className: "sf:h-3 sf:w-3", "aria-hidden": "true" })
                   }
                 )
               ] }) : null,
-              flags.showResizeHandles ? /* @__PURE__ */ jsx39(
+              flags.showResizeHandles ? /* @__PURE__ */ jsx40(
                 SelectionResizeOverlay,
                 {
                   selectedNodes: selectionOverlayNodes,
                   onMultiResize
                 }
               ) : null,
-              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
-                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx39(
+              flags.showToolbar && onCreateShapeNode || flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(Panel, { position: "top-left", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:flex-col sf:gap-2", children: [
+                flags.showToolbar && onCreateShapeNode ? /* @__PURE__ */ jsx40(
                   CanvasToolbar,
                   {
                     activeShape: drawShape,
@@ -8620,7 +8690,7 @@ function SeeflowCanvasImpl(props, ref) {
                     onPickIcon
                   }
                 ) : null,
-                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx39(
+                flags.showStyleStrip && onStyleNode && onStyleConnector ? /* @__PURE__ */ jsx40(
                   StyleStrip,
                   {
                     nodes: selectedNodesForStyleStrip,
@@ -8635,9 +8705,9 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 ) : null
               ] }) }) : null,
-              flags.showShareMenu || flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx39(Panel, { position: "top-right", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:items-center sf:gap-1", children: [
-                flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx39(RestartDemoButton, { onRestartDemo }) : null,
-                flags.showShareMenu ? /* @__PURE__ */ jsx39(
+              flags.showShareMenu || flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(Panel, { position: "top-right", children: /* @__PURE__ */ jsxs28("div", { className: "sf:flex sf:items-center sf:gap-1", children: [
+                flags.showRestart && onRestartDemo ? /* @__PURE__ */ jsx40(RestartDemoButton, { onRestartDemo }) : null,
+                flags.showShareMenu ? /* @__PURE__ */ jsx40(
                   ShareMenu,
                   {
                     mode: mode === "mini" ? "view" : mode,
@@ -8654,7 +8724,7 @@ function SeeflowCanvasImpl(props, ref) {
             ]
           }
         ),
-        ghostRect ? /* @__PURE__ */ jsx39(
+        ghostRect ? /* @__PURE__ */ jsx40(
           "div",
           {
             "data-testid": "canvas-draw-ghost",
@@ -8675,7 +8745,7 @@ function SeeflowCanvasImpl(props, ref) {
             children: (() => {
               const GhostRenderer = drawShape ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape] : void 0;
               if (!GhostRenderer) return null;
-              return /* @__PURE__ */ jsx39(
+              return /* @__PURE__ */ jsx40(
                 GhostRenderer,
                 {
                   width: ghostRect.width,
@@ -8700,7 +8770,7 @@ function SeeflowCanvasImpl(props, ref) {
               }
             },
             children: [
-              /* @__PURE__ */ jsx39(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(ContextMenuTrigger, { asChild: true, children: /* @__PURE__ */ jsx40(
                 "div",
                 {
                   ref: contextTriggerRef,
@@ -8716,7 +8786,7 @@ function SeeflowCanvasImpl(props, ref) {
                 }
               ) }),
               /* @__PURE__ */ jsxs28(ContextMenuContent, { "data-testid": "node-context-menu", children: [
-                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx39(
+                contextEndpoint?.pinned && onUnpinEndpoint ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "connector-endpoint-context-menu-unpin",
@@ -8726,7 +8796,7 @@ function SeeflowCanvasImpl(props, ref) {
                 ) : null,
                 contextOnNode && onCopyNode ? /* @__PURE__ */ jsxs28(ContextMenuItem, { "data-testid": "node-context-menu-copy", onSelect: handleCopyPick, children: [
                   "Copy",
-                  /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: copyShortcut })
+                  /* @__PURE__ */ jsx40(ContextMenuShortcut, { children: copyShortcut })
                 ] }) : null,
                 onPasteAt ? /* @__PURE__ */ jsxs28(
                   ContextMenuItem,
@@ -8736,12 +8806,12 @@ function SeeflowCanvasImpl(props, ref) {
                     onSelect: handlePastePick,
                     children: [
                       "Paste",
-                      /* @__PURE__ */ jsx39(ContextMenuShortcut, { children: pasteShortcut })
+                      /* @__PURE__ */ jsx40(ContextMenuShortcut, { children: pasteShortcut })
                     ]
                   }
                 ) : null,
-                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx39(
+                contextOnNode && (onCopyNode || onPasteAt) && (contextNodeType === "iconNode" && !!onRequestIconReplace || onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-change-icon",
@@ -8749,9 +8819,9 @@ function SeeflowCanvasImpl(props, ref) {
                     children: "Change icon"
                   }
                 ) : null,
-                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
+                contextOnNode && contextNodeType === "iconNode" && onRequestIconReplace && (onReorderNode || onDeleteNode) ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
                 contextOnNode && onReorderNode ? /* @__PURE__ */ jsxs28(Fragment8, { children: [
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-front",
@@ -8759,7 +8829,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Bring to front"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-forward",
@@ -8767,7 +8837,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Bring forward"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-backward",
@@ -8775,7 +8845,7 @@ function SeeflowCanvasImpl(props, ref) {
                       children: "Send backward"
                     }
                   ),
-                  /* @__PURE__ */ jsx39(
+                  /* @__PURE__ */ jsx40(
                     ContextMenuItem,
                     {
                       "data-testid": "node-context-menu-to-back",
@@ -8784,8 +8854,8 @@ function SeeflowCanvasImpl(props, ref) {
                     }
                   )
                 ] }) : null,
-                contextOnNode && onReorderNode && onDeleteNode ? /* @__PURE__ */ jsx39(ContextMenuSeparator, {}) : null,
-                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx39(
+                contextOnNode && onReorderNode && onDeleteNode ? /* @__PURE__ */ jsx40(ContextMenuSeparator, {}) : null,
+                contextOnNode && onDeleteNode ? /* @__PURE__ */ jsx40(
                   ContextMenuItem,
                   {
                     "data-testid": "node-context-menu-delete",
@@ -8805,7 +8875,7 @@ function SeeflowCanvasImpl(props, ref) {
               if (!open) setDropPopover(null);
             },
             children: [
-              /* @__PURE__ */ jsx39(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(PopoverAnchor, { asChild: true, children: /* @__PURE__ */ jsx40(
                 "div",
                 {
                   "data-testid": "drop-popover-anchor",
@@ -8819,7 +8889,7 @@ function SeeflowCanvasImpl(props, ref) {
                   }
                 }
               ) }),
-              /* @__PURE__ */ jsx39(
+              /* @__PURE__ */ jsx40(
                 PopoverContent,
                 {
                   "data-testid": "drop-popover",
@@ -8830,7 +8900,7 @@ function SeeflowCanvasImpl(props, ref) {
                   onOpenAutoFocus: (e) => {
                     e.preventDefault();
                   },
-                  children: /* @__PURE__ */ jsx39(
+                  children: /* @__PURE__ */ jsx40(
                     "div",
                     {
                       role: "menu",
@@ -8858,8 +8928,8 @@ function SeeflowCanvasImpl(props, ref) {
                             "sf:focus:bg-accent sf:focus:text-accent-foreground sf:focus:outline-hidden"
                           ),
                           children: [
-                            /* @__PURE__ */ jsx39(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
-                            /* @__PURE__ */ jsx39("span", { children: label })
+                            /* @__PURE__ */ jsx40(Icon2, { className: "sf:h-4 sf:w-4 sf:text-muted-foreground", "aria-hidden": "true" }),
+                            /* @__PURE__ */ jsx40("span", { children: label })
                           ]
                         },
                         shape
@@ -8871,7 +8941,7 @@ function SeeflowCanvasImpl(props, ref) {
             ]
           }
         ) : null,
-        shouldRenderSidebar ? /* @__PURE__ */ jsx39(
+        shouldRenderSidebar ? /* @__PURE__ */ jsx40(
           DetailPanel,
           {
             flowId: sidebarDemoId,
