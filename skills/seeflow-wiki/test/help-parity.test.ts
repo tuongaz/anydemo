@@ -21,9 +21,7 @@ function getSkillReferencedSubcommands(): string[] {
 
 describe('seeflow-wiki <-> CLI help parity', () => {
   it('references at least the three required subcommands in SKILL.md', () => {
-    expect(getSkillReferencedSubcommands().sort()).toEqual(
-      [...REQUIRED_SUBCOMMANDS].sort(),
-    );
+    expect(getSkillReferencedSubcommands().sort()).toEqual([...REQUIRED_SUBCOMMANDS].sort());
   });
 
   it('every subcommand referenced in SKILL.md appears in `seeflow help`', () => {
