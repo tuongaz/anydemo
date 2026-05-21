@@ -4230,7 +4230,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             <StoreApiBridge storeApiRef={storeApiRef} />
             <ZoomBridge wrapperRef={wrapperRef} />
             <Background gap={12} size={0.6} />
-            <GlowOverlay />
+            {mode !== 'mini' && <GlowOverlay />}
             {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
             is hidden so we can render a Lucide-styled button that calls
             fitView with the documented options (padding 0.15, duration 300).
