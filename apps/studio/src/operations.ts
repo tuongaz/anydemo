@@ -79,8 +79,26 @@ export type ReorderBody = z.infer<typeof ReorderBodySchema>;
 // other key lands inside node.data. Final validity is enforced by re-parsing
 // the whole demo through ResolvedFlowSchema after the merge — this body schema just
 // rejects unknown top-level keys to catch typos.
+const NodeTypeSchema = z.enum([
+  'playNode',
+  'stateNode',
+  'shapeNode',
+  'imageNode',
+  'iconNode',
+  'htmlNode',
+]);
+
 export const NodePatchBodySchema = z
   .object({
+    // When supplied AND different from the node's current type, the merged
+    // node is reclassified in place: data keys not allowed on the new type's
+    // FlowDataSchema are stripped, visuals (which route to style.json) are
+    // preserved, and the post-merge ResolvedFlowSchema reparse enforces the
+    // new type's required fields (e.g. stateNode → playNode without a
+    // playAction in the same body surfaces as `badSchema`). The per-node
+    // folder under `.seeflow/nodes/<id>/` is keyed by id, so retype keeps
+    // scripts, detail.md, and view.html attached.
+    type: NodeTypeSchema.optional(),
     position: PositionBodySchema.optional(),
     name: z.string().optional(),
     borderColor: ColorTokenSchema.optional(),
@@ -164,6 +182,61 @@ const NODE_DATA_PATCH_KEYS = [
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
 
+// Semantic (non-visual) data keys allowed by each node type's FlowDataSchema.
+// Visual keys (NODE_STYLE_KEYS in merge.ts) are always preserved on retype —
+// they route to style.json on write. Everything else gets stripped from
+// `data` when a node changes type so the post-merge ResolvedFlowSchema reparse
+// doesn't reject lingering fields from the previous variant. Missing required
+// fields on the new type (e.g. stateNode → playNode without playAction)
+// surface as the normal `badSchema` outcome from the reparse.
+const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<string>> = {
+  playNode: new Set([
+    'name',
+    'kind',
+    'stateSource',
+    'handlerModule',
+    'icon',
+    'description',
+    'detail',
+    'playAction',
+    'statusAction',
+  ]),
+  stateNode: new Set([
+    'name',
+    'kind',
+    'stateSource',
+    'handlerModule',
+    'icon',
+    'description',
+    'detail',
+    'playAction',
+    'statusAction',
+  ]),
+  shapeNode: new Set(['shape', 'name', 'description', 'detail']),
+  imageNode: new Set(['path', 'alt', 'description', 'detail']),
+  iconNode: new Set(['icon', 'alt', 'name', 'description', 'detail']),
+  htmlNode: new Set(['html', 'name', 'icon', 'description', 'detail']),
+};
+
+// Visual data keys — routed to style.json on write by splitFlow. Kept here
+// (duplicated from merge.ts) so mergeNodeUpdates can preserve them across a
+// type change without taking a runtime dependency on merge.ts.
+const NODE_VISUAL_KEYS = new Set([
+  'width',
+  'height',
+  'borderColor',
+  'backgroundColor',
+  'borderSize',
+  'borderStyle',
+  'fontSize',
+  'textColor',
+  'cornerRadius',
+  'borderWidth',
+  'color',
+  'strokeWidth',
+  'autoSize',
+]);
+
 export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePatchBody): void => {
   if (updates.position !== undefined) {
     node.position = updates.position;
@@ -203,6 +276,27 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     }
     data[key] = updates[key];
     touchedData = true;
+  }
+
+  // Type retype: when the patch supplies a `type` that differs from the
+  // node's current type, reclassify in place. Visual keys are preserved
+  // (they route to style.json on write); any semantic data key not allowed
+  // by the new type's FlowDataSchema is stripped so the post-merge reparse
+  // doesn't reject lingering fields. The per-node folder under
+  // `.seeflow/nodes/<id>/` is keyed by id (unchanged), so scripts and
+  // externalized files stay attached. Missing required fields on the new
+  // type (e.g. stateNode → playNode without a playAction in the same patch)
+  // surface as `badSchema` from the ResolvedFlowSchema reparse.
+  if (updates.type !== undefined && updates.type !== node.type) {
+    node.type = updates.type;
+    const allowedSemantic = SEMANTIC_KEYS_BY_TYPE[updates.type];
+    for (const key of Object.keys(data)) {
+      if (NODE_VISUAL_KEYS.has(key)) continue;
+      if (!allowedSemantic.has(key)) {
+        delete data[key];
+        touchedData = true;
+      }
+    }
   }
 
   // htmlNode-only invariant enforcement:

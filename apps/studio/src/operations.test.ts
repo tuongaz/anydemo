@@ -962,3 +962,268 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
     expect(res.kind).toBe('ok');
   });
 });
+
+describe('NodePatchBodySchema type field', () => {
+  it('accepts a valid node type', () => {
+    const r = NodePatchBodySchema.safeParse({ type: 'stateNode' });
+    expect(r.success).toBe(true);
+  });
+
+  it('rejects an unknown node type', () => {
+    const r = NodePatchBodySchema.safeParse({ type: 'notANode' });
+    expect(r.success).toBe(false);
+  });
+});
+
+describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
+  // mergeNodeUpdates is the pure mutator; the post-merge ResolvedFlowSchema
+  // reparse is what enforces required fields on the new type. These cases
+  // assert the mutator's contract: type flips, visuals survive, lingering
+  // semantic fields from the previous type get stripped.
+
+  it('play → state preserves playAction (allowed on both variants)', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        borderColor: 'teal',
+      },
+    };
+    mergeNodeUpdates(node, { type: 'stateNode' });
+    expect(node.type).toBe('stateNode');
+    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
+    expect((node.data as Record<string, unknown>).borderColor).toBe('teal');
+  });
+
+  it('play → shape strips action + kind + stateSource, keeps visuals', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
+        borderColor: 'teal',
+        cornerRadius: 8,
+      },
+    };
+    mergeNodeUpdates(node, { type: 'shapeNode', shape: 'rectangle' });
+    expect(node.type).toBe('shapeNode');
+    const data = node.data as Record<string, unknown>;
+    expect(data.shape).toBe('rectangle');
+    expect('playAction' in data).toBe(false);
+    expect('statusAction' in data).toBe(false);
+    expect('kind' in data).toBe(false);
+    expect('stateSource' in data).toBe(false);
+    expect(data.borderColor).toBe('teal');
+    expect(data.cornerRadius).toBe(8);
+  });
+
+  it('state → play accepts a playAction supplied in the same patch', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'stateNode',
+      data: {
+        name: 'queue',
+        kind: 'queue',
+        stateSource: { kind: 'event' },
+      },
+    };
+    mergeNodeUpdates(node, {
+      type: 'playNode',
+      playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+    });
+    expect(node.type).toBe('playNode');
+    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
+  });
+
+  it('shape → state requires kind + stateSource in the same patch (mutator carries them through)', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'shapeNode',
+      data: { name: 'placeholder', shape: 'rectangle', borderColor: 'teal' },
+    };
+    mergeNodeUpdates(node, {
+      type: 'stateNode',
+      stateSource: { kind: 'event' },
+    });
+    expect(node.type).toBe('stateNode');
+    const data = node.data as Record<string, unknown>;
+    expect(data.stateSource).toEqual({ kind: 'event' });
+    expect('shape' in data).toBe(false);
+    expect(data.borderColor).toBe('teal');
+  });
+
+  it('any → icon strips semantic fields outside iconNode allowlist; visuals survive', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'stateNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'event' },
+        statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
+        borderColor: 'teal',
+      },
+    };
+    mergeNodeUpdates(node, { type: 'iconNode', icon: 'server' });
+    expect(node.type).toBe('iconNode');
+    const data = node.data as Record<string, unknown>;
+    expect(data.icon).toBe('server');
+    expect('kind' in data).toBe(false);
+    expect('stateSource' in data).toBe(false);
+    expect('statusAction' in data).toBe(false);
+    expect(data.borderColor).toBe('teal');
+  });
+
+  it('any → html drops kind / stateSource / actions; html is externalized at the patchNodeImpl layer, not here', () => {
+    // mergeNodeUpdates intentionally skips externalized fields (detail, html
+    // — see EXTERNALIZED_FIELD_NAMES); patchNodeImpl writes the file and
+    // rewrites data[field] to a file:// ref. This test asserts the retype
+    // strip contract on the in-memory mutator; the externalize round-trip
+    // is covered by the patchNodeImpl integration cases below.
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'stateNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'event' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      },
+    };
+    mergeNodeUpdates(node, { type: 'htmlNode' });
+    expect(node.type).toBe('htmlNode');
+    const data = node.data as Record<string, unknown>;
+    expect('kind' in data).toBe(false);
+    expect('stateSource' in data).toBe(false);
+    expect('playAction' in data).toBe(false);
+    expect(data.name).toBe('svc');
+  });
+
+  it('no-op when patch type equals current type', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      },
+    };
+    mergeNodeUpdates(node, { type: 'playNode' });
+    expect(node.type).toBe('playNode');
+    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
+  });
+});
+
+describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', () => {
+  it('demotes playNode to stateNode without touching the per-node folder', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        detail: 'docs survive retype',
+      },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+    const nodeId = add.data.id;
+
+    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    expect(existsSync(detailAbs)).toBe(true);
+    expect(readFileSync(detailAbs, 'utf8')).toBe('docs survive retype');
+
+    const patch = await patchNodeImpl(deps, flowId, nodeId, { type: 'stateNode' });
+    expect(patch.kind).toBe('ok');
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
+    expect(node.type).toBe('stateNode');
+    expect(existsSync(detailAbs)).toBe(true);
+    expect(readFileSync(detailAbs, 'utf8')).toBe('docs survive retype');
+  });
+
+  it('stateNode → playNode without a playAction in the same patch fails badSchema', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'stateNode',
+      data: { name: 'queue', kind: 'queue', stateSource: { kind: 'event' } },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'playNode' });
+    expect(patch.kind).toBe('badSchema');
+  });
+
+  it('stateNode → playNode succeeds when the same patch carries a playAction', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'stateNode',
+      data: { name: 'queue', kind: 'queue', stateSource: { kind: 'event' } },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, {
+      type: 'playNode',
+      playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+    });
+    expect(patch.kind).toBe('ok');
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
+    expect(node.type).toBe('playNode');
+    expect(node.data.playAction.scriptPath).toBe('scripts/play.ts');
+  });
+
+  it('playNode → shapeNode without a shape in the same patch fails badSchema', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'shapeNode' });
+    expect(patch.kind).toBe('badSchema');
+  });
+
+  it('playNode → shapeNode succeeds when the same patch carries a shape', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'playNode',
+      data: {
+        name: 'svc',
+        kind: 'service',
+        stateSource: { kind: 'request' },
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, {
+      type: 'shapeNode',
+      shape: 'rectangle',
+    });
+    expect(patch.kind).toBe('ok');
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
+    expect(node.type).toBe('shapeNode');
+    expect(node.data.shape).toBe('rectangle');
+    expect('playAction' in node.data).toBe(false);
+  });
+});

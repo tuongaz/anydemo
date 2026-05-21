@@ -405,6 +405,19 @@ If `contextBrief.existingDemo.diffTarget === true`:
   `data.name` or `data.kind` + position in the flow).
 - Remove nodes whose underlying entity is no longer in scope.
 - Add nodes for entities the user is now asking about.
+- **Retype in place when an entity's role changes.** If a node's
+  underlying entity is the same but its role flipped (e.g. the
+  previous trigger is no longer the trigger — demote it from
+  `playNode` to `stateNode`), emit it with its **existing id** but
+  the new `type`. The orchestrator routes this to a non-destructive
+  `nodes:patch { type, ... }` instead of `delete` + `add-bulk`, so
+  the per-node folder (`.seeflow/nodes/<id>/`) — scripts, detail.md,
+  view.html, uploaded images — survives. Supply any fields the new
+  type requires in the same patch (e.g. `state → play` needs
+  `playAction`, `* → shape` needs `shape`, `* → icon` needs `icon`,
+  `* → image` needs `path`); the server's post-merge
+  `ResolvedFlowSchema` reparse fails the call with `badSchema`
+  otherwise.
 - The orchestrator computes the `+ / ~ / -` diff from your output
   against `editTarget`; you do not annotate the diff yourself.
 

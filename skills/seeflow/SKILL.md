@@ -225,6 +225,8 @@ For each overlay returned by Phase 4 (parallelise the writes when the script bod
 
 If the play-designer emitted `newTriggerNodes`, batch them via `nodes:add-bulk` + `connectors:add-bulk`, then re-run `flows:layout`. (Body shapes: `$SEEFLOW help <command>`.)
 
+**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `nodes:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type via the post-merge reparse (e.g. `state → play` requires a `playAction` in the same patch); `badSchema` means feed the issues to the play-designer and retry.
+
 **Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule).
 
 ## Phase 6 — end-to-end validation

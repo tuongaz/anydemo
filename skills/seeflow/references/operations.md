@@ -26,7 +26,7 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | P3 | `nodes:add-bulk` | Atomic seed of skeleton nodes |
 | P3 | `connectors:add-bulk` | Atomic seed of skeleton connectors |
 | P3 | `flows:layout` | Run ELK; rewrite style.json positions |
-| P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node |
+| P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node — also accepts an optional `type` field for non-destructive retype (preserves the per-node folder under `.seeflow/nodes/<id>/`) |
 | P5 | `nodes:add-bulk` | Inject synthetic trigger nodes |
 | P5 | `connectors:add-bulk` | Wire trigger nodes |
 | P5 | `flows:layout` | Re-layout after Phase 5 changes |
