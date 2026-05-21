@@ -12,7 +12,7 @@ DOCKER_TAG ?= dev
 
 CLI := bun run apps/studio/src/cli.ts
 
-.PHONY: help install dev build typecheck lint format test clean start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release deploy gh.deploy docker.build docker.run docker.buildx docker.push
+.PHONY: help install dev build typecheck lint format test test.it test.it.update-snapshots clean start stop register demo example-order-pipeline ralph ralph-clean sync-seeflow-schema verify-seeflow-schema-sync smoke-seeflow release deploy gh.deploy docker.build docker.run docker.buildx docker.push
 
 SEEFLOW_SCHEMA_SRC := apps/studio/src/schema.ts
 SEEFLOW_SCHEMA_DST := skills/seeflow/vendored/schema.ts
@@ -53,6 +53,12 @@ format: ## biome format --write (run before lint)
 
 test: ## bun test
 	bun test
+
+test.it: ## Run the integration tier (bun-test + Playwright e2e) via the orchestrator
+	bun run test:it
+
+test.it.update-snapshots: ## Regenerate Playwright visual baselines under apps/studio/e2e/
+	bun run test:it:update-snapshots
 
 start: ## Start the studio daemon (writes ~/.seeflow/seeflow.pid)
 	$(CLI) start --daemon
