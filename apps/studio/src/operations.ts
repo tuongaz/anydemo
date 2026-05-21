@@ -1773,10 +1773,7 @@ export interface Operations {
   getFlow(id: string): ReturnType<typeof getFlowImpl>;
   getFlowGraph(id: string): ReturnType<typeof getFlowGraphImpl>;
   getNode(flowId: string, nodeId: string): ReturnType<typeof getNodeImpl>;
-  addNode(
-    flowId: string,
-    body: Record<string, unknown>,
-  ): ReturnType<typeof addNodeImpl>;
+  addNode(flowId: string, body: Record<string, unknown>): ReturnType<typeof addNodeImpl>;
   addNodesBulk(
     flowId: string,
     body: Parameters<typeof addNodesBulkImpl>[2],
@@ -1797,10 +1794,7 @@ export interface Operations {
     body: Parameters<typeof reorderNodeImpl>[3],
   ): ReturnType<typeof reorderNodeImpl>;
   deleteNode(flowId: string, nodeId: string): ReturnType<typeof deleteNodeImpl>;
-  addConnector(
-    flowId: string,
-    body: Record<string, unknown>,
-  ): ReturnType<typeof addConnectorImpl>;
+  addConnector(flowId: string, body: Record<string, unknown>): ReturnType<typeof addConnectorImpl>;
   addConnectorsBulk(
     flowId: string,
     body: Parameters<typeof addConnectorsBulkImpl>[2],
@@ -1810,13 +1804,8 @@ export interface Operations {
     connectorId: string,
     body: Parameters<typeof patchConnectorImpl>[3],
   ): ReturnType<typeof patchConnectorImpl>;
-  deleteConnector(
-    flowId: string,
-    connectorId: string,
-  ): ReturnType<typeof deleteConnectorImpl>;
-  registerFlow(
-    body: Parameters<typeof registerFlowImpl>[1],
-  ): ReturnType<typeof registerFlowImpl>;
+  deleteConnector(flowId: string, connectorId: string): ReturnType<typeof deleteConnectorImpl>;
+  registerFlow(body: Parameters<typeof registerFlowImpl>[1]): ReturnType<typeof registerFlowImpl>;
   createProject(
     body: Parameters<typeof createProjectImpl>[1],
   ): ReturnType<typeof createProjectImpl>;
@@ -1837,20 +1826,15 @@ export function createOperations(deps: OperationsDeps): Operations {
     getNode: (flowId, nodeId) => getNodeImpl(deps, flowId, nodeId),
     addNode: (flowId, body) => addNodeImpl(deps, flowId, body),
     addNodesBulk: (flowId, body) => addNodesBulkImpl(deps, flowId, body),
-    patchNode: (flowId, nodeId, body) =>
-      patchNodeImpl(deps, flowId, nodeId, body),
-    moveNode: (flowId, nodeId, body) =>
-      moveNodeImpl(deps, flowId, nodeId, body),
-    reorderNode: (flowId, nodeId, body) =>
-      reorderNodeImpl(deps, flowId, nodeId, body),
+    patchNode: (flowId, nodeId, body) => patchNodeImpl(deps, flowId, nodeId, body),
+    moveNode: (flowId, nodeId, body) => moveNodeImpl(deps, flowId, nodeId, body),
+    reorderNode: (flowId, nodeId, body) => reorderNodeImpl(deps, flowId, nodeId, body),
     deleteNode: (flowId, nodeId) => deleteNodeImpl(deps, flowId, nodeId),
     addConnector: (flowId, body) => addConnectorImpl(deps, flowId, body),
-    addConnectorsBulk: (flowId, body) =>
-      addConnectorsBulkImpl(deps, flowId, body),
+    addConnectorsBulk: (flowId, body) => addConnectorsBulkImpl(deps, flowId, body),
     patchConnector: (flowId, connectorId, body) =>
       patchConnectorImpl(deps, flowId, connectorId, body),
-    deleteConnector: (flowId, connectorId) =>
-      deleteConnectorImpl(deps, flowId, connectorId),
+    deleteConnector: (flowId, connectorId) => deleteConnectorImpl(deps, flowId, connectorId),
     registerFlow: (body) => registerFlowImpl(deps, body),
     createProject: (body) => createProjectImpl(deps, body),
     deleteFlow: (id) => deleteFlowImpl(deps, id),

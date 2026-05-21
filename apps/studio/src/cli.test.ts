@@ -121,7 +121,10 @@ describe('seeflow CLI new subcommands', () => {
   it('projects:create returns ok with slug', async () => {
     const studio = startTestStudio();
     try {
-      const r = await runCli(['projects:create', '--no-start', '--name', 'Checkout One'], studio.env);
+      const r = await runCli(
+        ['projects:create', '--no-start', '--name', 'Checkout One'],
+        studio.env,
+      );
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; slug: string };
       expect(parsed.ok).toBe(true);
@@ -216,7 +219,10 @@ describe('seeflow CLI new subcommands', () => {
           },
         ],
       });
-      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], studio.env);
+      const r = await runCli(
+        ['nodes:add-bulk', entry.id, '--no-start', '--json', payload],
+        studio.env,
+      );
       if (r.code !== 0) {
         throw new Error(`exit=${r.code} stdout=${r.stdout} stderr=${r.stderr}`);
       }
@@ -257,7 +263,10 @@ describe('seeflow CLI new subcommands', () => {
           },
         ],
       });
-      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], studio.env);
+      const r = await runCli(
+        ['nodes:add-bulk', entry.id, '--no-start', '--json', payload],
+        studio.env,
+      );
       expect(r.code).toBe(4);
       expect(r.stderr).toContain('Duplicate id in batch');
       expect(r.stderr).toContain('"code":"duplicateIdInBatch"');

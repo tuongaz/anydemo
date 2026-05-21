@@ -63,8 +63,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
   const writtenHashes: string[] = [];
   const listeners = new Set<() => void>();
 
-  const sha256 = (s: string): string =>
-    createHash('sha256').update(s).digest('hex');
+  const sha256 = (s: string): string => createHash('sha256').update(s).digest('hex');
 
   const rememberWrite = (contents: string) => {
     writtenHashes.push(sha256(contents));

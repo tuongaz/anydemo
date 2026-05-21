@@ -757,10 +757,7 @@ export function createApi(options: ApiOptions): Hono {
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
       case 'badJson':
-        return c.json(
-          { error: 'Flow file is not valid JSON', detail: result.detail },
-          400,
-        );
+        return c.json({ error: 'Flow file is not valid JSON', detail: result.detail }, 400);
       case 'badSchema':
         return c.json({ ok: false as const, issues: result.issues });
       case 'writeFailed':

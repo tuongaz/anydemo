@@ -1,9 +1,9 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { connectSse } from './support/sse-client.ts';
 import { runCli } from './support/cli-runner.ts';
 import { uniqueFlowId } from './support/ids.ts';
+import { connectSse } from './support/sse-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
 
 // In-process CLI mutations land on disk via the registry path the studio

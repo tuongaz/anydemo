@@ -83,9 +83,7 @@ export function printOutcome<T extends { kind: string }>(
   const err = opts.stderr ?? ((s) => process.stderr.write(s));
   const message = describeOutcome(outcome);
   err(`${JSON.stringify({ error: message, code: outcome.kind })}\n`);
-  return (opts.exit ?? (process.exit as (code: number) => never))(
-    outcomeExitCode(outcome.kind),
-  );
+  return (opts.exit ?? (process.exit as (code: number) => never))(outcomeExitCode(outcome.kind));
 }
 
 function describeOutcome(outcome: { kind: string } & Record<string, unknown>): string {

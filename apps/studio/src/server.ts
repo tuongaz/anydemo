@@ -8,10 +8,7 @@ import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
 import { createMcpServer } from './mcp.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
-import {
-  type RegistryWatcher,
-  createRegistryWatcher,
-} from './registry-watcher.ts';
+import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';

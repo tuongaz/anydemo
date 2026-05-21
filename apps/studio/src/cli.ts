@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { drainStdin, loadBody, printError, printOk, printOutcome } from './cli-helpers.ts';
 import {
   COMMAND_MANIFEST,
   renderCommandHelp,
@@ -8,18 +9,8 @@ import {
   renderManifestJson,
 } from './cli-manifest.ts';
 import { createCliOperations } from './cli-ops.ts';
-import {
-  drainStdin,
-  loadBody,
-  printError,
-  printOk,
-  printOutcome,
-} from './cli-helpers.ts';
 import { createEventBus } from './events.ts';
 import type { LayoutOptions } from './layout.ts';
-import { seeflowHome } from './paths.ts';
-import { defaultProcessSpawner } from './process-spawner.ts';
-import { type Registry, createRegistry } from './registry.ts';
 import {
   ConnectorPatchBodySchema,
   ConnectorsBulkBodySchema,
@@ -27,6 +18,9 @@ import {
   NodesBulkBodySchema,
   ReorderBodySchema,
 } from './operations.ts';
+import { seeflowHome } from './paths.ts';
+import { defaultProcessSpawner } from './process-spawner.ts';
+import { type Registry, createRegistry } from './registry.ts';
 import {
   DEFAULT_CONFIG,
   clearPid,

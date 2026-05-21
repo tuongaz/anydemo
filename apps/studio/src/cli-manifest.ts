@@ -112,7 +112,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     synopsis: 'seeflow help [<command>] [--json]',
     description:
       'Show CLI help. With no args lists every command. With a command name shows ' +
-      'that command\'s synopsis, flags, body schema, and examples. --json emits the ' +
+      "that command's synopsis, flags, body schema, and examples. --json emits the " +
       'full manifest (or the named command) as a machine-readable JSON document.',
     category: 'meta',
     args: [{ name: 'command', required: false, description: 'Name of a command to drill into' }],
@@ -287,11 +287,21 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
     flags: BODY_FLAGS,
     body: {
-      example: { type: 'stateNode', data: { name: 'hello', kind: 'state', stateSource: { kind: 'request' } } },
+      example: {
+        type: 'stateNode',
+        data: { name: 'hello', kind: 'state', stateSource: { kind: 'request' } },
+      },
     },
     outputs: {
       okExample: { id: 'node-abc' },
-      errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'idAlreadyExists', 'writeFailed'],
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'badJson',
+        'badSchema',
+        'idAlreadyExists',
+        'writeFailed',
+      ],
     },
     requiresStudio: false,
     examples: [
@@ -344,7 +354,9 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
     flags: BODY_FLAGS,
     body: { schemaRef: 'NodePatchBody' },
-    outputs: { errorKinds: ['flowNotFound', 'fileNotFound', 'unknownNode', 'badSchema', 'writeFailed'] },
+    outputs: {
+      errorKinds: ['flowNotFound', 'fileNotFound', 'unknownNode', 'badSchema', 'writeFailed'],
+    },
     requiresStudio: false,
     examples: ['seeflow nodes:patch abc12345 api-checkout --json \'{"data":{"name":"renamed"}}\''],
   },
@@ -403,7 +415,10 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'nodeId', required: true, description: 'Node id in the flow' },
     ],
     flags: [],
-    outputs: { okExample: { ok: true, removedConnectors: 0 }, errorKinds: ['flowNotFound', 'unknownNode'] },
+    outputs: {
+      okExample: { ok: true, removedConnectors: 0 },
+      errorKinds: ['flowNotFound', 'unknownNode'],
+    },
     requiresStudio: false,
     examples: ['seeflow nodes:delete abc12345 api-checkout'],
   },
@@ -478,7 +493,12 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     category: 'meta',
     args: [],
     flags: [
-      { name: 'file', valuePlaceholder: '<flow.json>', description: 'Flow file to validate', required: true },
+      {
+        name: 'file',
+        valuePlaceholder: '<flow.json>',
+        description: 'Flow file to validate',
+        required: true,
+      },
       { name: 'style', valuePlaceholder: '<style.json>', description: 'Optional style file' },
     ],
     outputs: { okExample: { ok: true } },
