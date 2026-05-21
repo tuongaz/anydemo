@@ -11,7 +11,8 @@ export type StudioEventType =
   | 'node:done'
   | 'node:error'
   | 'node:status'
-  | 'file:changed';
+  | 'file:changed'
+  | 'registry:reload';
 
 export interface StudioEvent {
   type: StudioEventType;
