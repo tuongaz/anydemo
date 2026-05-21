@@ -61,10 +61,10 @@ the following shape — and nothing else outside the fence:
       "data": {
         "name": "POST /checkout",
         "kind": "service",
+        "icon": "server",
         "stateSource": { "kind": "request" },
         "description": "Receives a cart, creates an order, kicks off the payment leg."
-      },
-      "oneNodeRationale": "Single HTTP service surface — its internal middleware and routes are implementation detail."
+      }
     }
   ],
   "connectors": [
@@ -77,9 +77,16 @@ the following shape — and nothing else outside the fence:
       "url": "/charge",
       "label": "POST /charge"
     }
-  ]
+  ],
+  "rationales": {
+    "checkout-api": "Single HTTP service surface — its internal middleware and routes are implementation detail."
+  }
 }
 ```
+
+**How the orchestrator uses this:** the `nodes` array is forwarded verbatim to `seeflow nodes:add-bulk <flowId>`, and `connectors` to `seeflow connectors:add-bulk <flowId>`. Every key the server's `ResolvedFlowSchema` rejects is rejected here too — so do NOT emit `position`, `playAction`, `statusAction`, or any visual field (border, color, width, …) at the node root. Phase 4 designers attach `playAction` / `statusAction` later via `nodes:patch`.
+
+`rationales` is a planner-only sibling map keyed by node id. The orchestrator strips it before forwarding and surfaces each entry to the user during the Phase 3 review checkpoint.
 
 Field-by-field rules:
 
@@ -95,6 +102,13 @@ Field-by-field rules:
 - **`connectors`** *(array)* — see "Connector entries" below. Every
   connector's `source` and `target` MUST reference an `id` from
   `nodes[]`.
+- **`rationales`** *(object, keyed by node id)* — one entry per node,
+  each ≤ 200 chars. Justification for why this entity is exactly one
+  node (not zero, not many). Write rationales that quote the abstraction
+  rules table when applicable (`"Single Temporal workflow — the unit of
+  business meaning"`, `"Pipeline stage independently meaningful — earns
+  its own node"`). Cite exception number (`Exception 1/2/3`) whenever
+  you emit multiple nodes for one underlying entity.
 
 ### Node entries
 
@@ -172,12 +186,12 @@ Each node entry has:
   directly on the node. Must be ≤ 15 words — longer text overflows the
   node card. Write a tight verb phrase from the audience's perspective
   (e.g. `"Accepts cart, creates order"` not a full sentence).
-- **`oneNodeRationale`** *(string, ≤ 200 chars)* — a justification for why
-  this entity is exactly one node (not zero, not many). The orchestrator
-  surfaces this to the user as part of the plan-review step. Write
-  rationales that quote the abstraction rules table when applicable
-  (`"Single Temporal workflow — the unit of business meaning"`,
-  `"Pipeline stage independently meaningful — earns its own node"`).
+- **`data.icon`** *(string, kebab-case Lucide name, recommended on
+  playNode / stateNode)* — visual glyph that echoes the kind. Use the
+  defaults: `service`→`server`, `endpoint`→`plug`, `worker`→`cog`,
+  `workflow`→`git-branch`, `queue`→`list-ordered`, `topic`/`bus`→`radio-tower`,
+  `db`→`database`, `store`→`archive`, `cache`→`zap`, `scheduler`→`clock`,
+  `external-api`→`cloud`, `trigger`→`play`.
 
 ### Connector entries
 
@@ -251,7 +265,7 @@ Do NOT skip a resource node because:
 | Search engine (Elasticsearch, OpenSearch, Algolia, Typesense) | One thing |
 
 **Exceptions that DO earn multiple nodes** — be explicit in
-`oneNodeRationale` when you invoke an exception:
+`rationales[nodeId]` when you invoke an exception:
 
 1. **Pipelines whose stages are independently meaningful.**
    Example: `validate → score → rank → publish`. Each stage has a
@@ -272,8 +286,8 @@ exceptions, collapse it.
 
 - **A Temporal workflow with 4 activities, none independently meaningful
   to the audience.** → 1 node, `data.kind: "workflow"`,
-  `oneNodeRationale: "Single Temporal workflow — activities are
-  implementation detail"`. Even though there are 4 activities, the
+  `rationales["temporal-workflow"]: "Single Temporal workflow — activities
+  are implementation detail"`. Even though there are 4 activities, the
   audience cares about "did the workflow run?"; they don't need each
   activity surfaced.
 - **A 4-stage pipeline (`validate → score → rank → publish`) inside one
@@ -398,123 +412,30 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    {
-      "id": "order-server",
-      "type": "playNode",
-      "data": {
-        "name": "POST /orders",
-        "kind": "service",
-        "stateSource": { "kind": "request" },
-        "description": "Accepts a cart, creates an order, publishes order.created."
-      },
-      "oneNodeRationale": "Single HTTP service. Internal routes (orders, payments) are implementation detail."
-    },
-    {
-      "id": "event-bus",
-      "type": "stateNode",
-      "data": {
-        "name": "Event Bus",
-        "kind": "bus",
-        "stateSource": { "kind": "event" },
-        "description": "Fans order.created to async consumers."
-      },
-      "oneNodeRationale": "Named bus abstraction in the codebase — one channel, not many."
-    },
-    {
-      "id": "inventory-worker",
-      "type": "stateNode",
-      "data": {
-        "name": "Inventory Worker",
-        "kind": "worker",
-        "stateSource": { "kind": "event" },
-        "description": "Reserves stock when an order.created event arrives."
-      },
-      "oneNodeRationale": "Exception 2: fan-out consumer whose work is its own business concept."
-    },
-    {
-      "id": "shipping-worker",
-      "type": "stateNode",
-      "data": {
-        "name": "Shipping Worker",
-        "kind": "worker",
-        "stateSource": { "kind": "event" },
-        "description": "Drains the shipments queue, moves orders to shipped."
-      },
-      "oneNodeRationale": "Exception 2: fan-out consumer whose work is its own business concept."
-    },
-    {
-      "id": "shipments-queue",
-      "type": "stateNode",
-      "data": {
-        "name": "Shipments Queue",
-        "kind": "queue",
-        "stateSource": { "kind": "event" },
-        "description": "Buffer between inventory confirmation and shipping handoff."
-      },
-      "oneNodeRationale": "Single message queue — one channel."
-    },
-    {
-      "id": "order-store",
-      "type": "stateNode",
-      "data": {
-        "name": "Order Store",
-        "kind": "db",
-        "stateSource": { "kind": "event" },
-        "description": "Authoritative order state: pending → paid → shipped."
-      },
-      "oneNodeRationale": "Single database dependency, regardless of how many tables it holds."
-    }
+    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "kind": "service", "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created." } },
+    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "kind": "bus",     "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers." } },
+    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives." } },
+    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped." } },
+    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "kind": "queue",   "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff." } },
+    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "kind": "db",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped." } }
   ],
   "connectors": [
-    {
-      "id": "c-order-server-event-bus",
-      "kind": "event",
-      "source": "order-server",
-      "target": "event-bus",
-      "eventName": "order.created",
-      "label": "order.created"
-    },
-    {
-      "id": "c-event-bus-inventory-worker",
-      "kind": "event",
-      "source": "event-bus",
-      "target": "inventory-worker",
-      "eventName": "order.created"
-    },
-    {
-      "id": "c-inventory-worker-shipments-queue",
-      "kind": "queue",
-      "source": "inventory-worker",
-      "target": "shipments-queue",
-      "queueName": "shipments",
-      "label": "shipments"
-    },
-    {
-      "id": "c-shipments-queue-shipping-worker",
-      "kind": "queue",
-      "source": "shipments-queue",
-      "target": "shipping-worker",
-      "queueName": "shipments"
-    },
-    {
-      "id": "c-order-server-order-store",
-      "kind": "default",
-      "source": "order-server",
-      "target": "order-store"
-    },
-    {
-      "id": "c-inventory-worker-order-store",
-      "kind": "default",
-      "source": "inventory-worker",
-      "target": "order-store"
-    },
-    {
-      "id": "c-shipping-worker-order-store",
-      "kind": "default",
-      "source": "shipping-worker",
-      "target": "order-store"
-    }
-  ]
+    { "id": "c-order-server-event-bus",         "kind": "event",   "source": "order-server",     "target": "event-bus",        "eventName": "order.created", "label": "order.created" },
+    { "id": "c-event-bus-inventory-worker",     "kind": "event",   "source": "event-bus",        "target": "inventory-worker", "eventName": "order.created" },
+    { "id": "c-inventory-worker-shipments-queue","kind": "queue",  "source": "inventory-worker", "target": "shipments-queue",  "queueName": "shipments", "label": "shipments" },
+    { "id": "c-shipments-queue-shipping-worker","kind": "queue",   "source": "shipments-queue",  "target": "shipping-worker",  "queueName": "shipments" },
+    { "id": "c-order-server-order-store",       "kind": "default", "source": "order-server",     "target": "order-store" },
+    { "id": "c-inventory-worker-order-store",   "kind": "default", "source": "inventory-worker", "target": "order-store" },
+    { "id": "c-shipping-worker-order-store",    "kind": "default", "source": "shipping-worker",  "target": "order-store" }
+  ],
+  "rationales": {
+    "order-server":     "Single HTTP service. Internal routes (orders, payments) are implementation detail.",
+    "event-bus":        "Named bus abstraction in the codebase — one channel, not many.",
+    "inventory-worker": "Exception 2: fan-out consumer whose work is its own business concept.",
+    "shipping-worker":  "Exception 2: fan-out consumer whose work is its own business concept.",
+    "shipments-queue":  "Single message queue — one channel.",
+    "order-store":      "Single database dependency, regardless of how many tables it holds."
+  }
 }
 ```
 
@@ -525,12 +446,13 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "validate-cart", "type": "stateNode", "data": { "name": "validate cart", "kind": "step", "stateSource": { "kind": "event" } }, "oneNodeRationale": "step 1" },
-    { "id": "compute-tax",   "type": "stateNode", "data": { "name": "compute tax",   "kind": "step", "stateSource": { "kind": "event" } }, "oneNodeRationale": "step 2" },
-    { "id": "charge-card",   "type": "stateNode", "data": { "name": "charge card",   "kind": "step", "stateSource": { "kind": "event" } }, "oneNodeRationale": "step 3" },
-    { "id": "publish-event", "type": "stateNode", "data": { "name": "publish event", "kind": "step", "stateSource": { "kind": "event" } }, "oneNodeRationale": "step 4" }
+    { "id": "validate-cart", "type": "stateNode", "data": { "name": "validate cart", "kind": "step", "stateSource": { "kind": "event" } } },
+    { "id": "compute-tax",   "type": "stateNode", "data": { "name": "compute tax",   "kind": "step", "stateSource": { "kind": "event" } } },
+    { "id": "charge-card",   "type": "stateNode", "data": { "name": "charge card",   "kind": "step", "stateSource": { "kind": "event" } } },
+    { "id": "publish-event", "type": "stateNode", "data": { "name": "publish event", "kind": "step", "stateSource": { "kind": "event" } } }
   ],
-  "connectors": []
+  "connectors": [],
+  "rationales": { "validate-cart": "step 1", "compute-tax": "step 2", "charge-card": "step 3", "publish-event": "step 4" }
 }
 ```
 
@@ -551,6 +473,9 @@ downstream entities.
 - Every database, queue, event bus, cache, file store, and external SaaS
   mentioned in the brief MUST have a node. Omitting a resource node is
   always wrong.
-- Cite an exception by number (`Exception 1/2/3`) in `oneNodeRationale`
+- Cite an exception by number (`Exception 1/2/3`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
+- **Do not emit `position`, `playAction`, `statusAction`, or any visual
+  field** at the node root. Phase 4 attaches actions; Phase 3 `flows:layout`
+  attaches positions.
 - When in doubt: collapse, don't split.
