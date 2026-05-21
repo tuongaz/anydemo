@@ -103,13 +103,15 @@ const expectError = (envelope: JsonRpcEnvelope): string => {
 };
 
 describe('POST /mcp tools/list', () => {
-  it('returns the discovery + node-lifecycle + patch + connector tools (5 + 4 + 1 + 3)', async () => {
+  it('returns the discovery + node-lifecycle + patch + connector + bulk tools', async () => {
     const { app } = buildApp();
     const envelope = await mcpRequest(app, 'tools/list', {});
     const names = (envelope.result?.tools ?? []).map((t) => t.name).sort();
     expect(names).toEqual([
       'seeflow_add_connector',
+      'seeflow_add_connectors',
       'seeflow_add_node',
+      'seeflow_add_nodes',
       'seeflow_create_project',
       'seeflow_delete_connector',
       'seeflow_delete_flow',
@@ -1269,6 +1271,180 @@ describe('seeflow_delete_connector', () => {
     const envelope = await callTool(app, 'seeflow_delete_connector', {
       flowId: 'does-not-exist',
       connectorId: 'a-to-b',
+    });
+    expect(expectError(envelope)).toBe('unknown demo');
+  });
+});
+
+describe('seeflow_add_nodes', () => {
+  it('appends every node and externalizes detail/html per item in one call', async () => {
+    const { app } = buildApp();
+    const { demoFile, repoPath, reg } = await registerFixture(app);
+
+    const envelope = await callTool(app, 'seeflow_add_nodes', {
+      flowId: reg.id,
+      nodes: [
+        { id: 'n1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+        { id: 'n2', type: 'shapeNode', data: { name: 'B', shape: 'ellipse', detail: 'd2' } },
+        { id: 'n3', type: 'htmlNode', data: { html: '<p>hi</p>' } },
+      ],
+    });
+    const body = expectOk(envelope) as {
+      ok: boolean;
+      nodes: Array<{ id: string; node: { type: string } }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.nodes.map((n) => n.id)).toEqual(['n1', 'n2', 'n3']);
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; data: { detail?: string; html?: string } }>;
+    };
+    // Fixture had 1 seed node; bulk added 3 → 4 total.
+    expect(onDisk.nodes).toHaveLength(4);
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n2', 'detail.md'), 'utf8')).toBe('d2');
+    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n3', 'view.html'), 'utf8')).toBe(
+      '<p>hi</p>',
+    );
+  });
+
+  it('rejects the whole batch with a schema-validation error when one item is bad', async () => {
+    const { app } = buildApp();
+    const { demoFile, reg } = await registerFixture(app);
+    const before = readFileSync(demoFile, 'utf8');
+
+    const envelope = await callTool(app, 'seeflow_add_nodes', {
+      flowId: reg.id,
+      nodes: [
+        { type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+        // shapeNode without shape — post-mutation parse rejects.
+        { type: 'shapeNode', data: { name: 'B' } },
+      ],
+    });
+    expect(expectError(envelope)).toContain('Flow failed schema validation');
+    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+  });
+
+  it('errors on intra-batch duplicate id', async () => {
+    const { app } = buildApp();
+    const { reg } = await registerFixture(app);
+    const envelope = await callTool(app, 'seeflow_add_nodes', {
+      flowId: reg.id,
+      nodes: [
+        { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+        { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+      ],
+    });
+    expect(expectError(envelope)).toContain('Duplicate id in batch');
+  });
+
+  it('errors on id collision with an existing node', async () => {
+    const { app } = buildApp();
+    const { reg } = await registerFixture(app);
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: { id: 'taken', type: 'shapeNode', data: { name: 'seed', shape: 'rectangle' } },
+    });
+
+    const envelope = await callTool(app, 'seeflow_add_nodes', {
+      flowId: reg.id,
+      nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
+    });
+    expect(expectError(envelope)).toContain('Node id already exists');
+  });
+
+  it('errors with "unknown demo" for an unknown flowId', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_add_nodes', {
+      flowId: 'does-not-exist',
+      nodes: [{ type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
+    });
+    expect(expectError(envelope)).toBe('unknown demo');
+  });
+
+  it('input schema advertises the 100-item cap', async () => {
+    const { app } = buildApp();
+    const envelope = await mcpRequest(app, 'tools/list', {});
+    const tool = (envelope.result?.tools ?? []).find((t) => t.name === 'seeflow_add_nodes');
+    const props = tool?.inputSchema?.properties as Record<string, { maxItems?: number }>;
+    expect(props?.nodes?.maxItems).toBe(100);
+  });
+});
+
+describe('seeflow_add_connectors', () => {
+  it('appends every connector in one call and defaults kind per item', async () => {
+    const { app } = buildApp();
+    const { demoFile, reg } = await registerFixture(app);
+    // Seed two playNodes so the bulk connectors have something to wire.
+    await callTool(app, 'seeflow_add_nodes', {
+      flowId: reg.id,
+      nodes: [
+        {
+          id: 'src',
+          type: 'playNode',
+          data: {
+            name: 'S',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
+          },
+        },
+        {
+          id: 'dst',
+          type: 'playNode',
+          data: {
+            name: 'D',
+            kind: 'service',
+            stateSource: { kind: 'request' },
+            playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
+          },
+        },
+      ],
+    });
+
+    const envelope = await callTool(app, 'seeflow_add_connectors', {
+      flowId: reg.id,
+      connectors: [
+        { source: 'src', target: 'dst', kind: 'event', eventName: 'thing' },
+        { id: 'pinned', source: 'dst', target: 'src' },
+      ],
+    });
+    const body = expectOk(envelope) as { ok: boolean; connectors: Array<{ id: string }> };
+    expect(body.ok).toBe(true);
+    expect(body.connectors[1]?.id).toBe('pinned');
+
+    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
+      connectors: Array<{ id: string; kind: string }>;
+    };
+    expect(onDisk.connectors).toHaveLength(2);
+    expect(onDisk.connectors[0]?.kind).toBe('event');
+    expect(onDisk.connectors[1]?.kind).toBe('default');
+  });
+
+  it('rejects the whole batch when one connector has a dangling target', async () => {
+    const { app } = buildApp();
+    const { demoFile, reg } = await registerFixture(app);
+    await callTool(app, 'seeflow_add_node', {
+      flowId: reg.id,
+      node: { id: 'lone', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+    });
+    const before = readFileSync(demoFile, 'utf8');
+
+    const envelope = await callTool(app, 'seeflow_add_connectors', {
+      flowId: reg.id,
+      connectors: [
+        { source: 'lone', target: 'lone' },
+        { source: 'lone', target: 'no-such-node' },
+      ],
+    });
+    expect(expectError(envelope)).toContain('Flow failed schema validation');
+    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+  });
+
+  it('errors with "unknown demo" for an unknown flowId', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_add_connectors', {
+      flowId: 'does-not-exist',
+      connectors: [{ source: 'a', target: 'b' }],
     });
     expect(expectError(envelope)).toBe('unknown demo');
   });

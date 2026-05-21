@@ -8,14 +8,18 @@ import { type ZodTypeAny, z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   ConnectorPatchBodySchema,
+  ConnectorsBulkBodySchema,
   CreateProjectBodySchema,
   NodePatchBodySchema,
+  NodesBulkBodySchema,
   type OperationsDeps,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
   addConnectorImpl,
+  addConnectorsBulkImpl,
   addNodeImpl,
+  addNodesBulkImpl,
   createProjectImpl,
   deleteConnectorImpl,
   deleteFlowImpl,
@@ -114,6 +118,14 @@ const AddNodeInputSchema = z.object({
   node: z.record(z.unknown()),
 });
 
+// add_nodes input: { flowId, nodes: [...] }. Same loose per-item shape as
+// add_node — ResolvedFlowSchema runs once over the whole batch server-side
+// after the merge. Min/max bounds come from NodesBulkBodySchema so the
+// 100-item cap shows up in the JSON Schema the agent introspects.
+const AddNodesInputSchema = NodesBulkBodySchema.extend({
+  flowId: z.string().min(1),
+});
+
 const DeleteNodeInputSchema = FlowNodeIdBaseSchema;
 
 // move_node input: { flowId, nodeId } extended with PositionBodySchema's
@@ -154,6 +166,11 @@ const PatchNodeInputSchema = NodePatchBodySchema.extend({
 const AddConnectorInputSchema = z.object({
   flowId: z.string().min(1),
   connector: z.record(z.unknown()),
+});
+
+// add_connectors input: { flowId, connectors: [...] }. Mirrors add_nodes.
+const AddConnectorsInputSchema = ConnectorsBulkBodySchema.extend({
+  flowId: z.string().min(1),
 });
 
 // patch_connector input: { flowId, connectorId } merged with the strict
@@ -322,6 +339,38 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     },
   },
   {
+    name: 'seeflow_add_nodes',
+    description:
+      'Append 1–100 nodes to a flow in a single transactional write. Either every node lands or nothing does — if any item fails schema validation the whole batch is rejected. Use this instead of multiple seeflow_add_node calls when seeding a flow; it avoids per-item round-trips. Same per-item shape and externalization rules as seeflow_add_node.',
+    inputSchema: inputSchemaFromZod(AddNodesInputSchema),
+    handler: async (args) => {
+      const parsed = AddNodesInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return errorResult(`Invalid add_nodes arguments: ${JSON.stringify(parsed.error.issues)}`);
+      }
+      const { flowId, nodes } = parsed.data;
+      const result = await addNodesBulkImpl(deps, flowId, { nodes });
+      switch (result.kind) {
+        case 'ok':
+          return okResult({ ok: true, nodes: result.data.nodes });
+        case 'flowNotFound':
+          return errorResult('unknown demo');
+        case 'fileNotFound':
+          return errorResult(`Flow file not found: ${result.path}`);
+        case 'badJson':
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
+        case 'badSchema':
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
+        case 'duplicateIdInBatch':
+          return errorResult(`Duplicate id in batch: ${result.id}`);
+        case 'idAlreadyExists':
+          return errorResult(`Node id already exists: ${result.id}`);
+        case 'writeFailed':
+          return errorResult(`Failed to write demo file: ${result.message}`);
+      }
+    },
+  },
+  {
     name: 'seeflow_delete_node',
     description: 'Delete a node and cascade-remove every connector touching it.',
     inputSchema: inputSchemaFromZod(DeleteNodeInputSchema),
@@ -470,6 +519,40 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
           return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
+        case 'writeFailed':
+          return errorResult(`Failed to write demo file: ${result.message}`);
+      }
+    },
+  },
+  {
+    name: 'seeflow_add_connectors',
+    description:
+      'Append 1–100 connectors to a flow in a single transactional write. Either every connector lands or nothing does — a dangling source/target on any item rolls back the whole batch. Use after seeflow_add_nodes when seeding a flow.',
+    inputSchema: inputSchemaFromZod(AddConnectorsInputSchema),
+    handler: async (args) => {
+      const parsed = AddConnectorsInputSchema.safeParse(args);
+      if (!parsed.success) {
+        return errorResult(
+          `Invalid add_connectors arguments: ${JSON.stringify(parsed.error.issues)}`,
+        );
+      }
+      const { flowId, connectors } = parsed.data;
+      const result = await addConnectorsBulkImpl(deps, flowId, { connectors });
+      switch (result.kind) {
+        case 'ok':
+          return okResult({ ok: true, connectors: result.data.connectors });
+        case 'flowNotFound':
+          return errorResult('unknown demo');
+        case 'fileNotFound':
+          return errorResult(`Flow file not found: ${result.path}`);
+        case 'badJson':
+          return errorResult(`Flow file is not valid JSON: ${result.message}`);
+        case 'badSchema':
+          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
+        case 'duplicateIdInBatch':
+          return errorResult(`Duplicate id in batch: ${result.id}`);
+        case 'idAlreadyExists':
+          return errorResult(`Connector id already exists: ${result.id}`);
         case 'writeFailed':
           return errorResult(`Failed to write demo file: ${result.message}`);
       }
