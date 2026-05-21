@@ -65,22 +65,37 @@ with this exact shape — and nothing else outside the fence:
   "playOverlays": [
     {
       "nodeId": "order-server",
-      "playAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "args": ["run"],
-        "scriptPath": "order-pipeline/scripts/play-order.ts",
-        "input": { "cart": [{ "sku": "SKU-1", "qty": 1 }] },
-        "timeoutMs": 15000
+      "patch": {
+        "description": "Receives a cart, creates an order.",
+        "detail": "## POST /orders\n\nValidates the cart, persists the order, publishes `order.created`.",
+        "playAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": ["run"],
+          "scriptPath": "scripts/play.ts",
+          "input": { "cart": [{ "sku": "SKU-1", "qty": 1 }] },
+          "timeoutMs": 15000
+        }
       },
-      "scriptBody": "#!/usr/bin/env bun\n// full script source as a string",
+      "scriptFile": {
+        "path": ".seeflow/nodes/order-server/scripts/play.ts",
+        "body": "#!/usr/bin/env bun\n// full script source as a string",
+        "chmod": "755"
+      },
       "validationSafe": true,
-      "rationale": "Sync HTTP entry — Play sits on the endpoint per rule 1."
+      "rationale": "Rule 1: sync HTTP entry — Play sits on the endpoint."
     }
   ],
-  "newTriggerNodes": []
+  "newTriggerNodes": { "nodes": [], "connectors": [] }
 }
 ```
+
+**How the orchestrator uses this:** for each overlay it writes
+`scriptFile.body` to `scriptFile.path` (with `chmod`), then runs
+`seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`. `patch` is the
+exact PATCH body — every key the studio's `NodePatchBodySchema` rejects
+is rejected here too. `playAction.scriptPath` is **relative to the node
+folder** (`scripts/play.ts`), NOT the project root.
 
 Field-by-field rules:
 
@@ -88,39 +103,50 @@ Field-by-field rules:
 
 One entry per node that should host a `playAction`. Omit entries for
 nodes that get no Play. Every `nodeId` MUST reference a node already in
-`nodeDraft.nodes` OR a node you introduce in `newTriggerNodes`. Do not
-emit overlays for ids that exist nowhere.
+`nodeDraft.nodes` OR a node you introduce in `newTriggerNodes.nodes`.
+Do not emit overlays for ids that exist nowhere.
 
 - **`nodeId`** *(string)* — the target node's `id` from `nodeDraft`
-  (or from `newTriggerNodes`).
-- **`playAction`** *(object)* — matches the studio's `PlayActionSchema`:
-  - `kind`: literal `"script"`.
-  - `interpreter` *(string, required)*: the executable resolved against
-    `$PATH`. Default to `"bun"` for TypeScript scripts. Use `"python3"`,
-    `"node"`, `"bash"`, etc. when the user's project clearly prefers a
-    different runtime.
-  - `args` *(string[], optional)*: pre-script flags. For bun use
-    `["run"]`; for python use `["-u"]` if you need unbuffered stdio.
-    Omit when not needed.
-  - `scriptPath` *(string, required)*: clean relative path that the
-    studio will resolve as `<projectRoot>/.seeflow/<scriptPath>`. The
-    canonical form is `<slug>/scripts/play-<short-name>.ts`. No
-    absolute paths, no `..` segments, no leading `/`. The orchestrator
-    will write the file at exactly that path under the slug directory.
-  - `input` *(JSON, optional)*: payload written to the script's stdin
-    (the studio JSON-serialises it). Pick the smallest object that
-    triggers the demonstrated behaviour — a single item, one cart, one
-    webhook envelope. Do not embed PII, secrets, or production ids.
-  - `timeoutMs` *(integer, optional, ≤ 600000)*: hard cap on the
-    script's wall-clock. Default to `15000` for HTTP-trigger scripts,
-    `5000` for filesystem fixtures, `30000` for long fan-outs. The
-    studio kills the script with SIGTERM + 2s grace + SIGKILL on
-    timeout and surfaces it as a `node:error`. Keep it tight — the
-    validation phase has its own 2-minute ceiling.
-- **`scriptBody`** *(string, required)* — the FULL source text of the
-  script that the orchestrator will write to `scriptPath`. Always
-  start with a shebang (`#!/usr/bin/env bun`, `#!/usr/bin/env python3`,
-  etc.). The script's contract:
+  (or from `newTriggerNodes.nodes`).
+- **`patch`** *(object)* — body forwarded to `seeflow nodes:patch
+  <flowId> <nodeId>`. Accepts any key from `NodePatchBodySchema`:
+  - `playAction` *(object, required)* — matches the studio's
+    `PlayActionSchema`:
+    - `kind`: literal `"script"`.
+    - `interpreter` *(string, required)*: the executable resolved against
+      `$PATH`. Default to `"bun"` for TypeScript scripts. Use `"python3"`,
+      `"node"`, `"bash"`, etc. when the user's project clearly prefers a
+      different runtime.
+    - `args` *(string[], optional)*: pre-script flags. For bun use
+      `["run"]`; for python use `["-u"]` if you need unbuffered stdio.
+      Omit when not needed.
+    - `scriptPath` *(string, required)*: clean relative path resolved
+      under the node folder (`.seeflow/nodes/<nodeId>/`). The canonical
+      form is `scripts/play.ts`. No absolute paths, no `..`, no leading
+      `/`. NO `<slug>/` or `<nodeId>/` prefix — the studio prepends the
+      anchor.
+    - `input` *(JSON, optional)*: payload written to the script's stdin
+      (the studio JSON-serialises it). Pick the smallest object that
+      triggers the demonstrated behaviour — a single item, one cart, one
+      webhook envelope. Do not embed PII, secrets, or production ids.
+    - `timeoutMs` *(integer, optional, ≤ 600000)*: hard cap on the
+      script's wall-clock. Default to `15000` for HTTP-trigger scripts,
+      `5000` for filesystem fixtures, `30000` for long fan-outs.
+  - `description` *(string, optional, ≤ 15 words)* — short on-canvas
+    caption. Empty string clears the field.
+  - `detail` *(string, optional)* — long markdown that auto-externalises
+    to `.seeflow/nodes/<nodeId>/detail.md`. Use for sample payloads,
+    behaviour notes, source-file pointers.
+  - `icon` *(string, optional)* — kebab-case Lucide name. Only set if
+    the planner missed one; otherwise omit.
+- **`scriptFile`** *(object, required)* — what the orchestrator writes
+  to disk before running `nodes:patch`:
+  - `path` *(string, required)*: project-root-relative path. Always
+    `.seeflow/nodes/<nodeId>/scripts/<filename>` — the studio resolves
+    `playAction.scriptPath` against that node folder.
+  - `body` *(string, required)*: the FULL source text. Always start with
+    a shebang (`#!/usr/bin/env bun`, `#!/usr/bin/env python3`, etc.).
+    The script's contract:
   - Reads JSON from stdin when `input` is present (`await Bun.stdin.text()`
     in bun; `sys.stdin.read()` in python). Treat malformed/empty input
     as "use defaults" — never throw.
@@ -133,11 +159,12 @@ emit overlays for ids that exist nowhere.
   - On failure: writes a one-line message to stderr and exits non-zero.
     The studio surfaces the last stderr line as the play's `error`
     field. Do not rely on stack traces — the user sees the one line.
-  - Must be **idempotent**: validation calls the script once and the
-    user will click again. Use append-only state (the demo's
-    `.seeflow/<slug>/state/` directory is git-ignored), upserts keyed
-    by a deterministic id, or external-API endpoints that are
-    naturally idempotent (Stripe idempotency keys, PUT vs POST).
+    - Must be **idempotent**: validation calls the script once and the
+      user will click again. Use append-only state (the project's
+      `.seeflow/state/` directory is git-ignored), upserts keyed by a
+      deterministic id, or external-API endpoints that are naturally
+      idempotent (Stripe idempotency keys, PUT vs POST).
+  - `chmod` *(string, optional, default `"755"`)*: octal permissions.
 - **`validationSafe`** *(boolean, required)* — `true` when the script
   is safe to invoke during automated end-to-end validation; `false`
   when invocation would cost real money, hit a third-party SaaS with
@@ -150,46 +177,53 @@ emit overlays for ids that exist nowhere.
   `"Rule 3: fast-forward Play for long async wait"`). The orchestrator
   surfaces these in the plan-review step.
 
-### `newTriggerNodes[]`
+### `newTriggerNodes`
 
-Zero or more synthetic nodes you inject so the audience has something
-to click on an otherwise observer-only graph. Each entry is a complete
-node object suitable for splicing into `nodeDraft.nodes`:
+Synthetic nodes (plus their connectors) you inject so the audience has
+something to click on an otherwise observer-only graph. Shape matches
+the `seeflow-node-planner` output for `nodes` + `connectors` — the
+orchestrator forwards them to `seeflow nodes:add-bulk` and
+`seeflow connectors:add-bulk`:
 
 ```json
 {
-  "id": "fixture-drop",
-  "type": "playNode",
-  "data": {
-    "name": "Drop Order Fixture",
-    "kind": "trigger",
-    "stateSource": { "kind": "request" },
-    "description": "Writes a fake order JSON into the drop directory."
-  }
+  "nodes": [
+    {
+      "id": "fixture-drop",
+      "type": "playNode",
+      "data": {
+        "name": "Drop Order Fixture",
+        "kind": "trigger",
+        "icon": "play",
+        "stateSource": { "kind": "request" },
+        "description": "Writes a fake order JSON into the drop directory."
+      }
+    }
+  ],
+  "connectors": [
+    { "id": "c-fixture-drop-inventory-worker", "kind": "default", "source": "fixture-drop", "target": "inventory-worker" }
+  ]
 }
 ```
 
 Rules for `newTriggerNodes`:
 
-- Use `type: "playNode"` so the graph clearly marks it as the
-  clickable entry. The corresponding entry in `playOverlays` carries
-  the actual `playAction`.
+- Use `type: "playNode"` so the graph marks it as the clickable entry. The
+  matching `playOverlays` entry carries the actual `playAction`.
 - Pick a `data.kind` that names the role (`"trigger"`, `"fixture"`,
-  `"webhook"`, `"tick"`). It is free-form text in the schema but
-  these labels make downstream rendering predictable.
-- `stateSource.kind` is `"request"` when the Play is the direct cause
-  of the state change visible downstream; `"event"` when the Play
-  emits an event that other nodes subscribe to.
-- Do not invent connectors here. The orchestrator splices your new
-  nodes into `nodeDraft.nodes` and wires them to the original trigger
-  based on the rationale you provide on the matching `playOverlays`
-  entry (e.g. `"Rule 4: injected fixture-producer in front of
-  inventory-worker"`).
-- Reuse existing ids when editing. Two different `newTriggerNodes`
-  entries with the same id is a contract violation.
+  `"webhook"`, `"tick"`). Free-form, but these labels make downstream
+  rendering predictable.
+- `stateSource.kind` is `"request"` when the Play directly causes the
+  downstream state change; `"event"` when the Play emits an event others
+  subscribe to.
+- Wire every new node — emit at least one connector per new node so the
+  graph isn't disconnected.
+- Reuse existing ids when editing. Two different entries with the same id
+  is a contract violation.
 
-If you do not need to inject any triggers, return `"newTriggerNodes": []`.
-The field must always be present.
+If you do not need to inject any triggers, return
+`"newTriggerNodes": { "nodes": [], "connectors": [] }`. The field must
+always be present.
 
 ## Play-button placement rules
 
@@ -335,22 +369,26 @@ editTarget: null
   "playOverlays": [
     {
       "nodeId": "order-server",
-      "playAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "args": ["run"],
-        "scriptPath": "order-pipeline/scripts/play-order.ts",
-        "input": {
-          "cart": [{ "sku": "SKU-1", "qty": 1 }]
-        },
-        "timeoutMs": 15000
+      "patch": {
+        "playAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": ["run"],
+          "scriptPath": "scripts/play.ts",
+          "input": { "cart": [{ "sku": "SKU-1", "qty": 1 }] },
+          "timeoutMs": 15000
+        }
       },
-      "scriptBody": "#!/usr/bin/env bun\nconst input = (await Bun.stdin.text()).trim();\nlet body: unknown = { cart: [{ sku: 'SKU-1', qty: 1 }] };\nif (input.length > 0) {\n  try {\n    body = JSON.parse(input);\n  } catch {\n    /* fall back to default cart */\n  }\n}\nconst port = process.env.ORDER_PIPELINE_PORT ?? '3001';\nconst res = await fetch(`http://localhost:${port}/orders`, {\n  method: 'POST',\n  headers: { 'content-type': 'application/json' },\n  body: JSON.stringify(body),\n});\nconst text = await res.text();\nif (!res.ok) {\n  console.error(`POST /orders failed: ${res.status} ${text.slice(0, 200)}`);\n  process.exit(1);\n}\nconst order = text.length > 0 ? JSON.parse(text) : {};\nconsole.log(JSON.stringify({ ok: true, orderId: order.id ?? null, flowId: process.env.SEEFLOW_DEMO_ID }));\n",
+      "scriptFile": {
+        "path": ".seeflow/nodes/order-server/scripts/play.ts",
+        "body": "#!/usr/bin/env bun\nconst input = (await Bun.stdin.text()).trim();\nlet body: unknown = { cart: [{ sku: 'SKU-1', qty: 1 }] };\nif (input.length > 0) {\n  try {\n    body = JSON.parse(input);\n  } catch {\n    /* fall back to default cart */\n  }\n}\nconst port = process.env.ORDER_PIPELINE_PORT ?? '3001';\nconst res = await fetch(`http://localhost:${port}/orders`, {\n  method: 'POST',\n  headers: { 'content-type': 'application/json' },\n  body: JSON.stringify(body),\n});\nconst text = await res.text();\nif (!res.ok) {\n  console.error(`POST /orders failed: ${res.status} ${text.slice(0, 200)}`);\n  process.exit(1);\n}\nconst order = text.length > 0 ? JSON.parse(text) : {};\nconsole.log(JSON.stringify({ ok: true, orderId: order.id ?? null, flowId: process.env.SEEFLOW_DEMO_ID }));\n",
+        "chmod": "755"
+      },
       "validationSafe": true,
       "rationale": "Rule 1: sync HTTP entry — Play sits on the endpoint."
     }
   ],
-  "newTriggerNodes": []
+  "newTriggerNodes": { "nodes": [], "connectors": [] }
 }
 ```
 
@@ -379,30 +417,20 @@ Notes on the example:
   "playOverlays": [
     {
       "nodeId": "order-store",
-      "playAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "scriptPath": "../escape/out-of-sandbox.ts",
-        "input": null
-      },
-      "scriptBody": "console.log('did stuff')",
+      "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "../escape/out-of-sandbox.ts" } },
+      "scriptFile": { "path": ".seeflow/nodes/order-store/scripts/play.ts", "body": "console.log('did stuff')" },
       "validationSafe": true,
       "rationale": "Play the DB"
     },
     {
       "nodeId": "inventory-worker",
-      "playAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "scriptPath": "order-pipeline/scripts/play-inventory.ts",
-        "input": {}
-      },
-      "scriptBody": "/* same as above */",
+      "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "order-pipeline/scripts/play-inventory.ts" } },
+      "scriptFile": { "path": ".seeflow/nodes/inventory-worker/scripts/play.ts", "body": "/* placeholder */" },
       "validationSafe": true,
       "rationale": "Play the consumer"
     }
   ],
-  "newTriggerNodes": []
+  "newTriggerNodes": { "nodes": [], "connectors": [] }
 }
 ```
 
@@ -412,22 +440,28 @@ This is wrong because:
    playActions — that is a status concern.
 2. `scriptPath: "../escape/..."` fails the schema's clean-relative
    check (no `..` segments allowed).
-3. `inventory-worker` is a consumer in an async chain — Rule 2 says
-   put the Play on the *source* (`order-server` or a synthetic
-   trigger), not on a consumer.
-4. The `scriptBody` is a placeholder; the orchestrator writes it
-   verbatim, so the file would be a no-op string.
-5. The rationales do not cite a numbered rule.
+3. The second overlay's `scriptPath: "order-pipeline/scripts/…"` uses
+   the legacy `<slug>/` prefix. The new anchor is the node folder, so
+   the correct value is just `scripts/play.ts`.
+4. `inventory-worker` is a consumer in an async chain — Rule 2 says put
+   the Play on the *source* (`order-server` or a synthetic trigger), not
+   on a consumer.
+5. The `scriptFile.body` values are placeholders; the orchestrator writes
+   them verbatim, so the files would be no-op strings.
+6. The rationales do not cite a numbered rule.
 
 ## Constraints recap
 
 - Tools: `Read`, `Grep`, `Glob`, `LS` only. Never write, never run.
 - Final message is ONE fenced JSON block, nothing else.
 - Every `playOverlays[].nodeId` must reference a node in `nodeDraft`
-  OR in your `newTriggerNodes`.
-- Every `scriptPath` is a clean relative path under
-  `<slug>/scripts/play-*.<ext>`.
-- Every `scriptBody` is the complete file body, including shebang.
+  OR in your `newTriggerNodes.nodes`.
+- Every `patch.playAction.scriptPath` is a clean relative path under the
+  node folder — `scripts/<name>.<ext>`. No `<slug>/`, no `<nodeId>/`,
+  no leading `/`, no `..`.
+- Every `scriptFile.path` is project-root-relative —
+  `.seeflow/nodes/<nodeId>/scripts/<name>.<ext>`.
+- Every `scriptFile.body` is the complete file body, including shebang.
 - Every script is idempotent.
 - `validationSafe: false` for anything that hits real third-party
   SaaS, real money, real notifications, or production data.

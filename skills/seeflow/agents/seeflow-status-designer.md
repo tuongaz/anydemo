@@ -69,57 +69,76 @@ with this exact shape — and nothing else outside the fence:
   "statusOverlays": [
     {
       "nodeId": "order-store",
-      "statusAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "args": ["run"],
-        "scriptPath": "order-pipeline/scripts/status-orders.ts",
-        "maxLifetimeMs": 600000
+      "patch": {
+        "detail": "## Order Store\n\nAuthoritative order state — rows transition pending → paid → shipped.",
+        "statusAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": ["run"],
+          "scriptPath": "scripts/status.ts",
+          "maxLifetimeMs": 600000
+        }
       },
-      "scriptBody": "#!/usr/bin/env bun\n// full script source as a string",
+      "scriptFile": {
+        "path": ".seeflow/nodes/order-store/scripts/status.ts",
+        "body": "#!/usr/bin/env bun\n// full script source as a string",
+        "chmod": "755"
+      },
       "rationale": "DB row state — audience sees orders move pending → paid → shipped."
     }
   ]
 }
 ```
 
+**How the orchestrator uses this:** for each overlay it writes
+`scriptFile.body` to `scriptFile.path` (with `chmod`), then runs
+`seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`. `patch` is the
+exact PATCH body. `statusAction.scriptPath` is **relative to the node
+folder** (`scripts/status.ts`), NOT the project root.
+
 Field-by-field rules:
 
 ### `statusOverlays[]`
 
 One entry per node that should host a `statusAction`. Omit entries for
-nodes that get none — do not emit "empty" overlays. Every `nodeId`
-MUST reference a node already in `nodeDraft.nodes`. You do not inject
-new nodes; if a status would need a node that does not exist, surface
-the gap by *not* emitting that overlay and trust the plan-review step
-to give the user a chance to ask for it.
+nodes that get none — do not emit "empty" overlays. Every `nodeId` MUST
+reference a node already in `nodeDraft.nodes`. You do not inject new
+nodes; if a status would need a node that does not exist, surface the
+gap by *not* emitting that overlay and trust the plan-review step to
+give the user a chance to ask for it.
 
 - **`nodeId`** *(string)* — the target node's `id` from `nodeDraft`.
-- **`statusAction`** *(object)* — matches the studio's
-  `StatusActionSchema`:
-  - `kind`: literal `"script"`.
-  - `interpreter` *(string, required)*: the executable resolved
-    against `$PATH`. Default to `"bun"` for TypeScript; use
-    `"python3"`, `"node"`, `"bash"` when the project clearly prefers
-    a different runtime.
-  - `args` *(string[], optional)*: pre-script flags. For bun use
-    `["run"]`; for python use `["-u"]` to force unbuffered stdio
-    (status scripts MUST flush every line — buffered Python that
-    flushes only on exit hangs the UI). Omit when not needed.
-  - `scriptPath` *(string, required)*: clean relative path that the
-    studio resolves as `<projectRoot>/.seeflow/<scriptPath>`. The
-    canonical form is `<slug>/scripts/status-<short-name>.ts`. No
-    absolute paths, no `..` segments, no leading `/`. The
-    orchestrator writes the file at exactly that path.
-  - `maxLifetimeMs` *(integer, optional, ≤ 3_600_000)*: hard cap on
-    the long-running script's wall-clock. Default to `600000`
-    (10 minutes) for most demos. Bump to `1800000` (30 min) for
-    demos with long async legs (Temporal workflows, carrier callbacks).
-    The studio kills the script on subsequent Play clicks (SIGTERM +
-    2s grace + SIGKILL) AND on lifetime expiry. Keep it short enough
-    that a forgotten tab cleans itself up.
-- **`scriptBody`** *(string, required)* — the FULL source text of the
-  script. Always start with a shebang. The script's contract:
+- **`patch`** *(object)* — body forwarded to `seeflow nodes:patch
+  <flowId> <nodeId>`. Accepts any key from `NodePatchBodySchema`:
+  - `statusAction` *(object, required)* — matches the studio's
+    `StatusActionSchema`:
+    - `kind`: literal `"script"`.
+    - `interpreter` *(string, required)*: the executable resolved
+      against `$PATH`. Default to `"bun"` for TypeScript; use
+      `"python3"`, `"node"`, `"bash"` when the project clearly prefers
+      a different runtime.
+    - `args` *(string[], optional)*: pre-script flags. For bun use
+      `["run"]`; for python use `["-u"]` to force unbuffered stdio
+      (status scripts MUST flush every line — buffered Python that
+      flushes only on exit hangs the UI). Omit when not needed.
+    - `scriptPath` *(string, required)*: clean relative path resolved
+      under the node folder (`.seeflow/nodes/<nodeId>/`). Canonical
+      form `scripts/status.ts`. No `<slug>/`, no `<nodeId>/`, no `..`,
+      no leading `/`.
+    - `maxLifetimeMs` *(integer, optional, ≤ 3_600_000)*: hard cap on
+      the long-running script's wall-clock. Default to `600000`
+      (10 minutes) for most demos. Bump to `1800000` (30 min) for demos
+      with long async legs. The studio kills the script on subsequent
+      Play clicks (SIGTERM + 2s grace + SIGKILL) AND on lifetime expiry.
+  - `detail` *(string, optional)* — long markdown that auto-externalises
+    to `.seeflow/nodes/<nodeId>/detail.md`. Use to describe what the
+    status surface reads and what each state means.
+- **`scriptFile`** *(object, required)* — what the orchestrator writes
+  to disk before running `nodes:patch`:
+  - `path` *(string, required)*: project-root-relative path. Always
+    `.seeflow/nodes/<nodeId>/scripts/<filename>`.
+  - `body` *(string, required)* — the FULL source text of the script.
+    Always start with a shebang. The script's contract:
   - Reads no stdin. The studio closes stdin immediately.
   - May read `process.env.SEEFLOW_DEMO_ID`, `process.env.SEEFLOW_NODE_ID`,
     `process.env.SEEFLOW_RUN_ID` for correlation/logging. All three
@@ -301,26 +320,38 @@ editTarget: null
   "statusOverlays": [
     {
       "nodeId": "order-store",
-      "statusAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "args": ["run"],
-        "scriptPath": "order-pipeline/scripts/status-orders.ts",
-        "maxLifetimeMs": 600000
+      "patch": {
+        "statusAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": ["run"],
+          "scriptPath": "scripts/status.ts",
+          "maxLifetimeMs": 600000
+        }
       },
-      "scriptBody": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\ninterface Order { id: string; status: 'pending' | 'paid' | 'shipped' | 'failed' }\n\nconst STATE_FILE = resolve(process.cwd(), '.seeflow/state/orders.json');\n\nasync function read(): Promise<Order[]> {\n  try {\n    const raw = await readFile(STATE_FILE, 'utf8');\n    if (raw.trim().length === 0) return [];\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? (parsed as Order[]) : [];\n  } catch {\n    return [];\n  }\n}\n\nwhile (true) {\n  const orders = await read();\n  const counts = { pending: 0, paid: 0, shipped: 0, failed: 0 };\n  for (const o of orders) counts[o.status] = (counts[o.status] ?? 0) + 1;\n  const total = orders.length;\n  const state = total === 0 ? 'warn' : counts.failed > 0 ? 'error' : counts.pending > 0 ? 'pending' : 'ok';\n  const detail = orders.slice(-5).map((o) => `- ${o.id} ${o.status}`).join('\\n');\n  console.log(JSON.stringify({\n    state,\n    summary: `${counts.pending} pending / ${counts.paid} paid / ${counts.shipped} shipped${counts.failed ? ' / ' + counts.failed + ' failed' : ''}`,\n    detail: detail.length > 0 ? detail : undefined,\n    data: { ...counts, total },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+      "scriptFile": {
+        "path": ".seeflow/nodes/order-store/scripts/status.ts",
+        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\ninterface Order { id: string; status: 'pending' | 'paid' | 'shipped' | 'failed' }\n\nconst STATE_FILE = resolve(process.cwd(), '.seeflow/state/orders.json');\n\nasync function read(): Promise<Order[]> {\n  try {\n    const raw = await readFile(STATE_FILE, 'utf8');\n    if (raw.trim().length === 0) return [];\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? (parsed as Order[]) : [];\n  } catch {\n    return [];\n  }\n}\n\nwhile (true) {\n  const orders = await read();\n  const counts = { pending: 0, paid: 0, shipped: 0, failed: 0 };\n  for (const o of orders) counts[o.status] = (counts[o.status] ?? 0) + 1;\n  const total = orders.length;\n  const state = total === 0 ? 'warn' : counts.failed > 0 ? 'error' : counts.pending > 0 ? 'pending' : 'ok';\n  const detail = orders.slice(-5).map((o) => `- ${o.id} ${o.status}`).join('\\n');\n  console.log(JSON.stringify({\n    state,\n    summary: `${counts.pending} pending / ${counts.paid} paid / ${counts.shipped} shipped${counts.failed ? ' / ' + counts.failed + ' failed' : ''}`,\n    detail: detail.length > 0 ? detail : undefined,\n    data: { ...counts, total },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+        "chmod": "755"
+      },
       "rationale": "DB row state — audience sees orders move pending → paid → shipped."
     },
     {
       "nodeId": "shipments-queue",
-      "statusAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "args": ["run"],
-        "scriptPath": "order-pipeline/scripts/status-shipments-queue.ts",
-        "maxLifetimeMs": 600000
+      "patch": {
+        "statusAction": {
+          "kind": "script",
+          "interpreter": "bun",
+          "args": ["run"],
+          "scriptPath": "scripts/status.ts",
+          "maxLifetimeMs": 600000
+        }
       },
-      "scriptBody": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\nconst QUEUE_FILE = resolve(process.cwd(), '.seeflow/state/shipments-queue.json');\n\nasync function depth(): Promise<number> {\n  try {\n    const raw = await readFile(QUEUE_FILE, 'utf8');\n    if (raw.trim().length === 0) return 0;\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? parsed.length : 0;\n  } catch {\n    return 0;\n  }\n}\n\nwhile (true) {\n  const d = await depth();\n  console.log(JSON.stringify({\n    state: d === 0 ? 'ok' : 'pending',\n    summary: `${d} pending`,\n    data: { depth: d },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+      "scriptFile": {
+        "path": ".seeflow/nodes/shipments-queue/scripts/status.ts",
+        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\nconst QUEUE_FILE = resolve(process.cwd(), '.seeflow/state/shipments-queue.json');\n\nasync function depth(): Promise<number> {\n  try {\n    const raw = await readFile(QUEUE_FILE, 'utf8');\n    if (raw.trim().length === 0) return 0;\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? parsed.length : 0;\n  } catch {\n    return 0;\n  }\n}\n\nwhile (true) {\n  const d = await depth();\n  console.log(JSON.stringify({\n    state: d === 0 ? 'ok' : 'pending',\n    summary: `${d} pending`,\n    data: { depth: d },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+        "chmod": "755"
+      },
       "rationale": "Queue depth — audience sees buffer drain as shipping-worker consumes."
     }
   ]
@@ -354,24 +385,14 @@ Notes on the example:
   "statusOverlays": [
     {
       "nodeId": "order-server",
-      "statusAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "scriptPath": "order-pipeline/scripts/status-server.ts",
-        "maxLifetimeMs": 600000
-      },
-      "scriptBody": "#!/usr/bin/env bun\nconsole.log(JSON.stringify({ state: 'ok', summary: 'server running' }));\n",
+      "patch": { "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "order-pipeline/scripts/status-server.ts", "maxLifetimeMs": 600000 } },
+      "scriptFile": { "path": ".seeflow/nodes/order-server/scripts/status.ts", "body": "#!/usr/bin/env bun\nconsole.log(JSON.stringify({ state: 'ok', summary: 'server running' }));\n" },
       "rationale": "show server is alive"
     },
     {
       "nodeId": "event-bus",
-      "statusAction": {
-        "kind": "script",
-        "interpreter": "bun",
-        "scriptPath": "order-pipeline/scripts/status-bus.ts",
-        "maxLifetimeMs": 600000
-      },
-      "scriptBody": "#!/usr/bin/env bun\nwhile (true) { console.log('not json'); }",
+      "patch": { "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 } },
+      "scriptFile": { "path": ".seeflow/nodes/event-bus/scripts/status.ts", "body": "#!/usr/bin/env bun\nwhile (true) { console.log('not json'); }" },
       "rationale": "status the bus"
     }
   ]
@@ -380,15 +401,16 @@ Notes on the example:
 
 This is wrong because:
 
-1. `order-server` is a pure trigger — Rule: don't status pure
-   triggers.
-2. The first script emits one line then exits; status scripts must
-   loop. The studio will see one report then think the script
-   crashed.
-3. The second script writes non-JSON to stdout; the studio drops
-   every line and the node shows "no status received".
-4. The second script has no sleep — it pegs a CPU core.
-5. The rationales do not identify a placement category.
+1. `order-server` is a pure trigger — Rule: don't status pure triggers.
+2. The first overlay's `scriptPath: "order-pipeline/scripts/…"` uses the
+   legacy `<slug>/` prefix. The new anchor is the node folder, so the
+   correct value is just `scripts/status.ts`.
+3. The first script emits one line then exits; status scripts must loop.
+   The studio will see one report then think the script crashed.
+4. The second script writes non-JSON to stdout; the studio drops every
+   line and the node shows "no status received".
+5. The second script has no sleep — it pegs a CPU core.
+6. The rationales do not identify a placement category.
 
 ## Constraints recap
 
@@ -396,9 +418,12 @@ This is wrong because:
 - Final message is ONE fenced JSON block, nothing else.
 - Every `statusOverlays[].nodeId` must reference a node in
   `nodeDraft.nodes`. You do NOT inject new nodes.
-- Every `scriptPath` is a clean relative path under
-  `<slug>/scripts/status-*.<ext>`.
-- Every `scriptBody` is the complete file body, including shebang.
+- Every `patch.statusAction.scriptPath` is a clean relative path under
+  the node folder — `scripts/<name>.<ext>`. No `<slug>/`, no `<nodeId>/`,
+  no leading `/`, no `..`.
+- Every `scriptFile.path` is project-root-relative —
+  `.seeflow/nodes/<nodeId>/scripts/<name>.<ext>`.
+- Every `scriptFile.body` is the complete file body, including shebang.
 - Every script loops forever and sleeps every iteration.
 - Every stdout line is a valid `StatusReport` JSON object.
 - Skip pure triggers, decorative nodes, and nodes whose state would
