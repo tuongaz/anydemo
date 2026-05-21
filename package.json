@@ -10,6 +10,7 @@
     "lint": "biome check .",
     "format": "biome format --write .",
     "test": "bun test",
+    "test:it:bun": "bun test ./apps/studio/integration/*.it.ts",
     "dev": "concurrently -n canvas-css,workspaces -c blue,green \"cd packages/canvas && bun run build:css:watch\" \"bun run --filter '*' dev\""
   },
   "dependencies": {
