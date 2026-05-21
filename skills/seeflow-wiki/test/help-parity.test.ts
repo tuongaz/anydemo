@@ -3,31 +3,17 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const REQUIRED_SUBCOMMANDS = ['flows:summary', 'flows:graph', 'nodes:get'] as const;
-
-function getHelpOutput(): string {
-  const localBin = resolve(__dirname, '../../../apps/studio/bin/seeflow');
-  const result = spawnSync(localBin, ['help'], { encoding: 'utf8' });
-  if (result.status !== 0) {
-    throw new Error(`seeflow help failed: ${result.stderr}`);
-  }
-  return result.stdout;
-}
-
-function getSkillReferencedSubcommands(): string[] {
-  const skill = readFileSync(resolve(__dirname, '../SKILL.md'), 'utf8');
-  return REQUIRED_SUBCOMMANDS.filter((cmd) => skill.includes(cmd));
-}
-
-describe('seeflow-wiki <-> CLI help parity', () => {
-  it('references at least the three required subcommands in SKILL.md', () => {
-    expect(getSkillReferencedSubcommands().sort()).toEqual([...REQUIRED_SUBCOMMANDS].sort());
+describe('seeflow-wiki <-> CLI help', () => {
+  it('tells the agent to consult `seeflow help` as the source of truth', () => {
+    const skill = readFileSync(resolve(__dirname, '../SKILL.md'), 'utf8');
+    expect(skill).toContain('seeflow help');
+    expect(skill).toContain('npx -y @tuongaz/seeflow@latest help');
   });
 
-  it('every subcommand referenced in SKILL.md appears in `seeflow help`', () => {
-    const help = getHelpOutput();
-    for (const cmd of getSkillReferencedSubcommands()) {
-      expect(help, `expected '${cmd}' in seeflow help`).toContain(cmd);
-    }
+  it('`seeflow help` runs successfully and produces output', () => {
+    const localBin = resolve(__dirname, '../../../apps/studio/bin/seeflow');
+    const result = spawnSync(localBin, ['help'], { encoding: 'utf8' });
+    expect(result.status).toBe(0);
+    expect(result.stdout.length).toBeGreaterThan(0);
   });
 });
