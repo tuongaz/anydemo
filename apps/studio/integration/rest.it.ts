@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { uniqueFlowId } from './support/ids.ts';
+import { connectSse } from './support/sse-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
 
 // One shared studio per file — every test uses uniqueFlowId for its own
@@ -504,6 +505,185 @@ describe('integration: REST — connectors', () => {
       const onDisk = await readFlowJson(created.slug);
       expect(onDisk.connectors).toEqual([]);
       expect(onDisk.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    });
+  });
+});
+
+describe('integration: REST — runtime (play / emit / SSE)', () => {
+  describe('POST /api/flows/:id/play/:nodeId', () => {
+    // Seed a playNode with a scriptPath that resolves under the node folder.
+    // addNodeImpl externalizes `detail` to <repoPath>/.seeflow/nodes/<id>/detail.md,
+    // which creates the node directory; we then drop a tiny scripts/play.ts
+    // beside it so resolveScript's realpath check passes. The script exits 0
+    // and prints a JSON line so runPlay parses it as the body.
+    it('spawns the node script, returns runId, and broadcasts node:done over SSE', async () => {
+      const created = await createProject(uniqueFlowId('play-node'));
+      const nodeId = 'play-it-1';
+      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+        id: nodeId,
+        type: 'playNode',
+        data: {
+          name: 'Play',
+          kind: 'http',
+          stateSource: { kind: 'request' },
+          playAction: {
+            kind: 'script',
+            interpreter: 'bun',
+            scriptPath: 'scripts/play.ts',
+          },
+        },
+      });
+      expect(addRes.status).toBe(200);
+
+      const scriptDir = join(
+        studio.workspace,
+        created.slug,
+        '.seeflow',
+        'nodes',
+        nodeId,
+        'scripts',
+      );
+      mkdirSync(scriptDir, { recursive: true });
+      writeFileSync(
+        join(scriptDir, 'play.ts'),
+        'console.log(JSON.stringify({ hello: "play" }));\nprocess.exit(0);\n',
+      );
+
+      const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
+      try {
+        await sse.waitFor((e) => e.event === 'hello', 2_000);
+
+        const playRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/play/${nodeId}`, {
+          method: 'POST',
+        });
+        expect(playRes.status).toBe(200);
+        const playBody = (await playRes.json()) as {
+          runId: string;
+          status?: number;
+          body?: unknown;
+          error?: string;
+        };
+        expect(playBody.error).toBeUndefined();
+        expect(playBody.runId).toBeTruthy();
+        expect(playBody.status).toBe(200);
+        expect(playBody.body).toEqual({ hello: 'play' });
+
+        const done = await sse.waitFor((e) => e.event === 'node:done', 5_000);
+        const parsed = JSON.parse(done.data) as {
+          nodeId: string;
+          runId: string;
+          status: number;
+          body: unknown;
+        };
+        expect(parsed.nodeId).toBe(nodeId);
+        expect(parsed.runId).toBe(playBody.runId);
+        expect(parsed.status).toBe(200);
+        expect(parsed.body).toEqual({ hello: 'play' });
+      } finally {
+        sse.close();
+      }
+    });
+  });
+
+  describe('POST /api/emit', () => {
+    it('returns 200 and is idempotent across repeated calls', async () => {
+      const created = await createProject(uniqueFlowId('emit-idempotent'));
+      const body = {
+        flowId: created.id,
+        nodeId: 'emit-it-1',
+        status: 'running',
+        runId: 'run-emit-1',
+      };
+      const res1 = await postJson('/api/emit', body);
+      expect(res1.status).toBe(200);
+      expect(await res1.json()).toEqual({ ok: true });
+
+      const res2 = await postJson('/api/emit', body);
+      expect(res2.status).toBe(200);
+      expect(await res2.json()).toEqual({ ok: true });
+
+      const res3 = await postJson('/api/emit', body);
+      expect(res3.status).toBe(200);
+      expect(await res3.json()).toEqual({ ok: true });
+    });
+  });
+
+  describe('GET /api/events (SSE)', () => {
+    it('delivers a node:status event posted via /api/emit within 2s', async () => {
+      const created = await createProject(uniqueFlowId('sse-runtime'));
+      const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
+      try {
+        await sse.waitFor((e) => e.event === 'hello', 2_000);
+
+        const emitRes = await postJson('/api/emit', {
+          flowId: created.id,
+          nodeId: 'sse-rt-1',
+          status: 'done',
+          runId: 'run-sse-rt-1',
+          payload: { status: 201 },
+        });
+        expect(emitRes.status).toBe(200);
+
+        const evt = await sse.waitFor((e) => e.event === 'node:done', 2_000);
+        const parsed = JSON.parse(evt.data) as {
+          nodeId: string;
+          runId: string;
+          status: number;
+        };
+        expect(parsed.nodeId).toBe('sse-rt-1');
+        expect(parsed.runId).toBe('run-sse-rt-1');
+        expect(parsed.status).toBe(201);
+      } finally {
+        sse.close();
+      }
+    });
+  });
+
+  describe('external flow.json edit', () => {
+    // Watcher fires fs.watch on <workspace>/<slug>/.seeflow/, debounces 100ms,
+    // computes the combined flow+style hash, and if it doesn't match a recent
+    // own-write hash, broadcasts `flow:reload` with the merged payload. An
+    // external writeFileSync from this test isn't in the writtenHashes ring,
+    // so the broadcast fires. Event name is `flow:reload` (not `reloaded`).
+    it('triggers a flow:reload SSE event after writing a modified flow.json to disk', async () => {
+      const name = uniqueFlowId('external-edit');
+      const created = await createProject(name);
+      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+
+      const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
+      try {
+        await sse.waitFor((e) => e.event === 'hello', 2_000);
+
+        // flow.json on disk uses FlowSchema (strict, position-stripped — that
+        // field lives in style.json after splitFlow). Don't include `position`
+        // here or the watcher's reparse will broadcast valid: false.
+        const edited = {
+          version: 2,
+          name,
+          nodes: [
+            {
+              id: 'ext-1',
+              type: 'shapeNode',
+              data: { shape: 'rectangle', name: 'External' },
+            },
+          ],
+          connectors: [],
+        };
+        writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
+
+        const reload = await sse.waitFor((e) => e.event === 'flow:reload', 3_000);
+        const parsed = JSON.parse(reload.data) as {
+          valid?: boolean;
+          flow?: { name?: string; nodes?: Array<{ id: string }> };
+          error?: string | null;
+          ts?: number;
+        };
+        expect(parsed.valid).toBe(true);
+        expect(parsed.flow?.name).toBe(name);
+        expect(parsed.flow?.nodes?.map((n) => n.id)).toContain('ext-1');
+      } finally {
+        sse.close();
+      }
     });
   });
 });
