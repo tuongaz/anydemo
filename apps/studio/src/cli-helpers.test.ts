@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { loadBody } from './cli-helpers.ts';
+import { EXIT_CODE_BY_KIND, exitCodeForKind, loadBody } from './cli-helpers.ts';
 
 describe('loadBody', () => {
   it('reads inline JSON from --json', async () => {
@@ -45,5 +45,34 @@ describe('loadBody', () => {
     await expect(loadBody({ json: undefined, file, stdin: false }, async () => '')).rejects.toThrow(
       new RegExp(file.replace(/\//g, '\\/')),
     );
+  });
+});
+
+describe('EXIT_CODE_BY_KIND', () => {
+  it('maps every documented outcome kind to its exit code', () => {
+    expect(EXIT_CODE_BY_KIND).toEqual({
+      badSchema: 2,
+      badJson: 2,
+      notFound: 3,
+      flowNotFound: 3,
+      fileNotFound: 3,
+      unknownNode: 3,
+      unknownConnector: 3,
+      duplicateIdInBatch: 4,
+      idAlreadyExists: 4,
+      writeFailed: 5,
+      sdkWriteFailed: 5,
+      scaffoldFailed: 5,
+    });
+  });
+
+  it('exitCodeForKind falls back to 1 for unknown kinds', () => {
+    expect(exitCodeForKind('mysteryFailure')).toBe(1);
+  });
+
+  it('exitCodeForKind returns the mapped code for known kinds', () => {
+    expect(exitCodeForKind('badSchema')).toBe(2);
+    expect(exitCodeForKind('flowNotFound')).toBe(3);
+    expect(exitCodeForKind('writeFailed')).toBe(5);
   });
 });

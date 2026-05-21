@@ -83,7 +83,7 @@ export function printOutcome<T extends { kind: string }>(
   const err = opts.stderr ?? ((s) => process.stderr.write(s));
   const message = describeOutcome(outcome);
   err(`${JSON.stringify({ error: message, code: outcome.kind })}\n`);
-  return (opts.exit ?? (process.exit as (code: number) => never))(outcomeExitCode(outcome.kind));
+  return (opts.exit ?? (process.exit as (code: number) => never))(exitCodeForKind(outcome.kind));
 }
 
 function describeOutcome(outcome: { kind: string } & Record<string, unknown>): string {
@@ -116,19 +116,23 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
   }
 }
 
-function outcomeExitCode(kind: string): number {
-  if (kind === 'badSchema' || kind === 'badJson') return 2;
-  if (
-    kind === 'notFound' ||
-    kind === 'flowNotFound' ||
-    kind === 'fileNotFound' ||
-    kind === 'unknownNode' ||
-    kind === 'unknownConnector'
-  )
-    return 3;
-  if (kind === 'duplicateIdInBatch' || kind === 'idAlreadyExists') return 4;
-  if (kind === 'writeFailed' || kind === 'sdkWriteFailed' || kind === 'scaffoldFailed') return 5;
-  return 1;
+export const EXIT_CODE_BY_KIND: Record<string, number> = {
+  badSchema: 2,
+  badJson: 2,
+  notFound: 3,
+  flowNotFound: 3,
+  fileNotFound: 3,
+  unknownNode: 3,
+  unknownConnector: 3,
+  duplicateIdInBatch: 4,
+  idAlreadyExists: 4,
+  writeFailed: 5,
+  sdkWriteFailed: 5,
+  scaffoldFailed: 5,
+};
+
+export function exitCodeForKind(kind: string): number {
+  return EXIT_CODE_BY_KIND[kind] ?? 1;
 }
 
 export const drainStdin: StdinReader = async () => {
