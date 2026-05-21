@@ -275,8 +275,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented. (1) `.github/workflows/docker.yml` gains a new top-level `integration` job (uses `./.github/workflows/_integration.yml`) above the existing `docker` job; `docker` now has `needs: integration`. All other steps (Verify tag, QEMU, Buildx, login, metadata, build-push) are unchanged. (2) The same reusable `_integration.yml` workflow from US-015 is shared verbatim — no new workflow file. Caller boilerplate is a one-line `uses:` (matches publish.yml's pattern exactly), so both deploy paths run the identical unit+integration+playwright suite before shipping. (3) Validated via `bunx --bun js-yaml < .github/workflows/docker.yml > /dev/null` — parses without error. `bun run typecheck` (all 4 workspaces) + `bun run lint` (biome) both pass. (4) Caveat carried forward from US-015 (note 6) / pattern line 68: visual baselines under `apps/studio/e2e/canvas.e2e.ts-snapshots/` are darwin-only — the Playwright `per-node visual baseline` test in the gating workflow will fail on ubuntu-latest until Linux baselines are committed. US-017 cannot land successfully until the cross-OS baseline gap is closed."
     },
     {
       "id": "US-017",
