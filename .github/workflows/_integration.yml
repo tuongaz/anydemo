@@ -38,8 +38,9 @@ jobs:
       - name: Install Playwright browsers
         run: bunx playwright install --with-deps chromium
 
-      - name: Build web bundle
-        run: bun run --filter @seeflow/web build
+      # The integration orchestrator (apps/studio/scripts/test-integration.ts)
+      # rebuilds apps/studio/dist/web on demand, and `bun test` doesn't touch
+      # the static bundle, so we no longer build it explicitly here.
 
       # Run unit tests first so a fast suite failure short-circuits the slower
       # integration tier. `bun run test:it` only runs the integration files

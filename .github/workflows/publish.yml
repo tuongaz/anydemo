@@ -67,24 +67,12 @@ jobs:
       - name: Lint
         run: bun run lint
 
-      - name: Build web bundle
-        run: cd apps/web && bun run build
-
-      - name: Verify web bundle landed in apps/studio/dist/web
-        run: |
-          test -f apps/studio/dist/web/index.html || {
-            echo "ERROR: apps/studio/dist/web/index.html missing after build" >&2
-            exit 1
-          }
-
-      - name: Stage README for npm package
-        run: cp README.md apps/studio/README.md
-
       - name: Publish to npm with provenance
         working-directory: apps/studio
-        # --ignore-scripts skips prepublishOnly because we already built the
-        # web bundle and staged the README in earlier steps.
-        run: npm publish --provenance --access public --ignore-scripts
+        # `prepublishOnly` (in apps/studio/package.json) vendors the tailwind
+        # runtime, builds the web bundle into dist/web, and stages the README,
+        # so we don't need explicit build/stage steps here.
+        run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
