@@ -109,3 +109,193 @@ describe('seeflow CLI register integration', () => {
     }
   }, 20_000);
 });
+
+describe('seeflow CLI new subcommands', () => {
+  it('projects:create returns ok with slug', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['projects:create', '--no-start', '--name', 'Checkout One'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as { ok: boolean; slug: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.slug).toBe('checkout-one');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:list returns the registered flows', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-list-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      studio.registry.upsert({
+        name: 'Listed',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const r = await runCli(['flows:list', '--no-start'], { SEEFLOW_STUDIO_URL: studio.url });
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        flows: Array<{ slug: string }>;
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.flows.some((f) => f.slug === 'listed')).toBe(true);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:get returns the flow and flows:delete unregisters it', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-getdel-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      const entry = studio.registry.upsert({
+        name: 'GD',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const get = await runCli(['flows:get', entry.id, '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(get.code).toBe(0);
+      const parsedGet = JSON.parse(get.stdout) as { ok: boolean; id: string };
+      expect(parsedGet.id).toBe(entry.id);
+
+      const del = await runCli(['flows:delete', entry.id, '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(del.code).toBe(0);
+      expect(studio.registry.list()).toHaveLength(0);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:get returns exit 1 with stderr for unknown flowId', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['flows:get', 'nope', '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toContain('Studio returned 404');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('nodes:add-bulk adds nodes via --json', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-bulk-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      const emptyDemo = { version: 2, name: 'Empty', nodes: [], connectors: [] };
+      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(emptyDemo));
+      const entry = studio.registry.upsert({
+        name: 'Empty',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const payload = JSON.stringify({
+        nodes: [
+          {
+            id: 'n1',
+            type: 'stateNode',
+            data: { name: 'one', kind: 'state', stateSource: { kind: 'request' } },
+          },
+        ],
+      });
+      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      if (r.code !== 0) {
+        throw new Error(`exit=${r.code} stdout=${r.stdout} stderr=${r.stderr}`);
+      }
+      const parsed = JSON.parse(r.stdout) as { ok: boolean; nodes: Array<{ id: string }> };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.nodes[0]?.id).toBe('n1');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('nodes:add-bulk reports duplicate id error', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-dup-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.seeflow', 'flow.json'),
+        JSON.stringify({ version: 2, name: 'Dup', nodes: [], connectors: [] }),
+      );
+      const entry = studio.registry.upsert({
+        name: 'Dup',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const payload = JSON.stringify({
+        nodes: [
+          {
+            id: 'same',
+            type: 'stateNode',
+            data: { name: 'a', kind: 'state', stateSource: { kind: 'request' } },
+          },
+          {
+            id: 'same',
+            type: 'stateNode',
+            data: { name: 'b', kind: 'state', stateSource: { kind: 'request' } },
+          },
+        ],
+      });
+      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(1);
+      expect(r.stderr).toMatch(/Studio returned \d+/);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('validate accepts a valid flow and rejects a malformed one', async () => {
+    const studio = startTestStudio();
+    try {
+      const tmpDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-validate-'));
+      const goodFile = join(tmpDir, 'good.json');
+      writeFileSync(goodFile, JSON.stringify(VALID_DEMO));
+
+      const ok = await runCli(['validate', '--no-start', '--file', goodFile], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(ok.code).toBe(0);
+
+      const badFile = join(tmpDir, 'bad.json');
+      writeFileSync(
+        badFile,
+        JSON.stringify({
+          version: 2,
+          name: 'Bad',
+          nodes: [],
+          connectors: [{ id: 'c1', source: 'missing', target: 'missing' }],
+        }),
+      );
+      const bad = await runCli(['validate', '--no-start', '--file', badFile], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(bad.code).toBe(1);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+});
