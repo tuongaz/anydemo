@@ -13,7 +13,6 @@ Then ask the CLI:
 
 - `$SEEFLOW help` — list every subcommand by category.
 - `$SEEFLOW help <command>` — synopsis, args, flags, body schema, output shape, error kinds, examples.
-- `$SEEFLOW help --json` — full machine-readable manifest (for programmatic drivers).
 
 Treat the help output as the source of truth and follow the instructions it
 prints. If a flag, body shape, or error kind is not in `help`, it does not

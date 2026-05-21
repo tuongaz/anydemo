@@ -2,12 +2,7 @@
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { drainStdin, loadBody, printError, printOk, printOutcome } from './cli-helpers.ts';
-import {
-  COMMAND_MANIFEST,
-  renderCommandHelp,
-  renderCommandList,
-  renderManifestJson,
-} from './cli-manifest.ts';
+import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
 import type { LayoutOptions } from './layout.ts';
@@ -247,25 +242,13 @@ Examples:
 }
 
 async function runHelp() {
-  const wantsJson = hasFlag('json');
   const target = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
   if (target) {
-    if (wantsJson) {
-      const entry = COMMAND_MANIFEST.find((e) => e.name === target);
-      if (!entry) printError(`Unknown command: ${target}`);
-      printOk({ command: entry });
-      return;
-    }
     try {
       console.log(renderCommandHelp(target));
     } catch (err) {
       printError(err instanceof Error ? err.message : String(err));
     }
-    return;
-  }
-  if (wantsJson) {
-    process.stdout.write(renderManifestJson());
-    process.stdout.write('\n');
     return;
   }
   console.log(renderCommandList());

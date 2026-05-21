@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  COMMAND_MANIFEST,
-  renderCommandHelp,
-  renderCommandList,
-  renderManifestJson,
-} from './cli-manifest.ts';
+import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 
 describe('COMMAND_MANIFEST', () => {
   it('has an entry for every command the CLI dispatches on', () => {
@@ -76,19 +71,6 @@ describe('COMMAND_MANIFEST', () => {
       if (textOrStream.has(entry.name)) continue;
       expect(entry.outputKind ?? 'json').toBe('json');
     }
-  });
-});
-
-describe('renderManifestJson', () => {
-  it('returns the manifest as parseable JSON with a version + commands key', () => {
-    const out = renderManifestJson();
-    const parsed = JSON.parse(out) as {
-      version: string;
-      commands: unknown[];
-    };
-    expect(typeof parsed.version).toBe('string');
-    expect(Array.isArray(parsed.commands)).toBe(true);
-    expect(parsed.commands.length).toBe(COMMAND_MANIFEST.length);
   });
 });
 

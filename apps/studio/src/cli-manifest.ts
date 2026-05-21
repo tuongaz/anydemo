@@ -1,6 +1,6 @@
-// Machine-readable command catalogue. Powers `seeflow help`, `seeflow help
-// <command>`, and `seeflow help --json` so AI agents and downstream tools
-// can discover every subcommand without scraping the human help text.
+// Machine-readable command catalogue. Powers `seeflow help` and
+// `seeflow help <command>` so AI agents and downstream tools can discover
+// every subcommand without scraping the human help text.
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { EXIT_CODE_BY_KIND, exitCodeForKind } from './cli-helpers.ts';
@@ -117,17 +117,17 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'help',
-    synopsis: 'seeflow help [<command>] [--json]',
+    synopsis: 'seeflow help [<command>]',
     description:
-      'Show CLI help. With no args lists every command. With a command name shows ' +
-      "that command's synopsis, flags, body schema, and examples. --json emits the " +
-      'full manifest (or the named command) as a machine-readable JSON document.',
+      'Show CLI help. With no args lists every command grouped by category. ' +
+      "With a command name shows that command's synopsis, flags, body schema, " +
+      'output shape, error kinds, and examples.',
     category: 'meta',
     args: [{ name: 'command', required: false, description: 'Name of a command to drill into' }],
-    flags: [{ name: 'json', description: 'Emit the manifest as JSON' }],
+    flags: [],
     outputs: {},
     requiresStudio: false,
-    examples: ['seeflow help', 'seeflow help nodes:add', 'seeflow help --json'],
+    examples: ['seeflow help', 'seeflow help nodes:add'],
   },
   // ---- flows -------------------------------------------------------------
   {
@@ -559,21 +559,6 @@ function resolveSchemaRef(ref: string): unknown {
   }
 }
 
-const MANIFEST_VERSION = '1';
-
-export function renderManifestJson(): string {
-  const commands = COMMAND_MANIFEST.map((entry) => ({
-    ...entry,
-    body: entry.body
-      ? {
-          ...entry.body,
-          schema: entry.body.schemaRef ? resolveSchemaRef(entry.body.schemaRef) : undefined,
-        }
-      : undefined,
-  }));
-  return JSON.stringify({ version: MANIFEST_VERSION, commands }, null, 2);
-}
-
 export function renderCommandHelp(name: string): string {
   const entry = COMMAND_MANIFEST.find((e) => e.name === name);
   if (!entry) throw new Error(`Unknown command: ${name}`);
@@ -760,7 +745,6 @@ export function renderCommandList(): string {
   lines.push('seeflow — local studio for file-defined interactive demos');
   lines.push('');
   lines.push('Run `seeflow help <command>` for full detail on any command below.');
-  lines.push('Run `seeflow help --json` for the machine-readable manifest.');
   lines.push('');
   lines.push('## Calling convention');
   lines.push(
