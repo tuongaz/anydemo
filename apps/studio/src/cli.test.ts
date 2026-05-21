@@ -100,6 +100,10 @@ describe('seeflow CLI register integration', () => {
       expect(second.code).toBe(0);
       expect(second.stdout).toContain('Registered "Refund"');
 
+      // CLI runs in a separate process and writes the shared registry.json on
+      // disk. The studio's in-memory registry needs a manual reload to see
+      // the new state since the test harness disables the watcher.
+      studio.registry.reload();
       expect(studio.registry.list()).toHaveLength(2);
       const entries = studio.registry.list();
       const slugs = entries.map((e) => e.slug).sort();
@@ -171,6 +175,7 @@ describe('seeflow CLI new subcommands', () => {
 
       const del = await runCli(['flows:delete', entry.id, '--no-start'], studio.env);
       expect(del.code).toBe(0);
+      studio.registry.reload();
       expect(studio.registry.list()).toHaveLength(0);
     } finally {
       studio.stop();

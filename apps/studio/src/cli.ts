@@ -482,10 +482,6 @@ function isEsrch(err: unknown): boolean {
 async function runRegister() {
   const repoPath = resolve(flagValue('path') ?? '.');
   const demoPathArg = flagValue('flow') ?? DEFAULT_FLOW_PATH;
-  const noStart = hasFlag('no-start');
-  const config = readConfig();
-  const overrideUrl = process.env.SEEFLOW_STUDIO_URL?.replace(/\/+$/, '');
-  const url = overrideUrl ?? studioUrl(config);
 
   const fullPath = isAbsolute(demoPathArg) ? demoPathArg : join(repoPath, demoPathArg);
   if (!existsSync(fullPath)) {
@@ -511,37 +507,27 @@ async function runRegister() {
     process.exit(1);
   }
 
-  await ensureStudioRunning(url, config.port, noStart);
-
-  let res: Response;
-  try {
-    res = await fetch(`${url}/api/flows/register`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        name: parsed.data.name,
-        repoPath,
-        flowPath: demoPathArg,
-      }),
-    });
-  } catch (err) {
-    console.error(`Could not reach studio at ${url}: ${String(err)}`);
-    console.error('Start it first: seeflow start');
-    process.exit(1);
+  const ops = createCliOperations();
+  const result = await ops.registerFlow({
+    name: parsed.data.name,
+    repoPath,
+    flowPath: demoPathArg,
+  });
+  if (result.kind !== 'ok') {
+    printOutcome(result);
   }
+  const body = result.data;
 
-  if (!res.ok) {
-    const text = await res.text();
-    console.error(`Studio returned ${res.status}: ${text}`);
-    process.exit(1);
+  // Show the studio URL only when a daemon is actually running.
+  const pid = readPid();
+  if (pid && isPidAlive(pid)) {
+    const config = readConfig();
+    const overrideUrl = process.env.SEEFLOW_STUDIO_URL?.replace(/\/+$/, '');
+    const url = overrideUrl ?? studioUrl(config);
+    console.log(`Registered "${parsed.data.name}" → ${url}/d/${body.slug}`);
+  } else {
+    console.log(`Registered "${parsed.data.name}" (slug: ${body.slug})`);
   }
-
-  const body = (await res.json()) as {
-    id: string;
-    slug: string;
-    sdk?: { outcome: 'written' | 'present' | 'skipped'; filePath: string | null };
-  };
-  console.log(`Registered "${parsed.data.name}" → ${url}/d/${body.slug}`);
 
   if (body.sdk?.outcome === 'written') {
     console.log(`Wrote ${body.sdk.filePath} (event-bound state node detected)`);
@@ -601,10 +587,9 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<boolean> {
 async function runProjectsCreate() {
   const name = flagValue('name');
   if (!name) printError('Missing required flag: --name');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/projects`, { name });
-  const body = (await handleResponse(res)) as object;
-  printOk(body);
+  const ops = createCliOperations();
+  const result = await ops.createProject({ name: name as string });
+  printOutcome(result);
 }
 
 async function runFlowsList() {
@@ -635,10 +620,9 @@ async function runFlowsGraph() {
 
 async function runFlowsDelete() {
   const flowId = requireArg(1, '<flowId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await deleteRequest(`${url}/api/flows/${encodeURIComponent(flowId)}`);
-  const body = (await handleResponse(res)) as object;
-  printOk(body);
+  const ops = createCliOperations();
+  const result = ops.deleteFlow(flowId);
+  printOutcome(result);
 }
 
 async function runFlowsLayout() {
@@ -824,9 +808,8 @@ async function runValidate() {
       );
     }
   }
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/validate`, { flow, style });
-  const body = (await handleResponse(res)) as { ok?: boolean; issues?: unknown[] };
+  const ops = createCliOperations();
+  const body = ops.validate({ flow, style });
   if (body.ok === false) {
     printError(`Schema validation failed: ${JSON.stringify(body.issues ?? [])}`);
   }
