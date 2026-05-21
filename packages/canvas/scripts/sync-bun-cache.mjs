@@ -10,6 +10,11 @@
 // snapshot so a `bun run --filter @seeflow/canvas build` actually reaches
 // the consuming app. Idempotent and silent on the no-cache path so the
 // canvas package still builds standalone (e.g. outside the monorepo).
+//
+// Note: the snapshot's `node_modules/@seeflow/canvas/dist` directory may
+// not exist on a fresh CI checkout (packages/canvas/dist/ is gitignored,
+// so bun install creates the snapshot without it). cpSync with
+// `recursive: true` creates the target dir, so we do not guard on it.
 
 import { cpSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
@@ -29,7 +34,6 @@ const matches = readdirSync(cacheRoot).filter((name) =>
 
 for (const dir of matches) {
   const target = join(cacheRoot, dir, 'node_modules/@seeflow/canvas/dist');
-  if (!existsSync(target)) continue;
   cpSync(distSrc, target, { recursive: true, force: true });
   console.log(`[sync-bun-cache] refreshed ${dir}`);
 }
