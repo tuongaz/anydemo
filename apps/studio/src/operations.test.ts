@@ -505,3 +505,55 @@ describe('addConnectorsBulkImpl', () => {
     expect(flow.connectors).toHaveLength(1);
   });
 });
+
+describe('NodePatchBodySchema — action overlays', () => {
+  it('accepts playAction in the patch body', () => {
+    const parsed = NodePatchBodySchema.safeParse({
+      playAction: {
+        kind: 'script',
+        interpreter: 'bun',
+        scriptPath: 'scripts/play.ts',
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts statusAction in the patch body', () => {
+    const parsed = NodePatchBodySchema.safeParse({
+      statusAction: {
+        kind: 'script',
+        interpreter: 'bun',
+        scriptPath: 'scripts/status.ts',
+      },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts stateSource in the patch body', () => {
+    const parsed = NodePatchBodySchema.safeParse({
+      stateSource: { kind: 'request' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('mergeNodeUpdates writes playAction onto node.data', () => {
+    const node: Record<string, unknown> = { id: 'n1', type: 'playNode', data: {} };
+    mergeNodeUpdates(node, {
+      playAction: {
+        kind: 'script',
+        interpreter: 'bun',
+        scriptPath: 'scripts/play.ts',
+      },
+    });
+    expect((node.data as Record<string, unknown>).playAction).toEqual({
+      kind: 'script',
+      interpreter: 'bun',
+      scriptPath: 'scripts/play.ts',
+    });
+  });
+
+  it('rejects unknown top-level keys (strict guarantee preserved)', () => {
+    const parsed = NodePatchBodySchema.safeParse({ bogus: 1 });
+    expect(parsed.success).toBe(false);
+  });
+});

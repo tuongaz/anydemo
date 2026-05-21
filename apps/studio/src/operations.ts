@@ -27,10 +27,13 @@ import {
   EdgePinSchema,
   type Flow,
   FlowSchema,
+  PlayActionSchema,
   type ResolvedFlow,
   ResolvedFlowSchema,
   ShapeKindSchema,
   SourceHandleIdSchema,
+  StateSourceSchema,
+  StatusActionSchema,
   StyleSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
@@ -117,6 +120,13 @@ export const NodePatchBodySchema = z
     // `<project>/.seeflow/nodes/<id>/view.html` by patchNodeImpl; the file://
     // ref on the node persists. Empty string empties the file but keeps the ref.
     html: z.string().optional(),
+    // P5 overlay attach: lets the skill (or any consumer) wire executable
+    // behaviour onto a previously-created node without re-issuing it. Final
+    // validity is enforced by the post-merge ResolvedFlowSchema reparse —
+    // e.g. statusAction is only valid on playNode / stateNode.
+    playAction: PlayActionSchema.optional(),
+    statusAction: StatusActionSchema.optional(),
+    stateSource: StateSourceSchema.optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -146,6 +156,9 @@ const NODE_DATA_PATCH_KEYS = [
   'description',
   'detail',
   'html',
+  'playAction',
+  'statusAction',
+  'stateSource',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
