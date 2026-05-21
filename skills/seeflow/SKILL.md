@@ -1,21 +1,21 @@
 ---
 name: seeflow
-description: Use when the user asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", "show how X works", "diagram our system", or "add a flow to this repo". Orchestrates five sub-agents and bun scripts to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
+description: Use when the user asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", "show how X works", "diagram our system", or "add a flow to this repo". Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
 ---
 
 # seeflow
 
-Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.seeflow/<slug>/`. Orchestrate five sub-agents and bun scripts; never read the codebase directly.
+Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.seeflow/<slug>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `flow.json` by hand.
 
-**Parallelism is the default — one message, N `Task` calls.** Phase 1's wrong/right block below is canonical; Phases 4, 5 retries, and Phase 7 fix-up follow it. Narrate each phase boundary with a one-line status (e.g. `Phase 3: registering skeleton flow…`) so silent waits don't feel broken.
+**Parallelism is the default — one message, N `Task` calls.** Phase 1's wrong/right block below is canonical; later parallel phases reference it. Narrate each phase boundary with a one-line status (e.g. `Phase 3: scaffolding skeleton flow…`) so silent waits don't feel broken.
 
 ## When NOT to invoke
 
-- Editing nodes on an existing flow → use the canvas / `.seeflow/<slug>/flow.json` directly.
-- Deleting or renaming a flow → `unregister.ts`.
-- Re-laying out an existing flow without semantic changes → `refresh-layout.ts <id>`.
+- Editing nodes on an existing flow → use the canvas, or hit the CLI directly (`seeflow nodes:patch …`).
+- Deleting a flow → `seeflow flows:delete <flowId>`.
+- Re-laying out an existing flow without semantic changes → `seeflow flows:layout <flowId>`.
 - Empty project (nothing to analyze) → ask the user first.
-- Debugging a single broken Play/Status script → edit in-place, re-run Phase 7.
+- Debugging a single broken Play/Status script → edit in-place, re-run Phase 6.
 
 ## Inputs
 
@@ -27,28 +27,28 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 
 | Variable | Resolution |
 |---|---|
-| `$SF` | `${CLAUDE_PLUGIN_ROOT}/skills/seeflow` — every script invocation uses this. |
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
 | `$repoPath` | `$PWD`. |
-| `$flowDir` | `$repoPath/.seeflow/<slug>`. |
-| `$flowPath` | `.seeflow/<slug>/flow.json` (relative — `register.ts` resolves against `--path`). |
-| `$stylePath` | `.seeflow/<slug>/style.json`. |
+| `seeflow` | `npx -y @tuongaz/seeflow@latest`. Every CLI invocation below is shorthand for that. |
 
-**The studio API is the only validator.** `bun "$SF/scripts/validate.ts"` POSTs `/api/validate`; there is no local validator. Layout is the same: `refresh-layout.ts` calls the studio. The skill never writes `style.json` directly.
+**Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. CLI output is `{"ok":true,…}` on stdout, plain text on stderr, exit `0`/`1`. Full subcommand reference: `references/cli.md`.
 
 ## Pipeline
 
 ```
-0+0.5  /health probe ‖ read WIKI.md
-1      code-analyzer ‖ system-analyzer
-2      node-planner (starts when code-analyzer returns; system-analyzer
-       finishes in background → wikiUpdates merged into WIKI.md)
-3      skeleton flow.json + style.json → validate → register → user reviews canvas
-3.5    gate: continue with Play/Status (dynamic) or stop (static)?
-4      play-designer ‖ status-designer
-5      synthesize + validate (retry ≤ 3)
-6      write script files + re-register
-7      validate-end-to-end.ts (retry ≤ 2) → polish WIKI.md
+P0    /health probe ‖ read WIKI.md
+P1    code-analyzer ‖ system-analyzer
+P2    node-planner (kicks off when code-analyzer returns;
+                   system-analyzer continues in background)
+P3    projects:create → nodes:add-bulk → connectors:add-bulk
+      → flows:layout → USER REVIEW
+P3.5  dynamic gate (continue with scripts, or stop static?)
+P4    play-designer ‖ status-designer
+P5    write scripts to .seeflow/nodes/<nodeId>/scripts/
+      → nodes:patch (per node, with playAction / statusAction)
+      → optional newTriggerNodes via nodes:add-bulk + connectors:add-bulk
+      → flows:layout
+P6    e2e
 ```
 
 Each phase gates on the previous (with the Phase 1 → Phase 2 overlap).
@@ -64,15 +64,17 @@ Full text in `references/core-rules.md`:
 ## Common mistakes
 
 - **Serial sub-agent dispatch** (N messages, one Task call each). One message, N Task calls — see Phase 1's wrong/right.
-- **One sub-agent fixing multiple failing scripts in Phase 7.** Each needs isolated context.
-- **Re-running `register.ts` inside the Phase 7 fix-up loop.** The flow is already registered.
-- **Reading the codebase yourself.** Delegate to the analyzers.
-- **Touching `style.json` directly, or putting `position` / visual fields at the node root of `flow.json`.** The studio owns layout; call `refresh-layout.ts`. The node root is `data`-only.
+- **One sub-agent fixing multiple failing scripts in Phase 6.** Each needs isolated context.
+- **Authoring `flow.json` directly.** Every mutation is a CLI call.
+- **Touching `style.json`.** The studio owns it via `flows:layout`.
+- **Passing `<slug>/scripts/…` as `scriptPath`.** New anchor is the node folder — emit just `scripts/play.ts`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
 - **Asking "what's your codebase?".** Launch the analyzers — that is their job.
-- **Skipping or simulating Phase 7.** Mandatory; the retry budget handles flakiness.
+- **Skipping or simulating Phase 6.** Mandatory; the retry budget handles flakiness.
 
-## Phase 0 + 0.5 — pre-flight (parallel)
+## Phase 0 — pre-flight (parallel)
+
+Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note.
 
 In a single message:
 
@@ -90,8 +92,6 @@ In a single message:
 
 ## Phase 1 — discover (parallel)
 
-Create a `TaskCreate` checklist of the eight phases (`Phase 1 — discover` … `Phase 7 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note.
-
 **Launch both analyzers in parallel — single message, two `Task` calls.** Serial launch roughly doubles wall-clock for zero benefit.
 
 **Wrong:**
@@ -108,10 +108,10 @@ message 1: Task(seeflow-code-analyzer, …)
            Task(seeflow-system-analyzer, …)
 ```
 
-Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both overlay families, Phase 7 per-script fix-up) follows this pattern.
+Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both overlay families, Phase 6 per-script fix-up) follows this pattern.
 
 - `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `wikiContext`. Out: `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
-- `seeflow-system-analyzer` — in: `projectRoot`, `wikiContext`. Out: `runtimeProfile` + a `wikiUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `wikiUpdates`** — that payload is what persists.
+- `seeflow-system-analyzer` — in: `projectRoot`, `wikiContext`. Out: `runtimeProfile` + a `wikiUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `wikiUpdates`.**
 
 Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/wiki-format.md`. Unparseable output: retry that single agent once, then surface and stop.
 
@@ -135,27 +135,42 @@ Launch `seeflow-node-planner` with the brief, the resolved tech-ref paths, and t
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches.
 - **Connection limit** — max 4 (in + out) per node. Exceeded → **split** distinct responsibilities, or **duplicate** a shared resource (same `kind` + `name`, unique `id` like `orders-db-read`).
 
-Output: `{ name, slug, nodes:[{id,type,data,oneNodeRationale}], connectors:[{id,kind,source,target}] }`. One retry on unparseable output, then surface and stop.
+Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,target,…}], rationales:{[nodeId]: string} }`. The `nodes` and `connectors` arrays are forwarded verbatim to the CLI bulk-add subcommands in Phase 3 — every key the schema rejects is rejected here. One retry on unparseable output, then surface and stop. Full schema: `agents/seeflow-node-planner.md`.
 
-## Phase 3 — node review checkpoint
+## Phase 3 — scaffold, populate, layout, review
 
-Register a **skeleton** (nodes + connectors, no scripts) so the user reviews the canvas before any scripts are written. Path vars in [Conventions](#conventions).
+The skeleton flow lands via four CLI calls. No `flow.json` authoring.
 
-1. Build `flow.json` — omit `playAction` / `statusAction` / `resetAction`; keep `version: 2`, `name`, `nodes` (data-only), `connectors`. **No `position` or visual fields** at the node root.
-2. `mkdir -p $flowDir` then write `flow.json`.
-3. Validate, register, lay out:
-   ```bash
-   bun "$SF/scripts/validate.ts" --flow "$flowDir/flow.json"
-   bun "$SF/scripts/register.ts" --path "$repoPath" --flow "$flowPath"
-   bun "$SF/scripts/refresh-layout.ts" "$id"
-   ```
-   ELK is fast — finish layout before opening the canvas. On validate failure: fix in-place, retry (no node-planner re-run).
-4. Open and prompt:
-   ```bash
-   URL="$STUDIO_URL/d/<slug>"
-   (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
-   ```
-   > Opened the canvas at `<url>`. Layout look right? Any additions, removals, or renames?
+```bash
+# 1. Create the project. Returns {id, slug}.
+PROJECT_JSON=$(seeflow projects:create --name "<flowName>")
+id=$(echo "$PROJECT_JSON" | jq -r '.id')
+slug=$(echo "$PROJECT_JSON" | jq -r '.slug')
+
+# 2. Bulk-add nodes. Strip `rationales` from the planner output first; pass
+#    only `nodes` (re-wrapped as the bulk body shape).
+echo "$NODES_PAYLOAD" > /tmp/sf-nodes-$id.json     # body: {"nodes":[…]}
+seeflow nodes:add-bulk "$id" --file /tmp/sf-nodes-$id.json
+
+# 3. Bulk-add connectors.
+echo "$CONNECTORS_PAYLOAD" > /tmp/sf-conns-$id.json  # body: {"connectors":[…]}
+seeflow connectors:add-bulk "$id" --file /tmp/sf-conns-$id.json
+
+# 4. Layout (ELK).
+seeflow flows:layout "$id"
+```
+
+Each CLI call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
+
+Open the canvas and ask, surfacing the planner's `rationales` per node:
+
+```bash
+URL="$STUDIO_URL/d/$slug"
+(open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
+```
+
+> Opened the canvas at `<url>`. Layout look right? Any additions, removals, or
+> renames?
 
 **Wait.** Changes requested → re-run node-planner, repeat. Approved → dynamic gate.
 
@@ -169,60 +184,64 @@ Register a **skeleton** (nodes + connectors, no scripts) so the user reviews the
 
 ## Phase 4 — design Play + Status (parallel)
 
-Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`. Schemas (do not duplicate): `agents/seeflow-play-designer.md` (`playOverlays[]` + `newTriggerNodes[]`), `agents/seeflow-status-designer.md` (`statusOverlays[]`).
+Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
+
+Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`.seeflow/nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full schemas: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
 **Sample data priority:** integration/e2e fixtures (`runtimeProfile.integrationTestDir`, copy verbatim) → seed / migration / ORM factories → README / OpenAPI / Postman examples → invent last, note in `rationale`.
 
-`newTriggerNodes` may inject synthetic sources (file-drop, webhook receiver) when no natural trigger exists.
+`newTriggerNodes` (play-designer only) may inject synthetic sources (file-drop, webhook receiver) when no natural trigger exists. Shape: `{nodes, connectors}` — same as the planner's output.
 
-## Phase 5 — synthesize + validate
+## Phase 5 — patch overlays + layout
 
-1. Splice `newTriggerNodes` into `nodeDraft.nodes` (add required connectors).
-2. Merge each overlay onto its target node's `data`. Strip `validationSafe`, `rationale`, `scriptBody`. Collect `nodeId`s with `validationSafe: false` into `unsafeNodeIds`.
-3. Write merged flow to `$flowDir/flow.json` (data-only), then refresh layout — the studio re-runs ELK and overwrites `style.json` (positions are never preserved across re-runs):
-   ```bash
-   bun "$SF/scripts/refresh-layout.ts" "$id"
-   ```
-4. Validate:
-   ```bash
-   bun "$SF/scripts/validate.ts" --flow "$flowDir/flow.json" --style "$flowDir/style.json"
-   ```
-   0 → continue. Non-zero → feed issues back to the relevant designer(s), retry. **Max 3 retries.** If issues span both overlay families, re-dispatch both designers in parallel (Phase 1 rule); otherwise just the one.
+For each overlay returned by Phase 4 (parallelise the writes when the script bodies don't depend on each other):
 
-## Phase 6 — write script files + re-register
+1. Write `scriptFile.body` to `scriptFile.path` (Write tool).
+2. `chmod` per `scriptFile.chmod` (default 755).
+3. `seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`.
+
+If the play-designer emitted `newTriggerNodes`, batch them:
 
 ```bash
-mkdir -p "$flowDir/scripts" "$flowDir/state"
-# Write: flow.json, style.json (mandatory), scripts/<name> (chmod +x), state/.gitignore (`*`)
-bun "$SF/scripts/register.ts" --path "$repoPath" --flow "$flowPath"
+echo "$TRIGGER_NODES_JSON" > /tmp/sf-triggers-$id.json
+seeflow nodes:add-bulk "$id" --file /tmp/sf-triggers-$id.json
+
+echo "$TRIGGER_CONNS_JSON" > /tmp/sf-trigger-conns-$id.json
+seeflow connectors:add-bulk "$id" --file /tmp/sf-trigger-conns-$id.json
 ```
 
-Prints `{id, slug}`; use the new `id` for Phase 7. On 400: show body, ask fix-and-retry / stop. On other 4xx/5xx: show body, stop.
+Then re-layout:
 
-## Phase 7 — end-to-end validation
+```bash
+seeflow flows:layout "$id"
+```
+
+**Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule).
+
+## Phase 6 — end-to-end validation
 
 **Must run. Do not skip or simulate.**
 
 ```bash
-bun "$SF/scripts/validate-end-to-end.ts" <id> [--skip-nodes <id1>,<id2>]
+seeflow e2e "$id" [--skip-nodes <id1>,<id2>]
 ```
 
-Pass `--skip-nodes` when `unsafeNodeIds` is non-empty (third-party / paid). Skipped nodes appear in `skipped[]`, not as failures.
+Pass `--skip-nodes` when `unsafeNodeIds` from Phase 4 is non-empty (third-party or paid actions). Skipped nodes appear in `skipped[]`, not as failures.
 
-The script GETs `/api/flows/<id>`, opens SSE at `/api/events?flowId=<id>`, POSTs each safe play, then drains `node:done|error|status` events (SSE outcome wins). Hard ceiling ~2 min. Emits `{ok, plays, statuses, skipped}`.
+The CLI GETs `/api/flows/<id>`, opens SSE at `/api/events?flowId=<id>`, POSTs each safe play, then drains `node:done|error|status` events (SSE outcome wins). Hard ceiling ~2 min. Output: `{ok, plays, statuses, skipped}`.
 
-**`ok: true`** → refresh layout once more (positions for any new trigger nodes get a fresh ELK pass), then print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done.
+**`ok: true`** → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done.
 
 **`ok: false`** fix-up loop:
 
 1. Identify failing nodes from `plays[*].error` / `statuses[*].outcome`.
 2. **Parallel fix-up (Phase 1 rule):** one sub-agent per failing script, single message. A single agent fixing N scripts cross-contaminates.
-3. Each agent gets the script path, the specific error payload, and a concrete fix hypothesis (`play-checkout.ts: ECONNREFUSED on :3001 — start the app first`).
-4. Edit in-place, re-run Phase 7. **Max 2 retries**, then ask retry / stop.
+3. Each agent gets the script path (under `.seeflow/nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
+4. Edit in-place, re-run `seeflow e2e`. **Max 2 retries**, then ask retry / stop.
 
 ### Polish WIKI.md with anything learned
 
-If Phases 6-7 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<project>/.seeflow/WIKI.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
+If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<project>/.seeflow/WIKI.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
 
 **Tech-specific learnings** (a helper, a required attribute, an emulator quirk, a fixture path) go in `## Tech stack adaptations` → `### <techId>`, not just `## Gotchas`. If the code-analyzer missed a tech entirely, also append the `techId` to `## Tech stack`. This is what makes the next `/seeflow` run reuse the work.
 
@@ -230,10 +249,10 @@ If Phases 6-7 surfaced something the next run would want — port mismatch, fixt
 
 | Topic | File |
 |---|---|
-| Error handling, retry caps, studio API endpoints, sub-agent table | `references/operations.md` |
-| `flow.json` + `style.json` schema, node types, connectors, actions, `StatusReport` | `references/schema.md` |
+| CLI subcommand reference | `references/cli.md` |
+| Error handling, retry caps, sub-agent table | `references/operations.md` |
+| Schema, per-node file convention, action shapes | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
 | `WIKI.md` format, lifecycle, merging, `wikiUpdates` contract | `references/wiki-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
-| Phase 5 plan-presentation template | `references/plan-format.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |
