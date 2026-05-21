@@ -12,8 +12,8 @@
     "test": "bun test",
     "test:it": "bun apps/studio/scripts/test-integration.ts",
     "test:it:bun": "bun test ./apps/studio/integration/*.it.ts",
-    "test:it:e2e": "bun apps/studio/node_modules/.bin/playwright test --config=apps/studio/e2e/playwright.config.ts",
-    "test:it:update-snapshots": "bun apps/studio/node_modules/.bin/playwright test --config=apps/studio/e2e/playwright.config.ts --update-snapshots",
+    "test:it:e2e": "bun apps/studio/scripts/run-e2e.ts",
+    "test:it:update-snapshots": "bun apps/studio/scripts/run-e2e.ts --update-snapshots",
     "dev": "concurrently -n canvas-css,workspaces -c blue,green \"cd packages/canvas && bun run build:css:watch\" \"bun run --filter '*' dev\""
   },
   "dependencies": {

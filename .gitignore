@@ -23,3 +23,4 @@ apps/cloud/cdk.out
 ralph/prd.json
 ralph/progress.txt
 apps/studio/integration/.artifacts/
+apps/studio/playwright-report/

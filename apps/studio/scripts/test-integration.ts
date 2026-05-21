@@ -24,13 +24,10 @@ const REPO_ROOT = resolve(STUDIO_DIR, '../..');
 const DIST_INDEX = join(STUDIO_DIR, 'dist/web/index.html');
 const WEB_SRC = join(REPO_ROOT, 'apps/web/src');
 const ARTIFACT_ROOT = join(STUDIO_DIR, 'integration/.artifacts');
-const PLAYWRIGHT_CONFIG = join(STUDIO_DIR, 'e2e/playwright.config.ts');
-// Spawn the package-local playwright binary (apps/studio devDep) under bun's
-// runtime — `bunx --bun playwright` resolves against ~/.bun cache which may
-// hold older versions whose CLI surface differs (no `test` subcommand).
-// Using the explicit relative path under STUDIO_DIR makes resolution
-// deterministic regardless of the orchestrator's cwd.
-const PLAYWRIGHT_BIN = join(STUDIO_DIR, 'node_modules/.bin/playwright');
+// run-e2e.ts dispatches between native playwright (Linux/CI) and the official
+// Playwright Docker image (macOS/Windows dev) so visual baselines compare
+// against the same pixels regardless of host.
+const E2E_DISPATCHER = join(STUDIO_DIR, 'scripts/run-e2e.ts');
 
 interface StepResult {
   name: string;
@@ -114,14 +111,7 @@ async function main(): Promise<void> {
 
   const results: StepResult[] = [];
   results.push(await runStep('bun test (integration)', ['bun', 'run', 'test:it:bun']));
-  results.push(
-    await runStep('playwright (e2e)', [
-      'bun',
-      PLAYWRIGHT_BIN,
-      'test',
-      `--config=${PLAYWRIGHT_CONFIG}`,
-    ]),
-  );
+  results.push(await runStep('playwright (e2e)', ['bun', E2E_DISPATCHER]));
 
   const summary = {
     runId,

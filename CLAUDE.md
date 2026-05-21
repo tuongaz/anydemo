@@ -30,3 +30,14 @@ bun test
 ```
 
 `make help` lists Makefile wrappers.
+
+## Visual baselines
+
+Playwright e2e tests in `apps/studio/e2e/` include pixel-level snapshot
+assertions. Baselines are pinned to **chromium-linux** so they match CI.
+`bun run test:it:e2e` (and the orchestrator under `bun run test:it`) auto-
+routes through the official Playwright Docker image on non-Linux hosts —
+Docker Desktop must be running. To regenerate baselines after an
+intentional UI change, run `bun run test:it:update-snapshots` and commit
+the resulting `*-chromium-linux.png` files. Never commit `*-darwin.png` or
+other host-specific snapshots.
