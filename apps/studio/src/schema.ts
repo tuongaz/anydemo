@@ -71,7 +71,7 @@ const ScriptActionSchema = z.object({
   interpreter: z.string().min(1),
   args: z.array(z.string()).optional(),
   scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under .seeflow/ (no absolute / traversal)',
+    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
   }),
   input: z.unknown().optional(),
   timeoutMs: z.number().int().positive().max(600_000).optional(),
@@ -94,7 +94,7 @@ export const StatusActionSchema = z.object({
   interpreter: z.string().min(1),
   args: z.array(z.string()).optional(),
   scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under .seeflow/ (no absolute / traversal)',
+    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
   }),
   maxLifetimeMs: z.number().int().positive().max(3_600_000).optional(),
 });
