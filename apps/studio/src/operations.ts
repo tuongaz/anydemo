@@ -842,7 +842,7 @@ export function listFlowsSummaryImpl(deps: OperationsDeps): ListFlowsSummaryOutc
 
 export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise<GetFlowOutcome> {
   const { registry, watcher } = deps;
-  const entry = registry.getById(flowId);
+  const entry = registry.resolve(flowId);
   if (!entry) return { kind: 'notFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -897,7 +897,7 @@ export async function getFlowGraphImpl(
   deps: OperationsDeps,
   flowId: string,
 ): Promise<GetFlowGraphOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'notFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -932,7 +932,7 @@ export async function getNodeImpl(
   nodeId: string,
 ): Promise<GetNodeOutcome> {
   const { registry, watcher } = deps;
-  const entry = registry.getById(flowId);
+  const entry = registry.resolve(flowId);
   if (!entry) return { kind: 'notFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1033,7 +1033,7 @@ export async function registerFlowImpl(
 
 export function deleteFlowImpl(deps: OperationsDeps, idOrSlug: string): DeleteFlowOutcome {
   const { registry, watcher } = deps;
-  const entry = registry.getById(idOrSlug) ?? registry.getBySlug(idOrSlug);
+  const entry = registry.resolve(idOrSlug);
   if (!entry) return { kind: 'notFound' };
   watcher?.unwatch(entry.id);
   registry.remove(entry.id);
@@ -1112,7 +1112,7 @@ export async function addNodeImpl(
   flowId: string,
   nodeBody: Record<string, unknown>,
 ): Promise<AddNodeOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const newNode = { ...nodeBody };
@@ -1185,7 +1185,7 @@ export async function addNodesBulkImpl(
   flowId: string,
   body: NodesBulkBody,
 ): Promise<AddNodesBulkOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   // Pre-allocate ids + capture externalization writes per item. Doing this
@@ -1287,7 +1287,7 @@ export async function deleteNodeImpl(
   flowId: string,
   nodeId: string,
 ): Promise<DeleteNodeOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1330,7 +1330,7 @@ export async function moveNodeImpl(
   nodeId: string,
   position: PositionBody,
 ): Promise<MoveNodeOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1366,7 +1366,7 @@ export async function patchNodeImpl(
   nodeId: string,
   updates: NodePatchBody,
 ): Promise<PatchNodeOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1426,7 +1426,7 @@ export async function reorderNodeImpl(
   nodeId: string,
   body: ReorderBody,
 ): Promise<ReorderNodeOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1458,7 +1458,7 @@ export async function addConnectorImpl(
   flowId: string,
   connBody: Record<string, unknown>,
 ): Promise<AddConnectorOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const newConn = { ...connBody };
@@ -1492,7 +1492,7 @@ export async function addConnectorsBulkImpl(
   flowId: string,
   body: ConnectorsBulkBody,
 ): Promise<AddConnectorsBulkOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const prepared: Array<{ id: string; conn: Record<string, unknown> }> = [];
@@ -1555,7 +1555,7 @@ export async function patchConnectorImpl(
   connectorId: string,
   updates: ConnectorPatchBody,
 ): Promise<PatchConnectorOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1582,7 +1582,7 @@ export async function deleteConnectorImpl(
   flowId: string,
   connectorId: string,
 ): Promise<DeleteConnectorOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1704,7 +1704,7 @@ export async function applyLayoutImpl(
   flowId: string,
   options: LayoutOptions | undefined,
 ): Promise<ApplyLayoutOutcome> {
-  const entry = deps.registry.getById(flowId);
+  const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
   const flowAbs = resolveFilePath(entry.repoPath, entry.flowPath);

@@ -31,6 +31,9 @@ export interface Registry {
   list(): FlowEntry[];
   getById(id: string): FlowEntry | undefined;
   getBySlug(slug: string): FlowEntry | undefined;
+  /** Resolve by id, falling back to slug. The canonical lookup for CLI/API
+   *  paths that document `<flowId>` as "Flow id or slug". */
+  resolve(idOrSlug: string): FlowEntry | undefined;
   getByRepoPath(repoPath: string): FlowEntry | undefined;
   getByRepoPathAndFlowPath(repoPath: string, flowPath: string): FlowEntry | undefined;
   upsert(input: RegisterInput): FlowEntry;
@@ -181,6 +184,12 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     getBySlug: (slug) => {
       refreshIfStale();
       return [...entries.values()].find((e) => e.slug === slug);
+    },
+    resolve: (idOrSlug) => {
+      refreshIfStale();
+      const byId = entries.get(idOrSlug);
+      if (byId) return byId;
+      return [...entries.values()].find((e) => e.slug === idOrSlug);
     },
     getByRepoPath: (repoPath) => {
       refreshIfStale();

@@ -17,6 +17,7 @@ import {
   addConnectorsBulkImpl,
   addNodeImpl,
   addNodesBulkImpl,
+  applyLayoutImpl,
   createOperations,
   deleteNodeImpl,
   getFlowGraphImpl,
@@ -904,5 +905,60 @@ describe('createOperations factory', () => {
     const flows = ops.listFlows();
     expect(flows.data.length).toBe(1);
     expect(flows.data[0]?.name).toBe('Factory Round-Trip');
+  });
+});
+
+// Regression: CLI help advertises every `<flowId>` arg as "Flow id or slug"
+// but mutation ops historically resolved only by id, surfacing flowNotFound
+// on slug input. Each *Impl now goes through registry.resolve(); these tests
+// pin that contract for the ops the retrospective specifically called out.
+describe('registry.resolve() + slug-tolerant *Impl', () => {
+  it('registry.resolve returns the same entry whether called with id or slug', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const byId = deps.registry.resolve(flowId);
+    if (!byId) throw new Error('expected resolve(id) to find the entry');
+    const bySlug = deps.registry.resolve(byId.slug);
+    expect(bySlug?.id).toBe(byId.id);
+    expect(deps.registry.resolve('nope-not-there')).toBeUndefined();
+  });
+
+  it('addNodesBulkImpl resolves a slug argument', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const entry = deps.registry.resolve(flowId);
+    if (!entry) throw new Error('seed lookup failed');
+    const res = await addNodesBulkImpl(deps, entry.slug, {
+      nodes: [{ id: 'slug-n1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
+    });
+    expect(res.kind).toBe('ok');
+  });
+
+  it('addConnectorsBulkImpl resolves a slug argument', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const entry = deps.registry.resolve(flowId);
+    if (!entry) throw new Error('seed lookup failed');
+    // Seed two nodes first (using id) so the connector has endpoints to wire.
+    const seed = await addNodesBulkImpl(deps, flowId, {
+      nodes: [
+        { id: 'src', type: 'shapeNode', data: { name: 'src', shape: 'rectangle' } },
+        { id: 'dst', type: 'shapeNode', data: { name: 'dst', shape: 'ellipse' } },
+      ],
+    });
+    if (seed.kind !== 'ok') throw new Error(`seed failed: ${seed.kind}`);
+    const res = await addConnectorsBulkImpl(deps, entry.slug, {
+      connectors: [{ id: 'c1', kind: 'default', source: 'src', target: 'dst' }],
+    });
+    expect(res.kind).toBe('ok');
+  });
+
+  it('applyLayoutImpl resolves a slug argument', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const entry = deps.registry.resolve(flowId);
+    if (!entry) throw new Error('seed lookup failed');
+    const seed = await addNodesBulkImpl(deps, flowId, {
+      nodes: [{ id: 'only', type: 'shapeNode', data: { name: 'only', shape: 'rectangle' } }],
+    });
+    if (seed.kind !== 'ok') throw new Error(`seed failed: ${seed.kind}`);
+    const res = await applyLayoutImpl(deps, entry.slug, undefined);
+    expect(res.kind).toBe('ok');
   });
 });

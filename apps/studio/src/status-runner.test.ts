@@ -80,6 +80,7 @@ function makeFakeRegistry(entries: FlowEntry[]): Registry {
     list: () => [...map.values()],
     getById: (id) => map.get(id),
     getBySlug: () => undefined,
+    resolve: (id) => map.get(id),
     getByRepoPath: () => undefined,
     getByRepoPathAndFlowPath: () => undefined,
     upsert() {
@@ -441,6 +442,7 @@ describe('createStatusRunner', () => {
         list: () => [entry],
         getById: () => entry,
         getBySlug: () => undefined,
+        resolve: () => entry,
         getByRepoPath: () => undefined,
         getByRepoPathAndFlowPath: () => undefined,
         upsert: () => {
