@@ -12,7 +12,7 @@
           "kind": "request"
         },
         "description": "Creates order, kicks off the pipeline.",
-        "detail": "file://nodes/node-XKIyds0TDg/detail.md",
+        "detail": "file://detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -33,7 +33,7 @@
           "kind": "event"
         },
         "description": "Reserves stock.",
-        "detail": "file://nodes/node-GXTKUcE3ye/detail.md",
+        "detail": "file://detail.md",
         "icon": "a-arrow-down-icon"
       }
     },
@@ -47,7 +47,7 @@
           "kind": "event"
         },
         "description": "Charges card.",
-        "detail": "file://nodes/node-YOYiHJpY0i/detail.md"
+        "detail": "file://detail.md"
       }
     },
     {
@@ -60,7 +60,7 @@
           "kind": "event"
         },
         "description": "Enqueues shipment.",
-        "detail": "file://nodes/node-zUIH7WFnhK/detail.md"
+        "detail": "file://detail.md"
       }
     }
   ],

@@ -1937,7 +1937,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.description).toBe('short body');
-    expect(node?.data.detail).toBe('file://nodes/api-checkout/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
     ).toBe('multi-line\nnotes about the node');
@@ -1971,7 +1971,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.description).toBeUndefined();
     expect('description' in (node?.data ?? {})).toBe(false);
-    expect(node?.data.detail).toBe('file://nodes/api-checkout/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
     ).toBe('');
@@ -2036,9 +2036,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
-    expect(onDisk.nodes.find((n) => n.id === 'html-patch')?.data.html).toBe(
-      'file://nodes/html-patch/view.html',
-    );
+    expect(onDisk.nodes.find((n) => n.id === 'html-patch')?.data.html).toBe('file://view.html');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-patch', 'view.html'), 'utf8'),
     ).toBe('<p>via PATCH</p>');
@@ -2151,7 +2149,7 @@ describe('POST /api/flows/:id/nodes', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
-    expect(node?.data.detail).toBe('file://nodes/with-detail/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
     ).toBe('hello world');
@@ -2178,7 +2176,7 @@ describe('POST /api/flows/:id/nodes', () => {
       nodes: Array<{ id: string; data: { detail?: string } }>;
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
-    expect(node?.data.detail).toBe('file://nodes/no-detail/detail.md');
+    expect(node?.data.detail).toBe('file://detail.md');
     expect(
       readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
     ).toBe('');
@@ -2208,7 +2206,7 @@ describe('POST /api/flows/:id/nodes', () => {
         nodes: Array<{ id: string; type: string; data: { html?: string } }>;
       };
       const persisted = onDisk.nodes.find((n) => n.id === 'hero-block');
-      expect(persisted?.data.html).toBe('file://nodes/hero-block/view.html');
+      expect(persisted?.data.html).toBe('file://view.html');
       expect(
         readFileSync(join(repoPath, '.seeflow', 'nodes', 'hero-block', 'view.html'), 'utf8'),
       ).toBe('');
@@ -2235,7 +2233,7 @@ describe('POST /api/flows/:id/nodes', () => {
         nodes: Array<{ id: string; data: { html?: string } }>;
       };
       const persisted = onDisk.nodes.find((n) => n.id === 'with-content');
-      expect(persisted?.data.html).toBe('file://nodes/with-content/view.html');
+      expect(persisted?.data.html).toBe('file://view.html');
       expect(
         readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-content', 'view.html'), 'utf8'),
       ).toBe('<p>inline</p>');
@@ -2264,7 +2262,7 @@ describe('POST /api/flows/:id/nodes', () => {
       const persisted = onDisk.nodes.find((n) => n.id === 'pricing');
       expect(persisted?.data.name).toBe('Pricing card');
       expect(persisted?.data.icon).toBe('tag');
-      expect(persisted?.data.html).toBe('file://nodes/pricing/view.html');
+      expect(persisted?.data.html).toBe('file://view.html');
     });
   });
 });
@@ -2301,10 +2299,10 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     // Pre-existing demo had 1 node, bulk added 3.
     expect(onDisk.nodes).toHaveLength(4);
     const b2 = onDisk.nodes.find((n) => n.id === 'b2');
-    expect(b2?.data.detail).toBe('file://nodes/b2/detail.md');
+    expect(b2?.data.detail).toBe('file://detail.md');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'b2', 'detail.md'), 'utf8')).toBe('hi');
     const b3 = onDisk.nodes.find((n) => n.id === 'b3');
-    expect(b3?.data.html).toBe('file://nodes/b3/view.html');
+    expect(b3?.data.html).toBe('file://view.html');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'b3', 'view.html'), 'utf8')).toBe(
       '<div>x</div>',
     );

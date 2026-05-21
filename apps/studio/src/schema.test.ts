@@ -1621,7 +1621,7 @@ describe('ResolvedFlowSchema', () => {
 
     it('accepts html as a file:// ref (round-trip from disk)', () => {
       const result = HtmlNodeDataSchema.safeParse({
-        html: 'file://nodes/node-abc/view.html',
+        html: 'file://view.html',
       });
       expect(result.success).toBe(true);
     });

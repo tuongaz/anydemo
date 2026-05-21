@@ -15,8 +15,8 @@ describe('node-files path helpers', () => {
   it('builds rel path under nodes/<id>/<fileName>', () => {
     expect(nodeFileRelPath('node-abc', 'detail.md')).toBe('nodes/node-abc/detail.md');
   });
-  it('builds file:// ref', () => {
-    expect(nodeFileRef('node-abc', 'view.html')).toBe('file://nodes/node-abc/view.html');
+  it('builds node-relative file:// ref (just the filename)', () => {
+    expect(nodeFileRef('node-abc', 'view.html')).toBe('file://view.html');
   });
   it('builds absolute path under .seeflow/', () => {
     expect(nodeFileAbsPath('/repo', 'node-abc', 'detail.md')).toBe(

@@ -338,20 +338,19 @@ describe('createWatcher', () => {
   });
 
   // -------------------------------------------------------------------------
-  // file:// refs resolve against `<project>/.seeflow/` (per skill spec), so a
-  // nested-slug layout — flow at `<repo>/.seeflow/<slug>/flow.json` — can
-  // reference files via `file://<slug>/details/foo.md`. Regression test for the
-  // bug where the resolver looked one directory too deep and reported every
-  // subfolder ref as missing.
+  // file:// refs are node-relative: `file://detail.md` inside node-id `n1`
+  // resolves under `<seeflowRoot>/nodes/n1/detail.md`. For nested-slug layouts
+  // (flow at `<repo>/.seeflow/<slug>/flow.json`), seeflowRoot still walks up to
+  // the `.seeflow` ancestor — so the per-node folder is `.seeflow/nodes/<id>/`,
+  // NOT under the slug. Regression test for both the resolver root walk and
+  // the node-relative ref contract.
   // -------------------------------------------------------------------------
-  it('resolves file:// refs against .seeflow root for nested-slug layouts', async () => {
+  it('resolves node-relative file:// refs for nested-slug layouts', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = mkdtempSync(join(tmpdir(), 'watcher-nested-'));
-    mkdirSync(join(repoPath, '.seeflow', 'crn-retained', 'details'), { recursive: true });
-    writeFileSync(
-      join(repoPath, '.seeflow', 'crn-retained', 'details', 'data.md'),
-      '# Resolved content',
-    );
+    mkdirSync(join(repoPath, '.seeflow', 'nodes', 'n1'), { recursive: true });
+    writeFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), '# Resolved content');
+    mkdirSync(join(repoPath, '.seeflow', 'crn-retained'), { recursive: true });
 
     const nestedDemo = {
       version: 2,
@@ -365,7 +364,7 @@ describe('createWatcher', () => {
             kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-            detail: 'file://crn-retained/details/data.md',
+            detail: 'file://detail.md',
           },
         },
       ],
@@ -396,15 +395,12 @@ describe('createWatcher', () => {
     });
 
     await wait(30);
-    writeFileSync(
-      join(repoPath, '.seeflow', 'crn-retained', 'details', 'data.md'),
-      '# Resolved content v2',
-    );
+    writeFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), '# Resolved content v2');
     await wait(150);
 
     expect(fileEvents.length).toBeGreaterThanOrEqual(1);
     const payload = fileEvents.at(-1)?.payload as { path: string };
-    expect(payload.path).toBe('crn-retained/details/data.md');
+    expect(payload.path).toBe('nodes/n1/detail.md');
     watcher.closeAll();
   });
 
