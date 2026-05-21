@@ -20,6 +20,14 @@ Run `seeflow help` to list the available subcommands and their flags. If `seeflo
 
 Cache the resolved binary (`seeflow` vs `npx -y @tuongaz/seeflow@latest`) for the rest of the conversation and reuse it for every subsequent call.
 
+## First step — does a matching flow exist?
+
+Before any deeper lookup, list the registered flows (use the catalog subcommand surfaced by `seeflow help`) and match the user's topic against it. Match generously: exact slug, fuzzy name, or topic keyword (e.g. "the cart" matches a flow named `shopping-cart`).
+
+- **Match found** → continue with the cost ladder below.
+- **No match** → stop. Tell the user no flow is registered for that topic and recommend `/seeflow <topic>` to scaffold one. Do **not** answer the question by grepping the codebase — that's `/seeflow`'s job (it dispatches code-analyzer + system-analyzer sub-agents). Surfacing the gap is the right answer.
+- **Ambiguous match** (multiple plausible flows) → list them and ask the user which one.
+
 ## Output contract
 
 - Every response is **JSON on stdout, passed through unchanged from the CLI**. No markdown wrappers, no synthetic fields.

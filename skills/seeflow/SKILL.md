@@ -1,6 +1,6 @@
 ---
 name: seeflow
-description: Use when the user asks to "create a flow", "generate a flow", "scaffold a SeeFlow flow", "show how X works", "diagram our system", or "add a flow to this repo". Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
+description: Use when the user asks to *create* a new SeeFlow flow — "create a flow", "generate a flow", "scaffold a SeeFlow flow", "add a flow to this repo", or when a previous `/seeflow-lookup` reported no matching flow exists. For questions about an existing flow ("how does X work", "show me the flow", "diagram our system"), use `/seeflow-lookup` first — it will fall back to this skill if nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
 ---
 
 # seeflow
