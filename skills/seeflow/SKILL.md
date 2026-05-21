@@ -41,8 +41,7 @@ P1    code-analyzer ‖ system-analyzer
 P2    node-planner (kicks off when code-analyzer returns;
                    system-analyzer continues in background)
 P3    projects:create → nodes:add-bulk → connectors:add-bulk
-      → flows:layout → USER REVIEW
-P3.5  dynamic gate (continue with scripts, or stop static?)
+      → flows:layout → USER REVIEW + dynamic gate (one combined ask)
 P4    play-designer ‖ status-designer
 P5    write scripts to .seeflow/nodes/<nodeId>/scripts/
       → nodes:patch (per node, with playAction / statusAction)
@@ -109,6 +108,30 @@ Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both ove
 
 Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/learn-format.md`. Unparseable output: retry that single agent once, then surface and stop.
 
+### Empty-project / design-only mode
+
+If the project root has no source tree (no `package.json`, no Go module, no Python project, no language source files), the "When NOT to invoke" rule kicks in: **ask the user first.** If they say "design anyway" (mockups, demo skeletons, architectural sketches), skip both analyzers and build a synthetic brief by hand from the user's prompt:
+
+```json
+{
+  "userIntent":     "<extracted verbatim from the user's prompt>",
+  "audienceFraming":"design-only sketch — no running system to observe",
+  "scope":          { "rootEntities": [<inferred from prompt>], "outOfScope": [] },
+  "codePointers":   [],
+  "knownEndpoints": [],
+  "techStack":      [<user-stated, or empty>],
+  "existingDemo":   null,
+  "runtimeProfile": null
+}
+```
+
+Forward that brief to `seeflow-node-planner` (Phase 2) as-is — the planner already tolerates a sparse brief.
+
+Downstream consequences:
+- **Phase 3 dynamic gate:** default to **static** without re-asking. Without `runtimeProfile`, Phase 4 designers cannot pick a real interpreter or fixture; tell the user to populate code first if they later want dynamic.
+- **Phase 6 (e2e):** N/A — skip with a one-line note when summarising the run.
+- **LEARN.md:** still write the flow row, but mark it `(design-only)` in the purpose column so the next run knows the canvas is not wired to a real system.
+
 ### Phase 1 → Phase 2 overlap
 
 Start `seeflow-node-planner` as soon as the code-analyzer returns — it only needs the code-analyzer's brief plus `techStack`. The system-analyzer continues in the background.
@@ -135,32 +158,43 @@ Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,targe
 
 The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
 
-1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result.
-2. `nodes:add-bulk` — bulk-seed nodes. Strip `rationales` from the planner output first; forward only the `nodes` array (re-wrapped per the body schema).
-3. `connectors:add-bulk` — bulk-seed connectors.
-4. `flows:layout` — run ELK and write `style.json`.
+1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result. **Use `id` (not `slug`) for every follow-up CLI call below.** Several commands document slug support in `help` but the server only resolves by id today.
+2. **Normalize the planner output:** strip `rationales`, then for every `playNode` whose `data.playAction` is absent, inject a placeholder so the server's `ResolvedFlowSchema` (which requires `playAction` on every `playNode`) accepts the batch:
+   ```json
+   "playAction": {
+     "kind": "script",
+     "interpreter": "<runtimeProfile.primaryLanguage, or 'bun' if unknown>",
+     "scriptPath": "scripts/play.ts",
+     "timeoutMs": 15000
+   }
+   ```
+   The Phase 4 play-designer overwrites this with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
+3. `nodes:add-bulk` — bulk-seed nodes. Forward only the (now normalized) `nodes` array, re-wrapped per the body schema.
+4. `connectors:add-bulk` — bulk-seed connectors.
+5. `flows:layout` — run ELK and write `style.json`.
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
-Open the canvas and ask, surfacing the planner's `rationales` per node:
+Open the canvas, surface the planner's `rationales` per node, and ask **one combined question** (layout review + dynamic gate in a single round-trip — two consecutive waits is interrogation):
 
 ```bash
 URL="$STUDIO_URL/d/$slug"
 (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
 ```
 
-> Opened the canvas at `<url>`. Layout look right? Any additions, removals, or
-> renames?
+> Opened the canvas at `<url>`. Two quick questions:
+> 1. **Layout** — any additions, removals, or renames?
+> 2. **Dynamic or static** — continue with Play scripts + Status probes so the
+>    canvas reacts to your running system, or stop with the static layout?
 
-**Wait.** Changes requested → re-run node-planner, repeat. Approved → dynamic gate.
+**Wait once.** Parse both answers from the reply.
 
-### Phase 3.5 — dynamic gate
+- **Layout changes requested** → re-run node-planner with the feedback, repeat the combined ask. The dynamic answer (if given) is remembered but not acted on until the layout is approved.
+- **Layout approved + dynamic** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations. Re-merge any new `learnUpdates` first.
+- **Layout approved + static** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `learnUpdates`.
+- **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in).
 
-> Continue and make this flow **dynamic** (write Play scripts and Status probes so the canvas reacts to your running system) — or stop with the static layout?
-
-- **Yes** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations. Re-merge any new `learnUpdates` first.
-- **No** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `learnUpdates`.
-- **Unclear** → ask once more, default to static (dynamic writes executable scripts; opt-in).
+(Design-only mode from Phase 1's empty-project branch defaults to static here without re-asking.)
 
 ## Phase 4 — design Play + Status (parallel)
 

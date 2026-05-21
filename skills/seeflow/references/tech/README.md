@@ -54,6 +54,7 @@ hits, emit the corresponding `techId` in `learnUpdates.techStack`.
 | `aws-sdk-go-v2/service/s3` / `@aws-sdk/client-s3` / `boto3` `s3` client | `s3`                  | `tech/s3.md`                 |
 | `lib/pq` / `pgx` / `pg` / `psycopg` / `postgres` compose image | `postgres`            | `tech/postgres.md`           |
 | `go-sql-driver/mysql` / `mysql2` / `mysqlclient` / `mysql` compose image | `mysql`               | `tech/mysql.md`              |
+| `bun:sqlite` / `better-sqlite3` / `sqlite3` (node/py) / `mattn/go-sqlite3` / `sqlalchemy` + `sqlite:///` / `*.sqlite`/`*.db` files | `sqlite`              | `tech/sqlite.md`             |
 | `go.mongodb.org/mongo-driver` / `mongodb` / `pymongo` / `mongo` compose image | `mongodb`             | `tech/mongodb.md`            |
 | `aws-sdk-go-v2/service/dynamodb` / `@aws-sdk/client-dynamodb` / `boto3` `dynamodb` | `dynamodb`            | `tech/dynamodb.md`           |
 | `go-redis/redis` / `ioredis` / `redis-py` / `redis` compose image | `redis`               | `tech/redis.md`              |
