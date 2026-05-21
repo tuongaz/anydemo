@@ -93,16 +93,46 @@ describe('renderManifestJson', () => {
 });
 
 describe('renderCommandHelp', () => {
-  it('returns a multi-section help page for a known command', () => {
-    const out = renderCommandHelp('nodes:add');
-    expect(out).toContain('nodes:add');
-    expect(out).toContain('Synopsis');
-    expect(out).toContain('Flags');
-    expect(out).toContain('Example');
-  });
-
   it('throws for an unknown command', () => {
     expect(() => renderCommandHelp('nope:nope')).toThrow();
+  });
+
+  it('renders a body-bearing JSON command with all sections (nodes:add)', () => {
+    const out = renderCommandHelp('nodes:add');
+    expect(out).toMatch(/^# nodes:add/m);
+    expect(out).toContain('## Synopsis');
+    expect(out).toContain('## Arguments');
+    expect(out).toContain('## Flags');
+    expect(out).toContain('## Input (body)');
+    // example body
+    expect(out).toContain('Example body');
+    expect(out).toContain('"stateNode"');
+    // output envelope
+    expect(out).toContain('## Output');
+    expect(out).toContain('"ok": true');
+    expect(out).toContain('"error"');
+    expect(out).toContain('"code"');
+    // per-command exit-code table
+    expect(out).toMatch(/flowNotFound.*exit 3/);
+    expect(out).toMatch(/badSchema.*exit 2/);
+    expect(out).toMatch(/writeFailed.*exit 5/);
+    // examples + requires-studio
+    expect(out).toContain('## Examples');
+    expect(out).toContain('Requires studio running: no');
+  });
+
+  it('omits the Input section for commands with no body (flows:get)', () => {
+    const out = renderCommandHelp('flows:get');
+    expect(out).not.toContain('## Input (body)');
+    expect(out).toContain('## Arguments');
+    expect(out).toContain('## Output');
+  });
+
+  it('inlines the JSON Schema for body commands whose schemaRef resolves', () => {
+    const out = renderCommandHelp('nodes:patch');
+    expect(out).toContain('## Input (body)');
+    // schemaRef NodePatchBody resolves via zod-to-json-schema
+    expect(out).toContain('"type": "object"');
   });
 });
 

@@ -3,7 +3,7 @@
 // can discover every subcommand without scraping the human help text.
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { EXIT_CODE_BY_KIND } from './cli-helpers.ts';
+import { EXIT_CODE_BY_KIND, exitCodeForKind } from './cli-helpers.ts';
 import {
   ConnectorPatchBodySchema,
   ConnectorsBulkBodySchema,
@@ -577,68 +577,141 @@ export function renderManifestJson(): string {
 export function renderCommandHelp(name: string): string {
   const entry = COMMAND_MANIFEST.find((e) => e.name === name);
   if (!entry) throw new Error(`Unknown command: ${name}`);
+
   const lines: string[] = [];
-  lines.push(`# ${entry.name}`);
-  lines.push('');
-  lines.push(entry.description);
-  lines.push('');
-  lines.push('## Synopsis');
-  lines.push(`  ${entry.synopsis}`);
-  lines.push('');
+  lines.push(`# ${entry.name}`, '');
+  lines.push(entry.description, '');
+
+  lines.push('## Synopsis', `  ${entry.synopsis}`, '');
+
   if (entry.args.length > 0) {
     lines.push('## Arguments');
     for (const a of entry.args) {
-      lines.push(`  <${a.name}>${a.required ? '' : ' (optional)'} — ${a.description}`);
+      const req = a.required ? '(required)' : '(optional)';
+      lines.push(`  <${a.name}>  ${req} — ${a.description}`);
     }
     lines.push('');
   }
+
   if (entry.flags.length > 0) {
     lines.push('## Flags');
     for (const f of entry.flags) {
       const value = f.valuePlaceholder ? ` ${f.valuePlaceholder}` : '';
-      lines.push(`  --${f.name}${value}${f.required ? '' : ' (optional)'} — ${f.description}`);
+      const req = f.required ? '(required)' : '(optional)';
+      lines.push(`  --${f.name}${value}  ${req} — ${f.description}`);
     }
     lines.push('');
   }
+
   if (entry.body) {
-    lines.push('## Body');
-    if (entry.body.schemaRef) lines.push(`  Schema: ${entry.body.schemaRef}`);
-    if (entry.body.example !== undefined) {
-      lines.push('  Example:');
-      lines.push(`    ${JSON.stringify(entry.body.example)}`);
+    lines.push('## Input (body)');
+    if (entry.body.schemaRef) {
+      const schema = resolveSchemaRef(entry.body.schemaRef);
+      if (schema !== undefined) {
+        lines.push('Schema (JSON Schema, resolved from Zod):', '');
+        lines.push(indent(JSON.stringify(schema, null, 2), '    '));
+        lines.push('');
+      }
     }
-    lines.push('');
+    if (entry.body.example !== undefined) {
+      lines.push('Example body:', '');
+      lines.push(indent(JSON.stringify(entry.body.example, null, 2), '    '));
+      lines.push('');
+    }
   }
+
   lines.push('## Output');
-  if (entry.outputs.okExample !== undefined) {
-    lines.push('  On success:');
-    lines.push(`    ${JSON.stringify(entry.outputs.okExample)}`);
-  }
-  if (entry.outputs.errorKinds?.length) {
-    lines.push(`  Error kinds: ${entry.outputs.errorKinds.join(', ')}`);
-  }
+  lines.push(...renderOutputSection(entry));
   lines.push('');
+
   if (entry.examples.length > 0) {
     lines.push('## Examples');
-    for (const ex of entry.examples) {
-      lines.push(`  ${ex}`);
-    }
+    for (const ex of entry.examples) lines.push(`  ${ex}`);
     lines.push('');
   }
+
   lines.push(`Requires studio running: ${entry.requiresStudio ? 'yes' : 'no'}`);
   return lines.join('\n');
 }
 
-function renderExitCodeTable(): string {
-  const groups = new Map<number, string[]>();
-  for (const [kind, code] of Object.entries(EXIT_CODE_BY_KIND)) {
-    const arr = groups.get(code) ?? [];
-    arr.push(kind);
-    groups.set(code, arr);
+function indent(text: string, prefix: string): string {
+  return text
+    .split('\n')
+    .map((l) => `${prefix}${l}`)
+    .join('\n');
+}
+
+function renderOutputSection(entry: CommandManifestEntry): string[] {
+  const kind = entry.outputKind ?? 'json';
+  if (kind === 'text') return renderOutputText(entry);
+  if (kind === 'stream') return renderOutputStream(entry);
+  return renderOutputJson(entry);
+}
+
+function renderOutputJson(entry: CommandManifestEntry): string[] {
+  const out: string[] = [];
+  out.push('On success (stdout, exit 0):', '');
+  if (entry.outputs.okExample !== undefined) {
+    const merged = { ok: true, ...(entry.outputs.okExample as object) };
+    out.push(indent(JSON.stringify(merged, null, 2), '    '));
+  } else {
+    out.push('    { "ok": true }');
   }
+  out.push('');
+  out.push('On error (stderr, non-zero exit):', '');
+  out.push('    { "error": "<message>", "code": "<kind>" }', '');
+  const kinds = entry.outputs.errorKinds ?? [];
+  if (kinds.length > 0) {
+    out.push('Error kinds for this command:');
+    for (const group of groupKindsByExitCode(kinds)) {
+      for (const k of group.kinds) {
+        out.push(`  ${k}  → exit ${group.code}`);
+      }
+    }
+  }
+  return out;
+}
+
+// Tasks 5 & 6 will implement these; stub for now:
+function renderOutputText(_entry: CommandManifestEntry): string[] {
+  return ['Prints human-readable status to stdout.', 'Exit 0 on success, non-zero on failure.'];
+}
+function renderOutputStream(_entry: CommandManifestEntry): string[] {
+  return [
+    'Streams progress events to stdout until completion.',
+    'Exit 0 on success, non-zero on failure.',
+  ];
+}
+
+/**
+ * Bucket a list of error kinds by their runtime exit code, preserving the
+ * caller's order within each bucket. Shared between the global preamble
+ * (which passes all known kinds) and the per-command output section (which
+ * passes only the kinds that command can emit). Both render via the same
+ * formatter so output style cannot drift.
+ */
+function groupKindsByExitCode(kinds: string[]): Array<{ code: number; kinds: string[] }> {
+  const byCode = new Map<number, string[]>();
+  for (const kind of kinds) {
+    const code = exitCodeForKind(kind);
+    const arr = byCode.get(code) ?? [];
+    arr.push(kind);
+    byCode.set(code, arr);
+  }
+  return [...byCode.entries()].sort(([a], [b]) => a - b).map(([code, k]) => ({ code, kinds: k }));
+}
+
+function renderExitCodeTable(): string {
+  // Derive the ordered set of unique exit codes from the runtime map, skipping
+  // 1 (the catch-all is rendered as a final literal line). This keeps the
+  // preamble future-proof if a new exit code is added to EXIT_CODE_BY_KIND.
+  const codes = [...new Set(Object.values(EXIT_CODE_BY_KIND))].sort((a, b) => a - b);
+  const groups = groupKindsByExitCode(Object.keys(EXIT_CODE_BY_KIND));
+  const byCode = new Map(groups.map((g) => [g.code, g.kinds]));
   const lines: string[] = ['Exit codes:'];
-  for (const code of [2, 3, 4, 5]) {
-    const kinds = groups.get(code);
+  for (const code of codes) {
+    if (code === 1) continue;
+    const kinds = byCode.get(code);
     if (!kinds) continue;
     lines.push(`  ${kinds.join(', ')} — exit ${code}`);
   }
