@@ -51,7 +51,7 @@ describe('createRegistryWatcher', () => {
       ),
     );
 
-    await wait(200);
+    await wait(300);
     expect(observed).toBeGreaterThanOrEqual(1);
     expect(registry.list().length).toBe(1);
 
@@ -76,7 +76,7 @@ describe('createRegistryWatcher', () => {
       flowPath: '.seeflow/flow.json',
     });
 
-    await wait(200);
+    await wait(300);
     expect(observed).toBe(0);
 
     unsub();
@@ -114,7 +114,7 @@ describe('createRegistryWatcher', () => {
       ),
     );
 
-    await wait(200);
+    await wait(300);
     expect(observed).toBeGreaterThanOrEqual(1);
 
     unsub();

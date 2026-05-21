@@ -1,7 +1,14 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { drainStdin, loadBody, printError, printOk } from './cli-helpers.ts';
+import { createCliOperations } from './cli-ops.ts';
+import {
+  drainStdin,
+  loadBody,
+  printError,
+  printOk,
+  printOutcome,
+} from './cli-helpers.ts';
 import { createEventBus } from './events.ts';
 import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
@@ -593,33 +600,29 @@ async function runProjectsCreate() {
 }
 
 async function runFlowsList() {
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await fetch(`${url}/api/flows`);
-  const body = (await handleResponse(res)) as unknown[];
-  printOk({ flows: body });
+  const ops = createCliOperations();
+  const result = ops.listFlows();
+  printOk({ flows: result.data });
 }
 
 async function runFlowsSummary() {
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await fetch(`${url}/api/flows/summary`);
-  const body = (await handleResponse(res)) as unknown[];
-  printOk({ flows: body });
+  const ops = createCliOperations();
+  const result = ops.listFlowsSummary();
+  printOk({ flows: result.data });
 }
 
 async function runFlowsGet() {
   const flowId = requireArg(1, '<flowId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await fetch(`${url}/api/flows/${encodeURIComponent(flowId)}`);
-  const body = (await handleResponse(res)) as object;
-  printOk(body);
+  const ops = createCliOperations();
+  const result = await ops.getFlow(flowId);
+  printOutcome(result);
 }
 
 async function runFlowsGraph() {
   const flowId = requireArg(1, '<flowId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await fetch(`${url}/api/flows/${encodeURIComponent(flowId)}/graph`);
-  const body = (await handleResponse(res)) as object;
-  printOk(body);
+  const ops = createCliOperations();
+  const result = await ops.getFlowGraph(flowId);
+  printOutcome(result);
 }
 
 async function runFlowsDelete() {
@@ -672,12 +675,9 @@ async function runNodesAddBulk() {
 async function runNodesGet() {
   const flowId = requireArg(1, '<flowId>');
   const nodeId = requireArg(2, '<nodeId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await fetch(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const ops = createCliOperations();
+  const result = await ops.getNode(flowId, nodeId);
+  printOutcome(result);
 }
 
 async function runNodesPatch() {

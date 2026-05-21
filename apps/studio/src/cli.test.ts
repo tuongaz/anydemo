@@ -30,18 +30,21 @@ const VALID_DEMO = {
   connectors: [],
 };
 
-const tmpRegistryPath = () => {
-  const dir = mkdtempSync(join(tmpdir(), 'seeflow-cli-reg-'));
-  return join(dir, 'registry.json');
-};
-
 const startTestStudio = () => {
-  const registry = createRegistry({ path: tmpRegistryPath() });
+  const workspace = mkdtempSync(join(tmpdir(), 'seeflow-cli-ws-'));
+  mkdirSync(join(workspace, '.seeflow'), { recursive: true });
+  const registry = createRegistry({
+    path: join(workspace, '.seeflow', 'registry.json'),
+  });
   const app = createApp({ mode: 'prod', staticRoot: './dist/web', registry, disableWatcher: true });
   const server = Bun.serve({ port: 0, fetch: app.fetch });
+  const url = `http://${server.hostname}:${server.port}`;
   return {
     registry,
-    url: `http://${server.hostname}:${server.port}`,
+    workspace,
+    url,
+    /** Env that the CLI needs to share the studio's registry and URL. */
+    env: { SEEFLOW_STUDIO_URL: url, SEEFLOW_WORKSPACE: workspace },
     stop: () => server.stop(true),
   };
 };
@@ -81,7 +84,7 @@ describe('seeflow CLI register integration', () => {
         JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
       );
 
-      const baseEnv = { SEEFLOW_STUDIO_URL: studio.url };
+      const baseEnv = studio.env;
 
       const first = await runCli(
         ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/checkout/flow.json'],
@@ -114,9 +117,7 @@ describe('seeflow CLI new subcommands', () => {
   it('projects:create returns ok with slug', async () => {
     const studio = startTestStudio();
     try {
-      const r = await runCli(['projects:create', '--no-start', '--name', 'Checkout One'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['projects:create', '--no-start', '--name', 'Checkout One'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; slug: string };
       expect(parsed.ok).toBe(true);
@@ -138,7 +139,7 @@ describe('seeflow CLI new subcommands', () => {
         flowPath: '.seeflow/flow.json',
       });
 
-      const r = await runCli(['flows:list', '--no-start'], { SEEFLOW_STUDIO_URL: studio.url });
+      const r = await runCli(['flows:list', '--no-start'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
@@ -163,16 +164,12 @@ describe('seeflow CLI new subcommands', () => {
         flowPath: '.seeflow/flow.json',
       });
 
-      const get = await runCli(['flows:get', entry.id, '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const get = await runCli(['flows:get', entry.id, '--no-start'], studio.env);
       expect(get.code).toBe(0);
       const parsedGet = JSON.parse(get.stdout) as { ok: boolean; id: string };
       expect(parsedGet.id).toBe(entry.id);
 
-      const del = await runCli(['flows:delete', entry.id, '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const del = await runCli(['flows:delete', entry.id, '--no-start'], studio.env);
       expect(del.code).toBe(0);
       expect(studio.registry.list()).toHaveLength(0);
     } finally {
@@ -180,14 +177,13 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
-  it('flows:get returns exit 1 with stderr for unknown flowId', async () => {
+  it('flows:get returns exit 3 with notFound stderr for unknown flowId', async () => {
     const studio = startTestStudio();
     try {
-      const r = await runCli(['flows:get', 'nope', '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
-      expect(r.code).toBe(1);
-      expect(r.stderr).toContain('Studio returned 404');
+      const r = await runCli(['flows:get', 'nope', '--no-start'], studio.env);
+      expect(r.code).toBe(3);
+      expect(r.stderr).toContain('not found');
+      expect(r.stderr).toContain('"code":"notFound"');
     } finally {
       studio.stop();
     }
@@ -215,9 +211,7 @@ describe('seeflow CLI new subcommands', () => {
           },
         ],
       });
-      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], studio.env);
       if (r.code !== 0) {
         throw new Error(`exit=${r.code} stdout=${r.stdout} stderr=${r.stderr}`);
       }
@@ -258,9 +252,7 @@ describe('seeflow CLI new subcommands', () => {
           },
         ],
       });
-      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['nodes:add-bulk', entry.id, '--no-start', '--json', payload], studio.env);
       expect(r.code).toBe(1);
       expect(r.stderr).toMatch(/Studio returned \d+/);
     } finally {
@@ -275,9 +267,7 @@ describe('seeflow CLI new subcommands', () => {
       const goodFile = join(tmpDir, 'good.json');
       writeFileSync(goodFile, JSON.stringify(VALID_DEMO));
 
-      const ok = await runCli(['validate', '--no-start', '--file', goodFile], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const ok = await runCli(['validate', '--no-start', '--file', goodFile], studio.env);
       expect(ok.code).toBe(0);
 
       const badFile = join(tmpDir, 'bad.json');
@@ -290,9 +280,7 @@ describe('seeflow CLI new subcommands', () => {
           connectors: [{ id: 'c1', source: 'missing', target: 'missing' }],
         }),
       );
-      const bad = await runCli(['validate', '--no-start', '--file', badFile], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const bad = await runCli(['validate', '--no-start', '--file', badFile], studio.env);
       expect(bad.code).toBe(1);
     } finally {
       studio.stop();
@@ -315,9 +303,7 @@ describe('seeflow CLI new subcommands', () => {
         flowPath: '.seeflow/flow.json',
       });
 
-      const r = await runCli(['flows:summary', '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['flows:summary', '--no-start'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
@@ -358,9 +344,7 @@ describe('seeflow CLI new subcommands', () => {
         flowPath: '.seeflow/flow.json',
       });
 
-      const r = await runCli(['flows:graph', entry.id, '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['flows:graph', entry.id, '--no-start'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
@@ -398,9 +382,7 @@ describe('seeflow CLI new subcommands', () => {
       });
       const added = (await addRes.json()) as { id: string };
 
-      const r = await runCli(['nodes:get', entry.id, added.id, '--no-start'], {
-        SEEFLOW_STUDIO_URL: studio.url,
-      });
+      const r = await runCli(['nodes:get', entry.id, added.id, '--no-start'], studio.env);
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
