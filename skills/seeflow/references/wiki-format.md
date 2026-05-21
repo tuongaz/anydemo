@@ -20,7 +20,7 @@ run should be able to skip a lot of grep work by reading it.
   the heavy contributor here — every fact it learns about boot, setup,
   ports, env vars, fixtures, gotchas, and tech adaptations MUST be
   persisted on this step.
-- **Update again** after Phase 6 / Phase 7 if a play or status script
+- **Update again** during Phase 6 polish if a play or status script
   uncovered a new gotcha (port mismatch, hidden env var, fixture
   factory, surprising auth).
 
@@ -259,6 +259,6 @@ applies the merging rules above.
     should copy from instead of inventing.
   - `gotchas` *(string[])* — tech-specific quirks discovered this run.
   Omit a `techId` entirely if no adaptation was found — empty entries
-  are noise. **Phase 7 polish updates this section** whenever a play
+  are noise. **Phase 6 polish updates this section** whenever a play
   or status script discovers a new project-specific fact about a
   detected tech.
