@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSyn
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { writeFileAtomic } from './atomic-write.ts';
+import { type LayoutOptions, computeLayout } from './layout.ts';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
   EXTERNALIZED_NODE_FIELDS,
@@ -1683,6 +1684,83 @@ export function validateImpl(body: ValidateBody): ValidateOutcome {
 }
 
 // ---------------------------------------------------------------------------
+// applyLayoutImpl — ELK layout for a registered flow. Reads flow.json from
+// the registry-resolved path, validates it, computes layout, writes
+// style.json atomically, and (if a watcher is present) calls notifyWritten so
+// the studio's flow watcher seeds its snapshot and broadcasts flow:reload
+// without echoing the style.json fs event.
+// ---------------------------------------------------------------------------
+
+export type ApplyLayoutOutcome =
+  | { kind: 'ok' }
+  | { kind: 'flowNotFound' }
+  | { kind: 'fileNotFound'; path: string }
+  | { kind: 'badJson'; detail: string }
+  | { kind: 'badSchema'; issues: ValidationIssue[] }
+  | { kind: 'writeFailed'; message: string };
+
+export async function applyLayoutImpl(
+  deps: OperationsDeps,
+  flowId: string,
+  options: LayoutOptions | undefined,
+): Promise<ApplyLayoutOutcome> {
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'flowNotFound' };
+
+  const flowAbs = resolveFilePath(entry.repoPath, entry.flowPath);
+  if (!existsSync(flowAbs)) return { kind: 'fileNotFound', path: flowAbs };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(flowAbs, 'utf8'));
+  } catch (err) {
+    return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
+  }
+
+  const flowParse = FlowSchema.safeParse(raw);
+  if (!flowParse.success) {
+    return {
+      kind: 'badSchema',
+      issues: flowParse.error.issues.map((i) => ({
+        scope: 'flow',
+        path: [...i.path],
+        message: i.message,
+        code: i.code,
+      })),
+    };
+  }
+
+  const flow = flowParse.data;
+  const result = await computeLayout(
+    flow.nodes.map((n) => ({
+      id: n.id,
+      type: n.type,
+      data: n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
+    })),
+    flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
+    options,
+  );
+
+  const styleAbs = join(dirname(flowAbs), 'style.json');
+  const styleContent = `${JSON.stringify(result, null, 2)}\n`;
+  try {
+    writeFileAtomic(styleAbs, styleContent);
+  } catch (err) {
+    return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+  }
+
+  // Inform the watcher so it broadcasts flow:reload with the new payload and
+  // suppresses the upcoming fs-watcher echo for this style.json write.
+  const snap = deps.watcher?.reparse(flowId);
+  if (deps.watcher && snap) {
+    const flowContent = readFileSync(flowAbs, 'utf8');
+    deps.watcher.notifyWritten(flowId, snap, flowContent, styleContent);
+  }
+
+  return { kind: 'ok' };
+}
+
+// ---------------------------------------------------------------------------
 // createOperations — thin handle that exposes every *Impl as a bound method.
 // Consumers (api.ts, mcp.ts, cli.ts) construct one of these at startup so they
 // don't re-thread `deps` through every call site. No behaviour change — every
@@ -1744,6 +1822,10 @@ export interface Operations {
   ): ReturnType<typeof createProjectImpl>;
   deleteFlow(id: string): ReturnType<typeof deleteFlowImpl>;
   validate(body: ValidateBody): ReturnType<typeof validateImpl>;
+  applyLayout(
+    flowId: string,
+    options: LayoutOptions | undefined,
+  ): ReturnType<typeof applyLayoutImpl>;
 }
 
 export function createOperations(deps: OperationsDeps): Operations {
@@ -1773,5 +1855,6 @@ export function createOperations(deps: OperationsDeps): Operations {
     createProject: (body) => createProjectImpl(deps, body),
     deleteFlow: (id) => deleteFlowImpl(deps, id),
     validate: (body) => validateImpl(body),
+    applyLayout: (flowId, options) => applyLayoutImpl(deps, flowId, options),
   };
 }

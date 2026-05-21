@@ -10,6 +10,7 @@ import {
   printOutcome,
 } from './cli-helpers.ts';
 import { createEventBus } from './events.ts';
+import type { LayoutOptions } from './layout.ts';
 import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
@@ -642,11 +643,15 @@ async function runFlowsDelete() {
 
 async function runFlowsLayout() {
   const flowId = requireArg(1, '<flowId>');
-  const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/layout`, body);
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  // Body is optional — `{ options? }` shape if provided. Empty when omitted.
+  let options: LayoutOptions | undefined;
+  if (hasFlag('json') || hasFlag('file') || hasFlag('stdin')) {
+    const body = (await bodyFromFlags()) as { options?: LayoutOptions } | undefined;
+    options = body?.options;
+  }
+  const ops = createCliOperations();
+  const result = await ops.applyLayout(flowId, options);
+  printOutcome(result);
 }
 
 async function runFlowsPlay() {

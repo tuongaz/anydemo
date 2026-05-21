@@ -728,37 +728,6 @@ export function createApi(options: ApiOptions): Hono {
   // file / unknown id / bad JSON / write failure returns HTTP 4xx/5xx.
   api.post('/flows/:id/layout', async (c) => {
     const id = c.req.param('id');
-    const entry = registry.getById(id);
-    if (!entry) return c.json({ error: 'unknown demo' }, 404);
-
-    const flowAbs = resolveFilePath(entry.repoPath, entry.flowPath);
-    if (!existsSync(flowAbs)) return c.json({ error: `Flow file not found: ${flowAbs}` }, 404);
-
-    let raw: unknown;
-    try {
-      raw = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    } catch (err) {
-      return c.json(
-        {
-          error: 'Flow file is not valid JSON',
-          detail: err instanceof Error ? err.message : String(err),
-        },
-        400,
-      );
-    }
-
-    const flowParse = FlowSchema.safeParse(raw);
-    if (!flowParse.success) {
-      return c.json({
-        ok: false as const,
-        issues: flowParse.error.issues.map((i) => ({
-          scope: 'flow' as const,
-          path: [...i.path],
-          message: i.message,
-          code: i.code,
-        })),
-      });
-    }
 
     // Empty body is valid — the skill always uses defaults. Only parse if the
     // caller actually sent something.
@@ -773,41 +742,30 @@ export function createApi(options: ApiOptions): Hono {
       }
     }
 
-    const flow = flowParse.data;
-    const result = await computeLayout(
-      flow.nodes.map((n) => ({
-        id: n.id,
-        type: n.type,
-        // Only `shape` matters for layout (floating-annotation detection +
-        // shape-specific sizing). Other Flow data fields are irrelevant.
-        data: n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
-      })),
-      flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
-      options,
-    );
-
-    const styleAbs = join(dirname(flowAbs), 'style.json');
-    const styleContent = `${JSON.stringify(result, null, 2)}\n`;
-    try {
-      writeFileAtomic(styleAbs, styleContent);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return c.json({ error: `Failed to write style file: ${msg}` }, 500);
+    const result = await ops.applyLayout(id, options);
+    switch (result.kind) {
+      case 'ok':
+        // No watcher (test harness, or watch() hasn't been called yet) — emit
+        // a bare flow:reload so any subscribers still react. When the watcher
+        // exists, applyLayoutImpl already notified it directly.
+        if (!watcher) {
+          events?.broadcast({ type: 'flow:reload', flowId: id, payload: {} });
+        }
+        return c.json({ ok: true as const });
+      case 'flowNotFound':
+        return c.json({ error: 'unknown demo' }, 404);
+      case 'fileNotFound':
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
+      case 'badJson':
+        return c.json(
+          { error: 'Flow file is not valid JSON', detail: result.detail },
+          400,
+        );
+      case 'badSchema':
+        return c.json({ ok: false as const, issues: result.issues });
+      case 'writeFailed':
+        return c.json({ error: `Failed to write style file: ${result.message}` }, 500);
     }
-
-    // Reparse + notifyWritten: the watcher seeds its snapshot AND broadcasts
-    // flow:reload with the new merged payload directly, while suppressing the
-    // fs-watcher echo that the style.json write would otherwise trigger.
-    const snap = watcher?.reparse(id);
-    if (watcher && snap) {
-      const flowContent = readFileSync(flowAbs, 'utf8');
-      watcher.notifyWritten(id, snap, flowContent, styleContent);
-    } else {
-      // No watcher (test harness, or watch() hasn't been called yet) — emit a
-      // bare flow:reload so any subscribers still react.
-      events?.broadcast({ type: 'flow:reload', flowId: id, payload: {} });
-    }
-    return c.json({ ok: true as const });
   });
 
   api.post('/flows/:id/play/:nodeId', async (c) => {
