@@ -153,6 +153,28 @@ describe('renderCommandHelp — text output', () => {
   });
 });
 
+describe('renderCommandHelp — stream output', () => {
+  it('documents SSE-style streaming for flows:play', () => {
+    const out = renderCommandHelp('flows:play');
+    expect(out).toContain('## Output');
+    expect(out).toContain('Streams progress events to stdout until the run completes.');
+    expect(out).toContain('Exit 0 on success, non-zero on failure.');
+    // per-command flavor text — Triggers the node…
+    expect(out).toContain('Triggers the node');
+    expect(out).toContain('Requires studio running: yes');
+  });
+
+  it('documents streaming for e2e', () => {
+    const out = renderCommandHelp('e2e');
+    expect(out).toContain('## Output');
+    expect(out).toContain('Streams progress events to stdout until the run completes.');
+    expect(out).toContain('Exit 0 on success, non-zero on failure.');
+    // per-command flavor text — topological order
+    expect(out).toContain('topological order');
+    expect(out).toContain('Requires studio running: yes');
+  });
+});
+
 describe('renderCommandList', () => {
   it('opens with the drill-in instruction before anything else', () => {
     const out = renderCommandList();

@@ -687,12 +687,20 @@ function renderOutputText(entry: CommandManifestEntry): string[] {
   }
   return out;
 }
-// Task 6 will implement this; stub for now:
-function renderOutputStream(_entry: CommandManifestEntry): string[] {
-  return [
-    'Streams progress events to stdout until completion.',
-    'Exit 0 on success, non-zero on failure.',
-  ];
+function renderOutputStream(entry: CommandManifestEntry): string[] {
+  const out: string[] = [];
+  out.push('Streams progress events to stdout until the run completes.');
+  out.push('Exit 0 on success, non-zero on failure.');
+  if (entry.name === 'flows:play') {
+    out.push('');
+    out.push("Triggers the node's play action and prints status updates as the studio drives it.");
+  } else if (entry.name === 'e2e') {
+    out.push('');
+    out.push(
+      'Walks every node in topological order, prints per-node status, exits non-zero on the first failure.',
+    );
+  }
+  return out;
 }
 
 /**
