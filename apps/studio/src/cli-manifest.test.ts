@@ -55,6 +55,28 @@ describe('COMMAND_MANIFEST', () => {
       expect(new Set(argNames).size).toBe(argNames.length);
     }
   });
+
+  it('labels lifecycle commands with outputKind: "text"', () => {
+    const start = COMMAND_MANIFEST.find((e) => e.name === 'start');
+    const stop = COMMAND_MANIFEST.find((e) => e.name === 'stop');
+    expect(start?.outputKind).toBe('text');
+    expect(stop?.outputKind).toBe('text');
+  });
+
+  it('labels live SSE commands with outputKind: "stream"', () => {
+    const play = COMMAND_MANIFEST.find((e) => e.name === 'flows:play');
+    const e2e = COMMAND_MANIFEST.find((e) => e.name === 'e2e');
+    expect(play?.outputKind).toBe('stream');
+    expect(e2e?.outputKind).toBe('stream');
+  });
+
+  it('every other command defaults outputKind to "json" (or leaves it undefined)', () => {
+    const textOrStream = new Set(['start', 'stop', 'flows:play', 'e2e']);
+    for (const entry of COMMAND_MANIFEST) {
+      if (textOrStream.has(entry.name)) continue;
+      expect(entry.outputKind ?? 'json').toBe('json');
+    }
+  });
 });
 
 describe('renderManifestJson', () => {

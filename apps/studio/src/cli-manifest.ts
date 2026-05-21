@@ -39,6 +39,8 @@ export type CommandCategory =
   | 'live'
   | 'meta';
 
+export type CommandOutputKind = 'json' | 'text' | 'stream';
+
 export interface CommandManifestEntry {
   name: string;
   synopsis: string;
@@ -53,6 +55,9 @@ export interface CommandManifestEntry {
     /** Concrete example body the caller can copy. */
     example?: unknown;
   };
+  /** Shape of stdout. Default 'json' (envelope {ok:true,...}). 'text' for
+   *  human-readable lifecycle output. 'stream' for SSE-driven runs. */
+  outputKind?: CommandOutputKind;
   outputs: {
     okExample?: unknown;
     errorKinds?: string[];
@@ -80,6 +85,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'foreground', description: 'Run attached to the terminal (default: background)' },
       { name: 'debug', description: 'Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log' },
     ],
+    outputKind: 'text',
     outputs: { okExample: { url: 'http://localhost:4321', port: 4321, pid: 12345 } },
     requiresStudio: false,
     examples: ['seeflow start', 'seeflow start --port 8080 --foreground'],
@@ -91,6 +97,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     category: 'lifecycle',
     args: [],
     flags: [],
+    outputKind: 'text',
     outputs: { okExample: { stopped: true, pid: 12345 } },
     requiresStudio: false,
     examples: ['seeflow stop'],
@@ -254,6 +261,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'nodeId', required: true, description: 'Node id in the flow' },
     ],
     flags: [{ name: 'no-start', description: 'Fail if the studio is not already running' }],
+    outputKind: 'stream',
     outputs: {},
     requiresStudio: true,
     examples: ['seeflow flows:play abc12345 api-checkout'],
@@ -520,6 +528,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       },
       { name: 'no-start', description: 'Fail if the studio is not already running' },
     ],
+    outputKind: 'stream',
     outputs: {},
     requiresStudio: true,
     examples: ['seeflow e2e abc12345'],
