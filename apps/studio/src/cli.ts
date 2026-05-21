@@ -758,46 +758,45 @@ async function runNodesDelete() {
 async function runConnectorsAdd() {
   const flowId = requireArg(1, '<flowId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/connectors`, body);
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  if (!body || typeof body !== 'object' || Array.isArray(body)) {
+    printError('Body must be an object');
+  }
+  const ops = createCliOperations();
+  const result = await ops.addConnector(flowId, body as Record<string, unknown>);
+  printOutcome(result);
 }
 
 async function runConnectorsAddBulk() {
   const flowId = requireArg(1, '<flowId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await postJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/bulk`,
-    body,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const parsed = ConnectorsBulkBodySchema.safeParse(body);
+  if (!parsed.success) {
+    printError(`Invalid connectors:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
+  }
+  const ops = createCliOperations();
+  const result = await ops.addConnectorsBulk(flowId, parsed.data);
+  printOutcome(result);
 }
 
 async function runConnectorsPatch() {
   const flowId = requireArg(1, '<flowId>');
   const connId = requireArg(2, '<connectorId>');
   const body = await bodyFromFlags();
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await patchJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/${encodeURIComponent(connId)}`,
-    body,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const parsed = ConnectorPatchBodySchema.safeParse(body);
+  if (!parsed.success) {
+    printError(`Invalid connectors:patch body: ${JSON.stringify(parsed.error.issues)}`);
+  }
+  const ops = createCliOperations();
+  const result = await ops.patchConnector(flowId, connId, parsed.data);
+  printOutcome(result);
 }
 
 async function runConnectorsDelete() {
   const flowId = requireArg(1, '<flowId>');
   const connId = requireArg(2, '<connectorId>');
-  const { url } = await studioUrlOrDie(hasFlag('no-start'));
-  const res = await deleteRequest(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/${encodeURIComponent(connId)}`,
-  );
-  const out = (await handleResponse(res)) as object;
-  printOk(out);
+  const ops = createCliOperations();
+  const result = await ops.deleteConnector(flowId, connId);
+  printOutcome(result);
 }
 
 async function runValidate() {
