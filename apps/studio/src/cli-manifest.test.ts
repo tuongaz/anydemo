@@ -107,7 +107,34 @@ describe('renderCommandHelp', () => {
 });
 
 describe('renderCommandList', () => {
-  it('groups commands by category and lists every one', () => {
+  it('opens with the drill-in instruction before anything else', () => {
+    const out = renderCommandList();
+    const lines = out.split('\n').filter((l) => l.trim().length > 0);
+    // Drill-in line must appear before the first category header.
+    const firstCategoryIdx = lines.findIndex((l) => l.startsWith('## '));
+    const drillInIdx = lines.findIndex((l) => l.includes('seeflow help <command>'));
+    expect(drillInIdx).toBeGreaterThanOrEqual(0);
+    expect(drillInIdx).toBeLessThan(firstCategoryIdx);
+  });
+
+  it('includes a calling-convention preamble', () => {
+    const out = renderCommandList();
+    expect(out).toContain('Calling convention');
+    // body delivery modes
+    expect(out).toContain('--json');
+    expect(out).toContain('--file');
+    expect(out).toContain('--stdin');
+    // success envelope
+    expect(out).toContain('"ok": true');
+    // error envelope
+    expect(out).toContain('"error"');
+    expect(out).toContain('"code"');
+    // exit-code map (sample entries)
+    expect(out).toMatch(/badSchema.*exit 2/);
+    expect(out).toMatch(/flowNotFound.*exit 3/);
+  });
+
+  it('still lists every command after the preamble', () => {
     const out = renderCommandList();
     for (const entry of COMMAND_MANIFEST) {
       expect(out).toContain(entry.name);

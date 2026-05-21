@@ -3,6 +3,7 @@
 // can discover every subcommand without scraping the human help text.
 
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { EXIT_CODE_BY_KIND } from './cli-helpers.ts';
 import {
   ConnectorPatchBodySchema,
   ConnectorsBulkBodySchema,
@@ -628,6 +629,23 @@ export function renderCommandHelp(name: string): string {
   return lines.join('\n');
 }
 
+function renderExitCodeTable(): string {
+  const groups = new Map<number, string[]>();
+  for (const [kind, code] of Object.entries(EXIT_CODE_BY_KIND)) {
+    const arr = groups.get(code) ?? [];
+    arr.push(kind);
+    groups.set(code, arr);
+  }
+  const lines: string[] = ['Exit codes:'];
+  for (const code of [2, 3, 4, 5]) {
+    const kinds = groups.get(code);
+    if (!kinds) continue;
+    lines.push(`  ${kinds.join(', ')} — exit ${code}`);
+  }
+  lines.push('  anything else — exit 1');
+  return lines.join('\n');
+}
+
 export function renderCommandList(): string {
   // Stable category order for predictable output regardless of manifest order.
   const order: CommandCategory[] = [
@@ -648,6 +666,18 @@ export function renderCommandList(): string {
   const lines: string[] = [];
   lines.push('seeflow — local studio for file-defined interactive demos');
   lines.push('');
+  lines.push('Run `seeflow help <command>` for full detail on any command below.');
+  lines.push('Run `seeflow help --json` for the machine-readable manifest.');
+  lines.push('');
+  lines.push('## Calling convention');
+  lines.push(
+    "  Body-bearing commands accept JSON via exactly one of: --json '<inline>' | --file <path> | --stdin",
+  );
+  lines.push('  On success: stdout = {"ok": true, ...payload}; exit 0.');
+  lines.push('  On error: stderr = {"error": "<msg>", "code": "<kind>"}; non-zero exit.');
+  lines.push('');
+  lines.push(renderExitCodeTable());
+  lines.push('');
   for (const category of order) {
     const entries = byCategory.get(category);
     if (!entries || entries.length === 0) continue;
@@ -658,7 +688,5 @@ export function renderCommandList(): string {
     }
     lines.push('');
   }
-  lines.push('Run `seeflow help <command>` for details on one command,');
-  lines.push('or `seeflow help --json` for the full machine-readable manifest.');
   return lines.join('\n');
 }
