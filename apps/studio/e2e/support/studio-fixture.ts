@@ -90,7 +90,13 @@ type EmptyTestArgs = Record<never, never>;
 
 export const test = base.extend<EmptyTestArgs, WorkerFixtures>({
   studio: [
-    async (_args, use) => {
+    // Playwright introspects the first parameter's source text to discover
+    // fixture dependencies and REQUIRES it to be an object destructuring
+    // pattern — `_args` throws "First argument must use the object
+    // destructuring pattern". Biome's `noEmptyPattern` rule otherwise
+    // forbids `{}` here, so the ignore is load-bearing.
+    // biome-ignore lint/correctness/noEmptyPattern: required by Playwright fixture API
+    async ({}, use) => {
       const handle = await bootKitchenSinkStudio();
       try {
         await use(handle);
