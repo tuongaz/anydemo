@@ -800,6 +800,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }) {
       className: cn("sf:group sf:relative", sized ? "sf:h-full sf:w-full" : ""),
       style: containerStyle,
       "data-testid": "icon-node",
+      "data-node-type": "iconNode",
       onDoubleClick: handleDoubleClick,
       children: [
         /* @__PURE__ */ jsx3(
@@ -1714,6 +1715,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }) {
       className: cn("sf:group sf:relative", userSized ? "sf:h-full sf:w-full" : ""),
       style: outerStyle,
       "data-testid": "html-node",
+      "data-node-type": "htmlNode",
       children: [
         observerActive ? /* @__PURE__ */ jsx6(AutoSizeObserver, { nodeId: id, measureRef }) : null,
         /* @__PURE__ */ jsx6(
@@ -1858,6 +1860,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }) {
       className: cn("sf:group sf:relative sf:overflow-hidden", sized ? "sf:h-full sf:w-full" : ""),
       style: containerStyle,
       "data-testid": "image-node",
+      "data-node-type": "imageNode",
       children: [
         /* @__PURE__ */ jsx7(
           ResizeControls,
@@ -2414,6 +2417,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }) {
       style: containerStyle,
       "data-status": status ?? "idle",
       "data-testid": "play-node",
+      "data-node-type": "playNode",
       onDoubleClick: handleWrapperDoubleClick,
       children: [
         /* @__PURE__ */ jsx13(
@@ -3323,6 +3327,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }) {
       ),
       style,
       "data-testid": "shape-node",
+      "data-node-type": "shapeNode",
       "data-shape": shape,
       onDoubleClick: handleWrapperDoubleClick,
       children: [
@@ -3503,6 +3508,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }) {
       style: containerStyle,
       "data-status": status,
       "data-testid": "state-node",
+      "data-node-type": "stateNode",
       onDoubleClick: handleWrapperDoubleClick,
       children: [
         /* @__PURE__ */ jsx21(
@@ -3875,6 +3881,18 @@ function EditableEdge({
     if (!registerEditHandle || !editable) return;
     return registerEditHandle(id, () => setEditing(true));
   }, [id, registerEditHandle, editable]);
+  const edgeKind = typeof data?.kind === "string" ? data.kind : void 0;
+  useEffect5(() => {
+    if (!edgeKind) return;
+    const wrapper = document.querySelector(
+      `.react-flow__edge[data-id="${CSS.escape(id)}"]`
+    );
+    if (!wrapper) return;
+    wrapper.setAttribute("data-edge-kind", edgeKind);
+    return () => {
+      wrapper.removeAttribute("data-edge-kind");
+    };
+  }, [id, edgeKind]);
   const showEndpointDots = data?.reconnectable === true;
   const sourcePinned = data?.sourcePin !== void 0;
   const targetPinned = data?.targetPin !== void 0;
@@ -8512,6 +8530,7 @@ function SeeflowCanvasImpl(props, ref) {
               rfInstanceRef.current = instance;
               const wrapper = wrapperRef.current;
               if (wrapper) wrapper.style.setProperty("--rf-zoom", String(instance.getZoom()));
+              if (wrapper) wrapper.setAttribute("data-canvas-ready", "true");
               if (!didMountFitRef.current && resolvedAutoFitView.onMount && nodes.length > 0) {
                 instance.fitView(FIT_VIEW_OPTIONS);
                 didMountFitRef.current = true;
