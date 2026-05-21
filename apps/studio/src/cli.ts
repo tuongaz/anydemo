@@ -1,6 +1,12 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import {
+  COMMAND_MANIFEST,
+  renderCommandHelp,
+  renderCommandList,
+  renderManifestJson,
+} from './cli-manifest.ts';
 import { createCliOperations } from './cli-ops.ts';
 import {
   drainStdin,
@@ -114,7 +120,7 @@ const daemonLogPath = () => join(seeflowHome(), 'seeflow.log');
 if (argv.includes('--version') || argv.includes('-v')) {
   await printVersion();
 } else if (sub === 'help' || sub === '--help' || sub === '-h') {
-  printHelp();
+  await runHelp();
 } else if (sub === 'version') {
   await printVersion();
 } else if (!sub || sub === 'start' || sub.startsWith('-')) {
@@ -244,6 +250,31 @@ Examples:
   npx -y @tuongaz/seeflow@latest stop
 `.trim(),
   );
+}
+
+async function runHelp() {
+  const wantsJson = hasFlag('json');
+  const target = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
+  if (target) {
+    if (wantsJson) {
+      const entry = COMMAND_MANIFEST.find((e) => e.name === target);
+      if (!entry) printError(`Unknown command: ${target}`);
+      printOk({ command: entry });
+      return;
+    }
+    try {
+      console.log(renderCommandHelp(target));
+    } catch (err) {
+      printError(err instanceof Error ? err.message : String(err));
+    }
+    return;
+  }
+  if (wantsJson) {
+    process.stdout.write(renderManifestJson());
+    process.stdout.write('\n');
+    return;
+  }
+  console.log(renderCommandList());
 }
 
 async function runStart() {
