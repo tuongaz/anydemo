@@ -1,4 +1,4 @@
-# Operations — error handling, studio API, sub-agents
+# Operations — error handling, CLI subcommands, sub-agents
 
 ## Error-handling table
 
@@ -6,54 +6,48 @@
 |---|---|
 | Studio `/health` fails | Ask the user to run `npx -y @tuongaz/seeflow@latest start` in another terminal, then re-probe once. No silent retry, no self-start. |
 | Sub-agent unparseable output | Retry that single agent once with parse error; if still failing, surface and stop. Do **not** restart its parallel sibling. |
-| Schema validation fails (Phase 5) | Feed Zod issues back to relevant designer. Max 3 retries. |
-| Register 400 (Phase 6) | Show body; ask "fix-and-retry / stop". |
-| Register 4xx/5xx other | Show body; stop. |
-| Play `{error: "…"}` (Phase 7) | Edit scripts in-place; re-run Phase 7 (max 2 retries). Do NOT re-register. |
-| Status SSE timeout 10s | Mark `no status received`; include in fix-up or ask retry/stop. |
-| Validation >2 min | `ok:false`; treat as failure → fix-up path. |
+| CLI exits with `badSchema` (any phase) | Feed `issues[]` back to the agent that produced the payload (planner in P3, designer in P5). Max 3 retries per node. |
+| CLI exits with `idAlreadyExists` / `duplicateIdInBatch` | Dedupe / rename / delete the existing item; do not retry blind. |
+| CLI exits with `flowNotFound` / `unknownNode` | Re-fetch via `seeflow flows:list` or `seeflow flows:get <id>`; the id is stale. |
+| `seeflow e2e` reports `play.error` (Phase 6) | Edit script in-place; re-run `seeflow e2e` (max 2 retries). Do NOT re-register. |
+| `seeflow e2e` status SSE timeout 10s | Mark `no status received`; include in fix-up or ask retry/stop. |
+| `seeflow e2e` exceeds ~2 min hard ceiling | `ok:false`; treat as failure → fix-up path. |
 
-Retry caps: Phase 5 schema → **3**. Phase 7 fix-up → **2**.
+Retry caps: P5 per-node patch failure → **3** (re-dispatch that one designer). P6 e2e fix-up → **2**.
 
-## Studio API touchpoints
+## CLI subcommands
 
-| Endpoint | Method | Phase | Body |
-|---|---|---|---|
-| `/health` | GET | 0 | — |
-| `/api/validate` | POST | 3, 5 | `{flow, style}` |
-| `/api/flows/register` | POST | 3, 6 | `{name, repoPath, flowPath}` |
-| `/api/flows/:id` | GET | 7 | — |
-| `/api/flows/:id/play/:nodeId` | POST | 7 | — |
-| `/api/events?flowId=:id` | GET (SSE) | 7 | — |
-| `/api/flows/:id` | DELETE | rollback only | — |
+Full per-subcommand reference: `references/cli.md`. Quick lookup by phase:
 
-Never invent endpoints. Surface anything outside this table to the user.
+| Phase | Subcommand | Purpose |
+|---|---|---|
+| P0 | (curl `/health`) | Studio probe — not a CLI call |
+| P3 | `projects:create` | Scaffold + register new project |
+| P3 | `nodes:add-bulk` | Atomic seed of skeleton nodes |
+| P3 | `connectors:add-bulk` | Atomic seed of skeleton connectors |
+| P3 | `flows:layout` | Run ELK; rewrite style.json positions |
+| P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node |
+| P5 | `nodes:add-bulk` | Inject synthetic trigger nodes |
+| P5 | `connectors:add-bulk` | Wire trigger nodes |
+| P5 | `flows:layout` | Re-layout after Phase 5 changes |
+| P6 | `e2e` | End-to-end validation via SSE |
+| any | `flows:list`, `flows:get` | Discovery / id lookup |
+| rollback | `flows:delete`, `nodes:delete`, `connectors:delete` | Undo |
+
+Every write is validated server-side by the studio's post-merge `ResolvedFlowSchema` reparse. There is no standalone validation step — a `badSchema` exit from any mutation is the validation feedback.
 
 ## Sub-agent reference
 
 | Agent | Tools | Used for |
 |---|---|---|
-| `seeflow-code-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1 (parallel): user-prompt-specific brief — scope, code pointers, endpoints, tech stack, edit-case |
-| `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | Phase 1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `WIKI.md` |
-| `seeflow-node-planner` | none (pure reasoning) | Phase 2: pick nodes + connectors (starts as soon as code-analyzer returns) |
-| `seeflow-play-designer` | `Read, Grep, Glob, LS` | Phase 4: design playActions + script bodies |
-| `seeflow-status-designer` | `Read, Grep, Glob, LS` | Phase 4: design statusActions + script bodies |
+| `seeflow-code-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): user-prompt-specific brief — scope, code pointers, endpoints, tech stack, edit-case |
+| `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `WIKI.md` |
+| `seeflow-node-planner` | none (pure reasoning) | P2: pick nodes + connectors (starts as soon as code-analyzer returns) — emits payloads in `nodes:add-bulk` / `connectors:add-bulk` shape |
+| `seeflow-play-designer` | `Read, Grep, Glob, LS` | P4: design playActions + script bodies — emits `{patch, scriptFile}` triples for P5 |
+| `seeflow-status-designer` | `Read, Grep, Glob, LS` | P4: design statusActions + script bodies — same triple shape |
 
 Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
 
 ## General orchestration rule — parallelise sub-agents
 
-Whenever two or more tasks are independent, dispatch them as concurrent sub-agents in a single message. Serial execution is the exception, not the default.
-
-## Helper scripts
-
-Bun scripts shipped with the skill, invoked from phase steps:
-
-| Script | Purpose | Invoked in |
-|---|---|---|
-| `scripts/register.ts` | POST to `/api/flows/register` with `{name, repoPath, flowPath}`. Prints `{id, slug}` on success | Phase 3, Phase 6 |
-| `scripts/validate.ts` | POST `{flow, style?}` to `/api/validate`. Exits 1 + prints issues on failure | Phase 3, Phase 5 |
-| `scripts/refresh-layout.ts` | POST to `/api/flows/<id>/layout` to rebuild `style.json` via ELK | Phase 3, Phase 5, Phase 7 |
-| `scripts/validate-end-to-end.ts` | GET flow, open SSE, fire plays, await results | Phase 7 |
-| `scripts/unregister.ts` | DELETE a registered flow (rollback) | rollback only |
-| `scripts/studio-config.ts` | Resolve `$STUDIO_URL` from env + `~/.seeflow/config.json` | shared helper |
+Whenever two or more tasks are independent, dispatch them as concurrent sub-agents in a single message. Serial execution is the exception, not the default. The canonical wrong/right block lives in `SKILL.md` Phase 1; later phases reference it.
