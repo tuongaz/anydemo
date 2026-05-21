@@ -1,9 +1,9 @@
 ---
-name: seeflow-wiki
+name: seeflow-design
 description: Use when an AI agent or user needs to consult a SeeFlow flow as architectural ground truth — exploring how a system works ("how does X work", "show me the flow"), gathering context before implementation ("what already handles X", "where should this code go"), making scope/design decisions ("what depends on Y"), or onboarding to a `.seeflow/`-equipped repo. Read-only; never mutates flows.
 ---
 
-# seeflow-wiki
+# seeflow-design
 
 Consult registered SeeFlow flows as architectural ground truth. Read-only counterpart to `/seeflow` — that skill *creates* flows from code; this one *reads* them when an agent is writing code or making decisions.
 
