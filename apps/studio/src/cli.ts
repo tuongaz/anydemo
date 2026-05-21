@@ -87,18 +87,6 @@ async function postJson(url: string, body: unknown): Promise<Response> {
   });
 }
 
-async function patchJson(url: string, body: unknown): Promise<Response> {
-  return fetch(url, {
-    method: 'PATCH',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-}
-
-async function deleteRequest(url: string): Promise<Response> {
-  return fetch(url, { method: 'DELETE' });
-}
-
 async function handleResponse(res: Response): Promise<unknown> {
   const text = await res.text();
   let parsed: unknown = text;
