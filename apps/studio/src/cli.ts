@@ -181,19 +181,18 @@ seeflow — local studio for file-defined interactive demos
 Usage:
   npx -y @tuongaz/seeflow@latest [command] [options]
 
-Commands:
+Commands (work without a running studio):
   start                Start the SeeFlow Studio server (default port 4321) — default when no command is given
   stop                 Stop a background studio instance
-  register             Register a demo repo with the running studio (alias of flows:register)
-  flows:register       Register a demo repo with the running studio
+  register             Register a demo repo, writing to ~/.seeflow/registry.json (alias of flows:register)
+  flows:register       Register a demo repo
   projects:create      Create a new project (--name <name>)
   flows:list           List registered flows
   flows:summary        List registered flows (id + name + description only)
   flows:get <id>       Get flow details
   flows:graph <id>     List nodes + connectors without inlined file content
   flows:delete <id>    Unregister a flow
-  flows:layout <id>    POST a layout payload (--json/--file/--stdin)
-  flows:play <id> <n>  Trigger a play on node <n>
+  flows:layout <id>    Apply ELK layout, writing style.json (--json/--file/--stdin optional)
   nodes:add <id>       Add a node (--json/--file/--stdin)
   nodes:add-bulk <id>  Add many nodes (--json/--file/--stdin)
   nodes:get <id> <n>   Get a node with detail / html content inlined
@@ -206,13 +205,18 @@ Commands:
   connectors:patch <id> <connId>  Patch a connector (--json/--file/--stdin)
   connectors:delete <id> <connId> Delete a connector
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
+
+Commands (require a running studio):
+  flows:play <id> <n>  Trigger a play on node <n>
   e2e <id>             End-to-end validate a registered flow (--skip-nodes a,b)
+
+Meta:
   version              Print the CLI version
   help                 Show this help message
 
 Global options:
   --version, -v        Print the CLI version and exit
-  --no-start           Fail if studio is not already running
+  --no-start           For flows:play / e2e: fail instead of auto-starting the studio
 
 Body source flags (where applicable):
   --json '<JSON>'      Inline JSON body
