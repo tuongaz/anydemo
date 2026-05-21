@@ -121,10 +121,15 @@ Field-by-field rules:
 
 Each node entry has:
 
-- **`id`** *(string, kebab-case)* — stable identifier. Reuse existing ids
-  from `editTarget` when an entity persists across an edit. Pick a
-  descriptive id derived from the entity name (`checkout-api`,
-  `payments-service`, `order-db`).
+- **`id`** *(string, kebab-case)* — descriptive planning id derived from
+  the entity name (`checkout-api`, `payments-service`, `order-db`). The
+  orchestrator rewrites these to canonical `node-<10 base62>` form via
+  `skills/seeflow/lib/short-id.mjs` before `nodes:add-bulk`, so what
+  ends up in `flow.json` matches every other id producer in the studio
+  (canvas, server auto-assign). In edit-case, when reusing an entity
+  from `editTarget`, reuse its existing canonical id verbatim — the
+  orchestrator detects the `node-<10 base62>` shape and skips the
+  rewrite for that node.
 - **`type`** *(string)* — pick one:
   - `"playNode"` — node that will host a playAction in Phase 4. Use for
     entities that are *triggers* the audience can act on (HTTP endpoints,
@@ -224,7 +229,10 @@ fields verbatim in `data`:
 
 Each connector entry has:
 
-- **`id`** *(string)* — `c-<source>-<target>` is the conventional shape.
+- **`id`** *(string)* — descriptive planning id; `c-<source>-<target>` is
+  the conventional shape. The orchestrator rewrites these to canonical
+  `conn-<10 base62>` form before `connectors:add-bulk` (same helper as
+  node ids).
 - **`kind`** *(string)* — one of:
   - `"http"` — synchronous service-to-service call. May include
     `method` + `url` echoing the playAction.

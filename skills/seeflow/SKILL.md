@@ -159,7 +159,7 @@ Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,targe
 The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
 
 1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result. **Use `id` (not `slug`) for every follow-up CLI call below.** Several commands document slug support in `help` but the server only resolves by id today.
-2. **Normalize the planner output:** strip `rationales`, then for every `playNode` whose `data.playAction` is absent, inject a placeholder so the server's `ResolvedFlowSchema` (which requires `playAction` on every `playNode`) accepts the batch:
+2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose `data.playAction` is absent, inject a placeholder so the server's `ResolvedFlowSchema` (which requires `playAction` on every `playNode`) accepts the batch:
    ```json
    "playAction": {
      "kind": "script",
@@ -169,13 +169,22 @@ The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. 
    }
    ```
    The Phase 4 play-designer overwrites this with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
-3. `nodes:add-bulk` — bulk-seed nodes. Forward only the (now normalized) `nodes` array, re-wrapped per the body schema.
+2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches:
+   ```bash
+   nodeIds=$(node skills/seeflow/lib/short-id.mjs "${#nodes[@]}" node-)
+   connIds=$(node skills/seeflow/lib/short-id.mjs "${#connectors[@]}" conn-)
+   ```
+   For each `nodes[i].id` that already matches `^node-[A-Za-z0-9]{10}$` (edit-case reuse from `editTarget`), keep it; only mint new canonical ids for net-new nodes. Build a `descriptiveId → canonicalId` map and rewrite:
+   - `nodes[].id`
+   - `connectors[].id`, `connectors[].source`, `connectors[].target`
+   - `rationales` keys (kept in memory for the review prompt)
+3. `nodes:add-bulk` — bulk-seed nodes. Forward only the (now normalized + id-rewritten) `nodes` array, re-wrapped per the body schema.
 4. `connectors:add-bulk` — bulk-seed connectors.
 5. `flows:layout` — run ELK and write `style.json`.
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
-Open the canvas, surface the planner's `rationales` per node, and ask **one combined question** (layout review + dynamic gate in a single round-trip — two consecutive waits is interrogation):
+Open the canvas, surface the planner's `rationales` per node — prefix each with `<data.name> (<canonical id>):` so the human sees a readable anchor despite the opaque id (`POST /orders (node-Ab12cd34Ef): Single HTTP service — internal routes are implementation detail.`) — and ask **one combined question** (layout review + dynamic gate in a single round-trip — two consecutive waits is interrogation):
 
 ```bash
 URL="$STUDIO_URL/d/$slug"
@@ -250,3 +259,4 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 | `LEARN.md` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |
+| Canonical id generator | `lib/short-id.mjs` |
