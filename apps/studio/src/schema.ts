@@ -385,6 +385,7 @@ export const ResolvedFlowSchema = z
   .object({
     version: z.literal(2),
     name: z.string().min(1),
+    description: z.string().optional(),
     nodes: z.array(NodeSchema),
     connectors: z.array(ConnectorSchema),
     // Optional one-shot script the studio runs when the user clicks Restart.
@@ -610,6 +611,7 @@ export const FlowSchema = z
   .object({
     version: z.literal(2),
     name: z.string().min(1),
+    description: z.string().optional(),
     resetAction: ResetActionSchema.optional(),
     nodes: z.array(FlowNodeSchema),
     connectors: z.array(FlowConnectorSchema),

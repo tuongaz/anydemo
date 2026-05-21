@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createEventBus } from './events.ts';
@@ -11,7 +18,10 @@ import {
   addNodeImpl,
   addNodesBulkImpl,
   deleteNodeImpl,
+  getFlowGraphImpl,
   getFlowImpl,
+  getNodeImpl,
+  listFlowsSummaryImpl,
   mergeNodeUpdates,
   moveNodeImpl,
   patchNodeImpl,
@@ -641,5 +651,215 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
     // detail is externalized for every node type (including htmlNode), so the
     // same resolution must apply to it too — initialized to empty by addNode.
     expect((node?.data as { detail?: string }).detail).toBe('');
+  });
+});
+
+describe('listFlowsSummaryImpl', () => {
+  it('returns only id, name, description from the registry when no watcher snapshot exists', async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.seeflow', 'flow.json'),
+      JSON.stringify({
+        version: 2,
+        name: 'Documented',
+        description: 'persisted at register',
+        nodes: [],
+        connectors: [],
+      }),
+    );
+
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-reg-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const deps = { registry };
+
+    const reg = await registerFlowImpl(deps, {
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
+
+    const result = listFlowsSummaryImpl(deps);
+    expect(result.kind).toBe('ok');
+    expect(result.data).toEqual([
+      { id: reg.data.id, name: 'Documented', description: 'persisted at register' },
+    ]);
+  });
+
+  it('omits description on items where the flow has none', async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-bare-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(repoDir, '.seeflow', 'flow.json'),
+      JSON.stringify({ version: 2, name: 'Bare', nodes: [], connectors: [] }),
+    );
+
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-bare-reg-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const deps = { registry };
+
+    const reg = await registerFlowImpl(deps, {
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
+
+    const result = listFlowsSummaryImpl(deps);
+    expect(result.data).toHaveLength(1);
+    const first = result.data[0];
+    if (!first) throw new Error('summary entry missing');
+    expect('description' in first).toBe(false);
+  });
+
+  it('prefers live watcher snapshot for description and name', async () => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-live-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+    writeFileSync(
+      flowAbs,
+      JSON.stringify({
+        version: 2,
+        name: 'Original',
+        description: 'original',
+        nodes: [],
+        connectors: [],
+      }),
+    );
+
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-live-reg-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry, events, debounceMs: 10 });
+    const deps = { registry, watcher };
+
+    const reg = await registerFlowImpl(deps, {
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+    if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
+    watcher.watch(reg.data.id);
+
+    // Author edits flow.json on disk; reparse() picks up the new description.
+    writeFileSync(
+      flowAbs,
+      JSON.stringify({
+        version: 2,
+        name: 'Renamed',
+        description: 'updated',
+        nodes: [],
+        connectors: [],
+      }),
+    );
+    watcher.reparse(reg.data.id);
+
+    const result = listFlowsSummaryImpl(deps);
+    expect(result.data[0]).toEqual({
+      id: reg.data.id,
+      name: 'Renamed',
+      description: 'updated',
+    });
+  });
+});
+
+describe('getFlowGraphImpl', () => {
+  it('returns notFound for an unknown flowId', async () => {
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-graph-nf-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const result = await getFlowGraphImpl({ registry }, 'nope');
+    expect(result.kind).toBe('notFound');
+  });
+
+  it('returns nodes/connectors stripped of detail and html, plus description', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+
+    const detailAdd = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: '# long form body' },
+    });
+    if (detailAdd.kind !== 'ok') throw new Error('addNode A failed');
+
+    const htmlAdd = await addNodeImpl(deps, flowId, {
+      type: 'htmlNode',
+      data: { html: '<p>fancy</p>', autoSize: true },
+    });
+    if (htmlAdd.kind !== 'ok') throw new Error('addNode B failed');
+
+    // Author later adds a description by editing flow.json directly.
+    const entry = deps.registry.getById(flowId);
+    if (!entry) throw new Error('entry missing');
+    const flowAbs = join(entry.repoPath, entry.flowPath);
+    const raw = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    raw.description = 'demo flow';
+    writeFileSync(flowAbs, JSON.stringify(raw));
+
+    const result = await getFlowGraphImpl(deps, flowId);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+
+    expect(result.data.description).toBe('demo flow');
+    expect(result.data.nodes).toHaveLength(2);
+
+    const shapeNode = result.data.nodes.find((n) => n.id === detailAdd.data.id);
+    expect(shapeNode).toBeDefined();
+    expect((shapeNode?.data as Record<string, unknown>).detail).toBeUndefined();
+    // Non-stripped fields persist.
+    expect((shapeNode?.data as { name?: string }).name).toBe('A');
+
+    const htmlNode = result.data.nodes.find((n) => n.id === htmlAdd.data.id);
+    expect((htmlNode?.data as Record<string, unknown>).html).toBeUndefined();
+    expect((htmlNode?.data as Record<string, unknown>).detail).toBeUndefined();
+  });
+
+  it('returns fileNotFound when flow.json has been removed from disk', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    unlinkSync(flowAbs);
+    const result = await getFlowGraphImpl(deps, flowId);
+    expect(result.kind).toBe('fileNotFound');
+  });
+});
+
+describe('getNodeImpl', () => {
+  it('returns notFound for an unknown flowId', async () => {
+    const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-node-nf-'));
+    const registry = createRegistry({ path: join(registryDir, 'registry.json') });
+    const result = await getNodeImpl({ registry }, 'nope', 'whatever');
+    expect(result.kind).toBe('notFound');
+  });
+
+  it('returns unknownNode when nodeId is not in the flow', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const result = await getNodeImpl(deps, flowId, 'no-such-node');
+    expect(result.kind).toBe('unknownNode');
+  });
+
+  it('returns the node with detail content inlined', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: '# body text' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const result = await getNodeImpl(deps, flowId, add.data.id);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+
+    expect(result.data.id).toBe(add.data.id);
+    expect(result.data.flowId).toBe(flowId);
+    expect((result.data.node.data as { detail?: string }).detail).toBe('# body text');
+  });
+
+  it('returns the htmlNode with html content inlined', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'htmlNode',
+      data: { html: '<p>resolved html</p>', autoSize: true },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const result = await getNodeImpl(deps, flowId, add.data.id);
+    expect(result.kind).toBe('ok');
+    if (result.kind !== 'ok') return;
+    expect((result.data.node.data as { html?: string }).html).toBe('<p>resolved html</p>');
   });
 });

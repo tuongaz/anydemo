@@ -117,7 +117,10 @@ describe('POST /mcp tools/list', () => {
       'seeflow_delete_flow',
       'seeflow_delete_node',
       'seeflow_get_flow',
+      'seeflow_get_flow_graph',
+      'seeflow_get_node',
       'seeflow_list_flows',
+      'seeflow_list_flows_summary',
       'seeflow_move_node',
       'seeflow_patch_connector',
       'seeflow_patch_node',
@@ -203,6 +206,126 @@ describe('seeflow_get_flow', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_get_flow', { flowId: 'does-not-exist' });
     expect(expectError(envelope)).toBe('not found');
+  });
+});
+
+describe('seeflow_list_flows_summary', () => {
+  it('returns id, name, description for each registered flow', async () => {
+    const { app } = buildApp();
+    const repoA = tmpRepoWithDemo({ ...VALID_DEMO, description: 'main flow' });
+    const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund' });
+    await callTool(app, 'seeflow_register_flow', {
+      repoPath: repoA,
+      flowPath: '.seeflow/flow.json',
+    });
+    await callTool(app, 'seeflow_register_flow', {
+      repoPath: repoB,
+      flowPath: '.seeflow/flow.json',
+    });
+
+    const envelope = await callTool(app, 'seeflow_list_flows_summary');
+    const list = expectOk(envelope) as Array<{ id: string; name: string; description?: string }>;
+    expect(list).toHaveLength(2);
+    const docs = list.find((e) => e.name === 'Checkout Flow');
+    expect(docs?.description).toBe('main flow');
+    const bare = list.find((e) => e.name === 'Refund');
+    expect(bare).toBeDefined();
+    expect('description' in (bare as object)).toBe(false);
+  });
+});
+
+describe('seeflow_get_flow_graph', () => {
+  it('returns nodes/connectors with detail and html stripped, description preserved', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo({
+      ...VALID_DEMO,
+      description: 'demo flow',
+      nodes: [
+        ...VALID_DEMO.nodes,
+        {
+          id: 'shape-1',
+          type: 'shapeNode',
+          data: { name: 'note', shape: 'rectangle', detail: '# secrets' },
+        },
+        { id: 'html-1', type: 'htmlNode', data: { html: '<p>also secret</p>' } },
+      ],
+    });
+    const reg = expectOk(
+      await callTool(app, 'seeflow_register_flow', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      }),
+    ) as { id: string };
+
+    const envelope = await callTool(app, 'seeflow_get_flow_graph', { flowId: reg.id });
+    const body = expectOk(envelope) as {
+      description?: string;
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+    };
+    expect(body.description).toBe('demo flow');
+    expect(body.nodes.find((n) => n.id === 'shape-1')?.data.detail).toBeUndefined();
+    expect(body.nodes.find((n) => n.id === 'html-1')?.data.html).toBeUndefined();
+  });
+
+  it('returns an isError result for an unknown flowId', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_get_flow_graph', { flowId: 'missing' });
+    expect(expectError(envelope)).toBe('not found');
+  });
+});
+
+describe('seeflow_get_node', () => {
+  it('returns a single node with detail content inlined', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = expectOk(
+      await callTool(app, 'seeflow_register_flow', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      }),
+    ) as { id: string };
+
+    const add = expectOk(
+      await callTool(app, 'seeflow_add_node', {
+        flowId: reg.id,
+        node: {
+          type: 'shapeNode',
+          data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+        },
+      }),
+    ) as { id: string };
+
+    const envelope = await callTool(app, 'seeflow_get_node', { flowId: reg.id, nodeId: add.id });
+    const body = expectOk(envelope) as {
+      id: string;
+      flowId: string;
+      node: { data: { detail?: string } };
+    };
+    expect(body.id).toBe(add.id);
+    expect(body.flowId).toBe(reg.id);
+    expect(body.node.data.detail).toBe('# inlined body');
+  });
+
+  it('returns an isError result for an unknown flow id', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_get_node', { flowId: 'missing', nodeId: 'n' });
+    expect(expectError(envelope)).toBe('not found');
+  });
+
+  it('returns an isError result for an unknown nodeId in a registered flow', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = expectOk(
+      await callTool(app, 'seeflow_register_flow', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      }),
+    ) as { id: string };
+    const envelope = await callTool(app, 'seeflow_get_node', {
+      flowId: reg.id,
+      nodeId: 'no-such-node',
+    });
+    expect(expectError(envelope)).toContain('Unknown nodeId');
   });
 });
 

@@ -2311,3 +2311,45 @@ describe('StyleSchema', () => {
     expect(r.success).toBe(false);
   });
 });
+
+describe('flow description field', () => {
+  const baseFlow = {
+    version: 2 as const,
+    name: 'documented-flow',
+    nodes: [],
+    connectors: [],
+  };
+
+  it('round-trips a description on FlowSchema', () => {
+    const result = FlowSchema.safeParse({ ...baseFlow, description: 'Stripe → ship' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.description).toBe('Stripe → ship');
+  });
+
+  it('round-trips a description on ResolvedFlowSchema', () => {
+    const result = ResolvedFlowSchema.safeParse({ ...baseFlow, description: 'Stripe → ship' });
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect(result.data.description).toBe('Stripe → ship');
+  });
+
+  it('omits description when absent (stays absent, not undefined) on FlowSchema', () => {
+    const result = FlowSchema.safeParse(baseFlow);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect('description' in result.data).toBe(false);
+  });
+
+  it('omits description when absent on ResolvedFlowSchema', () => {
+    const result = ResolvedFlowSchema.safeParse(baseFlow);
+    expect(result.success).toBe(true);
+    if (!result.success) return;
+    expect('description' in result.data).toBe(false);
+  });
+
+  it('rejects a non-string description on FlowSchema', () => {
+    const result = FlowSchema.safeParse({ ...baseFlow, description: 123 });
+    expect(result.success).toBe(false);
+  });
+});

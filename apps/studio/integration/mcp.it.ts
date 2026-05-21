@@ -79,7 +79,10 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_delete_flow',
   'seeflow_delete_node',
   'seeflow_get_flow',
+  'seeflow_get_flow_graph',
+  'seeflow_get_node',
   'seeflow_list_flows',
+  'seeflow_list_flows_summary',
   'seeflow_move_node',
   'seeflow_patch_connector',
   'seeflow_patch_node',
@@ -142,6 +145,66 @@ describe('integration: MCP — read-only tools', () => {
     expect(data.flow?.name).toBe(name);
     expect(data.flow?.nodes).toEqual([]);
     expect(data.filePath.endsWith('flow.json')).toBe(true);
+  });
+
+  it('seeflow_list_flows_summary returns id, name, description per flow', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-summary'));
+
+    const result = await client.callTool('seeflow_list_flows_summary');
+    const data = okJson<Array<{ id: string; name: string; description?: string }>>(result);
+    expect(Array.isArray(data)).toBe(true);
+    const found = data.find((f) => f.id === seeded.id);
+    expect(found).toBeDefined();
+    expect(found?.name).toBeTruthy();
+  });
+
+  it('seeflow_get_flow_graph returns nodes/connectors with detail stripped', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-graph'));
+
+    // Add a node with detail content via REST so file:// externalization runs.
+    await fetch(`${studio.baseURL}/api/flows/${seeded.id}/nodes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'note', shape: 'rectangle', detail: '# inside' },
+      }),
+    });
+
+    const result = await client.callTool('seeflow_get_flow_graph', { flowId: seeded.id });
+    const data = okJson<{
+      id: string;
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+    }>(result);
+    const shape = data.nodes.find((n) => n.id === 'shape-1');
+    expect(shape).toBeDefined();
+    expect(shape?.data.detail).toBeUndefined();
+  });
+
+  it('seeflow_get_node returns the node with detail content inlined', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-getnode'));
+
+    await fetch(`${studio.baseURL}/api/flows/${seeded.id}/nodes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+      }),
+    });
+
+    const result = await client.callTool('seeflow_get_node', {
+      flowId: seeded.id,
+      nodeId: 'shape-1',
+    });
+    const data = okJson<{ id: string; flowId: string; node: { data: { detail?: string } } }>(
+      result,
+    );
+    expect(data.id).toBe('shape-1');
+    expect(data.flowId).toBe(seeded.id);
+    expect(data.node.data.detail).toBe('# inlined body');
   });
 
   it('validate_seeflow returns { ok: true } for a minimal valid flow', async () => {

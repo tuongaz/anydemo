@@ -298,4 +298,119 @@ describe('seeflow CLI new subcommands', () => {
       studio.stop();
     }
   }, 20_000);
+
+  it('flows:summary returns id, name, description per flow', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-summary-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.seeflow', 'flow.json'),
+        JSON.stringify({ ...VALID_DEMO, name: 'Documented', description: 'doc body' }),
+      );
+      studio.registry.upsert({
+        name: 'Documented',
+        description: 'doc body',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const r = await runCli(['flows:summary', '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        flows: Array<{ id: string; name: string; description?: string }>;
+      };
+      expect(parsed.flows).toHaveLength(1);
+      expect(parsed.flows[0]?.name).toBe('Documented');
+      expect(parsed.flows[0]?.description).toBe('doc body');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:graph returns nodes/connectors and strips detail/html', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-graph-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(
+        join(repoDir, '.seeflow', 'flow.json'),
+        JSON.stringify({
+          ...VALID_DEMO,
+          description: 'demo',
+          nodes: [
+            ...VALID_DEMO.nodes,
+            {
+              id: 'shape-1',
+              type: 'shapeNode',
+              data: { name: 'note', shape: 'rectangle', detail: '# hidden' },
+            },
+          ],
+        }),
+      );
+      const entry = studio.registry.upsert({
+        name: 'Graph',
+        description: 'demo',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      const r = await runCli(['flows:graph', entry.id, '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        description: string;
+        nodes: Array<{ id: string; data: Record<string, unknown> }>;
+      };
+      expect(parsed.description).toBe('demo');
+      const shape = parsed.nodes.find((n) => n.id === 'shape-1');
+      expect(shape?.data.detail).toBeUndefined();
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('nodes:get returns the node with detail content inlined', async () => {
+    const studio = startTestStudio();
+    try {
+      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-nodeget-'));
+      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      const entry = studio.registry.upsert({
+        name: 'NodeGet',
+        repoPath: repoDir,
+        flowPath: '.seeflow/flow.json',
+      });
+
+      // Add a shape node via the add endpoint so detail.md is externalized.
+      const addRes = await fetch(`${studio.url}/api/flows/${entry.id}/nodes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          type: 'shapeNode',
+          data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+        }),
+      });
+      const added = (await addRes.json()) as { id: string };
+
+      const r = await runCli(['nodes:get', entry.id, added.id, '--no-start'], {
+        SEEFLOW_STUDIO_URL: studio.url,
+      });
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        flowId: string;
+        node: { data: { detail?: string } };
+      };
+      expect(parsed.flowId).toBe(entry.id);
+      expect(parsed.node.data.detail).toBe('# inlined body');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
 });

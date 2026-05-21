@@ -3633,3 +3633,151 @@ describe('POST /api/validate', () => {
     expect(res.status).toBe(400);
   });
 });
+
+describe('GET /api/flows/summary', () => {
+  it('returns id, name, description for each registered flow', async () => {
+    const { app } = buildApp();
+    const repoA = tmpRepoWithDemo({ ...VALID_DEMO, description: 'main checkout flow' });
+    const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund', description: undefined });
+    await post(app, '/api/flows/register', { repoPath: repoA, flowPath: '.seeflow/flow.json' });
+    await post(app, '/api/flows/register', { repoPath: repoB, flowPath: '.seeflow/flow.json' });
+
+    const res = await app.request('/api/flows/summary');
+    expect(res.status).toBe(200);
+    const list = (await res.json()) as Array<{ id: string; name: string; description?: string }>;
+    expect(list).toHaveLength(2);
+
+    const docs = list.find((e) => e.name === 'Checkout Flow');
+    expect(docs?.description).toBe('main checkout flow');
+
+    const bare = list.find((e) => e.name === 'Refund');
+    expect(bare).toBeDefined();
+    expect('description' in (bare as object)).toBe(false);
+  });
+
+  it('returns each summary with only id, name and description keys', async () => {
+    const { app } = buildApp();
+    const repo = tmpRepoWithDemo({ ...VALID_DEMO, description: 'doc' });
+    await post(app, '/api/flows/register', { repoPath: repo, flowPath: '.seeflow/flow.json' });
+
+    const list = (await (await app.request('/api/flows/summary')).json()) as Array<object>;
+    const keys = Object.keys(list[0] as object).sort();
+    expect(keys).toEqual(['description', 'id', 'name']);
+  });
+});
+
+describe('GET /api/flows/:id/graph', () => {
+  it('returns nodes and connectors with detail/html stripped, description preserved', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo({
+      ...VALID_DEMO,
+      description: 'demo flow',
+      nodes: [
+        ...VALID_DEMO.nodes,
+        {
+          id: 'shape-1',
+          type: 'shapeNode',
+          data: { name: 'note', shape: 'rectangle', detail: '# secrets here' },
+        },
+        {
+          id: 'html-1',
+          type: 'htmlNode',
+          data: { html: '<p>also secret</p>' },
+        },
+      ],
+    });
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+    ).json()) as { id: string };
+
+    const res = await app.request(`/api/flows/${reg.id}/graph`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      name: string;
+      description?: string;
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+      connectors: unknown[];
+    };
+    expect(body.id).toBe(reg.id);
+    expect(body.description).toBe('demo flow');
+    const shape = body.nodes.find((n) => n.id === 'shape-1');
+    const html = body.nodes.find((n) => n.id === 'html-1');
+    expect(shape?.data.detail).toBeUndefined();
+    expect(html?.data.html).toBeUndefined();
+    // Non-stripped fields still ride along.
+    expect((shape?.data as { name?: string }).name).toBe('note');
+  });
+
+  it('returns 404 for unknown flow ids', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/flows/no-such/graph');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 when flow.json was removed from disk', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+    ).json()) as { id: string };
+    unlinkSync(join(repoPath, '.seeflow', 'flow.json'));
+
+    const res = await app.request(`/api/flows/${reg.id}/graph`);
+    expect(res.status).toBe(404);
+  });
+});
+
+describe('GET /api/flows/:id/nodes/:nodeId', () => {
+  it('returns a single node with detail content inlined', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+    ).json()) as { id: string };
+
+    // Add a node via the existing add endpoint so detail.md is externalized
+    // through the canonical write path.
+    await post(app, `/api/flows/${reg.id}/nodes`, {
+      type: 'shapeNode',
+      data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+    });
+
+    // Discover the node id via the graph endpoint.
+    const graph = (await (await app.request(`/api/flows/${reg.id}/graph`)).json()) as {
+      nodes: Array<{ id: string; type: string }>;
+    };
+    const shapeId = graph.nodes.find((n) => n.type === 'shapeNode')?.id;
+    if (!shapeId) throw new Error('shape node missing from graph');
+
+    const res = await app.request(`/api/flows/${reg.id}/nodes/${shapeId}`);
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      id: string;
+      flowId: string;
+      node: { data: { detail?: string } };
+    };
+    expect(body.id).toBe(shapeId);
+    expect(body.flowId).toBe(reg.id);
+    expect(body.node.data.detail).toBe('# inlined body');
+  });
+
+  it('returns 404 for unknown flow id', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/flows/missing/nodes/whatever');
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an unknown nodeId in a known flow', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+    ).json()) as { id: string };
+
+    const res = await app.request(`/api/flows/${reg.id}/nodes/not-a-node`);
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('Unknown nodeId');
+  });
+});

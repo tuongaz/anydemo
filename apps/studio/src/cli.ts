@@ -126,8 +126,12 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runProjectsCreate();
 } else if (sub === 'flows:list') {
   await runFlowsList();
+} else if (sub === 'flows:summary') {
+  await runFlowsSummary();
 } else if (sub === 'flows:get') {
   await runFlowsGet();
+} else if (sub === 'flows:graph') {
+  await runFlowsGraph();
 } else if (sub === 'flows:delete') {
   await runFlowsDelete();
 } else if (sub === 'flows:layout') {
@@ -138,6 +142,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runNodesAdd();
 } else if (sub === 'nodes:add-bulk') {
   await runNodesAddBulk();
+} else if (sub === 'nodes:get') {
+  await runNodesGet();
 } else if (sub === 'nodes:patch') {
   await runNodesPatch();
 } else if (sub === 'nodes:move') {
@@ -179,12 +185,15 @@ Commands:
   flows:register       Register a demo repo with the running studio
   projects:create      Create a new project (--name <name>)
   flows:list           List registered flows
+  flows:summary        List registered flows (id + name + description only)
   flows:get <id>       Get flow details
+  flows:graph <id>     List nodes + connectors without inlined file content
   flows:delete <id>    Unregister a flow
   flows:layout <id>    POST a layout payload (--json/--file/--stdin)
   flows:play <id> <n>  Trigger a play on node <n>
   nodes:add <id>       Add a node (--json/--file/--stdin)
   nodes:add-bulk <id>  Add many nodes (--json/--file/--stdin)
+  nodes:get <id> <n>   Get a node with detail / html content inlined
   nodes:patch <id> <n> Patch a node (--json/--file/--stdin)
   nodes:move <id> <n>  Move a node (--x N --y N)
   nodes:reorder <id> <n> Reorder a node (--op forward|backward|toFront|toBack|toIndex [--index N])
@@ -590,10 +599,25 @@ async function runFlowsList() {
   printOk({ flows: body });
 }
 
+async function runFlowsSummary() {
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(`${url}/api/flows/summary`);
+  const body = (await handleResponse(res)) as unknown[];
+  printOk({ flows: body });
+}
+
 async function runFlowsGet() {
   const flowId = requireArg(1, '<flowId>');
   const { url } = await studioUrlOrDie(hasFlag('no-start'));
   const res = await fetch(`${url}/api/flows/${encodeURIComponent(flowId)}`);
+  const body = (await handleResponse(res)) as object;
+  printOk(body);
+}
+
+async function runFlowsGraph() {
+  const flowId = requireArg(1, '<flowId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(`${url}/api/flows/${encodeURIComponent(flowId)}/graph`);
   const body = (await handleResponse(res)) as object;
   printOk(body);
 }
@@ -641,6 +665,17 @@ async function runNodesAddBulk() {
   const body = await bodyFromFlags();
   const { url } = await studioUrlOrDie(hasFlag('no-start'));
   const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/nodes/bulk`, body);
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesGet() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
+  );
   const out = (await handleResponse(res)) as object;
   printOk(out);
 }

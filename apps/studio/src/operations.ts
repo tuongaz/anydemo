@@ -281,10 +281,57 @@ export interface CreateProjectSuccess {
 
 export type ListFlowsOutcome = { kind: 'ok'; data: FlowListItem[] };
 
+// Minimal projection for agent/CLI discovery — `description` and `name` come
+// from the live watcher snapshot when available so author edits to flow.json
+// surface immediately; fall back to the registry value at startup before
+// any reparse has happened.
+export interface FlowSummary {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export type ListFlowsSummaryOutcome = { kind: 'ok'; data: FlowSummary[] };
+
 export type GetFlowOutcome =
   | { kind: 'ok'; data: FlowGetResponse }
   | { kind: 'notFound' }
   | { kind: 'fileNotFound'; path: string };
+
+// Lightweight graph projection — flow + nodes + connectors with file-backed
+// fields (`detail` on every node, `html` on htmlNode) stripped so the
+// caller can navigate the topology without paying for inlined bodies.
+export interface FlowGraphResponse {
+  id: string;
+  slug: string;
+  name: string;
+  description?: string;
+  nodes: Array<Record<string, unknown>>;
+  connectors: Array<Record<string, unknown>>;
+}
+
+export type GetFlowGraphOutcome =
+  | { kind: 'ok'; data: FlowGraphResponse }
+  | { kind: 'notFound' }
+  | { kind: 'fileNotFound'; path: string }
+  | { kind: 'badJson'; detail: string }
+  | { kind: 'badSchema'; issues: ZodIssue[] };
+
+// Single node, content resolved. The node shape mirrors the on-disk Flow
+// node shape (no position / style) with `file://` refs already inlined.
+export interface GetNodeResponse {
+  id: string;
+  flowId: string;
+  node: Record<string, unknown>;
+}
+
+export type GetNodeOutcome =
+  | { kind: 'ok'; data: GetNodeResponse }
+  | { kind: 'notFound' }
+  | { kind: 'fileNotFound'; path: string }
+  | { kind: 'badJson'; detail: string }
+  | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'unknownNode' };
 
 export type RegisterFlowOutcome =
   | { kind: 'ok'; data: RegisterFlowSuccess }
@@ -776,6 +823,22 @@ export function listDemosImpl(deps: OperationsDeps): ListFlowsOutcome {
   return { kind: 'ok', data };
 }
 
+export function listFlowsSummaryImpl(deps: OperationsDeps): ListFlowsSummaryOutcome {
+  const { registry, watcher } = deps;
+  const data = registry.list().map((e) => {
+    const snap = watcher?.snapshot(e.id) ?? null;
+    const liveFlow = snap?.valid ? snap.flow : null;
+    const item: FlowSummary = {
+      id: e.id,
+      name: liveFlow?.name ?? e.name,
+    };
+    const description = liveFlow?.description ?? e.description;
+    if (description !== undefined) item.description = description;
+    return item;
+  });
+  return { kind: 'ok', data };
+}
+
 export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise<GetFlowOutcome> {
   const { registry, watcher } = deps;
   const entry = registry.getById(flowId);
@@ -813,6 +876,101 @@ export async function getFlowImpl(deps: OperationsDeps, flowId: string): Promise
   };
 }
 
+// Strip the only file-backed fields that ride on `node.data` today.
+// Keep narrow on purpose — if file-ref.ts ever grows another resolved field,
+// this list must grow with it (covered by the operations.test.ts coverage).
+const FILE_BACKED_NODE_DATA_FIELDS = ['detail', 'html'] as const;
+
+function stripFileBackedFields(node: Record<string, unknown>): Record<string, unknown> {
+  const data = node.data;
+  if (!data || typeof data !== 'object') return node;
+  const stripped: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(data as Record<string, unknown>)) {
+    if ((FILE_BACKED_NODE_DATA_FIELDS as readonly string[]).includes(k)) continue;
+    stripped[k] = v;
+  }
+  return { ...node, data: stripped };
+}
+
+export async function getFlowGraphImpl(
+  deps: OperationsDeps,
+  flowId: string,
+): Promise<GetFlowGraphOutcome> {
+  const entry = deps.registry.getById(flowId);
+  if (!entry) return { kind: 'notFound' };
+
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
+  if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
+
+  let raw: unknown;
+  try {
+    raw = JSON.parse(readFileSync(fullPath, 'utf8'));
+  } catch (err) {
+    return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
+  }
+
+  // Parse the on-disk Flow shape directly (no resolveFileRefs, no style.json
+  // merge) so we never read the per-node detail/html files from disk.
+  const parsed = FlowSchema.safeParse(raw);
+  if (!parsed.success) return { kind: 'badSchema', issues: parsed.error.issues };
+
+  const data: FlowGraphResponse = {
+    id: entry.id,
+    slug: entry.slug,
+    name: parsed.data.name,
+    nodes: parsed.data.nodes.map((n) => stripFileBackedFields(n as Record<string, unknown>)),
+    connectors: parsed.data.connectors as Array<Record<string, unknown>>,
+  };
+  if (parsed.data.description !== undefined) data.description = parsed.data.description;
+  return { kind: 'ok', data };
+}
+
+export async function getNodeImpl(
+  deps: OperationsDeps,
+  flowId: string,
+  nodeId: string,
+): Promise<GetNodeOutcome> {
+  const { registry, watcher } = deps;
+  const entry = registry.getById(flowId);
+  if (!entry) return { kind: 'notFound' };
+
+  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
+
+  // Prefer a live snapshot (already has file:// refs resolved) so we don't
+  // re-walk the filesystem on every call. Fall back to readMergedFlow for
+  // callers without a watcher (CLI, MCP-only setups).
+  const snap = watcher?.snapshot(flowId) ?? watcher?.reparse(flowId) ?? null;
+  let flow: ResolvedFlow | null = snap?.valid ? snap.flow : null;
+
+  if (!flow) {
+    if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
+    const result = readMergedFlow(fullPath);
+    if (!result.valid || !result.flow) {
+      if (result.error?.startsWith('Invalid JSON')) {
+        return { kind: 'badJson', detail: result.error };
+      }
+      // Schema failed — re-parse to surface ZodIssues.
+      try {
+        const raw = JSON.parse(readFileSync(fullPath, 'utf8'));
+        const parsed = FlowSchema.safeParse(raw);
+        if (!parsed.success) return { kind: 'badSchema', issues: parsed.error.issues };
+      } catch (err) {
+        return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
+      }
+      return { kind: 'badJson', detail: result.error ?? 'unknown error' };
+    }
+    flow = result.flow;
+  }
+
+  const node = flow.nodes.find((n) => n.id === nodeId);
+  if (!node) return { kind: 'unknownNode' };
+
+  return {
+    kind: 'ok',
+    data: { id: nodeId, flowId, node: node as unknown as Record<string, unknown> },
+  };
+}
+
 export async function registerFlowImpl(
   deps: OperationsDeps,
   body: RegisterBody,
@@ -845,6 +1003,7 @@ export async function registerFlowImpl(
   const lastModified = statSync(fullPath).mtimeMs;
   const entry = registry.upsert({
     name: body.name ?? merged.flow.name,
+    description: merged.flow.description,
     repoPath,
     flowPath,
     valid: true,

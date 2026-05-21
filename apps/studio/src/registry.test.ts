@@ -183,4 +183,69 @@ describe('createRegistry', () => {
     const reg = createRegistry({ path });
     expect(reg.list()).toHaveLength(0);
   });
+
+  it('persists description on insert and rehydrates it on construct', () => {
+    const path = tmpRegistryPath();
+    const reg1 = createRegistry({ path });
+    reg1.upsert({
+      name: 'Documented',
+      description: 'Stripe → ship',
+      repoPath: '/tmp/d',
+      flowPath: 'd.json',
+    });
+
+    const reg2 = createRegistry({ path });
+    expect(reg2.list()[0]?.description).toBe('Stripe → ship');
+  });
+
+  it('omits description on disk when not provided', () => {
+    const path = tmpRegistryPath();
+    const reg = createRegistry({ path });
+    reg.upsert({ name: 'Bare', repoPath: '/tmp/b', flowPath: 'd.json' });
+    const onDisk = JSON.parse(readFileSync(path, 'utf8'));
+    expect('description' in onDisk[0]).toBe(false);
+  });
+
+  it('upsert updates description from a fresh value, including clearing it', () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const first = reg.upsert({
+      name: 'X',
+      description: 'first',
+      repoPath: '/tmp/x',
+      flowPath: 'd.json',
+    });
+    expect(first.description).toBe('first');
+
+    const second = reg.upsert({
+      name: 'X',
+      description: 'second',
+      repoPath: '/tmp/x',
+      flowPath: 'd.json',
+    });
+    expect(second.description).toBe('second');
+
+    const cleared = reg.upsert({ name: 'X', repoPath: '/tmp/x', flowPath: 'd.json' });
+    expect(cleared.description).toBeUndefined();
+  });
+
+  it('strips a malformed description from a tampered registry on load', () => {
+    const path = tmpRegistryPath();
+    writeFileSync(
+      path,
+      JSON.stringify([
+        {
+          id: 'abc',
+          slug: 'abc',
+          name: 'tampered',
+          description: 42,
+          repoPath: '/tmp/t',
+          flowPath: 'd.json',
+          lastModified: 0,
+          valid: true,
+        },
+      ]),
+    );
+    const reg = createRegistry({ path });
+    expect(reg.list()[0]?.description).toBeUndefined();
+  });
 });

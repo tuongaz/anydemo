@@ -7,6 +7,7 @@ export interface FlowEntry {
   id: string;
   slug: string;
   name: string;
+  description?: string;
   repoPath: string;
   flowPath: string;
   lastModified: number;
@@ -15,6 +16,7 @@ export interface FlowEntry {
 
 export interface RegisterInput {
   name: string;
+  description?: string;
   repoPath: string;
   flowPath: string;
   valid?: boolean;
@@ -64,7 +66,13 @@ export function createRegistry(options: { path?: string } = {}): Registry {
               );
               continue;
             }
-            entries.set(e.id, e as FlowEntry);
+            const entry = e as FlowEntry;
+            // Drop a malformed description silently — old registry files
+            // can't have one, and external tampering shouldn't crash load.
+            if (entry.description !== undefined && typeof entry.description !== 'string') {
+              entry.description = undefined;
+            }
+            entries.set(entry.id, entry);
           }
         }
       }
@@ -111,9 +119,13 @@ export function createRegistry(options: { path?: string } = {}): Registry {
       const valid = input.valid ?? true;
       const existing = findByRepoPathAndFlowPath(input.repoPath, input.flowPath);
       if (existing) {
+        // input.description reflects the current flow.json on every call —
+        // when an author removes the description, we drop it from the entry
+        // too (JSON.stringify skips undefined values on persist).
         const updated: FlowEntry = {
           ...existing,
           name: input.name,
+          description: input.description,
           flowPath: input.flowPath,
           lastModified,
           valid,
@@ -128,6 +140,7 @@ export function createRegistry(options: { path?: string } = {}): Registry {
         id,
         slug,
         name: input.name,
+        description: input.description,
         repoPath: input.repoPath,
         flowPath: input.flowPath,
         lastModified,

@@ -24,8 +24,11 @@ import {
   deleteConnectorImpl,
   deleteFlowImpl,
   deleteNodeImpl,
+  getFlowGraphImpl,
   getFlowImpl,
+  getNodeImpl,
   listDemosImpl,
+  listFlowsSummaryImpl,
   moveNodeImpl,
   patchConnectorImpl,
   patchNodeImpl,
@@ -198,6 +201,18 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
     },
   },
   {
+    name: 'seeflow_list_flows_summary',
+    description:
+      'List registered flows as { id, name, description } only. Use this for ' +
+      'cheap discovery before drilling into a specific flow with ' +
+      'seeflow_get_flow_graph or seeflow_get_node.',
+    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+    handler: async () => {
+      const result = listFlowsSummaryImpl(deps);
+      return okResult(result.data);
+    },
+  },
+  {
     name: 'validate_seeflow',
     description:
       'Validate a flow.json (and optional style.json) against the SeeFlow ' +
@@ -239,6 +254,77 @@ const buildTools = (deps: OperationsDeps): McpTool[] => [
           return errorResult('not found');
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
+      }
+    },
+  },
+  {
+    name: 'seeflow_get_flow_graph',
+    description:
+      "Get a flow's nodes + connectors without inlining per-node file-backed " +
+      'content (`detail`, `html`). Cheap topology read — pair with seeflow_get_node ' +
+      "when you need a specific node's long-form body.",
+    inputSchema: FLOW_ID_INPUT_SCHEMA,
+    handler: async (args) => {
+      const v = requireFlowId(args);
+      if ('error' in v) return errorResult(v.error);
+      const result = await getFlowGraphImpl(deps, v.flowId);
+      switch (result.kind) {
+        case 'ok':
+          return okResult(result.data);
+        case 'notFound':
+          return errorResult('not found');
+        case 'fileNotFound':
+          return errorResult(`Flow file not found: ${result.path}`);
+        case 'badJson':
+          return errorResult(`Flow file is not valid JSON: ${result.detail}`);
+        case 'badSchema':
+          return errorResult(
+            `Flow file failed schema validation: ${JSON.stringify(result.issues)}`,
+          );
+      }
+    },
+  },
+  {
+    name: 'seeflow_get_node',
+    description:
+      'Get a single node from a flow with its file-backed content (detail.md, ' +
+      'view.html) inlined. Use after seeflow_get_flow_graph to drill into one node.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        flowId: { type: 'string', minLength: 1 },
+        nodeId: { type: 'string', minLength: 1 },
+      },
+      required: ['flowId', 'nodeId'],
+      additionalProperties: false,
+    },
+    handler: async (args) => {
+      if (!args || typeof args !== 'object' || Array.isArray(args)) {
+        return errorResult('Invalid arguments: expected an object with flowId + nodeId');
+      }
+      const { flowId, nodeId } = args as { flowId?: unknown; nodeId?: unknown };
+      if (typeof flowId !== 'string' || flowId.length === 0) {
+        return errorResult('Invalid arguments: flowId must be a non-empty string');
+      }
+      if (typeof nodeId !== 'string' || nodeId.length === 0) {
+        return errorResult('Invalid arguments: nodeId must be a non-empty string');
+      }
+      const result = await getNodeImpl(deps, flowId, nodeId);
+      switch (result.kind) {
+        case 'ok':
+          return okResult(result.data);
+        case 'notFound':
+          return errorResult('not found');
+        case 'fileNotFound':
+          return errorResult(`Flow file not found: ${result.path}`);
+        case 'unknownNode':
+          return errorResult(`Unknown nodeId: ${nodeId}`);
+        case 'badJson':
+          return errorResult(`Flow file is not valid JSON: ${result.detail}`);
+        case 'badSchema':
+          return errorResult(
+            `Flow file failed schema validation: ${JSON.stringify(result.issues)}`,
+          );
       }
     },
   },

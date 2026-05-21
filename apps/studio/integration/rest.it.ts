@@ -188,6 +188,97 @@ describe('integration: REST — flow lifecycle', () => {
     });
   });
 
+  describe('GET /api/flows/summary', () => {
+    it('returns id, name, and description for each registered flow', async () => {
+      const name = uniqueFlowId('summary-flow');
+      const created = await createProject(name);
+
+      // Patch flow.json on disk to add a description.
+      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+      const raw = JSON.parse(await Bun.file(flowPath).text());
+      raw.description = 'integration summary';
+      writeFileSync(flowPath, `${JSON.stringify(raw, null, 2)}\n`);
+      // Re-register so the watcher snapshot picks up the description.
+      await fetch(`${studio.baseURL}/api/flows/register`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          repoPath: join(studio.workspace, created.slug),
+          flowPath: '.seeflow/flow.json',
+        }),
+      });
+
+      const res = await fetch(`${studio.baseURL}/api/flows/summary`);
+      expect(res.status).toBe(200);
+      const list = (await res.json()) as Array<{
+        id: string;
+        name: string;
+        description?: string;
+      }>;
+      const entry = list.find((e) => e.id === created.id);
+      expect(entry).toBeDefined();
+      expect(entry?.name).toBe(name);
+      expect(entry?.description).toBe('integration summary');
+    });
+  });
+
+  describe('GET /api/flows/:id/graph', () => {
+    it('returns nodes/connectors with detail and html stripped', async () => {
+      const name = uniqueFlowId('graph-flow');
+      const created = await createProject(name);
+
+      // Add a shapeNode with detail through the standard write path so
+      // detail.md is externalized; the graph endpoint should still hide it.
+      await postJson(`/api/flows/${created.id}/nodes`, {
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'note', shape: 'rectangle', detail: '# secret body' },
+      });
+
+      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/graph`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        id: string;
+        nodes: Array<{ id: string; data: Record<string, unknown> }>;
+      };
+      const shape = body.nodes.find((n) => n.id === 'shape-1');
+      expect(shape).toBeDefined();
+      expect(shape?.data.detail).toBeUndefined();
+      expect((shape?.data as { name?: string }).name).toBe('note');
+    });
+  });
+
+  describe('GET /api/flows/:id/nodes/:nodeId', () => {
+    it('returns a single node with detail content inlined', async () => {
+      const name = uniqueFlowId('node-get-flow');
+      const created = await createProject(name);
+
+      await postJson(`/api/flows/${created.id}/nodes`, {
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'note', shape: 'rectangle', detail: '# inlined body' },
+      });
+
+      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/shape-1`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        id: string;
+        flowId: string;
+        node: { data: { detail?: string } };
+      };
+      expect(body.id).toBe('shape-1');
+      expect(body.flowId).toBe(created.id);
+      expect(body.node.data.detail).toBe('# inlined body');
+    });
+
+    it('returns 404 for an unknown nodeId', async () => {
+      const name = uniqueFlowId('node-get-404');
+      const created = await createProject(name);
+      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/not-a-node`);
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('POST /api/flows/register', () => {
     // PRD listed `/api/flows/:id/register`; the real route is `/api/flows/register`
     // and the request body identifies the flow by `{ repoPath, flowPath }` — see

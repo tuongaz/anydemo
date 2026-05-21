@@ -31,8 +31,11 @@ import {
   deleteConnectorImpl,
   deleteFlowImpl,
   deleteNodeImpl,
+  getFlowGraphImpl,
   getFlowImpl,
+  getNodeImpl,
   listDemosImpl,
+  listFlowsSummaryImpl,
   moveNodeImpl,
   patchConnectorImpl,
   patchNodeImpl,
@@ -475,6 +478,14 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(result.data);
   });
 
+  // Lightweight projection: id, name, description only. Reads from the
+  // watcher snapshot when available so author edits to flow.json show up
+  // immediately; falls back to the registry copy persisted at register time.
+  api.get('/flows/summary', (c) => {
+    const result = listFlowsSummaryImpl({ registry, watcher });
+    return c.json(result.data);
+  });
+
   api.get('/flows/:id', async (c) => {
     const result = await getFlowImpl({ registry, watcher }, c.req.param('id'));
     switch (result.kind) {
@@ -484,6 +495,46 @@ export function createApi(options: ApiOptions): Hono {
         return c.json({ error: 'not found' }, 404);
       case 'fileNotFound':
         return c.json({ error: `Flow file not found: ${result.path}` }, 404);
+    }
+  });
+
+  // Flow skeleton without per-node file content (detail.md / view.html).
+  // Pairs with GET /flows/:id/nodes/:nodeId for full per-node detail.
+  api.get('/flows/:id/graph', async (c) => {
+    const result = await getFlowGraphImpl({ registry, watcher }, c.req.param('id'));
+    switch (result.kind) {
+      case 'ok':
+        return c.json(result.data);
+      case 'notFound':
+        return c.json({ error: 'not found' }, 404);
+      case 'fileNotFound':
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
+      case 'badJson':
+        return c.json({ error: 'Flow file is not valid JSON', detail: result.detail }, 400);
+      case 'badSchema':
+        return c.json({ error: 'Flow file failed schema validation', issues: result.issues }, 400);
+    }
+  });
+
+  api.get('/flows/:id/nodes/:nodeId', async (c) => {
+    const result = await getNodeImpl(
+      { registry, watcher },
+      c.req.param('id'),
+      c.req.param('nodeId'),
+    );
+    switch (result.kind) {
+      case 'ok':
+        return c.json(result.data);
+      case 'notFound':
+        return c.json({ error: 'not found' }, 404);
+      case 'fileNotFound':
+        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
+      case 'unknownNode':
+        return c.json({ error: `Unknown nodeId: ${c.req.param('nodeId')}` }, 404);
+      case 'badJson':
+        return c.json({ error: 'Flow file is not valid JSON', detail: result.detail }, 400);
+      case 'badSchema':
+        return c.json({ error: 'Flow file failed schema validation', issues: result.issues }, 400);
     }
   });
 

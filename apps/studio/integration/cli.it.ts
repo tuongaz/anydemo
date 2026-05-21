@@ -90,12 +90,15 @@ describe('integration: CLI — meta (help / version / unknown)', () => {
       'flows:register',
       'projects:create',
       'flows:list',
+      'flows:summary',
       'flows:get',
+      'flows:graph',
       'flows:delete',
       'flows:layout',
       'flows:play',
       'nodes:add',
       'nodes:add-bulk',
+      'nodes:get',
       'nodes:patch',
       'nodes:move',
       'nodes:reorder',
@@ -192,6 +195,73 @@ describe('integration: CLI — projects + flows', () => {
     expect(body.slug).toBe(created.slug);
     expect(body.name).toBe(name);
     expect(body.valid).toBe(true);
+  });
+
+  it('flows:summary returns flows with id, name, and optional description', async () => {
+    const name = uniqueFlowId('cli-flows-summary');
+    const created = await createProject(name);
+
+    const r = await runCli(['flows:summary'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & {
+      flows: Array<{ id: string; name: string; description?: string }>;
+    };
+    expect(body.ok).toBe(true);
+    const found = body.flows.find((f) => f.id === created.id);
+    expect(found).toBeDefined();
+    expect(found?.name).toBe(name);
+  });
+
+  it('flows:graph returns nodes and connectors without inlined detail', async () => {
+    const name = uniqueFlowId('cli-flows-graph');
+    const created = await createProject(name);
+
+    const addRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'note', shape: 'rectangle', detail: '# hidden' },
+      }),
+    });
+    expect(addRes.status).toBe(200);
+
+    const r = await runCli(['flows:graph', created.id], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & {
+      nodes: Array<{ id: string; data: Record<string, unknown> }>;
+    };
+    expect(body.ok).toBe(true);
+    const shape = body.nodes.find((n) => n.id === 'shape-1');
+    expect(shape?.data.detail).toBeUndefined();
+  });
+
+  it('nodes:get returns the node with detail content inlined', async () => {
+    const name = uniqueFlowId('cli-nodes-get');
+    const created = await createProject(name);
+
+    const addRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        id: 'shape-1',
+        type: 'shapeNode',
+        data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+      }),
+    });
+    expect(addRes.status).toBe(200);
+
+    const r = await runCli(['nodes:get', created.id, 'shape-1'], { env: cliEnv });
+    expect(r.code).toBe(0);
+    const body = parseOkLine(r.stdout) as OkLine & {
+      id: string;
+      flowId: string;
+      node: { data: { detail?: string } };
+    };
+    expect(body.ok).toBe(true);
+    expect(body.flowId).toBe(created.id);
+    expect(body.node.data.detail).toBe('# inlined body');
   });
 
   it('flows:delete removes the flow from the registry', async () => {
