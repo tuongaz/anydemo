@@ -2024,12 +2024,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       setConnectTarget(null);
       return;
     }
-    const onMove = (e: globalThis.PointerEvent) => {
-      // Buffer-aware: a node within RECONNECT_BUFFER_PX of the cursor
-      // counts as the candidate target, mirroring the snap behavior of
-      // the connection line. Direct-hit cursor-over-node still wins (the
-      // buffered helper falls back to nearest-in-buffer only when no
-      // node is directly under the cursor).
+    // Coalesce the hit-test through rAF: a fast pointer stream (240+ Hz) was
+    // running `nodeElNearPoint` — which falls back to `querySelectorAll('.react-flow__node')`
+    // + `getBoundingClientRect()` PER node when the cursor is in empty space —
+    // on every event. At many-node densities the buffered fallback forces a
+    // synchronous layout per event; capping at one hit-test per frame keeps
+    // the connection-drag main-thread cost bounded regardless of node count.
+    let rafId: number | null = null;
+    let lastEvent: { clientX: number; clientY: number } | null = null;
+    const flush = () => {
+      rafId = null;
+      const e = lastEvent;
+      lastEvent = null;
+      if (!e) return;
       const nodeEl = nodeElNearPoint(wrapperRef.current, e.clientX, e.clientY);
       const id = nodeEl?.getAttribute('data-id') ?? null;
       // The source node should not also be highlighted as a target — dropping
@@ -2042,9 +2049,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       }
       setConnectTarget(id);
     };
-    document.addEventListener('pointermove', onMove);
+    const onMove = (e: globalThis.PointerEvent) => {
+      lastEvent = { clientX: e.clientX, clientY: e.clientY };
+      if (rafId !== null) return;
+      rafId = requestAnimationFrame(flush);
+    };
+    document.addEventListener('pointermove', onMove, { passive: true });
     return () => {
       document.removeEventListener('pointermove', onMove);
+      if (rafId !== null) cancelAnimationFrame(rafId);
     };
   }, [connecting, setConnectTarget]);
   // State drives the ghost preview render; refs back the handlers so a single

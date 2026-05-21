@@ -13,7 +13,7 @@
     "./style.css": "./dist/style.css"
   },
   "scripts": {
-    "build": "rm -rf dist && bun run build:css && bun run build:js",
+    "build": "rm -rf dist && bun run build:css && bun run build:js && bun run scripts/sync-bun-cache.mjs",
     "build:css": "tailwindcss -i src/styles/index.css -o dist/style.css --minify",
     "build:css:dev": "tailwindcss -i src/styles/index.css -o dist/style.dev.css",
     "build:css:watch": "bun run build:css:dev && tailwindcss -i src/styles/index.css -o dist/style.dev.css --watch",

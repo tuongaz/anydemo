@@ -465,18 +465,52 @@ layer(base);
 
   --mx: 50%;
   --my: 50%;
+  /* Static mask gradient with an EXPLICIT 240px circle inside a 480px box.
+     The 240px sizing is load-bearing: without it, `radial-gradient(circle, ...)`
+     defaults to `farthest-corner` (~339px in a 480×480 box), which stretches
+     the gradient to the diagonals and makes the reveal look square. With the
+     explicit 240px, the gradient is a true 240px-radius circle and the
+     surrounding 480×480 box pads it with transparency (mask-repeat: no-repeat
+     extends transparency outside the box too).
+     The gradient bitmap stays identical for every frame, so Chromium caches
+     the rasterized layer and just RE-COMPOSITES it at a new offset when
+     --mx/--my change. Re-centering the gradient (old form: `circle 240px
+     at var(--mx) var(--my)`) forces a full repaint of the 1920×1080+ overlay
+     every frame; mask-position is a composite-only op on the cached bitmap. */
   -webkit-mask-image: radial-gradient(
-    circle 240px at var(--mx) var(--my),
+    circle 240px at center,
     rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.6) 35%,
     rgba(0, 0, 0, 0) 100%
   );
   mask-image: radial-gradient(
-    circle 240px at var(--mx) var(--my),
+    circle 240px at center,
     rgba(0, 0, 0, 1) 0%,
     rgba(0, 0, 0, 0.6) 35%,
     rgba(0, 0, 0, 0) 100%
   );
+  -webkit-mask-size: 480px 480px;
+  mask-size: 480px 480px;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  /* Subtract 240px (half mask-size) so the gradient center lands AT the
+     cursor, matching the old `at var(--mx) var(--my)` semantics. The JS-side
+     handler still writes --mx/--my as cursor-relative px, so tests and the
+     rAF batching contract are unchanged. */
+  -webkit-mask-position: calc(var(--mx) - 240px) calc(var(--my) - 240px);
+  mask-position: calc(var(--mx) - 240px) calc(var(--my) - 240px);
+
+  /* Promote the overlay to its own compositor layer so per-frame mask shifts
+     stay isolated from the rest of the canvas (nodes, edges, dots). Without
+     this, every --mx/--my update invalidates the canvas paint tree, stretching
+     pointerover-bundled paint work into 30+ ms tasks. */
+  transform: translateZ(0);
+  will-change: mask-position, opacity;
+  /* `contain: strict` tells the browser this element's layout, style, and
+     paint cannot affect anything outside its box — so a mask shift here
+     doesn't propagate invalidations into sibling subtrees (the React Flow
+     pane is the next sibling and contains every node/edge). */
+  contain: strict;
 
   opacity: 0;
   /* Fade-in stays snappy (120ms, see [data-active='true'] below) so a fresh

@@ -29,16 +29,37 @@ export interface GlowOverlayTarget {
 export function createGlowHandlers(el: GlowOverlayTarget, opts: { idleMs?: number } = {}) {
   const idleMs = opts.idleMs ?? DEFAULT_IDLE_FADE_MS;
   let idleTimer: ReturnType<typeof setTimeout> | undefined;
+  // Native pointer streams can fire at 240+ Hz on modern trackpads. Each move
+  // mutates the overlay's `--mx` / `--my` CSS variables, which feed a 240px
+  // radial-gradient mask covering the entire canvas — every change forces a
+  // mask repaint. Coalescing to one DOM write per animation frame caps the
+  // repaint rate at the display's refresh rate (the maximum the user can see)
+  // and keeps the move handler off the critical pointer-dispatch path.
+  let pending: { clientX: number; clientY: number } | null = null;
+  let rafId: number | null = null;
+  const rafSupported = typeof requestAnimationFrame !== 'undefined';
   const clearIdle = () => {
     if (idleTimer !== undefined) {
       clearTimeout(idleTimer);
       idleTimer = undefined;
     }
   };
-  const onMove = (e: { clientX: number; clientY: number }) => {
+  const cancelPendingRaf = () => {
+    if (rafId !== null && typeof cancelAnimationFrame !== 'undefined') {
+      cancelAnimationFrame(rafId);
+    }
+    rafId = null;
+  };
+  const flush = () => {
+    rafId = null;
+    if (!pending) return;
+    const { clientX, clientY } = pending;
+    pending = null;
+    // Reading the rect inside the rAF callback aligns the (forced) layout
+    // read with the browser's layout phase instead of mid-event-dispatch.
     const rect = el.getBoundingClientRect();
-    el.style.setProperty('--mx', `${e.clientX - rect.left}px`);
-    el.style.setProperty('--my', `${e.clientY - rect.top}px`);
+    el.style.setProperty('--mx', `${clientX - rect.left}px`);
+    el.style.setProperty('--my', `${clientY - rect.top}px`);
     el.dataset.active = 'true';
     clearIdle();
     idleTimer = setTimeout(() => {
@@ -46,11 +67,28 @@ export function createGlowHandlers(el: GlowOverlayTarget, opts: { idleMs?: numbe
       idleTimer = undefined;
     }, idleMs);
   };
+  const onMove = (e: { clientX: number; clientY: number }) => {
+    pending = { clientX: e.clientX, clientY: e.clientY };
+    if (!rafSupported) {
+      // Test/non-DOM environments without rAF: flush synchronously.
+      flush();
+      return;
+    }
+    if (rafId !== null) return;
+    rafId = requestAnimationFrame(flush);
+  };
   const onLeave = () => {
+    cancelPendingRaf();
+    pending = null;
     clearIdle();
     el.dataset.active = 'false';
   };
-  return { onMove, onLeave, dispose: clearIdle };
+  const dispose = () => {
+    cancelPendingRaf();
+    pending = null;
+    clearIdle();
+  };
+  return { onMove, onLeave, dispose };
 }
 
 /**
@@ -83,8 +121,11 @@ export function GlowOverlay() {
     if (!pane) return;
 
     const { onMove, onLeave, dispose } = createGlowHandlers(el);
-    pane.addEventListener('mousemove', onMove);
-    pane.addEventListener('mouseleave', onLeave);
+    // Passive listener: the handler never calls preventDefault, and marking it
+    // passive lets the browser dispatch the event without first waiting on JS,
+    // shaving frames off the pointer-input latency.
+    pane.addEventListener('mousemove', onMove, { passive: true });
+    pane.addEventListener('mouseleave', onLeave, { passive: true });
     return () => {
       pane.removeEventListener('mousemove', onMove);
       pane.removeEventListener('mouseleave', onLeave);
