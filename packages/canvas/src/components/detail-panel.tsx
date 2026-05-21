@@ -262,7 +262,8 @@ export function DetailPanel({
               {inspectableNode.type === 'htmlNode' && flowId ? (
                 <HtmlNodeSection
                   adapter={adapter}
-                  htmlPath={`nodes/${inspectableNode.id}/view.html`}
+                  nodeId={inspectableNode.id}
+                  htmlPath="view.html"
                 />
               ) : null}
             </div>
@@ -525,16 +526,21 @@ export function TitleIconTrigger({
   );
 }
 
-// htmlNode detail section — surfaces the relative `data.htmlPath` and provides
+// htmlNode detail section — displays the node-relative html path (e.g.
+// `view.html`, matching the `file://view.html` ref in flow.json) and provides
 // Open-in-editor + Reveal-in-file-manager shellout buttons. Both route through
-// the host-supplied `adapter.openFile` / `adapter.revealFile`. When either
-// adapter method is undefined the corresponding button is hidden so embedders
-// without filesystem support don't render dead affordances.
+// the host-supplied `adapter.openFile` / `adapter.revealFile`. The studio's
+// file routes expect seeflow-root-relative paths, so the adapter calls reattach
+// the `nodes/<id>/` prefix internally. When either adapter method is undefined
+// the corresponding button is hidden so embedders without filesystem support
+// don't render dead affordances.
 export function HtmlNodeSection({
   adapter,
+  nodeId,
   htmlPath,
 }: {
   adapter: CanvasAdapter | null | undefined;
+  nodeId: string;
   htmlPath: string;
 }) {
   const [status, setStatus] = useState<{
@@ -544,14 +550,15 @@ export function HtmlNodeSection({
 
   const canOpen = typeof adapter?.openFile === 'function';
   const canReveal = typeof adapter?.revealFile === 'function';
+  const adapterPath = `nodes/${nodeId}/${htmlPath}`;
 
   const dispatch = async (action: 'open' | 'reveal') => {
     setStatus({ kind: 'pending' });
     try {
       if (action === 'open') {
-        await adapter?.openFile?.(htmlPath);
+        await adapter?.openFile?.(adapterPath);
       } else {
-        await adapter?.revealFile?.(htmlPath);
+        await adapter?.revealFile?.(adapterPath);
       }
       setStatus({ kind: 'idle' });
     } catch (err) {

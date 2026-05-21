@@ -4855,7 +4855,8 @@ function DetailPanel({
                   HtmlNodeSection,
                   {
                     adapter,
-                    htmlPath: `nodes/${inspectableNode.id}/view.html`
+                    nodeId: inspectableNode.id,
+                    htmlPath: "view.html"
                   }
                 ) : null
               ] })
@@ -5049,18 +5050,20 @@ function TitleIconTrigger({
 }
 function HtmlNodeSection({
   adapter,
+  nodeId,
   htmlPath
 }) {
   const [status, setStatus] = useState10({ kind: "idle" });
   const canOpen = typeof adapter?.openFile === "function";
   const canReveal = typeof adapter?.revealFile === "function";
+  const adapterPath = `nodes/${nodeId}/${htmlPath}`;
   const dispatch = async (action) => {
     setStatus({ kind: "pending" });
     try {
       if (action === "open") {
-        await adapter?.openFile?.(htmlPath);
+        await adapter?.openFile?.(adapterPath);
       } else {
-        await adapter?.revealFile?.(htmlPath);
+        await adapter?.revealFile?.(adapterPath);
       }
       setStatus({ kind: "idle" });
     } catch (err) {

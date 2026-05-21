@@ -1927,8 +1927,9 @@ declare function EditableField({ nodeId, value, placeholder, multiline, ariaLabe
     textClassName?: string;
     markdown?: boolean;
 }): react_jsx_runtime.JSX.Element;
-declare function HtmlNodeSection({ adapter, htmlPath, }: {
+declare function HtmlNodeSection({ adapter, nodeId, htmlPath, }: {
     adapter: CanvasAdapter | null | undefined;
+    nodeId: string;
     htmlPath: string;
 }): react_jsx_runtime.JSX.Element;
 /**

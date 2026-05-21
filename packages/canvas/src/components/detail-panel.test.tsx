@@ -23,8 +23,14 @@ const mockWindow = {
 };
 (globalThis as unknown as { window: typeof mockWindow }).window = mockWindow;
 
-const { DetailPanel, EditableField, TitleIconTrigger, StatusSection, formatRelativeTime } =
-  await import('./detail-panel.tsx');
+const {
+  DetailPanel,
+  EditableField,
+  HtmlNodeSection,
+  TitleIconTrigger,
+  StatusSection,
+  formatRelativeTime,
+} = await import('./detail-panel.tsx');
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
 // without a DOM, so we shim React's internal hook dispatcher and call the
@@ -593,6 +599,65 @@ describe('DetailPanel icon trigger', () => {
     expect(isElement(anchor)).toBe(true);
     if (!isElement(anchor)) return;
     expect(anchor.props['aria-label']).toBe('Change icon');
+  });
+});
+
+describe('HtmlNodeSection', () => {
+  it('displays the node-relative htmlPath (no nodes/<id>/ prefix)', () => {
+    const tree = renderWithHooks(() =>
+      HtmlNodeSection({
+        adapter: null,
+        nodeId: 'node-XwygzfKPZ5',
+        htmlPath: 'view.html',
+      }),
+    );
+    const pathEl = findByTestId(tree, 'detail-panel-html-path');
+    expect(pathEl).not.toBeNull();
+    expect(pathEl?.props.children).toBe('view.html');
+  });
+
+  it('reattaches the nodes/<id>/ prefix when invoking adapter.openFile', async () => {
+    const openCalls: string[] = [];
+    const adapter = {
+      openFile: async (p: string) => {
+        openCalls.push(p);
+      },
+    } as Partial<import('../adapter/types.ts').CanvasAdapter>;
+    const tree = renderWithHooks(() =>
+      HtmlNodeSection({
+        adapter: adapter as import('../adapter/types.ts').CanvasAdapter,
+        nodeId: 'node-XwygzfKPZ5',
+        htmlPath: 'view.html',
+      }),
+    );
+    const openBtn = findByTestId(tree, 'detail-panel-html-open');
+    expect(openBtn).not.toBeNull();
+    const onClick = openBtn?.props.onClick as () => void;
+    onClick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(openCalls).toEqual(['nodes/node-XwygzfKPZ5/view.html']);
+  });
+
+  it('reattaches the nodes/<id>/ prefix when invoking adapter.revealFile', async () => {
+    const revealCalls: string[] = [];
+    const adapter = {
+      revealFile: async (p: string) => {
+        revealCalls.push(p);
+      },
+    } as Partial<import('../adapter/types.ts').CanvasAdapter>;
+    const tree = renderWithHooks(() =>
+      HtmlNodeSection({
+        adapter: adapter as import('../adapter/types.ts').CanvasAdapter,
+        nodeId: 'node-XwygzfKPZ5',
+        htmlPath: 'view.html',
+      }),
+    );
+    const revealBtn = findByTestId(tree, 'detail-panel-html-reveal');
+    expect(revealBtn).not.toBeNull();
+    const onClick = revealBtn?.props.onClick as () => void;
+    onClick();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(revealCalls).toEqual(['nodes/node-XwygzfKPZ5/view.html']);
   });
 });
 
