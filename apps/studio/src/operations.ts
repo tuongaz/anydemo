@@ -658,13 +658,27 @@ export async function mutateMergedFlow<E extends { kind: string }>(
     return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
   }
 
-  const snap: FlowSnapshot = {
-    flow: finalParse.data as ResolvedFlow,
-    valid: true,
-    error: null,
-    filePath: flowPath,
-    parsedAt: Date.now(),
-  };
+  // Re-read through readMergedFlow so the snapshot we hand to notifyWritten
+  // carries file://-resolved content (detail.md, view.html, …). The in-memory
+  // `merged` tree above still holds raw `file://<name>` strings — broadcasting
+  // it would clobber the watcher's resolved seed and ship unresolved refs to
+  // every SSE subscriber until the next reparse.
+  const reread = readMergedFlow(flowPath);
+  const snap: FlowSnapshot = reread.valid
+    ? {
+        flow: reread.flow,
+        valid: true,
+        error: null,
+        filePath: flowPath,
+        parsedAt: Date.now(),
+      }
+    : {
+        flow: finalParse.data as ResolvedFlow,
+        valid: true,
+        error: null,
+        filePath: flowPath,
+        parsedAt: Date.now(),
+      };
   return { kind: 'ok', snap, flowContent, styleContent };
 }
 
