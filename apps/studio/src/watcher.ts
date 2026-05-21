@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { type FSWatcher, existsSync, readFileSync, watch } from 'node:fs';
+import { type FSWatcher, existsSync, readFileSync, statSync, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
 import type { EventBus } from './events.ts';
 import { resolveFileRefs } from './file-ref.ts';
@@ -256,6 +256,13 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
   const handles = new Map<string, WatchHandle>();
   const snapshots = new Map<string, FlowSnapshot>();
   /**
+   * Combined flow+style mtime witnessed during the most recent reparse, per
+   * flowId. Used by snapshot() to detect external writes (notably the
+   * in-process CLI) that the debounced fs watcher hasn't dispatched yet.
+   * Two files → larger of the two mtimes; missing style.json contributes 0.
+   */
+  const lastSeenMtimes = new Map<string, number>();
+  /**
    * Ring buffer of recent self-write content hashes per flow. The fs watcher
    * computes the same hash on its debounced callback and short-circuits when
    * it matches — that's how a server-initiated PATCH avoids re-broadcasting
@@ -379,6 +386,13 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     }
   };
 
+  const combinedMtimeMs = (filePath: string): number => {
+    const stylePath = join(dirname(filePath), 'style.json');
+    const flowMtime = existsSync(filePath) ? statSync(filePath).mtimeMs : 0;
+    const styleMtime = existsSync(stylePath) ? statSync(stylePath).mtimeMs : 0;
+    return Math.max(flowMtime, styleMtime);
+  };
+
   const reparse = (flowId: string): FlowSnapshot | null => {
     const entry = registry.getById(flowId);
     if (!entry) return null;
@@ -393,6 +407,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
       : { flow: previous?.flow ?? null, valid: false, error: result.error, filePath, parsedAt };
 
     snapshots.set(flowId, next);
+    lastSeenMtimes.set(flowId, combinedMtimeMs(filePath));
 
     // Reconcile the referenced-file watch set: imageNode.path from
     // flow + any file:// targets that resolved cleanly. Schema errors
@@ -481,7 +496,19 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
 
   return {
     snapshot(flowId) {
-      return snapshots.get(flowId) ?? null;
+      const current = snapshots.get(flowId) ?? null;
+      if (!current) return null;
+      // Stat-and-reparse guard: when an external process (notably the
+      // in-process CLI) rewrites flow.json or style.json, the fs.watch
+      // callback is debounced by ~100ms — long enough for a fast HTTP read
+      // to hit a stale snapshot. Catching it here closes the gap with one
+      // stat() per read.
+      const seen = lastSeenMtimes.get(flowId);
+      const now = combinedMtimeMs(current.filePath);
+      if (seen !== undefined && now > seen) {
+        return reparse(flowId) ?? current;
+      }
+      return current;
     },
     watch(flowId) {
       startWatch(flowId);
@@ -494,6 +521,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
       closeFileWatchers(h);
       handles.delete(flowId);
       snapshots.delete(flowId);
+      lastSeenMtimes.delete(flowId);
     },
     watchAll() {
       for (const entry of registry.list()) startWatch(entry.id);
@@ -506,11 +534,13 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
       }
       handles.clear();
       snapshots.clear();
+      lastSeenMtimes.clear();
       writtenHashes.clear();
     },
     reparse,
     notifyWritten(flowId, snap, flowContent, styleContent) {
       snapshots.set(flowId, snap);
+      lastSeenMtimes.set(flowId, combinedMtimeMs(snap.filePath));
       rememberWrittenHash(flowId, sha256Hex(combinedContent(flowContent, styleContent)));
       broadcastReload(flowId, snap);
     },

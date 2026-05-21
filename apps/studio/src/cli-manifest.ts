@@ -762,6 +762,9 @@ export function renderCommandList(): string {
     for (const e of entries) {
       const liveMarker = e.requiresStudio ? ' (requires running studio)' : '';
       lines.push(`  ${e.name} — ${e.description.split('\n')[0]}${liveMarker}`);
+      // Include the synopsis so flags (like `--foreground` on start) are
+      // discoverable from the top-level listing without a drill-in.
+      lines.push(`    ${e.synopsis}`);
     }
     lines.push('');
   }

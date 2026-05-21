@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
 import { seeflowHome } from './paths.ts';
@@ -70,12 +70,32 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     if (writtenHashes.length > OWN_WRITE_RING_SIZE) writtenHashes.shift();
   };
 
+  // Mtime of the last on-disk state we observed (load or persist). Used by
+  // refreshIfStale() to detect external writes (notably the in-process CLI
+  // mutating registry.json while the studio is running) without waiting for
+  // the debounced fs.watch callback.
+  let lastSeenMtimeMs = 0;
+
+  const statMtimeMs = (): number | null => {
+    try {
+      return statSync(path).mtimeMs;
+    } catch {
+      return null;
+    }
+  };
+
   const loadFromDisk = () => {
     entries.clear();
-    if (!existsSync(path)) return;
+    if (!existsSync(path)) {
+      lastSeenMtimeMs = 0;
+      return;
+    }
     try {
       const parsed = JSON.parse(readFileSync(path, 'utf8'));
-      if (!Array.isArray(parsed)) return;
+      if (!Array.isArray(parsed)) {
+        lastSeenMtimeMs = statMtimeMs() ?? 0;
+        return;
+      }
       for (const e of parsed) {
         if (
           e &&
@@ -96,18 +116,34 @@ export function createRegistry(options: { path?: string } = {}): Registry {
           entries.set(entry.id, entry);
         }
       }
+      lastSeenMtimeMs = statMtimeMs() ?? 0;
     } catch (err) {
       console.error(`[registry] failed to load ${path}, starting empty:`, err);
+      lastSeenMtimeMs = statMtimeMs() ?? 0;
     }
   };
 
   loadFromDisk();
+
+  // Cheap stat-and-reload guard for read paths. When another process (the
+  // in-process CLI) has written registry.json since our last load, the
+  // debounced fs.watch reload can lag the next HTTP read; this closes that
+  // gap with one stat() per request.
+  const refreshIfStale = () => {
+    const mtime = statMtimeMs();
+    if (mtime === null) {
+      if (lastSeenMtimeMs !== 0) loadFromDisk();
+      return;
+    }
+    if (mtime !== lastSeenMtimeMs) loadFromDisk();
+  };
 
   const persist = () => {
     mkdirSync(dirname(path), { recursive: true });
     const contents = JSON.stringify([...entries.values()], null, 2);
     rememberWrite(contents);
     writeFileAtomic(path, contents);
+    lastSeenMtimeMs = statMtimeMs() ?? lastSeenMtimeMs;
   };
 
   const findByRepoPath = (repoPath: string): FlowEntry | undefined => {
@@ -134,11 +170,26 @@ export function createRegistry(options: { path?: string } = {}): Registry {
 
   return {
     path,
-    list: () => [...entries.values()],
-    getById: (id) => entries.get(id),
-    getBySlug: (slug) => [...entries.values()].find((e) => e.slug === slug),
-    getByRepoPath: findByRepoPath,
-    getByRepoPathAndFlowPath: findByRepoPathAndFlowPath,
+    list: () => {
+      refreshIfStale();
+      return [...entries.values()];
+    },
+    getById: (id) => {
+      refreshIfStale();
+      return entries.get(id);
+    },
+    getBySlug: (slug) => {
+      refreshIfStale();
+      return [...entries.values()].find((e) => e.slug === slug);
+    },
+    getByRepoPath: (repoPath) => {
+      refreshIfStale();
+      return findByRepoPath(repoPath);
+    },
+    getByRepoPathAndFlowPath: (repoPath, flowPath) => {
+      refreshIfStale();
+      return findByRepoPathAndFlowPath(repoPath, flowPath);
+    },
     upsert(input) {
       const lastModified = input.lastModified ?? Date.now();
       const valid = input.valid ?? true;
