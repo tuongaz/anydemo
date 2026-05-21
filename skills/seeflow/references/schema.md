@@ -72,6 +72,18 @@ Hand-authored `file://<relative-path>` strings still work for forward-compat; pa
 
 Written by `seeflow flows:layout <flowId>` (ELK) and by user drags in the canvas. Positions + handles are derived geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges. The skill never writes this file.
 
+## Default node style
+
+Every `playNode`, `stateNode`, and `shapeNode` created by the skill carries:
+
+```json
+"borderSize": 1,
+"borderStyle": "solid",
+"borderColor": "default"
+```
+
+`iconNode` is unboxed (no border). User edits in the canvas override these.
+
 ## Node types
 
 ### `playNode`

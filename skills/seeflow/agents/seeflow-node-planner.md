@@ -63,7 +63,10 @@ the following shape — and nothing else outside the fence:
         "kind": "service",
         "icon": "server",
         "stateSource": { "kind": "request" },
-        "description": "Receives a cart, creates an order, kicks off the payment leg."
+        "description": "Receives a cart, creates an order, kicks off the payment leg.",
+        "borderSize": 1,
+        "borderStyle": "solid",
+        "borderColor": "default"
       }
     }
   ],
@@ -84,7 +87,7 @@ the following shape — and nothing else outside the fence:
 }
 ```
 
-**How the orchestrator uses this:** the `nodes` array is forwarded verbatim to `seeflow nodes:add-bulk <flowId>`, and `connectors` to `seeflow connectors:add-bulk <flowId>`. Every key the server's `ResolvedFlowSchema` rejects is rejected here too — so do NOT emit `position`, `playAction`, `statusAction`, or any visual field (border, color, width, …) at the node root. Phase 4 designers attach `playAction` / `statusAction` later via `nodes:patch`.
+**How the orchestrator uses this:** the `nodes` array is forwarded verbatim to `seeflow nodes:add-bulk <flowId>`, and `connectors` to `seeflow connectors:add-bulk <flowId>`. Every key the server's `ResolvedFlowSchema` rejects is rejected here too — so do NOT emit `position`, `playAction`, or `statusAction` at the node root. The **only** visual fields you emit are the three mandatory default-style fields (`borderSize`, `borderStyle`, `borderColor`) on every `playNode` / `stateNode` / `shapeNode` — see "Default node style" below. No other visual fields (`width`, `height`, `backgroundColor`, `textColor`, `cornerRadius`, `fontSize`) at this phase. Phase 4 designers attach `playAction` / `statusAction` later via `nodes:patch`.
 
 `rationales` is a planner-only sibling map keyed by node id. The orchestrator strips it before forwarding and surfaces each entry to the user during the Phase 3 review checkpoint.
 
@@ -192,6 +195,17 @@ Each node entry has:
   `workflow`→`git-branch`, `queue`→`list-ordered`, `topic`/`bus`→`radio-tower`,
   `db`→`database`, `store`→`archive`, `cache`→`zap`, `scheduler`→`clock`,
   `external-api`→`cloud`, `trigger`→`play`.
+
+### Default node style (mandatory)
+
+Every `playNode`, `stateNode`, and `shapeNode` entry MUST carry these three
+fields verbatim in `data`:
+
+```json
+"borderSize": 1,
+"borderStyle": "solid",
+"borderColor": "default"
+```
 
 ### Connector entries
 
@@ -412,12 +426,12 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "kind": "service", "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created." } },
-    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "kind": "bus",     "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers." } },
-    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives." } },
-    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped." } },
-    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "kind": "queue",   "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff." } },
-    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "kind": "db",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped." } }
+    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "kind": "service", "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created.", "borderSize": 1, "borderStyle": "solid", "borderColor": "default" } },
+    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "kind": "bus",     "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "borderSize": 1, "borderStyle": "solid", "borderColor": "default" } },
+    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "borderSize": 1, "borderStyle": "solid", "borderColor": "default" } },
+    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "borderSize": 1, "borderStyle": "solid", "borderColor": "default" } },
+    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "kind": "queue",   "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","borderSize": 1, "borderStyle": "solid", "borderColor": "default" } },
+    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "kind": "db",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "borderSize": 1, "borderStyle": "solid", "borderColor": "default" } }
   ],
   "connectors": [
     { "id": "c-order-server-event-bus",         "kind": "event",   "source": "order-server",     "target": "event-bus",        "eventName": "order.created", "label": "order.created" },
@@ -475,7 +489,9 @@ downstream entities.
   always wrong.
 - Cite an exception by number (`Exception 1/2/3`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
-- **Do not emit `position`, `playAction`, `statusAction`, or any visual
-  field** at the node root. Phase 4 attaches actions; Phase 3 `flows:layout`
-  attaches positions.
+- **Do not emit `position`, `playAction`, or `statusAction`** at the node
+  root. Phase 4 attaches actions; Phase 3 `flows:layout` attaches positions.
+- **Every emitted node carries the default style** (`borderSize: 1`,
+  `borderStyle: "solid"`, `borderColor: "default"`) — see "Default node
+  style" above. No other visual fields.
 - When in doubt: collapse, don't split.
