@@ -93,6 +93,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
       className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="icon-node"
+      data-node-type="iconNode"
       onDoubleClick={handleDoubleClick}
     >
       <ResizeControls

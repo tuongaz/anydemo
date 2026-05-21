@@ -511,6 +511,7 @@ function ShapeNodeImpl({ id, data, selected, isConnectable }: NodeProps<ShapeNod
       )}
       style={style}
       data-testid="shape-node"
+      data-node-type="shapeNode"
       data-shape={shape}
       onDoubleClick={handleWrapperDoubleClick}
     >

@@ -4125,6 +4125,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               // outline reads a sensible value before the first onMove fires.
               const wrapper = wrapperRef.current;
               if (wrapper) wrapper.style.setProperty('--rf-zoom', String(instance.getZoom()));
+              // US-011: signal that React Flow has mounted and laid out so
+              // Playwright / a11y tooling can wait on a stable readiness gate
+              // before interacting with the canvas. Set imperatively on the
+              // canvas root so test selectors stay decoupled from internal
+              // state ordering.
+              if (wrapper) wrapper.setAttribute('data-canvas-ready', 'true');
               // US-008: mount-fit. Reuses the same guard the late-nodes useEffect
               // checks (`didMountFitRef`) so whichever path fires first wins and
               // the other no-ops — preventing double-fit when nodes are already

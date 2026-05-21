@@ -289,6 +289,24 @@ export function EditableEdge({
     return registerEditHandle(id, () => setEditing(true));
   }, [id, registerEditHandle, editable]);
 
+  // US-011: surface the connector kind on the React Flow edge wrapper as a
+  // `data-edge-kind` attribute so Playwright (and accessibility tooling) can
+  // select edges by semantic kind without DOM-walking. The wrapper is owned by
+  // xyflow's sibling render path, so the attribute is set imperatively —
+  // mirroring the data-handoff pattern above.
+  const edgeKind = typeof data?.kind === 'string' ? data.kind : undefined;
+  useEffect(() => {
+    if (!edgeKind) return;
+    const wrapper = document.querySelector(
+      `.react-flow__edge[data-id="${CSS.escape(id)}"]`,
+    ) as SVGGElement | null;
+    if (!wrapper) return;
+    wrapper.setAttribute('data-edge-kind', edgeKind);
+    return () => {
+      wrapper.removeAttribute('data-edge-kind');
+    };
+  }, [id, edgeKind]);
+
   // US-024: only render the visible endpoint dots when this edge is
   // reconnectable (sole-selected). The dots are purely visual — `pointer-
   // events: none` lets clicks pass through to React Flow's native
