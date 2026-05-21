@@ -929,8 +929,9 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     return { app, bus, registry, spawnerRecord: record, runnerCalls: calls };
   };
 
-  // Flow with a play.ts script staged inside <repo>/.seeflow/scripts/ so the
-  // realpath check in proxy.ts:resolveScript passes.
+  // Flow with a play.ts script staged inside the per-node folder
+  // (<repo>/.seeflow/nodes/api-checkout/scripts/) so the realpath check in
+  // proxy.ts:resolveScript passes.
   const demoWithPlayScript = (scriptPath = 'scripts/play.ts') => ({
     ...VALID_DEMO,
     nodes: [
@@ -946,8 +947,9 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
 
   const tmpRepoWithPlayScript = (scriptName = 'play.ts') => {
     const repoPath = tmpRepoWithDemo(demoWithPlayScript(`scripts/${scriptName}`));
-    mkdirSync(join(repoPath, '.seeflow', 'scripts'), { recursive: true });
-    writeFileSync(join(repoPath, '.seeflow', 'scripts', scriptName), '// stub\n');
+    const nodeScripts = join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'scripts');
+    mkdirSync(nodeScripts, { recursive: true });
+    writeFileSync(join(nodeScripts, scriptName), '// stub\n');
     return repoPath;
   };
 

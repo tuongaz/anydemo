@@ -71,13 +71,13 @@ const ScriptActionSchema = z.object({
   interpreter: z.string().min(1),
   args: z.array(z.string()).optional(),
   scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under .seeflow/ (no absolute / traversal)',
+    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
   }),
   input: z.unknown().optional(),
   timeoutMs: z.number().int().positive().max(600_000).optional(),
 });
 
-const PlayActionSchema = ScriptActionSchema;
+export const PlayActionSchema = ScriptActionSchema;
 
 // US-008: resetAction is a one-shot script action — same shape as a play
 // script (interpreter + args + scriptPath + optional input/timeoutMs) but
@@ -89,12 +89,12 @@ const ResetActionSchema = ScriptActionSchema;
 // Long-running status script. Same spawn shape as ScriptAction (interpreter +
 // args + scriptPath) but no stdin payload and a much longer max lifetime since
 // these processes tick continuously and stream StatusReports to stdout.
-const StatusActionSchema = z.object({
+export const StatusActionSchema = z.object({
   kind: z.literal('script'),
   interpreter: z.string().min(1),
   args: z.array(z.string()).optional(),
   scriptPath: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'scriptPath must be a relative path under .seeflow/ (no absolute / traversal)',
+    message: 'scriptPath must be a relative path under the node folder (no absolute / traversal)',
   }),
   maxLifetimeMs: z.number().int().positive().max(3_600_000).optional(),
 });
@@ -110,7 +110,7 @@ export const StatusReportSchema = z.object({
   ts: z.number().int().positive().optional(),
 });
 
-const StateSourceSchema = z.discriminatedUnion('kind', [
+export const StateSourceSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('request') }),
   z.object({ kind: z.literal('event') }),
 ]);

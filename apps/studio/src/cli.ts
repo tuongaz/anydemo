@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { drainStdin, loadBody, printError, printOk } from './cli-helpers.ts';
 import { createEventBus } from './events.ts';
 import { seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
@@ -40,6 +41,67 @@ const flagValue = (name: string): string | undefined => {
 
 const hasFlag = (name: string): boolean => argv.includes(`--${name}`);
 
+const requireArg = (idx: number, name: string): string => {
+  const v = argv[idx];
+  if (!v || v.startsWith('--')) {
+    printError(`Missing required positional argument: ${name}`);
+  }
+  return v as string;
+};
+
+async function studioUrlOrDie(noStart: boolean): Promise<{ url: string; port: number }> {
+  const config = readConfig();
+  const overrideUrl = process.env.SEEFLOW_STUDIO_URL?.replace(/\/+$/, '');
+  const url = overrideUrl ?? studioUrl(config);
+  await ensureStudioRunning(url, config.port, noStart);
+  return { url, port: config.port };
+}
+
+async function bodyFromFlags(): Promise<unknown> {
+  return loadBody(
+    { json: flagValue('json'), file: flagValue('file'), stdin: hasFlag('stdin') },
+    drainStdin,
+  );
+}
+
+async function postJson(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function patchJson(url: string, body: unknown): Promise<Response> {
+  return fetch(url, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+}
+
+async function deleteRequest(url: string): Promise<Response> {
+  return fetch(url, { method: 'DELETE' });
+}
+
+async function handleResponse(res: Response): Promise<unknown> {
+  const text = await res.text();
+  let parsed: unknown = text;
+  try {
+    parsed = JSON.parse(text);
+  } catch {
+    /* keep raw text */
+  }
+  if (!res.ok) {
+    const detail =
+      typeof parsed === 'object' && parsed !== null
+        ? JSON.stringify(parsed)
+        : String(parsed).slice(0, 500);
+    printError(`Studio returned ${res.status}: ${detail}`);
+  }
+  return parsed;
+}
+
 const DEBUG = hasFlag('debug') || process.env.SEEFLOW_DEBUG === '1';
 const dbg = (msg: string) => {
   if (DEBUG) console.error(`[debug] ${msg}`);
@@ -58,9 +120,44 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runStop();
 } else if (sub === 'register') {
   await runRegister();
-} else if (['unregister', 'list'].includes(sub)) {
-  console.log(`seeflow ${sub}: not implemented (M1.B)`);
-  process.exit(0);
+} else if (sub === 'flows:register') {
+  await runRegister();
+} else if (sub === 'projects:create') {
+  await runProjectsCreate();
+} else if (sub === 'flows:list') {
+  await runFlowsList();
+} else if (sub === 'flows:get') {
+  await runFlowsGet();
+} else if (sub === 'flows:delete') {
+  await runFlowsDelete();
+} else if (sub === 'flows:layout') {
+  await runFlowsLayout();
+} else if (sub === 'flows:play') {
+  await runFlowsPlay();
+} else if (sub === 'nodes:add') {
+  await runNodesAdd();
+} else if (sub === 'nodes:add-bulk') {
+  await runNodesAddBulk();
+} else if (sub === 'nodes:patch') {
+  await runNodesPatch();
+} else if (sub === 'nodes:move') {
+  await runNodesMove();
+} else if (sub === 'nodes:reorder') {
+  await runNodesReorder();
+} else if (sub === 'nodes:delete') {
+  await runNodesDelete();
+} else if (sub === 'connectors:add') {
+  await runConnectorsAdd();
+} else if (sub === 'connectors:add-bulk') {
+  await runConnectorsAddBulk();
+} else if (sub === 'connectors:patch') {
+  await runConnectorsPatch();
+} else if (sub === 'connectors:delete') {
+  await runConnectorsDelete();
+} else if (sub === 'validate') {
+  await runValidate();
+} else if (sub === 'e2e') {
+  await runE2e();
 } else {
   console.error(`Unknown subcommand: ${sub}`);
   printHelp();
@@ -76,32 +173,58 @@ Usage:
   npx -y @tuongaz/seeflow@latest [command] [options]
 
 Commands:
-  start             Start the SeeFlow Studio server (default port 4321) — default when no command is given
-  stop              Stop a background studio instance
-  register          Register a demo repo with the running studio
-  version           Print the CLI version
-  help              Show this help message
+  start                Start the SeeFlow Studio server (default port 4321) — default when no command is given
+  stop                 Stop a background studio instance
+  register             Register a demo repo with the running studio (alias of flows:register)
+  flows:register       Register a demo repo with the running studio
+  projects:create      Create a new project (--name <name>)
+  flows:list           List registered flows
+  flows:get <id>       Get flow details
+  flows:delete <id>    Unregister a flow
+  flows:layout <id>    POST a layout payload (--json/--file/--stdin)
+  flows:play <id> <n>  Trigger a play on node <n>
+  nodes:add <id>       Add a node (--json/--file/--stdin)
+  nodes:add-bulk <id>  Add many nodes (--json/--file/--stdin)
+  nodes:patch <id> <n> Patch a node (--json/--file/--stdin)
+  nodes:move <id> <n>  Move a node (--x N --y N)
+  nodes:reorder <id> <n> Reorder a node (--op forward|backward|toFront|toBack|toIndex [--index N])
+  nodes:delete <id> <n> Delete a node
+  connectors:add <id>  Add a connector (--json/--file/--stdin)
+  connectors:add-bulk <id>  Add many connectors (--json/--file/--stdin)
+  connectors:patch <id> <connId>  Patch a connector (--json/--file/--stdin)
+  connectors:delete <id> <connId> Delete a connector
+  validate             Schema-validate a flow.json (--file <file> [--style <file>])
+  e2e <id>             End-to-end validate a registered flow (--skip-nodes a,b)
+  version              Print the CLI version
+  help                 Show this help message
 
 Global options:
-  --version, -v     Print the CLI version and exit
+  --version, -v        Print the CLI version and exit
+  --no-start           Fail if studio is not already running
+
+Body source flags (where applicable):
+  --json '<JSON>'      Inline JSON body
+  --file <path>        Read JSON body from file
+  --stdin              Read JSON body from stdin
 
 Options (start):
-  --port <n>        Listen on port n (default: 4321)
-  --foreground      Run attached to the terminal (default: background)
-  --daemon          Deprecated alias — background is already the default
-  --debug           Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log
+  --port <n>           Listen on port n (default: 4321)
+  --foreground         Run attached to the terminal (default: background)
+  --daemon             Deprecated alias — background is already the default
+  --debug              Verbose logs + pipe daemon output to ~/.seeflow/seeflow.log
 
 Options (register):
-  --path <dir>      Path to repo root (default: current directory)
-  --flow <file>     Path to flow JSON, relative to repo root
-                    (default: .seeflow/flow.json)
-  --no-start        Fail if studio is not already running
+  --path <dir>         Path to repo root (default: current directory)
+  --flow <file>        Path to flow JSON, relative to repo root
+                       (default: .seeflow/flow.json)
 
 Examples:
   npx -y @tuongaz/seeflow@latest
   npx -y @tuongaz/seeflow@latest --port 8080
   npx -y @tuongaz/seeflow@latest start --foreground
   npx -y @tuongaz/seeflow@latest register --path ./my-app
+  npx -y @tuongaz/seeflow@latest projects:create --name "Checkout"
+  npx -y @tuongaz/seeflow@latest flows:list
   npx -y @tuongaz/seeflow@latest stop
 `.trim(),
   );
@@ -447,4 +570,235 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<boolean> {
     await Bun.sleep(HEALTH_POLL_INTERVAL_MS);
   }
   return false;
+}
+
+// ---- HTTP-passthrough subcommands ----------------------------------------
+
+async function runProjectsCreate() {
+  const name = flagValue('name');
+  if (!name) printError('Missing required flag: --name');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/projects`, { name });
+  const body = (await handleResponse(res)) as object;
+  printOk(body);
+}
+
+async function runFlowsList() {
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(`${url}/api/flows`);
+  const body = (await handleResponse(res)) as unknown[];
+  printOk({ flows: body });
+}
+
+async function runFlowsGet() {
+  const flowId = requireArg(1, '<flowId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(`${url}/api/flows/${encodeURIComponent(flowId)}`);
+  const body = (await handleResponse(res)) as object;
+  printOk(body);
+}
+
+async function runFlowsDelete() {
+  const flowId = requireArg(1, '<flowId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await deleteRequest(`${url}/api/flows/${encodeURIComponent(flowId)}`);
+  const body = (await handleResponse(res)) as object;
+  printOk(body);
+}
+
+async function runFlowsLayout() {
+  const flowId = requireArg(1, '<flowId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/layout`, body);
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runFlowsPlay() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/play/${encodeURIComponent(nodeId)}`,
+    {},
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesAdd() {
+  const flowId = requireArg(1, '<flowId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/nodes`, body);
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesAddBulk() {
+  const flowId = requireArg(1, '<flowId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/nodes/bulk`, body);
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesPatch() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await patchJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
+    body,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesMove() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const xRaw = flagValue('x');
+  const yRaw = flagValue('y');
+  if (xRaw === undefined || yRaw === undefined) {
+    printError('nodes:move requires --x <n> --y <n>');
+  }
+  const x = Number(xRaw);
+  const y = Number(yRaw);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    printError('--x and --y must be finite numbers');
+  }
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await patchJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}/position`,
+    { x, y },
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesReorder() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const op = flagValue('op');
+  if (!op) printError('nodes:reorder requires --op forward|backward|toFront|toBack|toIndex');
+  let body: Record<string, unknown> = { op };
+  if (op === 'toIndex') {
+    const idxRaw = flagValue('index');
+    if (idxRaw === undefined) printError('nodes:reorder --op toIndex requires --index <n>');
+    const index = Number(idxRaw);
+    if (!Number.isInteger(index) || index < 0) {
+      printError('--index must be a non-negative integer');
+    }
+    body = { op, index };
+  }
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await patchJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}/order`,
+    body,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runNodesDelete() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await deleteRequest(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/nodes/${encodeURIComponent(nodeId)}`,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runConnectorsAdd() {
+  const flowId = requireArg(1, '<flowId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/flows/${encodeURIComponent(flowId)}/connectors`, body);
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runConnectorsAddBulk() {
+  const flowId = requireArg(1, '<flowId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/bulk`,
+    body,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runConnectorsPatch() {
+  const flowId = requireArg(1, '<flowId>');
+  const connId = requireArg(2, '<connectorId>');
+  const body = await bodyFromFlags();
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await patchJson(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/${encodeURIComponent(connId)}`,
+    body,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runConnectorsDelete() {
+  const flowId = requireArg(1, '<flowId>');
+  const connId = requireArg(2, '<connectorId>');
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await deleteRequest(
+    `${url}/api/flows/${encodeURIComponent(flowId)}/connectors/${encodeURIComponent(connId)}`,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runValidate() {
+  const file = flagValue('file');
+  const styleFile = flagValue('style');
+  if (!file) printError('Missing required flag: --file <flow.json>');
+  let flow: unknown;
+  try {
+    flow = JSON.parse(readFileSync(file as string, 'utf8'));
+  } catch (err) {
+    printError(`Failed to read ${file}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  let style: unknown;
+  if (styleFile) {
+    try {
+      style = JSON.parse(readFileSync(styleFile, 'utf8'));
+    } catch (err) {
+      printError(
+        `Failed to read ${styleFile}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+  }
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(`${url}/api/validate`, { flow, style });
+  const body = (await handleResponse(res)) as { ok?: boolean; issues?: unknown[] };
+  if (body.ok === false) {
+    printError(`Schema validation failed: ${JSON.stringify(body.issues ?? [])}`);
+  }
+  printOk(body);
+}
+
+async function runE2e() {
+  const flowId = requireArg(1, '<flowId>');
+  const skipNodesRaw = flagValue('skip-nodes');
+  const skipNodes = skipNodesRaw ? skipNodesRaw.split(',').filter(Boolean) : [];
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const { validateEndToEnd } = await import('./cli-e2e.ts');
+  const report = await validateEndToEnd({ flowId, url, skipNodes });
+  if (!report.ok) {
+    process.stderr.write(`${JSON.stringify(report)}\n`);
+    process.exit(1);
+  }
+  printOk(report);
 }

@@ -93,12 +93,12 @@ const tmpDirs: string[] = [];
 function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptName?: string }) {
   const cwd = mkdtempSync(join(tmpdir(), 'seeflow-status-'));
   tmpDirs.push(cwd);
-  mkdirSync(join(cwd, '.seeflow', 'scripts'), { recursive: true });
   const statusScriptName = opts.statusScriptName ?? 'status.ts';
-  writeFileSync(join(cwd, '.seeflow', 'scripts', statusScriptName), '// stub for tests');
-  writeFileSync(join(cwd, '.seeflow', 'scripts', 'play.ts'), '// stub for tests');
-
   const nodeId = opts.nodeId ?? 'status-node';
+  const nodeScripts = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  mkdirSync(nodeScripts, { recursive: true });
+  writeFileSync(join(nodeScripts, statusScriptName), '// stub for tests');
+  writeFileSync(join(nodeScripts, 'play.ts'), '// stub for tests');
   const demo = {
     version: 2,
     name: 'Test demo',
@@ -321,8 +321,8 @@ describe('createStatusRunner', () => {
   it('enforces maxLifetimeMs: kills process and emits final error event', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'seeflow-status-'));
     tmpDirs.push(cwd);
-    mkdirSync(join(cwd, '.seeflow', 'scripts'), { recursive: true });
-    writeFileSync(join(cwd, '.seeflow', 'scripts', 'status.ts'), '// stub');
+    mkdirSync(join(cwd, '.seeflow', 'nodes', 'n1', 'scripts'), { recursive: true });
+    writeFileSync(join(cwd, '.seeflow', 'nodes', 'n1', 'scripts', 'status.ts'), '// stub');
     const demo = {
       version: 2,
       name: 'Lifetime test',
@@ -459,6 +459,39 @@ describe('createStatusRunner', () => {
     await runner.restart('demoA');
     expect(spawns[0]?.killCalls).toContain('SIGTERM');
     expect(spawns).toHaveLength(1); // no new spawn since no status nodes
+  });
+
+  it('status-runner anchors scriptPath at .seeflow/nodes/<nodeId>/', async () => {
+    const { entry, nodeId, cwd } = makeProject({ hasStatus: true, nodeId: 'checkout-api' });
+    const bus = createEventBus();
+    const captured = captureEvents(bus, 'demoA');
+    const { spawner, spawns } = makeFakeSpawner(() => ({
+      stdout: '',
+      neverExit: true,
+      killExitsOn: ['SIGTERM'],
+    }));
+    const runner = createStatusRunner({
+      registry: makeFakeRegistry([entry]),
+      events: bus,
+      spawner,
+    });
+
+    await runner.restart('demoA');
+
+    // Spawn must have happened (no SCRIPT_PATH_ESCAPE), and the absolute
+    // script path must be rooted at the per-node folder.
+    expect(spawns).toHaveLength(1);
+    const absPath = spawns[0]?.options.cmd.at(-1) ?? '';
+    expect(absPath).toContain(`/.seeflow/nodes/${nodeId}/scripts/`);
+    // No error broadcast.
+    const errors = captured.filter(
+      (e) => e.type === 'node:status' && (e.payload as { state?: string }).state === 'error',
+    );
+    expect(errors).toHaveLength(0);
+
+    await runner.stopAll();
+    // touch cwd to satisfy unused checker
+    expect(cwd).toBe(entry.repoPath);
   });
 
   it('sets SEEFLOW_* env vars and assembles cmd correctly per spawn', async () => {

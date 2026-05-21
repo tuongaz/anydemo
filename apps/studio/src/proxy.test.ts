@@ -114,6 +114,28 @@ function makeProjectWithScript(scriptName = 'play.ts'): { cwd: string; scriptPat
   return { cwd, scriptPath: `scripts/${scriptName}` };
 }
 
+// Per-node anchor: writes the script under `.seeflow/nodes/<nodeId>/scripts/`
+// so it matches the new runPlay resolver. Reset tests continue to use the
+// legacy anchor (`.seeflow/scripts/`) via makeProjectWithScript.
+function makeProjectWithNodeScript(
+  nodeId: string,
+  scriptName = 'play.ts',
+): { cwd: string; scriptPath: string } {
+  const cwd = mkdtempSync(join(tmpdir(), 'seeflow-proxy-'));
+  tmpDirs.push(cwd);
+  const dir = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, scriptName), '// stub for tests');
+  return { cwd, scriptPath: `scripts/${scriptName}` };
+}
+
+// Drop the script into an additional node folder inside an existing cwd.
+function addNodeScript(cwd: string, nodeId: string, scriptName = 'play.ts'): void {
+  const dir = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, scriptName), '// stub for tests');
+}
+
 afterEach(() => {
   while (tmpDirs.length > 0) {
     const d = tmpDirs.pop();
@@ -131,7 +153,7 @@ function captureEvents(bus: ReturnType<typeof createEventBus>, flowId: string): 
 
 describe('runPlay (script spawner)', () => {
   it('returns parsed JSON body when stdout is valid JSON and exit is 0', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('node1');
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
     const { spawner } = makeFakeSpawner({ stdout: '{"ok":true,"n":42}\n' });
@@ -160,7 +182,7 @@ describe('runPlay (script spawner)', () => {
   });
 
   it('returns raw string body when stdout is not valid JSON', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     const { spawner } = makeFakeSpawner({ stdout: 'hello world (not json)\n' });
@@ -179,7 +201,7 @@ describe('runPlay (script spawner)', () => {
   });
 
   it('on exit code !== 0, surfaces the last non-empty stderr line as the error', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
     const stderr = 'warming up\n\nerror: ENOENT something\n';
@@ -205,7 +227,7 @@ describe('runPlay (script spawner)', () => {
   });
 
   it('on timeout, escalates SIGTERM → SIGKILL and reports the timeout error', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
     // Process ignores SIGTERM, only dies on SIGKILL.
@@ -239,7 +261,7 @@ describe('runPlay (script spawner)', () => {
   }, 10_000);
 
   it('writes JSON.stringify(input) to stdin and closes it', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     const { spawner, record } = makeFakeSpawner({ stdout: '{"ok":true}' });
@@ -264,7 +286,7 @@ describe('runPlay (script spawner)', () => {
   });
 
   it('spawns with stdin: ignore when action.input is undefined', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     const { spawner, record } = makeFakeSpawner({ stdout: '{}' });
@@ -282,7 +304,7 @@ describe('runPlay (script spawner)', () => {
   });
 
   it('sets SEEFLOW_* env vars and assembles cmd as [interpreter, ...args, absScriptPath]', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('node-x');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     const { spawner, record } = makeFakeSpawner({ stdout: '{}' });
@@ -319,10 +341,10 @@ describe('runPlay (script spawner)', () => {
     tmpDirs.push(cwd);
     const outside = mkdtempSync(join(tmpdir(), 'seeflow-proxy-out-'));
     tmpDirs.push(outside);
-    mkdirSync(join(cwd, '.seeflow'), { recursive: true });
+    mkdirSync(join(cwd, '.seeflow', 'nodes', 'n1'), { recursive: true });
     writeFileSync(join(outside, 'evil.ts'), '// outside');
-    // .seeflow/escape.ts is a symlink pointing outside the project root.
-    symlinkSync(join(outside, 'evil.ts'), join(cwd, '.seeflow', 'escape.ts'));
+    // nodes/n1/escape.ts is a symlink pointing outside the per-node folder.
+    symlinkSync(join(outside, 'evil.ts'), join(cwd, '.seeflow', 'nodes', 'n1', 'escape.ts'));
 
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
@@ -346,6 +368,37 @@ describe('runPlay (script spawner)', () => {
       nodeId: 'n1',
       message: 'scriptPath escapes project root',
     });
+  });
+
+  it('resolves scriptPath relative to .seeflow/nodes/<nodeId>/', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'seeflow-proxy-anchor-'));
+    tmpDirs.push(cwd);
+    const nodeDir = join(cwd, '.seeflow', 'nodes', 'checkout-api', 'scripts');
+    mkdirSync(nodeDir, { recursive: true });
+    writeFileSync(
+      join(nodeDir, 'play.ts'),
+      '#!/usr/bin/env bun\nconsole.log(JSON.stringify({ ok: true }));\n',
+    );
+
+    const bus = createEventBus();
+    const { spawner } = makeFakeSpawner({ stdout: '{"ok":true}' });
+
+    const result = await runPlay({
+      events: bus,
+      flowId: 'flow-1',
+      nodeId: 'checkout-api',
+      cwd,
+      action: {
+        kind: 'script',
+        interpreter: 'bun',
+        scriptPath: 'scripts/play.ts',
+      },
+      spawner,
+    });
+
+    expect(result.error).toBeUndefined();
+    expect(result.status).toBe(200);
+    expect(result.body).toEqual({ ok: true });
   });
 });
 
@@ -411,7 +464,8 @@ function makeMultiFakeSpawner(configFor: (i: number) => PerSpawnConfig): {
 
 describe('stopAllPlays (US-008)', () => {
   it('kills every live handle for the flowId via SIGTERM then awaits exit', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
+    addNodeScript(cwd, 'n2');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     // Two plays that never exit on their own — only SIGTERM/SIGKILL ends them.
@@ -447,7 +501,7 @@ describe('stopAllPlays (US-008)', () => {
   });
 
   it('escalates to SIGKILL when SIGTERM is ignored beyond the grace period', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     // Ignores SIGTERM, only dies on SIGKILL.
@@ -478,7 +532,7 @@ describe('stopAllPlays (US-008)', () => {
   });
 
   it('isolates per flowId — stop on demo A does not touch demo B', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     captureEvents(bus, 'demoB');
@@ -513,7 +567,7 @@ describe('stopAllPlays (US-008)', () => {
   });
 
   it('registers and unregisters live handles around runPlay lifecycle', async () => {
-    const { cwd, scriptPath } = makeProjectWithScript();
+    const { cwd, scriptPath } = makeProjectWithNodeScript('n1');
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
     // First spawn exits naturally; stopAllPlays should be a no-op after.
