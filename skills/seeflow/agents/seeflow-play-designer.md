@@ -40,12 +40,12 @@ The launching prompt will give you:
    existing `flow.json`. Use it to reuse existing `scriptPath`s when an
    entity persists across the edit.
 4. **(optional) `techRefs`** — paths to per-tech reference files
-   resolved from `wikiUpdates.techStack`. Each ref's **Play (trigger
+   resolved from `learnUpdates.techStack`. Each ref's **Play (trigger
    locally)** section is the canonical recipe for that tech — use it
    as the script's skeleton (which client to use, which env vars,
    which endpoint).
 5. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<project>/.seeflow/WIKI.md` `## Tech stack
+   overrides from `<project>/.seeflow/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.helpers` names a publisher / uploader
    / producer the project already ships, the script imports and calls

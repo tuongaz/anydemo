@@ -3,18 +3,18 @@
 Per-tech reference cards covering **how to use this tech locally from Play
 and Status node scripts**. Refs are general guidance only — the project's
 own helpers, fixtures, and conventions (captured in
-`<project>/.seeflow/WIKI.md` under `## Tech stack adaptations`) always win.
+`<project>/.seeflow/LEARN.md` under `## Tech stack adaptations`) always win.
 
 ## How the catalog is used
 
 1. **Discoverer** (Phase 1) reads this README, runs the signals in the
    table below against the repo, and emits matching `techId`s in
-   `wikiUpdates.techStack`. For each detected `techId`, it also searches
+   `learnUpdates.techStack`. For each detected `techId`, it also searches
    the repo for project-specific helpers / wrappers / fixtures /
-   conventions and emits them under `wikiUpdates.techAdaptations.<techId>`.
+   conventions and emits them under `learnUpdates.techAdaptations.<techId>`.
 2. **Orchestrator** maps each `techId` to `references/tech/<techId>.md`
    and forwards the file paths (plus the matching `techAdaptations`
-   entries from WIKI.md) into the launch prompts of:
+   entries from LEARN.md) into the launch prompts of:
    - `seeflow-node-planner` (Phase 2) — for node modelling guidance.
    - `seeflow-play-designer` (Phase 4) — for the canonical local trigger
      recipe.
@@ -32,7 +32,7 @@ Stable `techId` = the ref's filename stem (e.g. `google-pubsub`,
 ## Signal → ref lookup
 
 Run each signal against the repo (`Glob`/`Grep`/`Read`). When a signal
-hits, emit the corresponding `techId` in `wikiUpdates.techStack`.
+hits, emit the corresponding `techId` in `learnUpdates.techStack`.
 
 ### Local infra & emulators
 
@@ -100,7 +100,7 @@ hits, emit the corresponding `techId` in `wikiUpdates.techStack`.
 Every per-tech ref follows `_template.md` exactly:
 
 1. Frontmatter (`techId`, `category`).
-2. "General guidance only" banner pointing to WIKI.md adaptations.
+2. "General guidance only" banner pointing to LEARN.md adaptations.
 3. **Node modelling** — guidance for `seeflow-node-planner`.
 4. **Play (trigger locally)** — guidance + 1 short template for
    `seeflow-play-designer`.

@@ -11,7 +11,7 @@ Consult registered SeeFlow flows as architectural ground truth. Read-only counte
 
 - **Editing flows** → use `/seeflow` or the canvas.
 - **Creating flows** → use `/seeflow`.
-- **Reading `.seeflow/WIKI.md`** → use `Read` directly (that file is `/seeflow`'s territory).
+- **Reading `.seeflow/LEARN.md`** → use `Read` directly (that file is `/seeflow`'s territory).
 - **Mutating anything** — this skill is read-only.
 
 ## Discover the CLI

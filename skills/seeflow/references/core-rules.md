@@ -17,7 +17,7 @@ If a required service is not running, **stop and ask the user**. A flow with one
 
 Before writing a play script that INSERTs into a DB, publishes to a queue, or writes to a store, check whether the system already has a natural data-entry path. Direct inserts bypass validation and the code paths the flow is meant to show.
 
-Check these patterns first (ask the system-analyzer — `dataEntryPaths` in its `wikiUpdates`):
+Check these patterns first (ask the system-analyzer — `dataEntryPaths` in its `learnUpdates`):
 
 | Pattern | What to look for | Use instead |
 |---|---|---|

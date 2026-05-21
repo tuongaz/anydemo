@@ -34,12 +34,12 @@ The launching prompt will give you:
    that survive the edit.
 3. **(optional) `techRefs`** — paths to per-tech reference files
    (e.g. `references/tech/google-pubsub.md`, `references/tech/postgres.md`)
-   resolved from `wikiUpdates.techStack`. Each ref's **Node modelling**
+   resolved from `learnUpdates.techStack`. Each ref's **Node modelling**
    section is the canonical guidance for that tech (one node per
    topic, one node per bucket, etc.) and supersedes the generic
    abstraction rules below for matched resources.
 4. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<project>/.seeflow/WIKI.md` `## Tech stack
+   overrides from `<project>/.seeflow/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.conventions` says the project models
    one bucket per tenant, follow that — not the ref's generic "one

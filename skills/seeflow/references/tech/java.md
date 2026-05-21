@@ -5,7 +5,7 @@ category: language
 
 # Java / Kotlin
 
-> **General guidance only.** Check `<project>/.seeflow/WIKI.md`
+> **General guidance only.** Check `<project>/.seeflow/LEARN.md`
 > `## Tech stack adaptations` first — project-specific helpers,
 > fixtures, and conventions always win over the templates below.
 > Whatever you learn this run, append back into that section so the
@@ -82,7 +82,7 @@ done
 - `mvn` / `gradle` calls inherit massive classpath resolution; cache by
   invoking the wrapper once and looping inside bash, not the other way.
 - `jq` is a soft dependency — assume it's installed on dev machines, but
-  note it in WIKI if the project lacks it.
+  note it in LEARN if the project lacks it.
 - Kotlin scripts (`.kts`) have the same JVM startup penalty — same rule.
 
 ## Fixture shape

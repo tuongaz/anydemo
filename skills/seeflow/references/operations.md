@@ -41,7 +41,7 @@ Every write is validated server-side by the studio's post-merge `ResolvedFlowSch
 | Agent | Tools | Used for |
 |---|---|---|
 | `seeflow-code-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): user-prompt-specific brief — scope, code pointers, endpoints, tech stack, edit-case |
-| `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `WIKI.md` |
+| `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `LEARN.md` |
 | `seeflow-node-planner` | none (pure reasoning) | P2: pick nodes + connectors (starts as soon as code-analyzer returns) — emits payloads in `nodes:add-bulk` / `connectors:add-bulk` shape |
 | `seeflow-play-designer` | `Read, Grep, Glob, LS` | P4: design playActions + script bodies — emits `{patch, scriptFile}` triples for P5 |
 | `seeflow-status-designer` | `Read, Grep, Glob, LS` | P4: design statusActions + script bodies — same triple shape |

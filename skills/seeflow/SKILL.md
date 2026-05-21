@@ -21,7 +21,7 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 
 - User's prompt; project root (`$PWD`); `~/.seeflow/config.json` (optional studio host:port).
 - Existing `<project>/.seeflow/<slug>/flow.json` files (multi-flow supported).
-- `<project>/.seeflow/WIKI.md` — persistent crib sheet from prior runs. **Read before Phase 1.** Format: `references/wiki-format.md`.
+- `<project>/.seeflow/LEARN.md` — persistent crib sheet from prior runs. **Read before Phase 1.** Format: `references/learn-format.md`.
 
 ## Conventions
 
@@ -36,7 +36,7 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 ## Pipeline
 
 ```
-P0    /health probe ‖ read WIKI.md
+P0    /health probe ‖ read LEARN.md
 P1    code-analyzer ‖ system-analyzer
 P2    node-planner (kicks off when code-analyzer returns;
                    system-analyzer continues in background)
@@ -79,7 +79,7 @@ Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `P
 In a single message:
 
 1. `curl --max-time 0.5 -fsS "$STUDIO_URL/health"`
-2. Read `<project>/.seeflow/WIKI.md` if present → `wikiContext` (else `null`). Format: `references/wiki-format.md`.
+2. Read `<project>/.seeflow/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
 
 - **200** → Phase 1.
 - **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, surface and stop.
@@ -104,10 +104,10 @@ message 1: Task(seeflow-code-analyzer, …)
 
 Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both overlay families, Phase 6 per-script fix-up) follows this pattern.
 
-- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `wikiContext`. Out: `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
-- `seeflow-system-analyzer` — in: `projectRoot`, `wikiContext`. Out: `runtimeProfile` + a `wikiUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `wikiUpdates`.**
+- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `learnContext`. Out: `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
+- `seeflow-system-analyzer` — in: `projectRoot`, `learnContext`. Out: `runtimeProfile` + a `learnUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `learnUpdates`.**
 
-Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/wiki-format.md`. Unparseable output: retry that single agent once, then surface and stop.
+Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/learn-format.md`. Unparseable output: retry that single agent once, then surface and stop.
 
 ### Phase 1 → Phase 2 overlap
 
@@ -115,11 +115,11 @@ Start `seeflow-node-planner` as soon as the code-analyzer returns — it only ne
 
 When the system-analyzer returns:
 
-1. Merge `wikiUpdates` into `<project>/.seeflow/WIKI.md` (create `.seeflow/` if missing). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
-2. Splice `runtimeProfile` + wiki facts into the in-memory context brief used by Phase 4.
+1. Merge `learnUpdates` into `<project>/.seeflow/LEARN.md` (create `.seeflow/` if missing). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
+2. Splice `runtimeProfile` + LEARN.md facts into the in-memory context brief used by Phase 4.
 3. Merge `knownEndpoints` / `techStack` from the code-analyzer into the same write.
 
-**Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Forward those paths and the matching `## Tech stack adaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` the wiki already had; the planner produces a first draft and the user reviews in Phase 3 anyway.
+**Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Forward those paths and the matching `## Tech stack adaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` LEARN.md already had; the planner produces a first draft and the user reviews in Phase 3 anyway.
 
 ## Phase 2 — plan nodes
 
@@ -158,8 +158,8 @@ URL="$STUDIO_URL/d/$slug"
 
 > Continue and make this flow **dynamic** (write Play scripts and Status probes so the canvas reacts to your running system) — or stop with the static layout?
 
-- **Yes** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations. Re-merge any new `wikiUpdates` first.
-- **No** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `wikiUpdates`.
+- **Yes** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations. Re-merge any new `learnUpdates` first.
+- **No** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `learnUpdates`.
 - **Unclear** → ask once more, default to static (dynamic writes executable scripts; opt-in).
 
 ## Phase 4 — design Play + Status (parallel)
@@ -199,9 +199,9 @@ Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of
 3. Each agent gets the script path (under `.seeflow/nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
 4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then ask retry / stop.
 
-### Polish WIKI.md with anything learned
+### Polish LEARN.md with anything learned
 
-If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<project>/.seeflow/WIKI.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
+If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<project>/.seeflow/LEARN.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
 
 **Tech-specific learnings** (a helper, a required attribute, an emulator quirk, a fixture path) go in `## Tech stack adaptations` → `### <techId>`, not just `## Gotchas`. If the code-analyzer missed a tech entirely, also append the `techId` to `## Tech stack`. This is what makes the next `/seeflow` run reuse the work.
 
@@ -213,6 +213,6 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 | Error handling, retry caps, sub-agent table | `references/operations.md` |
 | Schema, per-node file convention, action shapes | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
-| `WIKI.md` format, lifecycle, merging, `wikiUpdates` contract | `references/wiki-format.md` |
+| `LEARN.md` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |

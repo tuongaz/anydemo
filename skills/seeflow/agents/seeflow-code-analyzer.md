@@ -27,8 +27,8 @@ codebase, so your half of the brief must stand on its own.
 2. **`projectRoot`** — absolute path to the user's project.
 3. **`existingDemo`** *(optional)* — parsed `flow.json` for the matching
    slug when the prompt obviously targets an existing flow. May be `null`.
-4. **`wikiContext`** *(optional)* — raw text of
-   `<projectRoot>/.seeflow/WIKI.md` if it exists. Past runs left this as
+4. **`learnContext`** *(optional)* — raw text of
+   `<projectRoot>/.seeflow/LEARN.md` if it exists. Past runs left this as
    a crib sheet: known endpoints, prior `Flows already created`, scope
    hints. **Treat it as authoritative for what it covers** — don't
    re-grep to "verify" known endpoints unless code obviously
@@ -44,7 +44,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
 
 ## Workflow
 
-1. **Inhale `wikiContext`.** Parse `Flows already created`, `Known
+1. **Inhale `learnContext`.** Parse `Flows already created`, `Known
    endpoints`, and any scope hints. Anything covered there is inherited
    fact — re-include it on the output so the merge doesn't lose it.
 2. **Anchor on the user prompt.** Identify the *primary verbs and
@@ -158,7 +158,7 @@ Field-by-field:
 userPrompt:   "show how the order pipeline works"
 projectRoot:  /Users/me/dev/order-pipeline
 existingDemo: null
-wikiContext:  null
+learnContext:  null
 ```
 
 **Expected final message** (single fenced JSON block, nothing else):

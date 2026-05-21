@@ -5,7 +5,7 @@ category: language
 
 # Rust
 
-> **General guidance only.** Check `<project>/.seeflow/WIKI.md`
+> **General guidance only.** Check `<project>/.seeflow/LEARN.md`
 > `## Tech stack adaptations` first — project-specific helpers,
 > fixtures, and conventions always win over the templates below.
 > Whatever you learn this run, append back into that section so the
@@ -85,7 +85,7 @@ done
   studio just needs the binary to be present before the flow runs.
 - `cargo script` / `rust-script` toolchains break between Rust releases;
   avoid pinning the demo to them.
-- `jq` is a soft dependency. Note it in WIKI if a teammate is on a
+- `jq` is a soft dependency. Note it in LEARN if a teammate is on a
   machine without it.
 
 ## Fixture shape

@@ -1,6 +1,6 @@
-# `.seeflow/WIKI.md` — project memory for flow authoring
+# `.seeflow/LEARN.md` — project memory for flow authoring
 
-`<project>/.seeflow/WIKI.md` is the persistent crib sheet the `seeflow`
+`<project>/.seeflow/LEARN.md` is the persistent crib sheet the `seeflow`
 skill writes for itself. Every `/seeflow` invocation reads it before
 discovery and updates it at the end of discovery (and again whenever
 later phases surface a non-obvious fact).
@@ -13,9 +13,9 @@ run should be able to skip a lot of grep work by reading it.
 
 - **Read** at the start of every `/seeflow` run (Phase 0 in `SKILL.md`).
 - **Pass** the contents into both `seeflow-code-analyzer` and
-  `seeflow-system-analyzer` launching prompts as `wikiContext` so they
+  `seeflow-system-analyzer` launching prompts as `learnContext` so they
   can avoid re-discovering known facts.
-- **Update** during Phase 1 → Phase 2, merging each agent's `wikiUpdates`
+- **Update** during Phase 1 → Phase 2, merging each agent's `learnUpdates`
   into the file as soon as that agent returns. The system-analyzer is
   the heavy contributor here — every fact it learns about boot, setup,
   ports, env vars, fixtures, gotchas, and tech adaptations MUST be
@@ -24,7 +24,7 @@ run should be able to skip a lot of grep work by reading it.
   uncovered a new gotcha (port mismatch, hidden env var, fixture
   factory, surprising auth).
 
-The file always lives at `<project>/.seeflow/WIKI.md`. Create the
+The file always lives at `<project>/.seeflow/LEARN.md`. Create the
 parent `.seeflow/` directory if missing. Never write outside `.seeflow/`.
 
 ## File structure
@@ -35,7 +35,7 @@ allowed at the bottom under a `## Notes` heading; do not invent new
 top-level headings unless the existing ones don't fit.
 
 ```markdown
-# SeeFlow project wiki
+# SeeFlow project memory
 
 > Auto-maintained by the `/seeflow` skill. Edit by hand only if you know
 > what you are doing — the next run will merge new facts in.
@@ -153,7 +153,7 @@ genuinely project-specific — empty subsections are noise.
 
 ## Merging rules
 
-When updating WIKI.md, follow these rules — they protect against
+When updating LEARN.md, follow these rules — they protect against
 re-running drift:
 
 1. **Replace** the `_Last updated:_` line with today's ISO date.
@@ -172,7 +172,7 @@ re-running drift:
    oldest "Gotchas" bullets into a collapsed `<details>` block dated
    with the year they were captured.
 
-## `wikiUpdates` contract (Phase 1 agents → orchestrator)
+## `learnUpdates` contract (Phase 1 agents → orchestrator)
 
 Both `seeflow-code-analyzer` and `seeflow-system-analyzer` surface
 structured updates the orchestrator merges into the file. The
@@ -184,7 +184,7 @@ Combined shape:
 
 ```json
 {
-  "wikiUpdates": {
+  "learnUpdates": {
     "runtimeProfile": {
       "primaryLanguage": "typescript",
       "packageManager": "bun",

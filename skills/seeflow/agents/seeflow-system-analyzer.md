@@ -21,15 +21,15 @@ to write faithful scripts without re-reading the codebase.
 ## Inputs
 
 1. **`projectRoot`** — absolute path to the user's project.
-2. **`wikiContext`** *(optional)* — raw text of
-   `<projectRoot>/.seeflow/WIKI.md` if it exists. Past runs left this as
+2. **`learnContext`** *(optional)* — raw text of
+   `<projectRoot>/.seeflow/LEARN.md` if it exists. Past runs left this as
    a crib sheet: runtime profile, dev setup, integration tests,
    fixtures, data-entry paths, gotchas, tech adaptations.
-   **Treat it as authoritative for what it covers.** When the wiki
+   **Treat it as authoritative for what it covers.** When LEARN.md
    names a port, fixture path, or seed command, trust it and do NOT
-   re-grep to "verify". Only re-investigate a wiki claim if direct
+   re-grep to "verify". Only re-investigate a LEARN.md claim if direct
    contradicting evidence shows up in the code. Re-discovering known
-   facts is exactly what the wiki exists to prevent — pass them
+   facts is exactly what LEARN.md exists to prevent — pass them
    through unchanged on the output so the merge doesn't lose them.
 3. **`techStack`** *(optional)* — a flat array of `techId`s the
    code-analyzer is detecting in parallel. The orchestrator forwards
@@ -47,11 +47,11 @@ processes. Prefer the dedicated tools over shelling out.
 
 ## Workflow
 
-1. **Inhale `wikiContext`.** Parse runtime profile, local dev setup,
+1. **Inhale `learnContext`.** Parse runtime profile, local dev setup,
    integration tests, fixtures, factories, data entry paths, known
    gotchas, and tech adaptations. Anything covered there is inherited
    fact — re-include it on the output so the merge doesn't lose it.
-   You only investigate gaps and changes since the wiki was last
+   You only investigate gaps and changes since LEARN.md was last
    written.
 2. **Profile the runtime.** Extract language, package manager, dev
    command, test command, default service port(s), required env vars.
@@ -76,8 +76,8 @@ processes. Prefer the dedicated tools over shelling out.
    - **Health probe** — how to know it's up: `GET /health`, a stdout
      line (`"Listening on"`), a port-listen check.
    - **Tear-down** — `docker compose down`, `make clean`, etc.
-   Capture as `wikiUpdates.localDevSetup` plus
-   `wikiUpdates.runtimeProfile.requiredEnv`.
+   Capture as `learnUpdates.localDevSetup` plus
+   `learnUpdates.runtimeProfile.requiredEnv`.
 4. **Inspect integration / blackbox / e2e tests.** This is the most
    valuable source for the play-script authors — the tests already
    solved "how to start the app and call its endpoints." Look for:
@@ -96,7 +96,7 @@ processes. Prefer the dedicated tools over shelling out.
    `runtimeProfile.integrationTestDir`,
    `runtimeProfile.integrationTestCommand`,
    `runtimeProfile.setupPattern`, and
-   `wikiUpdates.integrationTests`.
+   `learnUpdates.integrationTests`.
 5. **Catalogue fixtures, factories, mocks, seed data.** Play scripts
    reuse these payloads instead of inventing new ones:
    - Fixture dirs: `tests/fixtures/`, `testdata/`, `__fixtures__/`,
@@ -111,18 +111,18 @@ processes. Prefer the dedicated tools over shelling out.
    - File-drop watchers (`chokidar.watch(...)`, `fs.watch`, S3
      event-bridge handlers) — the watched directory is a great
      play-script entry point.
-   Capture in `wikiUpdates.fixtures`, `wikiUpdates.factories`,
-   `wikiUpdates.seedCommands`.
+   Capture in `learnUpdates.fixtures`, `learnUpdates.factories`,
+   `learnUpdates.seedCommands`.
 6. **Map data-entry paths.** For each major resource (DB, queue, bus,
    store, cache, external SaaS), identify the recommended way to get
    data IN that flows through the app's validation + side-effects, vs
    the direct-insert path that bypasses them. Capture in
-   `wikiUpdates.dataEntryPaths`.
+   `learnUpdates.dataEntryPaths`.
 7. **Capture gotchas.** Anything that would bite a future run:
    hardcoded ports the env var doesn't override, dependencies the dev
    command silently assumes, build artifacts that must be present
    before tests pass, fixture quirks, platform-specific surprises.
-   Surface in `wikiUpdates.gotchas`.
+   Surface in `learnUpdates.gotchas`.
 8. **Find tech adaptations.** For each `techId` (passed in or
    detected), search for project-specific things the play/status
    designers should reuse:
@@ -135,8 +135,8 @@ processes. Prefer the dedicated tools over shelling out.
      patterns the codebase enforces.
    - **Fixtures** — paths to realistic payloads, message envelopes,
      seed rows for this tech.
-   Emit each as `wikiUpdates.techAdaptations.<techId>` with the
-   relevant fields populated (see `references/wiki-format.md`).
+   Emit each as `learnUpdates.techAdaptations.<techId>` with the
+   relevant fields populated (see `references/learn-format.md`).
    **Omit a `techId` entirely if you found nothing project-specific**
    — empty entries are noise. Next run's play/status designers prefer
    these over the ref's default templates.
@@ -159,7 +159,7 @@ processes. Prefer the dedicated tools over shelling out.
     "integrationTestCommand": "bun test tests/integration",
     "setupPattern": "Tests call http://localhost:3001 directly after starting server with bun run dev"
   },
-  "wikiUpdates": {
+  "learnUpdates": {
     "runtimeProfile": {
       "primaryLanguage": "typescript",
       "packageManager": "bun",
@@ -220,13 +220,13 @@ Field-by-field:
   - `setupPattern` *(string)* — 1–2 sentences describing what the
     integration tests do to start the app and call its endpoints.
     Use `"unknown"` if no integration tests found.
-- **`wikiUpdates`** *(object, required)* — structured facts the
-  orchestrator merges into `<projectRoot>/.seeflow/WIKI.md`. Every
+- **`learnUpdates`** *(object, required)* — structured facts the
+  orchestrator merges into `<projectRoot>/.seeflow/LEARN.md`. Every
   child field is optional; emit what you investigated, plus the
-  inherited facts from `wikiContext` so they survive the merge.
-  Schema and merge rules: `references/wiki-format.md`. **Do not** emit
-  `wikiUpdates.techStack` — the code-analyzer owns that. **Do not**
-  emit `wikiUpdates.knownEndpoints` — the code-analyzer owns that.
+  inherited facts from `learnContext` so they survive the merge.
+  Schema and merge rules: `references/learn-format.md`. **Do not** emit
+  `learnUpdates.techStack` — the code-analyzer owns that. **Do not**
+  emit `learnUpdates.knownEndpoints` — the code-analyzer owns that.
 
 ## Constraints
 
@@ -245,7 +245,7 @@ Field-by-field:
 
 ```
 projectRoot:  /Users/me/dev/order-pipeline
-wikiContext:  null
+learnContext:  null
 techStack:    ["typescript", "bun-runtime"]
 ```
 
@@ -263,7 +263,7 @@ techStack:    ["typescript", "bun-runtime"]
     "integrationTestCommand": "bun test src/server.test.ts",
     "setupPattern": "Tests import and call Start() directly (in-process), then POST to http://localhost:3001/orders with JSON body {cart:[{sku,qty}]}. Port read from ORDER_PIPELINE_PORT env var, defaulting to 3001."
   },
-  "wikiUpdates": {
+  "learnUpdates": {
     "runtimeProfile": {
       "primaryLanguage": "typescript",
       "packageManager": "bun",
