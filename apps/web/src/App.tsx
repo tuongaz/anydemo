@@ -4,6 +4,7 @@ import { useDemos } from '@/hooks/use-demos';
 import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
+import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
 import { type CreateProjectResult, type FlowDetail, playNode, restartFlow } from '@/lib/api';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
@@ -23,6 +24,11 @@ export function App() {
   const pathname = usePathname();
   const { demos, refresh: refreshFlows } = useDemos();
   const slug = matchDemoSlug(pathname);
+
+  // External writes (CLI register / unregister) reach us via the global
+  // registry SSE channel. The flow list refetches; node-level state stays
+  // bound to the open demo and is untouched.
+  useRegistryEvents({ onRegistryReload: refreshFlows });
 
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
   const flowId = currentSummary?.id ?? null;
