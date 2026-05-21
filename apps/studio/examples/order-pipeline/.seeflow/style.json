@@ -1,6 +1,6 @@
 {
   "nodes": {
-    "post-orders": {
+    "node-XKIyds0TDg": {
       "position": {
         "x": -181.96549037838943,
         "y": 138.95644990042385
@@ -9,7 +9,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "inventory-service": {
+    "node-GXTKUcE3ye": {
       "position": {
         "x": 66.21484197841792,
         "y": -126.31035925520507
@@ -20,7 +20,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "payment-service": {
+    "node-YOYiHJpY0i": {
       "position": {
         "x": 469.1422114437386,
         "y": 206.48855752663212
@@ -29,7 +29,7 @@
       "fontSize": 15,
       "borderColor": "green"
     },
-    "fulfillment-service": {
+    "node-zUIH7WFnhK": {
       "position": {
         "x": 747.51321046746,
         "y": -37.78865629343234

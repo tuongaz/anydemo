@@ -1,6 +1,6 @@
 {
   "nodes": {
-    "client": {
+    "node-cQOUPXanaX": {
       "position": {
         "x": 80,
         "y": 215.5
@@ -9,7 +9,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "api-gateway": {
+    "node-CbwYqb7NfB": {
       "position": {
         "x": 320,
         "y": 227
@@ -18,7 +18,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "auth-service": {
+    "node-3zFtHg6ENc": {
       "position": {
         "x": 660,
         "y": 50
@@ -27,7 +27,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "product-service": {
+    "node-kwBY8YPmYM": {
       "position": {
         "x": 660,
         "y": 218
@@ -36,7 +36,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "cart-service": {
+    "node-5F424NWbEu": {
       "position": {
         "x": 660,
         "y": 413
@@ -45,7 +45,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "order-service": {
+    "node-yKrg9DV5fJ": {
       "position": {
         "x": 1000,
         "y": 413
@@ -54,7 +54,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "payment-service": {
+    "node-mPqan8rFYN": {
       "position": {
         "x": 1340,
         "y": 349
@@ -63,7 +63,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "notification-service": {
+    "node-fkptXw7uvs": {
       "position": {
         "x": 1680,
         "y": 339
@@ -72,7 +72,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "postgresql": {
+    "node-5SDiw3Wz6s": {
       "position": {
         "x": 1720,
         "y": 507
@@ -81,7 +81,7 @@
       "borderColor": "green",
       "borderSize": 1
     },
-    "platform-health": {
+    "node-XwygzfKPZ5": {
       "position": {
         "x": 1340,
         "y": 50

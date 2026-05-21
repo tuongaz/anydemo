@@ -3,7 +3,7 @@
   "name": "Order Pipeline",
   "nodes": [
     {
-      "id": "post-orders",
+      "id": "node-XKIyds0TDg",
       "type": "playNode",
       "data": {
         "name": "POST /orders",
@@ -12,7 +12,7 @@
           "kind": "request"
         },
         "description": "Creates order, kicks off the pipeline.",
-        "detail": "file://details/post-orders.md",
+        "detail": "file://nodes/node-XKIyds0TDg/detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -24,7 +24,7 @@
       }
     },
     {
-      "id": "inventory-service",
+      "id": "node-GXTKUcE3ye",
       "type": "stateNode",
       "data": {
         "name": "Inventory Service",
@@ -33,12 +33,12 @@
           "kind": "event"
         },
         "description": "Reserves stock.",
-        "detail": "file://details/inventory-service.md",
+        "detail": "file://nodes/node-GXTKUcE3ye/detail.md",
         "icon": "a-arrow-down-icon"
       }
     },
     {
-      "id": "payment-service",
+      "id": "node-YOYiHJpY0i",
       "type": "stateNode",
       "data": {
         "name": "Payment Service",
@@ -47,11 +47,11 @@
           "kind": "event"
         },
         "description": "Charges card.",
-        "detail": "file://details/payment-service.md"
+        "detail": "file://nodes/node-YOYiHJpY0i/detail.md"
       }
     },
     {
-      "id": "fulfillment-service",
+      "id": "node-zUIH7WFnhK",
       "type": "stateNode",
       "data": {
         "name": "Fulfillment Service",
@@ -60,31 +60,31 @@
           "kind": "event"
         },
         "description": "Enqueues shipment.",
-        "detail": "file://details/fulfillment-service.md"
+        "detail": "file://nodes/node-zUIH7WFnhK/detail.md"
       }
     }
   ],
   "connectors": [
     {
-      "id": "c1",
-      "source": "post-orders",
-      "target": "inventory-service",
+      "id": "conn-jJjuWBfe3a",
+      "source": "node-XKIyds0TDg",
+      "target": "node-GXTKUcE3ye",
       "kind": "event",
       "eventName": "order.created",
       "label": "order.created"
     },
     {
-      "id": "c2",
-      "source": "inventory-service",
-      "target": "payment-service",
+      "id": "conn-8DkPOzrnYo",
+      "source": "node-GXTKUcE3ye",
+      "target": "node-YOYiHJpY0i",
       "kind": "event",
       "eventName": "stock.reserved",
       "label": "stock.reserved"
     },
     {
-      "id": "c3",
-      "source": "payment-service",
-      "target": "fulfillment-service",
+      "id": "conn-qp90Rd2cgw",
+      "source": "node-YOYiHJpY0i",
+      "target": "node-zUIH7WFnhK",
       "kind": "event",
       "eventName": "payment.captured",
       "label": "payment.captured"

@@ -3,7 +3,7 @@
   "name": "E-Commerce Platform",
   "nodes": [
     {
-      "id": "client",
+      "id": "node-cQOUPXanaX",
       "type": "shapeNode",
       "data": {
         "shape": "user",
@@ -12,7 +12,7 @@
       }
     },
     {
-      "id": "api-gateway",
+      "id": "node-CbwYqb7NfB",
       "type": "playNode",
       "data": {
         "name": "API Gateway",
@@ -21,7 +21,7 @@
           "kind": "request"
         },
         "description": "Auth, rate-limiting, routing.",
-        "detail": "file://details/api-gateway.md",
+        "detail": "file://nodes/node-CbwYqb7NfB/detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -33,7 +33,7 @@
       }
     },
     {
-      "id": "auth-service",
+      "id": "node-3zFtHg6ENc",
       "type": "stateNode",
       "data": {
         "name": "Auth Service",
@@ -42,11 +42,11 @@
           "kind": "request"
         },
         "description": "JWT issuance + OAuth2 / OIDC.",
-        "detail": "file://details/auth-service.md"
+        "detail": "file://nodes/node-3zFtHg6ENc/detail.md"
       }
     },
     {
-      "id": "product-service",
+      "id": "node-kwBY8YPmYM",
       "type": "stateNode",
       "data": {
         "name": "Product Catalog",
@@ -55,11 +55,11 @@
           "kind": "request"
         },
         "description": "SKUs, variants, pricing, full-text search.",
-        "detail": "file://details/product-service.md"
+        "detail": "file://nodes/node-kwBY8YPmYM/detail.md"
       }
     },
     {
-      "id": "cart-service",
+      "id": "node-5F424NWbEu",
       "type": "playNode",
       "data": {
         "name": "Cart Service",
@@ -68,7 +68,7 @@
           "kind": "request"
         },
         "description": "Add/remove items, apply coupons, checkout.",
-        "detail": "file://details/cart-service.md",
+        "detail": "file://nodes/node-5F424NWbEu/detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -80,7 +80,7 @@
       }
     },
     {
-      "id": "order-service",
+      "id": "node-yKrg9DV5fJ",
       "type": "playNode",
       "data": {
         "name": "Order Service",
@@ -88,8 +88,8 @@
         "stateSource": {
           "kind": "event"
         },
-        "description": "pending \u2192 confirmed \u2192 shipped \u2192 delivered.",
-        "detail": "file://details/order-service.md",
+        "description": "pending → confirmed → shipped → delivered.",
+        "detail": "file://nodes/node-yKrg9DV5fJ/detail.md",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -101,7 +101,7 @@
       }
     },
     {
-      "id": "payment-service",
+      "id": "node-mPqan8rFYN",
       "type": "stateNode",
       "data": {
         "name": "Payment Service",
@@ -110,11 +110,11 @@
           "kind": "event"
         },
         "description": "Stripe + PayPal gateway integration.",
-        "detail": "file://details/payment-service.md"
+        "detail": "file://nodes/node-mPqan8rFYN/detail.md"
       }
     },
     {
-      "id": "notification-service",
+      "id": "node-fkptXw7uvs",
       "type": "stateNode",
       "data": {
         "name": "Notification Service",
@@ -123,96 +123,96 @@
           "kind": "event"
         },
         "description": "Email + SMS + push via AWS SES / SNS.",
-        "detail": "file://details/notification-service.md"
+        "detail": "file://nodes/node-fkptXw7uvs/detail.md"
       }
     },
     {
-      "id": "postgresql",
+      "id": "node-5SDiw3Wz6s",
       "type": "shapeNode",
       "data": {
         "shape": "database",
         "name": "PostgreSQL",
-        "description": "Orders, users, products \u2014 primary OLTP store"
+        "description": "Orders, users, products — primary OLTP store"
       }
     },
     {
-      "id": "platform-health",
+      "id": "node-XwygzfKPZ5",
       "type": "htmlNode",
       "data": {
         "name": "Platform Health",
-        "htmlPath": "scripts/platform-health.html"
+        "html": "file://nodes/node-XwygzfKPZ5/view.html"
       }
     }
   ],
   "connectors": [
     {
-      "id": "c-client-api",
-      "source": "client",
-      "target": "api-gateway",
+      "id": "conn-4XKU3GcGPF",
+      "source": "node-cQOUPXanaX",
+      "target": "node-CbwYqb7NfB",
       "kind": "http",
       "method": "POST",
       "label": "REST API"
     },
     {
-      "id": "c-api-auth",
-      "source": "api-gateway",
-      "target": "auth-service",
+      "id": "conn-OxNUxp7qB3",
+      "source": "node-CbwYqb7NfB",
+      "target": "node-3zFtHg6ENc",
       "kind": "http",
       "method": "POST",
       "label": "POST /auth"
     },
     {
-      "id": "c-api-product",
-      "source": "api-gateway",
-      "target": "product-service",
+      "id": "conn-7HlJF6KVHx",
+      "source": "node-CbwYqb7NfB",
+      "target": "node-kwBY8YPmYM",
       "kind": "http",
       "method": "GET",
       "label": "GET /products"
     },
     {
-      "id": "c-api-cart",
-      "source": "api-gateway",
-      "target": "cart-service",
+      "id": "conn-ORfUTiooia",
+      "source": "node-CbwYqb7NfB",
+      "target": "node-5F424NWbEu",
       "kind": "http",
       "method": "POST",
       "label": "POST /cart"
     },
     {
-      "id": "c-cart-order",
-      "source": "cart-service",
-      "target": "order-service",
+      "id": "conn-EABXtQv89M",
+      "source": "node-5F424NWbEu",
+      "target": "node-yKrg9DV5fJ",
       "kind": "event",
       "eventName": "cart.checkout",
       "label": "cart.checkout"
     },
     {
-      "id": "c-order-payment",
-      "source": "order-service",
-      "target": "payment-service",
+      "id": "conn-kjyg3RDDvu",
+      "source": "node-yKrg9DV5fJ",
+      "target": "node-mPqan8rFYN",
       "kind": "event",
       "eventName": "order.created",
       "label": "order.created"
     },
     {
-      "id": "c-payment-notify",
-      "source": "payment-service",
-      "target": "notification-service",
+      "id": "conn-wqFq0shXO5",
+      "source": "node-mPqan8rFYN",
+      "target": "node-fkptXw7uvs",
       "kind": "event",
       "eventName": "payment.captured",
       "label": "payment.captured"
     },
     {
-      "id": "c-order-pg",
-      "source": "order-service",
-      "target": "postgresql",
+      "id": "conn-8ftFXZvD4r",
+      "source": "node-yKrg9DV5fJ",
+      "target": "node-5SDiw3Wz6s",
       "kind": "http",
       "method": "POST",
       "label": "read/write"
     },
     {
-      "id": "c-payment-pg",
-      "source": "payment-service",
-      "target": "postgresql",
+      "id": "conn-VTfjsOckF2",
+      "source": "node-mPqan8rFYN",
+      "target": "node-5SDiw3Wz6s",
       "kind": "http",
       "method": "POST",
       "label": "read/write"
