@@ -1,12 +1,5 @@
 node_modules/
 dist/
-!packages/canvas/dist/
-packages/canvas/dist/*
-!packages/canvas/dist/index.js
-!packages/canvas/dist/index.js.map
-!packages/canvas/dist/index.d.ts
-!packages/canvas/dist/style.css
-!packages/canvas/dist/style.css.map
 /.seeflow/
 **/.seeflow/sdk/
 ~/.seeflow

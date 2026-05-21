@@ -6,6 +6,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "dev": "vite",
+    "prebuild": "bun run --filter @seeflow/canvas build",
     "build": "vite build",
     "preview": "vite preview",
     "icons": "node scripts/generate-icons.mjs"

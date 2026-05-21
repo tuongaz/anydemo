@@ -7,10 +7,10 @@
     "allowImportingTsExtensions": true,
     "noEmit": true,
     "jsx": "react-jsx",
-    "rootDir": ".",
     "baseUrl": ".",
     "paths": {
-      "@/*": ["src/*"]
+      "@/*": ["src/*"],
+      "@seeflow/canvas": ["../../packages/canvas/src/index.ts"]
     }
   },
   "include": ["src/**/*"]
