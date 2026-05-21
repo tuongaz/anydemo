@@ -1,31 +1,46 @@
 # Schema cheatsheet — `flow.json` + `style.json`
 
-The on-disk format is split into **two files that are BOTH mandatory** for every flow:
+The on-disk format is split into two files:
 
-- **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema, validated by `POST /api/validate`.
-- **`style.json`** — keyed map of presentation overrides by node/connector id. **Required** for every flow this skill creates. At minimum it carries one `position` entry per functional node id so the canvas doesn't pile every node at `(0,0)`. Additional visual fields are optional per entry.
+- **`flow.json`** — pure semantic data. What the studio + LLM read. Strict schema; every write is validated server-side by the studio's post-merge `ResolvedFlowSchema` reparse.
+- **`style.json`** — keyed map of presentation overrides (positions, colors, sizes). **Studio-owned end-to-end.** The skill never authors it directly — `seeflow flows:layout <flowId>` runs ELK and writes positions; the canvas writes user-drag overrides.
 
-The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together (positions, visual fields all merged onto each node).
+The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together.
 
-**RULE — never skip `style.json`.** A flow without `style.json` renders unusable. When creating a new flow, always emit both files in the same write step. When editing, refresh `style.json` to cover new node ids before re-registering.
+## Per-node file convention
+
+Every file owned by a node lives in `<project>/.seeflow/nodes/<nodeId>/`:
+
+```
+.seeflow/
+├── flow.json
+├── style.json
+└── nodes/
+    └── <nodeId>/
+        ├── detail.md          # auto-externalized from data.detail
+        ├── view.html          # auto-externalized from data.html (htmlNode)
+        └── scripts/
+            ├── play.ts
+            └── status.ts
+```
+
+`scriptPath` in `playAction` / `statusAction` is **relative to the node folder** — no `<slug>/` prefix, no `nodes/<id>/` prefix:
+
+```json
+"playAction": {
+  "kind": "script",
+  "interpreter": "bun",
+  "scriptPath": "scripts/play.ts"
+}
+```
+
+The studio's resolver prepends `.seeflow/nodes/<nodeId>/` and rejects any path that escapes the node folder (`..`, absolute). Deleting the node cascade-deletes the whole folder — no stranded scripts.
 
 ## `file://` substitution
 
-Any string in `flow.json` may use `file://<relative-path>` to offload content to a separate file under `<project>/.seeflow/`. Recommended for `detail` when it exceeds ~200 chars.
+`detail` and `html` strings in `flow.json` are auto-externalised by the studio on any write. Pass the raw content as a string to `seeflow nodes:add` / `seeflow nodes:patch`; the studio writes it to `nodes/<id>/detail.md` (or `view.html`) and persists `data.detail = "file://nodes/<id>/detail.md"` on disk. Reads inline it back to the actual string. Empty string clears the file but keeps the ref.
 
-```json
-// flow.json
-{ "data": { "detail": "file://details/checkout-api.md" } }
-
-// .seeflow/details/checkout-api.md
-## POST /checkout
-
-Validates the cart, reserves stock, publishes `order.created`.
-```
-
-Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card; the flow still loads.
-
-**RULE — prefer file refs for long detail.** When a node's `detail` would exceed ~200 chars, write it to `<slug>/details/<nodeId>.md` and set `"detail": "file://<slug>/details/<nodeId>.md"`. Keeps flow.json compact for LLM consumption.
+Hand-authored `file://<relative-path>` strings still work for forward-compat; path must be relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card.
 
 ## `flow.json` envelope
 
@@ -36,36 +51,26 @@ Path syntax: relative under `.seeflow/`, no leading `/`, no `..`. Missing files 
   "nodes": [ …node data only… ],
   "connectors": [ …connector data only… ],
   "resetAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                   "scriptPath": "<slug>/scripts/reset.ts" }
+                   "scriptPath": "scripts/reset.ts" }
 }
 ```
 
-`resetAction` is optional — include only if the app has a "wipe state" entrypoint.
+`resetAction` is optional — include only if the app has a "wipe state" entrypoint. (Note: `resetAction` scriptPath is currently anchored at `.seeflow/` for backwards compat; per-node anchor is a deferred follow-up.)
 
-## `style.json` envelope (mandatory)
+## `style.json` envelope (studio-owned)
 
 ```json
 {
   "nodes": {
-    "checkout-api": {
-      "position": { "x": 100, "y": 200 },
-      "width": 240, "height": 120,
-      "borderColor": "blue", "fontSize": 14
-    }
+    "checkout-api": { "position": { "x": 100, "y": 200 } }
   },
   "connectors": {
-    "c1": { "sourceHandle": "r", "targetHandle": "l", "style": "dashed", "color": "blue" }
+    "c1": { "sourceHandle": "r", "targetHandle": "l" }
   }
 }
 ```
 
-Every functional node id in `flow.json` MUST appear under `nodes` with at least a `position`. A missing connector entry → handle/style defaults apply. Do not delete `style.json` even if the only content is positions — the studio relies on it.
-
-### Position + handle generation
-
-Positions and connector handles come from `POST /api/flows/<id>/layout`. The studio reads `flow.json` from disk, runs ELK, and writes `style.json` adjacent to it — the skill never authors that file directly. The skill hits this endpoint after register (Phase 3), after each splice (Phase 5), and after the final Phase 7 dry-run. The endpoint runs ELK's layered Sugiyama algorithm with generous spacing for connector labels (220 px between layers, 140 px between siblings) and assigns handles geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges.
-
-Do not author positions by hand. Manual entries in `style.json` are still honoured at render time if a user drags a node in the canvas, but the skill always overwrites them on the next `/seeflow` run for that slug.
+Written by `seeflow flows:layout <flowId>` (ELK) and by user drags in the canvas. Positions + handles are derived geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges. The skill never writes this file.
 
 ## Node types
 
@@ -103,17 +108,16 @@ Has a clickable Play button. Required: `name`, `kind`, `stateSource`, `playActio
     "icon": "server",
     "stateSource": { "kind": "request" },
     "playAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                    "scriptPath": "checkout-flow/scripts/play-checkout.ts",
+                    "scriptPath": "scripts/play.ts",
                     "input": { "items": [{"sku":"ABC","qty":1}] },
                     "timeoutMs": 30000 },
     "description": "Receives a cart, creates an order.",
-    "detail": "file://details/checkout-api.md"
+    "detail": "file://nodes/checkout-api/detail.md"
   }
 }
-
-// style.json
-{ "nodes": { "checkout-api": { "position": { "x": 100, "y": 200 } } } }
 ```
+
+The script lives at `.seeflow/nodes/checkout-api/scripts/play.ts`; the detail markdown at `.seeflow/nodes/checkout-api/detail.md`. Both are auto-managed by the studio when you pass raw content to `seeflow nodes:add` / `seeflow nodes:patch`.
 
 ### `stateNode`
 
@@ -128,14 +132,11 @@ No mandatory Play; audience watches but doesn't trigger. Same `kind` values as `
     "icon": "database",
     "stateSource": { "kind": "event" },
     "statusAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                      "scriptPath": "checkout-flow/scripts/status-orders.ts",
+                      "scriptPath": "scripts/status.ts",
                       "maxLifetimeMs": 600000 },
-    "detail": "file://details/order-db.md"
+    "detail": "file://nodes/order-db/detail.md"
   }
 }
-
-// style.json
-{ "nodes": { "order-db": { "position": { "x": 600, "y": 200 } } } }
 ```
 
 ### `shapeNode`
@@ -155,19 +156,10 @@ Decorative / illustrative. No actions or live state.
 | `text` | Plain text | Canvas label |
 
 ```jsonc
-// flow.json
 { "id": "customer", "type": "shapeNode",
   "data": { "shape": "user", "name": "Customer" } }
 { "id": "stripe", "type": "shapeNode",
   "data": { "shape": "cloud", "name": "Stripe" } }
-
-// style.json
-{
-  "nodes": {
-    "customer": { "position": { "x": 0, "y": 200 } },
-    "stripe":   { "position": { "x": 800, "y": 200 }, "borderStyle": "dashed" }
-  }
-}
 ```
 
 ### `iconNode`
@@ -244,11 +236,11 @@ Optional visual fields (all kinds): `style` (`solid|dashed|dotted`), `direction`
 
 ```json
 { "kind": "script", "interpreter": "bun", "args": ["run"],
-  "scriptPath": "<slug>/scripts/<file>.ts", "input": {…optional…},
+  "scriptPath": "scripts/<file>.ts", "input": {…optional…},
   "timeoutMs": 30000 }
 ```
 
-- `scriptPath` — relative under `.seeflow/`. No leading slash, no `..`.
+- `scriptPath` — relative under the node folder (`.seeflow/nodes/<nodeId>/`). No leading slash, no `..`. (`resetAction` stays anchored at `.seeflow/` until a follow-up.)
 - `interpreter` — must match `runtimeProfile.primaryLanguage`. Values: `bun`, `go`, `python3`, `node`, `bash`.
 - `input` (playAction) — JSON-serialised, piped to stdin.
 - `timeoutMs` (playAction; max 600 000) — **be generous:**
