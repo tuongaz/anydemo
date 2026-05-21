@@ -136,6 +136,23 @@ describe('renderCommandHelp', () => {
   });
 });
 
+describe('renderCommandHelp — text output', () => {
+  it('does NOT advertise a JSON envelope for start', () => {
+    const out = renderCommandHelp('start');
+    expect(out).toContain('## Output');
+    expect(out).toContain('human-readable');
+    expect(out).not.toContain('"ok": true'); // no JSON envelope claim
+    // Real example lines from cli.ts
+    expect(out).toMatch(/SeeFlow Studio (listening|started)/);
+  });
+
+  it('does NOT advertise a JSON envelope for stop', () => {
+    const out = renderCommandHelp('stop');
+    expect(out).not.toContain('"ok": true');
+    expect(out).toMatch(/Stopped studio|No studio running/);
+  });
+});
+
 describe('renderCommandList', () => {
   it('opens with the drill-in instruction before anything else', () => {
     const out = renderCommandList();

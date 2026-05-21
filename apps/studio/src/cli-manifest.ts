@@ -672,10 +672,22 @@ function renderOutputJson(entry: CommandManifestEntry): string[] {
   return out;
 }
 
-// Tasks 5 & 6 will implement these; stub for now:
-function renderOutputText(_entry: CommandManifestEntry): string[] {
-  return ['Prints human-readable status to stdout.', 'Exit 0 on success, non-zero on failure.'];
+function renderOutputText(entry: CommandManifestEntry): string[] {
+  const out: string[] = [];
+  out.push('Prints human-readable status to stdout (no JSON envelope).');
+  out.push('Exit 0 on success, non-zero on failure.', '');
+  if (entry.name === 'start') {
+    out.push('Example stdout:');
+    out.push('  SeeFlow Studio listening on http://localhost:4321');
+    out.push('  SeeFlow Studio started in background on http://localhost:4321 (pid 12345)');
+  } else if (entry.name === 'stop') {
+    out.push('Example stdout:');
+    out.push('  Stopped studio (pid 12345).');
+    out.push('  No studio running (no pid file at ~/.seeflow/seeflow.pid).');
+  }
+  return out;
 }
+// Task 6 will implement this; stub for now:
 function renderOutputStream(_entry: CommandManifestEntry): string[] {
   return [
     'Streams progress events to stdout until completion.',
