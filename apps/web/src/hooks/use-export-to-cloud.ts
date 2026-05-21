@@ -40,7 +40,11 @@ export async function exportToCloud(
   if (previewDataUrl) {
     const base64 = previewDataUrl.split(',')[1];
     if (base64) {
-      zipEntries['preview.png'] = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+      zipEntries['preview.png'] = bytes;
+      // Duplicated under `screenshot.png` so seeflow.dev can serve it as the
+      // og:image for the rendered flow page.
+      zipEntries['screenshot.png'] = bytes;
     }
   }
 

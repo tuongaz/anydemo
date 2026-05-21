@@ -55,6 +55,14 @@ export function ExportDialog({
     setState({ kind: 'loading' });
     try {
       const previewDataUrl = await onCapturePreview?.();
+      if (!previewDataUrl) {
+        setState({
+          kind: 'error',
+          message:
+            "Couldn't capture the canvas. Make sure the diagram is visible and try again.",
+        });
+        return;
+      }
       const { shareUrl } = await exportToCloud(
         email.trim(),
         name.trim(),

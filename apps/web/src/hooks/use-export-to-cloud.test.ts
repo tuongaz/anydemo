@@ -287,7 +287,7 @@ describe('exportToCloud', () => {
     ).rejects.toThrow('Export failed with status 413');
   });
 
-  it('includes preview.png in the zip when previewDataUrl is provided', async () => {
+  it('includes preview.png and screenshot.png in the zip when previewDataUrl is provided', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
     const base64 = btoa(String.fromCharCode(...pngBytes));
     const previewDataUrl = `data:image/png;base64,${base64}`;
@@ -309,9 +309,11 @@ describe('exportToCloud', () => {
     const entries = unzipSync(new Uint8Array(capturedBody));
     expect('preview.png' in entries).toBe(true);
     expect(entries['preview.png']).toEqual(pngBytes);
+    expect('screenshot.png' in entries).toBe(true);
+    expect(entries['screenshot.png']).toEqual(pngBytes);
   });
 
-  it('omits preview.png from the zip when previewDataUrl is not provided', async () => {
+  it('omits preview.png and screenshot.png from the zip when previewDataUrl is not provided', async () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
@@ -329,6 +331,7 @@ describe('exportToCloud', () => {
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
     expect('preview.png' in entries).toBe(false);
+    expect('screenshot.png' in entries).toBe(false);
   });
 
   it('throws when cloud API response is missing url field', async () => {
