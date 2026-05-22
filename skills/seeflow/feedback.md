@@ -70,7 +70,7 @@ Append one JSON object as a single line to `~/.seeflow/feedback.jsonl` for each 
 | `env-service-unreachable` | `blocker` | Required service (studio `/health`) didn't respond after retry. |
 | `env-version-mismatch` | `degraded` | Tool/service version below stated minimum but a fallback exists. Promote to `blocker` if no fallback. |
 | `cli-error` | `failure` | `seeflow` CLI returned a structured error (`badSchema`, `flowNotFound`, `unknownNode`, `fileNotFound`, …) after the retry budget. |
-| `validation-fail` | `failure` | Phase 5 patch rejected by `ResolvedFlowSchema` server-side after retries. |
+| `validation-fail` | `failure` | Phase 5 patch rejected server-side by the studio after retries. |
 | `agent-output-corrected` | `corrected` | Orchestrator silently patched a sub-agent's output before the next CLI call (Phase 3 normalization: unknown type/field rename, bidir-connector strip, placeholder injection, id rewrite, …). One entry per `(agent, correction-kind)` with the count in `details`. |
 | `agent-output-unparseable` | `failure` | Sub-agent returned unparseable JSON after the single retry. |
 | `retry-exhausted` | `failure` | Any retry budget was exhausted (Phase 5 per-node `nodes:patch`, Phase 6 fix-up loop). |

@@ -22,7 +22,7 @@ string, locate a queue's depth API, copy a state-machine enum). You
 discover must be folded into your output — the orchestrator is the
 only writer.
 
-**The launching prompt carries `actionSchemaPayload` and `nodeSchemaPayload` — Draft-07 JSON Schemas + invariant notes the orchestrator captured from `$SEEFLOW schema action` / `$SEEFLOW schema node` before launching you. They are the authoritative contract.** Conform to them exactly before emitting any action / patch JSON; any field they reject fails the next `nodes:patch` and burns a retry. `references/schema.md` covers anchor rules and runtime budgets — not field shapes. If a schema payload is missing from your launching prompt, stop and surface the gap rather than guessing field shapes.
+**The launching prompt carries the current action + node contract** — the orchestrator captured it from `$SEEFLOW schema action` / `$SEEFLOW schema node` before launching you. Conform to it exactly before emitting any action / patch JSON; any field the CLI rejects fails the next `nodes:patch` and burns a retry. If the contract is missing from your launching prompt, stop and surface the gap rather than guessing.
 
 ## Inputs
 
@@ -95,115 +95,98 @@ with this exact shape — and nothing else outside the fence:
 **How the orchestrator uses this:** for each overlay it writes
 `scriptFile.body` to `scriptFile.path` (with `chmod`), then runs
 `seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`. `patch` is the
-exact PATCH body. `statusAction.scriptPath` is **relative to the node
-folder** (`scripts/status.ts`), NOT the project root.
-
-Field-by-field rules:
+exact PATCH body — conform to `$SEEFLOW schema action` and `$SEEFLOW
+schema node` (forwarded in your launching prompt). Action `scriptPath`
+values are **relative to the node folder** (`scripts/status.ts`), NOT
+the project root.
 
 ### `statusOverlays[]`
 
-One entry per node that should host a `statusAction`. Omit entries for
+One entry per node that should host a status action. Omit entries for
 nodes that get none — do not emit "empty" overlays. Every `nodeId` MUST
 reference a node already in `nodeDraft.nodes`. You do not inject new
 nodes; if a status would need a node that does not exist, surface the
 gap by *not* emitting that overlay and trust the plan-review step to
 give the user a chance to ask for it.
 
-- **`nodeId`** *(string)* — the target node's `id` from `nodeDraft`.
-- **`patch`** *(object)* — body forwarded to `seeflow nodes:patch
-  <flowId> <nodeId>`. Accepts any key from `NodePatchBodySchema`:
-  - `statusAction` *(object, required)* — matches the studio's
-    `StatusActionSchema`:
-    - `kind`: literal `"script"`.
-    - `interpreter` *(string, required)*: the executable resolved
-      against `$PATH`. Default to `"bun"` for TypeScript; use
-      `"python3"`, `"node"`, `"bash"` when the project clearly prefers
-      a different runtime.
-    - `args` *(string[], optional)*: pre-script flags. For bun use
-      `["run"]`; for python use `["-u"]` to force unbuffered stdio
-      (status scripts MUST flush every line — buffered Python that
-      flushes only on exit hangs the UI). Omit when not needed.
-    - `scriptPath` *(string, required)*: clean relative path resolved
-      under the node folder (`.seeflow/nodes/<nodeId>/`). Canonical
-      form `scripts/status.ts`. No `<slug>/`, no `<nodeId>/`, no `..`,
-      no leading `/`.
-    - `maxLifetimeMs` *(integer, optional, ≤ 3_600_000)*: hard cap on
-      the long-running script's wall-clock. Default to `600000`
-      (10 minutes) for most demos. Bump to `1800000` (30 min) for demos
-      with long async legs. The studio kills the script on subsequent
-      Play clicks (SIGTERM + 2s grace + SIGKILL) AND on lifetime expiry.
-  - `detail` *(string, optional)* — long markdown that auto-externalises
-    to `.seeflow/nodes/<nodeId>/detail.md`. Use to describe what the
-    status surface reads and what each state means.
-- **`scriptFile`** *(object, required)* — what the orchestrator writes
-  to disk before running `nodes:patch`:
-  - `path` *(string, required)*: project-root-relative path. Always
-    `.seeflow/nodes/<nodeId>/scripts/<filename>`.
-  - `body` *(string, required)* — the FULL source text of the script.
-    Always start with a shebang. The script's contract:
-  - Reads no stdin. The studio closes stdin immediately.
-  - May read `process.env.SEEFLOW_DEMO_ID`, `process.env.SEEFLOW_NODE_ID`,
-    `process.env.SEEFLOW_RUN_ID` for correlation/logging. All three
-    are set before spawn.
-  - Runs in a loop. Each iteration:
-    1. Reads the observable signal (file, HTTP endpoint, DB row,
-       queue depth, etc.).
-    2. Builds a `StatusReport` object (shape below).
-    3. Writes ONE line of JSON to stdout
-       (`console.log(JSON.stringify(report))`).
-    4. Sleeps a tick (typically 500–2000 ms — see "Tick cadence" below).
-  - Never exits voluntarily. The studio kills the script on the next
-    Play click or at `maxLifetimeMs`.
-  - Tolerant of missing state: if the underlying signal does not
-    exist yet (no rows, no file, queue empty), emit a `state: "warn"`
-    or `state: "pending"` report rather than throwing. The audience
-    expects to see "nothing here yet" not "script crashed".
-  - Malformed JSON lines are silently dropped by the studio — never
-    log non-JSON to stdout. Use stderr if you must log debug noise.
-- **`rationale`** *(string, ≤ 200 chars)* — one-line justification that
-  identifies the placement category (`"DB row state"`, `"queue depth"`,
-  `"worker idle/busy"`, `"workflow run state"`, `"external API health"`,
-  `"cache key count"`). The orchestrator surfaces these in the
-  plan-review step.
+- **`patch`** carries the action plus any node-data fields you want to
+  set (description, detail). Conform to the patch contract in your
+  launching prompt. The path `scripts/status.ts` is the canonical
+  `scriptPath` value — no absolute paths, no `..`, no leading `/`, no
+  `<slug>/` or `<nodeId>/` prefix.
+- **`scriptFile`** carries the file to write before the patch runs:
+  - `path` is project-root-relative
+    (`.seeflow/nodes/<nodeId>/scripts/<filename>`).
+  - `body` is the FULL source text including shebang.
+  - `chmod` defaults to `"755"`.
+- **`rationale`** — one-line justification that identifies the placement
+  category (`"DB row state"`, `"queue depth"`, `"worker idle/busy"`,
+  `"workflow run state"`, `"external API health"`, `"cache key
+  count"`). Surfaced in the plan-review step. ≤ 200 chars.
 
-### `StatusReport` shape
+### Action knobs (interpreter + timing)
 
-The studio validates each stdout line against this Zod schema; lines
-that fail are dropped and logged to the proxy. Your script bodies
-MUST emit objects with exactly these fields:
+For the legal action fields, run `$SEEFLOW schema action` (the
+orchestrator forwards the output in your launching prompt). The
+decision-guide values:
 
-```json
-{
-  "state": "ok",
-  "summary": "3 orders pending",
-  "detail": "pending: ord_123, ord_456, ord_789",
-  "data": { "pending": 3, "paid": 12, "shipped": 7 },
-  "ts": 1715000000000
-}
-```
+- **Interpreter** — default to `"bun"` for TypeScript scripts. Use
+  `"python3"`, `"node"`, `"bash"` when the project clearly prefers a
+  different runtime. Match `runtimeProfile.primaryLanguage`.
+- **Args** — `["run"]` for bun; **`["-u"]` for python is mandatory** —
+  status scripts MUST flush every line; buffered Python that flushes
+  only on exit hangs the UI.
+- **Max lifetime** — default ~10 min; bump to ~30 min for demos with
+  long async legs. The studio kills the script on subsequent Play
+  clicks (SIGTERM + 2 s grace + SIGKILL) AND on lifetime expiry.
 
-- **`state`** *(required enum)* — one of:
-  - `"ok"` — system is in a "good" steady state for this node.
-  - `"warn"` — observable anomaly that does not block the demo
-    (queue depth above threshold, no rows yet, worker idle when busy
-    was expected).
-  - `"error"` — node is broken (DB unreachable, external API
-    returning 5xx, workflow run in failed state). The end-to-end
-    validator treats `state: "error"` as a validation failure for
-    that node, so reserve it for genuine system breakage rather than
-    "I expected 3 rows and saw 2".
-  - `"pending"` — work is in flight (workflow `running`, queue
+### Script contract (runtime behavior)
+
+Every body must:
+
+- **Start with a shebang.**
+- **Read no stdin** — the studio closes stdin immediately.
+- **Read correlation env vars** if useful: `SEEFLOW_DEMO_ID`,
+  `SEEFLOW_NODE_ID`, `SEEFLOW_RUN_ID`. All three set before spawn.
+- **Loop forever.** Each iteration: (1) read the observable signal
+  (file, HTTP endpoint, DB row, queue depth, etc.), (2) build a status
+  report, (3) write ONE line of JSON to stdout
+  (`console.log(JSON.stringify(report))`), (4) sleep a tick (typically
+  500–2000 ms — see "Tick cadence" below).
+- **Never exit voluntarily.** The studio kills the script on the next
+  Play click or at lifetime expiry.
+- **Tolerate missing state.** If the underlying signal does not exist
+  yet (no rows, no file, queue empty), emit a `warn` / `pending` report
+  rather than throwing. The audience expects to see "nothing here yet",
+  not "script crashed".
+- **Only valid JSON on stdout.** Malformed lines are silently dropped
+  by the studio — use stderr if you must log debug noise.
+
+### Status report shape
+
+For the per-line shape, run `$SEEFLOW schema action` and look at the
+`statusReport` variant. The decision-guide values that aren't in the
+schema:
+
+- **State** — pick from the legal enum based on what the audience sees:
+  - **`ok`** — system is in a "good" steady state for this node.
+  - **`warn`** — observable anomaly that doesn't block the demo (queue
+    depth above threshold, no rows yet, worker idle when busy was
+    expected).
+  - **`error`** — node is broken (DB unreachable, external API 5xx,
+    workflow run failed). The end-to-end validator treats `error` as a
+    validation failure for that node — reserve it for genuine system
+    breakage, not "I expected 3 rows and saw 2".
+  - **`pending`** — work in flight (workflow `running`, queue
     non-empty, async leg not yet observed).
-- **`summary`** *(optional, ≤ 120 chars)* — short on-node label. Shown
-  directly under the node header. Aim for "N pending / M total" style
-  density.
-- **`detail`** *(optional, ≤ 2000 chars)* — longer text rendered in
-  the sidebar when the user inspects the node. Markdown is permitted.
-- **`data`** *(optional, record of string → unknown)* — structured
-  key/value bag rendered as a table in the sidebar. Use for counts,
-  ids, timestamps. Avoid embedding PII.
-- **`ts`** *(optional, positive integer)* — `Date.now()`. Lets the UI
-  show how stale the last tick is.
+- **Summary text** — aim for "N pending / M total" density. Shown
+  directly under the node header.
+- **Detail markdown** — rendered in the sidebar when the user inspects
+  the node.
+- **Structured data bag** — rendered as a table in the sidebar. Use for
+  counts, ids, timestamps. Avoid embedding PII.
+- **Timestamp** — `Date.now()` lets the UI show how stale the last tick
+  is.
 
 ## Tick cadence
 
@@ -242,10 +225,9 @@ see, with sketches of what the script should observe:
   fixture drop already shows "I was clicked"; layering a status on
   top adds noise.
 - **Decorative nodes** — `shapeNode`, `iconNode`, `htmlNode`,
-  `imageNode`. The schema does not even allow it for
-  most of these, but the rule holds for any node that exists for
-  layout reasons rather than because the system has an observable
-  state there.
+  `imageNode`. The CLI does not even accept it for most of these,
+  but the rule holds for any node that exists for layout reasons
+  rather than because the system has an observable state there.
 - **Nodes whose state would simply repeat the playAction return.**
   If a Play's `body` already says `"order ord_123 created"`, a
   status that polls the same DB and prints "1 order: ord_123" is
@@ -260,9 +242,9 @@ ones; the plan-review step lets the user ask for more.
 
 1. **Read the brief and the draft.** Map every node in
    `nodeDraft.nodes` to a placement category (DB, workflow, queue,
-   worker, cache, external-API, or "skip"). Use `data.kind` as the
-   first hint; fall back to the node's name + `codePointers` for
-   ambiguous cases.
+   worker, cache, external-API, or "skip"). Use the node's name and
+   `codePointers` to classify; fall back to behaviour the brief
+   describes when the name is ambiguous.
 2. **Ground in code.** For each candidate status, use `Grep`/`Read` to
    confirm how to read the signal — table name, HTTP path, queue
    depth API, workflow describe call. Quote the path/method in the
@@ -303,12 +285,12 @@ nodeDraft: {
   name: "Order Pipeline",
   slug: "order-pipeline",
   nodes: [
-    { id: "order-server",     type: "playNode",  data: { name: "POST /orders",     kind: "service" } },
-    { id: "event-bus",        type: "stateNode", data: { name: "Event Bus",        kind: "bus" } },
-    { id: "inventory-worker", type: "stateNode", data: { name: "Inventory Worker", kind: "worker" } },
-    { id: "shipping-worker",  type: "stateNode", data: { name: "Shipping Worker",  kind: "worker" } },
-    { id: "shipments-queue",  type: "stateNode", data: { name: "Shipments Queue",  kind: "queue" } },
-    { id: "order-store",      type: "stateNode", data: { name: "Order Store",      kind: "db" } }
+    { id: "order-server",     type: "playNode",  data: { name: "POST /orders" } },
+    { id: "event-bus",        type: "stateNode", data: { name: "Event Bus" } },
+    { id: "inventory-worker", type: "stateNode", data: { name: "Inventory Worker" } },
+    { id: "shipping-worker",  type: "stateNode", data: { name: "Shipping Worker" } },
+    { id: "shipments-queue",  type: "stateNode", data: { name: "Shipments Queue" } },
+    { id: "order-store",      type: "stateNode", data: { name: "Order Store" } }
   ],
   connectors: [ ... ]
 }

@@ -22,7 +22,9 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | Phase | Subcommand | Purpose |
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
-| P3 | `projects:create` | Scaffold + register new project |
+| P3 | (Write) | Author the empty envelope at `<project>/.seeflow/<slug>/flow.json` per `$SEEFLOW schema flow` (planner-supplied `name`, empty arrays) — never `projects:create` |
+| P3 | `register` | Validate the empty envelope and register the project at `<project>/.seeflow/<slug>/flow.json` — required before the canvas can open at `$STUDIO_URL/d/<slug>` |
+| P3 | `ids` | Mint canonical `node-<10>` / `conn-<10>` ids |
 | P3 | `flow:add-bulk` | Atomic seed of skeleton nodes + connectors in one transactional write (rollback covers both arrays) |
 | P3 | `flows:layout` | Run ELK; rewrite style.json positions |
 | P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node — also accepts an optional `type` field for non-destructive retype (preserves the per-node folder under `.seeflow/nodes/<id>/`) |
@@ -32,7 +34,7 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | any | `flows:list`, `flows:get` | Discovery / id lookup |
 | rollback | `flows:delete`, `nodes:delete`, `connectors:delete` | Undo |
 
-Every write is validated server-side by the studio's post-merge `ResolvedFlowSchema` reparse. There is no standalone validation step — a `badSchema` exit from any mutation is the validation feedback.
+Every write is validated server-side by the studio. There is no standalone validation step — a `badSchema` exit from any mutation is the validation feedback.
 
 ## Sub-agent reference
 

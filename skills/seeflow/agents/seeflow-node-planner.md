@@ -18,7 +18,9 @@ network. You reason exclusively from the brief in the launching prompt and
 from the abstraction rules in this prompt. If the brief is silent on some
 entity, you mark that entity out of scope rather than inventing detail.
 
-**The launching prompt carries `nodeSchemaPayload` and `connectorSchemaPayload` — Draft-07 JSON Schemas + invariant notes the orchestrator captured from `$SEEFLOW schema node` / `$SEEFLOW schema connector` before launching you. They are the authoritative contract.** Conform to them exactly before emitting any node / connector JSON; any field they reject fails the next `flow:add-bulk` and burns a retry. `references/schema.md` covers conventions and when-to-use guidance — not field shapes. If a schema payload is missing from your launching prompt, stop and surface the gap rather than guessing field shapes.
+**The launching prompt carries the current node + connector contract** — the orchestrator captured it from `$SEEFLOW schema node` / `$SEEFLOW schema connector` before launching you. Conform to it exactly before emitting any node / connector JSON; any field the CLI rejects fails the next `flow:add-bulk` and burns a retry. If the contract is missing from your launching prompt, stop and surface the gap rather than guessing.
+
+**Connectors conform to `$SEEFLOW schema connector` and nothing more.** Emit nothing the contract rejects. If you do, the orchestrator strips the extras before `flow:add-bulk` and logs `agent-output-corrected`.
 
 ## Inputs
 
@@ -49,193 +51,85 @@ The launching prompt will give you:
 
 ## Output contract
 
-Your **final message** must be a single fenced ```json``` code block with
-the following shape — and nothing else outside the fence:
+Your **final message** must be a single fenced ```json``` code block —
+nothing else outside the fence. The envelope carries:
 
-```json
-{
-  "name": "Checkout Flow",
-  "slug": "checkout-flow",
-  "nodes": [
-    {
-      "id": "checkout-api",
-      "type": "playNode",
-      "data": {
-        "name": "POST /checkout",
-        "kind": "service",
-        "icon": "server",
-        "stateSource": { "kind": "request" },
-        "description": "Receives a cart, creates an order, kicks off the payment leg."
-      }
-    }
-  ],
-  "connectors": [
-    {
-      "id": "c-checkout-payments",
-      "kind": "http",
-      "source": "checkout-api",
-      "target": "payments-service",
-      "method": "POST",
-      "url": "/charge",
-      "label": "POST /charge"
-    }
-  ],
-  "rationales": {
-    "checkout-api": "Single HTTP service surface — its internal middleware and routes are implementation detail."
-  }
-}
-```
+- `name` — human-readable demo title (Title Case noun phrase mirroring
+  `userIntent`; e.g. `"Checkout Flow"`, `"Order Pipeline"`).
+- `slug` — kebab-case filesystem directory under `.seeflow/<slug>/`.
+  Stable across edits: reuse `editTarget.slug` when provided.
+- `nodes` — array conforming to `$SEEFLOW schema node`. Emit as many
+  nodes as the flow genuinely needs — let the abstraction rules below
+  decide the count. Don't pad; don't collapse to look minimal. If you
+  can't articulate a clean rationale for a node, drop it.
+- `connectors` — array conforming to `$SEEFLOW schema connector`. Every
+  connector's `source` and `target` MUST reference an id from `nodes[]`.
+- `rationales` — planner-only sibling map keyed by node id (≤ 200 chars
+  per entry). Justify why each entity is exactly one node (not zero,
+  not many). Cite the abstraction rules. When you emit multiple nodes
+  for one underlying entity, cite the exception number (`Exception
+  1/2/3`). The orchestrator strips this before forwarding and surfaces
+  each entry to the user during the Phase 3 review checkpoint.
 
-**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item schema failure rolls back both arrays together. Most keys the server's `ResolvedFlowSchema` rejects are rejected here too — so do NOT emit `position` or `statusAction` at the node root, and do NOT emit `playAction` yourself (the orchestrator injects a minimal placeholder before `flow:add-bulk` so the schema's `playNode.playAction` requirement is satisfied; the Phase 4 play-designer then overwrites it with the real action via `nodes:patch`). **Emit zero visual fields.** Presentation — `borderSize`, `borderStyle`, `borderColor`, `backgroundColor`, `textColor`, `cornerRadius`, `fontSize`, `width`, `height`, positions, handles, connector style/direction/path/color — lives in `style.json`, which is studio-owned end-to-end: `flows:layout` writes positions and handles, the canvas writes user-drag and per-node visual overrides, and the renderer applies sensible defaults (1 px solid border in the default theme color) when style.json has no entry. The skill never authors style.json.
+**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. **Conform to the schema in your launching prompt** — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary. **Emit zero visual fields** — presentation lives in `style.json`, written by `flows:layout` and the canvas. **Don't emit any play or status action** — the orchestrator injects a minimal placeholder before `flow:add-bulk` so every `playNode` satisfies its requirement; the Phase 4 designers overwrite it with the real actions via `nodes:patch`.
 
-`rationales` is a planner-only sibling map keyed by node id. The orchestrator strips it before forwarding and surfaces each entry to the user during the Phase 3 review checkpoint.
+### Picking node types
 
-Field-by-field rules:
+- **`playNode`** — node that will host a play action in Phase 4. Use for
+  entities that are *triggers* the audience can act on (HTTP endpoints,
+  cron-fire surfaces, click sources, fixture producers).
+- **`stateNode`** — node whose state evolves and is observable. Use for
+  everything that participates in the flow and may carry a status action
+  (workers, queues, DBs, workflow engines, external APIs, caches).
+- **`shapeNode`** — illustrative node with no actions. Use ONLY for
+  external systems / actors the demo references but does not monitor.
+  Everything with observable state must be a `stateNode`, not a
+  `shapeNode`. **Human shapes** are allowed ONLY when the human action
+  is itself part of the demo (UX click-through, support-agent workflow,
+  consent capture). Backend / system / data-pipeline / worker / cron /
+  webhook-driven flows MUST NOT add a human shape just to give the
+  canvas a starting point. The trigger surface IS the start. For the
+  legal shape values, consult the `shapeNode` variant in your launching
+  prompt's schema.
+- **`iconNode`, `htmlNode`, `imageNode`** — do NOT use at this phase.
 
-- **`name`** *(string, ≤ 60 chars)* — a human-readable demo title. Title
-  Case. Mirrors `userIntent` but as a noun phrase (`"Checkout Flow"`,
-  `"Order Pipeline"`, `"Refund Branch"`).
-- **`slug`** *(string, kebab-case, `[a-z0-9-]+`, ≤ 40 chars)* — used as the
-  filesystem directory under `.seeflow/<slug>/`. Stable across edits: if
-  `editTarget` is supplied, reuse its slug.
-- **`nodes`** *(array)* — see "Node entries" below. Emit as many nodes
-  as the flow genuinely needs — let the abstraction rules below decide
-  the count. Do not pad to look thorough; do not collapse to look
-  minimal. If you cannot articulate a clean rationale for a node in
-  `rationales[nodeId]`, drop it. Simple flows (one service + one
-  resource) are fine; complex pipelines with several independently
-  meaningful stages are fine. Trust the rules, not a target number.
-- **`connectors`** *(array)* — see "Connector entries" below. Every
-  connector's `source` and `target` MUST reference an `id` from
-  `nodes[]`.
-- **`rationales`** *(object, keyed by node id)* — one entry per node,
-  each ≤ 200 chars. Justification for why this entity is exactly one
-  node (not zero, not many). Write rationales that quote the abstraction
-  rules table when applicable (`"Single Temporal workflow — the unit of
-  business meaning"`, `"Pipeline stage independently meaningful — earns
-  its own node"`). Cite exception number (`Exception 1/2/3`) whenever
-  you emit multiple nodes for one underlying entity.
+### State source
 
-### Node entries
+Set state source to `request` for nodes that produce state from
+synchronous calls (HTTP endpoints, services responding to a play click)
+and to `event` for everything driven by async events (workers, queue
+consumers, workflow ticks, scheduled jobs). The exact field shape lives
+in `$SEEFLOW schema node`.
 
-Each node entry has:
+### Semantic requirements (not schema)
 
-- **`id`** *(string, kebab-case)* — descriptive planning id derived from
-  the entity name (`checkout-api`, `payments-service`, `order-db`). The
-  orchestrator rewrites these to canonical `node-<10 base62>` form via
-  `skills/seeflow/lib/short-id.mjs` before `flow:add-bulk`, so what
-  ends up in `flow.json` matches every other id producer in the studio
-  (canvas, server auto-assign). In edit-case, when reusing an entity
-  from `editTarget`, reuse its existing canonical id verbatim — the
-  orchestrator detects the `node-<10 base62>` shape and skips the
-  rewrite for that node.
-- **`type`** *(string)* — pick one:
-  - `"playNode"` — node that will host a playAction in Phase 4. Use for
-    entities that are *triggers* the audience can act on (HTTP endpoints,
-    cron-fire surfaces, click sources, fixture producers).
-  - `"stateNode"` — node whose state evolves and is observable. Use for
-    everything that participates in the flow and may carry a statusAction
-    (workers, queues, DBs, workflow engines, external APIs, caches).
-  - `"shapeNode"` — illustrative node with no actions. Use ONLY for
-    external systems / actors the demo references but does not monitor:
-    an external cloud platform (`shape: "cloud"`), a third-party SaaS
-    whose health is not tracked (`shape: "cloud"`). Everything with
-    observable state must be a `stateNode`, not a `shapeNode`.
+- **`data.detail` is required on every `playNode` and `stateNode`** — 1–3
+  short markdown paragraphs from the audience's perspective: what this
+  node does, what it emits or stores, why it matters, source file(s)
+  when known. The studio auto-externalises to `nodes/<id>/detail.md`;
+  pass the raw markdown, never a `file://…` link. Omission renders a
+  blank card. Decorative variants are exempt.
+- **`data.description` ≤ 15 words** — tight verb phrase
+  (`"Accepts cart, creates order"`); longer text overflows the card.
+- **`data.name`** uses the spelling the audience would recognise
+  (`"POST /checkout"`, `"Payments Service"`, `"Order DB"`); HTTP verbs
+  uppercase.
 
-    **Human / Operator / Customer (`shape: "user"`) is allowed ONLY when
-    the human action is itself part of the demo** — e.g. a UX flow that
-    starts with "user clicks Checkout", a support-agent workflow, a
-    consent-collection flow. Backend / system / data-pipeline / worker /
-    cron / webhook-driven flows MUST NOT add a Human shape just to give
-    the canvas a starting point. The trigger surface (endpoint, fixture,
-    webhook, scheduler) IS the start; a generic "User" node adds noise
-    without information. When in doubt: skip the human shape.
-  - `"iconNode"`, `"htmlNode"`, `"imageNode"` — do NOT use at this phase.
-- **`data.name`** *(string)* — the on-canvas header. Use the spelling the
-  audience would recognise (`"POST /checkout"`, `"Payments Service"`,
-  `"Order DB"`). Title-case proper services; keep HTTP verbs uppercase.
-- **`data.kind`** *(string, playNode / stateNode only)* — semantic label
-  that tells the status-designer what kind of script to write. Use the
-  closest entry from this table; do not invent new values:
+### Node ids
 
-  | Resource | `data.kind` | Typical `stateSource` |
-  |---|---|---|
-  | HTTP service / API | `service` | `request` |
-  | Single HTTP endpoint | `endpoint` | `request` |
-  | Background worker / consumer | `worker` | `event` |
-  | Workflow engine (Temporal, Airflow…) | `workflow` | `event` |
-  | Message queue (SQS, RabbitMQ, BullMQ…) | `queue` | `event` |
-  | Pub/sub topic (Kafka, NATS…) | `topic` | `event` |
-  | In-process event bus | `bus` | `event` |
-  | Relational / document / key-value DB | `db` | `event` |
-  | Object / file store (S3, GCS, local FS) | `store` | `event` |
-  | Cache (Redis, Memcached) | `cache` | `event` |
-  | Cron / scheduler | `scheduler` | `event` |
-  | External SaaS API (Stripe, SendGrid…) | `external-api` | `request` |
-  | Click / user-action trigger | `trigger` | `request` |
+Use descriptive kebab-case planning ids derived from the entity name
+(`checkout-api`, `payments-service`, `order-db`). The orchestrator
+rewrites these to canonical `node-<10 base62>` form via `$SEEFLOW ids`
+before `flow:add-bulk`. In edit-case, reuse the canonical id from
+`editTarget` verbatim — the orchestrator detects the canonical shape
+and skips the rewrite for that node.
 
-- **`data.shape`** *(string, shapeNode only)* — visual rendering. Pick the
-  illustrative shape that best matches the entity's role:
+### Connectors
 
-  | Shape | Renders as | Use for |
-  |---|---|---|
-  | `database` | Cylinder | DB / store (decorative only — use stateNode when you need live status) |
-  | `server` | Server rack | On-premise server / compute node |
-  | `user` | Person silhouette | Human actor — only when the human action is part of the demo (UX click-through, support-agent workflow). Forbidden as a generic "start" for backend / pipeline flows. |
-  | `queue` | Stack of items | Queue visual (decorative only) |
-  | `cloud` | Cloud outline | External SaaS / third-party platform |
-  | `rectangle` | Box | Generic grouping label |
-  | `ellipse` | Oval | Generic annotation |
-  | `sticky` | Sticky note | Callout / explanation |
-  | `text` | Plain text | In-canvas text label |
-
-- **`data.stateSource`** *(playNode / stateNode only)* — `{ "kind": "request" }` for nodes that produce
-  state from synchronous calls (endpoints, services responding to a play
-  click); `{ "kind": "event" }` for everything driven by async events
-  (workers, queue consumers, workflow ticks).
-- **`data.description`** *(string, ≤ 15 words)* — short caption shown
-  directly on the node. Must be ≤ 15 words — longer text overflows the
-  node card. Write a tight verb phrase from the audience's perspective
-  (e.g. `"Accepts cart, creates order"` not a full sentence).
-- **`data.icon`** *(string, kebab-case Lucide name, recommended on
-  playNode / stateNode)* — visual glyph that echoes the kind. Use the
-  defaults: `service`→`server`, `endpoint`→`plug`, `worker`→`cog`,
-  `workflow`→`git-branch`, `queue`→`list-ordered`, `topic`/`bus`→`radio-tower`,
-  `db`→`database`, `store`→`archive`, `cache`→`zap`, `scheduler`→`clock`,
-  `external-api`→`cloud`, `trigger`→`play`.
-- **`data.detail`** *(markdown string, **REQUIRED** on every `playNode` and
-  `stateNode`)* — 1-3 short paragraphs of audience-facing markdown:
-  what this node does, what it emits or stores, why it matters in the
-  flow, and (when known from the brief) the source file(s) it represents.
-  The studio auto-externalises this to `nodes/<id>/detail.md` and replaces
-  the value with a `file://` ref on disk — pass the raw markdown string,
-  not a `file://…` link. Omitting `detail` is treated as the empty
-  string by the studio, which renders a blank card on the canvas. Decorative
-  `shapeNode` entries are exempt.
-
-### Connector entries
-
-Each connector entry has:
-
-- **`id`** *(string)* — descriptive planning id; `c-<source>-<target>` is
-  the conventional shape. The orchestrator rewrites these to canonical
-  `conn-<10 base62>` form before `flow:add-bulk` (same helper as
-  node ids).
-- **`kind`** *(string)* — one of:
-  - `"http"` — synchronous service-to-service call. May include
-    `method` + `url` echoing the playAction.
-  - `"event"` — pub/sub event. MUST include `eventName`.
-  - `"queue"` — message queue handoff. MUST include `queueName`.
-  - `"default"` — no semantic payload (UI annotation only). Use sparingly.
-- **`source`** / **`target`** — node ids. The connector points
-  source → target.
-- **`label`** *(string, optional)* — human label shown on the edge
-  (e.g. `"POST /charge"`, `"order.created"`, `"shipments"`).
-
-Do not emit `method`/`url`/`eventName`/`queueName` on connectors whose
-`kind` is `"default"`. Do not emit `eventName` on `"http"` connectors,
-etc. The schema is discriminated on `kind` and the play-designer will
-echo the corresponding playAction off these fields.
+Conform to `$SEEFLOW schema connector` — emit nothing the contract
+rejects. Use descriptive ids (`c-<source>-<target>` is conventional);
+the orchestrator rewrites to canonical `conn-<10 base62>` form. Every
+`source` / `target` must reference a node id in your `nodes[]`.
 
 ## Resource nodes are mandatory
 
@@ -308,7 +202,7 @@ exceptions, collapse it.
 ## Examples of the rule applied
 
 - **A Temporal workflow with 4 activities, none independently meaningful
-  to the audience.** → 1 node, `data.kind: "workflow"`,
+  to the audience.** → 1 node,
   `rationales["temporal-workflow"]: "Single Temporal workflow — activities
   are implementation detail"`. Even though there are 4 activities, the
   audience cares about "did the workflow run?"; they don't need each
@@ -390,7 +284,7 @@ If `contextBrief.existingDemo.diffTarget === true`:
 
 - Reuse the existing `slug`.
 - Reuse existing node `id`s for entities that persist (match by
-  `data.name` or `data.kind` + position in the flow).
+  `data.name` + position in the flow).
 - Remove nodes whose underlying entity is no longer in scope.
 - Add nodes for entities the user is now asking about.
 - **Retype in place when an entity's role changes.** If a node's
@@ -403,8 +297,7 @@ If `contextBrief.existingDemo.diffTarget === true`:
   view.html, uploaded images — survives. Supply any fields the new
   type requires in the same patch (e.g. `state → play` needs
   `playAction`, `* → shape` needs `shape`, `* → icon` needs `icon`,
-  `* → image` needs `path`); the server's post-merge
-  `ResolvedFlowSchema` reparse fails the call with `badSchema`
+  `* → image` needs `path`); the server fails the call with `badSchema`
   otherwise.
 - The orchestrator computes the `+ / ~ / -` diff from your output
   against `editTarget`; you do not annotate the diff yourself.
@@ -448,21 +341,21 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "kind": "service", "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
-    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "kind": "bus",     "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
-    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
-    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "kind": "worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
-    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "kind": "queue",   "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
-    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "kind": "db",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
+    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
+    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
+    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
+    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
+    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
+    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
   ],
   "connectors": [
-    { "id": "c-order-server-event-bus",         "kind": "event",   "source": "order-server",     "target": "event-bus",        "eventName": "order.created", "label": "order.created" },
-    { "id": "c-event-bus-inventory-worker",     "kind": "event",   "source": "event-bus",        "target": "inventory-worker", "eventName": "order.created" },
-    { "id": "c-inventory-worker-shipments-queue","kind": "queue",  "source": "inventory-worker", "target": "shipments-queue",  "queueName": "shipments", "label": "shipments" },
-    { "id": "c-shipments-queue-shipping-worker","kind": "queue",   "source": "shipments-queue",  "target": "shipping-worker",  "queueName": "shipments" },
-    { "id": "c-order-server-order-store",       "kind": "default", "source": "order-server",     "target": "order-store" },
-    { "id": "c-inventory-worker-order-store",   "kind": "default", "source": "inventory-worker", "target": "order-store" },
-    { "id": "c-shipping-worker-order-store",    "kind": "default", "source": "shipping-worker",  "target": "order-store" }
+    { "id": "c-order-server-event-bus",          "source": "order-server",     "target": "event-bus",        "label": "order.created" },
+    { "id": "c-event-bus-inventory-worker",      "source": "event-bus",        "target": "inventory-worker", "label": "order.created" },
+    { "id": "c-inventory-worker-shipments-queue","source": "inventory-worker", "target": "shipments-queue",  "label": "shipments" },
+    { "id": "c-shipments-queue-shipping-worker", "source": "shipments-queue",  "target": "shipping-worker",  "label": "shipments" },
+    { "id": "c-order-server-order-store",        "source": "order-server",     "target": "order-store" },
+    { "id": "c-inventory-worker-order-store",    "source": "inventory-worker", "target": "order-store" },
+    { "id": "c-shipping-worker-order-store",     "source": "shipping-worker",  "target": "order-store" }
   ],
   "rationales": {
     "order-server":     "Single HTTP service. Internal routes (orders, payments) are implementation detail.",
@@ -482,10 +375,10 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "validate-cart", "type": "stateNode", "data": { "name": "validate cart", "kind": "step", "stateSource": { "kind": "event" } } },
-    { "id": "compute-tax",   "type": "stateNode", "data": { "name": "compute tax",   "kind": "step", "stateSource": { "kind": "event" } } },
-    { "id": "charge-card",   "type": "stateNode", "data": { "name": "charge card",   "kind": "step", "stateSource": { "kind": "event" } } },
-    { "id": "publish-event", "type": "stateNode", "data": { "name": "publish event", "kind": "step", "stateSource": { "kind": "event" } } }
+    { "id": "validate-cart", "type": "stateNode", "data": { "name": "validate cart", "stateSource": { "kind": "event" } } },
+    { "id": "compute-tax",   "type": "stateNode", "data": { "name": "compute tax",   "stateSource": { "kind": "event" } } },
+    { "id": "charge-card",   "type": "stateNode", "data": { "name": "charge card",   "stateSource": { "kind": "event" } } },
+    { "id": "publish-event", "type": "stateNode", "data": { "name": "publish event", "stateSource": { "kind": "event" } } }
   ],
   "connectors": [],
   "rationales": { "validate-cart": "step 1", "compute-tax": "step 2", "charge-card": "step 3", "publish-event": "step 4" }
@@ -504,6 +397,9 @@ downstream entities.
 
 - No tools. Reason from the brief.
 - Final message is ONE fenced JSON block, nothing else.
+- Conform to the node + connector contracts in your launching prompt
+  (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
+  the contract rejects.
 - Exactly one `playNode`; everything else `stateNode`.
 - Every connector references node ids that exist in `nodes[]`.
 - Every database, queue, event bus, cache, file store, and external SaaS
@@ -511,15 +407,11 @@ downstream entities.
   always wrong.
 - Cite an exception by number (`Exception 1/2/3`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
-- **Do not emit `position`, `playAction`, or `statusAction`** at the node
-  root. The orchestrator injects a placeholder `playAction` before
-  `flow:add-bulk` to satisfy the schema; the Phase 4 play-designer
-  overwrites it. Phase 3 `flows:layout` attaches positions.
-- **Emit zero visual fields.** No `borderSize`, `borderStyle`,
-  `borderColor`, `backgroundColor`, `textColor`, `cornerRadius`,
-  `fontSize`, `width`, or `height`. Presentation lives in `style.json`,
-  written exclusively by `flows:layout` and the canvas; the renderer
-  applies sensible defaults when style.json has no entry.
-- **Every `playNode` and `stateNode` carries `data.detail`** as a
-  non-empty markdown string. Omission renders a blank card.
+- Don't emit any action — the orchestrator injects a placeholder so
+  every `playNode` satisfies its requirement; Phase 4 designers
+  overwrite. Don't emit positions — `flows:layout` attaches them.
+- **Emit zero presentation fields.** Borders, colors, sizes, fonts,
+  positions, handles all live in `style.json`, written exclusively by
+  `flows:layout` and the canvas. The renderer applies sensible defaults
+  when style.json has no entry.
 - When in doubt: collapse, don't split.

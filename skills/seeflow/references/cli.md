@@ -22,9 +22,22 @@ exist.
 
 `help` documents most `<flowId>` arguments as "Flow id or slug" — but the
 server currently only resolves by id (`flowNotFound` if a slug is passed).
-**Use the `id` returned by `projects:create` for every follow-up call.**
+**Use the `id` returned by `register` for every follow-up call.**
+(`projects:create` exists but scaffolds to `~/.seeflow/<slug>/` — wrong
+location for the project-local flow this skill creates. Always author
+the empty envelope under `<project>/.seeflow/<slug>/flow.json` and
+register it via `register --path <project> --flow .seeflow/<slug>/flow.json`.)
 Treat the slug as a URL convenience (the canvas opens at `$STUDIO_URL/d/<slug>`),
 not as an addressable identifier from the CLI.
+
+## Generating canonical ids
+
+`$SEEFLOW ids <node|connector> <count>` prints `count` canonical short
+ids (10 base62 chars), one per line. Use `node` for node ids
+(`node-<...>`) and `connector` for connector ids (`conn-<...>`) — the
+shape matches every other id producer in the studio (canvas, server
+auto-assign, the upload endpoint regex). `count` must be in `[1, 100]`;
+call once per type.
 
 The studio URL resolves from `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json`
 port → `http://localhost:4321`.

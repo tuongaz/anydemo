@@ -1,6 +1,6 @@
 ---
 name: seeflow
-description: Use when the user asks to *create* a new SeeFlow flow — "create a flow", "generate a flow", "scaffold a SeeFlow flow", "add a flow to this repo", or when a previous `/seeflow-lookup` reported no matching flow exists. For questions about an existing flow ("how does X work", "show me the flow", "diagram our system"), use `/seeflow-lookup` first — it will fall back to this skill if nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
+description: Use ONLY when the user explicitly asks to *create* a new SeeFlow flow — "create a flow", "generate a flow", "scaffold a SeeFlow flow", "add a flow to this repo" — or when a previous `/seeflow-lookup` already reported no matching flow exists. **Do NOT invoke for inspection phrasing** ("show me", "how does X work", "diagram our system", "explain the flow") — those route to `/seeflow-lookup` first; it will auto-hand off here only when nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow under `<project>/.seeflow/<slug>/`.
 ---
 
 # seeflow
@@ -43,7 +43,7 @@ Any intermediate file the orchestrator or a generated Play/Status script needs (
 3. **Cleanup at end of run** — after Phase 6 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
 4. **Never check in** — if `.seeflow/.tmp/` is not yet gitignored, add it before committing.
 
-**Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. **Don't memorise CLI syntax** — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
+**Every flow mutation goes through the CLI.** The studio validates every write server-side — there is no separate validation step. **Don't memorise CLI syntax** — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
 ## Pipeline
 
@@ -52,8 +52,9 @@ P0    /health probe ‖ read LEARN.md
 P1    code-analyzer ‖ system-analyzer
 P2    node-planner (kicks off when code-analyzer returns;
                    system-analyzer continues in background)
-P3    projects:create → flow:add-bulk (nodes + connectors, atomic)
-      → flows:layout → USER REVIEW + dynamic gate (one combined ask)
+P3    write empty <project>/.seeflow/<slug>/flow.json → register
+      → flow:add-bulk (nodes + connectors, atomic) → flows:layout
+      → USER REVIEW + dynamic gate (one combined ask)
 P4    play-designer ‖ status-designer
 P5    write scripts to .seeflow/nodes/<nodeId>/scripts/
       → nodes:patch (per node, with playAction / statusAction)
@@ -90,13 +91,21 @@ Full text in `references/core-rules.md`:
 
 ## Phase 0 — pre-flight (parallel)
 
-**First, silent consent check (see `feedback.md`).** Read `~/.seeflow/consent.json`. If absent, run the first-run prompt and write the file before continuing. The result governs whether qualifying events get logged to `~/.seeflow/feedback.jsonl` for the rest of the run — the skill only writes locally; a `SessionEnd` hook handles transfer.
+### Lookup-first gate — run before anything else
+
+If the user's prompt reads as **inspection** rather than creation — any of "show me", "show the", "how does", "how do", "what does", "diagram", "explain", "where does", "what handles" — STOP and route through `/seeflow-lookup` instead. That skill catalogues registered flows and only hands back here if nothing matches. Going straight to creation when a flow already exists wastes the run and surfaces a duplicate. The same gate applies when the user names a flow by slug or title without an explicit verb ("the CRN Enhancement flow", "the checkout flow") — assume inspection unless they prefix it with "create / scaffold / generate / add".
+
+Creation-only triggers (skip the gate): the prompt explicitly says "create / scaffold / generate / add a flow", or `/seeflow-lookup` has already run in this turn and reported no match.
+
+### Silent consent check (see `feedback.md`)
+
+Read `~/.seeflow/consent.json`. If absent, run the first-run prompt and write the file before continuing. The result governs whether qualifying events get logged to `~/.seeflow/feedback.jsonl` for the rest of the run — the skill only writes locally; a `SessionEnd` hook handles transfer.
 
 Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
 
 ### Capability probe — run before anything else
 
-Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `schema`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more.) For each missing subcommand, log a feedback entry and surface to the user.
+Run `$SEEFLOW help` once and confirm every required subcommand is present: `register`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `schema`, `ids`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more — `ids` was added with the project-local scaffold flow.) For each missing subcommand, log a feedback entry and surface to the user.
 
 - Required missing → log `env-capability-mismatch` (`severity: blocker`, `phase: P0`, `details: missing <subcommand>[, <subcommand>...]`, `summary: $SEEFLOW lacks required subcommands; run `npm i -g @tuongaz/seeflow@latest` and retry`). Then stop — do **not** start Phase 1.
 - All present → continue.
@@ -178,41 +187,45 @@ When the system-analyzer returns:
 
 ## Phase 2 — plan nodes
 
-Launch `seeflow-node-planner` with the brief, the resolved tech-ref paths, and the matching `techAdaptations`. No tools — pure reasoning. The planner reads each ref's **Node modelling** section and treats `techAdaptations` as the project-specific override.
+**Look up the current node + connector contract from the CLI first.** Before drafting anything, run `$SEEFLOW schema node` and `$SEEFLOW schema connector` (parallel; one message, two Bash calls) and capture both outputs. Pass them to the planner alongside the brief — the planner has no shell, so what you don't forward, it doesn't know. Skipping this step lets the planner invent fields the CLI rejects on `flow:add-bulk`, burning a retry.
 
-**Before launching the planner, run `$SEEFLOW schema node` and `$SEEFLOW schema connector`** (parallel; one message, two Bash calls) and capture the JSON payloads. Forward them in the launching prompt as `nodeSchemaPayload` and `connectorSchemaPayload`. The planner has no shell — it relies on these payloads as the authoritative contract; `references/schema.md` only covers conventions and when-to-use guidance, not field shapes. Missing forwarding = planner emits drift = `flow:add-bulk` rejects = wasted retry.
+Launch `seeflow-node-planner` with: the brief, the resolved tech-ref paths, the matching `techAdaptations`, and the two CLI outputs above. No tools — pure reasoning. The planner reads each ref's **Node modelling** section and treats `techAdaptations` as the project-specific override.
+
+**Connectors conform to `$SEEFLOW schema connector` and nothing more.** If the planner emits any field the contract rejects, strip it before `flow:add-bulk` and log `agent-output-corrected` with `details: connector-extras-stripped (×N)`. Do not enumerate the legal fields here — re-run the schema command whenever in doubt.
 
 - **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own `stateNode`.
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches.
 - **Connection limit** — max 4 (in + out) per node. Exceeded → **split** distinct responsibilities, or **duplicate** a shared resource (same `kind` + `name`, unique `id` like `orders-db-read`).
 
-Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,target,…}], rationales:{[nodeId]: string} }`. The `nodes` and `connectors` arrays are forwarded verbatim — in a single body — to the `flow:add-bulk` subcommand in Phase 3. Every key the schema rejects is rejected here. One retry on unparseable output, then surface and stop. Full schema: `agents/seeflow-node-planner.md`.
+Output: a single envelope carrying `name`, `slug`, `nodes`, `connectors`, and `rationales` (planner-only sibling map). The `nodes` and `connectors` arrays must conform to `$SEEFLOW schema node` and `$SEEFLOW schema connector` — they are forwarded verbatim in a single body to the `flow:add-bulk` subcommand in Phase 3. Any key the CLI rejects here is rejected at `flow:add-bulk` too. One retry on unparseable output, then surface and stop. Full contract: `agents/seeflow-node-planner.md`.
 
 ## Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via three CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
+The skeleton flow lands via four steps, in order. No `flow.json` authoring beyond the empty envelope in step 1. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
-1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result. **Use `id` (not `slug`) for every follow-up CLI call below.** Several commands document slug support in `help` but the server only resolves by id today.
-2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose `data.playAction` is absent, inject a placeholder so the server's `ResolvedFlowSchema` (which requires `playAction` on every `playNode`) accepts the batch:
-   ```json
-   "playAction": {
-     "kind": "script",
-     "interpreter": "<runtimeProfile.primaryLanguage, or 'bun' if unknown>",
-     "scriptPath": "scripts/play.ts",
-     "timeoutMs": 15000
-   }
-   ```
-   The Phase 4 play-designer overwrites this with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
-2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches:
+**Never run `projects:create`.** It scaffolds to `~/.seeflow/<slug>/` (the user's home), which is the wrong location — flows must always live inside the working project at `<project>/.seeflow/<slug>/` so they travel with the repo. Use the explicit dir-write + `register` flow below.
+
+1. **Scaffold + register inside the project.** The slug comes from the planner output (`<plannerOutput>.slug`); reuse it verbatim — that is the on-disk folder name and the canvas URL segment.
+
+   Run `$SEEFLOW schema flow` to see what the envelope requires, then write that minimum envelope to `$repoPath/.seeflow/$slug/flow.json` (empty `nodes` and `connectors` arrays; planner-supplied `name`). Do not hardcode the envelope shape from memory — re-read the schema every run, the contract evolves. Finally:
+
    ```bash
-   nodeIds=$(node skills/seeflow/lib/short-id.mjs "${#nodes[@]}" node-)
-   connIds=$(node skills/seeflow/lib/short-id.mjs "${#connectors[@]}" conn-)
+   $SEEFLOW register --path "$repoPath" --flow ".seeflow/$slug/flow.json"
+   ```
+
+   The studio writes a registry entry under `~/.seeflow/registry.json` pointing back at `<repoPath>/.seeflow/<slug>/flow.json` and returns `{ id, slug }`. **Capture `id` from the response and use it (not `slug`) for every follow-up CLI call below** — several commands document slug support in `help` but the server only resolves by id today. **Registration is a precondition for opening the canvas:** the `$STUDIO_URL/d/<slug>` route only works after `register` succeeds, so never surface the canvas URL to the user before this step.
+
+2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose play action is absent, inject the minimum placeholder the contract requires so the server accepts the batch. Look up the exact required fields by running `$SEEFLOW schema action` and `$SEEFLOW schema node` (the `playNode` variant's `playAction` requirements) — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
+2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
+   ```bash
+   mapfile -t nodeIds < <($SEEFLOW ids node "${#nodes[@]}")
+   mapfile -t connIds < <($SEEFLOW ids connector "${#connectors[@]}")
    ```
    For each `nodes[i].id` that already matches `^node-[A-Za-z0-9]{10}$` (edit-case reuse from `editTarget`), keep it; only mint new canonical ids for net-new nodes. Build a `descriptiveId → canonicalId` map and rewrite:
    - `nodes[].id`
    - `connectors[].id`, `connectors[].source`, `connectors[].target`
    - `rationales` keys (kept in memory for the review prompt)
-2b. **Log any silent corrections** from steps 2 and 2a (see `feedback.md`). For each correction kind that fired (placeholder-`playAction` injection, descriptive→canonical id rewrite, unknown-type rename, unknown-field rename, bidir-connector strip, …), emit **one** `agent-output-corrected` entry with `severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, and `details: <correction-kind> (×N)` where N is the count. Aggregate across nodes — never one entry per node. If no corrections were needed, log nothing. This is the signal that the planner drifted from the schema; without it, the orchestrator's silent patching is invisible.
+2b. **Log any silent corrections** from steps 2 and 2a (see `feedback.md`). For each correction kind that fired (placeholder-`playAction` injection, descriptive→canonical id rewrite, unknown-type rename, unknown-field rename, bidir-connector strip, …), emit **one** `agent-output-corrected` entry with `severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, and `details: <correction-kind> (×N)` where N is the count. Aggregate across nodes — never one entry per node. If no corrections were needed, log nothing. This is the signal that the planner drifted from the contract; without it, the orchestrator's silent patching is invisible.
 3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
 4. `flows:layout` — run ELK and write `style.json`.
 
@@ -243,9 +256,9 @@ URL="$STUDIO_URL/d/$slug"
 
 Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
 
-**Before launching either designer, run `$SEEFLOW schema action` and `$SEEFLOW schema node`** (parallel; one message, two Bash calls) and capture the JSON payloads. Forward them in each designer's launching prompt as `actionSchemaPayload` and `nodeSchemaPayload`. Designers have no shell — they rely on these payloads as the authoritative contract; `references/schema.md` only covers anchor rules and runtime budgets, not field shapes. The same payloads serve both designers; reuse them. Missing forwarding = designer emits drift = `nodes:patch` rejects = wasted retry.
+**Look up the action + node contract from the CLI first.** Run `$SEEFLOW schema action` and `$SEEFLOW schema node` (parallel; one message, two Bash calls) and capture both outputs. Pass them to each designer alongside the brief — designers have no shell, so what you don't forward, they don't know. The same outputs serve both designers; reuse them. Skipping this step lets the designer invent fields the CLI rejects on `nodes:patch`, burning a retry.
 
-Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`.seeflow/nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full schemas: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
+Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`.seeflow/nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
 **Sample data priority:** integration/e2e fixtures (`runtimeProfile.integrationTestDir`, copy verbatim) → seed / migration / ORM factories → README / OpenAPI / Postman examples → invent last, note in `rationale`.
 
@@ -261,9 +274,9 @@ For each overlay returned by Phase 4 (parallelise the writes when the script bod
 
 If the play-designer emitted `newTriggerNodes`, batch them via `flow:add-bulk` (one call, both arrays atomic), then re-run `flows:layout`. (Body shape: `$SEEFLOW help flow:add-bulk`.)
 
-**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type via the post-merge reparse (e.g. `state → play` requires a `playAction` in the same patch); `badSchema` means feed the issues to the play-designer and retry.
+**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type after the merge (e.g. `state → play` requires a `playAction` in the same patch); a `badSchema` exit means feed the issues to the play-designer and retry.
 
-**Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule). When the budget is exhausted for a node, log `retry-exhausted` (`severity: failure`, `phase: P5`, `code: badSchema` (or the actual code), `summary: nodes:patch retries exhausted on <kind> (N nodes)`). Aggregate across nodes — one entry per (kind, code) pair, not one per node.
+**Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the CLI's reported issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule). When the budget is exhausted for a node, log `retry-exhausted` (`severity: failure`, `phase: P5`, `code: badSchema` (or the actual code), `summary: nodes:patch retries exhausted on <kind> (N nodes)`). Aggregate across nodes — one entry per (kind, code) pair, not one per node.
 
 ## Phase 6 — end-to-end validation
 
@@ -294,10 +307,10 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 |---|---|
 | CLI resolver + discovery via `$SEEFLOW help` | `references/cli.md` |
 | Error handling, retry caps, sub-agent table | `references/operations.md` |
-| Schema, per-node file convention, action shapes | `references/schema.md` |
+| Per-node file convention, action runtime budgets, when-to-use guidance | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
 | `LEARN.md` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |
 | Feedback collection — consent, kinds, format, redaction, hook handoff | `feedback.md` |
-| Canonical id generator | `lib/short-id.mjs` |
+| Canonical id generator | `$SEEFLOW ids <node\|connector> <count>` |
