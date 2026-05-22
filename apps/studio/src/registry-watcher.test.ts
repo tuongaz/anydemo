@@ -41,7 +41,7 @@ describe('createRegistryWatcher', () => {
             slug: 'a',
             name: 'a',
             repoPath: '/tmp/a',
-            flowPath: '.seeflow/flow.json',
+            flowPath: 'flow.json',
             lastModified: 0,
             valid: true,
           },
@@ -73,7 +73,7 @@ describe('createRegistryWatcher', () => {
     registry.upsert({
       name: 'b',
       repoPath: '/tmp/b',
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     await wait(300);
@@ -104,7 +104,7 @@ describe('createRegistryWatcher', () => {
             slug: 'a',
             name: 'a',
             repoPath: '/tmp/a',
-            flowPath: '.seeflow/flow.json',
+            flowPath: 'flow.json',
             lastModified: 0,
             valid: true,
           },

@@ -19,24 +19,25 @@ const looksLikeFlowNode = (obj: Record<string, unknown>): obj is { id: string; d
 
 /**
  * Resolve every `file://<relative-path>` string in `raw` by reading the file
- * under `<seeflowRoot>/nodes/<nodeId>/` (node-relative) and substituting its
+ * under `<projectRoot>/nodes/<nodeId>/` (node-relative) and substituting its
  * UTF-8 content. Strings outside any enclosing flow node are treated as
  * invalid — every supported file:// ref currently lives inside `node.data`.
  *
- * Returns the mutated tree plus the sorted, de-duplicated list of seeflow-root-relative
- * paths that resolved cleanly (the watcher tracks these for live reload, so the
- * external contract uses `nodes/<id>/<file>` even though the source string is short).
+ * Returns the mutated tree plus the sorted, de-duplicated list of project-
+ * root-relative paths that resolved cleanly (the watcher tracks these for
+ * live reload, so the external contract uses `nodes/<id>/<file>` even though
+ * the source string is short).
  */
 export function resolveFileRefs(
   raw: unknown,
-  seeflowRoot: string,
+  projectRoot: string,
 ): { resolved: unknown; refs: string[] } {
   const refs = new Set<string>();
-  let seeflowRealRoot: string;
+  let projectRealRoot: string;
   try {
-    seeflowRealRoot = existsSync(seeflowRoot) ? realpathSync(seeflowRoot) : seeflowRoot;
+    projectRealRoot = existsSync(projectRoot) ? realpathSync(projectRoot) : projectRoot;
   } catch {
-    seeflowRealRoot = seeflowRoot;
+    projectRealRoot = projectRoot;
   }
 
   const resolveString = (s: string, nodeId: string | null): string => {
@@ -45,26 +46,26 @@ export function resolveFileRefs(
     if (!isCleanRelativePath(relPath)) return invalidMarker(relPath);
     if (nodeId === null) return invalidMarker(relPath);
 
-    const seeflowRelPath = `nodes/${nodeId}/${relPath}`;
-    const abs = join(seeflowRoot, seeflowRelPath);
-    if (!existsSync(abs)) return missingMarker(seeflowRelPath);
+    const projectRelPath = `nodes/${nodeId}/${relPath}`;
+    const abs = join(projectRoot, projectRelPath);
+    if (!existsSync(abs)) return missingMarker(projectRelPath);
 
     // Symlink-escape defense: resolve realpath and confirm it stays inside root.
     let realAbs: string;
     try {
       realAbs = realpathSync(abs);
     } catch {
-      return missingMarker(seeflowRelPath);
+      return missingMarker(projectRelPath);
     }
-    const rel = relative(seeflowRealRoot, realAbs);
+    const rel = relative(projectRealRoot, realAbs);
     if (rel.startsWith('..') || isAbsolute(rel)) return invalidMarker(relPath);
 
     try {
       const content = readFileSync(realAbs, 'utf8');
-      refs.add(seeflowRelPath);
+      refs.add(projectRelPath);
       return content;
     } catch {
-      return missingMarker(seeflowRelPath);
+      return missingMarker(projectRelPath);
     }
   };
 

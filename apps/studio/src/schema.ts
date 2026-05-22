@@ -62,10 +62,12 @@ const isCleanRelativePath = (s: string): boolean => {
 };
 
 // Script-based action: the studio spawns `<interpreter> [...args] <scriptPath>`
-// from the project's repoPath. `scriptPath` is a relative path under
-// `<project>/.seeflow/`; `args` (optional) prepend to the interpreter; `input`
-// (optional) gets JSON-serialized and written to the child's stdin then closed;
-// `timeoutMs` caps execution (default applied at the spawn layer, not here).
+// from the project's repoPath. `scriptPath` is a relative path under the
+// project root (typically `nodes/<id>/scripts/<name>` for play/status, or any
+// project-root-relative path for reset); `args` (optional) prepend to the
+// interpreter; `input` (optional) gets JSON-serialized and written to the
+// child's stdin then closed; `timeoutMs` caps execution (default applied at
+// the spawn layer, not here).
 const ScriptActionSchema = z.object({
   kind: z.literal('script'),
   interpreter: z.string().min(1),
@@ -188,14 +190,14 @@ const ShapeNodeSchema = z.object({
   data: ShapeNodeDataSchema,
 });
 
-// Decorative image node — references a file under `<project>/.seeflow/` by
+// Decorative image node — references a file under the project root by
 // relative path (US-004 hard-cut from base64 data URLs to path-backed files).
-// `path` is a relative path under `<project>/.seeflow/` for imageNode uploads: rooted
-// at `.seeflow/`, no leading slash, no `..` segments. The renderer fetches via
+// `path` is a relative path under the project root for imageNode uploads:
+// no leading slash, no `..` segments. The renderer fetches via
 // `GET /api/projects/:id/files/:path`.
 const ImageNodeDataSchema = z.object({
   path: z.string().min(1).refine(isCleanRelativePath, {
-    message: 'path must be a relative path under .seeflow/ (no absolute / traversal)',
+    message: 'path must be a relative path under the project root (no absolute / traversal)',
   }),
   alt: z.string().optional(),
   ...NodeVisualBaseShape,
@@ -212,8 +214,8 @@ const ImageNodeSchema = z.object({
 // US-011 (illustrative-shapes-htmlnode): htmlNode is the escape-hatch node type
 // for content the curated nodes don't cover — carries author-written HTML
 // inline via `data.html`. The studio externalizes the content to
-// `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in
-// flow.json; the resolver inlines the content back on read so consumers see
+// `<project>/nodes/<id>/view.html` and stores a `file://` ref in flow.json;
+// the resolver inlines the content back on read so consumers see
 // the resolved HTML string. The renderer sanitizes before injection
 // (US-013/US-014). Spreads NodeVisualBaseShape so authors can theme the
 // wrapper (border / background / radius / font) with the same fields
@@ -425,7 +427,7 @@ export type StateSource = z.infer<typeof StateSourceSchema>;
 
 // =============================================================================
 // Flow schema — pure semantic data, every visual/layout field stripped.
-// What lives on disk in <project>/.seeflow/flow.json after the split.
+// What lives on disk in <project>/flow.json after the split.
 // =============================================================================
 
 const FlowNodeDataBaseShape = {
@@ -464,7 +466,7 @@ const FlowShapeNodeDataSchema = z
 const FlowImageNodeDataSchema = z
   .object({
     path: z.string().min(1).refine(isCleanRelativePath, {
-      message: 'path must be a relative path under .seeflow/ (no absolute / traversal)',
+      message: 'path must be a relative path under the project root (no absolute / traversal)',
     }),
     alt: z.string().optional(),
     ...NodeDescriptionBaseShape,
@@ -620,7 +622,7 @@ export const FlowEnvelopeSchema = z
 
 // =============================================================================
 // Style schema — keyed map of presentation overrides, side-table by id.
-// What lives on disk in <project>/.seeflow/style.json (optional file).
+// What lives on disk in <project>/style.json (optional file).
 // =============================================================================
 
 const NodeStyleSchema = z

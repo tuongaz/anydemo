@@ -18,9 +18,9 @@ describe('node-files path helpers', () => {
   it('builds node-relative file:// ref (just the filename)', () => {
     expect(nodeFileRef('node-abc', 'view.html')).toBe('file://view.html');
   });
-  it('builds absolute path under .seeflow/', () => {
+  it('builds absolute path under the project root', () => {
     expect(nodeFileAbsPath('/repo', 'node-abc', 'detail.md')).toBe(
-      '/repo/.seeflow/nodes/node-abc/detail.md',
+      '/repo/nodes/node-abc/detail.md',
     );
   });
   it('exposes a spec with at least detail.md', () => {
@@ -61,7 +61,7 @@ describe('writeNodeFile / removeNodeDir', () => {
     writeNodeFile(abs, 'x');
     removeNodeDir(root, 'node-x');
     expect(existsSync(abs)).toBe(false);
-    expect(existsSync(join(root, '.seeflow', 'nodes', 'node-x'))).toBe(false);
+    expect(existsSync(join(root, 'nodes', 'node-x'))).toBe(false);
   });
 
   it('removeNodeDir is idempotent on missing folder', () => {

@@ -134,7 +134,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     synopsis: 'seeflow register [--path <dir>] [--flow <file>]',
     description:
       'Register a demo repo with the studio. Reads <repoPath>/<flow> (defaulting ' +
-      'to ./.seeflow/flow.json), validates the schema, and writes an entry to ' +
+      'to ./flow.json), validates the schema, and writes an entry to ' +
       '~/.seeflow/registry.json. Alias of flows:register.',
     category: 'flows',
     args: [],
@@ -143,7 +143,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'flow',
         valuePlaceholder: '<file>',
-        description: 'Path to flow.json relative to repo root (default: .seeflow/flow.json)',
+        description: 'Path to flow.json relative to repo root (default: flow.json)',
       },
     ],
     outputs: {
@@ -164,7 +164,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'flow',
         valuePlaceholder: '<file>',
-        description: 'Path to flow.json relative to repo root (default: .seeflow/flow.json)',
+        description: 'Path to flow.json relative to repo root (default: flow.json)',
       },
     ],
     body: { schemaRef: 'RegisterBody' },
@@ -306,7 +306,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     synopsis: 'seeflow projects:create --path <dir> --name <name> [--description <text>]',
     description:
       'Scaffold a new project at <path> with an empty flow.json and register it. ' +
-      'Errors if <path>/.seeflow/flow.json already exists — use flows:register for ' +
+      'Errors if <path>/flow.json already exists — use flows:register for ' +
       'an existing project.',
     category: 'project',
     args: [],
@@ -528,7 +528,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
     outputs: { okExample: { ok: true } },
     requiresStudio: false,
-    examples: ['seeflow validate --file .seeflow/flow.json'],
+    examples: ['seeflow validate --file flow.json'],
   },
   {
     name: 'ids',

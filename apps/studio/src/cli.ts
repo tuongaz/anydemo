@@ -12,7 +12,7 @@ import {
   NodePatchBodySchema,
   ReorderBodySchema,
 } from './operations.ts';
-import { seeflowHome } from './paths.ts';
+import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
@@ -31,7 +31,7 @@ import { serve } from './server.ts';
 import { MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import { createStatusRunner } from './status-runner.ts';
 
-const DEFAULT_FLOW_PATH = '.seeflow/flow.json';
+const DEFAULT_FLOW_PATH = PROJECT_FLOW_FILENAME;
 const HEALTH_TIMEOUT_MS = 10_000;
 const HEALTH_POLL_INTERVAL_MS = 150;
 const STOP_TIMEOUT_MS = 5_000;
@@ -235,7 +235,7 @@ Options (start):
 Options (register):
   --path <dir>         Path to repo root (default: current directory)
   --flow <file>        Path to flow JSON, relative to repo root
-                       (default: .seeflow/flow.json)
+                       (default: flow.json)
 
 Examples:
   npx -y @tuongaz/seeflow@latest
@@ -329,7 +329,7 @@ async function seedExamples(registry: Registry) {
 
 async function seedExample(registry: Registry, exampleName: string) {
   const destDir = join(seeflowHome(), exampleName);
-  const flowPath = '.seeflow/flow.json';
+  const flowPath = PROJECT_FLOW_FILENAME;
 
   // Always sync from source so that schema changes and example updates are
   // reflected on every startup, even when the dest directory already exists.

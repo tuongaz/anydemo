@@ -47,7 +47,7 @@ The launching prompt will give you:
    as the script's skeleton (which client to use, which env vars,
    which endpoint).
 5. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<project>/.seeflow/LEARN.md` `## Tech stack
+   overrides from `<projectPath>/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.helpers` names a publisher / uploader
    / producer the project already ships, the script imports and calls
@@ -80,7 +80,7 @@ with this exact shape — and nothing else outside the fence:
         }
       },
       "scriptFile": {
-        "path": ".seeflow/nodes/order-server/scripts/play.ts",
+        "path": "nodes/order-server/scripts/play.ts",
         "body": "#!/usr/bin/env bun\n// full script source as a string",
         "chmod": "755"
       },
@@ -114,7 +114,7 @@ nodes that get none. Every `nodeId` MUST reference a node already in
   `<slug>/` or `<nodeId>/` prefix; the studio prepends the anchor.
 - **`scriptFile`** carries the file to write before the patch runs:
   - `path` is project-root-relative
-    (`.seeflow/nodes/<nodeId>/scripts/<filename>`).
+    (`nodes/<nodeId>/scripts/<filename>`).
   - `body` is the FULL source text including shebang.
   - `chmod` defaults to `"755"`.
 - **`validationSafe`** — `true` when the script is safe to invoke during
@@ -164,7 +164,7 @@ Every body must:
   The studio surfaces the last stderr line as the play's error. Stack
   traces are pointless; the user sees one line.
 - **Be idempotent.** Validation calls the script once and the user will
-  click again. Use append-only state (the project's `.seeflow/state/`
+  click again. Use append-only state (the project's `state/`
   directory is git-ignored), upserts keyed by a deterministic id, or
   external-API endpoints that are naturally idempotent (Stripe
   idempotency keys, PUT vs POST).
@@ -350,7 +350,7 @@ editTarget: null
         }
       },
       "scriptFile": {
-        "path": ".seeflow/nodes/order-server/scripts/play.ts",
+        "path": "nodes/order-server/scripts/play.ts",
         "body": "#!/usr/bin/env bun\nconst input = (await Bun.stdin.text()).trim();\nlet body: unknown = { cart: [{ sku: 'SKU-1', qty: 1 }] };\nif (input.length > 0) {\n  try {\n    body = JSON.parse(input);\n  } catch {\n    /* fall back to default cart */\n  }\n}\nconst port = process.env.ORDER_PIPELINE_PORT ?? '3001';\nconst res = await fetch(`http://localhost:${port}/orders`, {\n  method: 'POST',\n  headers: { 'content-type': 'application/json' },\n  body: JSON.stringify(body),\n});\nconst text = await res.text();\nif (!res.ok) {\n  console.error(`POST /orders failed: ${res.status} ${text.slice(0, 200)}`);\n  process.exit(1);\n}\nconst order = text.length > 0 ? JSON.parse(text) : {};\nconsole.log(JSON.stringify({ ok: true, orderId: order.id ?? null, flowId: process.env.SEEFLOW_DEMO_ID }));\n",
         "chmod": "755"
       },
@@ -388,14 +388,14 @@ Notes on the example:
     {
       "nodeId": "order-store",
       "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "../escape/out-of-sandbox.ts" } },
-      "scriptFile": { "path": ".seeflow/nodes/order-store/scripts/play.ts", "body": "console.log('did stuff')" },
+      "scriptFile": { "path": "nodes/order-store/scripts/play.ts", "body": "console.log('did stuff')" },
       "validationSafe": true,
       "rationale": "Play the DB"
     },
     {
       "nodeId": "inventory-worker",
       "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "order-pipeline/scripts/play-inventory.ts" } },
-      "scriptFile": { "path": ".seeflow/nodes/inventory-worker/scripts/play.ts", "body": "/* placeholder */" },
+      "scriptFile": { "path": "nodes/inventory-worker/scripts/play.ts", "body": "/* placeholder */" },
       "validationSafe": true,
       "rationale": "Play the consumer"
     }
@@ -430,7 +430,7 @@ This is wrong because:
   node folder — `scripts/<name>.<ext>`. No `<slug>/`, no `<nodeId>/`,
   no leading `/`, no `..`.
 - Every `scriptFile.path` is project-root-relative —
-  `.seeflow/nodes/<nodeId>/scripts/<name>.<ext>`.
+  `nodes/<nodeId>/scripts/<name>.<ext>`.
 - Every `scriptFile.body` is the complete file body, including shebang.
 - Every script is idempotent.
 - `validationSafe: false` for anything that hits real third-party

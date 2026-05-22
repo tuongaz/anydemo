@@ -32,8 +32,8 @@ export function EmptyState() {
           </h1>
           <p className="text-sm text-muted-foreground">
             Point SeeFlow at any folder containing a{' '}
-            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">.seeflow/flow.json</code> file
-            and it'll appear here.
+            <code className="rounded bg-muted px-1.5 py-0.5 text-xs">flow.json</code> file and it'll
+            appear here.
           </p>
         </div>
         <div className="flex w-full items-center gap-2 rounded-md border border-border bg-card px-3 py-2 font-mono text-sm">

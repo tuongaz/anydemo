@@ -235,10 +235,10 @@ export interface CanvasAdapter {
   deleteConnector(connectorId: string): Promise<void>;
   /**
    * Upload an image file to the project, scoped to a specific node. The
-   * server writes to <project>/.seeflow/nodes/<nodeId>/<filename> and the
-   * returned path is `nodes/<nodeId>/<filename>` — used directly as
-   * `data.path` on an imageNode. Scoping the upload to the node id lets
-   * delete_node's cascade clean up the asset along with the row.
+   * server writes to <project>/nodes/<nodeId>/<filename> and the returned
+   * path is `nodes/<nodeId>/<filename>` — used directly as `data.path` on
+   * an imageNode. Scoping the upload to the node id lets delete_node's
+   * cascade clean up the asset along with the row.
    */
   uploadImage(nodeId: string, file: File, filename: string): Promise<UploadImageResult>;
   /** Optional: invoke the node's playAction. Adapters that don't support

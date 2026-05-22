@@ -78,14 +78,14 @@ const EMIT_STATUS_TO_EVENT = {
 const FilePathBodySchema = z.object({ path: z.string() });
 
 type ResolvedProjectFile =
-  | { kind: 'ok'; absPath: string; seeflowRoot: string }
+  | { kind: 'ok'; absPath: string; projectRoot: string }
   | { kind: 'unknownProject' }
   | { kind: 'invalidPath'; reason: string }
   | { kind: 'fileMissing'; absPath: string };
 
 // Shared path-safety + filesystem resolution for project-scoped file routes.
 // Performs textual rejection of absolute paths / `..` traversal, then layered
-// realpath verification that the resolved file stays inside `<project>/.seeflow/`
+// realpath verification that the resolved file stays inside the project root
 // (defense against symlink escapes). Returns the realpath of an existing file
 // on success, or `fileMissing` with the would-be absolute path so callers can
 // soft-fail with that path included for clipboard fallback.
@@ -100,15 +100,15 @@ function resolveProjectFile(
   const guard = validateRelativePath(relPath);
   if (guard.kind === 'invalid') return { kind: 'invalidPath', reason: guard.reason };
 
-  const seeflowRoot = join(entry.repoPath, '.seeflow');
+  const projectRoot = entry.repoPath;
   let realRoot: string;
   try {
-    realRoot = realpathSync(seeflowRoot);
+    realRoot = realpathSync(projectRoot);
   } catch {
-    return { kind: 'fileMissing', absPath: resolve(seeflowRoot, relPath) };
+    return { kind: 'fileMissing', absPath: resolve(projectRoot, relPath) };
   }
 
-  const target = resolve(seeflowRoot, relPath);
+  const target = resolve(projectRoot, relPath);
   let realTarget: string;
   try {
     realTarget = realpathSync(target);
@@ -121,7 +121,7 @@ function resolveProjectFile(
     return { kind: 'invalidPath', reason: 'path escapes project root' };
   }
 
-  return { kind: 'ok', absPath: realTarget, seeflowRoot: realRoot };
+  return { kind: 'ok', absPath: realTarget, projectRoot: realRoot };
 }
 
 // Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the
@@ -297,8 +297,8 @@ export function createApi(options: ApiOptions): Hono {
   // POST /api/diagram/assemble — Phase 7a. The skill POSTs wiring + layout
   // and gets back the assembled demo (IDs normalized, dupes dropped, dangling
   // connectors removed, positions snapped to a 24px grid). Pure compute; the
-  // skill writes the response to $TARGET/.seeflow/flow.json. No schema
-  // validation here — call /demos/validate for that.
+  // skill writes the response to $TARGET/flow.json. No schema validation
+  // here — call /demos/validate for that.
   api.post('/diagram/assemble', async (c) => {
     let body: unknown;
     try {
@@ -413,10 +413,10 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // POST /api/projects — UI-driven "Create new project" flow (US-020).
-  // Scaffolds `<path>/.seeflow/flow.json` with the supplied name + optional
+  // Scaffolds `<path>/flow.json` with the supplied name + optional
   // description, then registers it. If the target already has a
-  // `.seeflow/flow.json`, returns 409 — callers should use POST
-  // /api/flows/register instead.
+  // `flow.json`, returns 409 — callers should use POST /api/flows/register
+  // instead.
   api.post('/projects', async (c) => {
     let body: unknown;
     try {
@@ -557,9 +557,9 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // GET /api/projects/:id/files/<path> — stream a project-scoped file from
-  // <repoPath>/.seeflow/<path>. Path safety is layered: textual rejection
-  // (absolute / traversal), then realpath check that the resolved file stays
-  // inside the project's .seeflow root (defends against symlink escapes).
+  // <repoPath>/<path>. Path safety is layered: textual rejection (absolute /
+  // traversal), then realpath check that the resolved file stays inside the
+  // project root (defends against symlink escapes).
   api.get('/projects/:id/files/:path{.+}', async (c) => {
     const rawPath = c.req.param('path');
     let relPath: string;
@@ -683,11 +683,11 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // POST /api/projects/:id/nodes/:nodeId/files/upload — accept a multipart
-  // image upload and persist it under `<project>/.seeflow/nodes/<nodeId>/`.
-  // Multipart shape: `file` (Blob) and optional `filename` (the original OS
-  // name). Allowlist + 5 MB cap guard against arbitrary uploads; the
-  // destination folder is scoped to the node, so delete_node's removeNodeDir
-  // cascade cleans up the asset along with the node row.
+  // image upload and persist it under `<project>/nodes/<nodeId>/`. Multipart
+  // shape: `file` (Blob) and optional `filename` (the original OS name).
+  // Allowlist + 5 MB cap guard against arbitrary uploads; the destination
+  // folder is scoped to the node, so delete_node's removeNodeDir cascade
+  // cleans up the asset along with the node row.
   api.post('/projects/:id/nodes/:nodeId/files/upload', async (c) => {
     const projectId = c.req.param('id');
     const nodeId = c.req.param('nodeId');
@@ -722,7 +722,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'invalid filename or extension' }, 400);
     }
 
-    const nodeDir = join(entry.repoPath, '.seeflow', 'nodes', nodeId);
+    const nodeDir = join(entry.repoPath, 'nodes', nodeId);
     try {
       mkdirSync(nodeDir, { recursive: true });
     } catch (err) {

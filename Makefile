@@ -86,7 +86,7 @@ demo: ## Quickstart: start studio, register the bundled todo example, open in br
 example-order-pipeline: ## Run the order-pipeline example app (port 3040)
 	cd examples/order-pipeline && bun start
 
-clean: ## Remove node_modules + apps/studio/dist (preserves ~/.seeflow and examples/*/.seeflow/sdk)
+clean: ## Remove node_modules + apps/studio/dist (preserves ~/.seeflow and examples/*/sdk)
 	rm -rf node_modules apps/*/node_modules packages/*/node_modules examples/*/node_modules
 	rm -rf apps/studio/dist
 

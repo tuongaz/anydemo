@@ -26,8 +26,7 @@ const VALID_DEMO = {
 
 const tmpRepo = (demo: unknown = VALID_DEMO) => {
   const dir = mkdtempSync(join(tmpdir(), 'watcher-repo-'));
-  mkdirSync(join(dir, '.seeflow'));
-  writeFileSync(join(dir, '.seeflow', 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(dir, 'flow.json'), JSON.stringify(demo));
   return dir;
 };
 
@@ -45,7 +44,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -65,7 +64,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -77,7 +76,7 @@ describe('createWatcher', () => {
 
     // Force a write that should land after the watcher is up.
     await wait(50);
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), '{ not: json }');
+    writeFileSync(join(repoPath, 'flow.json'), '{ not: json }');
     await wait(150);
 
     const last = received.at(-1);
@@ -86,7 +85,7 @@ describe('createWatcher', () => {
     expect((last?.payload as { error: string }).error).toContain('Invalid JSON');
 
     // Repair the file. Should flip back to valid:true and broadcast a new event.
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(150);
 
     const finalEvent = received.at(-1);
@@ -100,7 +99,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -109,7 +108,7 @@ describe('createWatcher', () => {
     const good = watcher.snapshot(entry.id);
     expect(good?.valid).toBe(true);
 
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), 'oops');
+    writeFileSync(join(repoPath, 'flow.json'), 'oops');
     const reparsed = watcher.reparse(entry.id);
     expect(reparsed?.valid).toBe(false);
     expect(reparsed?.flow?.name).toBe('Watch Me');
@@ -123,7 +122,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -142,7 +141,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -158,7 +157,7 @@ describe('createWatcher', () => {
     watcher.unwatch(entry.id);
     expect(watcher.snapshot(entry.id)).toBeNull();
 
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(80);
     expect(count).toBe(0);
     watcher.closeAll();
@@ -194,14 +193,14 @@ describe('createWatcher', () => {
   it('emits file:changed when an imageNode-referenced path file is edited', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
-    mkdirSync(join(repoPath, '.seeflow', 'assets'));
-    const imgPath = join(repoPath, '.seeflow', 'assets', 'logo.png');
+    mkdirSync(join(repoPath, 'assets'));
+    const imgPath = join(repoPath, 'assets', 'logo.png');
     writeFileSync(imgPath, 'placeholder-v1');
 
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -229,7 +228,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -237,10 +236,10 @@ describe('createWatcher', () => {
     watcher.watch(entry.id);
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
-    mkdirSync(join(repoPath, '.seeflow', 'assets'));
-    writeFileSync(join(repoPath, '.seeflow', 'assets', 'logo.png'), 'placeholder');
+    mkdirSync(join(repoPath, 'assets'));
+    writeFileSync(join(repoPath, 'assets', 'logo.png'), 'placeholder');
     writeFileSync(
-      join(repoPath, '.seeflow', 'flow.json'),
+      join(repoPath, 'flow.json'),
       JSON.stringify(demoWithImagePath('assets/logo.png')),
     );
     await wait(120);
@@ -252,14 +251,14 @@ describe('createWatcher', () => {
   it('removes paths from the watch set when a referencing node is removed', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
-    mkdirSync(join(repoPath, '.seeflow', 'assets'));
-    const imgPath = join(repoPath, '.seeflow', 'assets', 'logo.png');
+    mkdirSync(join(repoPath, 'assets'));
+    const imgPath = join(repoPath, 'assets', 'logo.png');
     writeFileSync(imgPath, 'placeholder-v1');
 
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -273,7 +272,7 @@ describe('createWatcher', () => {
     expect(watcher.referencedPaths(entry.id)).toEqual(['assets/logo.png']);
 
     // Drop the referencing node from the demo via a write to flow.json.
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(VALID_DEMO));
     await wait(120);
     expect(watcher.referencedPaths(entry.id)).toEqual([]);
 
@@ -327,7 +326,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Files',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -339,18 +338,14 @@ describe('createWatcher', () => {
 
   // -------------------------------------------------------------------------
   // file:// refs are node-relative: `file://detail.md` inside node-id `n1`
-  // resolves under `<seeflowRoot>/nodes/n1/detail.md`. For nested-slug layouts
-  // (flow at `<repo>/.seeflow/<slug>/flow.json`), seeflowRoot still walks up to
-  // the `.seeflow` ancestor — so the per-node folder is `.seeflow/nodes/<id>/`,
-  // NOT under the slug. Regression test for both the resolver root walk and
+  // resolves under `<projectRoot>/nodes/n1/detail.md`. Regression test for
   // the node-relative ref contract.
   // -------------------------------------------------------------------------
-  it('resolves node-relative file:// refs for nested-slug layouts', async () => {
+  it('resolves node-relative file:// refs', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = mkdtempSync(join(tmpdir(), 'watcher-nested-'));
-    mkdirSync(join(repoPath, '.seeflow', 'nodes', 'n1'), { recursive: true });
-    writeFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), '# Resolved content');
-    mkdirSync(join(repoPath, '.seeflow', 'crn-retained'), { recursive: true });
+    mkdirSync(join(repoPath, 'nodes', 'n1'), { recursive: true });
+    writeFileSync(join(repoPath, 'nodes', 'n1', 'detail.md'), '# Resolved content');
 
     const nestedDemo = {
       version: 2,
@@ -370,15 +365,12 @@ describe('createWatcher', () => {
       ],
       connectors: [],
     };
-    writeFileSync(
-      join(repoPath, '.seeflow', 'crn-retained', 'flow.json'),
-      JSON.stringify(nestedDemo),
-    );
+    writeFileSync(join(repoPath, 'flow.json'), JSON.stringify(nestedDemo));
 
     const entry = reg.upsert({
       name: 'Nested Flow',
       repoPath,
-      flowPath: '.seeflow/crn-retained/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -395,7 +387,7 @@ describe('createWatcher', () => {
     });
 
     await wait(30);
-    writeFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), '# Resolved content v2');
+    writeFileSync(join(repoPath, 'nodes', 'n1', 'detail.md'), '# Resolved content v2');
     await wait(150);
 
     expect(fileEvents.length).toBeGreaterThanOrEqual(1);
@@ -410,7 +402,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -449,7 +441,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -466,7 +458,7 @@ describe('createWatcher', () => {
     // Simulate a server-side write: change the file AND record the hash via notifyWritten.
     const nextDemo = { ...VALID_DEMO, name: 'Renamed' };
     const nextContent = JSON.stringify(nextDemo);
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), nextContent);
+    writeFileSync(join(repoPath, 'flow.json'), nextContent);
     const snap = watcher.reparse(entry.id);
     expect(snap?.valid).toBe(true);
     if (!snap) throw new Error('expected snap');
@@ -485,7 +477,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -508,7 +500,7 @@ describe('createWatcher', () => {
     received.length = 0;
 
     const externalContent = JSON.stringify({ ...VALID_DEMO, name: 'External' });
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), externalContent);
+    writeFileSync(join(repoPath, 'flow.json'), externalContent);
     await wait(150);
 
     expect(received.length).toBeGreaterThanOrEqual(1);
@@ -525,7 +517,7 @@ describe('createWatcher', () => {
     const entry = reg.upsert({
       name: 'Watch Me',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -542,7 +534,7 @@ describe('createWatcher', () => {
     // Four back-to-back writes — each gets recorded; each fs echo gets suppressed.
     for (let i = 0; i < 4; i++) {
       const content = JSON.stringify({ ...VALID_DEMO, name: `v${i}` });
-      writeFileSync(join(repoPath, '.seeflow', 'flow.json'), content);
+      writeFileSync(join(repoPath, 'flow.json'), content);
       const snap = watcher.reparse(entry.id);
       if (!snap) throw new Error('expected snap');
       watcher.notifyWritten(entry.id, snap, content, '');

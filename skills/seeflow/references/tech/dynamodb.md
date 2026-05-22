@@ -5,7 +5,7 @@ category: storage
 
 # AWS DynamoDB
 
-> **General guidance only.** Check `<project>/.seeflow/LEARN.md`
+> **General guidance only.** Check `<projectPath>/LEARN.md`
 > `## Tech stack adaptations` first — project-specific helpers,
 > fixtures, and conventions always win over the templates below.
 > Whatever you learn this run, append back into that section so the

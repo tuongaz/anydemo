@@ -50,11 +50,11 @@ describe('writeSdkEmitIfNeeded', () => {
     expect(result.filePath).toBeNull();
   });
 
-  it('writes .seeflow/sdk/emit.ts when an event-bound state node is present', () => {
+  it('writes sdk/emit.ts when an event-bound state node is present', () => {
     const repoPath = tmpRepo();
     const result = writeSdkEmitIfNeeded(repoPath, EVENT_DEMO);
     expect(result.outcome).toBe('written');
-    expect(result.filePath).toBe(join(repoPath, '.seeflow', 'sdk', 'emit.ts'));
+    expect(result.filePath).toBe(join(repoPath, 'sdk', 'emit.ts'));
 
     const written = readFileSync(result.filePath as string, 'utf-8');
     expect(written).toContain('export async function emit');
@@ -65,8 +65,8 @@ describe('writeSdkEmitIfNeeded', () => {
 
   it('does not overwrite an existing emit.ts (idempotent)', () => {
     const repoPath = tmpRepo();
-    const filePath = join(repoPath, '.seeflow', 'sdk', 'emit.ts');
-    mkdirSync(join(repoPath, '.seeflow', 'sdk'), { recursive: true });
+    const filePath = join(repoPath, 'sdk', 'emit.ts');
+    mkdirSync(join(repoPath, 'sdk'), { recursive: true });
     writeFileSync(filePath, '// USER EDITED\n');
 
     const result = writeSdkEmitIfNeeded(repoPath, EVENT_DEMO);

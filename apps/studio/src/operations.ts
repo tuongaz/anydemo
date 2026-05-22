@@ -41,9 +41,9 @@ import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { shortId } from './short-id.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
-// projects:create writes flow.json at the project root (no `.seeflow/`
-// envelope). flows:register still defaults to `.seeflow/flow.json` for
-// existing repos that use the nested convention; CLI register handles that.
+// Both projects:create and flows:register write/read flow.json at the project
+// root. The studio never assumes a `.seeflow/` subdirectory — whatever path
+// the caller supplies is treated as the seeflow project root.
 const PROJECT_FLOW_RELATIVE_PATH = 'flow.json';
 
 export const RegisterBodySchema = z.object({
@@ -100,8 +100,8 @@ export const NodePatchBodySchema = z
     // preserved, and the post-merge ResolvedFlowSchema reparse enforces the
     // new type's required fields (e.g. stateNode → playNode without a
     // playAction in the same body surfaces as `badSchema`). The per-node
-    // folder under `.seeflow/nodes/<id>/` is keyed by id, so retype keeps
-    // scripts, detail.md, and view.html attached.
+    // folder under `nodes/<id>/` is keyed by id, so retype keeps scripts,
+    // detail.md, and view.html attached.
     type: NodeTypeSchema.optional(),
     position: PositionBodySchema.optional(),
     name: z.string().optional(),
@@ -140,8 +140,8 @@ export const NodePatchBodySchema = z
     description: z.string().optional(),
     detail: z.string().optional(),
     // htmlNode-only: inline HTML content. Externalized to
-    // `<project>/.seeflow/nodes/<id>/view.html` by patchNodeImpl; the file://
-    // ref on the node persists. Empty string empties the file but keeps the ref.
+    // `<project>/nodes/<id>/view.html` by patchNodeImpl; the file:// ref on
+    // the node persists. Empty string empties the file but keeps the ref.
     html: z.string().optional(),
     // P5 overlay attach: lets the skill (or any consumer) wire executable
     // behaviour onto a previously-created node without re-issuing it. Final
@@ -287,10 +287,10 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
   // (they route to style.json on write); any semantic data key not allowed
   // by the new type's FlowDataSchema is stripped so the post-merge reparse
   // doesn't reject lingering fields. The per-node folder under
-  // `.seeflow/nodes/<id>/` is keyed by id (unchanged), so scripts and
-  // externalized files stay attached. Missing required fields on the new
-  // type (e.g. stateNode → playNode without a playAction in the same patch)
-  // surface as `badSchema` from the ResolvedFlowSchema reparse.
+  // `nodes/<id>/` is keyed by id (unchanged), so scripts and externalized
+  // files stay attached. Missing required fields on the new type (e.g.
+  // stateNode → playNode without a playAction in the same patch) surface as
+  // `badSchema` from the ResolvedFlowSchema reparse.
   if (updates.type !== undefined && updates.type !== node.type) {
     node.type = updates.type;
     const allowedSemantic = SEMANTIC_KEYS_BY_TYPE[updates.type];
@@ -1399,8 +1399,8 @@ export async function addFlowBulkImpl(
 // atomic write. Final ResolvedFlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 // After the flow.json write, `removeNodeDir` cascades the node's whole
-// `<project>/.seeflow/nodes/<id>/` folder — covering detail.md, view.html,
-// and any imageNode upload that lived there.
+// `<project>/nodes/<id>/` folder — covering detail.md, view.html, and any
+// imageNode upload that lived there.
 export async function deleteNodeImpl(
   deps: OperationsDeps,
   flowId: string,

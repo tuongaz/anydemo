@@ -1,7 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { seeflowHome } from './paths.ts';
+import {
+  PROJECT_FLOW_FILENAME,
+  projectFlowPath,
+  projectNodeDir,
+  projectNodesRoot,
+  projectSdkDir,
+  seeflowHome,
+} from './paths.ts';
 
 describe('seeflowHome', () => {
   const original = process.env.SEEFLOW_WORKSPACE;
@@ -27,5 +34,27 @@ describe('seeflowHome', () => {
   it('uses ${SEEFLOW_WORKSPACE}/.seeflow when the env var is set', () => {
     process.env.SEEFLOW_WORKSPACE = '/workspace';
     expect(seeflowHome()).toBe('/workspace/.seeflow');
+  });
+});
+
+describe('project path helpers', () => {
+  it('PROJECT_FLOW_FILENAME is flow.json', () => {
+    expect(PROJECT_FLOW_FILENAME).toBe('flow.json');
+  });
+
+  it('projectFlowPath joins repoPath with flow.json', () => {
+    expect(projectFlowPath('/repo')).toBe('/repo/flow.json');
+  });
+
+  it('projectNodesRoot joins repoPath with nodes', () => {
+    expect(projectNodesRoot('/repo')).toBe('/repo/nodes');
+  });
+
+  it('projectNodeDir joins repoPath with nodes/<id>', () => {
+    expect(projectNodeDir('/repo', 'node-abc')).toBe('/repo/nodes/node-abc');
+  });
+
+  it('projectSdkDir joins repoPath with sdk', () => {
+    expect(projectSdkDir('/repo')).toBe('/repo/sdk');
   });
 });

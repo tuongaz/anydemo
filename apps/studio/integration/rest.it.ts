@@ -286,15 +286,14 @@ describe('integration: REST — flow lifecycle', () => {
     it('registers an existing on-disk flow into the registry', async () => {
       const slug = uniqueFlowId('register-flow');
       const repoPath = join(studio.home, slug);
-      const seeflowDir = join(repoPath, '.seeflow');
-      mkdirSync(seeflowDir, { recursive: true });
+      mkdirSync(repoPath, { recursive: true });
       const flowJson = { version: 2, name: slug, nodes: [], connectors: [] };
-      writeFileSync(join(seeflowDir, 'flow.json'), `${JSON.stringify(flowJson, null, 2)}\n`);
+      writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flowJson, null, 2)}\n`);
 
       const res = await fetch(`${studio.baseURL}/api/flows/register`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ repoPath, flowPath: '.seeflow/flow.json' }),
+        body: JSON.stringify({ repoPath, flowPath: 'flow.json' }),
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as RegisterResponse;
@@ -625,7 +624,7 @@ describe('integration: REST — connectors', () => {
 describe('integration: REST — runtime (play / emit / SSE)', () => {
   describe('POST /api/flows/:id/play/:nodeId', () => {
     // Seed a playNode with a scriptPath that resolves under the node folder.
-    // addNodeImpl externalizes `detail` to <repoPath>/.seeflow/nodes/<id>/detail.md,
+    // addNodeImpl externalizes `detail` to <repoPath>/nodes/<id>/detail.md,
     // which creates the node directory; we then drop a tiny scripts/play.ts
     // beside it so resolveScript's realpath check passes. The script exits 0
     // and prints a JSON line so runPlay parses it as the body.
@@ -647,14 +646,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       });
       expect(addRes.status).toBe(200);
 
-      const scriptDir = join(
-        studio.workspace,
-        created.slug,
-        '.seeflow',
-        'nodes',
-        nodeId,
-        'scripts',
-      );
+      const scriptDir = join(studio.workspace, created.slug, 'nodes', nodeId, 'scripts');
       mkdirSync(scriptDir, { recursive: true });
       writeFileSync(
         join(scriptDir, 'play.ts'),

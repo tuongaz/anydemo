@@ -310,14 +310,13 @@ describe('integration: MCP — project + flow lifecycle tools', () => {
     // doesn't trip over it. This mirrors the REST register test in rest.it.ts.
     const slug = uniqueFlowId('mcp-register');
     const repoPath = join(studio.home, slug);
-    const seeflowDir = join(repoPath, '.seeflow');
-    mkdirSync(seeflowDir, { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
     const flowJson = { version: 2, name: slug, nodes: [], connectors: [] };
-    writeFileSync(join(seeflowDir, 'flow.json'), `${JSON.stringify(flowJson, null, 2)}\n`);
+    writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flowJson, null, 2)}\n`);
 
     const result = await client.callTool('seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const data = okJson<{
       id: string;

@@ -38,8 +38,7 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
   // discovery — matches rest.it.ts's pattern for direct registration.
   const slug = 'kitchen-sink';
   const repoPath = join(studio.home, slug);
-  const seeflowDir = join(repoPath, '.seeflow');
-  mkdirSync(seeflowDir, { recursive: true });
+  mkdirSync(repoPath, { recursive: true });
 
   // The fixture file is a ResolvedFlow (has positions). The on-disk shape
   // expected by registerFlowImpl is FlowSchema (strict, no positions); use
@@ -48,13 +47,13 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
   const resolved = ResolvedFlowSchema.parse(raw);
   const { flow, style } = splitFlow(resolved);
 
-  writeFileSync(join(seeflowDir, 'flow.json'), `${JSON.stringify(flow, null, 2)}\n`);
-  writeFileSync(join(seeflowDir, 'style.json'), `${JSON.stringify(style, null, 2)}\n`);
+  writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flow, null, 2)}\n`);
+  writeFileSync(join(repoPath, 'style.json'), `${JSON.stringify(style, null, 2)}\n`);
 
-  // playNode's playAction.scriptPath is relative to `<repoPath>/.seeflow/nodes/<id>/`.
+  // playNode's playAction.scriptPath is relative to `<repoPath>/nodes/<id>/`.
   // resolveScript realpaths the target, so the script file MUST exist before
   // any /play call. The fixture pins the playNode id to `n1`.
-  const noopDest = join(seeflowDir, 'nodes', 'n1', 'scripts', 'noop.ts');
+  const noopDest = join(repoPath, 'nodes', 'n1', 'scripts', 'noop.ts');
   mkdirSync(dirname(noopDest), { recursive: true });
   copyFileSync(FIXTURE_NOOP_PATH, noopDest);
 
@@ -64,7 +63,7 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
     body: JSON.stringify({
       name: 'Kitchen Sink',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     }),
   });
   if (res.status !== 200) {

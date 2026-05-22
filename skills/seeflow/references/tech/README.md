@@ -3,7 +3,7 @@
 Per-tech reference cards covering **how to use this tech locally from Play
 and Status node scripts**. Refs are general guidance only — the project's
 own helpers, fixtures, and conventions (captured in
-`<project>/.seeflow/LEARN.md` under `## Tech stack adaptations`) always win.
+`<projectPath>/LEARN.md` under `## Tech stack adaptations`) always win.
 
 ## How the catalog is used
 

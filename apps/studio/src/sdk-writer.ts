@@ -12,9 +12,9 @@ export interface SdkWriteResult {
 }
 
 /**
- * Writes `.seeflow/sdk/emit.ts` into a target repo iff the demo declares any
- * node with `stateSource.kind === 'event'`. Idempotent: existing files are
- * never overwritten. The only place M1's CLI mutates a user repo.
+ * Writes `sdk/emit.ts` into a target repo iff the demo declares any node with
+ * `stateSource.kind === 'event'`. Idempotent: existing files are never
+ * overwritten. The only place M1's CLI mutates a user repo.
  */
 export function writeSdkEmitIfNeeded(repoPath: string, demo: Flow): SdkWriteResult {
   const hasEventState = demo.nodes.some(
@@ -27,7 +27,7 @@ export function writeSdkEmitIfNeeded(repoPath: string, demo: Flow): SdkWriteResu
   );
   if (!hasEventState) return { outcome: 'skipped', filePath: null };
 
-  const sdkDir = join(repoPath, '.seeflow', 'sdk');
+  const sdkDir = join(repoPath, 'sdk');
   const filePath = join(sdkDir, 'emit.ts');
   if (existsSync(filePath)) return { outcome: 'present', filePath };
 

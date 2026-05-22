@@ -48,8 +48,7 @@ interface Setup {
 
 async function setupProjectWithFlow(): Promise<Setup> {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-'));
-  mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-  const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+  const flowAbs = join(repoDir, 'flow.json');
   writeFileSync(flowAbs, JSON.stringify(STARTER_FLOW));
 
   const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-reg-'));
@@ -58,7 +57,7 @@ async function setupProjectWithFlow(): Promise<Setup> {
 
   const reg = await registerFlowImpl(deps, {
     repoPath: repoDir,
-    flowPath: '.seeflow/flow.json',
+    flowPath: 'flow.json',
   });
   if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
 
@@ -328,7 +327,7 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
     const del = await deleteNodeImpl(deps, flowId, nodeId);
     expect(del.kind).toBe('ok');
     expect(existsSync(detailAbs)).toBe(false);
-    expect(existsSync(join(repoPath, '.seeflow', 'nodes', nodeId))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', nodeId))).toBe(false);
   });
 });
 
@@ -419,7 +418,7 @@ describe('addFlowBulkImpl', () => {
     expect(flow.connectors).toHaveLength(0);
     // Per-node folders for nodes prepared in this batch cleaned up.
     for (const id of ['roll-a', 'roll-b']) {
-      expect(existsSync(join(repoPath, '.seeflow', 'nodes', id))).toBe(false);
+      expect(existsSync(join(repoPath, 'nodes', id))).toBe(false);
     }
   });
 
@@ -436,7 +435,7 @@ describe('addFlowBulkImpl', () => {
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(0);
     for (const id of ['rollback-a', 'rollback-b']) {
-      expect(existsSync(join(repoPath, '.seeflow', 'nodes', id))).toBe(false);
+      expect(existsSync(join(repoPath, 'nodes', id))).toBe(false);
     }
   });
 
@@ -594,8 +593,7 @@ describe('NodePatchBodySchema — action overlays', () => {
 describe('mutateMergedFlow snapshot resolves file:// refs', () => {
   async function setupWithWatcher() {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-mut-snap-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-    const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+    const flowAbs = join(repoDir, 'flow.json');
     writeFileSync(flowAbs, JSON.stringify(STARTER_FLOW));
 
     const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-mut-snap-reg-'));
@@ -606,7 +604,7 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
 
     const reg = await registerFlowImpl(deps, {
       repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
     watcher.watch(reg.data.id);
@@ -671,9 +669,8 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
 describe('listFlowsSummaryImpl', () => {
   it('returns only id, name, description from the registry when no watcher snapshot exists', async () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
     writeFileSync(
-      join(repoDir, '.seeflow', 'flow.json'),
+      join(repoDir, 'flow.json'),
       JSON.stringify({
         version: 2,
         name: 'Documented',
@@ -689,7 +686,7 @@ describe('listFlowsSummaryImpl', () => {
 
     const reg = await registerFlowImpl(deps, {
       repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
 
@@ -702,9 +699,8 @@ describe('listFlowsSummaryImpl', () => {
 
   it('omits description on items where the flow has none', async () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-bare-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
     writeFileSync(
-      join(repoDir, '.seeflow', 'flow.json'),
+      join(repoDir, 'flow.json'),
       JSON.stringify({ version: 2, name: 'Bare', nodes: [], connectors: [] }),
     );
 
@@ -714,7 +710,7 @@ describe('listFlowsSummaryImpl', () => {
 
     const reg = await registerFlowImpl(deps, {
       repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
 
@@ -727,8 +723,7 @@ describe('listFlowsSummaryImpl', () => {
 
   it('prefers live watcher snapshot for description and name', async () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-summary-live-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-    const flowAbs = join(repoDir, '.seeflow', 'flow.json');
+    const flowAbs = join(repoDir, 'flow.json');
     writeFileSync(
       flowAbs,
       JSON.stringify({
@@ -748,7 +743,7 @@ describe('listFlowsSummaryImpl', () => {
 
     const reg = await registerFlowImpl(deps, {
       repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     if (reg.kind !== 'ok') throw new Error(`registerFlowImpl failed: ${reg.kind}`);
     watcher.watch(reg.data.id);
@@ -899,9 +894,8 @@ describe('createOperations factory', () => {
 
   it('drives full register → list round-trip through the handle', async () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-repo-'));
-    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
     writeFileSync(
-      join(repoDir, '.seeflow', 'flow.json'),
+      join(repoDir, 'flow.json'),
       JSON.stringify({ ...STARTER_FLOW, name: 'Factory Round-Trip' }),
     );
     const registryDir = mkdtempSync(join(tmpdir(), 'seeflow-ops-factory-reg-'));
@@ -910,7 +904,7 @@ describe('createOperations factory', () => {
 
     const reg = await ops.registerFlow({
       repoPath: repoDir,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     expect(reg.kind).toBe('ok');
 

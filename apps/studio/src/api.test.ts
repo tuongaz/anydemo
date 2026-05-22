@@ -45,8 +45,7 @@ const tmpRegistry = () => {
 
 const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-api-repo-'));
-  mkdirSync(join(repoDir, '.seeflow'));
-  writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(demo));
   return repoDir;
 };
 
@@ -71,7 +70,7 @@ describe('POST /api/flows/register', () => {
     const res = await post(app, '/api/flows/register', {
       name: 'Checkout Flow',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     expect(res.status).toBe(200);
@@ -86,7 +85,7 @@ describe('POST /api/flows/register', () => {
     expect(json.sdk).toEqual({ outcome: 'skipped', filePath: null });
   });
 
-  it('writes .seeflow/sdk/emit.ts when the demo declares an event-bound state node', async () => {
+  it('writes sdk/emit.ts when the demo declares an event-bound state node', async () => {
     const { app } = buildApp();
     const eventDemo = {
       version: 2,
@@ -108,7 +107,7 @@ describe('POST /api/flows/register', () => {
 
     const res = await post(app, '/api/flows/register', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     expect(res.status).toBe(200);
@@ -116,13 +115,13 @@ describe('POST /api/flows/register', () => {
       sdk: { outcome: string; filePath: string | null };
     };
     expect(json.sdk.outcome).toBe('written');
-    expect(json.sdk.filePath).toBe(join(repoPath, '.seeflow', 'sdk', 'emit.ts'));
-    const written = readFileSync(join(repoPath, '.seeflow', 'sdk', 'emit.ts'), 'utf8');
+    expect(json.sdk.filePath).toBe(join(repoPath, 'sdk', 'emit.ts'));
+    const written = readFileSync(join(repoPath, 'sdk', 'emit.ts'), 'utf8');
     expect(written.length).toBeGreaterThan(0);
 
     const second = await post(app, '/api/flows/register', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const secondJson = (await second.json()) as { sdk: { outcome: string } };
     expect(secondJson.sdk.outcome).toBe('present');
@@ -135,7 +134,7 @@ describe('POST /api/flows/register', () => {
     const res = await post(app, '/api/flows/register', {
       name: 'Bad demo',
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     expect(res.status).toBe(400);
@@ -150,7 +149,7 @@ describe('POST /api/flows/register', () => {
     const res = await post(app, '/api/flows/register', {
       name: 'Missing',
       repoPath: '/this/path/does/not/exist',
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     expect(res.status).toBe(400);
   });
@@ -162,13 +161,13 @@ describe('POST /api/flows/register', () => {
     const first = await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json();
     const second = await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json();
 
@@ -180,27 +179,27 @@ describe('POST /api/flows/register', () => {
   it('same repoPath + different flowPath returns two distinct ids + slugs; both listed', async () => {
     const { app, registry } = buildApp();
     const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-api-multi-'));
-    mkdirSync(join(repoPath, '.seeflow', 'checkout'), { recursive: true });
-    mkdirSync(join(repoPath, '.seeflow', 'refund'), { recursive: true });
+    mkdirSync(join(repoPath, 'checkout'), { recursive: true });
+    mkdirSync(join(repoPath, 'refund'), { recursive: true });
     writeFileSync(
-      join(repoPath, '.seeflow', 'checkout', 'flow.json'),
+      join(repoPath, 'checkout', 'flow.json'),
       JSON.stringify({ ...VALID_DEMO, name: 'Checkout' }),
     );
     writeFileSync(
-      join(repoPath, '.seeflow', 'refund', 'flow.json'),
+      join(repoPath, 'refund', 'flow.json'),
       JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
     );
 
     const a = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/checkout/flow.json',
+        flowPath: 'checkout/flow.json',
       })
     ).json()) as { id: string; slug: string };
     const b = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/refund/flow.json',
+        flowPath: 'refund/flow.json',
       })
     ).json()) as { id: string; slug: string };
 
@@ -218,12 +217,12 @@ describe('POST /api/flows/register', () => {
     const updatedA = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/checkout/flow.json',
+        flowPath: 'checkout/flow.json',
       })
     ).json()) as { id: string };
     expect(updatedA.id).toBe(a.id);
     expect(registry.list()).toHaveLength(2);
-    expect(registry.getById(b.id)?.flowPath).toBe('.seeflow/refund/flow.json');
+    expect(registry.getById(b.id)?.flowPath).toBe('refund/flow.json');
   });
 });
 
@@ -587,9 +586,9 @@ describe('POST /api/flows/:id/layout', () => {
   ) => {
     const repoPath = tmpRepoWithDemo(demo);
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string };
-    return { id: reg.id, repoPath, stylePath: join(repoPath, '.seeflow', 'style.json') };
+    return { id: reg.id, repoPath, stylePath: join(repoPath, 'style.json') };
   };
 
   it('writes style.json and returns { ok: true } for a registered flow', async () => {
@@ -655,7 +654,7 @@ describe('POST /api/flows/:id/layout', () => {
   it('returns 404 when flow.json was removed after register', async () => {
     const { app } = buildLayoutApp();
     const { id, repoPath } = await registerLayoutFlow(app);
-    unlinkSync(join(repoPath, '.seeflow', 'flow.json'));
+    unlinkSync(join(repoPath, 'flow.json'));
 
     const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
     expect(res.status).toBe(404);
@@ -668,7 +667,7 @@ describe('POST /api/flows/:id/layout', () => {
     const { id, repoPath } = await registerLayoutFlow(app);
     // Corrupt the file after register so it loads at register-time but fails
     // on the layout call.
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), '{ not json');
+    writeFileSync(join(repoPath, 'flow.json'), '{ not json');
 
     const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
     expect(res.status).toBe(400);
@@ -681,7 +680,7 @@ describe('POST /api/flows/:id/layout', () => {
     const { id, repoPath, stylePath } = await registerLayoutFlow(app);
     // Drop required field to force a schema failure.
     writeFileSync(
-      join(repoPath, '.seeflow', 'flow.json'),
+      join(repoPath, 'flow.json'),
       JSON.stringify({ version: 1, nodes: [], connectors: [] }),
     );
 
@@ -703,7 +702,7 @@ describe('POST /api/flows/:id/layout', () => {
     const { id, repoPath } = await registerLayoutFlow(app);
 
     await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
-    const entries = readdirSync(join(repoPath, '.seeflow'));
+    const entries = readdirSync(repoPath);
     expect(entries.some((name) => name.startsWith('style.json.tmp'))).toBe(false);
   });
 });
@@ -826,7 +825,7 @@ describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
-    await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' });
+    await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' });
 
     const res = await app.request('/api/flows');
     expect(res.status).toBe(200);
@@ -847,9 +846,9 @@ describe('GET /api/flows', () => {
   it('flags entries whose demo file no longer exists as valid:false', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
-    await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' });
+    await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' });
 
-    rmSync(join(repoPath, '.seeflow', 'flow.json'));
+    rmSync(join(repoPath, 'flow.json'));
 
     const list = (await (await app.request('/api/flows')).json()) as Array<{ valid: boolean }>;
     expect(list).toHaveLength(1);
@@ -870,11 +869,11 @@ describe('GET /api/flows', () => {
     });
     await post(app1, '/api/flows/register', {
       repoPath: repoA,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     await post(app1, '/api/flows/register', {
       repoPath: repoB,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     const reg2 = createRegistry({ path: registryPath });
@@ -901,7 +900,7 @@ describe('GET /api/flows/:id', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -918,7 +917,7 @@ describe('GET /api/flows/:id', () => {
     };
     expect(body.valid).toBe(true);
     expect(body.flow.name).toBe('Checkout Flow');
-    expect(body.filePath.endsWith('.seeflow/flow.json')).toBe(true);
+    expect(body.filePath.endsWith('flow.json')).toBe(true);
     expect(body.error).toBeNull();
   });
 
@@ -934,11 +933,11 @@ describe('GET /api/flows/:id', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    writeFileSync(join(repoPath, '.seeflow', 'flow.json'), '{ broken');
+    writeFileSync(join(repoPath, 'flow.json'), '{ broken');
 
     const res = await app.request(`/api/flows/${reg.id}`);
     expect(res.status).toBe(200);
@@ -1044,7 +1043,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
   };
 
   // Flow with a play.ts script staged inside the per-node folder
-  // (<repo>/.seeflow/nodes/api-checkout/scripts/) so the realpath check in
+  // (<repo>/nodes/api-checkout/scripts/) so the realpath check in
   // proxy.ts:resolveScript passes.
   const demoWithPlayScript = (scriptPath = 'scripts/play.ts') => ({
     ...VALID_DEMO,
@@ -1061,7 +1060,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
 
   const tmpRepoWithPlayScript = (scriptName = 'play.ts') => {
     const repoPath = tmpRepoWithDemo(demoWithPlayScript(`scripts/${scriptName}`));
-    const nodeScripts = join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'scripts');
+    const nodeScripts = join(repoPath, 'nodes', 'api-checkout', 'scripts');
     mkdirSync(nodeScripts, { recursive: true });
     writeFileSync(join(nodeScripts, scriptName), '// stub\n');
     return repoPath;
@@ -1073,7 +1072,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1100,7 +1099,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1124,7 +1123,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1140,7 +1139,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1153,7 +1152,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
   it('returns 400 when the scriptPath escapes the project root via symlink', async () => {
     const { app } = buildPlayApp({ stdout: '{}' });
     // Build a demo whose playAction points at `escape.ts` (textually clean) and
-    // stage a symlink at <repo>/.seeflow/escape.ts pointing outside the root.
+    // stage a symlink at <repo>/nodes/api-checkout/escape.ts pointing outside the root.
     const repoPath = tmpRepoWithDemo({
       ...VALID_DEMO,
       nodes: [
@@ -1168,12 +1167,12 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     });
     const outside = mkdtempSync(join(tmpdir(), 'seeflow-api-out-'));
     writeFileSync(join(outside, 'evil.ts'), '// outside');
-    symlinkSync(join(outside, 'evil.ts'), join(repoPath, '.seeflow', 'escape.ts'));
+    symlinkSync(join(outside, 'evil.ts'), join(repoPath, 'escape.ts'));
 
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1195,7 +1194,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await post(app, `/api/flows/${reg.id}/play/missing`, {});
@@ -1221,7 +1220,7 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1322,7 +1321,7 @@ describe('POST /api/flows/:id/reset', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1356,13 +1355,13 @@ describe('POST /api/flows/:id/reset', () => {
     );
     // Stage the script file so the demo doesn't fail any future realpath
     // checks (the fake proxy doesn't actually validate, but matches reality).
-    mkdirSync(join(repoPath, '.seeflow', 'scripts'), { recursive: true });
-    writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true });
+    writeFileSync(join(repoPath, 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1394,13 +1393,13 @@ describe('POST /api/flows/:id/reset', () => {
         scriptPath: 'scripts/reset.ts',
       }),
     );
-    mkdirSync(join(repoPath, '.seeflow', 'scripts'), { recursive: true });
-    writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true });
+    writeFileSync(join(repoPath, 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1423,13 +1422,13 @@ describe('POST /api/flows/:id/reset', () => {
         scriptPath: 'scripts/reset.ts',
       }),
     );
-    mkdirSync(join(repoPath, '.seeflow', 'scripts'), { recursive: true });
-    writeFileSync(join(repoPath, '.seeflow', 'scripts', 'reset.ts'), '// stub\n');
+    mkdirSync(join(repoPath, 'scripts'), { recursive: true });
+    writeFileSync(join(repoPath, 'scripts', 'reset.ts'), '// stub\n');
 
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1474,7 +1473,7 @@ describe('POST /api/emit', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1500,7 +1499,7 @@ describe('POST /api/emit', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1536,7 +1535,7 @@ describe('POST /api/emit', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1570,7 +1569,7 @@ describe('POST /api/emit', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -1663,11 +1662,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const styleFile = join(repoPath, 'style.json');
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
       x: 250,
@@ -1690,11 +1689,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, { x: 1, y: 2 });
 
     const text = readFileSync(demoFile, 'utf8');
@@ -1715,7 +1714,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/missing/position`, { x: 0, y: 0 });
@@ -1728,7 +1727,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
@@ -1744,14 +1743,13 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const dir = join(repoPath, '.seeflow');
     await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, { x: 99, y: 99 });
 
-    const files = readdirSync(dir).sort();
+    const files = readdirSync(repoPath).sort();
     // Only flow.json + style.json should remain — temp files must be renamed/cleaned up.
     expect(files).toEqual(['flow.json', 'style.json']);
   });
@@ -1799,10 +1797,10 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     return { app, demoFile, flowId: reg.id };
   };
 
@@ -1909,12 +1907,12 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const demoFile = join(repoPath, 'flow.json');
+    const styleFile = join(repoPath, 'style.json');
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       name: 'POST /checkout (renamed)',
@@ -1951,11 +1949,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const styleFile = join(repoPath, 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       position: { x: 42, y: 84 },
     });
@@ -1973,11 +1971,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     // borderColor token outside the enum — the body schema itself should reject this.
@@ -1998,11 +1996,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { name: '' });
@@ -2019,7 +2017,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2041,7 +2039,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/nodes/missing`, { name: 'x' });
@@ -2054,11 +2052,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { name: 'Renamed' });
 
     const text = readFileSync(demoFile, 'utf8');
@@ -2077,11 +2075,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       description: 'short body',
       detail: 'multi-line\nnotes about the node',
@@ -2094,9 +2092,9 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const node = onDisk.nodes.find((n) => n.id === 'api-checkout');
     expect(node?.data.description).toBe('short body');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
-    ).toBe('multi-line\nnotes about the node');
+    expect(readFileSync(join(repoPath, 'nodes', 'api-checkout', 'detail.md'), 'utf8')).toBe(
+      'multi-line\nnotes about the node',
+    );
   });
 
   it('strips description on empty; empties detail.md but keeps the file:// ref', async () => {
@@ -2105,11 +2103,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     // First set both fields, then clear them with empty strings.
     await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       description: 'tmp',
@@ -2128,9 +2126,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     expect(node?.data.description).toBeUndefined();
     expect('description' in (node?.data ?? {})).toBe(false);
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'api-checkout', 'detail.md'), 'utf8'),
-    ).toBe('');
+    expect(readFileSync(join(repoPath, 'nodes', 'api-checkout', 'detail.md'), 'utf8')).toBe('');
   });
 
   // US-009: persist an icon name, then clear it via null. NodePatchBodySchema
@@ -2143,11 +2139,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const setRes = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
       icon: 'database',
     });
@@ -2175,7 +2171,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2189,13 +2185,13 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     });
     expect(res.status).toBe(200);
 
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'html-patch')?.data.html).toBe('file://view.html');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-patch', 'view.html'), 'utf8'),
-    ).toBe('<p>via PATCH</p>');
+    expect(readFileSync(join(repoPath, 'nodes', 'html-patch', 'view.html'), 'utf8')).toBe(
+      '<p>via PATCH</p>',
+    );
   });
 });
 
@@ -2206,11 +2202,11 @@ describe('POST /api/flows/:id/nodes', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
 
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       type: 'shapeNode',
@@ -2235,7 +2231,7 @@ describe('POST /api/flows/:id/nodes', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2255,11 +2251,11 @@ describe('POST /api/flows/:id/nodes', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     // type 'shapeNode' but missing required `shape`.
@@ -2289,11 +2285,11 @@ describe('POST /api/flows/:id/nodes', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'with-detail',
       type: 'shapeNode',
@@ -2306,9 +2302,9 @@ describe('POST /api/flows/:id/nodes', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
-    ).toBe('hello world');
+    expect(readFileSync(join(repoPath, 'nodes', 'with-detail', 'detail.md'), 'utf8')).toBe(
+      'hello world',
+    );
   });
 
   it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
@@ -2317,11 +2313,11 @@ describe('POST /api/flows/:id/nodes', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'no-detail',
       type: 'shapeNode',
@@ -2333,9 +2329,7 @@ describe('POST /api/flows/:id/nodes', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
-    ).toBe('');
+    expect(readFileSync(join(repoPath, 'nodes', 'no-detail', 'detail.md'), 'utf8')).toBe('');
   });
 
   // htmlNode externalization: every htmlNode write lands in
@@ -2347,7 +2341,7 @@ describe('POST /api/flows/:id/nodes', () => {
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         })
       ).json()) as { id: string };
 
@@ -2358,14 +2352,12 @@ describe('POST /api/flows/:id/nodes', () => {
       });
       expect(res.status).toBe(200);
 
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+      const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
         nodes: Array<{ id: string; type: string; data: { html?: string } }>;
       };
       const persisted = onDisk.nodes.find((n) => n.id === 'hero-block');
       expect(persisted?.data.html).toBe('file://view.html');
-      expect(
-        readFileSync(join(repoPath, '.seeflow', 'nodes', 'hero-block', 'view.html'), 'utf8'),
-      ).toBe('');
+      expect(readFileSync(join(repoPath, 'nodes', 'hero-block', 'view.html'), 'utf8')).toBe('');
     });
 
     it('writes nodes/<id>/view.html with content when html is provided', async () => {
@@ -2374,7 +2366,7 @@ describe('POST /api/flows/:id/nodes', () => {
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         })
       ).json()) as { id: string };
 
@@ -2385,14 +2377,14 @@ describe('POST /api/flows/:id/nodes', () => {
       });
       expect(res.status).toBe(200);
 
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+      const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
         nodes: Array<{ id: string; data: { html?: string } }>;
       };
       const persisted = onDisk.nodes.find((n) => n.id === 'with-content');
       expect(persisted?.data.html).toBe('file://view.html');
-      expect(
-        readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-content', 'view.html'), 'utf8'),
-      ).toBe('<p>inline</p>');
+      expect(readFileSync(join(repoPath, 'nodes', 'with-content', 'view.html'), 'utf8')).toBe(
+        '<p>inline</p>',
+      );
     });
 
     it('preserves other data fields when externalizing html', async () => {
@@ -2401,7 +2393,7 @@ describe('POST /api/flows/:id/nodes', () => {
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         })
       ).json()) as { id: string };
 
@@ -2412,7 +2404,7 @@ describe('POST /api/flows/:id/nodes', () => {
       });
       expect(res.status).toBe(200);
 
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+      const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
         nodes: Array<{ id: string; data: { name?: string; icon?: string; html?: string } }>;
       };
       const persisted = onDisk.nodes.find((n) => n.id === 'pricing');
@@ -2430,7 +2422,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2454,7 +2446,7 @@ describe('POST /api/flows/:id/bulk', () => {
     expect(body.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
     expect(body.connectors.map((c) => c.id)).toEqual(['b1-to-b2']);
 
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string; html?: string } }>;
       connectors: Array<{ id: string }>;
     };
@@ -2463,12 +2455,10 @@ describe('POST /api/flows/:id/bulk', () => {
     expect(onDisk.connectors).toHaveLength(1);
     const b2 = onDisk.nodes.find((n) => n.id === 'b2');
     expect(b2?.data.detail).toBe('file://detail.md');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'b2', 'detail.md'), 'utf8')).toBe('hi');
+    expect(readFileSync(join(repoPath, 'nodes', 'b2', 'detail.md'), 'utf8')).toBe('hi');
     const b3 = onDisk.nodes.find((n) => n.id === 'b3');
     expect(b3?.data.html).toBe('file://view.html');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'b3', 'view.html'), 'utf8')).toBe(
-      '<div>x</div>',
-    );
+    expect(readFileSync(join(repoPath, 'nodes', 'b3', 'view.html'), 'utf8')).toBe('<div>x</div>');
   });
 
   it('accepts a nodes-only body (no connectors field)', async () => {
@@ -2477,7 +2467,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2496,11 +2486,11 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
@@ -2513,8 +2503,8 @@ describe('POST /api/flows/:id/bulk', () => {
     expect(res.status).toBe(400);
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
     // Per-node folders cleaned up.
-    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'good-a'))).toBe(false);
-    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'good-b'))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'good-a'))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'good-b'))).toBe(false);
   });
 
   it('rolls back the whole batch when one node is malformed', async () => {
@@ -2523,11 +2513,11 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
@@ -2542,8 +2532,8 @@ describe('POST /api/flows/:id/bulk', () => {
     expect(body.error).toContain('schema');
 
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
-    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'ok-1'))).toBe(false);
-    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'bad'))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'ok-1'))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'bad'))).toBe(false);
   });
 
   it('reports intra-batch duplicate node id with collection=nodes', async () => {
@@ -2552,7 +2542,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2574,7 +2564,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2596,7 +2586,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2620,7 +2610,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2636,7 +2626,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2650,7 +2640,7 @@ describe('POST /api/flows/:id/bulk', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2709,11 +2699,11 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
 
     const res = await app.request(`/api/flows/${reg.id}/nodes/a`, { method: 'DELETE' });
     expect(res.status).toBe(200);
@@ -2754,11 +2744,11 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const res = await app.request(`/api/flows/${reg.id}/nodes/a`, { method: 'DELETE' });
     expect(res.status).toBe(200);
 
@@ -2783,7 +2773,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await app.request(`/api/flows/${reg.id}/nodes/missing`, { method: 'DELETE' });
@@ -2796,7 +2786,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2805,7 +2795,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       type: 'shapeNode',
       data: { shape: 'rectangle', detail: 'temp' },
     });
-    const folder = join(repoPath, '.seeflow', 'nodes', 'gone');
+    const folder = join(repoPath, 'nodes', 'gone');
     expect(existsSync(folder)).toBe(true);
 
     const res = await app.request(`/api/flows/${reg.id}/nodes/gone`, { method: 'DELETE' });
@@ -2820,7 +2810,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         })
       ).json()) as { id: string };
 
@@ -2831,7 +2821,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
           data: { html: '<p>x</p>' },
         })
       ).json()) as { id: string };
-      const viewFile = join(repoPath, '.seeflow', 'nodes', created.id, 'view.html');
+      const viewFile = join(repoPath, 'nodes', created.id, 'view.html');
       expect(existsSync(viewFile)).toBe(true);
 
       const res = await app.request(`/api/flows/${reg.id}/nodes/${created.id}`, {
@@ -2840,9 +2830,9 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
       expect(existsSync(viewFile)).toBe(false);
-      expect(existsSync(join(repoPath, '.seeflow', 'nodes', created.id))).toBe(false);
+      expect(existsSync(join(repoPath, 'nodes', created.id))).toBe(false);
 
-      const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+      const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
         nodes: Array<{ id: string }>;
       };
       expect(onDisk.nodes.find((n) => n.id === created.id)).toBeUndefined();
@@ -2854,7 +2844,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const reg = (await (
         await post(app, '/api/flows/register', {
           repoPath,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         })
       ).json()) as { id: string };
 
@@ -2872,8 +2862,8 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
           data: { html: '<p>2</p>' },
         })
       ).json()) as { id: string };
-      const firstFile = join(repoPath, '.seeflow', 'nodes', first.id, 'view.html');
-      const secondFile = join(repoPath, '.seeflow', 'nodes', second.id, 'view.html');
+      const firstFile = join(repoPath, 'nodes', first.id, 'view.html');
+      const secondFile = join(repoPath, 'nodes', second.id, 'view.html');
       expect(existsSync(firstFile)).toBe(true);
       expect(existsSync(secondFile)).toBe(true);
 
@@ -2927,12 +2917,12 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const demoFile = join(repoPath, 'flow.json');
+    const styleFile = join(repoPath, 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       label: 'renamed',
       style: 'dashed',
@@ -2962,7 +2952,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -2981,11 +2971,11 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const styleFile = join(repoPath, 'style.json');
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       sourceHandle: 'r',
       targetHandle: 't',
@@ -3005,11 +2995,11 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
@@ -3032,7 +3022,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3050,7 +3040,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3072,7 +3062,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await patch(app, `/api/flows/${reg.id}/connectors/missing`, { label: 'x' });
@@ -3088,10 +3078,10 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
-    const styleFile = join(repoPath, '.seeflow', 'style.json');
+    const styleFile = join(repoPath, 'style.json');
 
     const setRes = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
       sourcePin: { side: 'right', t: 0.25 },
@@ -3124,7 +3114,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3170,11 +3160,11 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const res = await post(app, `/api/flows/${reg.id}/connectors`, { source: 'a', target: 'b' });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; id: string };
@@ -3197,7 +3187,7 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3218,11 +3208,11 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -3242,11 +3232,11 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     const res = await post(app, `/api/flows/${reg.id}/connectors`, {
@@ -3292,7 +3282,7 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3302,7 +3292,7 @@ describe('POST /api/flows/:id/connectors', () => {
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string };
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       connectors: Array<{ id: string; source: string; target: string; kind: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
@@ -3333,7 +3323,7 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3342,7 +3332,7 @@ describe('POST /api/flows/:id/connectors', () => {
       target: 'svc',
     });
     expect(res.status).toBe(200);
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       connectors: Array<{ source: string; target: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
@@ -3372,7 +3362,7 @@ describe('POST /api/flows/:id/connectors', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3381,7 +3371,7 @@ describe('POST /api/flows/:id/connectors', () => {
       target: 'icon-b',
     });
     expect(res.status).toBe(200);
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       connectors: Array<{ source: string; target: string }>;
     };
     expect(onDisk.connectors[0]?.source).toBe('icon-a');
@@ -3424,7 +3414,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3445,7 +3435,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
     expect(body.connectors).toHaveLength(2);
     expect(body.connectors[1]?.id).toBe('pinned');
 
-    const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
+    const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
       connectors: Array<{ id: string; eventName?: string }>;
     };
     expect(onDisk.connectors).toHaveLength(2);
@@ -3458,7 +3448,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3515,11 +3505,11 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const demoFile = join(repoPath, 'flow.json');
     const res = await app.request(`/api/flows/${reg.id}/connectors/a-to-b`, { method: 'DELETE' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
@@ -3542,7 +3532,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
     const res = await app.request(`/api/flows/${reg.id}/connectors/missing`, { method: 'DELETE' });
@@ -3557,7 +3547,7 @@ describe('DELETE /api/flows/:id', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string };
 
@@ -3573,7 +3563,7 @@ describe('DELETE /api/flows/:id', () => {
     const reg = (await (
       await post(app, '/api/flows/register', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       })
     ).json()) as { id: string; slug: string };
 
@@ -3754,8 +3744,8 @@ describe('GET /api/flows/summary', () => {
     const { app } = buildApp();
     const repoA = tmpRepoWithDemo({ ...VALID_DEMO, description: 'main checkout flow' });
     const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund', description: undefined });
-    await post(app, '/api/flows/register', { repoPath: repoA, flowPath: '.seeflow/flow.json' });
-    await post(app, '/api/flows/register', { repoPath: repoB, flowPath: '.seeflow/flow.json' });
+    await post(app, '/api/flows/register', { repoPath: repoA, flowPath: 'flow.json' });
+    await post(app, '/api/flows/register', { repoPath: repoB, flowPath: 'flow.json' });
 
     const res = await app.request('/api/flows/summary');
     expect(res.status).toBe(200);
@@ -3773,7 +3763,7 @@ describe('GET /api/flows/summary', () => {
   it('returns each summary with only id, name and description keys', async () => {
     const { app } = buildApp();
     const repo = tmpRepoWithDemo({ ...VALID_DEMO, description: 'doc' });
-    await post(app, '/api/flows/register', { repoPath: repo, flowPath: '.seeflow/flow.json' });
+    await post(app, '/api/flows/register', { repoPath: repo, flowPath: 'flow.json' });
 
     const list = (await (await app.request('/api/flows/summary')).json()) as Array<object>;
     const keys = Object.keys(list[0] as object).sort();
@@ -3802,7 +3792,7 @@ describe('GET /api/flows/:id/graph', () => {
       ],
     });
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string };
 
     const res = await app.request(`/api/flows/${reg.id}/graph`);
@@ -3834,9 +3824,9 @@ describe('GET /api/flows/:id/graph', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string };
-    unlinkSync(join(repoPath, '.seeflow', 'flow.json'));
+    unlinkSync(join(repoPath, 'flow.json'));
 
     const res = await app.request(`/api/flows/${reg.id}/graph`);
     expect(res.status).toBe(404);
@@ -3848,7 +3838,7 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string };
 
     // Add a node via the existing add endpoint so detail.md is externalized
@@ -3887,7 +3877,7 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: '.seeflow/flow.json' })
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
     ).json()) as { id: string };
 
     const res = await app.request(`/api/flows/${reg.id}/nodes/not-a-node`);

@@ -16,9 +16,7 @@
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
-          "args": [
-            "run"
-          ],
+          "args": ["run"],
           "scriptPath": "scripts/play.ts"
         }
       }

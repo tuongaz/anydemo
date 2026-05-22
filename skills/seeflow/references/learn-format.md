@@ -1,6 +1,6 @@
-# `.seeflow/LEARN.md` — project memory for flow authoring
+# `LEARN.md` — project memory for flow authoring
 
-`<project>/.seeflow/LEARN.md` is the persistent crib sheet the `seeflow`
+`<projectPath>/LEARN.md` is the persistent crib sheet the `seeflow`
 skill writes for itself. Every `/seeflow` invocation reads it before
 discovery and updates it at the end of discovery (and again whenever
 later phases surface a non-obvious fact).
@@ -24,8 +24,9 @@ run should be able to skip a lot of grep work by reading it.
   uncovered a new gotcha (port mismatch, hidden env var, fixture
   factory, surprising auth).
 
-The file always lives at `<project>/.seeflow/LEARN.md`. Create the
-parent `.seeflow/` directory if missing. Never write outside `.seeflow/`.
+The file always lives at `<projectPath>/LEARN.md`. Create the
+seeflow project directory (`<host>/.seeflow/<slug>/`) if missing.
+Never write outside the project directory.
 
 ## File structure
 

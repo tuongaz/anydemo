@@ -1,11 +1,32 @@
 ---
 name: seeflow
-description: Use ONLY when the user explicitly asks to *create* a new SeeFlow flow — "create a flow", "generate a flow", "scaffold a SeeFlow flow", "add a flow to this repo" — or when a previous `/seeflow-lookup` already reported no matching flow exists. **Do NOT invoke for inspection phrasing** ("show me", "how does X work", "diagram our system", "explain the flow") — those route to `/seeflow-lookup` first; it will auto-hand off here only when nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at `<project>/flow.json` (node-attached files live under `<project>/.seeflow/nodes/<id>/`).
+description: Use ONLY when the user explicitly asks to *create* a new SeeFlow flow — "create a flow", "generate a flow", "scaffold a SeeFlow flow", "add a flow to this repo" — or when a previous `/seeflow-lookup` already reported no matching flow exists. **Do NOT invoke for inspection phrasing** ("show me", "how does X work", "diagram our system", "explain the flow") — those route to `/seeflow-lookup` first; it will auto-hand off here only when nothing is registered. Orchestrates five sub-agents and the `seeflow` CLI to turn a natural-language prompt into a registered, validated SeeFlow flow at `<project>/flow.json` (node-attached files live under `<projectPath>/nodes/<id>/`).
 ---
 
 # seeflow
 
-Turn a natural-language prompt into a registered SeeFlow flow at `<project>/flow.json`, with node-attached content (scripts, detail.md, view.html) under `<project>/.seeflow/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `flow.json` by hand (`projects:create` writes the envelope for you).
+Turn a natural-language prompt into a registered SeeFlow flow at `<projectPath>/flow.json`, with node-attached content (scripts, detail.md, view.html) under `<projectPath>/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `flow.json` by hand (`projects:create` writes the envelope for you).
+
+## Project layout convention
+
+A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **only** place this skill introduces a `.seeflow` folder — the studio itself is path-agnostic). Each flow lives in its own subdirectory:
+
+```
+<host>/                          ← the user's repo
+  .seeflow/                      ← container, created by this skill
+    <flow-name>/                 ← seeflow project root — passed to projects:create --path
+      flow.json                  ← envelope + nodes/connectors
+      style.json                 ← layout/visuals (managed by `flows:layout`)
+      nodes/<id>/                ← per-node sidecar files (detail.md, view.html, scripts/)
+      sdk/emit.ts                ← optional: auto-generated event SDK helper
+      LEARN.md                   ← persistent crib for this skill (per-flow)
+      .tmp/                      ← per-flow scratch ($SEEFLOW_TMP)
+      state/                     ← per-flow runtime script state
+```
+
+Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --name "..."`. Inside `--path`, every CLI / file reference is relative to that project root — never re-prefix with `.seeflow/`.
+
+`~/.seeflow/` (user-home) is a separate, unrelated directory that holds the studio's global registry / config / pid / consent / feedback files; leave its paths verbatim wherever they appear.
 
 **Parallelism is the default — one message, N `Task` calls.** Phase 1's wrong/right block below is canonical; later parallel phases reference it. Narrate each phase boundary with a one-line status (e.g. `Phase 3: scaffolding skeleton flow…`) so silent waits don't feel broken.
 
@@ -21,27 +42,27 @@ Turn a natural-language prompt into a registered SeeFlow flow at `<project>/flow
 
 - User's prompt; project root (`$PWD`); `~/.seeflow/config.json` (optional studio host:port).
 - Existing `<project>/flow.json` (skip the creation path if already present — fall back to `register --flow flow.json`).
-- `<project>/.seeflow/LEARN.md` — persistent crib sheet from prior runs. **Read before Phase 1.** Format: `references/learn-format.md`.
+- `<projectPath>/LEARN.md` — persistent crib sheet from prior runs. **Read before Phase 1.** Format: `references/learn-format.md`.
 
 ## Conventions
 
 | Variable | Resolution |
 |---|---|
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
-| `$repoPath` | `$PWD`. |
-| `$SEEFLOW_TMP` | `$repoPath/.seeflow/.tmp/` — project-local scratch directory. Create on demand (`mkdir -p`), write all intermediate files here, **never** under system `/tmp`. Already inside the project tree, so no extra write permission is needed. Cleaned up at end of the run (see "Scratch files & cleanup"). |
+| `$repoPath` | `$PWD/.seeflow/<flow-name>` (the seeflow project root the skill creates and passes to `projects:create --path`). |
+| `$SEEFLOW_TMP` | `$projectPath/.tmp/` — project-local scratch directory. Create on demand (`mkdir -p`), write all intermediate files here, **never** under system `/tmp`. Already inside the project tree, so no extra write permission is needed. Cleaned up at end of the run (see "Scratch files & cleanup"). |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
 ### Scratch files & cleanup
 
-Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The project-local path requires no extra permission, survives the run for debugging, and is gitignored by convention (`.seeflow/.tmp/` is already covered by the `.seeflow/` listing in most repos; add it explicitly if not).
+Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The project-local path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `.tmp/` explicitly if not).
 
 **Lifecycle:**
 
 1. **Create on first use** — `mkdir -p "$SEEFLOW_TMP"` inside any script or wrapper that writes there. Idempotent, costs nothing.
-2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `.seeflow/.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
+2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
 3. **Cleanup at end of run** — after Phase 6 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
-4. **Never check in** — if `.seeflow/.tmp/` is not yet gitignored, add it before committing.
+4. **Never check in** — if `.tmp/` is not yet gitignored, add it before committing.
 
 **Every flow mutation goes through the CLI.** The studio validates every write server-side — there is no separate validation step. **Don't memorise CLI syntax** — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
@@ -56,7 +77,7 @@ P3    projects:create (path + name → empty flow.json registered)
       → flow:add-bulk (nodes + connectors, atomic) → flows:layout
       → USER REVIEW + dynamic gate (one combined ask)
 P4    play-designer ‖ status-designer
-P5    write scripts to .seeflow/nodes/<nodeId>/scripts/
+P5    write scripts to nodes/<nodeId>/scripts/
       → nodes:patch (per node, with playAction / statusAction)
       → optional newTriggerNodes via flow:add-bulk
       → flows:layout
@@ -86,7 +107,7 @@ Full text in `references/core-rules.md`:
 - **Bypassing the Phase 0 consent check.** Never default to `enabled: true`; always read `~/.seeflow/consent.json` first.
 - **Touching `status` after the initial `pending` write.** The `SessionEnd` hook owns that field — see `feedback.md`.
 - **Logging without a redacted summary.** If the summary would leak a path, hostname, project name, or prompt text, **skip the entry** rather than emit a leaky one.
-- **Writing scratch files to `/tmp` (or `$TMPDIR`).** Use `$SEEFLOW_TMP` (`<project>/.seeflow/.tmp/`) — project-local, no permission prompts, and cleaned up at end of run. Same rule applies to scripts the Phase 4 designers emit.
+- **Writing scratch files to `/tmp` (or `$TMPDIR`).** Use `$SEEFLOW_TMP` (`<projectPath>/.tmp/`) — project-local, no permission prompts, and cleaned up at end of run. Same rule applies to scripts the Phase 4 designers emit.
 - **Forgetting to clean `$SEEFLOW_TMP` after a successful run.** Leave it in place on failure (debugging trail); `rm -rf "$SEEFLOW_TMP"` after Phase 6 prints the final `Flow registered` line on success.
 
 ## Phase 0 — pre-flight (parallel)
@@ -117,7 +138,7 @@ If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), log `en
 Then in a single message:
 
 1. `curl --max-time 0.5 -fsS "$STUDIO_URL/health"`
-2. Read `<project>/.seeflow/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
+2. Read `<projectPath>/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
 
 - **200** → Phase 1.
 - **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, log `env-service-unreachable` (`severity: blocker`, `phase: P0`, `summary: studio /health unreachable after start retry`), surface and stop.
@@ -179,7 +200,7 @@ Start `seeflow-node-planner` as soon as the code-analyzer returns — it only ne
 
 When the system-analyzer returns:
 
-1. Merge `learnUpdates` into `<project>/.seeflow/LEARN.md` (create `.seeflow/` if missing). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
+1. Merge `learnUpdates` into `<projectPath>/LEARN.md` (create the project dir if missing). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
 2. Splice `runtimeProfile` + LEARN.md facts into the in-memory context brief used by Phase 4.
 3. Merge `knownEndpoints` / `techStack` from the code-analyzer into the same write.
 
@@ -203,7 +224,7 @@ Output: a single envelope carrying `name`, `slug`, `nodes`, `connectors`, and `r
 
 The skeleton flow lands via four steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
-1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root, not inside `.seeflow/`) and registers it in one shot. Forward the planner-supplied `name` (and `description` if the planner provided one):
+1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot. Forward the planner-supplied `name` (and `description` if the planner provided one):
 
    ```bash
    $SEEFLOW projects:create --path "$repoPath" --name "$plannerName" [--description "$plannerDescription"]
@@ -211,7 +232,7 @@ The skeleton flow lands via four steps, in order. No `flow.json` authoring by ha
 
    The studio writes the envelope, adds a registry entry under `~/.seeflow/registry.json`, and returns `{ id, slug }` (slug is derived from `name`). **Capture `id` from the response and use it (not `slug`) for every follow-up CLI call below** — several commands document slug support in `help` but the server only resolves by id today. **Registration is a precondition for opening the canvas:** the `$STUDIO_URL/d/<slug>` route only works after this step succeeds, so never surface the canvas URL to the user before this step.
 
-   **`alreadyExists` exit (code 4) means `<repoPath>/flow.json` is already present** — fall back to `$SEEFLOW register --path "$repoPath" --flow flow.json` to pick up the existing root-level envelope (the `--flow` flag is required because `register`'s default is the legacy `.seeflow/flow.json`). Don't overwrite. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
+   **`alreadyExists` exit (code 4) means `<repoPath>/flow.json` is already present** — fall back to `$SEEFLOW register --path "$repoPath"` to pick up the existing envelope. Don't overwrite. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
 
 2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose play action is absent, inject the minimum placeholder the contract requires so the server accepts the batch. Look up the exact required fields by running `$SEEFLOW schema action` and `$SEEFLOW schema node` (the `playNode` variant's `playAction` requirements) — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
 2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
@@ -256,7 +277,7 @@ Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 
 
 **Look up the action + node contract from the CLI first.** Run `$SEEFLOW schema action` and `$SEEFLOW schema node` (parallel; one message, two Bash calls) and capture both outputs. Pass them to each designer alongside the brief — designers have no shell, so what you don't forward, they don't know. The same outputs serve both designers; reuse them. Skipping this step lets the designer invent fields the CLI rejects on `nodes:patch`, burning a retry.
 
-Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`.seeflow/nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
+Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
 **Sample data priority:** integration/e2e fixtures (`runtimeProfile.integrationTestDir`, copy verbatim) → seed / migration / ORM factories → README / OpenAPI / Postman examples → invent last, note in `rationale`.
 
@@ -272,7 +293,7 @@ For each overlay returned by Phase 4 (parallelise the writes when the script bod
 
 If the play-designer emitted `newTriggerNodes`, batch them via `flow:add-bulk` (one call, both arrays atomic), then re-run `flows:layout`. (Body shape: `$SEEFLOW help flow:add-bulk`.)
 
-**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type after the merge (e.g. `state → play` requires a `playAction` in the same patch); a `badSchema` exit means feed the issues to the play-designer and retry.
+**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type after the merge (e.g. `state → play` requires a `playAction` in the same patch); a `badSchema` exit means feed the issues to the play-designer and retry.
 
 **Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the CLI's reported issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule). When the budget is exhausted for a node, log `retry-exhausted` (`severity: failure`, `phase: P5`, `code: badSchema` (or the actual code), `summary: nodes:patch retries exhausted on <kind> (N nodes)`). Aggregate across nodes — one entry per (kind, code) pair, not one per node.
 
@@ -288,14 +309,14 @@ Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of
 
 1. Identify failing nodes from `plays[*].error` / `statuses[*].outcome`.
 2. **Parallel fix-up (Phase 1 rule):** one sub-agent per failing script, single message. A single agent fixing N scripts cross-contaminates.
-3. Each agent gets the script path (under `.seeflow/nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
+3. Each agent gets the script path (under `nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
 4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then log `seeflow:e2e-fail` (`severity: failure`, `phase: P6`, `details: <N> failing scripts after fix-up`, `summary: e2e ok:false after retry budget exhausted`) and ask retry / stop.
 
 If the run is design-only (Phase 1 fallback), skip Phase 6 entirely and log `phase-skipped` (`severity: degraded`, `phase: P6`, `details: design-only`, `summary: e2e skipped — no runtime to validate against`).
 
 ### Polish LEARN.md with anything learned
 
-If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<project>/.seeflow/LEARN.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
+If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<projectPath>/LEARN.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
 
 **Tech-specific learnings** (a helper, a required attribute, an emulator quirk, a fixture path) go in `## Tech stack adaptations` → `### <techId>`, not just `## Gotchas`. If the code-analyzer missed a tech entirely, also append the `techId` to `## Tech stack`. This is what makes the next `/seeflow` run reuse the work.
 

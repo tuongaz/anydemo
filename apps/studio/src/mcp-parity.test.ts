@@ -110,8 +110,7 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
   const app = createApp({ mode: 'prod', staticRoot: './dist/web', registry, disableWatcher: true });
 
   const repoPath = mkdtempSync(join(tmpdir(), 'seeflow-parity-repo-'));
-  mkdirSync(join(repoPath, '.seeflow'));
-  const demoFile = join(repoPath, '.seeflow', 'flow.json');
+  const demoFile = join(repoPath, 'flow.json');
   // operations.ts writes the canonical 2-space JSON + trailing newline back to
   // disk on every mutation, so the byte comparison only kicks in after the
   // first mutation runs. The initial seed bytes can be whatever — pretty or
@@ -122,7 +121,7 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
   const entry = registry.upsert({
     name: demoName,
     repoPath,
-    flowPath: '.seeflow/flow.json',
+    flowPath: 'flow.json',
     valid: true,
     lastModified: Date.now(),
   });

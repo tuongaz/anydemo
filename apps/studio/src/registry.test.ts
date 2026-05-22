@@ -28,7 +28,7 @@ describe('createRegistry', () => {
     const entry = reg.upsert({
       name: 'Checkout Flow',
       repoPath: '/tmp/repo-a',
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     expect(entry.id).toBeTruthy();
     expect(entry.slug).toBe('checkout-flow');
@@ -60,12 +60,12 @@ describe('createRegistry', () => {
     const a = reg.upsert({
       name: 'Checkout',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/checkout/flow.json',
+      flowPath: 'checkout/flow.json',
     });
     const b = reg.upsert({
       name: 'Refund',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/refund/flow.json',
+      flowPath: 'refund/flow.json',
     });
     expect(a.id).not.toBe(b.id);
     expect(a.slug).toBe('checkout');
@@ -78,17 +78,17 @@ describe('createRegistry', () => {
     const a = reg.upsert({
       name: 'Checkout',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/checkout/flow.json',
+      flowPath: 'checkout/flow.json',
     });
     const b = reg.upsert({
       name: 'Refund',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/refund/flow.json',
+      flowPath: 'refund/flow.json',
     });
     const updated = reg.upsert({
       name: 'Checkout v2',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/checkout/flow.json',
+      flowPath: 'checkout/flow.json',
     });
     expect(updated.id).toBe(a.id);
     expect(updated.slug).toBe(a.slug);
@@ -96,7 +96,7 @@ describe('createRegistry', () => {
     expect(reg.list()).toHaveLength(2);
     const sibling = reg.getById(b.id);
     expect(sibling?.name).toBe('Refund');
-    expect(sibling?.flowPath).toBe('.seeflow/refund/flow.json');
+    expect(sibling?.flowPath).toBe('refund/flow.json');
   });
 
   it('slug uniqueness still enforced across the WHOLE registry (same name, same repo)', () => {
@@ -104,12 +104,12 @@ describe('createRegistry', () => {
     const a = reg.upsert({
       name: 'Foo',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/foo-a/flow.json',
+      flowPath: 'foo-a/flow.json',
     });
     const b = reg.upsert({
       name: 'Foo',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/foo-b/flow.json',
+      flowPath: 'foo-b/flow.json',
     });
     expect(a.slug).toBe('foo');
     expect(b.slug).toBe('foo-2');
@@ -120,12 +120,12 @@ describe('createRegistry', () => {
     const a = reg.upsert({
       name: 'Checkout',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/checkout/flow.json',
+      flowPath: 'checkout/flow.json',
     });
     const b = reg.upsert({
       name: 'Refund',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/refund/flow.json',
+      flowPath: 'refund/flow.json',
     });
     expect(reg.remove(a.id)).toBe(true);
     expect(reg.list()).toHaveLength(1);
@@ -138,18 +138,16 @@ describe('createRegistry', () => {
     const a = reg.upsert({
       name: 'A',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/a/flow.json',
+      flowPath: 'a/flow.json',
     });
     reg.upsert({
       name: 'B',
       repoPath: '/tmp/multi',
-      flowPath: '.seeflow/b/flow.json',
+      flowPath: 'b/flow.json',
     });
-    const found = reg.getByRepoPathAndFlowPath('/tmp/multi', '.seeflow/a/flow.json');
+    const found = reg.getByRepoPathAndFlowPath('/tmp/multi', 'a/flow.json');
     expect(found?.id).toBe(a.id);
-    expect(
-      reg.getByRepoPathAndFlowPath('/tmp/multi', '.seeflow/missing/flow.json'),
-    ).toBeUndefined();
+    expect(reg.getByRepoPathAndFlowPath('/tmp/multi', 'missing/flow.json')).toBeUndefined();
   });
 
   it('persists to disk on every mutation and rehydrates on construct', () => {
@@ -258,7 +256,7 @@ describe('onChange subscription', () => {
     registry.upsert({
       name: 'a',
       repoPath: '/tmp/a',
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const persisted = readFileSync(path, 'utf8');
 
@@ -281,7 +279,7 @@ describe('onChange subscription', () => {
             slug: 'a',
             name: 'a',
             repoPath: '/tmp/a',
-            flowPath: '.seeflow/flow.json',
+            flowPath: 'flow.json',
             lastModified: 0,
             valid: true,
           },
@@ -290,7 +288,7 @@ describe('onChange subscription', () => {
             slug: 'b',
             name: 'b',
             repoPath: '/tmp/b',
-            flowPath: '.seeflow/flow.json',
+            flowPath: 'flow.json',
             lastModified: 0,
             valid: true,
           },
@@ -322,7 +320,7 @@ describe('atomic registry writes', () => {
         registry.upsert({
           name: `flow-${i}`,
           repoPath: `/tmp/repo-${i}`,
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         }),
       ),
     );

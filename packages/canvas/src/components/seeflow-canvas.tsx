@@ -1138,8 +1138,8 @@ const nodeTypes = {
   imageNode: ImageNode,
   iconNode: IconNode,
   // US-014: file-backed escape-hatch node — fetches author HTML at
-  // `<project>/.seeflow/<htmlPath>`, sanitizes (US-013), and renders with
-  // Tailwind Play CDN (US-012). Missing files render PlaceholderCard.
+  // `<project>/<htmlPath>`, sanitizes (US-013), and renders with Tailwind
+  // Play CDN (US-012). Missing files render PlaceholderCard.
   htmlNode: HtmlNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };

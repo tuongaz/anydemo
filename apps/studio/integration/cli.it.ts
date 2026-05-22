@@ -297,9 +297,9 @@ describe('integration: CLI — projects + flows', () => {
   it('register --path registers an on-disk flow.json with the studio', async () => {
     const slug = uniqueFlowId('cli-register');
     const repoPath = join(studio.home, slug);
-    mkdirSync(join(repoPath, '.seeflow'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
     writeFileSync(
-      join(repoPath, '.seeflow', 'flow.json'),
+      join(repoPath, 'flow.json'),
       `${JSON.stringify({ version: 2, name: slug, nodes: [], connectors: [] }, null, 2)}\n`,
     );
 
@@ -315,9 +315,9 @@ describe('integration: CLI — projects + flows', () => {
   it('flows:register is an alias of register (same on-disk + registry effect)', async () => {
     const slug = uniqueFlowId('cli-flows-register');
     const repoPath = join(studio.home, slug);
-    mkdirSync(join(repoPath, '.seeflow'), { recursive: true });
+    mkdirSync(repoPath, { recursive: true });
     writeFileSync(
-      join(repoPath, '.seeflow', 'flow.json'),
+      join(repoPath, 'flow.json'),
       `${JSON.stringify({ version: 2, name: slug, nodes: [], connectors: [] }, null, 2)}\n`,
     );
 
@@ -331,9 +331,9 @@ describe('integration: CLI — projects + flows', () => {
 
   it('flows:play triggers a playNode and prints { ok, runId, status, body }', async () => {
     // Mirrors rest.it.ts US-007: seed a playNode whose scriptPath resolves
-    // under <repoPath>/.seeflow/nodes/<id>/, then drop a tiny script that
-    // prints a JSON line and exits 0. CLI's flows:play POSTs to /play and
-    // the response is printed via printOk → `{"ok":true, runId, status, body}`.
+    // under <repoPath>/nodes/<id>/, then drop a tiny script that prints a
+    // JSON line and exits 0. CLI's flows:play POSTs to /play and the response
+    // is printed via printOk → `{"ok":true, runId, status, body}`.
     const created = await createProject(uniqueFlowId('cli-flows-play'));
     const nodeId = 'cli-play-1';
     const addRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes`, {
@@ -355,7 +355,7 @@ describe('integration: CLI — projects + flows', () => {
     });
     expect(addRes.status).toBe(200);
 
-    const scriptDir = join(studio.workspace, created.slug, '.seeflow', 'nodes', nodeId, 'scripts');
+    const scriptDir = join(studio.workspace, created.slug, 'nodes', nodeId, 'scripts');
     mkdirSync(scriptDir, { recursive: true });
     writeFileSync(
       join(scriptDir, 'play.ts'),

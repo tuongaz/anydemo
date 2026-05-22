@@ -1,7 +1,6 @@
 node_modules/
 dist/
 /.seeflow/
-**/.seeflow/sdk/
 ~/.seeflow
 *.log
 .DS_Store

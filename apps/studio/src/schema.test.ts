@@ -806,7 +806,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   // US-004: ImageNodeDataSchema hard-cut from a `data:image/...` URL to a
-  // relative `path` under `<project>/.seeflow/`. The renderer resolves it via
+  // relative `path` under the project root. The renderer resolves it via
   // the file-serving endpoint added in US-001. Path-safety:
   // no absolute paths, no `..` traversal, no leading slash.
   it('parses a demo containing one imageNode with data.path (US-004)', () => {
@@ -1531,8 +1531,8 @@ describe('ResolvedFlowSchema', () => {
   });
 
   // htmlNode carries author-written HTML inline via `data.html`. The studio
-  // externalizes content to `<project>/.seeflow/nodes/<id>/view.html` and
-  // stores a `file://` ref in flow.json; the file-ref resolver inlines on read.
+  // externalizes content to `<project>/nodes/<id>/view.html` and stores a
+  // `file://` ref in flow.json; the file-ref resolver inlines on read.
   describe('htmlNode', () => {
     it('parses a minimal htmlNode with optional html (omitted)', () => {
       const demo = {

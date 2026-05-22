@@ -109,21 +109,21 @@ const tmpDirs: string[] = [];
 function makeProjectWithScript(scriptName = 'play.ts'): { cwd: string; scriptPath: string } {
   const cwd = mkdtempSync(join(tmpdir(), 'seeflow-proxy-'));
   tmpDirs.push(cwd);
-  mkdirSync(join(cwd, '.seeflow', 'scripts'), { recursive: true });
-  writeFileSync(join(cwd, '.seeflow', 'scripts', scriptName), '// stub for tests');
+  mkdirSync(join(cwd, 'scripts'), { recursive: true });
+  writeFileSync(join(cwd, 'scripts', scriptName), '// stub for tests');
   return { cwd, scriptPath: `scripts/${scriptName}` };
 }
 
-// Per-node anchor: writes the script under `.seeflow/nodes/<nodeId>/scripts/`
+// Per-node anchor: writes the script under `nodes/<nodeId>/scripts/`
 // so it matches the new runPlay resolver. Reset tests continue to use the
-// legacy anchor (`.seeflow/scripts/`) via makeProjectWithScript.
+// legacy anchor (`scripts/`) via makeProjectWithScript.
 function makeProjectWithNodeScript(
   nodeId: string,
   scriptName = 'play.ts',
 ): { cwd: string; scriptPath: string } {
   const cwd = mkdtempSync(join(tmpdir(), 'seeflow-proxy-'));
   tmpDirs.push(cwd);
-  const dir = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  const dir = join(cwd, 'nodes', nodeId, 'scripts');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, scriptName), '// stub for tests');
   return { cwd, scriptPath: `scripts/${scriptName}` };
@@ -131,7 +131,7 @@ function makeProjectWithNodeScript(
 
 // Drop the script into an additional node folder inside an existing cwd.
 function addNodeScript(cwd: string, nodeId: string, scriptName = 'play.ts'): void {
-  const dir = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  const dir = join(cwd, 'nodes', nodeId, 'scripts');
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, scriptName), '// stub for tests');
 }
@@ -341,10 +341,10 @@ describe('runPlay (script spawner)', () => {
     tmpDirs.push(cwd);
     const outside = mkdtempSync(join(tmpdir(), 'seeflow-proxy-out-'));
     tmpDirs.push(outside);
-    mkdirSync(join(cwd, '.seeflow', 'nodes', 'n1'), { recursive: true });
+    mkdirSync(join(cwd, 'nodes', 'n1'), { recursive: true });
     writeFileSync(join(outside, 'evil.ts'), '// outside');
     // nodes/n1/escape.ts is a symlink pointing outside the per-node folder.
-    symlinkSync(join(outside, 'evil.ts'), join(cwd, '.seeflow', 'nodes', 'n1', 'escape.ts'));
+    symlinkSync(join(outside, 'evil.ts'), join(cwd, 'nodes', 'n1', 'escape.ts'));
 
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
@@ -370,10 +370,10 @@ describe('runPlay (script spawner)', () => {
     });
   });
 
-  it('resolves scriptPath relative to .seeflow/nodes/<nodeId>/', async () => {
+  it('resolves scriptPath relative to nodes/<nodeId>/', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'seeflow-proxy-anchor-'));
     tmpDirs.push(cwd);
-    const nodeDir = join(cwd, '.seeflow', 'nodes', 'checkout-api', 'scripts');
+    const nodeDir = join(cwd, 'nodes', 'checkout-api', 'scripts');
     mkdirSync(nodeDir, { recursive: true });
     writeFileSync(
       join(nodeDir, 'play.ts'),
@@ -672,9 +672,8 @@ describe('runReset (US-008)', () => {
     tmpDirs.push(cwd);
     const outside = mkdtempSync(join(tmpdir(), 'seeflow-proxy-reset-out-'));
     tmpDirs.push(outside);
-    mkdirSync(join(cwd, '.seeflow'), { recursive: true });
     writeFileSync(join(outside, 'evil.ts'), '// outside');
-    symlinkSync(join(outside, 'evil.ts'), join(cwd, '.seeflow', 'escape.ts'));
+    symlinkSync(join(outside, 'evil.ts'), join(cwd, 'escape.ts'));
 
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');

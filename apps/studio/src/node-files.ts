@@ -3,9 +3,9 @@ import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
 
 // Spec for fields that the studio externalizes to disk under
-// `<project>/.seeflow/nodes/<id>/<fileName>`. `nodeTypes` (when present)
-// scopes the spec entry to specific node types; absent means "applies to
-// every node type". Adding a future text field is one line.
+// `<project>/nodes/<id>/<fileName>`. `nodeTypes` (when present) scopes the
+// spec entry to specific node types; absent means "applies to every node
+// type". Adding a future text field is one line.
 export interface ExternalizedFieldSpec {
   field: string;
   fileName: string;
@@ -36,7 +36,7 @@ export const nodeFileRelPath = (nodeId: string, fileName: string): string =>
 export const nodeFileRef = (_nodeId: string, fileName: string): string => `file://${fileName}`;
 
 export const nodeFileAbsPath = (repoPath: string, nodeId: string, fileName: string): string =>
-  join(repoPath, '.seeflow', nodeFileRelPath(nodeId, fileName));
+  join(repoPath, nodeFileRelPath(nodeId, fileName));
 
 export function writeNodeFile(absPath: string, content: string): void {
   mkdirSync(dirname(absPath), { recursive: true });
@@ -44,5 +44,5 @@ export function writeNodeFile(absPath: string, content: string): void {
 }
 
 export function removeNodeDir(repoPath: string, nodeId: string): void {
-  rmSync(join(repoPath, '.seeflow', 'nodes', nodeId), { recursive: true, force: true });
+  rmSync(join(repoPath, 'nodes', nodeId), { recursive: true, force: true });
 }

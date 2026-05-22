@@ -5,7 +5,7 @@ category: language
 
 # Java / Kotlin
 
-> **General guidance only.** Check `<project>/.seeflow/LEARN.md`
+> **General guidance only.** Check `<projectPath>/LEARN.md`
 > `## Tech stack adaptations` first — project-specific helpers,
 > fixtures, and conventions always win over the templates below.
 > Whatever you learn this run, append back into that section so the
@@ -39,7 +39,7 @@ id=$(printf '%s' "$raw" | jq -r '.id // "demo-1"')
 total=$(printf '%s' "$raw" | jq -r '.total // 4200')
 
 # Prefer a project helper if one exists, e.g. ./gradlew :app:produceOrder -Pid="$id"
-tmp="${SEEFLOW_TMP:-.seeflow/.tmp}"; mkdir -p "$tmp"
+tmp="${SEEFLOW_TMP:-.tmp}"; mkdir -p "$tmp"
 http=$(curl -sS -o "$tmp/seeflow-play.out" -w '%{http_code}' \
   -H 'content-type: application/json' \
   -d "{\"id\":\"$id\",\"total\":$total}" \

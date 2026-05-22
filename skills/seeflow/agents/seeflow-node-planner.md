@@ -43,7 +43,7 @@ The launching prompt will give you:
    topic, one node per bucket, etc.) and supersedes the generic
    abstraction rules below for matched resources.
 4. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<project>/.seeflow/LEARN.md` `## Tech stack
+   overrides from `<projectPath>/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.conventions` says the project models
    one bucket per tenant, follow that — not the ref's generic "one
@@ -56,7 +56,7 @@ nothing else outside the fence. The envelope carries:
 
 - `name` — human-readable demo title (Title Case noun phrase mirroring
   `userIntent`; e.g. `"Checkout Flow"`, `"Order Pipeline"`).
-- `slug` — kebab-case filesystem directory under `.seeflow/<slug>/`.
+- `slug` — kebab-case identifier mirrored as the seeflow project's directory name (`<host>/.seeflow/<slug>/`).
   Stable across edits: reuse `editTarget.slug` when provided.
 - `nodes` — array conforming to `$SEEFLOW schema node`. Emit as many
   nodes as the flow genuinely needs — let the abstraction rules below
@@ -293,7 +293,7 @@ If `contextBrief.existingDemo.diffTarget === true`:
   `playNode` to `stateNode`), emit it with its **existing id** but
   the new `type`. The orchestrator routes this to a non-destructive
   `nodes:patch { type, ... }` instead of `delete` + `flow:add-bulk`, so
-  the per-node folder (`.seeflow/nodes/<id>/`) — scripts, detail.md,
+  the per-node folder (`nodes/<id>/`) — scripts, detail.md,
   view.html, uploaded images — survives. Supply any fields the new
   type requires in the same patch (e.g. `state → play` needs
   `playAction`, `* → shape` needs `shape`, `* → icon` needs `icon`,

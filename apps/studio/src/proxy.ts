@@ -8,7 +8,7 @@
  *
  * Defense-in-depth on scriptPath: schema.ts already rejects absolute paths
  * and `..` traversal textually. Here we additionally realpath-resolve the
- * script under `<cwd>/.seeflow/` and reject anything that escapes that root —
+ * script under the project root and reject anything that escapes that root —
  * symlink-escape defense in line with `resolveProjectFile` in api.ts.
  */
 
@@ -34,7 +34,7 @@ export interface RunPlayOptions {
   events: EventBus;
   flowId: string;
   nodeId: string;
-  /** Project root (`<repoPath>`). Script resolves under `<cwd>/.seeflow/`. */
+  /** Project root (`<repoPath>`). Script resolves under `<cwd>/nodes/<nodeId>/`. */
   cwd: string;
   action: PlayAction;
   /** Injectable for tests; defaults to `defaultProcessSpawner`. */
@@ -48,11 +48,11 @@ const SCRIPT_PATH_ESCAPE = 'scriptPath escapes project root';
 
 type Resolved = { ok: true; absPath: string } | { ok: false };
 
-// Resolve `<cwd>/.seeflow/nodes/<nodeId>/<scriptPath>` and verify via realpath
-// it stays inside the node folder. The per-node anchor means scriptPath is
+// Resolve `<cwd>/nodes/<nodeId>/<scriptPath>` and verify via realpath it
+// stays inside the node folder. The per-node anchor means scriptPath is
 // "scripts/play.ts" — no node id leaks into its own path.
 function resolveScript(cwd: string, nodeId: string, scriptPath: string): Resolved {
-  const nodeRoot = join(cwd, '.seeflow', 'nodes', nodeId);
+  const nodeRoot = join(cwd, 'nodes', nodeId);
   let realRoot: string;
   try {
     realRoot = realpathSync(nodeRoot);
@@ -74,17 +74,17 @@ function resolveScript(cwd: string, nodeId: string, scriptPath: string): Resolve
 }
 
 // Legacy anchor for resetAction (kept until resetAction gets its own design
-// round). Same realpath escape check as resolveScript, but rooted at
-// <cwd>/.seeflow/ rather than a per-node folder.
+// round). Same realpath escape check as resolveScript, but rooted at the
+// project root rather than a per-node folder.
 function resolveResetScript(cwd: string, scriptPath: string): Resolved {
-  const seeflowRoot = join(cwd, '.seeflow');
+  const projectRoot = cwd;
   let realRoot: string;
   try {
-    realRoot = realpathSync(seeflowRoot);
+    realRoot = realpathSync(projectRoot);
   } catch {
     return { ok: false };
   }
-  const target = resolve(seeflowRoot, scriptPath);
+  const target = resolve(projectRoot, scriptPath);
   let realTarget: string;
   try {
     realTarget = realpathSync(target);
@@ -307,7 +307,7 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
 export interface RunResetOptions {
   events: EventBus;
   flowId: string;
-  /** Project root (`<repoPath>`). Script resolves under `<cwd>/.seeflow/`. */
+  /** Project root (`<repoPath>`). Script resolves under `<cwd>/`. */
   cwd: string;
   action: ResetAction;
   /** Injectable for tests; defaults to `defaultProcessSpawner`. */
@@ -330,8 +330,8 @@ export async function runReset(options: RunResetOptions): Promise<ResetResult> {
   const { events, flowId, cwd, action } = options;
   const spawner = options.spawner ?? defaultProcessSpawner;
 
-  // resetAction stays anchored at .seeflow/ for now — design defers per-node
-  // resetAction to a later round (decision #7). Mirrors the previous behaviour.
+  // resetAction is anchored at the project root — design defers per-node
+  // resetAction to a later round (decision #7).
   const resolved = resolveResetScript(cwd, action.scriptPath);
   if (!resolved.ok) {
     events.broadcast({

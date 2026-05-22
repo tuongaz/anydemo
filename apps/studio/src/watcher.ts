@@ -1,6 +1,10 @@
 import { createHash } from 'node:crypto';
 import { type FSWatcher, existsSync, readFileSync, statSync, watch } from 'node:fs';
 import { basename, dirname, isAbsolute, join } from 'node:path';
+// `file://` refs in flow.json resolve against the project root (the dir that
+// contains flow.json). The studio is path-agnostic — whatever path the caller
+// supplied is the project root.
+const projectRootForFlow = (flowPath: string): string => dirname(flowPath);
 import type { EventBus } from './events.ts';
 import { resolveFileRefs } from './file-ref.ts';
 import { mergeFlowAndStyle } from './merge.ts';
@@ -70,17 +74,17 @@ export interface FlowWatcher {
     styleContent: string,
   ): void;
   /**
-   * Relative paths (under `<project>/.seeflow/`) currently being watched
-   * because they're referenced by a node's `data.path` (imageNode). htmlNode
-   * content rides on the file:// resolver via `data.html`, not this list.
-   * Sorted for stable assertion order. Used by tests.
+   * Relative paths (under the project root) currently being watched because
+   * they're referenced by a node's `data.path` (imageNode). htmlNode content
+   * rides on the file:// resolver via `data.html`, not this list. Sorted for
+   * stable assertion order. Used by tests.
    */
   referencedPaths(flowId: string): string[];
 }
 
 interface FileWatchEntry {
   fsWatcher: FSWatcher;
-  /** basename → relative path (rooted at `<project>/.seeflow/`) */
+  /** basename → relative path (rooted at the project root) */
   files: Map<string, string>;
   /** basename → pending debounce timer for the next broadcast */
   timers: Map<string, ReturnType<typeof setTimeout>>;
@@ -100,22 +104,6 @@ interface WatchHandle {
 
 const resolveFilePath = (repoPath: string, flowPath: string): string =>
   isAbsolute(flowPath) ? flowPath : join(repoPath, flowPath);
-
-// `file://` refs in flow.json resolve against `<project>/.seeflow/` per the
-// skill spec — not against the flow file's own directory. Walk up from the
-// flow's parent looking for an ancestor named `.seeflow`. Fallback to the
-// flow's parent for flows registered outside the `.seeflow/` convention.
-const computeSeeflowRoot = (flowPath: string): string => {
-  const flowDir = dirname(flowPath);
-  let current = flowDir;
-  while (true) {
-    if (basename(current) === '.seeflow') return current;
-    const parent = dirname(current);
-    if (parent === current) break;
-    current = parent;
-  }
-  return flowDir;
-};
 
 const isCleanRelativePath = (p: string): boolean => {
   if (!p) return false;
@@ -162,7 +150,7 @@ export interface ReadMergedFlowResult {
   flow: ResolvedFlow | null;
   valid: boolean;
   error: string | null;
-  /** Sorted relative paths under `<seeflowRoot>` resolved via file://. */
+  /** Sorted relative paths under the project root resolved via file://. */
   fileRefs: string[];
   /** Flow file paths referenced via imageNode.path. */
   staticRefs: string[];
@@ -181,7 +169,7 @@ export function readMergedFlow(flowPath: string): ReadMergedFlowResult {
   }
 
   const flowDir = dirname(flowPath);
-  const seeflowRoot = computeSeeflowRoot(flowPath);
+  const projectRoot = projectRootForFlow(flowPath);
   const stylePath = join(flowDir, 'style.json');
 
   let rawFlow: unknown;
@@ -194,7 +182,7 @@ export function readMergedFlow(flowPath: string): ReadMergedFlowResult {
     };
   }
 
-  const { resolved, refs } = resolveFileRefs(rawFlow, seeflowRoot);
+  const { resolved, refs } = resolveFileRefs(rawFlow, projectRoot);
   const staticRefs = collectReferencedPaths(rawFlow);
 
   const flowParse = FlowSchema.safeParse(resolved);
@@ -306,12 +294,12 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
   const reconcileFileWatchers = (
     flowId: string,
     handle: WatchHandle,
-    seeflowRoot: string,
+    projectRoot: string,
     refs: string[],
   ): void => {
     const desired = new Map<string, Map<string, string>>();
     for (const relPath of refs) {
-      const abs = join(seeflowRoot, relPath);
+      const abs = join(projectRoot, relPath);
       const dir = dirname(abs);
       const base = basename(abs);
       let dirMap = desired.get(dir);
@@ -417,7 +405,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     const handle = handles.get(flowId);
     if (handle) {
       const allRefs = [...result.fileRefs, ...result.staticRefs];
-      reconcileFileWatchers(flowId, handle, computeSeeflowRoot(filePath), allRefs);
+      reconcileFileWatchers(flowId, handle, projectRootForFlow(filePath), allRefs);
     }
 
     return next;

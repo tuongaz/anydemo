@@ -5,7 +5,7 @@ category: language
 
 # Go
 
-> **General guidance only.** Check `<project>/.seeflow/LEARN.md`
+> **General guidance only.** Check `<projectPath>/LEARN.md`
 > `## Tech stack adaptations` first — project-specific helpers,
 > fixtures, and conventions always win over the templates below.
 > Whatever you learn this run, append back into that section so the
@@ -91,7 +91,7 @@ func main() {
   but don't go sub-second.
 - Module path quirks: if the script lives outside a `go.mod`, `go run`
   fails. Prefer putting scripts inside the project's module, or drop a
-  tiny standalone `.seeflow/<slug>/scripts/go.mod`.
+  tiny standalone `nodes/<nodeId>/scripts/go.mod`.
 - `fmt.Println` to stdout is your JSON channel — never log to stdout from
   helper packages; route logs to `os.Stderr`.
 

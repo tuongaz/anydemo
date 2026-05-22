@@ -16,8 +16,8 @@
  * report. A solicited kill (restart / stop / maxLifetimeMs) is silent on exit.
  *
  * Defense-in-depth on scriptPath mirrors proxy.ts:`resolveScript` — realpath
- * the resolved file against `<repoPath>/.seeflow/nodes/<nodeId>/` so a
- * symlink-escape can't spawn arbitrary scripts outside the node folder.
+ * the resolved file against `<repoPath>/nodes/<nodeId>/` so a symlink-escape
+ * can't spawn arbitrary scripts outside the node folder.
  */
 
 import { existsSync, realpathSync } from 'node:fs';
@@ -63,7 +63,7 @@ interface TrackedHandle {
 type ResolvedScript = { ok: true; absPath: string } | { ok: false };
 
 function resolveScript(repoPath: string, nodeId: string, scriptPath: string): ResolvedScript {
-  const nodeRoot = join(repoPath, '.seeflow', 'nodes', nodeId);
+  const nodeRoot = join(repoPath, 'nodes', nodeId);
   let realRoot: string;
   try {
     realRoot = realpathSync(nodeRoot);

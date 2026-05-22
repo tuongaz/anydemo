@@ -28,7 +28,7 @@ codebase, so your half of the brief must stand on its own.
 3. **`existingDemo`** *(optional)* — parsed `flow.json` for the matching
    slug when the prompt obviously targets an existing flow. May be `null`.
 4. **`learnContext`** *(optional)* — raw text of
-   `<projectRoot>/.seeflow/LEARN.md` if it exists. Past runs left this as
+   `<projectPath>/LEARN.md` if it exists. Past runs left this as
    a crib sheet: known endpoints, prior `Flows already created`, scope
    hints. **Treat it as authoritative for what it covers** — don't
    re-grep to "verify" known endpoints unless code obviously
@@ -54,7 +54,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
 3. **Reconnoitre entry points.** Start with `LS` on `projectRoot` and
    `Glob` for `package.json`, `go.mod`, `pyproject.toml`, `Cargo.toml`,
    `src/index.*`, `apps/*/src/*`, `cmd/*/main.go`, `manage.py`,
-   `Dockerfile`, `docker-compose*`, `.seeflow/`. Skim the top-level
+   `Dockerfile`, `docker-compose*`. Skim the top-level
    README if present. **Skip every dev-setup / runtime / fixture detail
    — that's the system-analyzer's job.** You only need enough
    structural map to find the files that touch the user's verbs.

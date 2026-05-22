@@ -1,6 +1,6 @@
 ---
 name: seeflow-lookup
-description: Use BEFORE `/seeflow` whenever the user phrases the request as inspection rather than creation — "show me", "show the", "how does X work", "what does X do", "diagram our system", "explain the flow", "where does X live", "what handles Y", "what depends on Z", or names a flow by slug/title without an explicit "create / scaffold / generate / add" verb. Also use when onboarding to a `.seeflow/`-equipped repo. Read-only — never mutates flows; auto-hands off to `/seeflow` only when no matching flow is registered.
+description: Use BEFORE `/seeflow` whenever the user phrases the request as inspection rather than creation — "show me", "show the", "how does X work", "what does X do", "diagram our system", "explain the flow", "where does X live", "what handles Y", "what depends on Z", or names a flow by slug/title without an explicit "create / scaffold / generate / add" verb. Also use when onboarding to a repo that already has seeflow flows registered. Read-only — never mutates flows; auto-hands off to `/seeflow` only when no matching flow is registered.
 ---
 
 # seeflow-lookup
@@ -15,7 +15,7 @@ Inspection phrasing **always** lands here first, even when no flow is yet regist
 
 - **Editing flows** → use `/seeflow` or the canvas.
 - **Creating flows from scratch when the user explicitly said "create / scaffold / generate / add a flow"** → call `/seeflow` directly. (This skill auto-hands off to `/seeflow` if it discovers no match for an inspection prompt; skip the hop only when the user's verb is unambiguously creation.)
-- **Reading `.seeflow/LEARN.md`** → use `Read` directly (that file is `/seeflow`'s territory).
+- **Reading `LEARN.md`** → use `Read` directly (that file is `/seeflow`'s territory).
 - **Mutating anything** — this skill is read-only. The auto-handoff above invokes `/seeflow`; it does not mutate state itself.
 
 ## Consent — silent check, top of every invocation
@@ -50,7 +50,7 @@ What the schema can't tell you — runtime behavior the CLI assumes you know:
 - **Decorative node variants** (`shapeNode | iconNode | imageNode`, and `htmlNode` with empty content) are visual only — **skip them for architectural reasoning**.
 - **Semantics live on the nodes, not the connectors.** Read the source / target node's `data.name` (and `codePointers` from the brief) to understand what an edge means.
 - **`file://` content fields** (e.g. `detail`, `html`) are auto-externalised on write. Whether they come back inlined depends on the subcommand — check `seeflow help` for the variant that returns full content.
-- **Action `scriptPath` values** are relative under `.seeflow/nodes/<nodeId>/`. Read those files directly with `Read` if you need the script source.
+- **Action `scriptPath` values** are relative under `nodes/<nodeId>/`. Read those files directly with `Read` if you need the script source.
 
 Deeper reference: `../seeflow/references/schema.md` in this plugin (conventions only — no field shapes).
 

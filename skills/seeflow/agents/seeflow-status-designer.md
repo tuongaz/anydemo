@@ -47,7 +47,7 @@ The launching prompt will give you:
    that tech (which client method to call, what tick cadence, what
    `StatusReport` shape).
 5. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<project>/.seeflow/LEARN.md` `## Tech stack
+   overrides from `<projectPath>/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.helpers` names a consumer / reader /
    repository the project already ships, call that helper — don't
@@ -82,7 +82,7 @@ with this exact shape — and nothing else outside the fence:
         }
       },
       "scriptFile": {
-        "path": ".seeflow/nodes/order-store/scripts/status.ts",
+        "path": "nodes/order-store/scripts/status.ts",
         "body": "#!/usr/bin/env bun\n// full script source as a string",
         "chmod": "755"
       },
@@ -116,7 +116,7 @@ give the user a chance to ask for it.
   `<slug>/` or `<nodeId>/` prefix.
 - **`scriptFile`** carries the file to write before the patch runs:
   - `path` is project-root-relative
-    (`.seeflow/nodes/<nodeId>/scripts/<filename>`).
+    (`nodes/<nodeId>/scripts/<filename>`).
   - `body` is the FULL source text including shebang.
   - `chmod` defaults to `"755"`.
 - **`rationale`** — one-line justification that identifies the placement
@@ -314,8 +314,8 @@ editTarget: null
         }
       },
       "scriptFile": {
-        "path": ".seeflow/nodes/order-store/scripts/status.ts",
-        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\ninterface Order { id: string; status: 'pending' | 'paid' | 'shipped' | 'failed' }\n\nconst STATE_FILE = resolve(process.cwd(), '.seeflow/state/orders.json');\n\nasync function read(): Promise<Order[]> {\n  try {\n    const raw = await readFile(STATE_FILE, 'utf8');\n    if (raw.trim().length === 0) return [];\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? (parsed as Order[]) : [];\n  } catch {\n    return [];\n  }\n}\n\nwhile (true) {\n  const orders = await read();\n  const counts = { pending: 0, paid: 0, shipped: 0, failed: 0 };\n  for (const o of orders) counts[o.status] = (counts[o.status] ?? 0) + 1;\n  const total = orders.length;\n  const state = total === 0 ? 'warn' : counts.failed > 0 ? 'error' : counts.pending > 0 ? 'pending' : 'ok';\n  const detail = orders.slice(-5).map((o) => `- ${o.id} ${o.status}`).join('\\n');\n  console.log(JSON.stringify({\n    state,\n    summary: `${counts.pending} pending / ${counts.paid} paid / ${counts.shipped} shipped${counts.failed ? ' / ' + counts.failed + ' failed' : ''}`,\n    detail: detail.length > 0 ? detail : undefined,\n    data: { ...counts, total },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+        "path": "nodes/order-store/scripts/status.ts",
+        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\ninterface Order { id: string; status: 'pending' | 'paid' | 'shipped' | 'failed' }\n\nconst STATE_FILE = resolve(process.cwd(), 'state/orders.json');\n\nasync function read(): Promise<Order[]> {\n  try {\n    const raw = await readFile(STATE_FILE, 'utf8');\n    if (raw.trim().length === 0) return [];\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? (parsed as Order[]) : [];\n  } catch {\n    return [];\n  }\n}\n\nwhile (true) {\n  const orders = await read();\n  const counts = { pending: 0, paid: 0, shipped: 0, failed: 0 };\n  for (const o of orders) counts[o.status] = (counts[o.status] ?? 0) + 1;\n  const total = orders.length;\n  const state = total === 0 ? 'warn' : counts.failed > 0 ? 'error' : counts.pending > 0 ? 'pending' : 'ok';\n  const detail = orders.slice(-5).map((o) => `- ${o.id} ${o.status}`).join('\\n');\n  console.log(JSON.stringify({\n    state,\n    summary: `${counts.pending} pending / ${counts.paid} paid / ${counts.shipped} shipped${counts.failed ? ' / ' + counts.failed + ' failed' : ''}`,\n    detail: detail.length > 0 ? detail : undefined,\n    data: { ...counts, total },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
         "chmod": "755"
       },
       "rationale": "DB row state — audience sees orders move pending → paid → shipped."
@@ -332,8 +332,8 @@ editTarget: null
         }
       },
       "scriptFile": {
-        "path": ".seeflow/nodes/shipments-queue/scripts/status.ts",
-        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\nconst QUEUE_FILE = resolve(process.cwd(), '.seeflow/state/shipments-queue.json');\n\nasync function depth(): Promise<number> {\n  try {\n    const raw = await readFile(QUEUE_FILE, 'utf8');\n    if (raw.trim().length === 0) return 0;\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? parsed.length : 0;\n  } catch {\n    return 0;\n  }\n}\n\nwhile (true) {\n  const d = await depth();\n  console.log(JSON.stringify({\n    state: d === 0 ? 'ok' : 'pending',\n    summary: `${d} pending`,\n    data: { depth: d },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
+        "path": "nodes/shipments-queue/scripts/status.ts",
+        "body": "#!/usr/bin/env bun\nimport { readFile } from 'node:fs/promises';\nimport { resolve } from 'node:path';\n\nconst QUEUE_FILE = resolve(process.cwd(), 'state/shipments-queue.json');\n\nasync function depth(): Promise<number> {\n  try {\n    const raw = await readFile(QUEUE_FILE, 'utf8');\n    if (raw.trim().length === 0) return 0;\n    const parsed = JSON.parse(raw);\n    return Array.isArray(parsed) ? parsed.length : 0;\n  } catch {\n    return 0;\n  }\n}\n\nwhile (true) {\n  const d = await depth();\n  console.log(JSON.stringify({\n    state: d === 0 ? 'ok' : 'pending',\n    summary: `${d} pending`,\n    data: { depth: d },\n    ts: Date.now(),\n  }));\n  await Bun.sleep(1000);\n}\n",
         "chmod": "755"
       },
       "rationale": "Queue depth — audience sees buffer drain as shipping-worker consumes."
@@ -370,13 +370,13 @@ Notes on the example:
     {
       "nodeId": "order-server",
       "patch": { "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "order-pipeline/scripts/status-server.ts", "maxLifetimeMs": 600000 } },
-      "scriptFile": { "path": ".seeflow/nodes/order-server/scripts/status.ts", "body": "#!/usr/bin/env bun\nconsole.log(JSON.stringify({ state: 'ok', summary: 'server running' }));\n" },
+      "scriptFile": { "path": "nodes/order-server/scripts/status.ts", "body": "#!/usr/bin/env bun\nconsole.log(JSON.stringify({ state: 'ok', summary: 'server running' }));\n" },
       "rationale": "show server is alive"
     },
     {
       "nodeId": "event-bus",
       "patch": { "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 } },
-      "scriptFile": { "path": ".seeflow/nodes/event-bus/scripts/status.ts", "body": "#!/usr/bin/env bun\nwhile (true) { console.log('not json'); }" },
+      "scriptFile": { "path": "nodes/event-bus/scripts/status.ts", "body": "#!/usr/bin/env bun\nwhile (true) { console.log('not json'); }" },
       "rationale": "status the bus"
     }
   ]
@@ -406,7 +406,7 @@ This is wrong because:
   the node folder — `scripts/<name>.<ext>`. No `<slug>/`, no `<nodeId>/`,
   no leading `/`, no `..`.
 - Every `scriptFile.path` is project-root-relative —
-  `.seeflow/nodes/<nodeId>/scripts/<name>.<ext>`.
+  `nodes/<nodeId>/scripts/<name>.<ext>`.
 - Every `scriptFile.body` is the complete file body, including shebang.
 - Every script loops forever and sleeps every iteration.
 - Every stdout line is a valid `StatusReport` JSON object.

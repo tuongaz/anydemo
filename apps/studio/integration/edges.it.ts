@@ -253,6 +253,8 @@ describe('integration: edges — cross-boundary failure modes', () => {
     // (`if (readPid() === process.pid) clearPid()`) never runs — that's what
     // "stale" means here.
     const home = mkdtempSync(join(tmpdir(), 'seeflow-it-stalepid-'));
+    // The studio writes its pid under `${home}/.seeflow/seeflow.pid` because
+    // `seeflowHome()` joins `.seeflow` onto SEEFLOW_WORKSPACE (= home).
     const pidPath = join(home, '.seeflow', 'seeflow.pid');
 
     const studioA = await spawnStudio({ home });

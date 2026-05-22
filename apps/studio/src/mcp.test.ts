@@ -34,8 +34,7 @@ const tmpRegistry = () => {
 
 const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-mcp-repo-'));
-  mkdirSync(join(repoDir, '.seeflow'));
-  writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(demo));
+  writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(demo));
   return repoDir;
 };
 
@@ -290,7 +289,7 @@ describe('seeflow_list_flows', () => {
     const repoPath = tmpRepoWithDemo();
     await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     const envelope = await callTool(app, 'seeflow_list_flows');
@@ -307,7 +306,7 @@ describe('seeflow_get_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const registerEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const reg = expectOk(registerEnvelope) as { id: string };
 
@@ -338,11 +337,11 @@ describe('seeflow_list_flows_summary', () => {
     const repoB = tmpRepoWithDemo({ ...VALID_DEMO, name: 'Refund' });
     await callTool(app, 'seeflow_register_flow', {
       repoPath: repoA,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     await callTool(app, 'seeflow_register_flow', {
       repoPath: repoB,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
 
     const envelope = await callTool(app, 'seeflow_list_flows_summary');
@@ -375,7 +374,7 @@ describe('seeflow_get_flow_graph', () => {
     const reg = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       }),
     ) as { id: string };
 
@@ -403,7 +402,7 @@ describe('seeflow_get_node', () => {
     const reg = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       }),
     ) as { id: string };
 
@@ -440,7 +439,7 @@ describe('seeflow_get_node', () => {
     const reg = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       }),
     ) as { id: string };
     const envelope = await callTool(app, 'seeflow_get_node', {
@@ -457,7 +456,7 @@ describe('seeflow_register_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const body = expectOk(envelope) as {
       id: string;
@@ -473,7 +472,7 @@ describe('seeflow_register_flow', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath: '/this/path/does/not/exist',
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const text = expectError(envelope);
     expect(text).toContain('Flow file not found');
@@ -487,7 +486,7 @@ describe('seeflow_delete_flow', () => {
     const repoPath = tmpRepoWithDemo();
     const regEnvelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     const reg = expectOk(regEnvelope) as { id: string; slug: string };
     expect(registry.list()).toHaveLength(1);
@@ -501,7 +500,7 @@ describe('seeflow_delete_flow', () => {
     const second = expectOk(
       await callTool(app, 'seeflow_register_flow', {
         repoPath: repoPath2,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       }),
     ) as { slug: string };
     const bySlugEnvelope = await callTool(app, 'seeflow_delete_flow', { flowId: second.slug });
@@ -605,13 +604,13 @@ const registerFixture = async (
   const repoPath = tmpRepoWithDemo(demo);
   const envelope = await callTool(app, 'seeflow_register_flow', {
     repoPath,
-    flowPath: '.seeflow/flow.json',
+    flowPath: 'flow.json',
   });
   const reg = expectOk(envelope) as RegisterResult;
   return {
     repoPath,
-    demoFile: join(repoPath, '.seeflow', 'flow.json'),
-    styleFile: join(repoPath, '.seeflow', 'style.json'),
+    demoFile: join(repoPath, 'flow.json'),
+    styleFile: join(repoPath, 'style.json'),
     reg,
   };
 };
@@ -682,9 +681,7 @@ describe('seeflow_add_node', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'with-detail');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'with-detail', 'detail.md'), 'utf8'),
-    ).toBe('hello');
+    expect(readFileSync(join(repoPath, 'nodes', 'with-detail', 'detail.md'), 'utf8')).toBe('hello');
   });
 
   it('writes an empty detail.md and file:// ref when detail is omitted', async () => {
@@ -705,9 +702,7 @@ describe('seeflow_add_node', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'no-detail');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'no-detail', 'detail.md'), 'utf8'),
-    ).toBe('');
+    expect(readFileSync(join(repoPath, 'nodes', 'no-detail', 'detail.md'), 'utf8')).toBe('');
   });
 });
 
@@ -730,7 +725,7 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'html-mcp');
     expect(node?.data.html).toBe('file://view.html');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-mcp', 'view.html'), 'utf8')).toBe(
+    expect(readFileSync(join(repoPath, 'nodes', 'html-mcp', 'view.html'), 'utf8')).toBe(
       '<p>via mcp</p>',
     );
   });
@@ -748,9 +743,7 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'html-empty')?.data.html).toBe('file://view.html');
-    expect(
-      readFileSync(join(repoPath, '.seeflow', 'nodes', 'html-empty', 'view.html'), 'utf8'),
-    ).toBe('');
+    expect(readFileSync(join(repoPath, 'nodes', 'html-empty', 'view.html'), 'utf8')).toBe('');
   });
 });
 
@@ -773,9 +766,7 @@ describe('seeflow_patch_node + html externalization (htmlNode)', () => {
       nodes: Array<{ id: string; data: { html?: string } }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'h1')?.data.html).toBe('file://view.html');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'h1', 'view.html'), 'utf8')).toBe(
-      '<p>patched</p>',
-    );
+    expect(readFileSync(join(repoPath, 'nodes', 'h1', 'view.html'), 'utf8')).toBe('<p>patched</p>');
   });
 });
 
@@ -799,9 +790,7 @@ describe('seeflow_patch_node + detail externalization', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe(
-      'patched',
-    );
+    expect(readFileSync(join(repoPath, 'nodes', 'n1', 'detail.md'), 'utf8')).toBe('patched');
   });
 
   it('empties detail.md when patch.detail is empty, keeps the file:// ref', async () => {
@@ -827,7 +816,7 @@ describe('seeflow_patch_node + detail externalization', () => {
     };
     const node = onDisk.nodes.find((n) => n.id === 'n1');
     expect(node?.data.detail).toBe('file://detail.md');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n1', 'detail.md'), 'utf8')).toBe('');
+    expect(readFileSync(join(repoPath, 'nodes', 'n1', 'detail.md'), 'utf8')).toBe('');
   });
 });
 
@@ -860,7 +849,7 @@ describe('seeflow_delete_node', () => {
         data: { shape: 'rectangle', detail: 'bye' },
       },
     });
-    const folder = join(repoPath, '.seeflow', 'nodes', 'gone');
+    const folder = join(repoPath, 'nodes', 'gone');
     expect(existsSync(folder)).toBe(true);
 
     const envelope = await callTool(app, 'seeflow_delete_node', {
@@ -1194,7 +1183,7 @@ describe('seeflow_patch_node', () => {
     });
     const envelope = await callTool(app, 'seeflow_register_flow', {
       repoPath,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
     });
     expect(expectError(envelope)).toContain('chema validation');
   });
@@ -1522,10 +1511,8 @@ describe('seeflow_add_bulk', () => {
     // Fixture had 1 seed node; bulk added 3 → 4 total.
     expect(onDisk.nodes).toHaveLength(4);
     expect(onDisk.connectors).toHaveLength(1);
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n2', 'detail.md'), 'utf8')).toBe('d2');
-    expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'n3', 'view.html'), 'utf8')).toBe(
-      '<p>hi</p>',
-    );
+    expect(readFileSync(join(repoPath, 'nodes', 'n2', 'detail.md'), 'utf8')).toBe('d2');
+    expect(readFileSync(join(repoPath, 'nodes', 'n3', 'view.html'), 'utf8')).toBe('<p>hi</p>');
   });
 
   it('accepts a connectors-only body wiring existing nodes', async () => {

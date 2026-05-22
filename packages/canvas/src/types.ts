@@ -89,9 +89,9 @@ export interface IconNodeData extends NodeDescription {
 
 export interface HtmlNodeData extends NodeVisual, NodeDescription {
   // Inline HTML content. Studio externalizes this to
-  // `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in
-  // flow.json; the file-ref resolver inlines the resolved content on read,
-  // so the renderer always sees the actual HTML string.
+  // `<project>/nodes/<id>/view.html` and stores a `file://` ref in flow.json;
+  // the file-ref resolver inlines the resolved content on read, so the
+  // renderer always sees the actual HTML string.
   html?: string;
   name?: string;
   icon?: string;

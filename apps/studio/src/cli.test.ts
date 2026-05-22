@@ -32,6 +32,9 @@ const VALID_DEMO = {
 
 const startTestStudio = () => {
   const workspace = mkdtempSync(join(tmpdir(), 'seeflow-cli-ws-'));
+  // SEEFLOW_WORKSPACE drives `seeflowHome()` → `<workspace>/.seeflow/`.
+  // The CLI subprocess uses that for its registry; the in-process studio
+  // must point at the same file so reload() picks up CLI writes.
   mkdirSync(join(workspace, '.seeflow'), { recursive: true });
   const registry = createRegistry({
     path: join(workspace, '.seeflow', 'registry.json'),
@@ -73,28 +76,28 @@ describe('seeflow CLI register integration', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-repo-'));
-      mkdirSync(join(repoDir, '.seeflow', 'checkout'), { recursive: true });
-      mkdirSync(join(repoDir, '.seeflow', 'refund'), { recursive: true });
+      mkdirSync(join(repoDir, 'checkout'), { recursive: true });
+      mkdirSync(join(repoDir, 'refund'), { recursive: true });
       writeFileSync(
-        join(repoDir, '.seeflow', 'checkout', 'flow.json'),
+        join(repoDir, 'checkout', 'flow.json'),
         JSON.stringify({ ...VALID_DEMO, name: 'Checkout' }),
       );
       writeFileSync(
-        join(repoDir, '.seeflow', 'refund', 'flow.json'),
+        join(repoDir, 'refund', 'flow.json'),
         JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
       );
 
       const baseEnv = studio.env;
 
       const first = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/checkout/flow.json'],
+        ['register', '--no-start', '--path', repoDir, '--flow', 'checkout/flow.json'],
         baseEnv,
       );
       expect(first.code).toBe(0);
       expect(first.stdout).toContain('Registered "Checkout"');
 
       const second = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', '.seeflow/refund/flow.json'],
+        ['register', '--no-start', '--path', repoDir, '--flow', 'refund/flow.json'],
         baseEnv,
       );
       expect(second.code).toBe(0);
@@ -139,12 +142,11 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-list-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
       studio.registry.upsert({
         name: 'Listed',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       const r = await runCli(['flows:list', '--no-start'], studio.env);
@@ -164,12 +166,11 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-getdel-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
       const entry = studio.registry.upsert({
         name: 'GD',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       const get = await runCli(['flows:get', entry.id, '--no-start'], studio.env);
@@ -202,13 +203,12 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-bulk-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
       const emptyDemo = { version: 2, name: 'Empty', nodes: [], connectors: [] };
-      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(emptyDemo));
+      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(emptyDemo));
       const entry = studio.registry.upsert({
         name: 'Empty',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       // Connector references node from the same batch — proves transactional shape.
@@ -251,15 +251,14 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-dup-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
       writeFileSync(
-        join(repoDir, '.seeflow', 'flow.json'),
+        join(repoDir, 'flow.json'),
         JSON.stringify({ version: 2, name: 'Dup', nodes: [], connectors: [] }),
       );
       const entry = studio.registry.upsert({
         name: 'Dup',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       const payload = JSON.stringify({
@@ -319,16 +318,15 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-summary-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
       writeFileSync(
-        join(repoDir, '.seeflow', 'flow.json'),
+        join(repoDir, 'flow.json'),
         JSON.stringify({ ...VALID_DEMO, name: 'Documented', description: 'doc body' }),
       );
       studio.registry.upsert({
         name: 'Documented',
         description: 'doc body',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       const r = await runCli(['flows:summary', '--no-start'], studio.env);
@@ -349,9 +347,8 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-graph-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
       writeFileSync(
-        join(repoDir, '.seeflow', 'flow.json'),
+        join(repoDir, 'flow.json'),
         JSON.stringify({
           ...VALID_DEMO,
           description: 'demo',
@@ -369,7 +366,7 @@ describe('seeflow CLI new subcommands', () => {
         name: 'Graph',
         description: 'demo',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       const r = await runCli(['flows:graph', entry.id, '--no-start'], studio.env);
@@ -449,12 +446,11 @@ describe('seeflow CLI new subcommands', () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-nodeget-'));
-      mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
-      writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
       const entry = studio.registry.upsert({
         name: 'NodeGet',
         repoPath: repoDir,
-        flowPath: '.seeflow/flow.json',
+        flowPath: 'flow.json',
       });
 
       // Add a shape node via the add endpoint so detail.md is externalized.

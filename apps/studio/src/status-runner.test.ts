@@ -100,7 +100,7 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
   tmpDirs.push(cwd);
   const statusScriptName = opts.statusScriptName ?? 'status.ts';
   const nodeId = opts.nodeId ?? 'status-node';
-  const nodeScripts = join(cwd, '.seeflow', 'nodes', nodeId, 'scripts');
+  const nodeScripts = join(cwd, 'nodes', nodeId, 'scripts');
   mkdirSync(nodeScripts, { recursive: true });
   writeFileSync(join(nodeScripts, statusScriptName), '// stub for tests');
   writeFileSync(join(nodeScripts, 'play.ts'), '// stub for tests');
@@ -131,7 +131,7 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
     ],
     connectors: [],
   };
-  const flowPath = join(cwd, '.seeflow', 'flow.json');
+  const flowPath = join(cwd, 'flow.json');
   writeFileSync(flowPath, JSON.stringify(demo, null, 2));
   return {
     cwd,
@@ -141,7 +141,7 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
       slug: 'demo-a',
       name: 'Test demo',
       repoPath: cwd,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
       lastModified: Date.now(),
       valid: true,
     } satisfies FlowEntry,
@@ -326,8 +326,8 @@ describe('createStatusRunner', () => {
   it('enforces maxLifetimeMs: kills process and emits final error event', async () => {
     const cwd = mkdtempSync(join(tmpdir(), 'seeflow-status-'));
     tmpDirs.push(cwd);
-    mkdirSync(join(cwd, '.seeflow', 'nodes', 'n1', 'scripts'), { recursive: true });
-    writeFileSync(join(cwd, '.seeflow', 'nodes', 'n1', 'scripts', 'status.ts'), '// stub');
+    mkdirSync(join(cwd, 'nodes', 'n1', 'scripts'), { recursive: true });
+    writeFileSync(join(cwd, 'nodes', 'n1', 'scripts', 'status.ts'), '// stub');
     const demo = {
       version: 2,
       name: 'Lifetime test',
@@ -351,13 +351,13 @@ describe('createStatusRunner', () => {
       ],
       connectors: [],
     };
-    writeFileSync(join(cwd, '.seeflow', 'flow.json'), JSON.stringify(demo));
+    writeFileSync(join(cwd, 'flow.json'), JSON.stringify(demo));
     const entry: FlowEntry = {
       id: 'demoA',
       slug: 'demo-a',
       name: 'Lifetime test',
       repoPath: cwd,
-      flowPath: '.seeflow/flow.json',
+      flowPath: 'flow.json',
       lastModified: Date.now(),
       valid: true,
     };
@@ -471,7 +471,7 @@ describe('createStatusRunner', () => {
     expect(spawns).toHaveLength(1); // no new spawn since no status nodes
   });
 
-  it('status-runner anchors scriptPath at .seeflow/nodes/<nodeId>/', async () => {
+  it('status-runner anchors scriptPath at nodes/<nodeId>/', async () => {
     const { entry, nodeId, cwd } = makeProject({ hasStatus: true, nodeId: 'checkout-api' });
     const bus = createEventBus();
     const captured = captureEvents(bus, 'demoA');
@@ -492,7 +492,7 @@ describe('createStatusRunner', () => {
     // script path must be rooted at the per-node folder.
     expect(spawns).toHaveLength(1);
     const absPath = spawns[0]?.options.cmd.at(-1) ?? '';
-    expect(absPath).toContain(`/.seeflow/nodes/${nodeId}/scripts/`);
+    expect(absPath).toContain(`/nodes/${nodeId}/scripts/`);
     // No error broadcast.
     const errors = captured.filter(
       (e) => e.type === 'node:status' && (e.payload as { state?: string }).state === 'error',
