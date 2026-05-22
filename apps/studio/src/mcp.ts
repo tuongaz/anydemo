@@ -418,8 +418,6 @@ const buildTools = (ops: Operations): McpTool[] => [
           return errorResult(
             `Flow file failed schema validation: ${JSON.stringify(result.issues)}`,
           );
-        case 'sdkWriteFailed':
-          return errorResult(`Failed to write SDK helper: ${result.message}`);
       }
     },
   },
@@ -457,8 +455,6 @@ const buildTools = (ops: Operations): McpTool[] => [
           return errorResult(`Project already exists at ${result.path}`);
         case 'scaffoldFailed':
           return errorResult(`Failed to scaffold project: ${result.message}`);
-        case 'sdkWriteFailed':
-          return errorResult(`Failed to write SDK helper: ${result.message}`);
       }
     },
   },

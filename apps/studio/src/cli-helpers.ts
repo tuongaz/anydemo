@@ -64,7 +64,7 @@ export function printError(message: string, opts: CliOutcomeOptions = {}): never
  *             'unknownNode'|'unknownConnector'        → exit 3
  *  - kind === 'duplicateIdInBatch'|'idAlreadyExists'|
  *             'alreadyExists'                          → exit 4
- *  - kind === 'writeFailed'|'sdkWriteFailed'|'scaffoldFailed' → exit 5
+ *  - kind === 'writeFailed'|'scaffoldFailed' → exit 5
  *  - anything else                                    → exit 1
  *
  * The error message mirrors the strings used by api.ts so the CLI's
@@ -126,8 +126,6 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
       return `Project already exists at ${String(outcome.path ?? '')}`;
     case 'writeFailed':
       return `Failed to write demo file: ${String(outcome.message ?? '')}`;
-    case 'sdkWriteFailed':
-      return `Failed to write SDK helper: ${String(outcome.message ?? '')}`;
     case 'scaffoldFailed':
       return `Failed to scaffold project: ${String(outcome.message ?? '')}`;
     default:
@@ -147,7 +145,6 @@ export const EXIT_CODE_BY_KIND: Record<string, number> = {
   idAlreadyExists: 4,
   alreadyExists: 4,
   writeFailed: 5,
-  sdkWriteFailed: 5,
   scaffoldFailed: 5,
 };
 

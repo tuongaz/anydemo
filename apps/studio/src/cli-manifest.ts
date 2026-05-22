@@ -147,8 +147,8 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       },
     ],
     outputs: {
-      okExample: { id: 'abc12345', slug: 'checkout', sdk: { outcome: 'skipped', filePath: null } },
-      errorKinds: ['fileNotFound', 'badJson', 'badSchema', 'sdkWriteFailed'],
+      okExample: { id: 'abc12345', slug: 'checkout' },
+      errorKinds: ['fileNotFound', 'badJson', 'badSchema'],
     },
     requiresStudio: false,
     examples: ['seeflow register', 'seeflow register --path ./my-app'],
@@ -169,8 +169,8 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
     body: { schemaRef: 'RegisterBody' },
     outputs: {
-      okExample: { id: 'abc12345', slug: 'checkout', sdk: { outcome: 'skipped', filePath: null } },
-      errorKinds: ['fileNotFound', 'badJson', 'badSchema', 'sdkWriteFailed'],
+      okExample: { id: 'abc12345', slug: 'checkout' },
+      errorKinds: ['fileNotFound', 'badJson', 'badSchema'],
     },
     requiresStudio: false,
     examples: ['seeflow flows:register --path ./my-app'],
@@ -606,6 +606,49 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     outputs: {},
     requiresStudio: true,
     examples: ['seeflow e2e abc12345'],
+  },
+  {
+    name: 'emit',
+    synopsis:
+      'seeflow emit <flowId> <nodeId> <status> [--run-id <id>] [--payload <json>] [--studio-url <url>]',
+    description:
+      'Broadcast a node-status event to the studio (status: running | done | error). ' +
+      'User apps shell out to this command instead of importing an in-repo helper; ' +
+      "the studio re-broadcasts the event on the flow's SSE stream.",
+    category: 'live',
+    args: [
+      { name: 'flowId', required: true, description: 'Flow id or slug' },
+      { name: 'nodeId', required: true, description: 'Node id in the flow' },
+      { name: 'status', required: true, description: 'Status: running | done | error' },
+    ],
+    flags: [
+      {
+        name: 'run-id',
+        valuePlaceholder: '<id>',
+        description: 'Correlate events emitted within a single run',
+      },
+      {
+        name: 'payload',
+        valuePlaceholder: '<json>',
+        description: 'JSON string merged into the event payload',
+      },
+      {
+        name: 'studio-url',
+        valuePlaceholder: '<url>',
+        description: 'Override studio base URL (skips auto-start; targets the URL as-is)',
+      },
+      { name: 'no-start', description: 'Fail if the studio is not already running' },
+    ],
+    outputs: {
+      okExample: { ok: true },
+      errorKinds: [],
+    },
+    requiresStudio: true,
+    examples: [
+      'seeflow emit abc12345 api-charge done',
+      'seeflow emit abc12345 api-charge error --payload \'{"code":402}\'',
+      'seeflow emit abc12345 api-charge running --run-id run-9b3 --studio-url http://localhost:4321',
+    ],
   },
 ];
 

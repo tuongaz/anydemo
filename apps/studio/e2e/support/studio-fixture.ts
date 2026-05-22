@@ -23,7 +23,6 @@ export interface KitchenSinkStudio {
 interface RegisterResponse {
   id: string;
   slug: string;
-  sdk: { outcome: string; filePath: string | null };
 }
 
 // Spawn a studio + register the kitchen-sink fixture under it. Worker-scoped

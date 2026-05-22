@@ -321,11 +321,9 @@ describe('integration: MCP — project + flow lifecycle tools', () => {
     const data = okJson<{
       id: string;
       slug: string;
-      sdk: { outcome: string; filePath: string | null };
     }>(result);
     expect(data.id).toBeTruthy();
     expect(data.slug).toBeTruthy();
-    expect(typeof data.sdk.outcome).toBe('string');
 
     // Cross-check via REST list.
     const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as Array<{

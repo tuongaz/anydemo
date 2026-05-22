@@ -37,7 +37,6 @@ import {
   StyleSchema,
   TargetHandleIdSchema,
 } from './schema.ts';
-import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { shortId } from './short-id.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
@@ -363,7 +362,6 @@ export interface FlowGetResponse {
 export interface RegisterFlowSuccess {
   id: string;
   slug: string;
-  sdk: { outcome: 'written' | 'present' | 'skipped'; filePath: string | null };
 }
 
 export interface CreateProjectSuccess {
@@ -429,16 +427,14 @@ export type RegisterFlowOutcome =
   | { kind: 'ok'; data: RegisterFlowSuccess }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; detail: string }
-  | { kind: 'badSchema'; issues: ZodIssue[] }
-  | { kind: 'sdkWriteFailed'; id: string; slug: string; message: string };
+  | { kind: 'badSchema'; issues: ZodIssue[] };
 
 export type DeleteFlowOutcome = { kind: 'ok' } | { kind: 'notFound' };
 
 export type CreateProjectOutcome =
   | { kind: 'ok'; data: CreateProjectSuccess }
   | { kind: 'alreadyExists'; path: string }
-  | { kind: 'scaffoldFailed'; message: string }
-  | { kind: 'sdkWriteFailed'; message: string };
+  | { kind: 'scaffoldFailed'; message: string };
 
 // Outcomes for the four node-lifecycle helpers. Every variant lines up with
 // an existing REST error response so api.ts can translate them back to the
@@ -1102,20 +1098,11 @@ export async function registerFlowImpl(
 
   watcher?.watch(entry.id);
 
-  let sdkResult: { outcome: 'written' | 'present' | 'skipped'; filePath: string | null };
-  try {
-    sdkResult = writeSdkEmitIfNeeded(repoPath, merged.flow);
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { kind: 'sdkWriteFailed', id: entry.id, slug: entry.slug, message };
-  }
-
   return {
     kind: 'ok',
     data: {
       id: entry.id,
       slug: entry.slug,
-      sdk: { outcome: sdkResult.outcome, filePath: sdkResult.filePath },
     },
   };
 }
@@ -1156,15 +1143,6 @@ export async function createProjectImpl(
     writeFileSync(demoFullPath, `${JSON.stringify(scaffold, null, 2)}\n`);
   } catch (err) {
     return { kind: 'scaffoldFailed', message: err instanceof Error ? err.message : String(err) };
-  }
-
-  // Same SDK-emit path as the CLI register flow. For a fresh scaffold with no
-  // event-bound state nodes this returns 'skipped' and writes nothing —
-  // retained for parity with `seeflow register`.
-  try {
-    writeSdkEmitIfNeeded(folderPath, scaffold);
-  } catch (err) {
-    return { kind: 'sdkWriteFailed', message: err instanceof Error ? err.message : String(err) };
   }
 
   const lastModified = statSync(demoFullPath).mtimeMs;

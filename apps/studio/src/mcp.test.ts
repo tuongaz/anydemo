@@ -451,7 +451,7 @@ describe('seeflow_get_node', () => {
 });
 
 describe('seeflow_register_flow', () => {
-  it('registers a valid demo and returns id + slug + sdk outcome', async () => {
+  it('registers a valid demo and returns id + slug', async () => {
     const { app, registry } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const envelope = await callTool(app, 'seeflow_register_flow', {
@@ -461,10 +461,8 @@ describe('seeflow_register_flow', () => {
     const body = expectOk(envelope) as {
       id: string;
       slug: string;
-      sdk: { outcome: string; filePath: string | null };
     };
     expect(body.slug).toBe('checkout-flow');
-    expect(body.sdk).toEqual({ outcome: 'skipped', filePath: null });
     expect(registry.list()).toHaveLength(1);
   });
 

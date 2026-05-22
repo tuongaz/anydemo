@@ -164,6 +164,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runIds();
 } else if (sub === 'e2e') {
   await runE2e();
+} else if (sub === 'emit') {
+  await runEmit();
 } else {
   console.error(`Unknown subcommand: ${sub}`);
   printHelp();
@@ -211,6 +213,8 @@ Commands (work without a running studio):
 
 Commands (require a running studio):
   flows:play <id> <n>  Trigger a play on node <n>
+  emit <id> <n> <st>   Broadcast a status event for node <n> (st: running|done|error)
+                       [--run-id <id>] [--payload <json>] [--studio-url <url>]
   e2e <id>             End-to-end validate a registered flow (--skip-nodes a,b)
 
 Meta:
@@ -556,12 +560,6 @@ async function runRegister() {
   } else {
     console.log(`Registered "${parsed.data.name}" (slug: ${body.slug})`);
   }
-
-  if (body.sdk?.outcome === 'written') {
-    console.log(`Wrote ${body.sdk.filePath} (event-bound state node detected)`);
-  } else if (body.sdk?.outcome === 'present') {
-    console.log(`SDK helper already present at ${body.sdk.filePath} (skipped)`);
-  }
 }
 
 async function ensureStudioRunning(url: string, port: number, noStart: boolean) {
@@ -682,6 +680,45 @@ async function runFlowsPlay() {
     `${url}/api/flows/${encodeURIComponent(flowId)}/play/${encodeURIComponent(nodeId)}`,
     {},
   );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runEmit() {
+  const flowId = requireArg(1, '<flowId>');
+  const nodeId = requireArg(2, '<nodeId>');
+  const status = requireArg(3, '<status>');
+  if (status !== 'running' && status !== 'done' && status !== 'error') {
+    printError(`Invalid status: ${status} (expected running | done | error)`);
+  }
+
+  const runId = flagValue('run-id');
+  const rawPayload = flagValue('payload');
+  let payload: unknown;
+  if (rawPayload !== undefined) {
+    try {
+      payload = JSON.parse(rawPayload);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      printError(`--payload must be valid JSON: ${message}`);
+    }
+  }
+
+  // Explicit --studio-url targets a specific instance; skip auto-start since
+  // the caller is asserting where the studio lives.
+  const studioUrlFlag = flagValue('studio-url');
+  let url: string;
+  if (studioUrlFlag) {
+    url = studioUrlFlag.replace(/\/+$/, '');
+  } else {
+    ({ url } = await studioUrlOrDie(hasFlag('no-start')));
+  }
+
+  const body: Record<string, unknown> = { flowId, nodeId, status };
+  if (runId !== undefined) body.runId = runId;
+  if (payload !== undefined) body.payload = payload;
+
+  const res = await postJson(`${url}/api/emit`, body);
   const out = (await handleResponse(res)) as object;
   printOk(out);
 }

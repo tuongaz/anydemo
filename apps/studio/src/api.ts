@@ -229,15 +229,6 @@ export function createApi(options: ApiOptions): Hono {
         return c.json({ error: 'Flow file is not valid JSON', detail: result.detail }, 400);
       case 'badSchema':
         return c.json({ error: 'Flow file failed schema validation', issues: result.issues }, 400);
-      case 'sdkWriteFailed':
-        return c.json(
-          {
-            error: `Failed to write SDK helper: ${result.message}`,
-            id: result.id,
-            slug: result.slug,
-          },
-          500,
-        );
     }
   });
 
@@ -438,8 +429,6 @@ export function createApi(options: ApiOptions): Hono {
         return c.json({ error: `Project already exists at ${result.path}` }, 409);
       case 'scaffoldFailed':
         return c.json({ error: `Failed to scaffold project: ${result.message}` }, 500);
-      case 'sdkWriteFailed':
-        return c.json({ error: `Failed to write SDK helper: ${result.message}` }, 500);
     }
   });
 
@@ -939,10 +928,9 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true, calledResetAction });
   });
 
-  // PATCH a single node's position back into the on-disk flow.json. This is
-  // the second (and only other) place the studio mutates user files — the
-  // first being the SDK helper write in `register`. Atomic write via tempfile
-  // + rename keeps editor diffs clean and avoids corruption mid-write.
+  // PATCH a single node's position back into the on-disk flow.json. Atomic
+  // write via tempfile + rename keeps editor diffs clean and avoids
+  // corruption mid-write.
   api.patch('/flows/:id/nodes/:nodeId/position', async (c) => {
     const id = c.req.param('id');
     const nodeId = c.req.param('nodeId');

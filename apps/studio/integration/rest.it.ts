@@ -45,7 +45,6 @@ interface FlowGetResponse {
 interface RegisterResponse {
   id: string;
   slug: string;
-  sdk: { outcome: string; filePath: string | null };
 }
 
 interface ValidateReport {
@@ -299,7 +298,6 @@ describe('integration: REST — flow lifecycle', () => {
       const body = (await res.json()) as RegisterResponse;
       expect(body.id).toBeTruthy();
       expect(body.slug).toBeTruthy();
-      expect(typeof body.sdk.outcome).toBe('string');
 
       // Side effect: it's now listed by GET /api/flows.
       const list = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];

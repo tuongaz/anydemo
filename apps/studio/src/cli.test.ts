@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createEventBus } from './events.ts';
 import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
 
@@ -30,7 +31,7 @@ const VALID_DEMO = {
   connectors: [],
 };
 
-const startTestStudio = () => {
+const startTestStudio = (opts: { withEvents?: boolean } = {}) => {
   const workspace = mkdtempSync(join(tmpdir(), 'seeflow-cli-ws-'));
   // SEEFLOW_WORKSPACE drives `seeflowHome()` → `<workspace>/.seeflow/`.
   // The CLI subprocess uses that for its registry; the in-process studio
@@ -39,11 +40,19 @@ const startTestStudio = () => {
   const registry = createRegistry({
     path: join(workspace, '.seeflow', 'registry.json'),
   });
-  const app = createApp({ mode: 'prod', staticRoot: './dist/web', registry, disableWatcher: true });
+  const events = opts.withEvents ? createEventBus() : undefined;
+  const app = createApp({
+    mode: 'prod',
+    staticRoot: './dist/web',
+    registry,
+    disableWatcher: true,
+    ...(events ? { events } : {}),
+  });
   const server = Bun.serve({ port: 0, fetch: app.fetch });
   const url = `http://${server.hostname}:${server.port}`;
   return {
     registry,
+    events,
     workspace,
     url,
     /** Env that the CLI needs to share the studio's registry and URL. */
@@ -473,6 +482,140 @@ describe('seeflow CLI new subcommands', () => {
       };
       expect(parsed.flowId).toBe(entry.id);
       expect(parsed.node.data.detail).toBe('# inlined body');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+});
+
+describe('seeflow emit', () => {
+  const registerFlow = (studio: ReturnType<typeof startTestStudio>) => {
+    const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-emit-'));
+    mkdirSync(join(repoDir, '.seeflow'), { recursive: true });
+    writeFileSync(join(repoDir, '.seeflow', 'flow.json'), JSON.stringify(VALID_DEMO));
+    return studio.registry.upsert({
+      name: 'Emit Test',
+      repoPath: repoDir,
+      flowPath: '.seeflow/flow.json',
+    });
+  };
+
+  it('broadcasts node:done for status=done and exits 0', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const entry = registerFlow(studio);
+      const captured: Array<{ type: string; payload: unknown }> = [];
+      studio.events?.subscribe(entry.id, (e) =>
+        captured.push({ type: e.type, payload: e.payload }),
+      );
+
+      const r = await runCli(['emit', entry.id, 'api-checkout', 'done', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      expect(JSON.parse(r.stdout)).toEqual({ ok: true });
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.type).toBe('node:done');
+      expect((captured[0]?.payload as { nodeId: string }).nodeId).toBe('api-checkout');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('propagates --run-id and merges --payload into the event', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const entry = registerFlow(studio);
+      const captured: Array<{ type: string; payload: unknown }> = [];
+      studio.events?.subscribe(entry.id, (e) =>
+        captured.push({ type: e.type, payload: e.payload }),
+      );
+
+      const r = await runCli(
+        [
+          'emit',
+          entry.id,
+          'api-checkout',
+          'running',
+          '--no-start',
+          '--run-id',
+          'run-42',
+          '--payload',
+          '{"latencyMs":12}',
+        ],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.type).toBe('node:running');
+      const payload = captured[0]?.payload as {
+        nodeId: string;
+        runId: string;
+        latencyMs: number;
+      };
+      expect(payload.runId).toBe('run-42');
+      expect(payload.latencyMs).toBe(12);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('exits non-zero with an error when status is not running|done|error', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const entry = registerFlow(studio);
+      const r = await runCli(['emit', entry.id, 'api-checkout', 'bogus', '--no-start'], studio.env);
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain('Invalid status');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('exits non-zero with an error when --payload is not valid JSON', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const entry = registerFlow(studio);
+      const r = await runCli(
+        ['emit', entry.id, 'api-checkout', 'done', '--no-start', '--payload', '{not-json'],
+        studio.env,
+      );
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain('--payload must be valid JSON');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('surfaces studio 404 when flowId is unknown', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const r = await runCli(
+        ['emit', 'does-not-exist', 'api-checkout', 'done', '--no-start'],
+        studio.env,
+      );
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain('404');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('--studio-url targets the URL directly and skips the daemon resolver', async () => {
+    const studio = startTestStudio({ withEvents: true });
+    try {
+      const entry = registerFlow(studio);
+      const captured: Array<{ type: string }> = [];
+      studio.events?.subscribe(entry.id, (e) => captured.push({ type: e.type }));
+
+      // Strip SEEFLOW_STUDIO_URL from the env so the flag is the only way the
+      // CLI can find the studio. --studio-url should bypass the auto-start
+      // path entirely.
+      const r = await runCli(
+        ['emit', entry.id, 'api-checkout', 'error', '--studio-url', studio.url],
+        { SEEFLOW_WORKSPACE: studio.env.SEEFLOW_WORKSPACE },
+      );
+      expect(r.code).toBe(0);
+      expect(captured).toHaveLength(1);
+      expect(captured[0]?.type).toBe('node:error');
     } finally {
       studio.stop();
     }

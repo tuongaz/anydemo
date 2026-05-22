@@ -62,7 +62,6 @@ describe('EXIT_CODE_BY_KIND', () => {
       idAlreadyExists: 4,
       alreadyExists: 4,
       writeFailed: 5,
-      sdkWriteFailed: 5,
       scaffoldFailed: 5,
     });
   });

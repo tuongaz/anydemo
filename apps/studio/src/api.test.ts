@@ -77,54 +77,10 @@ describe('POST /api/flows/register', () => {
     const json = (await res.json()) as {
       id: string;
       slug: string;
-      sdk: { outcome: string; filePath: string | null };
     };
     expect(json.slug).toBe('checkout-flow');
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0]?.id).toBe(json.id);
-    expect(json.sdk).toEqual({ outcome: 'skipped', filePath: null });
-  });
-
-  it('writes sdk/emit.ts when the demo declares an event-bound state node', async () => {
-    const { app } = buildApp();
-    const eventDemo = {
-      version: 2,
-      name: 'Event Flow',
-      nodes: [
-        {
-          id: 'queue-orders',
-          type: 'stateNode',
-          data: {
-            name: 'orders.created',
-            kind: 'queue',
-            stateSource: { kind: 'event' },
-          },
-        },
-      ],
-      connectors: [],
-    };
-    const repoPath = tmpRepoWithDemo(eventDemo);
-
-    const res = await post(app, '/api/flows/register', {
-      repoPath,
-      flowPath: 'flow.json',
-    });
-
-    expect(res.status).toBe(200);
-    const json = (await res.json()) as {
-      sdk: { outcome: string; filePath: string | null };
-    };
-    expect(json.sdk.outcome).toBe('written');
-    expect(json.sdk.filePath).toBe(join(repoPath, 'sdk', 'emit.ts'));
-    const written = readFileSync(join(repoPath, 'sdk', 'emit.ts'), 'utf8');
-    expect(written.length).toBeGreaterThan(0);
-
-    const second = await post(app, '/api/flows/register', {
-      repoPath,
-      flowPath: 'flow.json',
-    });
-    const secondJson = (await second.json()) as { sdk: { outcome: string } };
-    expect(secondJson.sdk.outcome).toBe('present');
   });
 
   it('returns 400 with Zod issues when the demo file fails schema validation', async () => {

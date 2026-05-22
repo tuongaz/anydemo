@@ -34,13 +34,14 @@ describe('COMMAND_MANIFEST', () => {
         'schema',
         'ids',
         'e2e',
+        'emit',
       ].sort(),
     );
   });
 
   it('marks live-only commands as requiresStudio: true', () => {
     const live = COMMAND_MANIFEST.filter((e) => e.requiresStudio).map((e) => e.name);
-    expect(live.sort()).toEqual(['e2e', 'flows:play'].sort());
+    expect(live.sort()).toEqual(['e2e', 'emit', 'flows:play'].sort());
   });
 
   it('flag/arg names are unique within each command', () => {
