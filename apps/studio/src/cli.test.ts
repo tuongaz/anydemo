@@ -386,6 +386,64 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
+  it('schema with no arg prints category index', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        categories: Array<{ name: string; description: string }>;
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.categories.map((c) => c.name)).toEqual([
+        'flow',
+        'node',
+        'connector',
+        'action',
+        'style',
+      ]);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema <category> prints full JSON Schemas plus notes', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        name: string;
+        schemas: Record<string, { type: string }>;
+        notes: string[];
+      };
+      expect(parsed.name).toBe('node');
+      expect(Object.keys(parsed.schemas).sort()).toEqual(
+        ['htmlNode', 'iconNode', 'imageNode', 'playNode', 'shapeNode', 'stateNode'].sort(),
+      );
+      expect(parsed.schemas.playNode?.type).toBe('object');
+      expect(parsed.notes.length).toBeGreaterThan(0);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema with unknown category exits 3 with notFound + available list', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'bogus', '--no-start'], studio.env);
+      expect(r.code).toBe(3);
+      expect(r.stderr).toContain('"code":"notFound"');
+      expect(r.stderr).toContain('unknown schema category: bogus');
+      const parsedErr = JSON.parse(r.stderr) as { available: string[] };
+      expect(parsedErr.available).toEqual(['flow', 'node', 'connector', 'action', 'style']);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
   it('nodes:get returns the node with detail content inlined', async () => {
     const studio = startTestStudio();
     try {

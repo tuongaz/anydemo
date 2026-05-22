@@ -31,6 +31,7 @@ describe('COMMAND_MANIFEST', () => {
         'connectors:patch',
         'connectors:delete',
         'validate',
+        'schema',
         'e2e',
       ].sort(),
     );

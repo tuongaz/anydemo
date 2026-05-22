@@ -37,6 +37,7 @@ import {
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
+import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
 import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -453,6 +454,23 @@ export function createApi(options: ApiOptions): Hono {
       case 'sdkWriteFailed':
         return c.json({ error: `Failed to write SDK helper: ${result.message}` }, 500);
     }
+  });
+
+  // GET /api/schema — index of categories the skill / agents can introspect.
+  // Mirrors `seeflow schema` and the `seeflow_schema` MCP tool. Drill in via
+  // GET /api/schema/:name for the full JSON Schema(s) + invariant notes.
+  api.get('/schema', (c) => c.json({ ok: true as const, categories: listSchemaCategories() }));
+
+  api.get('/schema/:name', (c) => {
+    const name = c.req.param('name');
+    const payload = getSchemaCategory(name);
+    if (!payload) {
+      return c.json(
+        { error: `unknown schema category: ${name}`, available: schemaCategoryNames() },
+        404,
+      );
+    }
+    return c.json({ ok: true as const, name, schemas: payload.schemas, notes: payload.notes });
   });
 
   api.get('/flows', (c) => {

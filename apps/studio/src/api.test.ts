@@ -708,6 +708,56 @@ describe('POST /api/flows/:id/layout', () => {
   });
 });
 
+describe('GET /api/schema', () => {
+  it('returns the category index', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      categories: Array<{ name: string; description: string }>;
+    };
+    expect(body.ok).toBe(true);
+    expect(body.categories.map((c) => c.name)).toEqual([
+      'flow',
+      'node',
+      'connector',
+      'action',
+      'style',
+    ]);
+    for (const c of body.categories) {
+      expect(c.description.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('returns full JSON Schemas + notes for each known category', async () => {
+    const { app } = buildApp();
+    for (const name of ['flow', 'node', 'connector', 'action', 'style']) {
+      const res = await app.request(`/api/schema/${name}`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        ok: boolean;
+        name: string;
+        schemas: Record<string, { type?: string }>;
+        notes: string[];
+      };
+      expect(body.ok).toBe(true);
+      expect(body.name).toBe(name);
+      expect(Object.keys(body.schemas).length).toBeGreaterThan(0);
+      expect(Array.isArray(body.notes)).toBe(true);
+    }
+  });
+
+  it('returns 404 with available list for unknown categories', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/bogus');
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string; available: string[] };
+    expect(body.error).toContain('unknown schema category: bogus');
+    expect(body.available).toEqual(['flow', 'node', 'connector', 'action', 'style']);
+  });
+});
+
 describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();

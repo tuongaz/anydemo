@@ -125,6 +125,7 @@ describe('POST /mcp tools/list', () => {
       'seeflow_patch_node',
       'seeflow_register_flow',
       'seeflow_reorder_node',
+      'seeflow_schema',
       'validate_seeflow',
     ]);
   });
@@ -152,6 +153,47 @@ describe('POST /mcp tools/list', () => {
     const createProject = byName.get('seeflow_create_project');
     const cpProps = createProject?.inputSchema?.properties as Record<string, unknown>;
     expect(Object.keys(cpProps)).toEqual(['name']);
+  });
+});
+
+describe('seeflow_schema', () => {
+  it('returns the category index when called with no args', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema');
+    const body = expectOk(envelope) as {
+      categories: Array<{ name: string; description: string }>;
+    };
+    expect(body.categories.map((c) => c.name)).toEqual([
+      'flow',
+      'node',
+      'connector',
+      'action',
+      'style',
+    ]);
+  });
+
+  it('returns full JSON Schemas + notes for a named category', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { name: 'node' });
+    const body = expectOk(envelope) as {
+      name: string;
+      schemas: Record<string, { type: string }>;
+      notes: string[];
+    };
+    expect(body.name).toBe('node');
+    expect(Object.keys(body.schemas).sort()).toEqual(
+      ['htmlNode', 'iconNode', 'imageNode', 'playNode', 'shapeNode', 'stateNode'].sort(),
+    );
+    expect(body.schemas.playNode?.type).toBe('object');
+    expect(body.notes.length).toBeGreaterThan(0);
+  });
+
+  it('returns isError for an unknown category', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { name: 'bogus' });
+    const msg = expectError(envelope);
+    expect(msg).toContain('unknown schema category: bogus');
+    expect(msg).toContain('flow');
   });
 });
 

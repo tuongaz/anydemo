@@ -84,7 +84,7 @@ export const PlayActionSchema = ScriptActionSchema;
 // invoked from the /reset endpoint. The studio kills every live play and
 // status script for the demo before running this script, so the running app
 // sees a clean baseline when wiping its state.
-const ResetActionSchema = ScriptActionSchema;
+export const ResetActionSchema = ScriptActionSchema;
 
 // Long-running status script. Same spawn shape as ScriptAction (interpreter +
 // args + scriptPath) but no stdin payload and a much longer max lifetime since
@@ -524,49 +524,61 @@ const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
 
+export const FlowPlayNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('playNode'),
+    data: FlowPlayNodeDataSchema,
+  })
+  .strict();
+
+export const FlowStateNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('stateNode'),
+    data: FlowStateNodeDataSchema,
+  })
+  .strict();
+
+export const FlowShapeNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('shapeNode'),
+    data: FlowShapeNodeDataSchema,
+  })
+  .strict();
+
+export const FlowImageNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('imageNode'),
+    data: FlowImageNodeDataSchema,
+  })
+  .strict();
+
+export const FlowIconNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('iconNode'),
+    data: FlowIconNodeDataSchema,
+  })
+  .strict();
+
+export const FlowHtmlNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('htmlNode'),
+    data: FlowHtmlNodeDataSchema,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('playNode'),
-      data: FlowPlayNodeDataSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('stateNode'),
-      data: FlowStateNodeDataSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('shapeNode'),
-      data: FlowShapeNodeDataSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('imageNode'),
-      data: FlowImageNodeDataSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('iconNode'),
-      data: FlowIconNodeDataSchema,
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowNodeBaseShape,
-      type: z.literal('htmlNode'),
-      data: FlowHtmlNodeDataSchema,
-    })
-    .strict(),
+  FlowPlayNodeSchema,
+  FlowStateNodeSchema,
+  FlowShapeNodeSchema,
+  FlowImageNodeSchema,
+  FlowIconNodeSchema,
+  FlowHtmlNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {
@@ -576,35 +588,43 @@ const FlowConnectorBaseShape = {
   label: z.string().optional(),
 };
 
+export const FlowHttpConnectorSchema = z
+  .object({
+    ...FlowConnectorBaseShape,
+    kind: z.literal('http'),
+    method: HttpMethodSchema.optional(),
+    url: z.string().min(1).optional(),
+  })
+  .strict();
+
+export const FlowEventConnectorSchema = z
+  .object({
+    ...FlowConnectorBaseShape,
+    kind: z.literal('event'),
+    eventName: z.string().min(1),
+  })
+  .strict();
+
+export const FlowQueueConnectorSchema = z
+  .object({
+    ...FlowConnectorBaseShape,
+    kind: z.literal('queue'),
+    queueName: z.string().min(1),
+  })
+  .strict();
+
+export const FlowDefaultConnectorSchema = z
+  .object({
+    ...FlowConnectorBaseShape,
+    kind: z.literal('default'),
+  })
+  .strict();
+
 const FlowConnectorSchema = z.discriminatedUnion('kind', [
-  z
-    .object({
-      ...FlowConnectorBaseShape,
-      kind: z.literal('http'),
-      method: HttpMethodSchema.optional(),
-      url: z.string().min(1).optional(),
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowConnectorBaseShape,
-      kind: z.literal('event'),
-      eventName: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowConnectorBaseShape,
-      kind: z.literal('queue'),
-      queueName: z.string().min(1),
-    })
-    .strict(),
-  z
-    .object({
-      ...FlowConnectorBaseShape,
-      kind: z.literal('default'),
-    })
-    .strict(),
+  FlowHttpConnectorSchema,
+  FlowEventConnectorSchema,
+  FlowQueueConnectorSchema,
+  FlowDefaultConnectorSchema,
 ]);
 
 export const FlowSchema = z
@@ -640,6 +660,23 @@ export const FlowSchema = z
 export type Flow = z.infer<typeof FlowSchema>;
 export type FlowNode = z.infer<typeof FlowNodeSchema>;
 export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
+
+// Envelope-only flow shape for the `seeflow schema flow` surface. The full
+// FlowSchema validates the whole graph; this companion schema describes the
+// top-level shape without inlining every node + connector variant, so the
+// runtime-introspectable JSON Schema stays compact. Authors drill into
+// `seeflow schema node` / `seeflow schema connector` for the per-variant
+// shapes. Not used for validation — only the catalog reads it.
+export const FlowEnvelopeSchema = z
+  .object({
+    version: z.literal(2),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    resetAction: ResetActionSchema.optional(),
+    nodes: z.array(z.unknown().describe('See `seeflow schema node`')),
+    connectors: z.array(z.unknown().describe('See `seeflow schema connector`')),
+  })
+  .strict();
 
 // =============================================================================
 // Style schema — keyed map of presentation overrides, side-table by id.

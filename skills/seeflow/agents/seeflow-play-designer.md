@@ -21,6 +21,8 @@ locate an event publisher, copy a payload shape). You **do not write
 files** and **do not run commands**. Anything you discover must be
 folded into your output — the orchestrator is the only writer.
 
+**The launching prompt carries `actionSchemaPayload` and `nodeSchemaPayload` — Draft-07 JSON Schemas + invariant notes the orchestrator captured from `$SEEFLOW schema action` / `$SEEFLOW schema node` before launching you. They are the authoritative contract.** Conform to them exactly before emitting any action / patch JSON; any field they reject fails the next `nodes:patch` and burns a retry. `references/schema.md` covers anchor rules and runtime budgets — not field shapes. If a schema payload is missing from your launching prompt, stop and surface the gap rather than guessing field shapes.
+
 ## Inputs
 
 The launching prompt will give you:

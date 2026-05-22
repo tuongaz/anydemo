@@ -7,6 +7,25 @@ The on-disk format is split into two files:
 
 The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow + style baked together.
 
+## Discovering the schema at runtime
+
+**Never memorise field shapes — the CLI is the source of truth.** This file
+documents conventions, file layout, and when-to-use guidance; it does **not**
+document field-by-field shapes. Run before authoring any flow.json write:
+
+    $SEEFLOW schema              # category index
+    $SEEFLOW schema flow         # top-level envelope
+    $SEEFLOW schema node         # all six node variants (playNode, stateNode, shapeNode, imageNode, iconNode, htmlNode)
+    $SEEFLOW schema connector    # all four connector kinds (http, event, queue, default)
+    $SEEFLOW schema action       # playAction / statusAction / resetAction / statusReport
+    $SEEFLOW schema style        # style.json envelope (studio-owned; for reference only)
+
+Returns Draft-07 JSON Schema per variant plus a `notes` array carrying
+cross-field invariants the schema can't express (dangling connector
+source/target, `imageNode` path prefix, `scriptPath` anchor). The same
+payload is reachable over MCP (`seeflow_schema`) and REST
+(`GET /api/schema[/:name]`) — pick whichever transport you're already on.
+
 ## Per-node file convention
 
 Node and connector ids in `flow.json` are canonical `node-<10 base62>` /
@@ -45,7 +64,7 @@ The studio's resolver prepends `.seeflow/nodes/<nodeId>/` and rejects any path t
 
 Hand-authored `file://<relative-path>` strings still work for forward-compat; path must be relative under `.seeflow/`, no leading `/`, no `..`. Missing files render as a `[seeflow: missing file '…']` placeholder card.
 
-## `flow.json` envelope
+## `flow.json` envelope (shape only)
 
 ```json
 {
@@ -53,12 +72,11 @@ Hand-authored `file://<relative-path>` strings still work for forward-compat; pa
   "name": "Checkout Flow",
   "nodes": [ …node data only… ],
   "connectors": [ …connector data only… ],
-  "resetAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                   "scriptPath": "scripts/reset.ts" }
+  "resetAction": { …optional script action… }
 }
 ```
 
-`resetAction` is optional — include only if the app has a "wipe state" entrypoint. (Note: `resetAction` scriptPath is currently anchored at `.seeflow/` for backwards compat; per-node anchor is a deferred follow-up.)
+`resetAction` is optional — include only if the app has a "wipe state" entrypoint. (Note: `resetAction` scriptPath is currently anchored at `.seeflow/` for backwards compat; per-node anchor is a deferred follow-up.) For the field-by-field shape, run `$SEEFLOW schema flow` and `$SEEFLOW schema action`.
 
 ## `style.json` envelope (studio-owned)
 
@@ -75,11 +93,17 @@ Hand-authored `file://<relative-path>` strings still work for forward-compat; pa
 
 Written by `seeflow flows:layout <flowId>` (ELK) and by user drags in the canvas. Positions + handles are derived geometrically — `sourceHandle: 'r' → targetHandle: 'l'` for forward edges, `'b' → 't'` for vertical or back-edges. The skill never writes this file.
 
-## Node types
+## When to use which node type
+
+For the exact field shape of each variant, run `$SEEFLOW schema node`.
+This section is the **decision guide** — what each variant is for and when
+to pick it. Pair it with the live schema before composing any patch body.
 
 ### `playNode`
 
-Has a clickable Play button. Required: `name`, `kind`, `stateSource`, `playAction`. Optional: `statusAction`, `description` (≤ 15 words), `detail`.
+Has a clickable Play button. Use for entities that are *triggers* the
+audience can act on (HTTP endpoints, cron-fire surfaces, click sources,
+fixture producers).
 
 **RULE — detail on important nodes:** Every `playNode` and `stateNode` that carries meaningful behaviour MUST include a `detail` field. `detail` renders as **markdown** — use it to explain what the node does, what it emits, why it matters, sample payloads, links to source files, or anything an audience member would ask. Decorative `shapeNode`/`iconNode` entries are exempt.
 
@@ -102,45 +126,9 @@ Has a clickable Play button. Required: `name`, `kind`, `stateSource`, `playActio
 | `external-api` | `cloud` |
 | `trigger` | `play` |
 
-```jsonc
-// flow.json — semantic node data only (no position, no visual fields)
-{
-  "id": "checkout-api", "type": "playNode",
-  "data": {
-    "name": "POST /checkout", "kind": "service",
-    "icon": "server",
-    "stateSource": { "kind": "request" },
-    "playAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                    "scriptPath": "scripts/play.ts",
-                    "input": { "items": [{"sku":"ABC","qty":1}] },
-                    "timeoutMs": 30000 },
-    "description": "Receives a cart, creates an order.",
-    "detail": "file://nodes/checkout-api/detail.md"
-  }
-}
-```
-
-The script lives at `.seeflow/nodes/checkout-api/scripts/play.ts`; the detail markdown at `.seeflow/nodes/checkout-api/detail.md`. Both are auto-managed by the studio when you pass raw content to `seeflow nodes:add` / `seeflow nodes:patch`.
-
 ### `stateNode`
 
-No mandatory Play; audience watches but doesn't trigger. Same `kind` values as `playNode`.
-
-```jsonc
-// flow.json
-{
-  "id": "order-db", "type": "stateNode",
-  "data": {
-    "name": "Orders DB", "kind": "db",
-    "icon": "database",
-    "stateSource": { "kind": "event" },
-    "statusAction": { "kind": "script", "interpreter": "bun", "args": ["run"],
-                      "scriptPath": "scripts/status.ts",
-                      "maxLifetimeMs": 600000 },
-    "detail": "file://nodes/order-db/detail.md"
-  }
-}
-```
+No mandatory Play; audience watches but doesn't trigger. Same `kind` values as `playNode`. Pair with a `statusAction` when the node has live state worth probing.
 
 ### `shapeNode`
 
@@ -158,41 +146,15 @@ Decorative / illustrative. No actions or live state.
 | `sticky` | Sticky note | Callout |
 | `text` | Plain text | Canvas label |
 
-```jsonc
-{ "id": "customer", "type": "shapeNode",
-  "data": { "shape": "user", "name": "Customer" } }
-{ "id": "stripe", "type": "shapeNode",
-  "data": { "shape": "cloud", "name": "Stripe" } }
-```
-
 ### `iconNode`
 
 Single Lucide glyph. Decorative only.
-
-```json
-{ "id": "user-icon", "type": "iconNode",
-  "data": { "icon": "User", "name": "Customer" } }
-```
 
 ### `htmlNode`
 
 Escape-hatch for content no curated node covers: legends, data tables, rich annotations, custom UI widgets. The studio externalizes the content to `<project>/.seeflow/nodes/<id>/view.html` and stores a `file://` ref in `flow.json`; the renderer injects Tailwind Play CDN (utility classes work) and **sanitises before painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:` URLs).
 
-**Fields:**
-- `html` (optional) — inline HTML content. Pass the markup as a string when calling `nodes:add` / `nodes:patch`; the studio writes it to `nodes/<id>/view.html` and persists `data.html = "file://nodes/<id>/view.html"`. On read the value is inlined back to the actual HTML string. Omitting `html` writes an empty file.
-
-**Optional semantic fields** (the only htmlNode `data` keys the skill emits): `name` (caption below node), `description`, `detail`, `icon`.
-
-**Presentation** (`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`) lives in `style.json` and is studio-owned — the renderer applies defaults (320 × 200 px) when style.json has no entry, the canvas writes resize / theming edits.
-
-```json
-{ "id": "legend", "type": "htmlNode",
-  "data": {
-    "html": "<div class=\"p-4\">…legend markup…</div>",
-    "name": "Legend"
-  }
-}
-```
+**Optional semantic fields** (the only htmlNode `data` keys the skill emits): `name` (caption below node), `description`, `detail`, `icon`. **Presentation** (`width`, `height`, `backgroundColor`, `borderColor`, `borderSize`, `borderStyle`, `cornerRadius`, `fontSize`, `textColor`) lives in `style.json` and is studio-owned — the renderer applies defaults (320 × 200 px) when style.json has no entry; the canvas writes resize / theming edits.
 
 Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Inline styles for anything Tailwind can't cover. To edit the markup outside Claude, open `<project>/.seeflow/nodes/<id>/view.html` directly — saves trigger a live reload.
 
@@ -202,42 +164,22 @@ Tailwind classes work; no `<script>` or `<style>` (stripped by sanitiser). Inlin
 
 Decorative image. Uploads land in the node's own folder: `<project>/.seeflow/nodes/<id>/<filename>`, and `data.path` must start with that folder. The studio's per-node upload endpoint enforces this; `delete_node` cascades the folder cleanup.
 
-```json
-{ "id": "node-Logo01abcd", "type": "imageNode",
-  "data": { "path": "nodes/node-Logo01abcd/logo.png", "alt": "Stripe logo" } }
-```
+## Connector kinds — when to pick which
 
-## Connectors
+For the exact field shape per kind, run `$SEEFLOW schema connector`. Pick by
+the most specific semantic available:
 
-Required: `id`, `source`, `target`, `kind`.
+- **`http`** — synchronous service-to-service call. Carries optional `method` + `url` echoing the playAction.
+- **`event`** — pub/sub. Names the topic / event via `eventName`.
+- **`queue`** — message-queue handoff. Names the channel via `queueName`.
+- **`default`** — no semantic payload (UI annotation only). Use sparingly.
 
-```json
-{ "id": "c1", "kind": "http",    "source": "checkout-api", "target": "payments",
-  "method": "POST", "url": "/charge", "label": "POST /charge" }
-{ "id": "c2", "kind": "event",   "source": "checkout-api", "target": "shipping-worker",
-  "eventName": "order.created" }
-{ "id": "c3", "kind": "queue",   "source": "checkout-api", "target": "fulfil-queue",
-  "queueName": "fulfilment-jobs" }
-{ "id": "c4", "kind": "default", "source": "user-icon",    "target": "checkout-api",
-  "label": "clicks checkout" }
-```
+Visual fields (`style`, `direction`, `path`, `color`, `borderSize`, `fontSize`, `label`, `sourceHandle`/`targetHandle`) are common across kinds but live in `style.json` — the skill leaves them to the canvas / `flows:layout`.
 
-Optional visual fields (all kinds): `style` (`solid|dashed|dotted`), `direction` (`forward|backward|both|none`), `path` (`curve|step`), `color`, `borderSize`, `fontSize`, `label`, `sourceHandle`/`targetHandle` (`r|b` / `t|l`).
+## `playAction` / `statusAction` / `resetAction` — runtime budgets
 
-## `stateSource`
-
-```json
-{ "kind": "request" }   // triggered by an explicit click/call
-{ "kind": "event" }     // fires reactively (consumer, worker, DB, watcher)
-```
-
-## `playAction` / `statusAction` / `resetAction`
-
-```json
-{ "kind": "script", "interpreter": "bun", "args": ["run"],
-  "scriptPath": "scripts/<file>.ts", "input": {…optional…},
-  "timeoutMs": 30000 }
-```
+For the exact field shape, run `$SEEFLOW schema action`. The decision-guide
+fields that don't live in the schema:
 
 - `scriptPath` — relative under the node folder (`.seeflow/nodes/<nodeId>/`). No leading slash, no `..`. (`resetAction` stays anchored at `.seeflow/` until a follow-up.)
 - `interpreter` — must match `runtimeProfile.primaryLanguage`. Values: `bun`, `go`, `python3`, `node`, `bash`.
@@ -251,9 +193,6 @@ Optional visual fields (all kinds): `style` (`solid|dashed|dotted`), `direction`
 
 ## `StatusReport` (stdout line shape)
 
-```json
-{ "state": "ok|warn|error|pending", "summary": "…(≤120)…",
-  "detail": "…(≤2000)…", "data": {…free…}, "ts": 1700000000000 }
-```
-
-Malformed lines are silently dropped. Emit one full JSON object per line.
+Run `$SEEFLOW schema action` for the full shape (`statusReport`). The
+contract beyond the schema: emit **one full JSON object per line** to stdout
+from the status script. Malformed lines are silently dropped.

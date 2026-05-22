@@ -26,6 +26,7 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_patch_node',
   'seeflow_register_flow',
   'seeflow_reorder_node',
+  'seeflow_schema',
   'validate_seeflow',
 ] as const;
 

@@ -157,6 +157,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runConnectorsDelete();
 } else if (sub === 'validate') {
   await runValidate();
+} else if (sub === 'schema') {
+  await runSchema();
 } else if (sub === 'e2e') {
   await runE2e();
 } else {
@@ -196,6 +198,8 @@ Commands (work without a running studio):
   connectors:patch <id> <connId>  Patch a connector (--json/--file/--stdin)
   connectors:delete <id> <connId> Delete a connector
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
+  schema [<category>]  Get the flow.json schema. No arg → category index;
+                       category arg → full JSON Schema(s) for that category
 
 Commands (require a running studio):
   flows:play <id> <n>  Trigger a play on node <n>
@@ -799,6 +803,22 @@ async function runValidate() {
     printError(`Schema validation failed: ${JSON.stringify(body.issues ?? [])}`);
   }
   printOk(body);
+}
+
+async function runSchema() {
+  const category = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
+  const { listSchemaCategories, getSchemaCategory } = await import('./schema-catalog.ts');
+  if (!category) {
+    printOk({ categories: listSchemaCategories() });
+  }
+  const payload = getSchemaCategory(category as string);
+  if (!payload) {
+    const available = listSchemaCategories().map((c) => c.name);
+    const message = `unknown schema category: ${category}`;
+    process.stderr.write(`${JSON.stringify({ error: message, code: 'notFound', available })}\n`);
+    process.exit(3);
+  }
+  printOk({ name: category, schemas: payload.schemas, notes: payload.notes });
 }
 
 async function runE2e() {

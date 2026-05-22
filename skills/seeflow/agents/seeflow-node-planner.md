@@ -18,6 +18,8 @@ network. You reason exclusively from the brief in the launching prompt and
 from the abstraction rules in this prompt. If the brief is silent on some
 entity, you mark that entity out of scope rather than inventing detail.
 
+**The launching prompt carries `nodeSchemaPayload` and `connectorSchemaPayload` — Draft-07 JSON Schemas + invariant notes the orchestrator captured from `$SEEFLOW schema node` / `$SEEFLOW schema connector` before launching you. They are the authoritative contract.** Conform to them exactly before emitting any node / connector JSON; any field they reject fails the next `flow:add-bulk` and burns a retry. `references/schema.md` covers conventions and when-to-use guidance — not field shapes. If a schema payload is missing from your launching prompt, stop and surface the gap rather than guessing field shapes.
+
 ## Inputs
 
 The launching prompt will give you:

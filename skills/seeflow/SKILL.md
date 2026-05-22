@@ -96,7 +96,7 @@ Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `P
 
 ### Capability probe — run before anything else
 
-Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more.) For each missing subcommand, log a feedback entry and surface to the user.
+Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `schema`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more.) For each missing subcommand, log a feedback entry and surface to the user.
 
 - Required missing → log `env-capability-mismatch` (`severity: blocker`, `phase: P0`, `details: missing <subcommand>[, <subcommand>...]`, `summary: $SEEFLOW lacks required subcommands; run `npm i -g @tuongaz/seeflow@latest` and retry`). Then stop — do **not** start Phase 1.
 - All present → continue.
@@ -180,6 +180,8 @@ When the system-analyzer returns:
 
 Launch `seeflow-node-planner` with the brief, the resolved tech-ref paths, and the matching `techAdaptations`. No tools — pure reasoning. The planner reads each ref's **Node modelling** section and treats `techAdaptations` as the project-specific override.
 
+**Before launching the planner, run `$SEEFLOW schema node` and `$SEEFLOW schema connector`** (parallel; one message, two Bash calls) and capture the JSON payloads. Forward them in the launching prompt as `nodeSchemaPayload` and `connectorSchemaPayload`. The planner has no shell — it relies on these payloads as the authoritative contract; `references/schema.md` only covers conventions and when-to-use guidance, not field shapes. Missing forwarding = planner emits drift = `flow:add-bulk` rejects = wasted retry.
+
 - **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own `stateNode`.
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches.
 - **Connection limit** — max 4 (in + out) per node. Exceeded → **split** distinct responsibilities, or **duplicate** a shared resource (same `kind` + `name`, unique `id` like `orders-db-read`).
@@ -240,6 +242,8 @@ URL="$STUDIO_URL/d/$slug"
 ## Phase 4 — design Play + Status (parallel)
 
 Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
+
+**Before launching either designer, run `$SEEFLOW schema action` and `$SEEFLOW schema node`** (parallel; one message, two Bash calls) and capture the JSON payloads. Forward them in each designer's launching prompt as `actionSchemaPayload` and `nodeSchemaPayload`. Designers have no shell — they rely on these payloads as the authoritative contract; `references/schema.md` only covers anchor rules and runtime budgets, not field shapes. The same payloads serve both designers; reuse them. Missing forwarding = designer emits drift = `nodes:patch` rejects = wasted retry.
 
 Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`.seeflow/nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full schemas: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 

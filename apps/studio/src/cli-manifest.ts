@@ -516,6 +516,32 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     requiresStudio: false,
     examples: ['seeflow validate --file .seeflow/flow.json'],
   },
+  {
+    name: 'schema',
+    synopsis: 'seeflow schema [<category>]',
+    description:
+      'Introspect the SeeFlow flow.json / style.json schemas at runtime. Call ' +
+      'without arguments to list the five categories (flow, node, connector, ' +
+      'action, style); call with a category name to get its full JSON Schema(s) ' +
+      '(Draft-07) plus a `notes` array of cross-field invariants the schema ' +
+      "can't express. Use this before authoring any flow.json write — never " +
+      'memorise field shapes.',
+    category: 'meta',
+    args: [
+      {
+        name: 'category',
+        required: false,
+        description: 'One of: flow, node, connector, action, style',
+      },
+    ],
+    flags: [],
+    outputs: {
+      okExample: { categories: [{ name: 'flow', description: 'Top-level flow.json envelope.' }] },
+      errorKinds: ['notFound'],
+    },
+    requiresStudio: false,
+    examples: ['seeflow schema', 'seeflow schema node', 'seeflow schema connector'],
+  },
   // ---- live --------------------------------------------------------------
   {
     name: 'e2e',

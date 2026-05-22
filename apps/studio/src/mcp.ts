@@ -20,6 +20,7 @@ import {
   flowBulkNonEmpty,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
+import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
 import type { FlowWatcher } from './watcher.ts';
 
 export interface CreateMcpServerOptions {
@@ -191,6 +192,43 @@ const buildTools = (ops: Operations): McpTool[] => [
     handler: async () => {
       const result = ops.listFlowsSummary();
       return okResult(result.data);
+    },
+  },
+  {
+    name: 'seeflow_schema',
+    description:
+      'Get the SeeFlow flow.json schema. Call with no args for a category index; ' +
+      "call with `name` for one category's full JSON Schemas. Use this to learn " +
+      'what a node, connector, action, or flow envelope looks like before authoring ' +
+      'writes. Categories: `flow`, `node`, `connector`, `action`, `style`.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        name: {
+          type: 'string',
+          description: 'Optional category name. Omit for the index.',
+        },
+      },
+      additionalProperties: false,
+    },
+    handler: async (args) => {
+      const name =
+        args && typeof args === 'object' && !Array.isArray(args)
+          ? (args as { name?: unknown }).name
+          : undefined;
+      if (name === undefined || name === null || name === '') {
+        return okResult({ categories: listSchemaCategories() });
+      }
+      if (typeof name !== 'string') {
+        return errorResult('Invalid arguments: `name` must be a string when present');
+      }
+      const payload = getSchemaCategory(name);
+      if (!payload) {
+        return errorResult(
+          `unknown schema category: ${name} (available: ${schemaCategoryNames().join(', ')})`,
+        );
+      }
+      return okResult({ name, schemas: payload.schemas, notes: payload.notes });
     },
   },
   {
