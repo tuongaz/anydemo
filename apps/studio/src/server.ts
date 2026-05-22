@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, mkdirSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js';
 import { Hono } from 'hono';
@@ -8,6 +8,7 @@ import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
 import { createMcpServer } from './mcp.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
+import { seeflowHome } from './paths.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import type { Spawner } from './shellout.ts';
@@ -208,6 +209,7 @@ export interface ServeOptions extends CreateAppOptions {
 export function serve(options: ServeOptions = {}) {
   const port = options.port ?? 4321;
   const hostname = options.hostname ?? '0.0.0.0';
+  mkdirSync(seeflowHome(), { recursive: true });
   const app = createApp(options);
   return Bun.serve({ port, hostname, fetch: app.fetch });
 }
