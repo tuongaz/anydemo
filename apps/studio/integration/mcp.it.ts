@@ -87,6 +87,7 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_patch_node',
   'seeflow_register_flow',
   'seeflow_reorder_node',
+  'seeflow_schema',
   'validate_seeflow',
 ];
 
@@ -204,6 +205,35 @@ describe('integration: MCP — read-only tools', () => {
     expect(data.id).toBe('shape-1');
     expect(data.flowId).toBe(seeded.id);
     expect(data.node.data.detail).toBe('# inlined body');
+  });
+
+  it('seeflow_schema (no args) returns the category index; (name) returns that category', async () => {
+    // No args → index of schema categories. Every entry has name + description.
+    const indexResult = await client.callTool('seeflow_schema', {});
+    const index = okJson<{ categories: { name: string; description: string }[] }>(indexResult);
+    expect(Array.isArray(index.categories)).toBe(true);
+    const indexNames = index.categories.map((c) => c.name).sort();
+    expect(indexNames).toEqual(['action', 'connector', 'flow', 'node', 'style']);
+
+    // With a known category → that category's JSON Schemas + notes.
+    const nodeResult = await client.callTool('seeflow_schema', { name: 'node' });
+    const node = okJson<{ name: string; schemas: Record<string, unknown>; notes: string[] }>(
+      nodeResult,
+    );
+    expect(node.name).toBe('node');
+    expect(Object.keys(node.schemas).sort()).toEqual([
+      'htmlNode',
+      'iconNode',
+      'imageNode',
+      'playNode',
+      'shapeNode',
+      'stateNode',
+    ]);
+    expect(Array.isArray(node.notes)).toBe(true);
+
+    // Unknown category → errorResult with the available names surfaced.
+    const bogus = await client.callTool('seeflow_schema', { name: 'does-not-exist' });
+    expect(bogus.isError).toBe(true);
   });
 
   it('validate_seeflow returns { ok: true } for a minimal valid flow', async () => {
