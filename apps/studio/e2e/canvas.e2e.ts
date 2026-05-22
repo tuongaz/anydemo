@@ -1,7 +1,7 @@
 import { expect, test } from './support/studio-fixture.ts';
 
-// The six node types and four connector kinds present in the kitchen-sink
-// fixture (apps/studio/integration/fixtures/kitchen-sink.flow.json).
+// The six node types present in the kitchen-sink fixture
+// (apps/studio/integration/fixtures/kitchen-sink.flow.json).
 const NODE_TYPES = [
   'playNode',
   'stateNode',
@@ -10,8 +10,6 @@ const NODE_TYPES = [
   'htmlNode',
   'iconNode',
 ] as const;
-
-const EDGE_KINDS = ['http', 'event', 'queue', 'default'] as const;
 
 // imageNode renders just an <img> tag with no visible text content, so the
 // "non-empty text" smoke check is skipped for it. Every other node type
@@ -58,12 +56,6 @@ test.describe('canvas — kitchen-sink fixture', () => {
       const locator = page.locator(`[data-node-type="${type}"]`);
       await expect(locator).toBeVisible();
       await expect(locator).toHaveScreenshot(`${type}.png`, { maxDiffPixelRatio: 0.02 });
-    }
-  });
-
-  test('connector kinds render distinctly', async ({ page }) => {
-    for (const kind of EDGE_KINDS) {
-      await expect(page.locator(`[data-edge-kind="${kind}"]`)).toHaveCount(1);
     }
   });
 

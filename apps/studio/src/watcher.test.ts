@@ -15,7 +15,6 @@ const VALID_DEMO = {
       type: 'playNode',
       data: {
         name: 'A',
-        kind: 'svc',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -180,7 +179,6 @@ describe('createWatcher', () => {
         type: 'playNode',
         data: {
           name: 'I',
-          kind: 'svc',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           path: imgPath,
@@ -293,7 +291,6 @@ describe('createWatcher', () => {
           type: 'playNode',
           data: {
             name: 'A',
-            kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: '/etc/passwd',
@@ -304,7 +301,6 @@ describe('createWatcher', () => {
           type: 'playNode',
           data: {
             name: 'B',
-            kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: '../secrets.png',
@@ -315,7 +311,6 @@ describe('createWatcher', () => {
           type: 'playNode',
           data: {
             name: 'C',
-            kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             path: 'data:image/png;base64,iVBORw0KGgo=',
@@ -356,7 +351,6 @@ describe('createWatcher', () => {
           type: 'playNode',
           data: {
             name: 'N',
-            kind: 'svc',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             detail: 'file://detail.md',

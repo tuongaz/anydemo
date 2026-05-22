@@ -26,7 +26,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'playNode',
       data: {
         name: 'A',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -36,7 +35,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'playNode',
       data: {
         name: 'B',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -60,7 +58,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'A',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -70,7 +67,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'B',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -80,7 +76,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'C',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },

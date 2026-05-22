@@ -5,11 +5,15 @@
     {
       "id": "n1",
       "type": "playNode",
-      "position": { "x": 100, "y": 100 },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
       "data": {
         "name": "Trigger",
-        "kind": "service",
-        "stateSource": { "kind": "request" },
+        "stateSource": {
+          "kind": "request"
+        },
         "description": "playNode — kitchen sink fixture trigger.",
         "playAction": {
           "kind": "script",
@@ -21,18 +25,25 @@
     {
       "id": "n2",
       "type": "stateNode",
-      "position": { "x": 500, "y": 100 },
+      "position": {
+        "x": 500,
+        "y": 100
+      },
       "data": {
         "name": "Worker",
-        "kind": "worker",
-        "stateSource": { "kind": "event" },
+        "stateSource": {
+          "kind": "event"
+        },
         "description": "stateNode — kitchen sink fixture worker."
       }
     },
     {
       "id": "n3",
       "type": "shapeNode",
-      "position": { "x": 100, "y": 300 },
+      "position": {
+        "x": 100,
+        "y": 300
+      },
       "data": {
         "shape": "rectangle",
         "name": "Shape"
@@ -41,7 +52,10 @@
     {
       "id": "n4",
       "type": "imageNode",
-      "position": { "x": 500, "y": 300 },
+      "position": {
+        "x": 500,
+        "y": 300
+      },
       "data": {
         "path": "nodes/n4/cover.png",
         "alt": "Kitchen sink cover image"
@@ -50,7 +64,10 @@
     {
       "id": "n5",
       "type": "htmlNode",
-      "position": { "x": 100, "y": 500 },
+      "position": {
+        "x": 100,
+        "y": 500
+      },
       "data": {
         "name": "Markup",
         "html": "<p>Kitchen sink htmlNode</p>"
@@ -59,7 +76,10 @@
     {
       "id": "n6",
       "type": "iconNode",
-      "position": { "x": 500, "y": 500 },
+      "position": {
+        "x": 500,
+        "y": 500
+      },
       "data": {
         "icon": "box",
         "name": "Icon"
@@ -71,7 +91,6 @@
       "id": "c1",
       "source": "n1",
       "target": "n2",
-      "kind": "http",
       "method": "POST",
       "url": "/api/orders",
       "label": "POST /orders"
@@ -80,7 +99,6 @@
       "id": "c2",
       "source": "n2",
       "target": "n3",
-      "kind": "event",
       "eventName": "order.created",
       "label": "order.created"
     },
@@ -88,7 +106,6 @@
       "id": "c3",
       "source": "n3",
       "target": "n5",
-      "kind": "queue",
       "queueName": "orders.queue",
       "label": "orders.queue"
     },
@@ -96,7 +113,6 @@
       "id": "c4",
       "source": "n5",
       "target": "n6",
-      "kind": "default",
       "label": "renders"
     }
   ]

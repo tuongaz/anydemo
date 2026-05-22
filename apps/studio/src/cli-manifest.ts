@@ -345,7 +345,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     body: {
       example: {
         type: 'stateNode',
-        data: { name: 'hello', kind: 'state', stateSource: { kind: 'request' } },
+        data: { name: 'hello', stateSource: { kind: 'request' } },
       },
     },
     outputs: {

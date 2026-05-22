@@ -117,7 +117,6 @@ function makePlayNode(overrides: Partial<FlowNode> = {}): FlowNode {
     position: { x: 0, y: 0 },
     data: {
       name: 'A play node',
-      kind: 'service',
       stateSource: { kind: 'request' },
       description: 'Short body text',
       detail: 'Long-form notes',
@@ -518,7 +517,7 @@ describe('DetailPanel icon trigger', () => {
       id: 's1',
       type: 'stateNode',
       position: { x: 0, y: 0 },
-      data: { name: 's', kind: 'service', status: 'idle' },
+      data: { name: 's', status: 'idle' },
     } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({

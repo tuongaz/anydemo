@@ -57,7 +57,7 @@ const DEFAULT_W = 250;
 function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNodeType>) {
   const status = data.status ?? 'idle';
   const visualStatus = deriveVisualStatus(data.status, data.statusReport);
-  const description = data.description ?? data.kind;
+  const description = data.description;
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
@@ -287,7 +287,7 @@ function StateNodeImpl({ id, data, selected, isConnectable }: NodeProps<StateNod
             onExit={() => setEditing(null)}
             className="sf:w-full sf:text-[18px] sf:text-muted-foreground"
             style={descriptionFontStyle}
-            placeholder={data.kind}
+            placeholder="Description"
           />
         ) : (
           <button

@@ -7,7 +7,6 @@
       "type": "playNode",
       "data": {
         "name": "POST /orders",
-        "kind": "service",
         "stateSource": {
           "kind": "request"
         },
@@ -26,7 +25,6 @@
       "type": "stateNode",
       "data": {
         "name": "Inventory Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },
@@ -40,7 +38,6 @@
       "type": "stateNode",
       "data": {
         "name": "Payment Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },
@@ -53,7 +50,6 @@
       "type": "stateNode",
       "data": {
         "name": "Fulfillment Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },

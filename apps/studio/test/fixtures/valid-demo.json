@@ -11,7 +11,6 @@
       },
       "data": {
         "name": "POST /checkout",
-        "kind": "service",
         "stateSource": {
           "kind": "request"
         },
@@ -37,7 +36,6 @@
       },
       "data": {
         "name": "Fulfillment worker",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },

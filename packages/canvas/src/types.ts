@@ -34,7 +34,6 @@ export interface NodeDescription {
 
 export interface NodeData extends NodeVisual, NodeDescription {
   name: string;
-  kind: string;
   stateSource: { kind: 'request' | 'event' };
   playAction?: HttpAction;
   handlerModule?: string;

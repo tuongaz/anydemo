@@ -18,7 +18,6 @@ const VALID_DEMO = {
       type: 'playNode',
       data: {
         name: 'POST /checkout',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: {
           kind: 'script',
@@ -226,12 +225,12 @@ describe('seeflow CLI new subcommands', () => {
           {
             id: 'n1',
             type: 'stateNode',
-            data: { name: 'one', kind: 'state', stateSource: { kind: 'request' } },
+            data: { name: 'one', stateSource: { kind: 'request' } },
           },
           {
             id: 'n2',
             type: 'stateNode',
-            data: { name: 'two', kind: 'state', stateSource: { kind: 'request' } },
+            data: { name: 'two', stateSource: { kind: 'request' } },
           },
         ],
         connectors: [{ id: 'n1-to-n2', source: 'n1', target: 'n2' }],
@@ -275,12 +274,12 @@ describe('seeflow CLI new subcommands', () => {
           {
             id: 'same',
             type: 'stateNode',
-            data: { name: 'a', kind: 'state', stateSource: { kind: 'request' } },
+            data: { name: 'a', stateSource: { kind: 'request' } },
           },
           {
             id: 'same',
             type: 'stateNode',
-            data: { name: 'b', kind: 'state', stateSource: { kind: 'request' } },
+            data: { name: 'b', stateSource: { kind: 'request' } },
           },
         ],
       });

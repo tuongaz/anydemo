@@ -148,7 +148,7 @@ function PlayButton({
 function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeType>) {
   const status = data.status;
   const action = data.playAction;
-  const description = data.description ?? data.kind;
+  const description = data.description;
   const playable = !!action && !!data.onPlay;
   const visualStatus = deriveVisualStatus(status, data.statusReport);
   const isRunning = status === 'running';
@@ -391,7 +391,7 @@ function PlayNodeImpl({ id, data, selected, isConnectable }: NodeProps<PlayNodeT
             onExit={() => setEditing(null)}
             className="sf:w-full sf:text-[18px] sf:text-muted-foreground"
             style={descriptionFontStyle}
-            placeholder={data.kind}
+            placeholder="Description"
           />
         ) : (
           <button

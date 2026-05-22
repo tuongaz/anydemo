@@ -979,7 +979,6 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         borderColor: 'teal',
@@ -997,7 +996,6 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
@@ -1058,7 +1056,6 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'stateNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'event' },
         statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
         borderColor: 'teal',
@@ -1085,7 +1082,6 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'stateNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'event' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1105,7 +1101,6 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1123,7 +1118,6 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         detail: 'docs survive retype',
@@ -1150,7 +1144,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     const { deps, flowId } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
       type: 'stateNode',
-      data: { name: 'queue', kind: 'queue', stateSource: { kind: 'event' } },
+      data: { name: 'queue', stateSource: { kind: 'event' } },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
 
@@ -1162,7 +1156,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
       type: 'stateNode',
-      data: { name: 'queue', kind: 'queue', stateSource: { kind: 'event' } },
+      data: { name: 'queue', stateSource: { kind: 'event' } },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
 
@@ -1183,7 +1177,6 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1200,7 +1193,6 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
       type: 'playNode',
       data: {
         name: 'svc',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },

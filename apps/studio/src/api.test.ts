@@ -25,7 +25,6 @@ const VALID_DEMO = {
       type: 'playNode',
       data: {
         name: 'POST /checkout',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: {
           kind: 'script',
@@ -325,7 +324,6 @@ describe('POST /api/diagram/assemble', () => {
             position: { x: 11, y: 23 },
             data: {
               name: 'API',
-              kind: 'service',
               stateSource: { kind: 'request' },
               playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
             },
@@ -334,7 +332,7 @@ describe('POST /api/diagram/assemble', () => {
             id: 'db',
             type: 'stateNode',
             position: { x: 100, y: 100 },
-            data: { name: 'DB', kind: 'store', stateSource: { kind: 'request' } },
+            data: { name: 'DB', stateSource: { kind: 'request' } },
           },
         ],
         connectors: [
@@ -394,7 +392,6 @@ describe('POST /api/layout', () => {
         type: 'playNode',
         data: {
           name: 'API',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
         },
@@ -402,7 +399,7 @@ describe('POST /api/layout', () => {
       {
         id: 'db',
         type: 'stateNode',
-        data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
+        data: { name: 'DB', stateSource: { kind: 'event' } },
       },
     ],
     connectors: [{ id: 'c1', source: 'api', target: 'db' }],
@@ -509,7 +506,6 @@ describe('POST /api/flows/:id/layout', () => {
         type: 'playNode',
         data: {
           name: 'API',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/api.ts' },
         },
@@ -517,7 +513,7 @@ describe('POST /api/flows/:id/layout', () => {
       {
         id: 'db',
         type: 'stateNode',
-        data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
+        data: { name: 'DB', stateSource: { kind: 'event' } },
       },
     ],
     connectors: [{ id: 'c1', source: 'api', target: 'db' }],
@@ -2627,7 +2623,6 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         type: 'playNode',
         data: {
           name: 'A',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -2637,7 +2632,6 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         type: 'playNode',
         data: {
           name: 'B',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -2684,7 +2678,6 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
           type: 'playNode',
           data: {
             name: 'C',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
@@ -2841,7 +2834,6 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         type: 'playNode',
         data: {
           name: 'A',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -2851,7 +2843,6 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         type: 'playNode',
         data: {
           name: 'B',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3091,7 +3082,6 @@ describe('POST /api/flows/:id/connectors', () => {
         type: 'playNode',
         data: {
           name: 'A',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3101,7 +3091,6 @@ describe('POST /api/flows/:id/connectors', () => {
         type: 'playNode',
         data: {
           name: 'B',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3225,7 +3214,7 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'svc',
           type: 'stateNode',
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+          data: { name: 'S', stateSource: { kind: 'request' } },
         },
         {
           id: 'icon-1',
@@ -3271,7 +3260,7 @@ describe('POST /api/flows/:id/connectors', () => {
         {
           id: 'svc',
           type: 'stateNode',
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' } },
+          data: { name: 'S', stateSource: { kind: 'request' } },
         },
       ],
       connectors: [],
@@ -3345,7 +3334,6 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
         type: 'playNode',
         data: {
           name: 'A',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3355,7 +3343,6 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
         type: 'playNode',
         data: {
           name: 'B',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3433,7 +3420,6 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
         type: 'playNode',
         data: {
           name: 'A',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },
@@ -3443,7 +3429,6 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
         type: 'playNode',
         data: {
           name: 'B',
-          kind: 'service',
           stateSource: { kind: 'request' },
           playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         },

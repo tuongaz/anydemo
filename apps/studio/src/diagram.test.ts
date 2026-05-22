@@ -45,7 +45,6 @@ const playNode = (id: string, x = 0, y = 0) => ({
   position: { x, y },
   data: {
     label: id,
-    kind: 'service',
     stateSource: { kind: 'request' as const },
     playAction: {
       kind: 'script' as const,
@@ -59,7 +58,7 @@ const stateNode = (id: string, x = 0, y = 0) => ({
   id,
   type: 'stateNode',
   position: { x, y },
-  data: { label: id, kind: 'store', stateSource: { kind: 'request' as const } },
+  data: { label: id, stateSource: { kind: 'request' as const } },
 });
 
 const connector = (source: string, target: string) => ({

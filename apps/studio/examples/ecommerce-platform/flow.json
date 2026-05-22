@@ -16,7 +16,6 @@
       "type": "playNode",
       "data": {
         "name": "API Gateway",
-        "kind": "gateway",
         "stateSource": {
           "kind": "request"
         },
@@ -35,7 +34,6 @@
       "type": "stateNode",
       "data": {
         "name": "Auth Service",
-        "kind": "service",
         "stateSource": {
           "kind": "request"
         },
@@ -48,7 +46,6 @@
       "type": "stateNode",
       "data": {
         "name": "Product Catalog",
-        "kind": "service",
         "stateSource": {
           "kind": "request"
         },
@@ -61,7 +58,6 @@
       "type": "playNode",
       "data": {
         "name": "Cart Service",
-        "kind": "service",
         "stateSource": {
           "kind": "request"
         },
@@ -80,7 +76,6 @@
       "type": "playNode",
       "data": {
         "name": "Order Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },
@@ -99,7 +94,6 @@
       "type": "stateNode",
       "data": {
         "name": "Payment Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },
@@ -112,7 +106,6 @@
       "type": "stateNode",
       "data": {
         "name": "Notification Service",
-        "kind": "worker",
         "stateSource": {
           "kind": "event"
         },

@@ -77,7 +77,6 @@ function callStateNode(data: Record<string, unknown>, overrides: Partial<NodePro
     type: 'stateNode',
     data: {
       name: 'State',
-      kind: 'service',
       ...data,
     },
     selected: false,

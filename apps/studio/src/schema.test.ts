@@ -77,7 +77,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             playAction: {
               kind: 'script' as const,
@@ -90,19 +89,19 @@ describe('ResolvedFlowSchema', () => {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'c',
           type: 'stateNode' as const,
           position: { x: 200, y: 0 },
-          data: { name: 'C', kind: 'worker', stateSource: { kind: 'event' as const } },
+          data: { name: 'C', stateSource: { kind: 'event' as const } },
         },
         {
           id: 'd',
           type: 'stateNode' as const,
           position: { x: 300, y: 0 },
-          data: { name: 'D', kind: 'worker', stateSource: { kind: 'event' as const } },
+          data: { name: 'D', stateSource: { kind: 'event' as const } },
         },
       ],
       connectors: [
@@ -252,7 +251,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             playAction: {
               kind: 'script' as const,
@@ -271,7 +269,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 100, y: 0 },
           data: {
             name: 'S',
-            kind: 'worker',
             stateSource: { kind: 'event' as const },
             width: 160,
             height: 60,
@@ -308,7 +305,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [],
@@ -327,7 +324,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             width,
             height,
@@ -352,7 +348,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             borderColor: 'fuchsia',
           },
@@ -378,13 +373,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', label: 'see also' }],
@@ -406,13 +401,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -459,13 +454,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -496,13 +491,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
@@ -525,13 +520,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -562,13 +557,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b' }],
@@ -591,13 +586,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -621,13 +616,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -654,13 +649,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', style: 'wavy' }],
@@ -677,13 +672,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', direction: 'sideways' }],
@@ -700,13 +695,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'fuchsia' }],
@@ -725,7 +720,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             borderSize: nodeBorderSize,
           },
@@ -734,7 +728,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [
@@ -773,7 +767,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             playAction: {
               kind: 'script' as const,
@@ -1018,7 +1011,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'img-1',
@@ -1049,7 +1042,7 @@ describe('ResolvedFlowSchema', () => {
           id: 's',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'icon-1',
@@ -1089,7 +1082,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [],
@@ -1118,7 +1111,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [],
@@ -1284,13 +1277,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: 16 }],
@@ -1312,13 +1305,13 @@ describe('ResolvedFlowSchema', () => {
           id: 'a',
           type: 'stateNode' as const,
           position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
           type: 'stateNode' as const,
           position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
+          data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: size }],
@@ -1340,7 +1333,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'POST /action',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: {
               kind: 'script',
@@ -1354,7 +1346,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'worker',
           type: 'stateNode',
           position: { x: 300, y: 0 },
-          data: { name: 'my-worker', kind: 'worker', stateSource: { kind: 'event' } },
+          data: { name: 'my-worker', stateSource: { kind: 'event' } },
         },
       ],
       connectors: [{ id: 'c1', source: 'svc', target: 'worker' }],
@@ -1370,7 +1362,6 @@ describe('ResolvedFlowSchema', () => {
   it('treats data.handlerModule as optional and reserved (no runtime use yet)', () => {
     const baseData = {
       name: 'worker',
-      kind: 'worker',
       stateSource: { kind: 'event' as const },
     };
     const baseDemo = (data: Record<string, unknown>) => ({
@@ -1409,7 +1400,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'p',
-              kind: 'svc',
               stateSource: { kind: 'request' },
               playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
               description: 'short body',
@@ -1425,7 +1415,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 's',
-              kind: 'svc',
               stateSource: { kind: 'event' },
               description: 'short body',
               detail: 'long-form notes',
@@ -1648,7 +1637,7 @@ describe('ResolvedFlowSchema', () => {
             id: 's',
             type: 'stateNode' as const,
             position: { x: 0, y: 0 },
-            data: { name: 'S', kind: 'svc', stateSource: { kind: 'request' as const } },
+            data: { name: 'S', stateSource: { kind: 'request' as const } },
           },
           {
             id: 'html-1',
@@ -1684,7 +1673,6 @@ describe('ResolvedFlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
-            kind: 'svc',
             stateSource: { kind: 'request' as const },
             playAction,
           },
@@ -1793,7 +1781,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'P',
-              kind: 'svc',
               stateSource: { kind: 'request' as const },
               playAction: {
                 kind: 'script' as const,
@@ -1834,7 +1821,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
               statusAction: {
                 kind: 'script' as const,
@@ -1866,7 +1852,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
               statusAction: {
                 kind: 'script' as const,
@@ -1893,7 +1878,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
               statusAction: {
                 kind: 'script' as const,
@@ -1920,7 +1904,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
               statusAction: {
                 kind: 'script' as const,
@@ -1980,7 +1963,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
             },
           },
@@ -2012,7 +1994,6 @@ describe('ResolvedFlowSchema', () => {
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
-              kind: 'worker',
               stateSource: { kind: 'event' as const },
             },
           },
@@ -2074,7 +2055,6 @@ describe('FlowSchema', () => {
           type: 'playNode',
           data: {
             name: 'POST /x',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
@@ -2095,7 +2075,6 @@ describe('FlowSchema', () => {
           type: 'playNode',
           data: {
             name: 'X',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
             fontSize: 15,
@@ -2118,7 +2097,6 @@ describe('FlowSchema', () => {
           position: { x: 0, y: 0 },
           data: {
             name: 'X',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
@@ -2139,7 +2117,6 @@ describe('FlowSchema', () => {
           type: 'playNode',
           data: {
             name: 'A',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
@@ -2147,7 +2124,7 @@ describe('FlowSchema', () => {
         {
           id: 'b',
           type: 'stateNode',
-          data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
+          data: { name: 'B', stateSource: { kind: 'event' } },
         },
       ],
       connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'blue' }],
@@ -2175,7 +2152,6 @@ describe('FlowSchema', () => {
           type: 'playNode',
           data: {
             name: 'A',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'p.ts' },
           },
@@ -2183,7 +2159,7 @@ describe('FlowSchema', () => {
         {
           id: 'b',
           type: 'stateNode',
-          data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
+          data: { name: 'B', stateSource: { kind: 'event' } },
         },
       ],
       connectors: [{ id: 'c', source: 'a', target: 'b', eventName: 'evt', label: 'hi' }],

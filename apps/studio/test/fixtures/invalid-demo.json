@@ -4,11 +4,15 @@
     {
       "id": "api-checkout",
       "type": "playNode",
-      "position": { "x": 100, "y": 100 },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
       "data": {
         "name": "POST /checkout",
-        "kind": "service",
-        "stateSource": { "kind": "request" },
+        "stateSource": {
+          "kind": "request"
+        },
         "playAction": {
           "kind": "script",
           "interpreter": "bun",

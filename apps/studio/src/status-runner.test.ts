@@ -113,7 +113,6 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
         type: 'stateNode',
         data: {
           name: 'Status',
-          kind: 'state',
           stateSource: { kind: 'request' },
           ...(opts.hasStatus
             ? {
@@ -337,7 +336,6 @@ describe('createStatusRunner', () => {
           type: 'stateNode',
           data: {
             name: 'Status',
-            kind: 'state',
             stateSource: { kind: 'request' },
             statusAction: {
               kind: 'script',

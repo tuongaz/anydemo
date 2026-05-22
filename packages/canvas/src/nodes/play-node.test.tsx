@@ -80,7 +80,6 @@ function callPlayNode(data: Record<string, unknown>, overrides: Partial<NodeProp
     type: 'playNode',
     data: {
       name: 'Run',
-      kind: 'http',
       ...data,
     },
     selected: false,

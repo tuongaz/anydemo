@@ -119,7 +119,6 @@ export const StateSourceSchema = z.discriminatedUnion('kind', [
 
 const NodeDataBaseSchema = z.object({
   name: z.string().min(1),
-  kind: z.string().min(1),
   stateSource: StateSourceSchema,
   // Reserved for v2: a module path resolved by future skills runtime.
   // Schema-only at v1 — never read at runtime.
@@ -432,7 +431,6 @@ export type StateSource = z.infer<typeof StateSourceSchema>;
 
 const FlowNodeDataBaseShape = {
   name: z.string().min(1),
-  kind: z.string().min(1),
   stateSource: StateSourceSchema,
   handlerModule: z.string().optional(),
   icon: z.string().optional(),

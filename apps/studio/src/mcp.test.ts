@@ -14,7 +14,6 @@ const VALID_DEMO = {
       type: 'playNode',
       data: {
         name: 'POST /checkout',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: {
           kind: 'script',
@@ -558,7 +557,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'A',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -568,7 +566,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'B',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -578,7 +575,6 @@ const VALID_DEMO_THREE_NODES = {
       type: 'playNode',
       data: {
         name: 'C',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1171,7 +1167,6 @@ describe('seeflow_patch_node', () => {
           futureField: 'survives',
           data: {
             name: 'Future',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
           },
@@ -1198,7 +1193,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'playNode',
       data: {
         name: 'A',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1208,7 +1202,6 @@ const VALID_DEMO_TWO_NODES = {
       type: 'playNode',
       data: {
         name: 'B',
-        kind: 'service',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
@@ -1525,7 +1518,6 @@ describe('seeflow_add_bulk', () => {
           type: 'playNode',
           data: {
             name: 'S',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
           },
@@ -1535,7 +1527,6 @@ describe('seeflow_add_bulk', () => {
           type: 'playNode',
           data: {
             name: 'D',
-            kind: 'service',
             stateSource: { kind: 'request' },
             playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/p.ts' },
           },
