@@ -40,6 +40,7 @@ import type { Registry } from './registry.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
 import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
+import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
 import { readMergedFlow } from './watcher.ts';
 import type { FlowWatcher } from './watcher.ts';
@@ -471,6 +472,41 @@ export function createApi(options: ApiOptions): Hono {
       );
     }
     return c.json({ ok: true as const, name, schemas: payload.schemas, notes: payload.notes });
+  });
+
+  // GET /api/ids/:type/:count — batch-mint canonical short ids. Mirrors
+  // `seeflow ids <type> <count>` and the `seeflow_ids` MCP tool. Pure compute,
+  // no state read, no studio side effects. Same alphabet, length, and
+  // rejection-sampling as every other id producer (operations.ts, canvas,
+  // upload regex), so generated ids match wherever they're inserted.
+  api.get('/ids/:type/:count', (c) => {
+    const type = c.req.param('type');
+    if (!isIdType(type)) {
+      return c.json(
+        {
+          ok: false as const,
+          error: `invalid type: ${type} (expected one of: ${ID_TYPES.join(', ')})`,
+        },
+        400,
+      );
+    }
+    const rawCount = c.req.param('count');
+    const count = Number.parseInt(rawCount, 10);
+    if (
+      !Number.isFinite(count) ||
+      String(count) !== rawCount ||
+      count < 1 ||
+      count > MAX_ID_COUNT
+    ) {
+      return c.json(
+        {
+          ok: false as const,
+          error: `invalid count: ${rawCount} (expected an integer in [1, ${MAX_ID_COUNT}])`,
+        },
+        400,
+      );
+    }
+    return c.json({ ok: true as const, ids: generateIds(type, count) });
   });
 
   api.get('/flows', (c) => {

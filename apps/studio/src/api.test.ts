@@ -758,6 +758,70 @@ describe('GET /api/schema', () => {
   });
 });
 
+describe('GET /api/ids/:type/:count', () => {
+  it('mints node ids with the `node-` prefix and 10 base62 chars', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/ids/node/5');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; ids: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.ids).toHaveLength(5);
+    for (const id of body.ids) {
+      expect(/^node-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+    // No duplicates in a single batch.
+    expect(new Set(body.ids).size).toBe(5);
+  });
+
+  it('mints connector ids with the `conn-` prefix', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/ids/connector/3');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { ok: boolean; ids: string[] };
+    expect(body.ok).toBe(true);
+    expect(body.ids).toHaveLength(3);
+    for (const id of body.ids) {
+      expect(/^conn-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+  });
+
+  it('accepts the upper bound (100) but rejects 101', async () => {
+    const { app } = buildApp();
+    const okRes = await app.request('/api/ids/node/100');
+    expect(okRes.status).toBe(200);
+    const okBody = (await okRes.json()) as { ok: boolean; ids: string[] };
+    expect(okBody.ids).toHaveLength(100);
+
+    const badRes = await app.request('/api/ids/node/101');
+    expect(badRes.status).toBe(400);
+    const badBody = (await badRes.json()) as { ok: boolean; error: string };
+    expect(badBody.ok).toBe(false);
+    expect(badBody.error).toContain('invalid count: 101');
+  });
+
+  it('rejects unknown types with 400 and lists valid ones', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/ids/conn/3');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { ok: boolean; error: string };
+    expect(body.ok).toBe(false);
+    expect(body.error).toContain('invalid type: conn');
+    expect(body.error).toContain('node');
+    expect(body.error).toContain('connector');
+  });
+
+  it('rejects non-integer / zero / negative counts with 400', async () => {
+    const { app } = buildApp();
+    for (const bad of ['0', '-1', 'abc', '1.5']) {
+      const res = await app.request(`/api/ids/node/${encodeURIComponent(bad)}`);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { ok: boolean; error: string };
+      expect(body.ok).toBe(false);
+      expect(body.error).toContain(`invalid count: ${bad}`);
+    }
+  });
+});
+
 describe('GET /api/flows', () => {
   it('returns the registry list as summaries', async () => {
     const { app } = buildApp();

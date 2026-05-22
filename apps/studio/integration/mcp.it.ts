@@ -80,6 +80,7 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_get_flow',
   'seeflow_get_flow_graph',
   'seeflow_get_node',
+  'seeflow_ids',
   'seeflow_list_flows',
   'seeflow_list_flows_summary',
   'seeflow_move_node',
@@ -254,6 +255,36 @@ describe('integration: MCP — read-only tools', () => {
       // Surfacing the issues helps debug if the schema gets stricter later.
       throw new Error(`Expected ok:true, got issues: ${JSON.stringify(data.issues)}`);
     }
+  });
+
+  it('seeflow_ids mints node ids with the canonical `node-` prefix', async () => {
+    const result = await client.callTool('seeflow_ids', { type: 'node', count: 6 });
+    const data = okJson<{ ids: string[] }>(result);
+    expect(data.ids).toHaveLength(6);
+    for (const id of data.ids) {
+      expect(/^node-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+    expect(new Set(data.ids).size).toBe(6);
+  });
+
+  it('seeflow_ids mints connector ids with the canonical `conn-` prefix', async () => {
+    const result = await client.callTool('seeflow_ids', { type: 'connector', count: 4 });
+    const data = okJson<{ ids: string[] }>(result);
+    expect(data.ids).toHaveLength(4);
+    for (const id of data.ids) {
+      expect(/^conn-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+  });
+
+  it('seeflow_ids returns isError for unknown types and out-of-range counts', async () => {
+    const badType = await client.callTool('seeflow_ids', { type: 'conn', count: 1 });
+    expect(badType.isError).toBe(true);
+
+    const tooMany = await client.callTool('seeflow_ids', { type: 'node', count: 101 });
+    expect(tooMany.isError).toBe(true);
+
+    const zero = await client.callTool('seeflow_ids', { type: 'node', count: 0 });
+    expect(zero.isError).toBe(true);
   });
 });
 

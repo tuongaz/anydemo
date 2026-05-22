@@ -28,6 +28,7 @@ import {
 } from './runtime.ts';
 import { FlowSchema } from './schema.ts';
 import { serve } from './server.ts';
+import { MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import { createStatusRunner } from './status-runner.ts';
 
 const DEFAULT_FLOW_PATH = '.seeflow/flow.json';
@@ -159,6 +160,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runValidate();
 } else if (sub === 'schema') {
   await runSchema();
+} else if (sub === 'ids') {
+  await runIds();
 } else if (sub === 'e2e') {
   await runE2e();
 } else {
@@ -200,6 +203,11 @@ Commands (work without a running studio):
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
   schema [<category>]  Get the flow.json schema. No arg → category index;
                        category arg → full JSON Schema(s) for that category
+  ids <type> <count>   Print <count> short ids of the given <type>, one per
+                       line. <type> is 'node' (-> 'node-...') or 'connector'
+                       (-> 'conn-...'). <count> is 1..100. Call once per type
+                       when seeding a flow.json (e.g. 'ids node 10', then
+                       'ids connector 12').
 
 Commands (require a running studio):
   flows:play <id> <n>  Trigger a play on node <n>
@@ -413,6 +421,25 @@ function reportDaemonFailure(logPath: string | undefined) {
   const tail = log.split('\n').slice(-50).join('\n');
   console.error(`\nLast lines of ${logPath}:`);
   console.error(tail || '(log is empty — daemon exited before writing anything)');
+}
+
+async function runIds() {
+  const typeArg = argv[1];
+  if (!typeArg || typeArg.startsWith('--')) {
+    printError("Missing required positional argument: type (expected 'node' or 'connector')");
+  }
+  if (!isIdType(typeArg)) {
+    printError(`Invalid type: ${typeArg} (expected 'node' or 'connector')`);
+  }
+  const rawCount = argv[2];
+  if (!rawCount || rawCount.startsWith('--')) {
+    printError(`Missing required positional argument: count (integer 1..${MAX_ID_COUNT})`);
+  }
+  const count = Number.parseInt(rawCount as string, 10);
+  if (!Number.isFinite(count) || count < 1 || count > MAX_ID_COUNT) {
+    printError(`Invalid count: ${rawCount} (expected an integer in [1, ${MAX_ID_COUNT}])`);
+  }
+  for (const id of generateIds(typeArg, count)) process.stdout.write(`${id}\n`);
 }
 
 async function printVersion() {

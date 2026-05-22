@@ -563,6 +563,51 @@ describe('integration: CLI — validate', () => {
   });
 });
 
+describe('integration: CLI — ids', () => {
+  // Pure compute — no studio touched. The whole point of these tests is to
+  // pin the wire format an AI / skill script consumes: one id per line on
+  // stdout, exit 0, prefix matches the operations.ts convention.
+  it('prints <count> node ids on stdout, one per line', async () => {
+    const r = await runCli(['ids', 'node', '7']);
+    expect(r.code).toBe(0);
+    expect(r.stderr).toBe('');
+    const lines = r.stdout.split('\n').filter((l) => l.length > 0);
+    expect(lines).toHaveLength(7);
+    for (const id of lines) {
+      expect(/^node-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+    expect(new Set(lines).size).toBe(7);
+  });
+
+  it('prints <count> connector ids with the `conn-` prefix', async () => {
+    const r = await runCli(['ids', 'connector', '3']);
+    expect(r.code).toBe(0);
+    const lines = r.stdout.split('\n').filter((l) => l.length > 0);
+    expect(lines).toHaveLength(3);
+    for (const id of lines) {
+      expect(/^conn-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+  });
+
+  it('rejects unknown types with a non-zero exit and a helpful stderr', async () => {
+    const r = await runCli(['ids', 'conn', '3']);
+    expect(r.code).not.toBe(0);
+    expect(r.stderr).toContain('Invalid type: conn');
+    expect(r.stderr).toContain('node');
+    expect(r.stderr).toContain('connector');
+  });
+
+  it('rejects count > 100 and count < 1', async () => {
+    const tooMany = await runCli(['ids', 'node', '101']);
+    expect(tooMany.code).not.toBe(0);
+    expect(tooMany.stderr).toContain('Invalid count: 101');
+
+    const zero = await runCli(['ids', 'node', '0']);
+    expect(zero.code).not.toBe(0);
+    expect(zero.stderr).toContain('Invalid count: 0');
+  });
+});
+
 describe('integration: CLI — e2e', () => {
   // e2e iterates every playNode + statusNode and runs them. With no
   // playNodes/statusNodes, both arrays are empty and the validator

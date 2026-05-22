@@ -32,6 +32,7 @@ describe('COMMAND_MANIFEST', () => {
         'connectors:delete',
         'validate',
         'schema',
+        'ids',
         'e2e',
       ].sort(),
     );
@@ -65,8 +66,24 @@ describe('COMMAND_MANIFEST', () => {
     expect(e2e?.outputKind).toBe('stream');
   });
 
+  it('labels the ids command with outputKind: "text"', () => {
+    const ids = COMMAND_MANIFEST.find((e) => e.name === 'ids');
+    expect(ids?.outputKind).toBe('text');
+  });
+
+  it('locks the ids command shape: `<type> <count>`, no flags, both examples present', () => {
+    const ids = COMMAND_MANIFEST.find((e) => e.name === 'ids');
+    expect(ids).toBeDefined();
+    expect(ids?.synopsis).toBe('seeflow ids <type> <count>');
+    expect(ids?.args.map((a) => a.name)).toEqual(['type', 'count']);
+    expect(ids?.args.every((a) => a.required)).toBe(true);
+    expect(ids?.flags).toEqual([]);
+    expect(ids?.requiresStudio).toBe(false);
+    expect(ids?.examples).toEqual(['seeflow ids node 10', 'seeflow ids connector 5']);
+  });
+
   it('every other command defaults outputKind to "json" (or leaves it undefined)', () => {
-    const textOrStream = new Set(['start', 'stop', 'flows:play', 'e2e']);
+    const textOrStream = new Set(['start', 'stop', 'flows:play', 'e2e', 'ids']);
     for (const entry of COMMAND_MANIFEST) {
       if (textOrStream.has(entry.name)) continue;
       expect(entry.outputKind ?? 'json').toBe('json');

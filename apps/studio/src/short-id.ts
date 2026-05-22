@@ -22,3 +22,27 @@ export function shortId(len = 10): string {
   }
   return out;
 }
+
+// Public id-type vocabulary shared by the CLI (`seeflow ids`), the REST API
+// (`GET /api/ids/:type/:count`), and the MCP tool (`seeflow_ids`). Internal
+// prefix `conn-` stays canonical (operations.ts mints connectors as
+// `conn-…`); the friendlier word `connector` is what callers pass.
+export const ID_TYPES = ['node', 'connector'] as const;
+export type IdType = (typeof ID_TYPES)[number];
+
+export const ID_PREFIX_BY_TYPE: Record<IdType, string> = {
+  node: 'node-',
+  connector: 'conn-',
+};
+
+export const MAX_ID_COUNT = 100;
+
+export const isIdType = (v: unknown): v is IdType =>
+  typeof v === 'string' && (ID_TYPES as readonly string[]).includes(v);
+
+export function generateIds(type: IdType, count: number): string[] {
+  const prefix = ID_PREFIX_BY_TYPE[type];
+  const out: string[] = new Array(count);
+  for (let i = 0; i < count; i++) out[i] = `${prefix}${shortId()}`;
+  return out;
+}

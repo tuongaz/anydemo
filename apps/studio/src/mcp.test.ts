@@ -118,6 +118,7 @@ describe('POST /mcp tools/list', () => {
       'seeflow_get_flow',
       'seeflow_get_flow_graph',
       'seeflow_get_node',
+      'seeflow_ids',
       'seeflow_list_flows',
       'seeflow_list_flows_summary',
       'seeflow_move_node',
@@ -194,6 +195,85 @@ describe('seeflow_schema', () => {
     const msg = expectError(envelope);
     expect(msg).toContain('unknown schema category: bogus');
     expect(msg).toContain('flow');
+  });
+});
+
+describe('seeflow_ids', () => {
+  it('returns count ids with the node prefix', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_ids', { type: 'node', count: 4 });
+    const body = expectOk(envelope) as { ids: string[] };
+    expect(body.ids).toHaveLength(4);
+    for (const id of body.ids) {
+      expect(/^node-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+    expect(new Set(body.ids).size).toBe(4);
+  });
+
+  it('returns count ids with the connector → `conn-` prefix', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_ids', { type: 'connector', count: 2 });
+    const body = expectOk(envelope) as { ids: string[] };
+    expect(body.ids).toHaveLength(2);
+    for (const id of body.ids) {
+      expect(/^conn-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+    }
+  });
+
+  it('accepts the upper bound (100) and rejects 101', async () => {
+    const { app } = buildApp();
+    const okEnv = await callTool(app, 'seeflow_ids', { type: 'node', count: 100 });
+    expect((expectOk(okEnv) as { ids: string[] }).ids).toHaveLength(100);
+
+    const badEnv = await callTool(app, 'seeflow_ids', { type: 'node', count: 101 });
+    expect(expectError(badEnv)).toContain('invalid count: 101');
+  });
+
+  it('rejects unknown types (e.g. `conn`, capitalised, empty)', async () => {
+    const { app } = buildApp();
+    for (const bad of ['conn', 'Node', '', 'flow']) {
+      const env = await callTool(app, 'seeflow_ids', { type: bad, count: 1 });
+      const msg = expectError(env);
+      expect(msg).toContain(`invalid type: ${bad}`);
+      expect(msg).toContain('node');
+      expect(msg).toContain('connector');
+    }
+  });
+
+  it('rejects non-integer / zero / negative counts', async () => {
+    const { app } = buildApp();
+    for (const bad of [0, -1, 1.5, Number.NaN]) {
+      const env = await callTool(app, 'seeflow_ids', { type: 'node', count: bad });
+      expect(expectError(env)).toContain('invalid count:');
+    }
+  });
+
+  it('rejects missing args', async () => {
+    const { app } = buildApp();
+    const env1 = await callTool(app, 'seeflow_ids', { count: 1 });
+    expect(expectError(env1)).toContain('invalid type:');
+    const env2 = await callTool(app, 'seeflow_ids', { type: 'node' });
+    expect(expectError(env2)).toContain('invalid count:');
+  });
+
+  it('advertises an inputSchema with the type enum and count bounds', async () => {
+    const { app } = buildApp();
+    const envelope = await mcpRequest(app, 'tools/list', {});
+    const tool = (envelope.result?.tools ?? []).find((t) => t.name === 'seeflow_ids');
+    expect(tool).toBeDefined();
+    const schema = tool?.inputSchema as {
+      type: string;
+      properties: {
+        type: { type: string; enum: string[] };
+        count: { type: string; minimum: number; maximum: number };
+      };
+      required: string[];
+    };
+    expect(schema.type).toBe('object');
+    expect(schema.properties.type.enum).toEqual(['node', 'connector']);
+    expect(schema.properties.count.minimum).toBe(1);
+    expect(schema.properties.count.maximum).toBe(100);
+    expect(schema.required.sort()).toEqual(['count', 'type']);
   });
 });
 

@@ -19,6 +19,7 @@ const EXPECTED_TOOL_NAMES = [
   'seeflow_get_flow',
   'seeflow_get_flow_graph',
   'seeflow_get_node',
+  'seeflow_ids',
   'seeflow_list_flows',
   'seeflow_list_flows_summary',
   'seeflow_move_node',

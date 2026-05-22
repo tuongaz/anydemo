@@ -363,6 +363,50 @@ describe('integration: REST — flow lifecycle', () => {
       expect(existsSync(flowPath)).toBe(true);
     });
   });
+
+  describe('GET /api/ids/:type/:count', () => {
+    // Pure compute, exercised through the full server route. End-to-end smoke
+    // test for the wire format an AI / skill script consumes when pre-minting
+    // ids before assembling a flow.json.
+    it('returns count node ids with the `node-` prefix', async () => {
+      const res = await fetch(`${studio.baseURL}/api/ids/node/8`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; ids: string[] };
+      expect(body.ok).toBe(true);
+      expect(body.ids).toHaveLength(8);
+      for (const id of body.ids) {
+        expect(/^node-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+      }
+      expect(new Set(body.ids).size).toBe(8);
+    });
+
+    it('returns count connector ids with the `conn-` prefix', async () => {
+      const res = await fetch(`${studio.baseURL}/api/ids/connector/4`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as { ok: boolean; ids: string[] };
+      expect(body.ok).toBe(true);
+      expect(body.ids).toHaveLength(4);
+      for (const id of body.ids) {
+        expect(/^conn-[A-Za-z0-9]{10}$/.test(id)).toBe(true);
+      }
+    });
+
+    it('returns 400 for an unknown type', async () => {
+      const res = await fetch(`${studio.baseURL}/api/ids/conn/3`);
+      expect(res.status).toBe(400);
+      const body = (await res.json()) as { ok: boolean; error: string };
+      expect(body.ok).toBe(false);
+      expect(body.error).toContain('invalid type: conn');
+    });
+
+    it('returns 400 for count > 100 or < 1', async () => {
+      const tooMany = await fetch(`${studio.baseURL}/api/ids/node/101`);
+      expect(tooMany.status).toBe(400);
+
+      const zero = await fetch(`${studio.baseURL}/api/ids/node/0`);
+      expect(zero.status).toBe(400);
+    });
+  });
 });
 
 describe('integration: REST — nodes', () => {

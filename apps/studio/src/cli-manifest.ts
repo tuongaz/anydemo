@@ -517,6 +517,37 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     examples: ['seeflow validate --file .seeflow/flow.json'],
   },
   {
+    name: 'ids',
+    synopsis: 'seeflow ids <type> <count>',
+    description:
+      'Generate <count> canonical short ids of the given <type>, one per line ' +
+      'on stdout. <type> must be `node` (emits `node-<10 base62 chars>`) or ' +
+      '`connector` (emits `conn-<10 base62 chars>`). <count> must be an ' +
+      'integer in [1, 100]. Uses the same alphabet, length, and rejection-' +
+      'sampling logic as the canvas / server / upload regex, so skill-minted ' +
+      'ids match every other id producer in the studio. Pure compute — no ' +
+      'studio required. Call once per type (i.e. one call for nodes, one for ' +
+      'connectors) when seeding a flow.json.',
+    category: 'meta',
+    args: [
+      {
+        name: 'type',
+        required: true,
+        description: "Id kind to generate: 'node' (→ `node-…`) or 'connector' (→ `conn-…`)",
+      },
+      {
+        name: 'count',
+        required: true,
+        description: 'How many ids to print (integer, 1..100)',
+      },
+    ],
+    flags: [],
+    outputKind: 'text',
+    outputs: {},
+    requiresStudio: false,
+    examples: ['seeflow ids node 10', 'seeflow ids connector 5'],
+  },
+  {
     name: 'schema',
     synopsis: 'seeflow schema [<category>]',
     description:

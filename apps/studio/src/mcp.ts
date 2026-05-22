@@ -21,6 +21,7 @@ import {
 } from './operations.ts';
 import type { Registry } from './registry.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
+import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { FlowWatcher } from './watcher.ts';
 
 export interface CreateMcpServerOptions {
@@ -229,6 +230,57 @@ const buildTools = (ops: Operations): McpTool[] => [
         );
       }
       return okResult({ name, schemas: payload.schemas, notes: payload.notes });
+    },
+  },
+  {
+    name: 'seeflow_ids',
+    description:
+      'Batch-mint canonical short ids. `type` is `node` (emits `node-<10 base62 chars>`) ' +
+      'or `connector` (emits `conn-<10 base62 chars>`); `count` is an integer in ' +
+      '[1, 100]. Pure compute — no flow side effects, no studio state read. Use ' +
+      'before authoring a flow.json so minted ids match every other id producer ' +
+      'in the studio (canvas, server, upload regex). Call once per type when ' +
+      'seeding a flow (one call for nodes, one for connectors).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        type: {
+          type: 'string',
+          enum: [...ID_TYPES],
+          description: "Id kind: 'node' (→ `node-…`) or 'connector' (→ `conn-…`)",
+        },
+        count: {
+          type: 'integer',
+          minimum: 1,
+          maximum: MAX_ID_COUNT,
+          description: `How many ids to mint (1..${MAX_ID_COUNT})`,
+        },
+      },
+      required: ['type', 'count'],
+      additionalProperties: false,
+    },
+    handler: async (args) => {
+      const body =
+        args && typeof args === 'object' && !Array.isArray(args)
+          ? (args as { type?: unknown; count?: unknown })
+          : {};
+      const { type, count } = body;
+      if (!isIdType(type)) {
+        return errorResult(
+          `invalid type: ${String(type)} (expected one of: ${ID_TYPES.join(', ')})`,
+        );
+      }
+      if (
+        typeof count !== 'number' ||
+        !Number.isInteger(count) ||
+        count < 1 ||
+        count > MAX_ID_COUNT
+      ) {
+        return errorResult(
+          `invalid count: ${String(count)} (expected an integer in [1, ${MAX_ID_COUNT}])`,
+        );
+      }
+      return okResult({ ids: generateIds(type, count) });
     },
   },
   {
