@@ -41,7 +41,10 @@ import { writeSdkEmitIfNeeded } from './sdk-writer.ts';
 import { shortId } from './short-id.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
 
-const DEFAULT_FLOW_RELATIVE_PATH = '.seeflow/flow.json';
+// projects:create writes flow.json at the project root (no `.seeflow/`
+// envelope). flows:register still defaults to `.seeflow/flow.json` for
+// existing repos that use the nested convention; CLI register handles that.
+const PROJECT_FLOW_RELATIVE_PATH = 'flow.json';
 
 export const RegisterBodySchema = z.object({
   name: z.string().min(1).optional(),
@@ -1133,7 +1136,7 @@ export async function createProjectImpl(
   const { registry, watcher } = deps;
   const { path: folderPath, name, description } = body;
 
-  const demoFullPath = join(folderPath, DEFAULT_FLOW_RELATIVE_PATH);
+  const demoFullPath = join(folderPath, PROJECT_FLOW_RELATIVE_PATH);
 
   if (existsSync(demoFullPath)) {
     return { kind: 'alreadyExists', path: folderPath };
@@ -1149,7 +1152,7 @@ export async function createProjectImpl(
   };
 
   try {
-    mkdirSync(join(folderPath, '.seeflow'), { recursive: true });
+    mkdirSync(folderPath, { recursive: true });
     writeFileSync(demoFullPath, `${JSON.stringify(scaffold, null, 2)}\n`);
   } catch (err) {
     return { kind: 'scaffoldFailed', message: err instanceof Error ? err.message : String(err) };
@@ -1169,7 +1172,7 @@ export async function createProjectImpl(
     name,
     description,
     repoPath: folderPath,
-    flowPath: DEFAULT_FLOW_RELATIVE_PATH,
+    flowPath: PROJECT_FLOW_RELATIVE_PATH,
     valid: true,
     lastModified,
   });

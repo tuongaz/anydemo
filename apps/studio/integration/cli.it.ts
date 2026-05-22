@@ -172,7 +172,7 @@ describe('integration: CLI — projects + flows', () => {
     expect(typeof body.id).toBe('string');
     expect(typeof body.slug).toBe('string');
 
-    expect(existsSync(join(projectPath, '.seeflow', 'flow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, 'flow.json'))).toBe(true);
   });
 
   it('flows:list returns the registry as { ok, flows: [...] }', async () => {

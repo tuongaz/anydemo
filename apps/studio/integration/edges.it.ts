@@ -45,12 +45,12 @@ async function createProject(
 }
 
 function readFlowJson(workspace: string, slug: string): OnDiskFlow {
-  const path = join(workspace, slug, '.seeflow', 'flow.json');
+  const path = join(workspace, slug, 'flow.json');
   return JSON.parse(readFileSync(path, 'utf8')) as OnDiskFlow;
 }
 
 function readStyleJson(workspace: string, slug: string): OnDiskStyle {
-  const path = join(workspace, slug, '.seeflow', 'style.json');
+  const path = join(workspace, slug, 'style.json');
   if (!existsSync(path)) return {};
   return JSON.parse(readFileSync(path, 'utf8')) as OnDiskStyle;
 }
@@ -176,7 +176,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
         nodes: [{ id: 'edge-1', type: 'shapeNode', data: { shape: 'rectangle', name: 'Edge' } }],
         connectors: [],
       };
-      const flowPath = join(studio.workspace, project.slug, '.seeflow', 'flow.json');
+      const flowPath = join(studio.workspace, project.slug, 'flow.json');
       writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
 
       // PRD: arrives within 1s. Watcher debounce is 100ms so this is plenty.

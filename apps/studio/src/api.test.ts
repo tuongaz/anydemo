@@ -3591,7 +3591,7 @@ describe('DELETE /api/flows/:id', () => {
 });
 
 describe('POST /api/projects', () => {
-  it('scaffolds a fresh project (folder + .seeflow/flow.json) at the supplied path', async () => {
+  it('scaffolds a fresh project (folder + flow.json) at the supplied path', async () => {
     const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-create-fresh-'));
     const projectPath = join(baseDir, 'fresh-project');
     const registry = createRegistry({ path: tmpRegistry() });
@@ -3613,8 +3613,9 @@ describe('POST /api/projects', () => {
     expect(body.slug).toBe('fresh-project');
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0]?.repoPath).toBe(projectPath);
+    expect(registry.list()[0]?.flowPath).toBe('flow.json');
 
-    const written = JSON.parse(readFileSync(join(projectPath, '.seeflow', 'flow.json'), 'utf-8'));
+    const written = JSON.parse(readFileSync(join(projectPath, 'flow.json'), 'utf-8'));
     expect(written).toEqual({ version: 2, name: 'Fresh Project', nodes: [], connectors: [] });
   });
 
@@ -3636,7 +3637,7 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.status).toBe(200);
-    const written = JSON.parse(readFileSync(join(projectPath, '.seeflow', 'flow.json'), 'utf-8'));
+    const written = JSON.parse(readFileSync(join(projectPath, 'flow.json'), 'utf-8'));
     expect(written).toEqual({
       version: 2,
       name: 'Described Project',
@@ -3647,13 +3648,13 @@ describe('POST /api/projects', () => {
     expect(registry.list()[0]?.description).toBe('A project with a description');
   });
 
-  it('returns 409 when the target already has a .seeflow/flow.json', async () => {
+  it('returns 409 when the target already has a flow.json', async () => {
     const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-create-existing-'));
     const projectPath = join(baseDir, 'existing-project');
-    mkdirSync(join(projectPath, '.seeflow'), { recursive: true });
+    mkdirSync(projectPath, { recursive: true });
     const existingDemo = { version: 2, name: 'Existing Project', nodes: [], connectors: [] };
-    writeFileSync(join(projectPath, '.seeflow', 'flow.json'), JSON.stringify(existingDemo));
-    const beforeBytes = readFileSync(join(projectPath, '.seeflow', 'flow.json'), 'utf-8');
+    writeFileSync(join(projectPath, 'flow.json'), JSON.stringify(existingDemo));
+    const beforeBytes = readFileSync(join(projectPath, 'flow.json'), 'utf-8');
 
     const registry = createRegistry({ path: tmpRegistry() });
     const app = createApp({
@@ -3672,7 +3673,7 @@ describe('POST /api/projects', () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain(projectPath);
     // Existing flow.json is untouched and not registered.
-    expect(readFileSync(join(projectPath, '.seeflow', 'flow.json'), 'utf-8')).toBe(beforeBytes);
+    expect(readFileSync(join(projectPath, 'flow.json'), 'utf-8')).toBe(beforeBytes);
     expect(registry.list()).toHaveLength(0);
   });
 

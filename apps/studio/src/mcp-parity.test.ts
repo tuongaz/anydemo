@@ -139,7 +139,7 @@ interface ProjectFixture {
 
 // create_project fixture: empty tmp dir + a derived project folder path the
 // tool will scaffold into. The tool itself writes
-// <projectPath>/.seeflow/flow.json and registers it.
+// <projectPath>/flow.json and registers it.
 const buildProjectFixture = (name: string): ProjectFixture => {
   const registry = createRegistry({ path: tmpRegistryPath() });
   const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-parity-proj-'));
@@ -159,7 +159,7 @@ const buildProjectFixture = (name: string): ProjectFixture => {
     app,
     registry,
     projectPath,
-    demoFile: join(projectPath, '.seeflow', 'flow.json'),
+    demoFile: join(projectPath, 'flow.json'),
   };
 };
 

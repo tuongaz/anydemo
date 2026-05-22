@@ -86,12 +86,12 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
 }
 
 async function readFlowJson(slug: string): Promise<OnDiskFlow> {
-  const path = join(studio.workspace, slug, '.seeflow', 'flow.json');
+  const path = join(studio.workspace, slug, 'flow.json');
   return JSON.parse(await Bun.file(path).text()) as OnDiskFlow;
 }
 
 async function readStyleJson(slug: string): Promise<OnDiskStyle> {
-  const path = join(studio.workspace, slug, '.seeflow', 'style.json');
+  const path = join(studio.workspace, slug, 'style.json');
   if (!existsSync(path)) return {};
   return JSON.parse(await Bun.file(path).text()) as OnDiskStyle;
 }
@@ -135,7 +135,7 @@ describe('integration: REST — flow lifecycle', () => {
       expect(created.id).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(created.slug).toBeTruthy();
 
-      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+      const flowPath = join(studio.workspace, created.slug, 'flow.json');
       expect(existsSync(flowPath)).toBe(true);
       const parsed = JSON.parse(await Bun.file(flowPath).text()) as {
         version: number;
@@ -193,7 +193,7 @@ describe('integration: REST — flow lifecycle', () => {
       const created = await createProject(name);
 
       // Patch flow.json on disk to add a description.
-      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+      const flowPath = join(studio.workspace, created.slug, 'flow.json');
       const raw = JSON.parse(await Bun.file(flowPath).text());
       raw.description = 'integration summary';
       writeFileSync(flowPath, `${JSON.stringify(raw, null, 2)}\n`);
@@ -203,7 +203,7 @@ describe('integration: REST — flow lifecycle', () => {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           repoPath: join(studio.workspace, created.slug),
-          flowPath: '.seeflow/flow.json',
+          flowPath: 'flow.json',
         }),
       });
 
@@ -339,7 +339,7 @@ describe('integration: REST — flow lifecycle', () => {
     it('removes the flow from the registry (file on disk is untouched)', async () => {
       const name = uniqueFlowId('delete-flow');
       const created = await createProject(name);
-      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+      const flowPath = join(studio.workspace, created.slug, 'flow.json');
       expect(existsSync(flowPath)).toBe(true);
 
       // Sanity: registered.
@@ -752,7 +752,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
   });
 
   describe('external flow.json edit', () => {
-    // Watcher fires fs.watch on <workspace>/<slug>/.seeflow/, debounces 100ms,
+    // Watcher fires fs.watch on the project root (<workspace>/<slug>/), debounces 100ms,
     // computes the combined flow+style hash, and if it doesn't match a recent
     // own-write hash, broadcasts `flow:reload` with the merged payload. An
     // external writeFileSync from this test isn't in the writtenHashes ring,
@@ -760,7 +760,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
     it('triggers a flow:reload SSE event after writing a modified flow.json to disk', async () => {
       const name = uniqueFlowId('external-edit');
       const created = await createProject(name);
-      const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
+      const flowPath = join(studio.workspace, created.slug, 'flow.json');
 
       const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
       try {
