@@ -29,7 +29,19 @@ Turn a natural-language prompt into a registered SeeFlow flow under `<project>/.
 |---|---|
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
 | `$repoPath` | `$PWD`. |
+| `$SEEFLOW_TMP` | `$repoPath/.seeflow/.tmp/` — project-local scratch directory. Create on demand (`mkdir -p`), write all intermediate files here, **never** under system `/tmp`. Already inside the project tree, so no extra write permission is needed. Cleaned up at end of the run (see "Scratch files & cleanup"). |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
+
+### Scratch files & cleanup
+
+Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The project-local path requires no extra permission, survives the run for debugging, and is gitignored by convention (`.seeflow/.tmp/` is already covered by the `.seeflow/` listing in most repos; add it explicitly if not).
+
+**Lifecycle:**
+
+1. **Create on first use** — `mkdir -p "$SEEFLOW_TMP"` inside any script or wrapper that writes there. Idempotent, costs nothing.
+2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `.seeflow/.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
+3. **Cleanup at end of run** — after Phase 6 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
+4. **Never check in** — if `.seeflow/.tmp/` is not yet gitignored, add it before committing.
 
 **Every flow mutation goes through the CLI.** The studio's `ResolvedFlowSchema` validates every write server-side — there is no separate validation step. **Don't memorise CLI syntax** — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
@@ -73,6 +85,8 @@ Full text in `references/core-rules.md`:
 - **Bypassing the Phase 0 consent check.** Never default to `enabled: true`; always read `~/.seeflow/consent.json` first.
 - **Touching `status` after the initial `pending` write.** The `SessionEnd` hook owns that field — see `feedback.md`.
 - **Logging without a redacted summary.** If the summary would leak a path, hostname, project name, or prompt text, **skip the entry** rather than emit a leaky one.
+- **Writing scratch files to `/tmp` (or `$TMPDIR`).** Use `$SEEFLOW_TMP` (`<project>/.seeflow/.tmp/`) — project-local, no permission prompts, and cleaned up at end of run. Same rule applies to scripts the Phase 4 designers emit.
+- **Forgetting to clean `$SEEFLOW_TMP` after a successful run.** Leave it in place on failure (debugging trail); `rm -rf "$SEEFLOW_TMP"` after Phase 6 prints the final `Flow registered` line on success.
 
 ## Phase 0 — pre-flight (parallel)
 
@@ -253,7 +267,7 @@ If the play-designer emitted `newTriggerNodes`, batch them via `flow:add-bulk` (
 
 Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of any Phase 4 overlays whose `validationSafe === false` (third-party or paid actions); skipped nodes appear in `skipped[]`, not as failures. Body / flag details: `$SEEFLOW help e2e`.
 
-**`ok: true`** → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`. Done.
+**`ok: true`** → print `Flow "<name>" registered as <slug>. Open: $STUDIO_URL/d/<slug>`, then `rm -rf "$SEEFLOW_TMP"` to clear project-local scratch. Done.
 
 **`ok: false`** fix-up loop:
 

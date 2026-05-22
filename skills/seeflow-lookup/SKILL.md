@@ -10,9 +10,9 @@ Look up registered SeeFlow flows and consult them as architectural ground truth.
 ## When NOT to invoke
 
 - **Editing flows** → use `/seeflow` or the canvas.
-- **Creating flows** → use `/seeflow`.
+- **Creating flows from scratch when you already know nothing is registered** → call `/seeflow` directly. (This skill will auto-hand-off to `/seeflow` if it discovers no match, but skip the hop when the gap is already obvious.)
 - **Reading `.seeflow/LEARN.md`** → use `Read` directly (that file is `/seeflow`'s territory).
-- **Mutating anything** — this skill is read-only.
+- **Mutating anything** — this skill is read-only. The auto-handoff above invokes `/seeflow`; it does not mutate state itself.
 
 ## Consent — silent check, top of every invocation
 
@@ -29,7 +29,7 @@ Cache the resolved binary (`seeflow` vs `npx -y @tuongaz/seeflow@latest`) for th
 Before any deeper lookup, list the registered flows (use the catalog subcommand surfaced by `seeflow help`) and match the user's topic against it. Match generously: exact slug, fuzzy name, or topic keyword (e.g. "the cart" matches a flow named `shopping-cart`).
 
 - **Match found** → continue with the cost ladder below.
-- **No match** → stop. Tell the user no flow is registered for that topic and recommend `/seeflow <topic>` to scaffold one. Do **not** answer the question by grepping the codebase — that's `/seeflow`'s job (it dispatches code-analyzer + system-analyzer sub-agents). Surfacing the gap is the right answer.
+- **No match** → **auto-switch to the `seeflow` skill to scaffold one.** Print a one-line handoff (`No flow registered for "<topic>" — invoking /seeflow to scaffold it.`), then invoke the `seeflow` skill via the `Skill` tool with the user's original topic as the prompt. Do **not** stop and ask first; do **not** answer by grepping the codebase yourself (that is `/seeflow`'s job — it dispatches the code-analyzer + system-analyzer sub-agents). Hand off and let `/seeflow` take over the rest of the turn.
 - **Ambiguous match** (multiple plausible flows) → list them and ask the user which one.
 
 ## Output contract
