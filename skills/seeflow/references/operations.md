@@ -22,8 +22,8 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | Phase | Subcommand | Purpose |
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
-| P3 | (Write) | Author the empty envelope at `<project>/.seeflow/<slug>/flow.json` per `$SEEFLOW schema flow` (planner-supplied `name`, empty arrays) — never `projects:create` |
-| P3 | `register` | Validate the empty envelope and register the project at `<project>/.seeflow/<slug>/flow.json` — required before the canvas can open at `$STUDIO_URL/d/<slug>` |
+| P3 | `projects:create` | Scaffold + register a new project: writes the empty envelope at `<project>/.seeflow/flow.json` from the planner-supplied `name` (and `description`) and registers it in one shot — returns `{ id, slug }`. Required before the canvas can open at `$STUDIO_URL/d/<slug>` |
+| P3 | `register` | Fallback for the `alreadyExists` exit from `projects:create` (envelope already on disk) — registers an existing `<project>/.seeflow/flow.json` without overwriting |
 | P3 | `ids` | Mint canonical `node-<10>` / `conn-<10>` ids |
 | P3 | `flow:add-bulk` | Atomic seed of skeleton nodes + connectors in one transactional write (rollback covers both arrays) |
 | P3 | `flows:layout` | Run ELK; rewrite style.json positions |

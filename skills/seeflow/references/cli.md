@@ -22,13 +22,20 @@ exist.
 
 `help` documents most `<flowId>` arguments as "Flow id or slug" — but the
 server currently only resolves by id (`flowNotFound` if a slug is passed).
-**Use the `id` returned by `register` for every follow-up call.**
-(`projects:create` exists but scaffolds to `~/.seeflow/<slug>/` — wrong
-location for the project-local flow this skill creates. Always author
-the empty envelope under `<project>/.seeflow/<slug>/flow.json` and
-register it via `register --path <project> --flow .seeflow/<slug>/flow.json`.)
-Treat the slug as a URL convenience (the canvas opens at `$STUDIO_URL/d/<slug>`),
-not as an addressable identifier from the CLI.
+**Use the `id` returned by `projects:create` (or `register`) for every
+follow-up call.** Treat the slug as a URL convenience (the canvas opens
+at `$STUDIO_URL/d/<slug>`), not as an addressable identifier from the CLI.
+
+## New project vs existing project
+
+- **New project (no `<repoPath>/.seeflow/flow.json` yet)** — use
+  `projects:create --path <repoPath> --name <name> [--description <text>]`.
+  The CLI writes the empty envelope and registers it in one step,
+  returning `{ id, slug }`. This is the default for `/seeflow`'s Phase 3.
+- **Existing project (envelope already on disk)** — use
+  `register --path <repoPath>` (default `--flow ./.seeflow/flow.json`)
+  to register the existing file. `projects:create` exits with
+  `alreadyExists` (code 4) here; fall back to `register` and continue.
 
 ## Generating canonical ids
 
