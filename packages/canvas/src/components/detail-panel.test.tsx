@@ -671,7 +671,6 @@ describe('DetailPanel (connector)', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'default',
           label: 'links',
         },
         onClose: () => {},

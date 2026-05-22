@@ -76,7 +76,6 @@ const CONNECTOR_FLOW_KEYS = new Set([
   'id',
   'source',
   'target',
-  'kind',
   'label',
   'method',
   'url',

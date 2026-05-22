@@ -101,15 +101,6 @@ const DEFAULT_STROKE_WIDTH = 2;
 // than the harsher 0px the schema would imply.
 const DEFAULT_CORNER_RADIUS = 8;
 
-// Mirrors connector-to-edge.ts STYLE_BY_KIND so the active highlight matches
-// the rendered edge before the user has set an explicit override.
-const KIND_DEFAULT_STYLE: Record<Connector['kind'], ConnectorStyle> = {
-  http: 'solid',
-  event: 'dashed',
-  queue: 'dotted',
-  default: 'solid',
-};
-
 const PALETTE_TOKENS: ColorToken[] = [
   'default',
   'slate',
@@ -214,9 +205,7 @@ export function StyleStrip({
     | 'solid'
     | 'dashed'
     | 'dotted';
-  const connectorStyleActive: ConnectorStyle = firstConnector
-    ? (firstConnector.style ?? KIND_DEFAULT_STYLE[firstConnector.kind])
-    : 'solid';
+  const connectorStyleActive: ConnectorStyle = firstConnector?.style ?? 'solid';
   const directionActive = (firstConnector?.direction ?? 'forward') as ConnectorDirection;
   const pathActive = (firstConnector?.path ?? 'curve') as ConnectorPath;
 

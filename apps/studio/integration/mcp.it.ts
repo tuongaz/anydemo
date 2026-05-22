@@ -370,7 +370,7 @@ describe('integration: MCP — node tools', () => {
       ],
       // Connector references nodes from the same batch — only valid because the
       // merged-graph parse runs once after both arrays land.
-      connectors: [{ id: 'm1-to-m2', source: 'm1', target: 'm2', kind: 'default' }],
+      connectors: [{ id: 'm1-to-m2', source: 'm1', target: 'm2' }],
     });
     const data = okJson<{
       ok: boolean;
@@ -444,7 +444,7 @@ describe('integration: MCP — node tools', () => {
     const connRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'c-ab', source: 'a', target: 'b', kind: 'default' }),
+      body: JSON.stringify({ id: 'c-ab', source: 'a', target: 'b' }),
     });
     expect(connRes.status).toBe(200);
 
@@ -473,7 +473,7 @@ describe('integration: MCP — connector tools', () => {
 
     const result = await client.callTool('seeflow_add_connector', {
       flowId: seeded.id,
-      connector: { id: 'c1', source: 'a', target: 'b', kind: 'default' },
+      connector: { id: 'c1', source: 'a', target: 'b' },
     });
     const data = okJson<{ ok: boolean; id: string }>(result);
     expect(data.ok).toBe(true);
@@ -486,7 +486,7 @@ describe('integration: MCP — connector tools', () => {
     const addRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b' }),
     });
     expect(addRes.status).toBe(200);
 
@@ -511,7 +511,7 @@ describe('integration: MCP — connector tools', () => {
     const addRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b' }),
     });
     expect(addRes.status).toBe(200);
 

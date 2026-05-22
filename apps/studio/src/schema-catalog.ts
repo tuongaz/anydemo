@@ -8,15 +8,12 @@
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
-  FlowDefaultConnectorSchema,
+  FlowConnectorSchema,
   FlowEnvelopeSchema,
-  FlowEventConnectorSchema,
   FlowHtmlNodeSchema,
-  FlowHttpConnectorSchema,
   FlowIconNodeSchema,
   FlowImageNodeSchema,
   FlowPlayNodeSchema,
-  FlowQueueConnectorSchema,
   FlowShapeNodeSchema,
   FlowStateNodeSchema,
   PlayActionSchema,
@@ -51,7 +48,7 @@ const CATEGORIES: SchemaCategory[] = [
   },
   {
     name: 'connector',
-    description: 'All four connector kinds (http, event, queue, default).',
+    description: 'Edge between two nodes (id/source/target + optional label/style/metadata).',
   },
   {
     name: 'action',
@@ -81,10 +78,7 @@ const PAYLOADS: Record<string, SchemaPayload> = {
   },
   connector: {
     schemas: {
-      http: toJsonSchema(FlowHttpConnectorSchema),
-      event: toJsonSchema(FlowEventConnectorSchema),
-      queue: toJsonSchema(FlowQueueConnectorSchema),
-      default: toJsonSchema(FlowDefaultConnectorSchema),
+      connector: toJsonSchema(FlowConnectorSchema),
     },
     notes: [],
   },

@@ -445,7 +445,7 @@ describe('integration: REST — nodes', () => {
           { id: 'b3', type: 'shapeNode', data: { shape: 'sticky', name: 'B3' } },
         ],
         // Connector references nodes from THIS batch — proves transactional shape.
-        connectors: [{ id: 'b1-to-b2', source: 'b1', target: 'b2', kind: 'default' }],
+        connectors: [{ id: 'b1-to-b2', source: 'b1', target: 'b2' }],
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -531,8 +531,8 @@ describe('integration: REST — nodes', () => {
       await seedShapeNodes(created.id, ['a', 'b']);
       const connRes = await postJson(`/api/flows/${created.id}/bulk`, {
         connectors: [
-          { id: 'a-b', source: 'a', target: 'b', kind: 'default' },
-          { id: 'b-a', source: 'b', target: 'a', kind: 'default' },
+          { id: 'a-b', source: 'a', target: 'b' },
+          { id: 'b-a', source: 'b', target: 'a' },
         ],
       });
       expect(connRes.status).toBe(200);
@@ -561,7 +561,6 @@ describe('integration: REST — connectors', () => {
         id: 'c1',
         source: 'a',
         target: 'b',
-        kind: 'default',
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as { ok: boolean; id: string };
@@ -574,7 +573,6 @@ describe('integration: REST — connectors', () => {
         id: 'c1',
         source: 'a',
         target: 'b',
-        kind: 'default',
       });
     });
   });
@@ -587,7 +585,6 @@ describe('integration: REST — connectors', () => {
         id: 'c1',
         source: 'a',
         target: 'b',
-        kind: 'default',
       });
 
       const res = await patchJson(`/api/flows/${created.id}/connectors/c1`, {
@@ -611,7 +608,6 @@ describe('integration: REST — connectors', () => {
         id: 'c1',
         source: 'a',
         target: 'b',
-        kind: 'default',
       });
 
       const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors/c1`, {
@@ -642,7 +638,6 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
         type: 'playNode',
         data: {
           name: 'Play',
-          kind: 'http',
           stateSource: { kind: 'request' },
           playAction: {
             kind: 'script',

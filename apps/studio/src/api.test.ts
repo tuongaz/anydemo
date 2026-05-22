@@ -383,8 +383,8 @@ describe('POST /api/diagram/assemble', () => {
           },
         ],
         connectors: [
-          { id: 'a-b', source: 'API', target: 'db', kind: 'http' },
-          { source: 'ghost', target: 'db', kind: 'http' },
+          { id: 'a-b', source: 'API', target: 'db' },
+          { source: 'ghost', target: 'db' },
         ],
       },
     });
@@ -450,7 +450,7 @@ describe('POST /api/layout', () => {
         data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
       },
     ],
-    connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'db' }],
+    connectors: [{ id: 'c1', source: 'api', target: 'db' }],
   };
 
   it('returns positions + handles for a valid flow', async () => {
@@ -485,7 +485,7 @@ describe('POST /api/layout', () => {
     const { app } = buildApp();
     const bad = {
       ...sampleFlow,
-      connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'ghost' }],
+      connectors: [{ id: 'c1', source: 'api', target: 'ghost' }],
     };
     const res = await post(app, '/api/layout', { flow: bad });
     expect(res.status).toBe(200);
@@ -565,7 +565,7 @@ describe('POST /api/flows/:id/layout', () => {
         data: { name: 'DB', kind: 'db', stateSource: { kind: 'event' } },
       },
     ],
-    connectors: [{ id: 'c1', kind: 'default', source: 'api', target: 'db' }],
+    connectors: [{ id: 'c1', source: 'api', target: 'db' }],
   };
 
   const buildLayoutApp = () => {
@@ -2698,8 +2698,8 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       },
     ],
     connectors: [
-      { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-      { id: 'b-to-a', source: 'b', target: 'a', kind: 'default' },
+      { id: 'a-to-b', source: 'a', target: 'b' },
+      { id: 'b-to-a', source: 'b', target: 'a' },
     ],
   };
 
@@ -2745,8 +2745,8 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         },
       ],
       connectors: [
-        { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-        { id: 'b-to-c', source: 'b', target: 'c', kind: 'default' },
+        { id: 'a-to-b', source: 'a', target: 'b' },
+        { id: 'b-to-c', source: 'b', target: 'c' },
       ],
     };
     const { app } = buildApp();
@@ -2911,7 +2911,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         },
       },
     ],
-    connectors: [{ id: 'a-to-b', source: 'a', target: 'b', kind: 'default', label: 'flow' }],
+    connectors: [{ id: 'a-to-b', source: 'a', target: 'b', label: 'flow' }],
   };
 
   const patch = (app: ReturnType<typeof buildApp>['app'], path: string, body: unknown) =>
@@ -2943,75 +2943,17 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     expect(await res.json()).toEqual({ ok: true });
 
     const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; kind: string; label?: string }>;
+      connectors: Array<{ id: string; label?: string }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       connectors: Record<string, { style?: string; color?: string; direction?: string }>;
     };
     const conn = arch.connectors.find((c) => c.id === 'a-to-b');
     expect(conn?.label).toBe('renamed');
-    expect(conn?.kind).toBe('default');
     const styleEntry = style.connectors['a-to-b'];
     expect(styleEntry?.style).toBe('dashed');
     expect(styleEntry?.color).toBe('blue');
     expect(styleEntry?.direction).toBe('both');
-  });
-
-  it('changes kind and clears stale kind-specific fields from the previous kind', async () => {
-    const demo = {
-      ...VALID_DEMO_WITH_CONN,
-      connectors: [
-        {
-          id: 'a-to-b',
-          source: 'a',
-          target: 'b',
-          kind: 'event',
-          eventName: 'OrderPlaced',
-        },
-      ],
-    };
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(demo);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, { kind: 'default' });
-    expect(res.status).toBe(200);
-
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<Record<string, unknown>>;
-    };
-    const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.kind).toBe('default');
-    // Stale 'eventName' from the previous kind must be removed.
-    expect(conn?.eventName).toBeUndefined();
-  });
-
-  it('returns 400 with schema issues when the resulting connector is invalid', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_WITH_CONN);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
-
-    // Switching to 'event' without supplying the required eventName is a
-    // schema violation surfaced by the post-mutation FlowSchema parse.
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, { kind: 'event' });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string; issues?: unknown };
-    expect(body.error).toContain('schema');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
   });
 
   it('returns 400 when the body has an unknown top-level key', async () => {
@@ -3222,7 +3164,7 @@ describe('POST /api/flows/:id/connectors', () => {
     connectors: [],
   };
 
-  it('creates a connector, defaults kind to default, auto-generates id', async () => {
+  it('creates a connector and auto-generates id', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
@@ -3240,17 +3182,16 @@ describe('POST /api/flows/:id/connectors', () => {
     expect(body.id).toMatch(/^conn-/);
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; source: string; target: string; kind: string }>;
+      connectors: Array<{ id: string; source: string; target: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
     const created = onDisk.connectors[0];
     expect(created?.id).toBe(body.id);
     expect(created?.source).toBe('a');
     expect(created?.target).toBe('b');
-    expect(created?.kind).toBe('default');
   });
 
-  it('honors a caller-provided id and kind', async () => {
+  it('honors a caller-provided id and persists optional metadata', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
@@ -3264,7 +3205,6 @@ describe('POST /api/flows/:id/connectors', () => {
       id: 'my-conn',
       source: 'a',
       target: 'b',
-      kind: 'event',
       eventName: 'OrderPlaced',
     });
     expect(res.status).toBe(200);
@@ -3316,27 +3256,6 @@ describe('POST /api/flows/:id/connectors', () => {
     });
     expect(res.status).toBe(400);
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
-  });
-
-  it('returns 400 with schema issues when kind-discriminated payload is missing', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    // kind='event' but no eventName — fails the discriminated union shape.
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
-      source: 'a',
-      target: 'b',
-      kind: 'event',
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('schema');
   });
 
   it('returns 404 for unknown flowId', async () => {
@@ -3511,7 +3430,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       connectors: [
-        { source: 'a', target: 'b', kind: 'event', eventName: 'evt.one' },
+        { source: 'a', target: 'b', eventName: 'evt.one' },
         { id: 'pinned', source: 'b', target: 'a' },
       ],
     });
@@ -3527,11 +3446,10 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
     expect(body.connectors[1]?.id).toBe('pinned');
 
     const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
-      connectors: Array<{ id: string; kind: string }>;
+      connectors: Array<{ id: string; eventName?: string }>;
     };
     expect(onDisk.connectors).toHaveLength(2);
-    expect(onDisk.connectors[0]?.kind).toBe('event');
-    expect(onDisk.connectors[1]?.kind).toBe('default');
+    expect(onDisk.connectors[0]?.eventName).toBe('evt.one');
   });
 
   it('rejects an id collision with an existing connector', async () => {
@@ -3586,8 +3504,8 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       },
     ],
     connectors: [
-      { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-      { id: 'b-to-a', source: 'b', target: 'a', kind: 'default' },
+      { id: 'a-to-b', source: 'a', target: 'b' },
+      { id: 'b-to-a', source: 'b', target: 'a' },
     ],
   };
 

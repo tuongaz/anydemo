@@ -50,7 +50,7 @@ describe('mergeFlowAndStyle', () => {
         { id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } },
         { id: 'b', type: 'shapeNode', data: { shape: 'rectangle' } },
       ],
-      connectors: [{ id: 'c', source: 'a', target: 'b', kind: 'default' }],
+      connectors: [{ id: 'c', source: 'a', target: 'b' }],
     };
     const style: Style = {
       connectors: { c: { sourceHandle: 'r', style: 'dashed', color: 'blue' } },

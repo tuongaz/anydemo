@@ -26,9 +26,8 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.nodes).toHaveLength(2);
     expect(result.data.connectors).toHaveLength(1);
     const connector = result.data.connectors[0];
-    if (connector?.kind !== 'event') throw new Error('expected event connector');
-    expect(connector.eventName).toBe('checkout.created');
-    expect(connector.label).toBe('publishes checkout.created');
+    expect(connector?.eventName).toBe('checkout.created');
+    expect(connector?.label).toBe('publishes checkout.created');
   });
 
   it('rejects an invalid demo fixture with a usable Zod error', async () => {
@@ -67,10 +66,10 @@ describe('ResolvedFlowSchema', () => {
     expect(targetIssue?.message).toContain('ghost-node');
   });
 
-  it('parses connectors of all three kinds: http, event, queue', () => {
+  it('parses connectors with arbitrary metadata combinations (method/url/eventName/queueName)', () => {
     const demo = {
       version: 2 as const,
-      name: 'all-kinds',
+      name: 'connector-metadata',
       nodes: [
         {
           id: 'a',
@@ -111,25 +110,12 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'http' as const,
           method: 'POST' as const,
           url: 'http://b/',
           label: 'calls B',
         },
-        {
-          id: 'c2',
-          source: 'a',
-          target: 'c',
-          kind: 'event' as const,
-          eventName: 'a.published',
-        },
-        {
-          id: 'c3',
-          source: 'a',
-          target: 'd',
-          kind: 'queue' as const,
-          queueName: 'work-queue',
-        },
+        { id: 'c2', source: 'a', target: 'c', eventName: 'a.published' },
+        { id: 'c3', source: 'a', target: 'd', queueName: 'work-queue' },
       ],
     };
 
@@ -138,33 +124,9 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`);
     }
     expect(result.data.connectors).toHaveLength(3);
-    expect(result.data.connectors[0]?.kind).toBe('http');
-    expect(result.data.connectors[1]?.kind).toBe('event');
-    expect(result.data.connectors[2]?.kind).toBe('queue');
-  });
-
-  it('rejects a connector with an unknown discriminator kind', () => {
-    const demo = {
-      version: 2 as const,
-      name: 'bad-kind',
-      nodes: [
-        {
-          id: 'a',
-          type: 'stateNode' as const,
-          position: { x: 0, y: 0 },
-          data: { name: 'A', kind: 'svc', stateSource: { kind: 'request' as const } },
-        },
-        {
-          id: 'b',
-          type: 'stateNode' as const,
-          position: { x: 100, y: 0 },
-          data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
-        },
-      ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'whisper' }],
-    };
-    const result = ResolvedFlowSchema.safeParse(demo);
-    expect(result.success).toBe(false);
+    expect(result.data.connectors[0]?.url).toBe('http://b/');
+    expect(result.data.connectors[1]?.eventName).toBe('a.published');
+    expect(result.data.connectors[2]?.queueName).toBe('work-queue');
   });
 
   it('round-trips a shapeNode with each shape variant', () => {
@@ -425,17 +387,14 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [
-        { id: 'c1', source: 'a', target: 'b', kind: 'default' as const, label: 'see also' },
-      ],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', label: 'see also' }],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.label).toBe('see also');
+    expect(conn?.label).toBe('see also');
   });
 
   it('accepts connector visual fields (style/color/direction) on every kind', () => {
@@ -461,7 +420,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'http' as const,
           method: 'POST' as const,
           url: 'http://b/',
           style: 'dashed' as const,
@@ -472,7 +430,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c2',
           source: 'a',
           target: 'b',
-          kind: 'event' as const,
           eventName: 'a.b',
           style: 'solid' as const,
           direction: 'both' as const,
@@ -481,7 +438,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c3',
           source: 'a',
           target: 'b',
-          kind: 'default' as const,
           color: 'amber' as const,
           direction: 'backward' as const,
         },
@@ -519,7 +475,6 @@ describe('ResolvedFlowSchema', () => {
           target: 'b',
           sourceHandle: 'b',
           targetHandle: 't',
-          kind: 'default' as const,
         },
       ],
     };
@@ -528,9 +483,8 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.sourceHandle).toBe('b');
-    expect(conn.targetHandle).toBe('t');
+    expect(conn?.sourceHandle).toBe('b');
+    expect(conn?.targetHandle).toBe('t');
   });
 
   it('parses connectors authored without handle ids (back-compat for US-013)', () => {
@@ -551,16 +505,15 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b' }],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.sourceHandle).toBeUndefined();
-    expect(conn.targetHandle).toBeUndefined();
+    expect(conn?.sourceHandle).toBeUndefined();
+    expect(conn?.targetHandle).toBeUndefined();
   });
 
   it('round-trips optional sourcePin/targetPin on connectors (US-006)', () => {
@@ -586,7 +539,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'default' as const,
           sourcePin: { side: 'right' as const, t: 0.25 },
           targetPin: { side: 'left' as const, t: 0.75 },
         },
@@ -597,9 +549,8 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.sourcePin).toEqual({ side: 'right', t: 0.25 });
-    expect(conn.targetPin).toEqual({ side: 'left', t: 0.75 });
+    expect(conn?.sourcePin).toEqual({ side: 'right', t: 0.25 });
+    expect(conn?.targetPin).toEqual({ side: 'left', t: 0.75 });
   });
 
   it('parses connectors authored without sourcePin/targetPin (back-compat for US-006)', () => {
@@ -620,16 +571,15 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b' }],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.sourcePin).toBeUndefined();
-    expect(conn.targetPin).toBeUndefined();
+    expect(conn?.sourcePin).toBeUndefined();
+    expect(conn?.targetPin).toBeUndefined();
   });
 
   it('rejects a pin with an unknown side (US-006)', () => {
@@ -655,7 +605,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'default' as const,
           sourcePin: { side: 'diagonal', t: 0.5 },
         },
       ],
@@ -686,7 +635,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'default' as const,
           sourcePin: { side: 'top' as const, t },
         },
       ],
@@ -715,7 +663,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', style: 'wavy' }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', style: 'wavy' }],
     };
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
@@ -738,7 +686,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', direction: 'sideways' }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', direction: 'sideways' }],
     };
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
@@ -761,7 +709,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', color: 'fuchsia' }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'fuchsia' }],
     };
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
@@ -794,7 +742,6 @@ describe('ResolvedFlowSchema', () => {
           id: 'c1',
           source: 'a',
           target: 'b',
-          kind: 'default' as const,
           borderSize: connBorderSize,
         },
       ],
@@ -1080,7 +1027,7 @@ describe('ResolvedFlowSchema', () => {
           data: { path: 'nodes/img-1/pixel.png' },
         },
       ],
-      connectors: [{ id: 'c1', source: 's', target: 'img-1', kind: 'default' as const }],
+      connectors: [{ id: 'c1', source: 's', target: 'img-1' }],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
@@ -1119,11 +1066,11 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [
         // stateNode → iconNode
-        { id: 'c1', source: 's', target: 'icon-1', kind: 'default' as const },
+        { id: 'c1', source: 's', target: 'icon-1' },
         // iconNode → stateNode
-        { id: 'c2', source: 'icon-1', target: 's', kind: 'default' as const },
+        { id: 'c2', source: 'icon-1', target: 's' },
         // iconNode → iconNode
-        { id: 'c3', source: 'icon-1', target: 'icon-2', kind: 'default' as const },
+        { id: 'c3', source: 'icon-1', target: 'icon-2' },
       ],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
@@ -1346,15 +1293,14 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default' as const, fontSize: 16 }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: 16 }],
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const conn = result.data.connectors[0];
-    if (conn?.kind !== 'default') throw new Error('expected default connector');
-    expect(conn.fontSize).toBe(16);
+    expect(conn?.fontSize).toBe(16);
   });
 
   it('rejects non-positive connector fontSize (US-018)', () => {
@@ -1375,9 +1321,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', kind: 'svc', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [
-        { id: 'c1', source: 'a', target: 'b', kind: 'default' as const, fontSize: size },
-      ],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', fontSize: size }],
     });
     expect(ResolvedFlowSchema.safeParse(make(0)).success).toBe(false);
     expect(ResolvedFlowSchema.safeParse(make(-1)).success).toBe(false);
@@ -1413,7 +1357,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'my-worker', kind: 'worker', stateSource: { kind: 'event' } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'svc', target: 'worker', kind: 'default' }],
+      connectors: [{ id: 'c1', source: 'svc', target: 'worker' }],
     };
     const parsed = ResolvedFlowSchema.safeParse(raw);
     if (!parsed.success) {
@@ -1714,8 +1658,8 @@ describe('ResolvedFlowSchema', () => {
           },
         ],
         connectors: [
-          { id: 'c1', source: 's', target: 'html-1', kind: 'default' as const },
-          { id: 'c2', source: 'html-1', target: 's', kind: 'default' as const },
+          { id: 'c1', source: 's', target: 'html-1' },
+          { id: 'c2', source: 'html-1', target: 's' },
         ],
       };
       const result = ResolvedFlowSchema.safeParse(demo);
@@ -2075,7 +2019,6 @@ describe('ResolvedFlowSchema', () => {
         ],
         connectors: [],
         resetAction: {
-          kind: 'http' as const,
           method: 'POST' as const,
           url: 'http://localhost:3000/reset',
         },
@@ -2207,7 +2150,7 @@ describe('FlowSchema', () => {
           data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', kind: 'default', color: 'blue' }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'blue' }],
     });
     expect(result.success).toBe(false);
   });
@@ -2217,7 +2160,7 @@ describe('FlowSchema', () => {
       version: 2,
       name: 'T',
       nodes: [],
-      connectors: [{ id: 'c', source: 'missing', target: 'also-missing', kind: 'default' }],
+      connectors: [{ id: 'c', source: 'missing', target: 'also-missing' }],
     });
     expect(result.success).toBe(false);
   });
@@ -2243,9 +2186,7 @@ describe('FlowSchema', () => {
           data: { name: 'B', kind: 'worker', stateSource: { kind: 'event' } },
         },
       ],
-      connectors: [
-        { id: 'c', source: 'a', target: 'b', kind: 'event', eventName: 'evt', label: 'hi' },
-      ],
+      connectors: [{ id: 'c', source: 'a', target: 'b', eventName: 'evt', label: 'hi' }],
     });
     expect(result.success).toBe(true);
   });

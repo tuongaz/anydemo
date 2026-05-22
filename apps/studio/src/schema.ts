@@ -8,8 +8,8 @@ const PositionSchema = z.object({
 // US-008: HttpAction was the original shape for both playAction and resetAction
 // in pre-script-action releases. After US-001 cut playAction to script-only and
 // US-008 cut resetAction the same way, no schema in this file uses HttpAction
-// anymore. Connectors keep the `http` *kind literal* for visual semantics, but
-// that's an independent enum — search before re-adding any HttpActionSchema.
+// anymore. `HttpMethodSchema` is still used for the optional `method` field on
+// connectors (documentation metadata).
 const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 
 // Curated palette tokens. Stored on disk as readable names; the frontend maps
@@ -273,17 +273,13 @@ const NodeSchema = z.discriminatedUnion('type', [
   HtmlNodeSchema,
 ]);
 
-// Connector is the semantic edge between two nodes — describes HOW they are
-// connected, not just THAT they are. Discriminated on `kind`:
-//   • http    — service-to-service HTTP call (method + url echo of the playAction)
-//   • event   — pub/sub event (eventName)
-//   • queue   — message-queue handoff (queueName)
-//   • default — user-drawn, no semantic payload (UI annotation only)
-// The frontend derives a React Flow Edge from each connector at render time
-// (id/source/target are reused; `label` becomes the edge label; visual style
-// is picked from `kind`, but per-connector `style`/`color` overrides it). v1
-// has no separate `edges[]` array — connectors are the sole source of truth
-// for inter-node connections.
+// Connector is the edge between two nodes. The frontend derives a React Flow
+// Edge from each connector at render time (id/source/target are reused;
+// `label` becomes the edge label; visual style comes from optional
+// `style`/`color` fields). v1 has no separate `edges[]` array — connectors
+// are the sole source of truth for inter-node connections. Optional
+// metadata fields (`method`/`url`/`eventName`/`queueName`) may be present
+// for documentation purposes; the renderer does not branch on them.
 const ConnectorStyleSchema = z.enum(['solid', 'dashed', 'dotted']);
 const ConnectorDirectionSchema = z.enum(['forward', 'backward', 'both', 'none']);
 // Path geometry — orthogonal to `style` (which means the dash pattern). Absent
@@ -291,7 +287,7 @@ const ConnectorDirectionSchema = z.enum(['forward', 'backward', 'both', 'none'])
 // (right-angle / zigzag) path. (US-017)
 const ConnectorPathSchema = z.enum(['curve', 'step']);
 
-// Visual fields shared by every connector kind. All optional — existing
+// Visual fields shared by every connector. All optional — existing
 // demo files predate them and must continue to parse. `direction` defaults
 // to 'forward' when absent (the historical behavior).
 const ConnectorVisualBaseShape = {
@@ -305,7 +301,7 @@ const ConnectorVisualBaseShape = {
   fontSize: z.number().positive().optional(),
 };
 
-// Handle ids — every node kind in this codebase uses the same four-handle
+// Handle ids — every node type in this codebase uses the same four-handle
 // layout: target-only on top + left, source-only on right + bottom (US-013).
 // `sourceHandle` MUST be a source-side id and `targetHandle` MUST be a
 // target-side id; sending the wrong role leaves a stranded endpoint at render
@@ -350,36 +346,13 @@ const ConnectorBaseShape = {
   ...ConnectorVisualBaseShape,
 };
 
-const HttpConnectorSchema = z.object({
+const ConnectorSchema = z.object({
   ...ConnectorBaseShape,
-  kind: z.literal('http'),
   method: HttpMethodSchema.optional(),
   url: z.string().min(1).optional(),
+  eventName: z.string().min(1).optional(),
+  queueName: z.string().min(1).optional(),
 });
-
-const EventConnectorSchema = z.object({
-  ...ConnectorBaseShape,
-  kind: z.literal('event'),
-  eventName: z.string().min(1),
-});
-
-const QueueConnectorSchema = z.object({
-  ...ConnectorBaseShape,
-  kind: z.literal('queue'),
-  queueName: z.string().min(1),
-});
-
-const DefaultConnectorSchema = z.object({
-  ...ConnectorBaseShape,
-  kind: z.literal('default'),
-});
-
-const ConnectorSchema = z.discriminatedUnion('kind', [
-  HttpConnectorSchema,
-  EventConnectorSchema,
-  QueueConnectorSchema,
-  DefaultConnectorSchema,
-]);
 
 export const ResolvedFlowSchema = z
   .object({
@@ -439,10 +412,6 @@ export type HtmlNodeData = z.infer<typeof HtmlNodeDataSchema>;
 export type ShapeKind = z.infer<typeof ShapeKindSchema>;
 export type ColorToken = z.infer<typeof ColorTokenSchema>;
 export type Connector = z.infer<typeof ConnectorSchema>;
-export type HttpConnector = z.infer<typeof HttpConnectorSchema>;
-export type EventConnector = z.infer<typeof EventConnectorSchema>;
-export type QueueConnector = z.infer<typeof QueueConnectorSchema>;
-export type DefaultConnector = z.infer<typeof DefaultConnectorSchema>;
 export type ConnectorStyle = z.infer<typeof ConnectorStyleSchema>;
 export type ConnectorDirection = z.infer<typeof ConnectorDirectionSchema>;
 export type ConnectorPath = z.infer<typeof ConnectorPathSchema>;
@@ -588,44 +557,15 @@ const FlowConnectorBaseShape = {
   label: z.string().optional(),
 };
 
-export const FlowHttpConnectorSchema = z
+export const FlowConnectorSchema = z
   .object({
     ...FlowConnectorBaseShape,
-    kind: z.literal('http'),
     method: HttpMethodSchema.optional(),
     url: z.string().min(1).optional(),
+    eventName: z.string().min(1).optional(),
+    queueName: z.string().min(1).optional(),
   })
   .strict();
-
-export const FlowEventConnectorSchema = z
-  .object({
-    ...FlowConnectorBaseShape,
-    kind: z.literal('event'),
-    eventName: z.string().min(1),
-  })
-  .strict();
-
-export const FlowQueueConnectorSchema = z
-  .object({
-    ...FlowConnectorBaseShape,
-    kind: z.literal('queue'),
-    queueName: z.string().min(1),
-  })
-  .strict();
-
-export const FlowDefaultConnectorSchema = z
-  .object({
-    ...FlowConnectorBaseShape,
-    kind: z.literal('default'),
-  })
-  .strict();
-
-const FlowConnectorSchema = z.discriminatedUnion('kind', [
-  FlowHttpConnectorSchema,
-  FlowEventConnectorSchema,
-  FlowQueueConnectorSchema,
-  FlowDefaultConnectorSchema,
-]);
 
 export const FlowSchema = z
   .object({
@@ -663,10 +603,10 @@ export type FlowConnector = z.infer<typeof FlowConnectorSchema>;
 
 // Envelope-only flow shape for the `seeflow schema flow` surface. The full
 // FlowSchema validates the whole graph; this companion schema describes the
-// top-level shape without inlining every node + connector variant, so the
-// runtime-introspectable JSON Schema stays compact. Authors drill into
-// `seeflow schema node` / `seeflow schema connector` for the per-variant
-// shapes. Not used for validation — only the catalog reads it.
+// top-level shape without inlining every node variant or the connector
+// shape, so the runtime-introspectable JSON Schema stays compact. Authors
+// drill into `seeflow schema node` / `seeflow schema connector` for the
+// detailed shapes. Not used for validation — only the catalog reads it.
 export const FlowEnvelopeSchema = z
   .object({
     version: z.literal(2),

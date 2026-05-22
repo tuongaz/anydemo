@@ -31,8 +31,6 @@ describe('integration: fixtures — kitchen-sink', () => {
     ]);
 
     expect(parsed.connectors).toHaveLength(4);
-    const connectorKinds = parsed.connectors.map((c) => c.kind).sort();
-    expect(connectorKinds).toEqual(['default', 'event', 'http', 'queue']);
   });
 
   it('splits into FlowSchema-compliant flow.json + StyleSchema-compliant style.json', () => {

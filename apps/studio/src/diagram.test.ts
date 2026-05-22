@@ -66,7 +66,6 @@ const connector = (source: string, target: string) => ({
   id: `${source}-${target}`,
   source,
   target,
-  kind: 'http' as const,
 });
 
 describe('assembleDemo auto-layout', () => {

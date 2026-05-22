@@ -344,7 +344,7 @@ describe('addFlowBulkImpl', () => {
       connectors: [
         // Connector references nodes from the SAME batch — proves the merged
         // graph is parsed as a whole, not phase-by-phase.
-        { id: 'a-to-b', source: 'a', target: 'b', kind: 'event', eventName: 'thing.happened' },
+        { id: 'a-to-b', source: 'a', target: 'b', eventName: 'thing.happened' },
         { source: 'b', target: 'a' },
       ],
     });
@@ -365,8 +365,6 @@ describe('addFlowBulkImpl', () => {
     expect(flow.nodes).toHaveLength(3);
     expect(flow.connectors).toHaveLength(2);
     expect(flow.nodes[0].data.detail).toBe(nodeFileRef('a', 'detail.md'));
-    // Connector without an explicit kind defaulted to 'default'.
-    expect(flow.connectors[1].kind).toBe('default');
   });
 
   it('accepts a nodes-only body', async () => {
@@ -945,7 +943,7 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
         { id: 'src', type: 'shapeNode', data: { name: 'src', shape: 'rectangle' } },
         { id: 'dst', type: 'shapeNode', data: { name: 'dst', shape: 'ellipse' } },
       ],
-      connectors: [{ id: 'c1', kind: 'default', source: 'src', target: 'dst' }],
+      connectors: [{ id: 'c1', source: 'src', target: 'dst' }],
     });
     expect(res.kind).toBe('ok');
   });

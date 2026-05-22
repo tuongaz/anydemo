@@ -5,11 +5,16 @@
     {
       "id": "api-checkout",
       "type": "playNode",
-      "position": { "x": 0, "y": 0 },
+      "position": {
+        "x": 0,
+        "y": 0
+      },
       "data": {
         "name": "POST /checkout",
         "kind": "service",
-        "stateSource": { "kind": "request" },
+        "stateSource": {
+          "kind": "request"
+        },
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -23,7 +28,6 @@
       "id": "c-bad",
       "source": "api-checkout",
       "target": "ghost-node",
-      "kind": "event",
       "eventName": "ghost.created"
     }
   ]

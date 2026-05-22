@@ -143,27 +143,12 @@ export interface ConnectorBase {
   fontSize?: number;
 }
 
-export interface HttpConnector extends ConnectorBase {
-  kind: 'http';
+export interface Connector extends ConnectorBase {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   url?: string;
+  eventName?: string;
+  queueName?: string;
 }
-
-export interface EventConnector extends ConnectorBase {
-  kind: 'event';
-  eventName: string;
-}
-
-export interface QueueConnector extends ConnectorBase {
-  kind: 'queue';
-  queueName: string;
-}
-
-export interface DefaultConnector extends ConnectorBase {
-  kind: 'default';
-}
-
-export type Connector = HttpConnector | EventConnector | QueueConnector | DefaultConnector;
 
 // US-012: mirror of `StatusReportSchema['state']` in apps/studio/src/schema.ts.
 // `apps/web/src/lib/api.ts` re-exports this type from `@seeflow/canvas` so

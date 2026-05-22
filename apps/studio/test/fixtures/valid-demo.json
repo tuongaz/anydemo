@@ -5,17 +5,25 @@
     {
       "id": "api-checkout",
       "type": "playNode",
-      "position": { "x": 100, "y": 100 },
+      "position": {
+        "x": 100,
+        "y": 100
+      },
       "data": {
         "name": "POST /checkout",
         "kind": "service",
-        "stateSource": { "kind": "request" },
+        "stateSource": {
+          "kind": "request"
+        },
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
           "args": ["run"],
           "scriptPath": "scripts/play.ts",
-          "input": { "items": [], "customerId": "cust_1" }
+          "input": {
+            "items": [],
+            "customerId": "cust_1"
+          }
         },
         "description": "Creates an order, charges the card, enqueues fulfillment."
       }
@@ -23,11 +31,16 @@
     {
       "id": "worker-fulfillment",
       "type": "stateNode",
-      "position": { "x": 400, "y": 100 },
+      "position": {
+        "x": 400,
+        "y": 100
+      },
       "data": {
         "name": "Fulfillment worker",
         "kind": "worker",
-        "stateSource": { "kind": "event" },
+        "stateSource": {
+          "kind": "event"
+        },
         "handlerModule": "src/workers/fulfillment.ts"
       }
     }
@@ -37,7 +50,6 @@
       "id": "c-checkout-fulfillment",
       "source": "api-checkout",
       "target": "worker-fulfillment",
-      "kind": "event",
       "eventName": "checkout.created",
       "label": "publishes checkout.created"
     }

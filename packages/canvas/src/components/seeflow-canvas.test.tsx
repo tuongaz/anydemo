@@ -1298,9 +1298,9 @@ describe('SeeflowCanvas', () => {
       const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
         connectors: [
-          { id: 'e1', source: 'a', target: 'b', kind: 'default' },
-          { id: 'e2', source: 'a', target: 'b', kind: 'default' },
-          { id: 'e3', source: 'a', target: 'b', kind: 'default' },
+          { id: 'e1', source: 'a', target: 'b' },
+          { id: 'e2', source: 'a', target: 'b' },
+          { id: 'e3', source: 'a', target: 'b' },
         ],
         selectedConnectorIds: ['e2'],
       });
@@ -2274,7 +2274,6 @@ describe('SeeflowCanvas', () => {
             target: 'b',
             sourceHandleAutoPicked: true,
             targetHandleAutoPicked: true,
-            kind: 'default',
           } as Connector,
         ],
         nodes: [makeShapeNode('a'), makeShapeNode('b')],
@@ -2426,7 +2425,6 @@ describe('SeeflowCanvas', () => {
         target: 'b',
         sourceHandleAutoPicked: true,
         targetHandleAutoPicked: true,
-        kind: 'default',
       } as Connector;
       const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a'), makeShapeNode('b')],

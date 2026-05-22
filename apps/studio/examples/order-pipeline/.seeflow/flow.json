@@ -69,7 +69,6 @@
       "id": "conn-jJjuWBfe3a",
       "source": "node-XKIyds0TDg",
       "target": "node-GXTKUcE3ye",
-      "kind": "event",
       "eventName": "order.created",
       "label": "order.created"
     },
@@ -77,7 +76,6 @@
       "id": "conn-8DkPOzrnYo",
       "source": "node-GXTKUcE3ye",
       "target": "node-YOYiHJpY0i",
-      "kind": "event",
       "eventName": "stock.reserved",
       "label": "stock.reserved"
     },
@@ -85,7 +83,6 @@
       "id": "conn-qp90Rd2cgw",
       "source": "node-YOYiHJpY0i",
       "target": "node-zUIH7WFnhK",
-      "kind": "event",
       "eventName": "payment.captured",
       "label": "payment.captured"
     }

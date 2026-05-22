@@ -94,7 +94,6 @@ export interface ConnectorCreateInput {
   targetHandleAutoPicked?: boolean;
   sourcePin?: EdgePin;
   targetPin?: EdgePin;
-  kind?: Connector['kind'];
   label?: string;
   style?: ConnectorStyle;
   color?: ColorToken;
@@ -114,7 +113,6 @@ export interface ConnectorPatch {
   path?: ConnectorPath;
   /** Per-connector label font size in px. */
   fontSize?: number;
-  kind?: Connector['kind'];
   eventName?: string;
   queueName?: string;
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';

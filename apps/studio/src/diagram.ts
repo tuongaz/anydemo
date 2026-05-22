@@ -225,7 +225,6 @@ const normalizeConnectors = (
     const key = [
       source,
       target,
-      String(raw.kind ?? ''),
       String(raw.sourceHandle ?? ''),
       String(raw.targetHandle ?? ''),
     ].join('\t');

@@ -568,8 +568,8 @@ const VALID_DEMO_THREE_NODES = {
     },
   ],
   connectors: [
-    { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-    { id: 'b-to-c', source: 'b', target: 'c', kind: 'default' },
+    { id: 'a-to-b', source: 'a', target: 'b' },
+    { id: 'b-to-c', source: 'b', target: 'c' },
   ],
 };
 
@@ -1212,11 +1212,11 @@ const VALID_DEMO_TWO_NODES = {
 
 const VALID_DEMO_WITH_CONN = {
   ...VALID_DEMO_TWO_NODES,
-  connectors: [{ id: 'a-to-b', source: 'a', target: 'b', kind: 'default', label: 'flow' }],
+  connectors: [{ id: 'a-to-b', source: 'a', target: 'b', label: 'flow' }],
 };
 
 describe('seeflow_add_connector', () => {
-  it('appends a new connector, defaults kind to default, auto-generates id', async () => {
+  it('appends a new connector and auto-generates id', async () => {
     const { app } = buildApp();
     const { demoFile, reg } = await registerFixture(app, VALID_DEMO_TWO_NODES);
 
@@ -1229,17 +1229,16 @@ describe('seeflow_add_connector', () => {
     expect(body.id).toMatch(/^conn-/);
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; source: string; target: string; kind: string }>;
+      connectors: Array<{ id: string; source: string; target: string }>;
     };
     expect(onDisk.connectors).toHaveLength(1);
     const created = onDisk.connectors[0];
     expect(created?.id).toBe(body.id);
     expect(created?.source).toBe('a');
     expect(created?.target).toBe('b');
-    expect(created?.kind).toBe('default');
   });
 
-  it('honors a caller-provided id and kind=event with eventName', async () => {
+  it('honors a caller-provided id and persists optional eventName metadata', async () => {
     const { app } = buildApp();
     const { demoFile, reg } = await registerFixture(app, VALID_DEMO_TWO_NODES);
 
@@ -1249,7 +1248,6 @@ describe('seeflow_add_connector', () => {
         id: 'my-conn',
         source: 'a',
         target: 'b',
-        kind: 'event',
         eventName: 'OrderPlaced',
       },
     });
@@ -1257,10 +1255,9 @@ describe('seeflow_add_connector', () => {
     expect(body.id).toBe('my-conn');
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; kind: string; eventName?: string }>;
+      connectors: Array<{ id: string; eventName?: string }>;
     };
     const created = onDisk.connectors.find((c) => c.id === 'my-conn');
-    expect(created?.kind).toBe('event');
     expect(created?.eventName).toBe('OrderPlaced');
   });
 
@@ -1303,7 +1300,6 @@ describe('seeflow_patch_connector', () => {
         'style',
         'color',
         'direction',
-        'kind',
         'eventName',
         'queueName',
         'method',
@@ -1333,70 +1329,41 @@ describe('seeflow_patch_connector', () => {
     expect(expectOk(envelope)).toEqual({ ok: true });
 
     const arch = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; kind: string; label?: string }>;
+      connectors: Array<{ id: string; label?: string }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       connectors: Record<string, { style?: string; color?: string; direction?: string }>;
     };
     const conn = arch.connectors.find((c) => c.id === 'a-to-b');
     expect(conn?.label).toBe('renamed');
-    expect(conn?.kind).toBe('default');
     const styleEntry = style.connectors['a-to-b'];
     expect(styleEntry?.style).toBe('dashed');
     expect(styleEntry?.color).toBe('blue');
     expect(styleEntry?.direction).toBe('both');
   });
 
-  it('clears stale kind-specific fields when kind changes (event → default)', async () => {
-    const demo = {
-      ...VALID_DEMO_TWO_NODES,
-      connectors: [
-        { id: 'a-to-b', source: 'a', target: 'b', kind: 'event', eventName: 'OrderPlaced' },
-      ],
-    };
-    const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, demo);
-
-    const envelope = await callTool(app, 'seeflow_patch_connector', {
-      flowId: reg.id,
-      connectorId: 'a-to-b',
-      kind: 'default',
-    });
-    expect(expectOk(envelope)).toEqual({ ok: true });
-
-    const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<Record<string, unknown>>;
-    };
-    const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.kind).toBe('default');
-    // Stale 'eventName' from the previous kind must be removed.
-    expect(conn?.eventName).toBeUndefined();
-  });
-
-  it('switching to kind=event with an eventName succeeds (kind-change happy path)', async () => {
+  it('merges optional eventName metadata into the connector on PATCH', async () => {
     const { app } = buildApp();
     const { demoFile, reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
 
     const envelope = await callTool(app, 'seeflow_patch_connector', {
       flowId: reg.id,
       connectorId: 'a-to-b',
-      kind: 'event',
       eventName: 'OrderPlaced',
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; kind: string; eventName?: string }>;
+      connectors: Array<{ id: string; eventName?: string }>;
     };
     const conn = onDisk.connectors.find((c) => c.id === 'a-to-b');
-    expect(conn?.kind).toBe('event');
     expect(conn?.eventName).toBe('OrderPlaced');
   });
 
   it('clears handle id when patch body passes sourceHandle: null', async () => {
     const demo = {
       ...VALID_DEMO_TWO_NODES,
-      connectors: [{ id: 'a-to-b', source: 'a', target: 'b', kind: 'default' }],
+      connectors: [{ id: 'a-to-b', source: 'a', target: 'b' }],
     };
     const { app } = buildApp();
     const { repoPath, styleFile, reg } = await registerFixture(app, demo);
@@ -1422,20 +1389,6 @@ describe('seeflow_patch_connector', () => {
     expect(entry).toBeDefined();
     expect('sourceHandle' in (entry as object)).toBe(false);
     expect(entry?.targetHandle).toBe('t');
-  });
-
-  it('returns Flow failed schema validation when kind=event lacks eventName', async () => {
-    const { app } = buildApp();
-    const { demoFile, reg } = await registerFixture(app, VALID_DEMO_WITH_CONN);
-    const before = readFileSync(demoFile, 'utf8');
-
-    const envelope = await callTool(app, 'seeflow_patch_connector', {
-      flowId: reg.id,
-      connectorId: 'a-to-b',
-      kind: 'event',
-    });
-    expect(expectError(envelope)).toContain('Flow failed schema validation');
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
   });
 
   it('rejects unknown top-level keys via .strict()', async () => {
@@ -1477,8 +1430,8 @@ describe('seeflow_delete_connector', () => {
   const VALID_DEMO_WITH_TWO_CONNS = {
     ...VALID_DEMO_TWO_NODES,
     connectors: [
-      { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-      { id: 'b-to-a', source: 'b', target: 'a', kind: 'default' },
+      { id: 'a-to-b', source: 'a', target: 'b' },
+      { id: 'b-to-a', source: 'b', target: 'a' },
     ],
   };
 
@@ -1588,7 +1541,7 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       connectors: [
-        { source: 'src', target: 'dst', kind: 'event', eventName: 'thing' },
+        { source: 'src', target: 'dst', eventName: 'thing' },
         { id: 'pinned', source: 'dst', target: 'src' },
       ],
     });
@@ -1602,11 +1555,10 @@ describe('seeflow_add_bulk', () => {
     expect(body.connectors[1]?.id).toBe('pinned');
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-      connectors: Array<{ id: string; kind: string }>;
+      connectors: Array<{ id: string; eventName?: string }>;
     };
     expect(onDisk.connectors).toHaveLength(2);
-    expect(onDisk.connectors[0]?.kind).toBe('event');
-    expect(onDisk.connectors[1]?.kind).toBe('default');
+    expect(onDisk.connectors[0]?.eventName).toBe('thing');
   });
 
   it('rolls back BOTH arrays when a connector dangles against the merged graph', async () => {

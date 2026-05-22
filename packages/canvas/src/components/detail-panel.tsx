@@ -277,9 +277,7 @@ export function DetailPanel({
               >
                 {connector.label ?? 'Connector'}
               </SheetTitle>
-              <SheetDescription className="sf:sr-only">
-                {connector.id} · {connector.kind}
-              </SheetDescription>
+              <SheetDescription className="sf:sr-only">{connector.id}</SheetDescription>
             </div>
 
             <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
@@ -808,20 +806,15 @@ function ConnectorSummary({ connector }: { connector: Connector }) {
       <dl className="divide-y">
         <SummaryRow label="Source" value={connector.source} />
         <SummaryRow label="Target" value={connector.target} />
-        <SummaryRow label="Kind" value={connector.kind} />
         {connector.label ? <SummaryRow label="Label" value={connector.label} /> : null}
         {connector.style ? <SummaryRow label="Style" value={connector.style} /> : null}
         {connector.color ? <SummaryRow label="Color" value={connector.color} /> : null}
         {connector.direction ? <SummaryRow label="Direction" value={connector.direction} /> : null}
-        {connector.kind === 'http' && connector.url ? (
+        {connector.url ? (
           <SummaryRow label="URL" value={`${connector.method ?? 'GET'} ${connector.url}`} />
         ) : null}
-        {connector.kind === 'event' ? (
-          <SummaryRow label="Event" value={connector.eventName} />
-        ) : null}
-        {connector.kind === 'queue' ? (
-          <SummaryRow label="Queue" value={connector.queueName} />
-        ) : null}
+        {connector.eventName ? <SummaryRow label="Event" value={connector.eventName} /> : null}
+        {connector.queueName ? <SummaryRow label="Queue" value={connector.queueName} /> : null}
       </dl>
     </div>
   );

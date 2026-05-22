@@ -222,7 +222,6 @@ describe('StyleStrip — iconNode color picker (US-014)', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
     } as Connector;
     const tree = callStrip({ nodes: [iconNode('n1')], connectors: [cn] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
@@ -426,7 +425,6 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
     } as Connector;
     const tree = callStrip({ nodes: [imageNode('i1')], connectors: [cn] });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).toBeNull();

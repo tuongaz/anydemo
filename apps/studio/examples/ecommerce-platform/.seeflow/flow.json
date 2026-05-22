@@ -149,7 +149,6 @@
       "id": "conn-4XKU3GcGPF",
       "source": "node-cQOUPXanaX",
       "target": "node-CbwYqb7NfB",
-      "kind": "http",
       "method": "POST",
       "label": "REST API"
     },
@@ -157,7 +156,6 @@
       "id": "conn-OxNUxp7qB3",
       "source": "node-CbwYqb7NfB",
       "target": "node-3zFtHg6ENc",
-      "kind": "http",
       "method": "POST",
       "label": "POST /auth"
     },
@@ -165,7 +163,6 @@
       "id": "conn-7HlJF6KVHx",
       "source": "node-CbwYqb7NfB",
       "target": "node-kwBY8YPmYM",
-      "kind": "http",
       "method": "GET",
       "label": "GET /products"
     },
@@ -173,7 +170,6 @@
       "id": "conn-ORfUTiooia",
       "source": "node-CbwYqb7NfB",
       "target": "node-5F424NWbEu",
-      "kind": "http",
       "method": "POST",
       "label": "POST /cart"
     },
@@ -181,7 +177,6 @@
       "id": "conn-EABXtQv89M",
       "source": "node-5F424NWbEu",
       "target": "node-yKrg9DV5fJ",
-      "kind": "event",
       "eventName": "cart.checkout",
       "label": "cart.checkout"
     },
@@ -189,7 +184,6 @@
       "id": "conn-kjyg3RDDvu",
       "source": "node-yKrg9DV5fJ",
       "target": "node-mPqan8rFYN",
-      "kind": "event",
       "eventName": "order.created",
       "label": "order.created"
     },
@@ -197,7 +191,6 @@
       "id": "conn-wqFq0shXO5",
       "source": "node-mPqan8rFYN",
       "target": "node-fkptXw7uvs",
-      "kind": "event",
       "eventName": "payment.captured",
       "label": "payment.captured"
     },
@@ -205,7 +198,6 @@
       "id": "conn-8ftFXZvD4r",
       "source": "node-yKrg9DV5fJ",
       "target": "node-5SDiw3Wz6s",
-      "kind": "http",
       "method": "POST",
       "label": "read/write"
     },
@@ -213,7 +205,6 @@
       "id": "conn-VTfjsOckF2",
       "source": "node-mPqan8rFYN",
       "target": "node-5SDiw3Wz6s",
-      "kind": "http",
       "method": "POST",
       "label": "read/write"
     }

@@ -3179,11 +3179,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       for (const [id, partial] of Object.entries(connectorOverrides)) {
         if (serverIds.has(id)) continue;
         const candidate = partial as Partial<Connector>;
-        if (
-          typeof candidate.source !== 'string' ||
-          typeof candidate.target !== 'string' ||
-          typeof candidate.kind !== 'string'
-        ) {
+        if (typeof candidate.source !== 'string' || typeof candidate.target !== 'string') {
           continue;
         }
         fromOverrides.push(decorate({ ...candidate, id } as Connector));

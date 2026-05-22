@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import { MarkerType } from '@xyflow/react';
 import type { Connector } from '../types.ts';
-import { connectorToEdge, styleForKind } from './connector-to-edge';
+import { connectorToEdge } from './connector-to-edge';
 
 describe('connectorToEdge', () => {
   it('preserves id/source/target and uses the editableEdge custom type', () => {
@@ -9,7 +9,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'http',
       method: 'POST',
       url: 'http://b/',
     };
@@ -25,7 +24,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'event',
       eventName: 'todo.completed',
       label: 'publishes todo.completed',
     };
@@ -33,15 +31,9 @@ describe('connectorToEdge', () => {
   });
 
   it('flips animated:true when adjacent to a running node', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'event', eventName: 'x.y' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b', eventName: 'x.y' };
     expect(connectorToEdge(c, true).animated).toBe(true);
     expect(connectorToEdge(c, false).animated).toBe(false);
-  });
-
-  it('styles edges by kind: solid http, dashed event, dotted queue', () => {
-    expect(styleForKind('http')).toEqual({});
-    expect(styleForKind('event')).toEqual({ strokeDasharray: '6 4' });
-    expect(styleForKind('queue')).toEqual({ strokeDasharray: '2 4' });
   });
 
   it('renders a closed arrowhead at the target so direction reads at a glance', () => {
@@ -49,7 +41,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'http',
       method: 'GET',
       url: 'http://b/',
     };
@@ -58,31 +49,18 @@ describe('connectorToEdge', () => {
     expect(edge.markerStart).toBeUndefined();
   });
 
-  it('preserves the connector kind in edge data for downstream filtering', () => {
-    const c: Connector = {
-      id: 'c1',
-      source: 'a',
-      target: 'b',
-      kind: 'queue',
-      queueName: 'work-queue',
-    };
-    expect(connectorToEdge(c, false).data.kind).toBe('queue');
-  });
-
-  it('renders a default connector as solid (no dasharray)', () => {
-    expect(styleForKind('default')).toEqual({});
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+  it('renders a connector as solid (no dasharray) by default', () => {
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.style.strokeDasharray).toBeUndefined();
     expect(edge.style.strokeWidth).toBe(2);
   });
 
-  it('lets per-connector style override the kind-derived style', () => {
+  it('lets per-connector style set the dash pattern', () => {
     const c: Connector = {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'http',
       style: 'dashed',
     };
     const edge = connectorToEdge(c, false);
@@ -95,7 +73,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       borderSize: 5,
     };
     expect(connectorToEdge(c, false).style.strokeWidth).toBe(5);
@@ -106,7 +83,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       direction: 'backward',
     };
     const edge = connectorToEdge(c, false);
@@ -119,7 +95,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       direction: 'both',
     };
     const edge = connectorToEdge(c, false);
@@ -128,14 +103,14 @@ describe('connectorToEdge', () => {
   });
 
   it('treats absent direction as forward (markerEnd only)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
     expect(edge.markerStart).toBeUndefined();
   });
 
   it('sets a 24px interactionWidth so the edge has a wider hit area for hover/click/reconnect', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     expect(connectorToEdge(c, false).interactionWidth).toBe(24);
   });
 
@@ -144,7 +119,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       sourceHandle: 'b',
       targetHandle: 't',
     };
@@ -154,58 +128,38 @@ describe('connectorToEdge', () => {
   });
 
   it('leaves sourceHandle/targetHandle undefined for connectors authored without handle ids', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.sourceHandle).toBeUndefined();
     expect(edge.targetHandle).toBeUndefined();
   });
 
   it('bumps strokeWidth to 3 and pins opacity to 1 when selected (US-004)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'http' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false, true);
     expect(edge.style.strokeWidth).toBe(3);
     expect(edge.style.opacity).toBe(1);
   });
 
   it('preserves user-provided borderSize >= 3 when selected', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default', borderSize: 5 };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b', borderSize: 5 };
     const edge = connectorToEdge(c, false, true);
     expect(edge.style.strokeWidth).toBe(5);
   });
 
-  it('keeps the connector kind dasharray when selected (event=dashed, queue=dotted)', () => {
-    const eventC: Connector = {
-      id: 'c1',
-      source: 'a',
-      target: 'b',
-      kind: 'event',
-      eventName: 'x.y',
-    };
-    const queueC: Connector = {
-      id: 'c2',
-      source: 'a',
-      target: 'b',
-      kind: 'queue',
-      queueName: 'q',
-    };
-    expect(connectorToEdge(eventC, false, true).style.strokeDasharray).toBe('6 4');
-    expect(connectorToEdge(queueC, false, true).style.strokeDasharray).toBe('2 4');
-  });
-
   it('does not bump strokeWidth or opacity when not selected', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'http' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false, false);
     expect(edge.style.strokeWidth).toBe(2);
     expect(edge.style.opacity).toBeUndefined();
   });
 
   it('forwards connector.path through edge.data so EditableEdge can branch geometry (US-017)', () => {
-    const curveC: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const curveC: Connector = { id: 'c1', source: 'a', target: 'b' };
     const stepC: Connector = {
       id: 'c2',
       source: 'a',
       target: 'b',
-      kind: 'default',
       path: 'step',
     };
     expect(connectorToEdge(curveC, false).data.path).toBeUndefined();
@@ -221,7 +175,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       sourceHandleAutoPicked: true,
       targetHandleAutoPicked: true,
     };
@@ -229,13 +182,12 @@ describe('connectorToEdge', () => {
       id: 'c2',
       source: 'a',
       target: 'b',
-      kind: 'default',
       sourceHandleAutoPicked: false,
       targetHandleAutoPicked: false,
       sourceHandle: 'r',
       targetHandle: 'l',
     };
-    const legacy: Connector = { id: 'c3', source: 'a', target: 'b', kind: 'default' };
+    const legacy: Connector = { id: 'c3', source: 'a', target: 'b' };
     expect(connectorToEdge(floating, false).data.sourceHandleAutoPicked).toBe(true);
     expect(connectorToEdge(floating, false).data.targetHandleAutoPicked).toBe(true);
     expect(connectorToEdge(pinned, false).data.sourceHandleAutoPicked).toBe(false);
@@ -251,7 +203,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       color: 'blue',
       direction: 'both',
     };
@@ -262,14 +213,14 @@ describe('connectorToEdge', () => {
   });
 
   it('renders the default token with an explicit stroke + matching marker (no fall-through to React Flow defaults)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.style.stroke).toBeTruthy();
     expect(edge.markerEnd?.color).toBe(edge.style.stroke);
   });
 
   it('does not set a per-edge zIndex so connectors paint behind nodes (US-014)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const idle = connectorToEdge(c, false, false);
     const running = connectorToEdge(c, true, false);
     const selected = connectorToEdge(c, false, true);
@@ -288,7 +239,7 @@ describe('connectorToEdge', () => {
   // demo-canvas drag-direction normalization — together they guarantee the
   // arrow lands on the drop-end node, not the drag-start node.
   it('defaults a no-direction connector to markerEnd-only (US-023)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.markerEnd).toBeDefined();
     expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
@@ -303,7 +254,6 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       sourcePin: { side: 'right', t: 0.25 },
       targetPin: { side: 'left', t: 0.75 },
     };
@@ -313,7 +263,7 @@ describe('connectorToEdge', () => {
   });
 
   it('leaves sourcePin / targetPin undefined when the connector has no pins', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const e = connectorToEdge(c, false);
     expect(e.data.sourcePin).toBeUndefined();
     expect(e.data.targetPin).toBeUndefined();
@@ -324,14 +274,14 @@ describe('connectorToEdge', () => {
   // gesture (which re-derives edges per frame) doesn't churn edge identities
   // and trigger needless edge re-renders.
   it('returns the same DerivedEdge reference for identical inputs (memoized)', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const first = connectorToEdge(c, false, false);
     const second = connectorToEdge(c, false, false);
     expect(second).toBe(first);
   });
 
   it('returns a fresh edge when isAdjacentToRunning changes for the same connector', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const idle = connectorToEdge(c, false, false);
     const running = connectorToEdge(c, true, false);
     expect(running).not.toBe(idle);
@@ -339,7 +289,7 @@ describe('connectorToEdge', () => {
   });
 
   it('returns a fresh edge when selected flips for the same connector', () => {
-    const c: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const unselected = connectorToEdge(c, false, false);
     const selected = connectorToEdge(c, false, true);
     expect(selected).not.toBe(unselected);
@@ -347,12 +297,12 @@ describe('connectorToEdge', () => {
   });
 
   it('keys the cache on the connector ref so a mutated copy yields a fresh edge', () => {
-    const c1: Connector = { id: 'c1', source: 'a', target: 'b', kind: 'default' };
-    const c2: Connector = { ...c1, kind: 'event', eventName: 'x.y' };
+    const c1: Connector = { id: 'c1', source: 'a', target: 'b' };
+    const c2: Connector = { ...c1, label: 'updated' };
     const e1 = connectorToEdge(c1, false, false);
     const e2 = connectorToEdge(c2, false, false);
     expect(e2).not.toBe(e1);
-    expect(e2.data.kind).toBe('event');
+    expect(e2.label).toBe('updated');
   });
 
   it('forwards optional connector fontSize to edge data (US-018)', () => {
@@ -360,11 +310,10 @@ describe('connectorToEdge', () => {
       id: 'c1',
       source: 'a',
       target: 'b',
-      kind: 'default',
       label: 'wide',
       fontSize: 18,
     };
-    const unsized: Connector = { id: 'c2', source: 'a', target: 'b', kind: 'default' };
+    const unsized: Connector = { id: 'c2', source: 'a', target: 'b' };
     expect(connectorToEdge(sized, false).data.fontSize).toBe(18);
     expect(connectorToEdge(unsized, false).data.fontSize).toBeUndefined();
   });

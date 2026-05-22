@@ -73,12 +73,10 @@ describe('schema-catalog', () => {
       expect(payload.notes.some((n) => /imageNode.*path.*nodes/.test(n))).toBe(true);
     });
 
-    it('connector → all four kinds', () => {
+    it('connector → single shape', () => {
       const payload = loadCategory('connector');
-      const keys = Object.keys(payload.schemas).sort();
-      expect(keys).toEqual(['default', 'event', 'http', 'queue']);
-      // Empty notes is allowed for connector — no extra invariants beyond
-      // the schema itself today.
+      const keys = Object.keys(payload.schemas);
+      expect(keys).toEqual(['connector']);
       expect(payload.notes).toEqual([]);
     });
 

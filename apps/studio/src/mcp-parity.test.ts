@@ -48,7 +48,7 @@ const VALID_DEMO_TWO_NODES = {
 const VALID_DEMO_WITH_CONN = {
   ...VALID_DEMO_TWO_NODES,
   name: 'Parity Two Nodes With Conn',
-  connectors: [{ id: 'a-to-b', source: 'a', target: 'b', kind: 'default', label: 'flow' }],
+  connectors: [{ id: 'a-to-b', source: 'a', target: 'b', label: 'flow' }],
 };
 
 const VALID_DEMO_THREE_NODES = {
@@ -87,8 +87,8 @@ const VALID_DEMO_THREE_NODES = {
     },
   ],
   connectors: [
-    { id: 'a-to-b', source: 'a', target: 'b', kind: 'default' },
-    { id: 'b-to-c', source: 'b', target: 'c', kind: 'default' },
+    { id: 'a-to-b', source: 'a', target: 'b' },
+    { id: 'b-to-c', source: 'b', target: 'c' },
   ],
 };
 
@@ -321,7 +321,7 @@ const SCENARIOS: ParityScenario[] = [
     build: () => {
       const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
       // Explicit id + kind so the on-disk connector record is deterministic.
-      const conn = { id: 'parity-conn', source: 'a', target: 'b', kind: 'default' as const };
+      const conn = { id: 'parity-conn', source: 'a', target: 'b' };
       return {
         demoFile: fix.demoFile,
         runRest: () => restJson(fix.app, 'POST', `/api/flows/${fix.flowId}/connectors`, conn),
@@ -386,7 +386,6 @@ const SCENARIOS: ParityScenario[] = [
             id: 'parity-bulk-conn',
             source: 'a',
             target: 'parity-bulk-c',
-            kind: 'default' as const,
           },
         ],
       };

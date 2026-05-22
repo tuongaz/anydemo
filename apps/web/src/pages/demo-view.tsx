@@ -6,15 +6,7 @@ import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
 import { useUndoStack } from '@/hooks/use-undo-stack';
-import type {
-  Connector,
-  DefaultConnector,
-  EdgePin,
-  FlowDetail,
-  FlowNode,
-  FlowSummary,
-  ShapeKind,
-} from '@/lib/api';
+import type { Connector, EdgePin, FlowDetail, FlowNode, FlowSummary, ShapeKind } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { shortId } from '@/lib/short-id';
@@ -850,10 +842,7 @@ export function DemoView({
     [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
-  // Style-tab edit on a connector: color, edge style, direction. Cast through
-  // Partial<Connector> because the discriminated union over `kind` rejects
-  // bare partials at the type level (we never change kind here, so the cast
-  // is safe at runtime).
+  // Style-tab edit on a connector: color, edge style, direction.
   const onStyleConnector = useCallback(
     (connId: string, patch: ConnectorStylePatch) => {
       if (!flowId || !adapter) return;
@@ -1814,7 +1803,7 @@ export function DemoView({
       // perimeter point").
       const targetPin = options?.targetPin;
       const lastUsedConnector = getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector;
-      const optimistic: DefaultConnector = {
+      const optimistic: Connector = {
         id,
         source,
         target,
@@ -1822,7 +1811,6 @@ export function DemoView({
         targetHandleAutoPicked: true,
         ...(targetPin ? { targetPin } : {}),
         ...lastUsedConnector,
-        kind: 'default',
       };
       const payload = {
         id,
@@ -1832,7 +1820,6 @@ export function DemoView({
         targetHandleAutoPicked: true,
         ...(targetPin ? { targetPin } : {}),
         ...lastUsedConnector,
-        kind: 'default' as const,
       };
       setConnectorOverride(id, optimistic as Partial<Connector>);
       setEditError(null);
@@ -1895,14 +1882,13 @@ export function DemoView({
         position,
         data: shapeData,
       };
-      const connPayload: DefaultConnector = {
+      const connPayload: Connector = {
         id: newConnId,
         source: sourceNodeId,
         target: newNodeId,
         sourceHandleAutoPicked: true,
         targetHandleAutoPicked: true,
         ...lastUsed.connector,
-        kind: 'default',
       };
       // Optimistic: render the new node + edge immediately so the user sees
       // the result before the round-trip resolves.

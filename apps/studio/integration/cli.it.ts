@@ -339,7 +339,6 @@ describe('integration: CLI — projects + flows', () => {
         type: 'playNode',
         data: {
           name: 'Play',
-          kind: 'http',
           stateSource: { kind: 'request' },
           playAction: {
             kind: 'script',
@@ -404,8 +403,8 @@ describe('integration: CLI — nodes', () => {
             { id: 'b', type: 'shapeNode', data: { shape: 'ellipse' } },
           ],
           connectors: [
-            { id: 'c1', source: 'a', target: 'b', kind: 'default' },
-            { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.cli' },
+            { id: 'c1', source: 'a', target: 'b' },
+            { id: 'c2', source: 'b', target: 'a', eventName: 'evt.cli' },
           ],
         }),
       ],
@@ -490,7 +489,7 @@ describe('integration: CLI — connectors', () => {
         'connectors:add',
         created.id,
         '--json',
-        JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+        JSON.stringify({ id: 'c1', source: 'a', target: 'b' }),
       ],
       { env: cliEnv },
     );
@@ -506,7 +505,7 @@ describe('integration: CLI — connectors', () => {
     await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b' }),
     });
 
     const r = await runCli(
@@ -534,7 +533,7 @@ describe('integration: CLI — connectors', () => {
     await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b', kind: 'default' }),
+      body: JSON.stringify({ id: 'c1', source: 'a', target: 'b' }),
     });
 
     const r = await runCli(['connectors:delete', created.id, 'c1'], { env: cliEnv });

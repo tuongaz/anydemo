@@ -517,9 +517,8 @@ export type PatchNodeOutcome =
   | { kind: 'writeFailed'; message: string };
 
 // Partial connector update body. Strict at the top level so client typos
-// surface as 400. Per-kind invariants (e.g. kind='event' requires eventName)
-// are enforced post-merge by re-parsing the whole demo through ResolvedFlowSchema.
-const ConnectorKindSchema = z.enum(['http', 'event', 'queue', 'default']);
+// surface as 400. Field shape invariants are enforced post-merge by
+// re-parsing the whole demo through ResolvedFlowSchema.
 export const ConnectorPatchBodySchema = z
   .object({
     label: z.string().optional(),
@@ -530,7 +529,6 @@ export const ConnectorPatchBodySchema = z
     path: z.enum(['curve', 'step']).optional(),
     // US-018: per-connector label font size (mirrors NodeVisualBaseShape.fontSize).
     fontSize: z.number().positive().optional(),
-    kind: ConnectorKindSchema.optional(),
     eventName: z.string().optional(),
     queueName: z.string().optional(),
     method: z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']).optional(),
@@ -567,21 +565,10 @@ export const ConnectorPatchBodySchema = z
   .strict();
 export type ConnectorPatchBody = z.infer<typeof ConnectorPatchBodySchema>;
 
-// Kind-specific connector fields. When `kind` changes via PATCH, these are
-// dropped first so the resulting connector doesn't carry phantom payloads
-// from the previous kind (e.g. an event→default change leaving eventName
-// behind, which ResolvedFlowSchema would silently strip on parse but leave on disk).
-const CONNECTOR_KIND_FIELDS = ['method', 'url', 'eventName', 'queueName'] as const;
-
 export const mergeConnectorUpdates = (
   conn: Record<string, unknown>,
   updates: ConnectorPatchBody,
 ): void => {
-  if (updates.kind !== undefined && updates.kind !== conn.kind) {
-    for (const key of CONNECTOR_KIND_FIELDS) {
-      delete conn[key];
-    }
-  }
   for (const [key, value] of Object.entries(updates)) {
     if (value === undefined) continue;
     // US-025: explicit null in the patch body means "clear this field on
@@ -1346,9 +1333,6 @@ export async function addFlowBulkImpl(
     if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
       newConn.id = `conn-${shortId()}`;
     }
-    if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
-      newConn.kind = 'default';
-    }
     const newId = newConn.id as string;
     if (connIdsInBatch.has(newId)) {
       return { kind: 'duplicateIdInBatch', collection: 'connectors', id: newId };
@@ -1617,9 +1601,6 @@ export async function addConnectorImpl(
   if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
     newConn.id = `conn-${shortId()}`;
   }
-  if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
-    newConn.kind = 'default';
-  }
   const newId = newConn.id as string;
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -1636,13 +1617,10 @@ export async function addConnectorImpl(
 
 // Apply a partial PATCH body to a single connector. Mutation runs against
 // the raw parsed JSON (so unknown forward-compat fields survive a round-trip).
-// When `kind` changes, the previous kind's payload fields are dropped first
-// so the connector doesn't carry phantom data; explicit `null` in the patch
-// clears the field on disk (used by reconnect-to-body to drop a pinned
-// handle id). The whole demo is re-validated through ResolvedFlowSchema before
-// commit so the discriminated union catches missing-required-fields
-// (e.g. kind='event' without eventName) and the superRefine gates
-// source/target referential integrity + handle role invariants.
+// Explicit `null` in the patch clears the field on disk (used by
+// reconnect-to-body to drop a pinned handle id). The whole demo is
+// re-validated through ResolvedFlowSchema before commit so the superRefine
+// gates source/target referential integrity + handle role invariants.
 export async function patchConnectorImpl(
   deps: OperationsDeps,
   flowId: string,

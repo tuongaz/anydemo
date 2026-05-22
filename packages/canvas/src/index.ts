@@ -25,22 +25,18 @@ export type {
   ConnectorDirection,
   ConnectorPath,
   ConnectorStyle,
-  DefaultConnector,
   Flow,
   FlowNode,
   EdgePin,
   EdgePinSide,
-  EventConnector,
   HtmlNodeData,
   HttpAction,
-  HttpConnector,
   IconNodeData,
   ImageNodeData,
   NodeData,
   NodeDescription,
   NodeStatus,
   NodeVisual,
-  QueueConnector,
   RunResult,
   ShapeKind,
   ShapeNodeData,
@@ -88,7 +84,7 @@ export type {
 
 export { cn } from './lib/cn.ts';
 
-export { connectorToEdge, styleForKind } from './lib/connector-to-edge.ts';
+export { connectorToEdge } from './lib/connector-to-edge.ts';
 export type { DerivedEdge } from './lib/connector-to-edge.ts';
 
 export { createDebouncer } from './lib/debounce.ts';

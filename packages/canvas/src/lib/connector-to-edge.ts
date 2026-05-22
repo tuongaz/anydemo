@@ -13,11 +13,11 @@ export interface DerivedEdge {
   type: 'editableEdge';
   label?: string;
   animated: boolean;
-  // `kind` drives downstream visual filtering; per-edge runtime callbacks
-  // (e.g. onLabelChange) are injected by DemoCanvas at render time so they
-  // don't churn the connectorToEdge memo. `path` belongs in `data` (not
-  // `style`) because it changes the SVG `d` attribute generation, not stroke
-  // styling — see EditableEdge for the bezier vs smoothstep branch.
+  // Per-edge runtime callbacks (e.g. onLabelChange) are injected by
+  // DemoCanvas at render time so they don't churn the connectorToEdge memo.
+  // `path` belongs in `data` (not `style`) because it changes the SVG `d`
+  // attribute generation, not stroke styling — see EditableEdge for the
+  // bezier vs smoothstep branch.
   // `sourceHandleAutoPicked` / `targetHandleAutoPicked` (US-025): when
   // !== false (true OR absent → floating), EditableEdge ignores React
   // Flow's stored handle coords and recomputes the endpoint as the
@@ -28,7 +28,6 @@ export interface DerivedEdge {
   // auto-pick behavior — EditableEdge anchors the endpoint to `(side, t)` on
   // the connected node's perimeter so it survives moves and resizes.
   data: {
-    kind: Connector['kind'];
     path?: ConnectorPath;
     sourceHandleAutoPicked?: boolean;
     targetHandleAutoPicked?: boolean;
@@ -60,26 +59,11 @@ const arrowMarker = (color?: string): EdgeMarker => ({
   ...(color ? { color } : {}),
 });
 
-// Visual style per connector kind. Kept terse so the canvas reads cleanly:
-//   • http    — solid (no dasharray)
-//   • event   — dashed
-//   • queue   — dotted
-//   • default — solid (user-drawn, no semantic payload)
-const STYLE_BY_KIND: Record<Connector['kind'], { strokeDasharray?: string }> = {
-  http: {},
-  event: { strokeDasharray: '6 4' },
-  queue: { strokeDasharray: '2 4' },
-  default: {},
-};
-
 const STYLE_BY_NAME: Record<ConnectorStyle, { strokeDasharray?: string }> = {
   solid: {},
   dashed: { strokeDasharray: '6 4' },
   dotted: { strokeDasharray: '2 4' },
 };
-
-export const styleForKind = (kind: Connector['kind']): { strokeDasharray?: string } =>
-  STYLE_BY_KIND[kind];
 
 // Selected connectors render with a thicker stroke (US-004) so the selection is
 // readable at a glance against the dashed/dotted/solid kinds. We also pin
@@ -110,12 +94,8 @@ export const connectorToEdge = (
   ) {
     return cached.edge;
   }
-  // Per-connector `style` overrides the kind-derived default. This lets a
-  // user-drawn 'default' connector pick up any visual style without changing
-  // its (semantically empty) kind.
-  const dashStyle = connector.style
-    ? STYLE_BY_NAME[connector.style]
-    : STYLE_BY_KIND[connector.kind];
+  // Optional per-connector `style` overrides the default solid stroke.
+  const dashStyle = connector.style ? STYLE_BY_NAME[connector.style] : {};
   // Color token (defaults to 'default') drives the stroke. Always call
   // `colorTokenStyle` — it falls back to the 'default' token internally — so
   // an unset color still produces an explicit stroke. Skipping that branch
@@ -151,7 +131,6 @@ export const connectorToEdge = (
     label: connector.label,
     animated: isAdjacentToRunning,
     data: {
-      kind: connector.kind,
       path: connector.path,
       sourceHandleAutoPicked: connector.sourceHandleAutoPicked,
       targetHandleAutoPicked: connector.targetHandleAutoPicked,
