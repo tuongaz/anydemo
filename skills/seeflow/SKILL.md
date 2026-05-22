@@ -70,12 +70,26 @@ Full text in `references/core-rules.md`:
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
 - **Asking "what's your codebase?".** Launch the analyzers — that is their job.
 - **Skipping or simulating Phase 6.** Mandatory; the retry budget handles flakiness.
+- **Bypassing the Phase 0 consent check.** Never default to `enabled: true`; always read `~/.seeflow/consent.json` first.
+- **Touching `status` after the initial `pending` write.** The `SessionEnd` hook owns that field — see `feedback.md`.
+- **Logging without a redacted summary.** If the summary would leak a path, hostname, project name, or prompt text, **skip the entry** rather than emit a leaky one.
 
 ## Phase 0 — pre-flight (parallel)
 
-**First, silent consent check (see `feedback.md`).** Read `~/.seeflow/consent.json`. If absent, run the first-run prompt and write the file before continuing. The result governs whether qualifying failures get logged to `~/.seeflow/feedback.md` for the rest of the run — the skill only writes locally; a `SessionEnd` hook handles transfer.
+**First, silent consent check (see `feedback.md`).** Read `~/.seeflow/consent.json`. If absent, run the first-run prompt and write the file before continuing. The result governs whether qualifying events get logged to `~/.seeflow/feedback.jsonl` for the rest of the run — the skill only writes locally; a `SessionEnd` hook handles transfer.
 
 Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
+
+### Capability probe — run before anything else
+
+Run `$SEEFLOW help` once and confirm every required subcommand is present: `projects:create`, `flow:add-bulk`, `flows:layout`, `nodes:patch`, `e2e`. (Older `@tuongaz/seeflow` versions on `npx` lack one or more.) For each missing subcommand, log a feedback entry and surface to the user.
+
+- Required missing → log `env-capability-mismatch` (`severity: blocker`, `phase: P0`, `details: missing <subcommand>[, <subcommand>...]`, `summary: $SEEFLOW lacks required subcommands; run `npm i -g @tuongaz/seeflow@latest` and retry`). Then stop — do **not** start Phase 1.
+- All present → continue.
+
+If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), log `env-tool-missing` (`severity: blocker`, `phase: P0`, `summary: $SEEFLOW unresolved — neither local binary nor npx fallback available`) and stop.
+
+### Studio probe + LEARN.md (parallel)
 
 Then in a single message:
 
@@ -83,7 +97,7 @@ Then in a single message:
 2. Read `<project>/.seeflow/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
 
 - **200** → Phase 1.
-- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, surface and stop.
+- **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, log `env-service-unreachable` (`severity: blocker`, `phase: P0`, `summary: studio /health unreachable after start retry`), surface and stop.
 
 ## Phase 1 — discover (parallel)
 
@@ -108,7 +122,7 @@ Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both ove
 - `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `learnContext`. Out: `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
 - `seeflow-system-analyzer` — in: `projectRoot`, `learnContext`. Out: `runtimeProfile` + a `learnUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `learnUpdates`.**
 
-Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/learn-format.md`. Unparseable output: retry that single agent once, then surface and stop.
+Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/learn-format.md`. Unparseable output: retry that single agent once, then log `agent-output-unparseable` (`severity: failure`, `agent: <slug>`, `summary: <agent> returned unparseable JSON after retry`), surface, and stop. The same `agent-output-unparseable` rule applies to every sub-agent in Phases 2 and 4.
 
 ### Empty-project / design-only mode
 
@@ -128,6 +142,8 @@ If the project root has no source tree (no `package.json`, no Go module, no Pyth
 ```
 
 Forward that brief to `seeflow-node-planner` (Phase 2) as-is — the planner already tolerates a sparse brief.
+
+Log `mode-fallback` (`severity: degraded`, `phase: P1`, `details: design-only`, `summary: empty project — analyzers skipped, synthetic brief built from prompt`).
 
 Downstream consequences:
 - **Phase 3 dynamic gate:** default to **static** without re-asking. Without `runtimeProfile`, Phase 4 designers cannot pick a real interpreter or fixture; tell the user to populate code first if they later want dynamic.
@@ -180,6 +196,7 @@ The skeleton flow lands via three CLI calls, in order. No `flow.json` authoring.
    - `nodes[].id`
    - `connectors[].id`, `connectors[].source`, `connectors[].target`
    - `rationales` keys (kept in memory for the review prompt)
+2b. **Log any silent corrections** from steps 2 and 2a (see `feedback.md`). For each correction kind that fired (placeholder-`playAction` injection, descriptive→canonical id rewrite, unknown-type rename, unknown-field rename, bidir-connector strip, …), emit **one** `agent-output-corrected` entry with `severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, and `details: <correction-kind> (×N)` where N is the count. Aggregate across nodes — never one entry per node. If no corrections were needed, log nothing. This is the signal that the planner drifted from the schema; without it, the orchestrator's silent patching is invisible.
 3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
 4. `flows:layout` — run ELK and write `style.json`.
 
@@ -199,10 +216,10 @@ URL="$STUDIO_URL/d/$slug"
 
 **Wait once.** Parse both answers from the reply.
 
-- **Layout changes requested** → re-run node-planner with the feedback, repeat the combined ask. The dynamic answer (if given) is remembered but not acted on until the layout is approved.
+- **Layout changes requested** → log `plan-revision` (`severity: friction`, `phase: P3`, `summary: user requested layout changes at canvas review gate`), re-run node-planner with the feedback, repeat the combined ask. The dynamic answer (if given) is remembered but not acted on until the layout is approved. Debounce — log once per session even if the user revises multiple times.
 - **Layout approved + dynamic** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations. Re-merge any new `learnUpdates` first.
 - **Layout approved + static** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `learnUpdates`.
-- **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in).
+- **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in). Log `mode-fallback` (`severity: degraded`, `phase: P3`, `details: dynamic-to-static`, `summary: dynamic gate unclear; auto-downgraded to static`).
 
 (Design-only mode from Phase 1's empty-project branch defaults to static here without re-asking.)
 
@@ -228,7 +245,7 @@ If the play-designer emitted `newTriggerNodes`, batch them via `flow:add-bulk` (
 
 **Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type via the post-merge reparse (e.g. `state → play` requires a `playAction` in the same patch); `badSchema` means feed the issues to the play-designer and retry.
 
-**Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule).
+**Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule). When the budget is exhausted for a node, log `retry-exhausted` (`severity: failure`, `phase: P5`, `code: badSchema` (or the actual code), `summary: nodes:patch retries exhausted on <kind> (N nodes)`). Aggregate across nodes — one entry per (kind, code) pair, not one per node.
 
 ## Phase 6 — end-to-end validation
 
@@ -243,7 +260,9 @@ Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of
 1. Identify failing nodes from `plays[*].error` / `statuses[*].outcome`.
 2. **Parallel fix-up (Phase 1 rule):** one sub-agent per failing script, single message. A single agent fixing N scripts cross-contaminates.
 3. Each agent gets the script path (under `.seeflow/nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
-4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then ask retry / stop.
+4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then log `seeflow:e2e-fail` (`severity: failure`, `phase: P6`, `details: <N> failing scripts after fix-up`, `summary: e2e ok:false after retry budget exhausted`) and ask retry / stop.
+
+If the run is design-only (Phase 1 fallback), skip Phase 6 entirely and log `phase-skipped` (`severity: degraded`, `phase: P6`, `details: design-only`, `summary: e2e skipped — no runtime to validate against`).
 
 ### Polish LEARN.md with anything learned
 
