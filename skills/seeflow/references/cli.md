@@ -28,14 +28,21 @@ at `$STUDIO_URL/d/<slug>`), not as an addressable identifier from the CLI.
 
 ## New project vs existing project
 
-- **New project (no `<repoPath>/.seeflow/flow.json` yet)** — use
+- **New project (no `<repoPath>/flow.json` yet)** — use
   `projects:create --path <repoPath> --name <name> [--description <text>]`.
-  The CLI writes the empty envelope and registers it in one step,
+  The CLI writes the empty envelope at `<repoPath>/flow.json` (project
+  root, **not** inside `.seeflow/`) and registers it in one step,
   returning `{ id, slug }`. This is the default for `/seeflow`'s Phase 3.
 - **Existing project (envelope already on disk)** — use
-  `register --path <repoPath>` (default `--flow ./.seeflow/flow.json`)
-  to register the existing file. `projects:create` exits with
-  `alreadyExists` (code 4) here; fall back to `register` and continue.
+  `register --path <repoPath> --flow flow.json` to register the existing
+  root-level file. Pass `--flow` explicitly — `register`'s default is the
+  legacy `.seeflow/flow.json`, which `projects:create` no longer writes.
+  `projects:create` exits with `alreadyExists` (code 4) when
+  `<repoPath>/flow.json` is present; fall back to `register` and continue.
+
+Note: node-attached content (`detail.md`, `view.html`, `scripts/`) still
+lives under `<project>/.seeflow/nodes/<nodeId>/` regardless of where
+`flow.json` itself sits.
 
 ## Generating canonical ids
 
