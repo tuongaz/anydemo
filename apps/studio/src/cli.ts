@@ -251,6 +251,7 @@ async function runHelp() {
 }
 
 async function runStart() {
+  mkdirSync(seeflowHome(), { recursive: true });
   const config = readConfig();
   const portArg = flagValue('port');
   // --port wins; otherwise always fall back to the schema default (not the
