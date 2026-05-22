@@ -7,5 +7,17 @@
     "name": "SeeFlow"
   },
   "skills": "./skills/",
-  "agents": "./skills/seeflow/agents/"
+  "agents": "./skills/seeflow/agents/",
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/seeflow-session-end.sh"
+          }
+        ]
+      }
+    ]
+  }
 }

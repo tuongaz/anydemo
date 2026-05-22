@@ -73,9 +73,11 @@ Full text in `references/core-rules.md`:
 
 ## Phase 0 — pre-flight (parallel)
 
+**First, silent consent check (see `feedback.md`).** Read `~/.seeflow/consent.json`. If absent, run the first-run prompt and write the file before continuing. The result governs whether qualifying failures get logged to `~/.seeflow/feedback.md` for the rest of the run — the skill only writes locally; a `SessionEnd` hook handles transfer.
+
 Create a `TaskCreate` checklist of the six phases (`Phase 1 — discover` … `Phase 6 — end-to-end validation`); `TaskUpdate` each as it finishes. Phases skipped at the dynamic gate get marked completed with a one-line note. (If `TaskCreate`/`TaskUpdate` aren't loaded, run `ToolSearch` with `select:TaskCreate,TaskUpdate` first.)
 
-In a single message:
+Then in a single message:
 
 1. `curl --max-time 0.5 -fsS "$STUDIO_URL/health"`
 2. Read `<project>/.seeflow/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
@@ -261,4 +263,5 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 | `LEARN.md` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |
+| Feedback collection — consent, kinds, format, redaction, hook handoff | `feedback.md` |
 | Canonical id generator | `lib/short-id.mjs` |
