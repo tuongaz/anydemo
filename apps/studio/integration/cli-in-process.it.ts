@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { slugify } from '../src/registry.ts';
 import { runCli } from './support/cli-runner.ts';
 import { uniqueFlowId } from './support/ids.ts';
 import { connectSse } from './support/sse-client.ts';
@@ -31,7 +32,7 @@ describe('integration: CLI in-process mutations → studio watcher broadcasts', 
     const res = await fetch(`${studio.baseURL}/api/projects`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name }),
+      body: JSON.stringify({ path: join(studio.workspace, slugify(name)), name }),
     });
     expect(res.status).toBe(200);
     return (await res.json()) as { id: string; slug: string };

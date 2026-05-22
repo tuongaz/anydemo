@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { slugify } from '../src/registry.ts';
 import { runCli } from './support/cli-runner.ts';
 import { uniqueFlowId } from './support/ids.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
@@ -35,7 +36,10 @@ interface OkLine {
 interface CreateProjectResponse {
   id: string;
   slug: string;
-  scaffolded: boolean;
+}
+
+function projectPathFor(name: string): string {
+  return join(studio.workspace, slugify(name));
 }
 
 interface FlowListItem {
@@ -60,7 +64,7 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
   const res = await fetch(`${studio.baseURL}/api/projects`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ path: projectPathFor(name), name }),
   });
   expect(res.status).toBe(200);
   return (await res.json()) as CreateProjectResponse;
@@ -158,16 +162,17 @@ describe('integration: CLI — meta (help / version / unknown)', () => {
 describe('integration: CLI — projects + flows', () => {
   it('projects:create creates a new project on disk and prints ok', async () => {
     const name = uniqueFlowId('cli-projects-create');
-    const r = await runCli(['projects:create', '--name', name], { env: cliEnv });
+    const projectPath = projectPathFor(name);
+    const r = await runCli(['projects:create', '--path', projectPath, '--name', name], {
+      env: cliEnv,
+    });
     expect(r.code).toBe(0);
     const body = parseOkLine(r.stdout);
     expect(body.ok).toBe(true);
     expect(typeof body.id).toBe('string');
     expect(typeof body.slug).toBe('string');
 
-    const slug = body.slug as string;
-    const flowPath = join(studio.workspace, slug, '.seeflow', 'flow.json');
-    expect(existsSync(flowPath)).toBe(true);
+    expect(existsSync(join(projectPath, '.seeflow', 'flow.json'))).toBe(true);
   });
 
   it('flows:list returns the registry as { ok, flows: [...] }', async () => {

@@ -1,6 +1,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { slugify } from '../src/registry.ts';
 import { uniqueFlowId } from './support/ids.ts';
 import { connectSse } from './support/sse-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
@@ -20,7 +21,6 @@ afterAll(async () => {
 interface CreateProjectResponse {
   id: string;
   slug: string;
-  scaffolded: boolean;
 }
 
 interface FlowListItem {
@@ -79,7 +79,7 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
   const res = await fetch(`${studio.baseURL}/api/projects`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ path: join(studio.workspace, slugify(name)), name }),
   });
   expect(res.status).toBe(200);
   return (await res.json()) as CreateProjectResponse;
@@ -134,7 +134,6 @@ describe('integration: REST — flow lifecycle', () => {
       const created = await createProject(name);
       expect(created.id).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(created.slug).toBeTruthy();
-      expect(created.scaffolded).toBe(true);
 
       const flowPath = join(studio.workspace, created.slug, '.seeflow', 'flow.json');
       expect(existsSync(flowPath)).toBe(true);

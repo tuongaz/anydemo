@@ -74,13 +74,14 @@ export interface PlayResult {
 }
 
 export interface CreateProjectBody {
+  path: string;
   name: string;
+  description?: string;
 }
 
 export interface CreateProjectResult {
   id: string;
   slug: string;
-  scaffolded: boolean;
 }
 
 export const deleteFlow = async (id: string): Promise<{ ok: true }> => {

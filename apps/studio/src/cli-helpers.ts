@@ -62,7 +62,8 @@ export function printError(message: string, opts: CliOutcomeOptions = {}): never
  *  - kind === 'badSchema'|'badJson'                   → exit 2
  *  - kind === 'notFound'|'flowNotFound'|'fileNotFound'|
  *             'unknownNode'|'unknownConnector'        → exit 3
- *  - kind === 'duplicateIdInBatch'|'idAlreadyExists'  → exit 4
+ *  - kind === 'duplicateIdInBatch'|'idAlreadyExists'|
+ *             'alreadyExists'                          → exit 4
  *  - kind === 'writeFailed'|'sdkWriteFailed'|'scaffoldFailed' → exit 5
  *  - anything else                                    → exit 1
  *
@@ -121,6 +122,8 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
             : 'Id already exists';
       return `${prefix}: ${String(outcome.id ?? '')}`;
     }
+    case 'alreadyExists':
+      return `Project already exists at ${String(outcome.path ?? '')}`;
     case 'writeFailed':
       return `Failed to write demo file: ${String(outcome.message ?? '')}`;
     case 'sdkWriteFailed':
@@ -142,6 +145,7 @@ export const EXIT_CODE_BY_KIND: Record<string, number> = {
   unknownConnector: 3,
   duplicateIdInBatch: 4,
   idAlreadyExists: 4,
+  alreadyExists: 4,
   writeFailed: 5,
   sdkWriteFailed: 5,
   scaffoldFailed: 5,

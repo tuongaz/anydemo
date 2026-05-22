@@ -183,7 +183,7 @@ Commands (work without a running studio):
   stop                 Stop a background studio instance
   register             Register a demo repo, writing to ~/.seeflow/registry.json (alias of flows:register)
   flows:register       Register a demo repo
-  projects:create      Create a new project (--name <name>)
+  projects:create      Create a new project (--path <dir> --name <name> [--description <text>])
   flows:list           List registered flows
   flows:summary        List registered flows (id + name + description only)
   flows:get <id>       Get flow details
@@ -242,7 +242,7 @@ Examples:
   npx -y @tuongaz/seeflow@latest --port 8080
   npx -y @tuongaz/seeflow@latest start --foreground
   npx -y @tuongaz/seeflow@latest register --path ./my-app
-  npx -y @tuongaz/seeflow@latest projects:create --name "Checkout"
+  npx -y @tuongaz/seeflow@latest projects:create --path ./checkout --name "Checkout"
   npx -y @tuongaz/seeflow@latest flows:list
   npx -y @tuongaz/seeflow@latest stop
 `.trim(),
@@ -613,10 +613,18 @@ async function waitForHealth(url: string, timeoutMs: number): Promise<boolean> {
 // ---- HTTP-passthrough subcommands ----------------------------------------
 
 async function runProjectsCreate() {
+  const rawPath = flagValue('path');
+  if (!rawPath) printError('Missing required flag: --path');
   const name = flagValue('name');
   if (!name) printError('Missing required flag: --name');
+  const description = flagValue('description');
+
   const ops = createCliOperations();
-  const result = await ops.createProject({ name: name as string });
+  const result = await ops.createProject({
+    path: resolve(rawPath as string),
+    name: name as string,
+    ...(description !== undefined ? { description } : {}),
+  });
   printOutcome(result);
 }
 

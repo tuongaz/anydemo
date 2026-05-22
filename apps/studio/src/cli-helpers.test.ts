@@ -60,6 +60,7 @@ describe('EXIT_CODE_BY_KIND', () => {
       unknownConnector: 3,
       duplicateIdInBatch: 4,
       idAlreadyExists: 4,
+      alreadyExists: 4,
       writeFailed: 5,
       sdkWriteFailed: 5,
       scaffoldFailed: 5,

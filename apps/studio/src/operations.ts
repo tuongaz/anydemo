@@ -21,8 +21,7 @@ import {
   removeNodeDir,
   writeNodeFile,
 } from './node-files.ts';
-import { seeflowHome } from './paths.ts';
-import { type Registry, slugify } from './registry.ts';
+import type { Registry } from './registry.ts';
 import {
   ColorTokenSchema,
   EdgePinSchema,
@@ -52,7 +51,9 @@ export const RegisterBodySchema = z.object({
 export type RegisterBody = z.infer<typeof RegisterBodySchema>;
 
 export const CreateProjectBodySchema = z.object({
+  path: z.string().min(1),
   name: z.string().min(1),
+  description: z.string().min(1).optional(),
 });
 export type CreateProjectBody = z.infer<typeof CreateProjectBodySchema>;
 
@@ -335,12 +336,6 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
 export interface OperationsDeps {
   registry: Registry;
   watcher?: FlowWatcher;
-  /**
-   * Override the base directory for new projects. Defaults to seeflowHome()
-   * — `${SEEFLOW_WORKSPACE}/.seeflow` inside Docker, `~/.seeflow` locally.
-   * Tests inject a tmp dir.
-   */
-  projectBaseDir?: string;
 }
 
 export interface FlowListItem {
@@ -371,7 +366,6 @@ export interface RegisterFlowSuccess {
 export interface CreateProjectSuccess {
   id: string;
   slug: string;
-  scaffolded: boolean;
 }
 
 export type ListFlowsOutcome = { kind: 'ok'; data: FlowListItem[] };
@@ -439,8 +433,7 @@ export type DeleteFlowOutcome = { kind: 'ok' } | { kind: 'notFound' };
 
 export type CreateProjectOutcome =
   | { kind: 'ok'; data: CreateProjectSuccess }
-  | { kind: 'badJson'; detail: string }
-  | { kind: 'badSchema'; issues: ZodIssue[] }
+  | { kind: 'alreadyExists'; path: string }
   | { kind: 'scaffoldFailed'; message: string }
   | { kind: 'sdkWriteFailed'; message: string };
 
@@ -1138,36 +1131,22 @@ export async function createProjectImpl(
   body: CreateProjectBody,
 ): Promise<CreateProjectOutcome> {
   const { registry, watcher } = deps;
-  const { name } = body;
-  const baseDir = deps.projectBaseDir ?? seeflowHome();
-  const folderPath = join(baseDir, slugify(name));
+  const { path: folderPath, name, description } = body;
 
   const demoFullPath = join(folderPath, DEFAULT_FLOW_RELATIVE_PATH);
 
   if (existsSync(demoFullPath)) {
-    let raw: unknown;
-    try {
-      raw = await Bun.file(demoFullPath).json();
-    } catch (err) {
-      return { kind: 'badJson', detail: err instanceof Error ? err.message : String(err) };
-    }
-    const flowParse = FlowSchema.safeParse(raw);
-    if (!flowParse.success) return { kind: 'badSchema', issues: flowParse.error.issues };
-
-    const lastModified = statSync(demoFullPath).mtimeMs;
-    const entry = registry.upsert({
-      name,
-      repoPath: folderPath,
-      flowPath: DEFAULT_FLOW_RELATIVE_PATH,
-      valid: true,
-      lastModified,
-    });
-    watcher?.watch(entry.id);
-    return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: false } };
+    return { kind: 'alreadyExists', path: folderPath };
   }
 
   // Flow-only scaffold: empty nodes/connectors, no style.json needed.
-  const scaffold: Flow = { version: 2, name, nodes: [], connectors: [] };
+  const scaffold: Flow = {
+    version: 2,
+    name,
+    ...(description !== undefined ? { description } : {}),
+    nodes: [],
+    connectors: [],
+  };
 
   try {
     mkdirSync(join(folderPath, '.seeflow'), { recursive: true });
@@ -1188,13 +1167,14 @@ export async function createProjectImpl(
   const lastModified = statSync(demoFullPath).mtimeMs;
   const entry = registry.upsert({
     name,
+    description,
     repoPath: folderPath,
     flowPath: DEFAULT_FLOW_RELATIVE_PATH,
     valid: true,
     lastModified,
   });
   watcher?.watch(entry.id);
-  return { kind: 'ok', data: { id: entry.id, slug: entry.slug, scaffolded: true } };
+  return { kind: 'ok', data: { id: entry.id, slug: entry.slug } };
 }
 
 // Append a new node to the demo. Auto-generates an id when absent; ResolvedFlowSchema

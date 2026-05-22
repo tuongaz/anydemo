@@ -176,8 +176,6 @@ export interface ApiOptions {
    *  Tests use this to record call order across runPlay / runReset /
    *  stopAllPlays and to drive each in isolation. */
   proxy?: ProxyFacade;
-  /** Override base directory for new projects. Defaults to ~/.seeflow. Tests inject a tmp dir. */
-  projectBaseDir?: string;
 }
 
 /**
@@ -205,8 +203,7 @@ export function createApi(options: ApiOptions): Hono {
   const platform = options.platform ?? process.platform;
   const processSpawner = options.processSpawner;
   const proxy = options.proxy ?? defaultProxyFacade;
-  const projectBaseDir = options.projectBaseDir;
-  const ops = createOperations({ registry, watcher, projectBaseDir });
+  const ops = createOperations({ registry, watcher });
   const api = new Hono();
 
   api.post('/flows/register', async (c) => {
@@ -415,17 +412,11 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ error: 'Body must be { flow, options? } or { nodes, edges, options? }' }, 400);
   });
 
-  // POST /api/projects — UI-driven "Create new project" flow (US-020). Two
-  // branches based on whether the target folder already has a SeeFlow
-  // project set up at `<folderPath>/.seeflow/flow.json`:
-  //   1. Existing setup: read + validate the on-disk demo and register it
-  //      as-is (no overwrite, no scaffolding). The user-supplied `name`
-  //      becomes the registry display name; the on-disk demo's `name` is
-  //      preserved on disk.
-  //   2. Fresh scaffold: mkdir -p the folder + .seeflow/, write a default
-  //      scaffold flow.json keyed off `name`, and run the same SDK-emit
-  //      helper write the CLI register flow uses (a no-op for an empty
-  //      scaffold, but kept for parity).
+  // POST /api/projects — UI-driven "Create new project" flow (US-020).
+  // Scaffolds `<path>/.seeflow/flow.json` with the supplied name + optional
+  // description, then registers it. If the target already has a
+  // `.seeflow/flow.json`, returns 409 — callers should use POST
+  // /api/flows/register instead.
   api.post('/projects', async (c) => {
     let body: unknown;
     try {
@@ -443,13 +434,8 @@ export function createApi(options: ApiOptions): Hono {
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
-      case 'badJson':
-        return c.json({ error: `Existing demo file is not valid JSON: ${result.detail}` }, 400);
-      case 'badSchema':
-        return c.json(
-          { error: 'Existing demo file failed schema validation', issues: result.issues },
-          400,
-        );
+      case 'alreadyExists':
+        return c.json({ error: `Project already exists at ${result.path}` }, 409);
       case 'scaffoldFailed':
         return c.json({ error: `Failed to scaffold project: ${result.message}` }, 500);
       case 'sdkWriteFailed':

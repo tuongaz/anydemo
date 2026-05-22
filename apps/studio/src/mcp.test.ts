@@ -41,14 +41,13 @@ const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
 
 const tmpEmptyFolder = () => mkdtempSync(join(tmpdir(), 'seeflow-mcp-proj-'));
 
-const buildApp = (opts: { projectBaseDir?: string } = {}) => {
+const buildApp = () => {
   const registry = createRegistry({ path: tmpRegistry() });
   const app = createApp({
     mode: 'prod',
     staticRoot: './dist/web',
     registry,
     disableWatcher: true,
-    ...opts,
   });
   return { app, registry };
 };
@@ -153,7 +152,9 @@ describe('POST /mcp tools/list', () => {
 
     const createProject = byName.get('seeflow_create_project');
     const cpProps = createProject?.inputSchema?.properties as Record<string, unknown>;
-    expect(Object.keys(cpProps)).toEqual(['name']);
+    expect(Object.keys(cpProps).sort()).toEqual(['description', 'name', 'path']);
+    const cpRequired = createProject?.inputSchema?.required as string[];
+    expect(cpRequired.sort()).toEqual(['name', 'path']);
   });
 });
 
@@ -517,14 +518,33 @@ describe('seeflow_delete_flow', () => {
 
 describe('seeflow_create_project', () => {
   it('scaffolds a new project folder and writes .seeflow/flow.json', async () => {
-    const projectBaseDir = tmpEmptyFolder();
-    const { app, registry } = buildApp({ projectBaseDir });
-    const envelope = await callTool(app, 'seeflow_create_project', { name: 'Brand New Flow' });
-    const body = expectOk(envelope) as { id: string; slug: string; scaffolded: boolean };
-    expect(body.scaffolded).toBe(true);
+    const projectPath = join(tmpEmptyFolder(), 'brand-new-flow');
+    const { app, registry } = buildApp();
+    const envelope = await callTool(app, 'seeflow_create_project', {
+      path: projectPath,
+      name: 'Brand New Flow',
+    });
+    const body = expectOk(envelope) as { id: string; slug: string };
     expect(body.slug).toBe('brand-new-flow');
-    expect(existsSync(join(projectBaseDir, 'brand-new-flow', '.seeflow', 'flow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, '.seeflow', 'flow.json'))).toBe(true);
     expect(registry.list()).toHaveLength(1);
+  });
+
+  it('errors when a project already exists at <path>/.seeflow/flow.json', async () => {
+    const projectPath = join(tmpEmptyFolder(), 'taken');
+    mkdirSync(join(projectPath, '.seeflow'), { recursive: true });
+    writeFileSync(
+      join(projectPath, '.seeflow', 'flow.json'),
+      JSON.stringify({ version: 2, name: 'Taken', nodes: [], connectors: [] }),
+    );
+
+    const { app, registry } = buildApp();
+    const envelope = await callTool(app, 'seeflow_create_project', {
+      path: projectPath,
+      name: 'Taken',
+    });
+    expect(expectError(envelope)).toContain(projectPath);
+    expect(registry.list()).toHaveLength(0);
   });
 });
 

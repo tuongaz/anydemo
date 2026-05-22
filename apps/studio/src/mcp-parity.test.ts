@@ -133,32 +133,33 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
 interface ProjectFixture {
   app: ReturnType<typeof createApp>;
   registry: ReturnType<typeof createRegistry>;
-  projectBaseDir: string;
+  projectPath: string;
   demoFile: string;
 }
 
-// create_project fixture: empty base dir, no pre-registered demo. The tool
-// itself scaffolds the demo file + registers it under <base>/<slug>/.seeflow/flow.json.
+// create_project fixture: empty tmp dir + a derived project folder path the
+// tool will scaffold into. The tool itself writes
+// <projectPath>/.seeflow/flow.json and registers it.
 const buildProjectFixture = (name: string): ProjectFixture => {
   const registry = createRegistry({ path: tmpRegistryPath() });
-  const projectBaseDir = mkdtempSync(join(tmpdir(), 'seeflow-parity-proj-'));
+  const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-parity-proj-'));
   const app = createApp({
     mode: 'prod',
     staticRoot: './dist/web',
     registry,
     disableWatcher: true,
-    projectBaseDir,
   });
   const slug =
     name
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '') || 'demo';
+  const projectPath = join(baseDir, slug);
   return {
     app,
     registry,
-    projectBaseDir,
-    demoFile: join(projectBaseDir, slug, '.seeflow', 'flow.json'),
+    projectPath,
+    demoFile: join(projectPath, '.seeflow', 'flow.json'),
   };
 };
 
@@ -404,11 +405,14 @@ const SCENARIOS: ParityScenario[] = [
       const mcpFix = buildProjectFixture(name);
       return {
         // Comparing two separate scaffolds: the project tool creates a fresh
-        // flow.json under each fixture's projectBaseDir. Folders differ, file
+        // flow.json under each fixture's projectPath. Folders differ, file
         // contents shouldn't.
         demoFile: '__pair__',
         runRest: async () => {
-          const body = await restJson(restFix.app, 'POST', '/api/projects', { name });
+          const body = await restJson(restFix.app, 'POST', '/api/projects', {
+            path: restFix.projectPath,
+            name,
+          });
           // Stash the demoFile bytes via a property-bag side channel so the
           // outer test code can compare both fixtures' on-disk flow.json.
           (body as Record<string, unknown>).__demoFileBytes = readFileSync(
@@ -419,6 +423,7 @@ const SCENARIOS: ParityScenario[] = [
         },
         runMcp: async () => {
           const body = (await callMcpTool(mcpFix.app, 'seeflow_create_project', {
+            path: mcpFix.projectPath,
             name,
           })) as Record<string, unknown>;
           body.__demoFileBytes = readFileSync(mcpFix.demoFile, 'utf8');
@@ -427,8 +432,8 @@ const SCENARIOS: ParityScenario[] = [
       };
     },
     // Registry-generated id is non-deterministic (shortId). Strip
-    // it before the equality check — slug, scaffolded flag, and the on-disk
-    // bytes (smuggled in as __demoFileBytes) are the meaningful invariants.
+    // it before the equality check — slug and the on-disk bytes (smuggled in
+    // as __demoFileBytes) are the meaningful invariants.
     normalizeResponse: (body) => {
       const { id: _id, ...rest } = body as Record<string, unknown>;
       return rest;

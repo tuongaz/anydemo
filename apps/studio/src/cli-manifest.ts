@@ -303,22 +303,36 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   // ---- project -----------------------------------------------------------
   {
     name: 'projects:create',
-    synopsis: 'seeflow projects:create --name <name>',
+    synopsis: 'seeflow projects:create --path <dir> --name <name> [--description <text>]',
     description:
-      'Scaffold a new project under ~/.seeflow/<slug>/ with an empty flow.json and ' +
-      'register it. The flow id is returned for follow-up writes.',
+      'Scaffold a new project at <path> with an empty flow.json and register it. ' +
+      'Errors if <path>/.seeflow/flow.json already exists — use flows:register for ' +
+      'an existing project.',
     category: 'project',
     args: [],
     flags: [
+      {
+        name: 'path',
+        valuePlaceholder: '<dir>',
+        description: 'Project folder (created if it does not exist)',
+        required: true,
+      },
       { name: 'name', valuePlaceholder: '<name>', description: 'Project name', required: true },
+      {
+        name: 'description',
+        valuePlaceholder: '<text>',
+        description: 'Optional human description, written into flow.json',
+      },
     ],
     body: { schemaRef: 'CreateProjectBody' },
     outputs: {
-      okExample: { id: 'abc12345', slug: 'checkout', scaffolded: true },
-      errorKinds: ['scaffoldFailed'],
+      okExample: { id: 'abc12345', slug: 'checkout' },
+      errorKinds: ['alreadyExists', 'scaffoldFailed'],
     },
     requiresStudio: false,
-    examples: ['seeflow projects:create --name "Checkout"'],
+    examples: [
+      'seeflow projects:create --path ./checkout --name "Checkout" --description "Cart + payments flow"',
+    ],
   },
   // ---- nodes -------------------------------------------------------------
   {

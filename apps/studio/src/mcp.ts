@@ -27,8 +27,6 @@ import type { FlowWatcher } from './watcher.ts';
 export interface CreateMcpServerOptions {
   registry: Registry;
   watcher?: FlowWatcher;
-  /** Override base directory for new projects. Defaults to ~/.seeflow. Tests inject a tmp dir. */
-  projectBaseDir?: string;
 }
 
 // Tools are pushed into this in-memory list inside `createMcpServer`. Each
@@ -443,7 +441,8 @@ const buildTools = (ops: Operations): McpTool[] => [
   },
   {
     name: 'seeflow_create_project',
-    description: 'Create a new SeeFlow project folder, or register an existing one.',
+    description:
+      'Scaffold a new SeeFlow project at the given path. Errors if a project already exists there.',
     inputSchema: inputSchemaFromZod(CreateProjectBodySchema),
     handler: async (args) => {
       const parsed = CreateProjectBodySchema.safeParse(args);
@@ -454,12 +453,8 @@ const buildTools = (ops: Operations): McpTool[] => [
       switch (result.kind) {
         case 'ok':
           return okResult(result.data);
-        case 'badJson':
-          return errorResult(`Existing demo file is not valid JSON: ${result.detail}`);
-        case 'badSchema':
-          return errorResult(
-            `Existing demo file failed schema validation: ${JSON.stringify(result.issues)}`,
-          );
+        case 'alreadyExists':
+          return errorResult(`Project already exists at ${result.path}`);
         case 'scaffoldFailed':
           return errorResult(`Failed to scaffold project: ${result.message}`);
         case 'sdkWriteFailed':
@@ -762,7 +757,6 @@ export function createMcpServer(options: CreateMcpServerOptions): Server {
   const ops = createOperations({
     registry: options.registry,
     watcher: options.watcher,
-    projectBaseDir: options.projectBaseDir,
   });
   const tools = buildTools(ops);
 

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { slugify } from '../src/registry.ts';
 import { runCli } from './support/cli-runner.ts';
 import { uniqueFlowId } from './support/ids.ts';
 import { connectSse } from './support/sse-client.ts';
@@ -14,7 +15,6 @@ import { spawnStudio } from './support/studio-harness.ts';
 interface CreateProjectResponse {
   id: string;
   slug: string;
-  scaffolded: boolean;
 }
 
 interface OnDiskFlow {
@@ -30,11 +30,15 @@ interface OnDiskStyle {
 
 const headers = { 'content-type': 'application/json' } as const;
 
-async function createProject(baseURL: string, name: string): Promise<CreateProjectResponse> {
+async function createProject(
+  baseURL: string,
+  workspace: string,
+  name: string,
+): Promise<CreateProjectResponse> {
   const res = await fetch(`${baseURL}/api/projects`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ path: join(workspace, slugify(name)), name }),
   });
   expect(res.status).toBe(200);
   return (await res.json()) as CreateProjectResponse;
@@ -73,7 +77,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
     let finalFlow: OnDiskFlow | null = null;
     try {
       const name = uniqueFlowId('sigterm-bulk');
-      const project = await createProject(studio.baseURL, name);
+      const project = await createProject(studio.baseURL, studio.workspace, name);
 
       // Confirm starting state: scaffolded flow has no nodes.
       expect(readFlowJson(studio.workspace, project.slug).nodes).toEqual([]);
@@ -158,7 +162,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
     let sse: Awaited<ReturnType<typeof connectSse>> | null = null;
     try {
       const name = uniqueFlowId('edges-external-edit');
-      const project = await createProject(studio.baseURL, name);
+      const project = await createProject(studio.baseURL, studio.workspace, name);
 
       sse = await connectSse(studio.baseURL, `/api/events?flowId=${project.id}`);
       await sse.waitFor((e) => e.event === 'hello', 2_000);
@@ -194,7 +198,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
     const studio = await spawnStudio();
     try {
       const name = uniqueFlowId('parallel-patch');
-      const project = await createProject(studio.baseURL, name);
+      const project = await createProject(studio.baseURL, studio.workspace, name);
 
       // Seed a single shape node — easiest valid target for /position.
       const nodeId = 'pp-1';

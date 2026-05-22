@@ -54,8 +54,6 @@ export interface CreateAppOptions {
   /** Inject a ProxyFacade — tests use this to short-circuit runPlay /
    *  runReset / stopAllPlays and assert call order. */
   proxy?: ProxyFacade;
-  /** Override base directory for new projects. Defaults to ~/.seeflow. Tests inject a tmp dir. */
-  projectBaseDir?: string;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -139,7 +137,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       statusRunner,
       processSpawner: options.processSpawner,
       proxy: options.proxy,
-      projectBaseDir: options.projectBaseDir,
     }),
   );
 
@@ -158,7 +155,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     const mcpServer = createMcpServer({
       registry,
       watcher,
-      projectBaseDir: options.projectBaseDir,
     });
     await mcpServer.connect(transport);
     try {

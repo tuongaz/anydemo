@@ -2,6 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { slugify } from '../src/registry.ts';
 import { uniqueFlowId } from './support/ids.ts';
 import { type McpClient, spawnMcpClient } from './support/mcp-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
@@ -42,14 +43,13 @@ function okJson<T>(result: CallToolResult): T {
 interface CreateProjectResponse {
   id: string;
   slug: string;
-  scaffolded: boolean;
 }
 
 async function restCreateProject(name: string): Promise<CreateProjectResponse> {
   const res = await fetch(`${studio.baseURL}/api/projects`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ name }),
+    body: JSON.stringify({ path: join(studio.workspace, slugify(name)), name }),
   });
   expect(res.status).toBe(200);
   return (await res.json()) as CreateProjectResponse;
@@ -291,11 +291,14 @@ describe('integration: MCP — read-only tools', () => {
 describe('integration: MCP — project + flow lifecycle tools', () => {
   it('seeflow_create_project scaffolds a new project on disk', async () => {
     const name = uniqueFlowId('mcp-create');
-    const result = await client.callTool('seeflow_create_project', { name });
-    const data = okJson<{ id: string; slug: string; scaffolded: boolean }>(result);
+    const projectPath = join(studio.workspace, slugify(name));
+    const result = await client.callTool('seeflow_create_project', {
+      path: projectPath,
+      name,
+    });
+    const data = okJson<{ id: string; slug: string }>(result);
     expect(data.id).toBeTruthy();
     expect(data.slug).toBeTruthy();
-    expect(data.scaffolded).toBe(true);
 
     // GET via REST to confirm registry side effect.
     const get = await fetch(`${studio.baseURL}/api/flows/${data.id}`);

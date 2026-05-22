@@ -1,4 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
+import { join } from 'node:path';
+import { slugify } from '../src/registry.ts';
 import { connectSse } from './support/sse-client.ts';
 import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
 
@@ -13,7 +15,10 @@ describe('integration: sse client', () => {
     const projRes = await fetch(`${studio.baseURL}/api/projects`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ name: 'sse-it' }),
+      body: JSON.stringify({
+        path: join(studio.workspace, slugify('sse-it')),
+        name: 'sse-it',
+      }),
     });
     expect(projRes.status).toBe(200);
     const project = (await projRes.json()) as { id: string };

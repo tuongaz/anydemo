@@ -120,9 +120,10 @@ describe('seeflow CLI register integration', () => {
 describe('seeflow CLI new subcommands', () => {
   it('projects:create returns ok with slug', async () => {
     const studio = startTestStudio();
+    const projectPath = join(mkdtempSync(join(tmpdir(), 'seeflow-cli-create-')), 'checkout-one');
     try {
       const r = await runCli(
-        ['projects:create', '--no-start', '--name', 'Checkout One'],
+        ['projects:create', '--no-start', '--path', projectPath, '--name', 'Checkout One'],
         studio.env,
       );
       expect(r.code).toBe(0);
