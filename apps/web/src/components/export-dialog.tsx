@@ -25,6 +25,7 @@ export interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   projectId: string;
+  flowName?: string;
   onCapturePreview?: () => Promise<string | undefined>;
 }
 
@@ -32,6 +33,7 @@ export function ExportDialog({
   open,
   onOpenChange,
   projectId,
+  flowName,
   onCapturePreview,
 }: ExportDialogProps) {
   const [email, setEmail] = useState('');
@@ -44,12 +46,12 @@ export function ExportDialog({
   useEffect(() => {
     if (open) {
       setEmail(localStorage.getItem(EMAIL_STORAGE_KEY) ?? '');
-      setName(localStorage.getItem(NAME_STORAGE_KEY) ?? '');
+      setName(flowName ?? localStorage.getItem(NAME_STORAGE_KEY) ?? '');
       setVisibility((localStorage.getItem(VISIBILITY_STORAGE_KEY) as Visibility) ?? 'public');
       setState({ kind: 'idle' });
       setCopied(false);
     }
-  }, [open]);
+  }, [open, flowName]);
 
   const handleExport = useCallback(async () => {
     setState({ kind: 'loading' });

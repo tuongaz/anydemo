@@ -3073,6 +3073,7 @@ export function DemoView({
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
           projectId={flowId}
+          flowName={detail?.name ?? summary.name}
           onCapturePreview={() => canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)}
         />
       ) : null}
