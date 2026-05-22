@@ -195,8 +195,19 @@ Do NOT skip a resource node because:
 3. **Choices / branches the audience must understand.**
    Example: `paid → fulfill` vs `failed → refund`. Two downstream nodes,
    not one "outcome" node.
+4. **One service hosting N independent state machines.**
+   Example: a payments service handling `charge`, `refund`, and
+   `subscription` — each with distinct state transitions
+   (paid/failed vs issued/declined vs active/canceled), distinct
+   trigger surfaces (different fixtures, different play actions), and
+   distinct status probes (different tables / endpoints). Earn N nodes.
+   The signal is **independent observable state**, not "different
+   features" — if `refund` and `charge` write to the same ledger row
+   and share state transitions, that is still one node. Internal HTTP
+   routes that share a state machine remain implementation detail
+   (see the microservice example below).
 
-If a candidate decomposition does NOT match one of those three
+If a candidate decomposition does NOT match one of those four
 exceptions, collapse it.
 
 ## Examples of the rule applied
@@ -215,6 +226,12 @@ exceptions, collapse it.
   1 event bus, 3 consumers — and one event connector from publisher to
   bus plus three event connectors from bus to each consumer. Cite
   exception 2.
+- **A payments service exposing `charge`, `refund`, and `subscription`
+  with independent state machines.** → 3 nodes (`payments-charge`,
+  `payments-refund`, `payments-subscription`), each with its own
+  `playNode` candidacy and its own status probe. Cite exception 4.
+  Contrast with a payments service whose `charge` and `refund` routes
+  both mutate the same ledger row — that stays one node.
   - Variant: if the brief did not mention an explicit bus
     abstraction, you may omit the bus and connect publisher directly
     to each consumer with three event connectors. Use your judgement;
@@ -227,11 +244,24 @@ exceptions, collapse it.
 
 ## Workflow
 
-1. **Audit the brief.** Map every `rootEntity` to a candidate node. Drop
+1. **Read the depth keyword from `audienceFraming`.** The code-analyzer
+   emits one of `overview` / `walkthrough` / `deep-architectural`
+   verbatim. This is your richness dial:
+   - `overview` — collapse aggressively; one node per top-level system,
+     resource nodes still mandatory. Skip Exception 1 (pipeline stages
+     internal to one workflow) unless the audience cannot understand
+     the demo without them.
+   - `walkthrough` — default. Follow the abstraction rules as written.
+   - `deep-architectural` — invoke Exception 4 freely when a service has
+     independent state machines; surface internal pipeline stages
+     (Exception 1) that walkthrough depth would collapse.
+   If the keyword is missing, default to `walkthrough` and log nothing
+   — the orchestrator will surface the gap to the user.
+2. **Audit the brief.** Map every `rootEntity` to a candidate node. Drop
    anything in `outOfScope`. If a `codePointers.why` mentions an entity
    not in `rootEntities`, ask yourself whether it should be added — the
    code-analyzer might have surfaced something in passing.
-2. **Surface all resource nodes.** Before applying abstraction rules,
+3. **Surface all resource nodes.** Before applying abstraction rules,
    collect every resource that belongs on the canvas using TWO passes:
 
    **Pass A — named resources:** scan `rootEntities` and `codePointers`
@@ -247,11 +277,11 @@ exceptions, collapse it.
 
    Missing a database or queue is always wrong — the audience needs to
    see state land somewhere.
-3. **Apply the abstraction rules.** For each candidate, decide: ONE node
+4. **Apply the abstraction rules.** For each candidate, decide: ONE node
    (default) or N nodes (only if it matches an exception). Write the
    rationale as you go — if you cannot articulate a clean rationale,
    default to ONE.
-4. **Pick the trigger.** Exactly one node should be a `playNode`. It is
+5. **Pick the trigger.** Exactly one node should be a `playNode`. It is
    the entity the audience clicks first to start the flow. The
    play-designer may later inject more triggers, but you produce
    exactly one initial `playNode`. Mark every other functional entity
@@ -265,17 +295,17 @@ exceptions, collapse it.
      flows whose subject is a human action (UX click-through,
      support-agent workflow, consent capture). If the user did not ask
      for a human-centred flow, skip the user shape entirely.
-5. **Wire connectors.** For every flow edge implied by the brief, add a
+6. **Wire connectors.** For every flow edge implied by the brief, add a
    connector, including edges from services INTO their resource nodes
    (service → DB, service → queue, service → event bus). Pick the most
    specific `kind` available (`http` > `event` > `queue` > `default`).
    Connectors are directional: `source` produces, `target` consumes.
-6. **Sanity-check.** No orphan nodes (every node either has an inbound
+7. **Sanity-check.** No orphan nodes (every node either has an inbound
    connector OR is the trigger). No connector points to or from an id
    that is not in `nodes[]`. Exactly one `playNode`. Slug is unique and
    kebab-case. Every resource — whether named in the brief or inferred
    from service behavior — has a node and at least one connector.
-7. **Emit.** Final message is the JSON code block. No preamble, no
+8. **Emit.** Final message is the JSON code block. No preamble, no
    explanation around the fence.
 
 ## Edit case
@@ -310,7 +340,7 @@ If `contextBrief.existingDemo.diffTarget === true`:
 contextBrief:
 {
   "userIntent": "Show the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
-  "audienceFraming": "Engineer-and-business audience that needs to see the HTTP entry, the event bus + queue fan-out, and the workers that drive state transitions.",
+  "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see the HTTP entry, the event bus + queue fan-out, and the workers that drive state transitions.",
   "scope": {
     "rootEntities": [
       "order HTTP server",
@@ -405,7 +435,7 @@ downstream entities.
 - Every database, queue, event bus, cache, file store, and external SaaS
   mentioned in the brief MUST have a node. Omitting a resource node is
   always wrong.
-- Cite an exception by number (`Exception 1/2/3`) in `rationales[nodeId]`
+- Cite an exception by number (`Exception 1/2/3/4`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
 - Don't emit any action — the orchestrator injects a placeholder so
   every `playNode` satisfies its requirement; Phase 4 designers

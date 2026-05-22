@@ -115,8 +115,20 @@ Field-by-field:
 - **`userIntent`** *(string, 1 sentence)* — commit to a concrete framing.
   No hedging.
 - **`audienceFraming`** *(string, 1–3 sentences)* — who this demo is for
-  (engineer-and-business is the SeeFlow default) and what they need to
-  walk away knowing. Surface scope ambiguity here.
+  (engineer-and-business is the SeeFlow default), **the depth level**
+  (one of `overview` / `walkthrough` / `deep-architectural`, named
+  verbatim), and what they need to walk away knowing. Surface scope
+  ambiguity here. The depth keyword is the planner's richness dial:
+  - `overview` — collapse aggressively; one node per top-level system.
+  - `walkthrough` — default; follow the abstraction rules as written.
+  - `deep-architectural` — invoke Exception 4 freely when a service has
+    independent state machines; surface internal pipeline stages
+    (Exception 1) the audience would otherwise miss.
+  Infer the keyword from the user's verbs: `"high-level map"` /
+  `"system diagram"` → `overview`; `"how X works"` / `"show the flow"`
+  → `walkthrough`; `"deep dive"` / `"architectural review"` /
+  `"every state machine"` → `deep-architectural`. When the prompt is
+  silent, pick `walkthrough`.
 - **`scope.rootEntities`** *(string[])* — names of the major systems /
   services / workers / data stores that belong in the flow. Use the
   names the codebase uses, not generic labels. Order them roughly
@@ -166,7 +178,7 @@ learnContext:  null
 ```json
 {
   "userIntent": "Visualise the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
-  "audienceFraming": "Engineer-and-business audience that needs to see (a) the HTTP entry points, (b) the event bus + queue fan-out, and (c) the workers that drive state transitions. Audience should leave knowing where each side-effect happens.",
+  "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see (a) the HTTP entry points, (b) the event bus + queue fan-out, and (c) the workers that drive state transitions. Audience should leave knowing where each side-effect happens.",
   "scope": {
     "rootEntities": [
       "order HTTP server",

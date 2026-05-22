@@ -215,8 +215,8 @@ Launch `seeflow-node-planner` with: the brief, the resolved tech-ref paths, the 
 **Connectors conform to `$SEEFLOW schema connector` and nothing more.** If the planner emits any field the contract rejects, strip it before `flow:add-bulk` and log `agent-output-corrected` with `details: connector-extras-stripped (×N)`. Do not enumerate the legal fields here — re-run the schema command whenever in doubt.
 
 - **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own `stateNode`.
-- **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches.
-- **Connection limit** — max 4 (in + out) per node. Exceeded → **split** distinct responsibilities, or **duplicate** a shared resource (same `kind` + `name`, unique `id` like `orders-db-read`).
+- **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches, and services hosting multiple independent state machines.
+- **Duplicate shared resources for clarity.** When a DB / queue / bus is referenced by many nodes and the lines tangle the canvas, split it into role-specific copies (`orders-db-read`, `orders-db-write`) sharing the same `kind` + `name` but distinct `id`s.
 
 Output: a single envelope carrying `name`, `slug`, `nodes`, `connectors`, and `rationales` (planner-only sibling map). The `nodes` and `connectors` arrays must conform to `$SEEFLOW schema node` and `$SEEFLOW schema connector` — they are forwarded verbatim in a single body to the `flow:add-bulk` subcommand in Phase 3. Any key the CLI rejects here is rejected at `flow:add-bulk` too. One retry on unparseable output, then surface and stop. Full contract: `agents/seeflow-node-planner.md`.
 
