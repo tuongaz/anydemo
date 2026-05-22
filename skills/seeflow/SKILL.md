@@ -99,6 +99,7 @@ Full text in `references/core-rules.md`:
 - **Serial sub-agent dispatch** (N messages, one Task call each). One message, N Task calls — see Phase 1's wrong/right.
 - **One sub-agent fixing multiple failing scripts in Phase 6.** Each needs isolated context.
 - **Authoring `flow.json` directly.** Every mutation is a CLI call.
+- **Silently overwriting (or silently falling back from) an existing flow at the target path.** Phase 3 step 1's existing-flow gate is mandatory — open / rename / overwrite, the user decides. The old "fall back to `register`" behavior was data-loss-adjacent.
 - **Touching `style.json`.** The studio owns it via `flows:layout`.
 - **Passing `<slug>/scripts/…` as `scriptPath`.** New anchor is the node folder — emit just `scripts/play.ts`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
@@ -224,7 +225,19 @@ Output: a single envelope carrying `name`, `slug`, `nodes`, `connectors`, and `r
 
 The skeleton flow lands via four steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
-1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot. Forward the planner-supplied `name` (and `description` if the planner provided one):
+1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot.
+
+   **Existing-flow gate — check before the CLI write.** Test `test -f "$repoPath/flow.json"`. If the file exists (or `projects:create` later returns `alreadyExists` exit code 4 because the pre-check raced), STOP and ask via `AskUserQuestion` — **never silently overwrite, never silently fall back**:
+
+   > A SeeFlow flow is already registered at this path. What do you want to do?
+   >
+   > 1. **Open the existing flow** *(Recommended)* — skip creation; run `$SEEFLOW register --path "$repoPath"` to re-attach the existing envelope, surface `$STUDIO_URL/d/<slug>`, then stop. If the user wanted to inspect rather than edit, hand off to `/seeflow-lookup`.
+   > 2. **Create a new flow with a different name** — ask the user for a new flow name, recompute `$repoPath = $PWD/.seeflow/<new-slug>`, then retry this step (Phase 1/2 only rerun if the user's intent also changed).
+   > 3. **Overwrite the existing flow** — destructive. Confirm once more, then `$SEEFLOW flows:delete --path "$repoPath"` (and `rm -rf "$repoPath"` for any sidecar leftovers), then retry this step.
+
+   Log one `plan-revision` per session (`severity: friction`, `phase: P3`, `summary: existing flow at target path; user picked <open|rename|overwrite>`). Debounce — even if the user toggles between options, the entry is written once.
+
+   Gate clear → forward the planner-supplied `name` (and `description` if the planner provided one):
 
    ```bash
    $SEEFLOW projects:create --path "$repoPath" --name "$plannerName" [--description "$plannerDescription"]
@@ -232,7 +245,7 @@ The skeleton flow lands via four steps, in order. No `flow.json` authoring by ha
 
    The studio writes the envelope, adds a registry entry under `~/.seeflow/registry.json`, and returns `{ id, slug }` (slug is derived from `name`). **Capture `id` from the response and use it (not `slug`) for every follow-up CLI call below** — several commands document slug support in `help` but the server only resolves by id today. **Registration is a precondition for opening the canvas:** the `$STUDIO_URL/d/<slug>` route only works after this step succeeds, so never surface the canvas URL to the user before this step.
 
-   **`alreadyExists` exit (code 4) means `<repoPath>/flow.json` is already present** — fall back to `$SEEFLOW register --path "$repoPath"` to pick up the existing envelope. Don't overwrite. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
+   If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed (filesystem race), loop back to the gate above and let the user decide — do not auto-fall-back. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
 
 2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose play action is absent, inject the minimum placeholder the contract requires so the server accepts the batch. Look up the exact required fields by running `$SEEFLOW schema action` and `$SEEFLOW schema node` (the `playNode` variant's `playAction` requirements) — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
 2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
