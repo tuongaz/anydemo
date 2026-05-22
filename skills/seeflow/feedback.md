@@ -89,7 +89,7 @@ phase: P3
 kind: cli-error
 code: badSchema
 status: pending
-summary: nodes:add-bulk rejected: connector.kind not in enum
+summary: flow:add-bulk rejected: connector.kind not in enum
 ```
 
 Fields:
@@ -118,8 +118,8 @@ Block conventions (so the hook's `awk` parser works):
 - **Hostnames**, **usernames**, environment variable values.
 - **Error messages** that contain any of the above — rephrase, don't quote.
 
-Good summary: `nodes:add-bulk rejected: connector.kind not in enum`
-Bad summary: `nodes:add-bulk rejected at /Users/alice/work/myapp/.seeflow/orders-pipeline/flow.json`
+Good summary: `flow:add-bulk rejected: connector.kind not in enum`
+Bad summary: `flow:add-bulk rejected at /Users/alice/work/myapp/.seeflow/orders-pipeline/flow.json`
 
 Good summary: `play.ts ECONNREFUSED on :3001 after 2 retries`
 Bad summary: `play.ts ECONNREFUSED hitting http://internal-api.acme.corp:3001/orders`

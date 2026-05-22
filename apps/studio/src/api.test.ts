@@ -2309,8 +2309,8 @@ describe('POST /api/flows/:id/nodes', () => {
   });
 });
 
-describe('POST /api/flows/:id/nodes/bulk', () => {
-  it('creates every node in one call and returns ids + nodes in order', async () => {
+describe('POST /api/flows/:id/bulk', () => {
+  it('creates every node + connector atomically in one call and returns ids in order', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2320,26 +2320,33 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
       })
     ).json()) as { id: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
         { id: 'b1', type: 'shapeNode', data: { name: 'B1', shape: 'rectangle' } },
         { id: 'b2', type: 'shapeNode', data: { name: 'B2', shape: 'ellipse', detail: 'hi' } },
         { id: 'b3', type: 'htmlNode', data: { html: '<div>x</div>' } },
       ],
+      // Connector references nodes from THIS batch — only works because the
+      // merged-graph parse runs after both arrays are pushed.
+      connectors: [{ id: 'b1-to-b2', source: 'b1', target: 'b2' }],
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       ok: boolean;
       nodes: Array<{ id: string; node: { type: string } }>;
+      connectors: Array<{ id: string }>;
     };
     expect(body.ok).toBe(true);
     expect(body.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
+    expect(body.connectors.map((c) => c.id)).toEqual(['b1-to-b2']);
 
     const onDisk = JSON.parse(readFileSync(join(repoPath, '.seeflow', 'flow.json'), 'utf8')) as {
       nodes: Array<{ id: string; data: { detail?: string; html?: string } }>;
+      connectors: Array<{ id: string }>;
     };
     // Pre-existing demo had 1 node, bulk added 3.
     expect(onDisk.nodes).toHaveLength(4);
+    expect(onDisk.connectors).toHaveLength(1);
     const b2 = onDisk.nodes.find((n) => n.id === 'b2');
     expect(b2?.data.detail).toBe('file://detail.md');
     expect(readFileSync(join(repoPath, '.seeflow', 'nodes', 'b2', 'detail.md'), 'utf8')).toBe('hi');
@@ -2350,7 +2357,26 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     );
   });
 
-  it('rejects the whole batch when one item is malformed; no on-disk changes', async () => {
+  it('accepts a nodes-only body (no connectors field)', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+      nodes: [{ id: 'only', type: 'shapeNode', data: { shape: 'rectangle', name: 'only' } }],
+    });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { nodes: unknown[]; connectors: unknown[] };
+    expect(body.nodes).toHaveLength(1);
+    expect(body.connectors).toHaveLength(0);
+  });
+
+  it('rolls back BOTH arrays when a connector dangles against the merged graph', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2363,7 +2389,34 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     const demoFile = join(repoPath, '.seeflow', 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+      nodes: [
+        { id: 'good-a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+        { id: 'good-b', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+      ],
+      connectors: [{ source: 'good-a', target: 'never-added' }],
+    });
+    expect(res.status).toBe(400);
+    expect(readFileSync(demoFile, 'utf8')).toBe(before);
+    // Per-node folders cleaned up.
+    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'good-a'))).toBe(false);
+    expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'good-b'))).toBe(false);
+  });
+
+  it('rolls back the whole batch when one node is malformed', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    const demoFile = join(repoPath, '.seeflow', 'flow.json');
+    const before = readFileSync(demoFile, 'utf8');
+
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
         { id: 'ok-1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
         // shapeNode without shape — trips the post-mutation parse.
@@ -2379,7 +2432,7 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     expect(existsSync(join(repoPath, '.seeflow', 'nodes', 'bad'))).toBe(false);
   });
 
-  it('rejects an intra-batch duplicate id with 400', async () => {
+  it('reports intra-batch duplicate node id with collection=nodes', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2389,7 +2442,7 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
       })
     ).json()) as { id: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
         { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
         { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
@@ -2397,11 +2450,11 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Duplicate id in batch');
+    expect(body.error).toContain('Duplicate nodes id in batch');
     expect(body.error).toContain('dupe');
   });
 
-  it('rejects an id collision with an existing node', async () => {
+  it('reports intra-batch duplicate connector id with collection=connectors', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2411,14 +2464,35 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
       })
     ).json()) as { id: string };
 
-    // Seed a node with a fixed id.
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      connectors: [
+        { id: 'c-dupe', source: 'a', target: 'a' },
+        { id: 'c-dupe', source: 'a', target: 'a' },
+      ],
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('Duplicate connectors id in batch');
+  });
+
+  it('reports an id collision with an existing node', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'taken',
       type: 'shapeNode',
       data: { name: 'seed', shape: 'rectangle' },
     });
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
     });
     expect(res.status).toBe(400);
@@ -2426,7 +2500,7 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
     expect(body.error).toContain('Node id already exists');
   });
 
-  it('rejects an empty nodes array via Zod min(1)', async () => {
+  it('rejects an empty body (no nodes, no connectors)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2436,13 +2510,27 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
       })
     ).json()) as { id: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, { nodes: [] });
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {});
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Invalid bulk nodes body');
+    expect(body.error).toContain('Invalid bulk body');
   });
 
-  it('rejects a batch over the 100-item cap', async () => {
+  it('rejects both-empty-arrays body via the refine', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', {
+        repoPath,
+        flowPath: '.seeflow/flow.json',
+      })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, { nodes: [], connectors: [] });
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects a batch over the 100-node-item cap', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2456,15 +2544,13 @@ describe('POST /api/flows/:id/nodes/bulk', () => {
       type: 'shapeNode',
       data: { name: `n${i}`, shape: 'rectangle' },
     }));
-    const res = await post(app, `/api/flows/${reg.id}/nodes/bulk`, { nodes: oversized });
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, { nodes: oversized });
     expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Invalid bulk nodes body');
   });
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await post(app, '/api/flows/nope/nodes/bulk', {
+    const res = await post(app, '/api/flows/nope/bulk', {
       nodes: [{ type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
     });
     expect(res.status).toBe(404);
@@ -3270,7 +3356,7 @@ describe('POST /api/flows/:id/connectors', () => {
   });
 });
 
-describe('POST /api/flows/:id/connectors/bulk', () => {
+describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', () => {
   const VALID_DEMO_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
@@ -3299,7 +3385,7 @@ describe('POST /api/flows/:id/connectors/bulk', () => {
     connectors: [],
   };
 
-  it('creates every connector in one call and returns ids in order', async () => {
+  it('connectors-only body wires existing nodes and defaults id/kind', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
     const reg = (await (
@@ -3309,15 +3395,20 @@ describe('POST /api/flows/:id/connectors/bulk', () => {
       })
     ).json()) as { id: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       connectors: [
         { source: 'a', target: 'b', kind: 'event', eventName: 'evt.one' },
         { id: 'pinned', source: 'b', target: 'a' },
       ],
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { ok: boolean; connectors: Array<{ id: string }> };
+    const body = (await res.json()) as {
+      ok: boolean;
+      nodes: unknown[];
+      connectors: Array<{ id: string }>;
+    };
     expect(body.ok).toBe(true);
+    expect(body.nodes).toHaveLength(0);
     expect(body.connectors).toHaveLength(2);
     expect(body.connectors[1]?.id).toBe('pinned');
 
@@ -3327,50 +3418,6 @@ describe('POST /api/flows/:id/connectors/bulk', () => {
     expect(onDisk.connectors).toHaveLength(2);
     expect(onDisk.connectors[0]?.kind).toBe('event');
     expect(onDisk.connectors[1]?.kind).toBe('default');
-  });
-
-  it('rejects the whole batch when one connector has a dangling target', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    const demoFile = join(repoPath, '.seeflow', 'flow.json');
-    const before = readFileSync(demoFile, 'utf8');
-
-    const res = await post(app, `/api/flows/${reg.id}/connectors/bulk`, {
-      connectors: [
-        { source: 'a', target: 'b' },
-        { source: 'a', target: 'no-such-node' },
-      ],
-    });
-    expect(res.status).toBe(400);
-    expect(readFileSync(demoFile, 'utf8')).toBe(before);
-  });
-
-  it('rejects an intra-batch duplicate connector id', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    const res = await post(app, `/api/flows/${reg.id}/connectors/bulk`, {
-      connectors: [
-        { id: 'c-dupe', source: 'a', target: 'b' },
-        { id: 'c-dupe', source: 'b', target: 'a' },
-      ],
-    });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Duplicate id in batch');
   });
 
   it('rejects an id collision with an existing connector', async () => {
@@ -3389,36 +3436,12 @@ describe('POST /api/flows/:id/connectors/bulk', () => {
       target: 'b',
     });
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors/bulk`, {
+    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       connectors: [{ id: 'c-taken', source: 'b', target: 'a' }],
     });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Connector id already exists');
-  });
-
-  it('rejects an empty connectors array via Zod min(1)', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo(VALID_DEMO_TWO_NODES);
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: '.seeflow/flow.json',
-      })
-    ).json()) as { id: string };
-
-    const res = await post(app, `/api/flows/${reg.id}/connectors/bulk`, { connectors: [] });
-    expect(res.status).toBe(400);
-    const body = (await res.json()) as { error: string };
-    expect(body.error).toContain('Invalid bulk connectors body');
-  });
-
-  it('returns 404 for unknown flowId', async () => {
-    const { app } = buildApp();
-    const res = await post(app, '/api/flows/nope/connectors/bulk', {
-      connectors: [{ source: 'a', target: 'b' }],
-    });
-    expect(res.status).toBe(404);
   });
 });
 

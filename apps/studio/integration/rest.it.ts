@@ -113,7 +113,7 @@ async function patchJson(path: string, body: unknown): Promise<Response> {
 }
 
 async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
-  const res = await postJson(`/api/flows/${flowId}/nodes/bulk`, {
+  const res = await postJson(`/api/flows/${flowId}/bulk`, {
     nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
   });
   expect(res.status).toBe(200);
@@ -391,26 +391,31 @@ describe('integration: REST — nodes', () => {
     });
   });
 
-  describe('POST /api/flows/:id/nodes/bulk', () => {
-    it('adds many nodes in one transactional write', async () => {
-      const created = await createProject(uniqueFlowId('node-bulk'));
-      const res = await postJson(`/api/flows/${created.id}/nodes/bulk`, {
+  describe('POST /api/flows/:id/bulk', () => {
+    it('adds many nodes + connectors atomically in one transactional write', async () => {
+      const created = await createProject(uniqueFlowId('flow-bulk'));
+      const res = await postJson(`/api/flows/${created.id}/bulk`, {
         nodes: [
           { id: 'b1', type: 'shapeNode', data: { shape: 'rectangle', name: 'B1' } },
           { id: 'b2', type: 'shapeNode', data: { shape: 'ellipse', name: 'B2' } },
           { id: 'b3', type: 'shapeNode', data: { shape: 'sticky', name: 'B3' } },
         ],
+        // Connector references nodes from THIS batch — proves transactional shape.
+        connectors: [{ id: 'b1-to-b2', source: 'b1', target: 'b2', kind: 'default' }],
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         ok: boolean;
         nodes: Array<{ id: string; node: Record<string, unknown> }>;
+        connectors: Array<{ id: string }>;
       };
       expect(body.ok).toBe(true);
       expect(body.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
+      expect(body.connectors.map((c) => c.id)).toEqual(['b1-to-b2']);
 
       const onDisk = await readFlowJson(created.slug);
       expect(onDisk.nodes.map((n) => n.id)).toEqual(['b1', 'b2', 'b3']);
+      expect(onDisk.connectors.map((c) => c.id)).toEqual(['b1-to-b2']);
     });
   });
 
@@ -480,7 +485,7 @@ describe('integration: REST — nodes', () => {
     it('removes the node and cascades adjacent connectors in one write', async () => {
       const created = await createProject(uniqueFlowId('node-delete'));
       await seedShapeNodes(created.id, ['a', 'b']);
-      const connRes = await postJson(`/api/flows/${created.id}/connectors/bulk`, {
+      const connRes = await postJson(`/api/flows/${created.id}/bulk`, {
         connectors: [
           { id: 'a-b', source: 'a', target: 'b', kind: 'default' },
           { id: 'b-a', source: 'b', target: 'a', kind: 'default' },
@@ -527,28 +532,6 @@ describe('integration: REST — connectors', () => {
         target: 'b',
         kind: 'default',
       });
-    });
-  });
-
-  describe('POST /api/flows/:id/connectors/bulk', () => {
-    it('adds many connectors in one transactional write', async () => {
-      const created = await createProject(uniqueFlowId('conn-bulk'));
-      await seedShapeNodes(created.id, ['a', 'b']);
-
-      const res = await postJson(`/api/flows/${created.id}/connectors/bulk`, {
-        connectors: [
-          { id: 'c1', source: 'a', target: 'b', kind: 'default' },
-          { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.one' },
-        ],
-      });
-      expect(res.status).toBe(200);
-      const body = (await res.json()) as { ok: boolean; connectors: Array<{ id: string }> };
-      expect(body.ok).toBe(true);
-      expect(body.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
-
-      const onDisk = await readFlowJson(created.slug);
-      expect(onDisk.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
-      expect(onDisk.connectors[1]).toMatchObject({ kind: 'event', eventName: 'evt.one' });
     });
   });
 

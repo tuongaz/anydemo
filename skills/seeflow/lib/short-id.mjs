@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Canonical id generator for the seeflow skill. Mirrors
 // apps/studio/src/short-id.ts so skill-minted ids match the shape every
-// other producer in the studio (canvas, nodes:add-bulk auto-assign, the
+// other producer in the studio (canvas, flow:add-bulk auto-assign, the
 // upload endpoint's regex). Same alphabet (62 base62 chars), same default
 // length (10), same rejection sampling.
 //

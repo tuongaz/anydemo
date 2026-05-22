@@ -40,12 +40,12 @@ P0    /health probe ‖ read LEARN.md
 P1    code-analyzer ‖ system-analyzer
 P2    node-planner (kicks off when code-analyzer returns;
                    system-analyzer continues in background)
-P3    projects:create → nodes:add-bulk → connectors:add-bulk
+P3    projects:create → flow:add-bulk (nodes + connectors, atomic)
       → flows:layout → USER REVIEW + dynamic gate (one combined ask)
 P4    play-designer ‖ status-designer
 P5    write scripts to .seeflow/nodes/<nodeId>/scripts/
       → nodes:patch (per node, with playAction / statusAction)
-      → optional newTriggerNodes via nodes:add-bulk + connectors:add-bulk
+      → optional newTriggerNodes via flow:add-bulk
       → flows:layout
 P6    e2e
 ```
@@ -154,11 +154,11 @@ Launch `seeflow-node-planner` with the brief, the resolved tech-ref paths, and t
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches.
 - **Connection limit** — max 4 (in + out) per node. Exceeded → **split** distinct responsibilities, or **duplicate** a shared resource (same `kind` + `name`, unique `id` like `orders-db-read`).
 
-Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,target,…}], rationales:{[nodeId]: string} }`. The `nodes` and `connectors` arrays are forwarded verbatim to the CLI bulk-add subcommands in Phase 3 — every key the schema rejects is rejected here. One retry on unparseable output, then surface and stop. Full schema: `agents/seeflow-node-planner.md`.
+Output: `{ name, slug, nodes:[{id,type,data}], connectors:[{id,kind,source,target,…}], rationales:{[nodeId]: string} }`. The `nodes` and `connectors` arrays are forwarded verbatim — in a single body — to the `flow:add-bulk` subcommand in Phase 3. Every key the schema rejects is rejected here. One retry on unparseable output, then surface and stop. Full schema: `agents/seeflow-node-planner.md`.
 
 ## Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
+The skeleton flow lands via three CLI calls, in order. No `flow.json` authoring. Run `$SEEFLOW help <command>` for each one's body shape and flags.
 
 1. `projects:create` — scaffold + register the project; capture `id` and `slug` from the result. **Use `id` (not `slug`) for every follow-up CLI call below.** Several commands document slug support in `help` but the server only resolves by id today.
 2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for every `playNode` whose `data.playAction` is absent, inject a placeholder so the server's `ResolvedFlowSchema` (which requires `playAction` on every `playNode`) accepts the batch:
@@ -180,9 +180,8 @@ The skeleton flow lands via four CLI calls, in order. No `flow.json` authoring. 
    - `nodes[].id`
    - `connectors[].id`, `connectors[].source`, `connectors[].target`
    - `rationales` keys (kept in memory for the review prompt)
-3. `nodes:add-bulk` — bulk-seed nodes. Forward only the (now normalized + id-rewritten) `nodes` array, re-wrapped per the body schema.
-4. `connectors:add-bulk` — bulk-seed connectors.
-5. `flows:layout` — run ELK and write `style.json`.
+3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
+4. `flows:layout` — run ELK and write `style.json`.
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
@@ -225,9 +224,9 @@ For each overlay returned by Phase 4 (parallelise the writes when the script bod
 2. `chmod` per `scriptFile.chmod` (default 755).
 3. Call `nodes:patch` with the overlay's `patch` body. (Body shape: `$SEEFLOW help nodes:patch`.)
 
-If the play-designer emitted `newTriggerNodes`, batch them via `nodes:add-bulk` + `connectors:add-bulk`, then re-run `flows:layout`. (Body shapes: `$SEEFLOW help <command>`.)
+If the play-designer emitted `newTriggerNodes`, batch them via `flow:add-bulk` (one call, both arrays atomic), then re-run `flows:layout`. (Body shape: `$SEEFLOW help flow:add-bulk`.)
 
-**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `nodes:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type via the post-merge reparse (e.g. `state → play` requires a `playAction` in the same patch); `badSchema` means feed the issues to the play-designer and retry.
+**Edit-case retype routing.** When the Phase 2 diff against `editTarget` flags a node whose `id` already exists but whose `type` changed (e.g. a former trigger demoted from `playNode` to `stateNode`), route it through `nodes:patch { type, ...required fields }` — **not** `nodes:delete` + `flow:add-bulk`. The patch path preserves the per-node folder under `.seeflow/nodes/<id>/`; the delete cascade destroys it. The server validates required fields for the new type via the post-merge reparse (e.g. `state → play` requires a `playAction` in the same patch); `badSchema` means feed the issues to the play-designer and retry.
 
 **Retry budget:** per-node `nodes:patch` failure → re-dispatch *that one* designer with the Zod issues, retry, **max 3 per node**. Parallelise re-dispatches when more than one node failed (Phase 1 rule).
 

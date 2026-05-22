@@ -15,10 +15,9 @@ import type { EventBus } from './events.ts';
 import { type LayoutOptions, computeLayout } from './layout.ts';
 import {
   ConnectorPatchBodySchema,
-  ConnectorsBulkBodySchema,
   CreateProjectBodySchema,
+  FlowBulkBodySchema,
   NodePatchBodySchema,
-  NodesBulkBodySchema,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
@@ -1053,11 +1052,14 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  // Bulk-create up to 100 nodes in one transactional write. Either the whole
-  // batch lands and a single flow:reload broadcast fires, or nothing lands.
-  // Intended for skill/LLM seeding where N singular calls would burn tokens
-  // and round-trip latency. Per-item shape mirrors the singular endpoint.
-  api.post('/flows/:id/nodes/bulk', async (c) => {
+  // Bulk-create up to 100 nodes + 100 connectors in one transactional write.
+  // Either the whole batch lands (single flow:reload broadcast) or nothing
+  // does — a post-mutation ResolvedFlowSchema reject (e.g. dangling connector
+  // source/target) rolls back both arrays together. Connectors may reference
+  // nodes added in the same call; the parse sees the merged graph as a whole.
+  // Intended for skill/LLM seeding where multiple singular calls would burn
+  // tokens and round-trip latency.
+  api.post('/flows/:id/bulk', async (c) => {
     const id = c.req.param('id');
 
     let body: unknown;
@@ -1066,15 +1068,19 @@ export function createApi(options: ApiOptions): Hono {
     } catch {
       return c.json({ error: 'Body must be valid JSON' }, 400);
     }
-    const parsed = NodesBulkBodySchema.safeParse(body);
+    const parsed = FlowBulkBodySchema.safeParse(body);
     if (!parsed.success) {
-      return c.json({ error: 'Invalid bulk nodes body', issues: parsed.error.issues }, 400);
+      return c.json({ error: 'Invalid bulk body', issues: parsed.error.issues }, 400);
     }
 
-    const result = await ops.addNodesBulk(id, parsed.data);
+    const result = await ops.addBulk(id, parsed.data);
     switch (result.kind) {
       case 'ok':
-        return c.json({ ok: true, nodes: result.data.nodes });
+        return c.json({
+          ok: true,
+          nodes: result.data.nodes,
+          connectors: result.data.connectors,
+        });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
       case 'fileNotFound':
@@ -1084,9 +1090,14 @@ export function createApi(options: ApiOptions): Hono {
       case 'badSchema':
         return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
       case 'duplicateIdInBatch':
-        return c.json({ error: `Duplicate id in batch: ${result.id}` }, 400);
+        return c.json({ error: `Duplicate ${result.collection} id in batch: ${result.id}` }, 400);
       case 'idAlreadyExists':
-        return c.json({ error: `Node id already exists: ${result.id}` }, 400);
+        return c.json(
+          {
+            error: `${result.collection === 'nodes' ? 'Node' : 'Connector'} id already exists: ${result.id}`,
+          },
+          400,
+        );
       case 'writeFailed':
         return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
     }
@@ -1190,44 +1201,6 @@ export function createApi(options: ApiOptions): Hono {
         return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
       case 'badSchema':
         return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
-      case 'writeFailed':
-        return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
-    }
-  });
-
-  // Bulk-create up to 100 connectors in one transactional write. Mirrors the
-  // /nodes/bulk shape. Dangling source/target on any item rolls back the whole
-  // batch via the post-mutation ResolvedFlowSchema parse.
-  api.post('/flows/:id/connectors/bulk', async (c) => {
-    const id = c.req.param('id');
-
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'Body must be valid JSON' }, 400);
-    }
-    const parsed = ConnectorsBulkBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: 'Invalid bulk connectors body', issues: parsed.error.issues }, 400);
-    }
-
-    const result = await ops.addConnectorsBulk(id, parsed.data);
-    switch (result.kind) {
-      case 'ok':
-        return c.json({ ok: true, connectors: result.data.connectors });
-      case 'flowNotFound':
-        return c.json({ error: 'unknown demo' }, 404);
-      case 'fileNotFound':
-        return c.json({ error: `Flow file not found: ${result.path}` }, 404);
-      case 'badJson':
-        return c.json({ error: `Flow file is not valid JSON: ${result.message}` }, 400);
-      case 'badSchema':
-        return c.json({ error: 'Flow failed schema validation', issues: result.issues }, 400);
-      case 'duplicateIdInBatch':
-        return c.json({ error: `Duplicate id in batch: ${result.id}` }, 400);
-      case 'idAlreadyExists':
-        return c.json({ error: `Connector id already exists: ${result.id}` }, 400);
       case 'writeFailed':
         return c.json({ error: `Failed to write demo file: ${result.message}` }, 500);
     }

@@ -67,7 +67,7 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
 }
 
 async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
-  const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/nodes/bulk`, {
+  const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/bulk`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -97,15 +97,14 @@ describe('integration: CLI — meta (help / version / unknown)', () => {
       'flows:layout',
       'flows:play',
       'nodes:add',
-      'nodes:add-bulk',
       'nodes:get',
       'nodes:patch',
       'nodes:move',
       'nodes:reorder',
       'nodes:delete',
       'connectors:add',
-      'connectors:add-bulk',
       'connectors:patch',
+      'flow:add-bulk',
       'connectors:delete',
       'validate',
       'e2e',
@@ -392,11 +391,11 @@ describe('integration: CLI — nodes', () => {
     expect((body.id as string).startsWith('node-')).toBe(true);
   });
 
-  it('nodes:add-bulk adds many nodes in one call', async () => {
-    const created = await createProject(uniqueFlowId('cli-nodes-add-bulk'));
+  it('flow:add-bulk adds many nodes + connectors atomically in one call', async () => {
+    const created = await createProject(uniqueFlowId('cli-flow-add-bulk'));
     const r = await runCli(
       [
-        'nodes:add-bulk',
+        'flow:add-bulk',
         created.id,
         '--json',
         JSON.stringify({
@@ -404,14 +403,22 @@ describe('integration: CLI — nodes', () => {
             { id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } },
             { id: 'b', type: 'shapeNode', data: { shape: 'ellipse' } },
           ],
+          connectors: [
+            { id: 'c1', source: 'a', target: 'b', kind: 'default' },
+            { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.cli' },
+          ],
         }),
       ],
       { env: cliEnv },
     );
     expect(r.code).toBe(0);
-    const body = parseOkLine(r.stdout) as OkLine & { nodes: Array<{ id: string }> };
+    const body = parseOkLine(r.stdout) as OkLine & {
+      nodes: Array<{ id: string }>;
+      connectors: Array<{ id: string }>;
+    };
     expect(body.ok).toBe(true);
     expect(body.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+    expect(body.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
   });
 
   it('nodes:patch partial-merges into node.data', async () => {
@@ -491,30 +498,6 @@ describe('integration: CLI — connectors', () => {
     const body = parseOkLine(r.stdout);
     expect(body.ok).toBe(true);
     expect(body.id).toBe('c1');
-  });
-
-  it('connectors:add-bulk adds many connectors in one call', async () => {
-    const created = await createProject(uniqueFlowId('cli-connectors-add-bulk'));
-    await seedShapeNodes(created.id, ['a', 'b']);
-
-    const r = await runCli(
-      [
-        'connectors:add-bulk',
-        created.id,
-        '--json',
-        JSON.stringify({
-          connectors: [
-            { id: 'c1', source: 'a', target: 'b', kind: 'default' },
-            { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.cli' },
-          ],
-        }),
-      ],
-      { env: cliEnv },
-    );
-    expect(r.code).toBe(0);
-    const body = parseOkLine(r.stdout) as OkLine & { connectors: Array<{ id: string }> };
-    expect(body.ok).toBe(true);
-    expect(body.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
   });
 
   it('connectors:patch partial-merges a connector field', async () => {

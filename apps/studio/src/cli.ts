@@ -8,9 +8,8 @@ import { createEventBus } from './events.ts';
 import type { LayoutOptions } from './layout.ts';
 import {
   ConnectorPatchBodySchema,
-  ConnectorsBulkBodySchema,
+  FlowBulkBodySchema,
   NodePatchBodySchema,
-  NodesBulkBodySchema,
   ReorderBodySchema,
 } from './operations.ts';
 import { seeflowHome } from './paths.ts';
@@ -134,12 +133,12 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runFlowsDelete();
 } else if (sub === 'flows:layout') {
   await runFlowsLayout();
+} else if (sub === 'flow:add-bulk') {
+  await runFlowAddBulk();
 } else if (sub === 'flows:play') {
   await runFlowsPlay();
 } else if (sub === 'nodes:add') {
   await runNodesAdd();
-} else if (sub === 'nodes:add-bulk') {
-  await runNodesAddBulk();
 } else if (sub === 'nodes:get') {
   await runNodesGet();
 } else if (sub === 'nodes:patch') {
@@ -152,8 +151,6 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runNodesDelete();
 } else if (sub === 'connectors:add') {
   await runConnectorsAdd();
-} else if (sub === 'connectors:add-bulk') {
-  await runConnectorsAddBulk();
 } else if (sub === 'connectors:patch') {
   await runConnectorsPatch();
 } else if (sub === 'connectors:delete') {
@@ -188,15 +185,14 @@ Commands (work without a running studio):
   flows:graph <id>     List nodes + connectors without inlined file content
   flows:delete <id>    Unregister a flow
   flows:layout <id>    Apply ELK layout, writing style.json (--json/--file/--stdin optional)
+  flow:add-bulk <id>   Add many nodes + connectors atomically (--json/--file/--stdin; body { nodes?, connectors? })
   nodes:add <id>       Add a node (--json/--file/--stdin)
-  nodes:add-bulk <id>  Add many nodes (--json/--file/--stdin)
   nodes:get <id> <n>   Get a node with detail / html content inlined
   nodes:patch <id> <n> Patch a node (--json/--file/--stdin)
   nodes:move <id> <n>  Move a node (--x N --y N)
   nodes:reorder <id> <n> Reorder a node (--op forward|backward|toFront|toBack|toIndex [--index N])
   nodes:delete <id> <n> Delete a node
   connectors:add <id>  Add a connector (--json/--file/--stdin)
-  connectors:add-bulk <id>  Add many connectors (--json/--file/--stdin)
   connectors:patch <id> <connId>  Patch a connector (--json/--file/--stdin)
   connectors:delete <id> <connId> Delete a connector
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
@@ -661,15 +657,15 @@ async function runNodesAdd() {
   printOutcome(result);
 }
 
-async function runNodesAddBulk() {
+async function runFlowAddBulk() {
   const flowId = requireArg(1, '<flowId>');
   const body = await bodyFromFlags();
-  const parsed = NodesBulkBodySchema.safeParse(body);
+  const parsed = FlowBulkBodySchema.safeParse(body);
   if (!parsed.success) {
-    printError(`Invalid nodes:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
+    printError(`Invalid flow:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
   }
   const ops = createCliOperations();
-  const result = await ops.addNodesBulk(flowId, parsed.data);
+  const result = await ops.addBulk(flowId, parsed.data);
   printOutcome(result);
 }
 
@@ -752,18 +748,6 @@ async function runConnectorsAdd() {
   }
   const ops = createCliOperations();
   const result = await ops.addConnector(flowId, body as Record<string, unknown>);
-  printOutcome(result);
-}
-
-async function runConnectorsAddBulk() {
-  const flowId = requireArg(1, '<flowId>');
-  const body = await bodyFromFlags();
-  const parsed = ConnectorsBulkBodySchema.safeParse(body);
-  if (!parsed.success) {
-    printError(`Invalid connectors:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
-  }
-  const ops = createCliOperations();
-  const result = await ops.addConnectorsBulk(flowId, parsed.data);
   printOutcome(result);
 }
 

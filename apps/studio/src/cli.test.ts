@@ -197,7 +197,7 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
-  it('nodes:add-bulk adds nodes via --json', async () => {
+  it('flow:add-bulk adds nodes + connectors atomically via --json', async () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-bulk-'));
@@ -210,6 +210,7 @@ describe('seeflow CLI new subcommands', () => {
         flowPath: '.seeflow/flow.json',
       });
 
+      // Connector references node from the same batch — proves transactional shape.
       const payload = JSON.stringify({
         nodes: [
           {
@@ -217,24 +218,35 @@ describe('seeflow CLI new subcommands', () => {
             type: 'stateNode',
             data: { name: 'one', kind: 'state', stateSource: { kind: 'request' } },
           },
+          {
+            id: 'n2',
+            type: 'stateNode',
+            data: { name: 'two', kind: 'state', stateSource: { kind: 'request' } },
+          },
         ],
+        connectors: [{ id: 'n1-to-n2', source: 'n1', target: 'n2' }],
       });
       const r = await runCli(
-        ['nodes:add-bulk', entry.id, '--no-start', '--json', payload],
+        ['flow:add-bulk', entry.id, '--no-start', '--json', payload],
         studio.env,
       );
       if (r.code !== 0) {
         throw new Error(`exit=${r.code} stdout=${r.stdout} stderr=${r.stderr}`);
       }
-      const parsed = JSON.parse(r.stdout) as { ok: boolean; nodes: Array<{ id: string }> };
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        nodes: Array<{ id: string }>;
+        connectors: Array<{ id: string }>;
+      };
       expect(parsed.ok).toBe(true);
-      expect(parsed.nodes[0]?.id).toBe('n1');
+      expect(parsed.nodes.map((n) => n.id)).toEqual(['n1', 'n2']);
+      expect(parsed.connectors.map((c) => c.id)).toEqual(['n1-to-n2']);
     } finally {
       studio.stop();
     }
   }, 20_000);
 
-  it('nodes:add-bulk reports duplicate id error', async () => {
+  it('flow:add-bulk reports duplicate node id with collection=nodes', async () => {
     const studio = startTestStudio();
     try {
       const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-dup-'));
@@ -264,11 +276,11 @@ describe('seeflow CLI new subcommands', () => {
         ],
       });
       const r = await runCli(
-        ['nodes:add-bulk', entry.id, '--no-start', '--json', payload],
+        ['flow:add-bulk', entry.id, '--no-start', '--json', payload],
         studio.env,
       );
       expect(r.code).toBe(4);
-      expect(r.stderr).toContain('Duplicate id in batch');
+      expect(r.stderr).toContain('Duplicate nodes id in batch');
       expect(r.stderr).toContain('"code":"duplicateIdInBatch"');
     } finally {
       studio.stop();

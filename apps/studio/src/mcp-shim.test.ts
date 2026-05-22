@@ -9,10 +9,9 @@ import { createApp } from './server.ts';
 const SHIM_PATH = join(dirname(fileURLToPath(import.meta.url)), 'mcp-shim.ts');
 
 const EXPECTED_TOOL_NAMES = [
+  'seeflow_add_bulk',
   'seeflow_add_connector',
-  'seeflow_add_connectors',
   'seeflow_add_node',
-  'seeflow_add_nodes',
   'seeflow_create_project',
   'seeflow_delete_connector',
   'seeflow_delete_flow',

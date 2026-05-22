@@ -6,10 +6,9 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 import { EXIT_CODE_BY_KIND, exitCodeForKind } from './cli-helpers.ts';
 import {
   ConnectorPatchBodySchema,
-  ConnectorsBulkBodySchema,
   CreateProjectBodySchema,
+  FlowBulkBodySchema,
   NodePatchBodySchema,
-  NodesBulkBodySchema,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
@@ -253,6 +252,40 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     examples: ['seeflow flows:layout abc12345'],
   },
   {
+    name: 'flow:add-bulk',
+    synopsis: 'seeflow flow:add-bulk <flowId> [--json | --file | --stdin]',
+    description:
+      'Add up to 100 nodes + 100 connectors atomically. Body shape: ' +
+      '`{ nodes?: Node[], connectors?: Connector[] }` (at least one non-empty). ' +
+      'Connectors may reference nodes added in the same batch; the whole flow ' +
+      'is re-validated post-merge so a dangling source/target — or any per-item ' +
+      'schema failure — rolls back both arrays together and emits no broadcast.',
+    category: 'flows',
+    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
+    flags: BODY_FLAGS,
+    body: { schemaRef: 'FlowBulkBody' },
+    outputs: {
+      okExample: {
+        nodes: [{ id: 'node-a', node: { id: 'node-a' } }],
+        connectors: [{ id: 'conn-a' }],
+      },
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'badJson',
+        'badSchema',
+        'duplicateIdInBatch',
+        'idAlreadyExists',
+        'writeFailed',
+      ],
+    },
+    requiresStudio: false,
+    examples: [
+      'seeflow flow:add-bulk abc12345 --json \'{"nodes":[{"id":"a","type":"shapeNode","data":{"shape":"rectangle"}}],"connectors":[]}\'',
+      'seeflow flow:add-bulk abc12345 --file batch.json',
+    ],
+  },
+  {
     name: 'flows:play',
     synopsis: 'seeflow flows:play <flowId> <nodeId>',
     description: 'Trigger a play action on one node. Requires a running studio.',
@@ -315,25 +348,6 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     requiresStudio: false,
     examples: [
       'seeflow nodes:add abc12345 --json \'{"type":"shapeNode","data":{"shape":"rectangle"}}\'',
-    ],
-  },
-  {
-    name: 'nodes:add-bulk',
-    synopsis: 'seeflow nodes:add-bulk <flowId> [--json | --file | --stdin]',
-    description:
-      'Add up to 100 nodes in one transactional write. Body shape: ' +
-      '`{ nodes: Node[] }`. Any duplicate id rolls back the whole batch.',
-    category: 'nodes',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
-    body: { schemaRef: 'NodesBulkBody' },
-    outputs: {
-      okExample: { ids: ['a', 'b'] },
-      errorKinds: ['flowNotFound', 'fileNotFound', 'badSchema', 'duplicateIdInBatch'],
-    },
-    requiresStudio: false,
-    examples: [
-      'seeflow nodes:add-bulk abc12345 --json \'{"nodes":[{"id":"a","type":"shapeNode","data":{"shape":"rectangle"}}]}\'',
     ],
   },
   {
@@ -452,18 +466,6 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
   },
   {
-    name: 'connectors:add-bulk',
-    synopsis: 'seeflow connectors:add-bulk <flowId> [--json | --file | --stdin]',
-    description: 'Add up to 100 connectors transactionally. Body: `{ connectors: Connector[] }`.',
-    category: 'connectors',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
-    body: { schemaRef: 'ConnectorsBulkBody' },
-    outputs: { errorKinds: ['flowNotFound', 'badSchema', 'duplicateIdInBatch'] },
-    requiresStudio: false,
-    examples: ['seeflow connectors:add-bulk abc12345 --file connectors.json'],
-  },
-  {
     name: 'connectors:patch',
     synopsis: 'seeflow connectors:patch <flowId> <connectorId> [--json | --file | --stdin]',
     description: 'Patch fields on an existing connector.',
@@ -542,10 +544,8 @@ function resolveSchemaRef(ref: string): unknown {
       return zodToJsonSchema(NodePatchBodySchema, { $refStrategy: 'none' });
     case 'ConnectorPatchBody':
       return zodToJsonSchema(ConnectorPatchBodySchema, { $refStrategy: 'none' });
-    case 'NodesBulkBody':
-      return zodToJsonSchema(NodesBulkBodySchema, { $refStrategy: 'none' });
-    case 'ConnectorsBulkBody':
-      return zodToJsonSchema(ConnectorsBulkBodySchema, { $refStrategy: 'none' });
+    case 'FlowBulkBody':
+      return zodToJsonSchema(FlowBulkBodySchema, { $refStrategy: 'none' });
     case 'CreateProjectBody':
       return zodToJsonSchema(CreateProjectBodySchema, { $refStrategy: 'none' });
     case 'RegisterBody':

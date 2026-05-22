@@ -23,12 +23,10 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
 | P3 | `projects:create` | Scaffold + register new project |
-| P3 | `nodes:add-bulk` | Atomic seed of skeleton nodes |
-| P3 | `connectors:add-bulk` | Atomic seed of skeleton connectors |
+| P3 | `flow:add-bulk` | Atomic seed of skeleton nodes + connectors in one transactional write (rollback covers both arrays) |
 | P3 | `flows:layout` | Run ELK; rewrite style.json positions |
 | P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node — also accepts an optional `type` field for non-destructive retype (preserves the per-node folder under `.seeflow/nodes/<id>/`) |
-| P5 | `nodes:add-bulk` | Inject synthetic trigger nodes |
-| P5 | `connectors:add-bulk` | Wire trigger nodes |
+| P5 | `flow:add-bulk` | Inject synthetic trigger nodes + wire them, atomically |
 | P5 | `flows:layout` | Re-layout after Phase 5 changes |
 | P6 | `e2e` | End-to-end validation via SSE |
 | any | `flows:list`, `flows:get` | Discovery / id lookup |
@@ -42,7 +40,7 @@ Every write is validated server-side by the studio's post-merge `ResolvedFlowSch
 |---|---|---|
 | `seeflow-code-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): user-prompt-specific brief — scope, code pointers, endpoints, tech stack, edit-case |
 | `seeflow-system-analyzer` | `Read, Grep, Glob, LS, Bash` (read-only) | P1 (parallel): request-agnostic brief — runtime, dev setup, integration tests, fixtures, gotchas, tech adaptations; populates `LEARN.md` |
-| `seeflow-node-planner` | none (pure reasoning) | P2: pick nodes + connectors (starts as soon as code-analyzer returns) — emits payloads in `nodes:add-bulk` / `connectors:add-bulk` shape |
+| `seeflow-node-planner` | none (pure reasoning) | P2: pick nodes + connectors (starts as soon as code-analyzer returns) — emits a single payload in `flow:add-bulk` shape |
 | `seeflow-play-designer` | `Read, Grep, Glob, LS` | P4: design playActions + script bodies — emits `{patch, scriptFile}` triples for P5 |
 | `seeflow-status-designer` | `Read, Grep, Glob, LS` | P4: design statusActions + script bodies — same triple shape |
 

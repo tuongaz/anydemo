@@ -455,19 +455,29 @@ export type AddNodeOutcome =
   | { kind: 'badSchema'; issues: ZodIssue[] }
   | { kind: 'writeFailed'; message: string };
 
-// Bulk add: ok payload carries every created node so the caller can read
-// server-assigned ids back. duplicateIdInBatch fires when two items in the
-// same request share an id; idAlreadyExists fires when a request id collides
-// with a node already on disk. Both are pre-write rejections, no rollback
-// needed. writeFailed/badSchema cover the post-mutation failure modes.
-export type AddNodesBulkOutcome =
-  | { kind: 'ok'; data: { nodes: Array<{ id: string; node: Record<string, unknown> }> } }
+// Combined bulk add: ok payload carries every created node + connector so the
+// caller can read server-assigned ids back. nodes/connectors arrays in the
+// payload are empty when the input section was absent. duplicateIdInBatch
+// fires when two items in the same collection of one request share an id;
+// idAlreadyExists fires when a request id collides with an existing entry on
+// disk; both are pre-write rejections (with a `collection` discriminator so
+// callers know which array tripped). The whole batch is wrapped in one
+// mutateMergedFlowAndBroadcast — a post-mutation ResolvedFlowSchema failure
+// (e.g. dangling connector source/target) rolls back both arrays together.
+export type FlowBulkOutcome =
+  | {
+      kind: 'ok';
+      data: {
+        nodes: Array<{ id: string; node: Record<string, unknown> }>;
+        connectors: Array<{ id: string }>;
+      };
+    }
   | { kind: 'flowNotFound' }
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
-  | { kind: 'duplicateIdInBatch'; id: string }
-  | { kind: 'idAlreadyExists'; id: string }
+  | { kind: 'duplicateIdInBatch'; collection: 'nodes' | 'connectors'; id: string }
+  | { kind: 'idAlreadyExists'; collection: 'nodes' | 'connectors'; id: string }
   | { kind: 'writeFailed'; message: string };
 
 export type DeleteNodeOutcome =
@@ -585,20 +595,32 @@ export const mergeConnectorUpdates = (
   }
 };
 
-// Bulk-add envelopes. Body shape gated here; per-item shape is implicit and
-// enforced by ResolvedFlowSchema after the whole batch is merged in — same
-// pattern the singular add endpoints already rely on. The 100-item cap keeps
-// one SSE broadcast payload reasonable; the LLM caller is meant to chunk if
-// it ever needs more.
+// Combined bulk-add envelope. Body shape gated here; per-item shape is
+// implicit and enforced by ResolvedFlowSchema after the whole batch is merged
+// in — same pattern the singular add endpoints already rely on. The 100-item
+// per-kind cap keeps one SSE broadcast payload reasonable; the LLM caller is
+// meant to chunk if it ever needs more. Both arrays are optional; the refine
+// requires at least one non-empty so an empty {} can't no-op a write.
+//
+// The shape is exported as a bare ZodObject (FlowBulkBodyShape) so MCP/CLI
+// surfaces can `.extend({ flowId })` and re-apply the refine — extend()
+// doesn't survive ZodEffects (a refined schema), and we want the JSON Schema
+// to stay a clean `{ type: 'object', properties: ... }` for agent
+// introspection instead of an `allOf` intersection.
 const BULK_MAX_ITEMS = 100;
-export const NodesBulkBodySchema = z.object({
-  nodes: z.array(z.record(z.unknown())).min(1).max(BULK_MAX_ITEMS),
+export const FLOW_BULK_NON_EMPTY_MESSAGE = 'Body must include at least one node or connector';
+export const flowBulkNonEmpty = (b: {
+  nodes?: unknown[];
+  connectors?: unknown[];
+}): boolean => (b.nodes?.length ?? 0) + (b.connectors?.length ?? 0) > 0;
+export const FlowBulkBodyShape = z.object({
+  nodes: z.array(z.record(z.unknown())).max(BULK_MAX_ITEMS).optional(),
+  connectors: z.array(z.record(z.unknown())).max(BULK_MAX_ITEMS).optional(),
 });
-export type NodesBulkBody = z.infer<typeof NodesBulkBodySchema>;
-export const ConnectorsBulkBodySchema = z.object({
-  connectors: z.array(z.record(z.unknown())).min(1).max(BULK_MAX_ITEMS),
+export const FlowBulkBodySchema = FlowBulkBodyShape.refine(flowBulkNonEmpty, {
+  message: FLOW_BULK_NON_EMPTY_MESSAGE,
 });
-export type ConnectorsBulkBody = z.infer<typeof ConnectorsBulkBodySchema>;
+export type FlowBulkBody = z.infer<typeof FlowBulkBodySchema>;
 
 export type AddConnectorOutcome =
   | { kind: 'ok'; data: { id: string } }
@@ -606,16 +628,6 @@ export type AddConnectorOutcome =
   | { kind: 'fileNotFound'; path: string }
   | { kind: 'badJson'; message: string }
   | { kind: 'badSchema'; issues: ZodIssue[] }
-  | { kind: 'writeFailed'; message: string };
-
-export type AddConnectorsBulkOutcome =
-  | { kind: 'ok'; data: { connectors: Array<{ id: string }> } }
-  | { kind: 'flowNotFound' }
-  | { kind: 'fileNotFound'; path: string }
-  | { kind: 'badJson'; message: string }
-  | { kind: 'badSchema'; issues: ZodIssue[] }
-  | { kind: 'duplicateIdInBatch'; id: string }
-  | { kind: 'idAlreadyExists'; id: string }
   | { kind: 'writeFailed'; message: string };
 
 export type PatchConnectorOutcome =
@@ -1267,39 +1279,44 @@ export async function addNodeImpl(
   return result;
 }
 
-// Bulk add — N nodes in one read-validate-write-broadcast cycle. Transactional:
-// any single item failing the post-mutation ResolvedFlowSchema parse rolls
-// back the whole batch (nothing on flow.json, no per-node folders created).
-// Per-node externalization runs per item exactly like the singular path; the
-// queued file writes all happen inside the mutator so a writeFailed on item
-// K leaves items 0..K-1 with stranded folders — same shape as the singular
-// path's writeFailed, but amplified by N. Caller is expected to retry.
-export async function addNodesBulkImpl(
+// Bulk add — N nodes + M connectors in one read-validate-write-broadcast
+// cycle. Transactional: any single item failing the post-mutation
+// ResolvedFlowSchema parse rolls back the whole batch (nothing on flow.json,
+// no per-node folders surviving). Connectors that reference nodes added in
+// the same call validate correctly because the parse sees the merged graph
+// as a whole; a dangling source/target rolls back BOTH arrays. Per-node
+// externalization is queued in Phase A and flushed inside the mutator so a
+// writeFailed on node K leaves nodes 0..K-1 with stranded folders — same
+// shape as the singular path's writeFailed, but amplified by N. Caller is
+// expected to retry.
+export async function addFlowBulkImpl(
   deps: OperationsDeps,
   flowId: string,
-  body: NodesBulkBody,
-): Promise<AddNodesBulkOutcome> {
+  body: FlowBulkBody,
+): Promise<FlowBulkOutcome> {
   const entry = deps.registry.resolve(flowId);
   if (!entry) return { kind: 'flowNotFound' };
 
-  // Pre-allocate ids + capture externalization writes per item. Doing this
-  // outside the mutator means the duplicateIdInBatch check runs before any
-  // disk IO; the collide-with-existing check happens inside the mutator where
-  // it can see the freshly-read flow.nodes.
-  const prepared: Array<{
+  // Phase A — prepare ids + externalization, per-collection duplicate check.
+  // No IO yet; duplicates inside a single collection trip here, before any
+  // disk write. Cross-collection id reuse is intentionally allowed (a node
+  // and a connector may share an id today).
+  const preparedNodes: Array<{
     id: string;
     node: Record<string, unknown>;
     externalized: Array<{ absPath: string; content: string }>;
   }> = [];
-  const idsInBatch = new Set<string>();
-  for (const item of body.nodes) {
+  const nodeIdsInBatch = new Set<string>();
+  for (const item of body.nodes ?? []) {
     const newNode = { ...item };
     if (typeof newNode.id !== 'string' || newNode.id.length === 0) {
       newNode.id = `node-${shortId()}`;
     }
     const newId = newNode.id as string;
-    if (idsInBatch.has(newId)) return { kind: 'duplicateIdInBatch', id: newId };
-    idsInBatch.add(newId);
+    if (nodeIdsInBatch.has(newId)) {
+      return { kind: 'duplicateIdInBatch', collection: 'nodes', id: newId };
+    }
+    nodeIdsInBatch.add(newId);
     if (!newNode.position || typeof newNode.position !== 'object') {
       newNode.position = { x: 0, y: 0 };
     }
@@ -1319,32 +1336,70 @@ export async function addNodesBulkImpl(
       });
     }
     newNode.data = data;
-    prepared.push({ id: newId, node: newNode, externalized });
+    preparedNodes.push({ id: newId, node: newNode, externalized });
+  }
+
+  const preparedConns: Array<{ id: string; conn: Record<string, unknown> }> = [];
+  const connIdsInBatch = new Set<string>();
+  for (const item of body.connectors ?? []) {
+    const newConn = { ...item };
+    if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
+      newConn.id = `conn-${shortId()}`;
+    }
+    if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
+      newConn.kind = 'default';
+    }
+    const newId = newConn.id as string;
+    if (connIdsInBatch.has(newId)) {
+      return { kind: 'duplicateIdInBatch', collection: 'connectors', id: newId };
+    }
+    connIdsInBatch.add(newId);
+    preparedConns.push({ id: newId, conn: newConn });
   }
 
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
-  const result = await mutateMergedFlowAndBroadcast<
-    { kind: 'idAlreadyExists'; id: string } | { kind: 'writeFailed'; message: string }
-  >(deps, flowId, fullPath, (flow) => {
-    const existing = new Set(
+  // Phase B — single transactional mutate. Push nodes first so connectors
+  // added in the same batch can reference them, then queue externalized file
+  // writes. mutateMergedFlowAndBroadcast runs one post-mutation
+  // ResolvedFlowSchema parse over the merged graph and emits one flow:reload
+  // broadcast.
+  type MutErr =
+    | { kind: 'idAlreadyExists'; collection: 'nodes' | 'connectors'; id: string }
+    | { kind: 'writeFailed'; message: string };
+  const result = await mutateMergedFlowAndBroadcast<MutErr>(deps, flowId, fullPath, (flow) => {
+    const existingNodeIds = new Set(
       flow.nodes
         .map((n) => (typeof n.id === 'string' ? n.id : null))
         .filter((id): id is string => id !== null),
     );
-    for (const p of prepared) {
-      if (existing.has(p.id)) return { kind: 'idAlreadyExists', id: p.id };
+    for (const p of preparedNodes) {
+      if (existingNodeIds.has(p.id)) {
+        return { kind: 'idAlreadyExists', collection: 'nodes', id: p.id };
+      }
     }
-    for (const p of prepared) {
-      flow.nodes.push(p.node);
+    const existingConnIds = new Set(
+      flow.connectors
+        .map((c) => (typeof c.id === 'string' ? c.id : null))
+        .filter((id): id is string => id !== null),
+    );
+    for (const p of preparedConns) {
+      if (existingConnIds.has(p.id)) {
+        return { kind: 'idAlreadyExists', collection: 'connectors', id: p.id };
+      }
     }
-    for (const p of prepared) {
+    for (const p of preparedNodes) flow.nodes.push(p.node);
+    for (const p of preparedConns) flow.connectors.push(p.conn);
+    for (const p of preparedNodes) {
       for (const ext of p.externalized) {
         try {
           writeNodeFile(ext.absPath, ext.content);
         } catch (err) {
-          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+          return {
+            kind: 'writeFailed',
+            message: err instanceof Error ? err.message : String(err),
+          };
         }
       }
     }
@@ -1354,17 +1409,20 @@ export async function addNodesBulkImpl(
   if (result.kind === 'ok') {
     return {
       kind: 'ok',
-      data: { nodes: prepared.map((p) => ({ id: p.id, node: p.node })) },
+      data: {
+        nodes: preparedNodes.map((p) => ({ id: p.id, node: p.node })),
+        connectors: preparedConns.map((p) => ({ id: p.id })),
+      },
     };
   }
 
   // Non-ok branch: the post-mutation ResolvedFlowSchema parse (or a later
   // writeFailed) ran AFTER the mutator already wrote per-node folders. The
   // collide-with-existing check ran first inside the mutator, so any folder
-  // at `nodes/<prepared.id>/` was created by this call — safe to cascade.
-  // The idAlreadyExists branch returns before any writeNodeFile, so we still
-  // try to remove (it's a no-op when the folder doesn't exist).
-  for (const p of prepared) {
+  // at `nodes/<p.id>/` was created by this call — safe to cascade. The
+  // idAlreadyExists branch returns before any writeNodeFile, so the rmdir is
+  // a no-op there.
+  for (const p of preparedNodes) {
     removeNodeDir(entry.repoPath, p.id);
   }
   return result;
@@ -1573,64 +1631,6 @@ export async function addConnectorImpl(
   });
 
   if (result.kind === 'ok') return { kind: 'ok', data: { id: newId } };
-  return result;
-}
-
-// Bulk add — N connectors in one read-validate-write-broadcast cycle. Same
-// transactional shape as addNodesBulkImpl: any single connector failing the
-// post-mutation ResolvedFlowSchema parse (dangling source/target, missing
-// kind-specific field) rolls back the whole batch. No per-item externalization
-// to manage — connectors don't own per-node folders.
-export async function addConnectorsBulkImpl(
-  deps: OperationsDeps,
-  flowId: string,
-  body: ConnectorsBulkBody,
-): Promise<AddConnectorsBulkOutcome> {
-  const entry = deps.registry.resolve(flowId);
-  if (!entry) return { kind: 'flowNotFound' };
-
-  const prepared: Array<{ id: string; conn: Record<string, unknown> }> = [];
-  const idsInBatch = new Set<string>();
-  for (const item of body.connectors) {
-    const newConn = { ...item };
-    if (typeof newConn.id !== 'string' || newConn.id.length === 0) {
-      newConn.id = `conn-${shortId()}`;
-    }
-    if (typeof newConn.kind !== 'string' || newConn.kind.length === 0) {
-      newConn.kind = 'default';
-    }
-    const newId = newConn.id as string;
-    if (idsInBatch.has(newId)) return { kind: 'duplicateIdInBatch', id: newId };
-    idsInBatch.add(newId);
-    prepared.push({ id: newId, conn: newConn });
-  }
-
-  const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
-  if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
-
-  const result = await mutateMergedFlowAndBroadcast<{ kind: 'idAlreadyExists'; id: string }>(
-    deps,
-    flowId,
-    fullPath,
-    (flow) => {
-      const existing = new Set(
-        flow.connectors
-          .map((c) => (typeof c.id === 'string' ? c.id : null))
-          .filter((id): id is string => id !== null),
-      );
-      for (const p of prepared) {
-        if (existing.has(p.id)) return { kind: 'idAlreadyExists', id: p.id };
-      }
-      for (const p of prepared) {
-        flow.connectors.push(p.conn);
-      }
-      return { kind: 'ok' };
-    },
-  );
-
-  if (result.kind === 'ok') {
-    return { kind: 'ok', data: { connectors: prepared.map((p) => ({ id: p.id })) } };
-  }
   return result;
 }
 
@@ -1868,10 +1868,6 @@ export interface Operations {
   getFlowGraph(id: string): ReturnType<typeof getFlowGraphImpl>;
   getNode(flowId: string, nodeId: string): ReturnType<typeof getNodeImpl>;
   addNode(flowId: string, body: Record<string, unknown>): ReturnType<typeof addNodeImpl>;
-  addNodesBulk(
-    flowId: string,
-    body: Parameters<typeof addNodesBulkImpl>[2],
-  ): ReturnType<typeof addNodesBulkImpl>;
   patchNode(
     flowId: string,
     nodeId: string,
@@ -1889,16 +1885,16 @@ export interface Operations {
   ): ReturnType<typeof reorderNodeImpl>;
   deleteNode(flowId: string, nodeId: string): ReturnType<typeof deleteNodeImpl>;
   addConnector(flowId: string, body: Record<string, unknown>): ReturnType<typeof addConnectorImpl>;
-  addConnectorsBulk(
-    flowId: string,
-    body: Parameters<typeof addConnectorsBulkImpl>[2],
-  ): ReturnType<typeof addConnectorsBulkImpl>;
   patchConnector(
     flowId: string,
     connectorId: string,
     body: Parameters<typeof patchConnectorImpl>[3],
   ): ReturnType<typeof patchConnectorImpl>;
   deleteConnector(flowId: string, connectorId: string): ReturnType<typeof deleteConnectorImpl>;
+  addBulk(
+    flowId: string,
+    body: Parameters<typeof addFlowBulkImpl>[2],
+  ): ReturnType<typeof addFlowBulkImpl>;
   registerFlow(body: Parameters<typeof registerFlowImpl>[1]): ReturnType<typeof registerFlowImpl>;
   createProject(
     body: Parameters<typeof createProjectImpl>[1],
@@ -1919,16 +1915,15 @@ export function createOperations(deps: OperationsDeps): Operations {
     getFlowGraph: (id) => getFlowGraphImpl(deps, id),
     getNode: (flowId, nodeId) => getNodeImpl(deps, flowId, nodeId),
     addNode: (flowId, body) => addNodeImpl(deps, flowId, body),
-    addNodesBulk: (flowId, body) => addNodesBulkImpl(deps, flowId, body),
     patchNode: (flowId, nodeId, body) => patchNodeImpl(deps, flowId, nodeId, body),
     moveNode: (flowId, nodeId, body) => moveNodeImpl(deps, flowId, nodeId, body),
     reorderNode: (flowId, nodeId, body) => reorderNodeImpl(deps, flowId, nodeId, body),
     deleteNode: (flowId, nodeId) => deleteNodeImpl(deps, flowId, nodeId),
     addConnector: (flowId, body) => addConnectorImpl(deps, flowId, body),
-    addConnectorsBulk: (flowId, body) => addConnectorsBulkImpl(deps, flowId, body),
     patchConnector: (flowId, connectorId, body) =>
       patchConnectorImpl(deps, flowId, connectorId, body),
     deleteConnector: (flowId, connectorId) => deleteConnectorImpl(deps, flowId, connectorId),
+    addBulk: (flowId, body) => addFlowBulkImpl(deps, flowId, body),
     registerFlow: (body) => registerFlowImpl(deps, body),
     createProject: (body) => createProjectImpl(deps, body),
     deleteFlow: (id) => deleteFlowImpl(deps, id),

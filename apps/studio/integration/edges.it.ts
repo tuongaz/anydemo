@@ -67,7 +67,7 @@ async function waitForPidDead(pid: number, timeoutMs: number): Promise<boolean> 
 }
 
 describe('integration: edges — cross-boundary failure modes', () => {
-  it('SIGTERM during in-flight nodes:add-bulk leaves flow.json complete or untouched', async () => {
+  it('SIGTERM during in-flight flow:add-bulk leaves flow.json complete or untouched', async () => {
     const studio = await spawnStudio();
     let inflight: Promise<Response | null> | null = null;
     let finalFlow: OnDiskFlow | null = null;
@@ -90,7 +90,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
       // Fire the bulk write WITHOUT awaiting — we want SIGTERM to potentially
       // land mid-flight. Swallow any fetch error (the connection may abort
       // when the server dies).
-      inflight = fetch(`${studio.baseURL}/api/flows/${project.id}/nodes/bulk`, {
+      inflight = fetch(`${studio.baseURL}/api/flows/${project.id}/bulk`, {
         method: 'POST',
         headers,
         body: JSON.stringify(bulkBody),
@@ -198,7 +198,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
 
       // Seed a single shape node — easiest valid target for /position.
       const nodeId = 'pp-1';
-      const seedRes = await fetch(`${studio.baseURL}/api/flows/${project.id}/nodes/bulk`, {
+      const seedRes = await fetch(`${studio.baseURL}/api/flows/${project.id}/bulk`, {
         method: 'POST',
         headers,
         body: JSON.stringify({

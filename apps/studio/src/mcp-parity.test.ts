@@ -367,6 +367,37 @@ const SCENARIOS: ParityScenario[] = [
     },
   },
   {
+    toolName: 'seeflow_add_bulk',
+    build: () => {
+      // Use the empty starter and seed both arrays in the same call so the
+      // atomic shape gets exercised end-to-end. Explicit ids keep the
+      // on-disk bytes deterministic across the REST and MCP runs.
+      const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+      const body = {
+        nodes: [
+          {
+            id: 'parity-bulk-c',
+            type: 'shapeNode' as const,
+            data: { shape: 'rectangle' as const, name: 'C' },
+          },
+        ],
+        connectors: [
+          {
+            id: 'parity-bulk-conn',
+            source: 'a',
+            target: 'parity-bulk-c',
+            kind: 'default' as const,
+          },
+        ],
+      };
+      return {
+        demoFile: fix.demoFile,
+        runRest: () => restJson(fix.app, 'POST', `/api/flows/${fix.flowId}/bulk`, body),
+        runMcp: () => callMcpTool(fix.app, 'seeflow_add_bulk', { flowId: fix.flowId, ...body }),
+      };
+    },
+  },
+  {
     toolName: 'seeflow_create_project',
     build: () => {
       const name = 'Parity Project';

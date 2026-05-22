@@ -14,9 +14,8 @@ import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
 import {
   NodePatchBodySchema,
   addConnectorImpl,
-  addConnectorsBulkImpl,
+  addFlowBulkImpl,
   addNodeImpl,
-  addNodesBulkImpl,
   applyLayoutImpl,
   createOperations,
   deleteNodeImpl,
@@ -333,73 +332,153 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
   });
 });
 
-describe('addNodesBulkImpl', () => {
-  it('appends every node and externalizes per-item detail + html in one write', async () => {
+describe('addFlowBulkImpl', () => {
+  it('appends nodes + connectors atomically in one write, with connectors referencing same-batch nodes', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
-    const res = await addNodesBulkImpl(deps, flowId, {
+    const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { type: 'shapeNode', data: { name: 'A', shape: 'rectangle', detail: 'aye' } },
-        { id: 'fixed-id', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+        { id: 'a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle', detail: 'aye' } },
+        { id: 'b', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
         { type: 'htmlNode', data: { html: '<div>hi</div>' } },
       ],
+      connectors: [
+        // Connector references nodes from the SAME batch — proves the merged
+        // graph is parsed as a whole, not phase-by-phase.
+        { id: 'a-to-b', source: 'a', target: 'b', kind: 'event', eventName: 'thing.happened' },
+        { source: 'b', target: 'a' },
+      ],
     });
+
     expect(res.kind).toBe('ok');
     if (res.kind !== 'ok') return;
     expect(res.data.nodes).toHaveLength(3);
-    expect(res.data.nodes[1]?.id).toBe('fixed-id');
+    expect(res.data.connectors).toHaveLength(2);
+    expect(res.data.connectors[0]?.id).toBe('a-to-b');
 
-    // detail.md / view.html landed under each node's folder.
-    const aId = res.data.nodes[0]?.id;
-    if (!aId) throw new Error('missing id');
-    expect(readFileSync(nodeFileAbsPath(repoPath, aId, 'detail.md'), 'utf8')).toBe('aye');
-    expect(readFileSync(nodeFileAbsPath(repoPath, 'fixed-id', 'detail.md'), 'utf8')).toBe('');
+    // Externalization landed for the per-node files.
+    expect(readFileSync(nodeFileAbsPath(repoPath, 'a', 'detail.md'), 'utf8')).toBe('aye');
     const cId = res.data.nodes[2]?.id;
     if (!cId) throw new Error('missing id');
     expect(readFileSync(nodeFileAbsPath(repoPath, cId, 'view.html'), 'utf8')).toBe('<div>hi</div>');
 
-    // flow.json carries file:// refs for all three.
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(3);
-    expect(flow.nodes[0].data.detail).toBe(nodeFileRef(aId, 'detail.md'));
-    expect(flow.nodes[2].data.html).toBe(nodeFileRef(cId, 'view.html'));
+    expect(flow.connectors).toHaveLength(2);
+    expect(flow.nodes[0].data.detail).toBe(nodeFileRef('a', 'detail.md'));
+    // Connector without an explicit kind defaulted to 'default'.
+    expect(flow.connectors[1].kind).toBe('default');
   });
 
-  it('rolls back the whole batch when one item fails ResolvedFlowSchema', async () => {
-    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
-    const res = await addNodesBulkImpl(deps, flowId, {
+  it('accepts a nodes-only body', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [{ id: 'only', type: 'shapeNode', data: { shape: 'rectangle', name: 'only' } }],
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok') return;
+    expect(res.data.nodes).toHaveLength(1);
+    expect(res.data.connectors).toHaveLength(0);
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    expect(flow.nodes).toHaveLength(1);
+    expect(flow.connectors).toHaveLength(0);
+  });
+
+  it('accepts a connectors-only body that wires existing nodes', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const seed = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'rollback-a', type: 'shapeNode', data: { name: 'good-1', shape: 'rectangle' } },
-        // shapeNode requires `shape` — omitting it trips the post-mutation parse.
-        { id: 'rollback-b', type: 'shapeNode', data: { name: 'bad-no-shape' } },
-        { id: 'rollback-c', type: 'shapeNode', data: { name: 'good-2', shape: 'ellipse' } },
+        { id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } },
+        { id: 'b', type: 'shapeNode', data: { shape: 'rectangle', name: 'B' } },
       ],
+    });
+    if (seed.kind !== 'ok') throw new Error('seed failed');
+
+    const res = await addFlowBulkImpl(deps, flowId, {
+      connectors: [{ id: 'wire', source: 'a', target: 'b' }],
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok') return;
+    expect(res.data.nodes).toHaveLength(0);
+    expect(res.data.connectors).toHaveLength(1);
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    expect(flow.connectors).toHaveLength(1);
+  });
+
+  it('rolls back BOTH arrays when a connector has a dangling target referencing nothing in the merged graph', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [
+        { id: 'roll-a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
+        { id: 'roll-b', type: 'shapeNode', data: { name: 'B', shape: 'rectangle' } },
+      ],
+      connectors: [{ source: 'roll-a', target: 'never-added' }],
     });
     expect(res.kind).toBe('badSchema');
 
-    // flow.json untouched.
+    // flow.json untouched — neither nodes nor connectors landed.
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(0);
-    // Every prepared per-node folder cleaned up — no orphans left behind.
-    for (const id of ['rollback-a', 'rollback-b', 'rollback-c']) {
+    expect(flow.connectors).toHaveLength(0);
+    // Per-node folders for nodes prepared in this batch cleaned up.
+    for (const id of ['roll-a', 'roll-b']) {
       expect(existsSync(join(repoPath, '.seeflow', 'nodes', id))).toBe(false);
     }
   });
 
-  it('rejects intra-batch duplicate ids before touching disk', async () => {
+  it('rolls back the whole batch when one node fails ResolvedFlowSchema', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [
+        { id: 'rollback-a', type: 'shapeNode', data: { name: 'good-1', shape: 'rectangle' } },
+        // shapeNode requires `shape` — omitting it trips the post-mutation parse.
+        { id: 'rollback-b', type: 'shapeNode', data: { name: 'bad-no-shape' } },
+      ],
+    });
+    expect(res.kind).toBe('badSchema');
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    expect(flow.nodes).toHaveLength(0);
+    for (const id of ['rollback-a', 'rollback-b']) {
+      expect(existsSync(join(repoPath, '.seeflow', 'nodes', id))).toBe(false);
+    }
+  });
+
+  it('rejects intra-batch duplicate node ids with collection=nodes', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
-    const res = await addNodesBulkImpl(deps, flowId, {
+    const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
         { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
         { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
       ],
     });
     expect(res.kind).toBe('duplicateIdInBatch');
-    if (res.kind === 'duplicateIdInBatch') expect(res.id).toBe('dupe');
+    if (res.kind === 'duplicateIdInBatch') {
+      expect(res.collection).toBe('nodes');
+      expect(res.id).toBe('dupe');
+    }
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(0);
   });
 
-  it('rejects when an item id collides with an existing flow node', async () => {
+  it('rejects intra-batch duplicate connector ids with collection=connectors', async () => {
+    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      connectors: [
+        { id: 'c-dupe', source: 'a', target: 'a' },
+        { id: 'c-dupe', source: 'a', target: 'a' },
+      ],
+    });
+    expect(res.kind).toBe('duplicateIdInBatch');
+    if (res.kind === 'duplicateIdInBatch') {
+      expect(res.collection).toBe('connectors');
+      expect(res.id).toBe('c-dupe');
+    }
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    expect(flow.nodes).toHaveLength(0);
+    expect(flow.connectors).toHaveLength(0);
+  });
+
+  it('rejects when a node id collides with an existing flow node (collection=nodes)', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const seed = await addNodeImpl(deps, flowId, {
       id: 'taken',
@@ -408,116 +487,51 @@ describe('addNodesBulkImpl', () => {
     });
     if (seed.kind !== 'ok') throw new Error('seed failed');
 
-    const res = await addNodesBulkImpl(deps, flowId, {
+    const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
     });
     expect(res.kind).toBe('idAlreadyExists');
-    if (res.kind === 'idAlreadyExists') expect(res.id).toBe('taken');
-
-    // Seed node is the only node on disk.
+    if (res.kind === 'idAlreadyExists') {
+      expect(res.collection).toBe('nodes');
+      expect(res.id).toBe('taken');
+    }
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(1);
   });
 
-  it('returns flowNotFound for an unknown flowId', async () => {
-    const { deps } = await setupProjectWithFlow();
-    const res = await addNodesBulkImpl(deps, 'no-such-flow', {
-      nodes: [{ type: 'shapeNode', data: { name: 'X', shape: 'rectangle' } }],
-    });
-    expect(res.kind).toBe('flowNotFound');
-  });
-});
-
-describe('addConnectorsBulkImpl', () => {
-  it('appends every connector and defaults id/kind per item', async () => {
+  it('rejects when a connector id collides with an existing connector (collection=connectors)', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const a = await addNodeImpl(deps, flowId, {
       id: 'a',
       type: 'shapeNode',
       data: { name: 'A', shape: 'rectangle' },
     });
-    const b = await addNodeImpl(deps, flowId, {
-      id: 'b',
-      type: 'shapeNode',
-      data: { name: 'B', shape: 'rectangle' },
+    if (a.kind !== 'ok') throw new Error('seed node failed');
+    const seedConn = await addConnectorImpl(deps, flowId, {
+      id: 'c-taken',
+      source: 'a',
+      target: 'a',
     });
-    if (a.kind !== 'ok' || b.kind !== 'ok') throw new Error('seed failed');
+    if (seedConn.kind !== 'ok') throw new Error('seed connector failed');
 
-    const res = await addConnectorsBulkImpl(deps, flowId, {
-      connectors: [
-        { source: 'a', target: 'b', kind: 'event', eventName: 'thing.happened' },
-        { id: 'pinned', source: 'b', target: 'a' },
-      ],
-    });
-    expect(res.kind).toBe('ok');
-    if (res.kind !== 'ok') return;
-    expect(res.data.connectors).toHaveLength(2);
-    expect(res.data.connectors[1]?.id).toBe('pinned');
-
-    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    expect(flow.connectors).toHaveLength(2);
-    expect(flow.connectors[0].kind).toBe('event');
-    // Item without an explicit kind defaulted to 'default'.
-    expect(flow.connectors[1].kind).toBe('default');
-  });
-
-  it('rolls back the whole batch when one connector has a dangling target', async () => {
-    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
-    const a = await addNodeImpl(deps, flowId, {
-      id: 'a',
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
-    });
-    if (a.kind !== 'ok') throw new Error('seed failed');
-
-    const res = await addConnectorsBulkImpl(deps, flowId, {
-      connectors: [
-        { source: 'a', target: 'a' },
-        { source: 'a', target: 'no-such-node' },
-      ],
-    });
-    expect(res.kind).toBe('badSchema');
-    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    expect(flow.connectors).toHaveLength(0);
-  });
-
-  it('rejects intra-batch duplicate ids before touching disk', async () => {
-    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
-    const a = await addNodeImpl(deps, flowId, {
-      id: 'a',
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
-    });
-    if (a.kind !== 'ok') throw new Error('seed failed');
-
-    const res = await addConnectorsBulkImpl(deps, flowId, {
-      connectors: [
-        { id: 'c-dupe', source: 'a', target: 'a' },
-        { id: 'c-dupe', source: 'a', target: 'a' },
-      ],
-    });
-    expect(res.kind).toBe('duplicateIdInBatch');
-    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    expect(flow.connectors).toHaveLength(0);
-  });
-
-  it('rejects when an item id collides with an existing connector', async () => {
-    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
-    const a = await addNodeImpl(deps, flowId, {
-      id: 'a',
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
-    });
-    if (a.kind !== 'ok') throw new Error('seed failed');
-    const seed = await addConnectorImpl(deps, flowId, { id: 'c-taken', source: 'a', target: 'a' });
-    if (seed.kind !== 'ok') throw new Error('seed connector failed');
-
-    const res = await addConnectorsBulkImpl(deps, flowId, {
+    const res = await addFlowBulkImpl(deps, flowId, {
       connectors: [{ id: 'c-taken', source: 'a', target: 'a' }],
     });
     expect(res.kind).toBe('idAlreadyExists');
+    if (res.kind === 'idAlreadyExists') {
+      expect(res.collection).toBe('connectors');
+      expect(res.id).toBe('c-taken');
+    }
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.connectors).toHaveLength(1);
+  });
+
+  it('returns flowNotFound for an unknown flowId', async () => {
+    const { deps } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, 'no-such-flow', {
+      nodes: [{ type: 'shapeNode', data: { name: 'X', shape: 'rectangle' } }],
+    });
+    expect(res.kind).toBe('flowNotFound');
   });
 });
 
@@ -922,29 +936,15 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
     expect(deps.registry.resolve('nope-not-there')).toBeUndefined();
   });
 
-  it('addNodesBulkImpl resolves a slug argument', async () => {
+  it('addFlowBulkImpl resolves a slug argument and seeds nodes + connectors in one call', async () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const entry = deps.registry.resolve(flowId);
     if (!entry) throw new Error('seed lookup failed');
-    const res = await addNodesBulkImpl(deps, entry.slug, {
-      nodes: [{ id: 'slug-n1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
-    });
-    expect(res.kind).toBe('ok');
-  });
-
-  it('addConnectorsBulkImpl resolves a slug argument', async () => {
-    const { deps, flowId } = await setupProjectWithFlow();
-    const entry = deps.registry.resolve(flowId);
-    if (!entry) throw new Error('seed lookup failed');
-    // Seed two nodes first (using id) so the connector has endpoints to wire.
-    const seed = await addNodesBulkImpl(deps, flowId, {
+    const res = await addFlowBulkImpl(deps, entry.slug, {
       nodes: [
         { id: 'src', type: 'shapeNode', data: { name: 'src', shape: 'rectangle' } },
         { id: 'dst', type: 'shapeNode', data: { name: 'dst', shape: 'ellipse' } },
       ],
-    });
-    if (seed.kind !== 'ok') throw new Error(`seed failed: ${seed.kind}`);
-    const res = await addConnectorsBulkImpl(deps, entry.slug, {
       connectors: [{ id: 'c1', kind: 'default', source: 'src', target: 'dst' }],
     });
     expect(res.kind).toBe('ok');
@@ -954,7 +954,7 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const entry = deps.registry.resolve(flowId);
     if (!entry) throw new Error('seed lookup failed');
-    const seed = await addNodesBulkImpl(deps, flowId, {
+    const seed = await addFlowBulkImpl(deps, flowId, {
       nodes: [{ id: 'only', type: 'shapeNode', data: { name: 'only', shape: 'rectangle' } }],
     });
     if (seed.kind !== 'ok') throw new Error(`seed failed: ${seed.kind}`);

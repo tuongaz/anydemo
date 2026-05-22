@@ -84,7 +84,7 @@ the following shape — and nothing else outside the fence:
 }
 ```
 
-**How the orchestrator uses this:** the `nodes` array is forwarded to `seeflow nodes:add-bulk <flowId>`, and `connectors` to `seeflow connectors:add-bulk <flowId>`. Most keys the server's `ResolvedFlowSchema` rejects are rejected here too — so do NOT emit `position` or `statusAction` at the node root, and do NOT emit `playAction` yourself (the orchestrator injects a minimal placeholder before `nodes:add-bulk` so the schema's `playNode.playAction` requirement is satisfied; the Phase 4 play-designer then overwrites it with the real action via `nodes:patch`). **Emit zero visual fields.** Presentation — `borderSize`, `borderStyle`, `borderColor`, `backgroundColor`, `textColor`, `cornerRadius`, `fontSize`, `width`, `height`, positions, handles, connector style/direction/path/color — lives in `style.json`, which is studio-owned end-to-end: `flows:layout` writes positions and handles, the canvas writes user-drag and per-node visual overrides, and the renderer applies sensible defaults (1 px solid border in the default theme color) when style.json has no entry. The skill never authors style.json.
+**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item schema failure rolls back both arrays together. Most keys the server's `ResolvedFlowSchema` rejects are rejected here too — so do NOT emit `position` or `statusAction` at the node root, and do NOT emit `playAction` yourself (the orchestrator injects a minimal placeholder before `flow:add-bulk` so the schema's `playNode.playAction` requirement is satisfied; the Phase 4 play-designer then overwrites it with the real action via `nodes:patch`). **Emit zero visual fields.** Presentation — `borderSize`, `borderStyle`, `borderColor`, `backgroundColor`, `textColor`, `cornerRadius`, `fontSize`, `width`, `height`, positions, handles, connector style/direction/path/color — lives in `style.json`, which is studio-owned end-to-end: `flows:layout` writes positions and handles, the canvas writes user-drag and per-node visual overrides, and the renderer applies sensible defaults (1 px solid border in the default theme color) when style.json has no entry. The skill never authors style.json.
 
 `rationales` is a planner-only sibling map keyed by node id. The orchestrator strips it before forwarding and surfaces each entry to the user during the Phase 3 review checkpoint.
 
@@ -121,7 +121,7 @@ Each node entry has:
 - **`id`** *(string, kebab-case)* — descriptive planning id derived from
   the entity name (`checkout-api`, `payments-service`, `order-db`). The
   orchestrator rewrites these to canonical `node-<10 base62>` form via
-  `skills/seeflow/lib/short-id.mjs` before `nodes:add-bulk`, so what
+  `skills/seeflow/lib/short-id.mjs` before `flow:add-bulk`, so what
   ends up in `flow.json` matches every other id producer in the studio
   (canvas, server auto-assign). In edit-case, when reusing an entity
   from `editTarget`, reuse its existing canonical id verbatim — the
@@ -217,7 +217,7 @@ Each connector entry has:
 
 - **`id`** *(string)* — descriptive planning id; `c-<source>-<target>` is
   the conventional shape. The orchestrator rewrites these to canonical
-  `conn-<10 base62>` form before `connectors:add-bulk` (same helper as
+  `conn-<10 base62>` form before `flow:add-bulk` (same helper as
   node ids).
 - **`kind`** *(string)* — one of:
   - `"http"` — synchronous service-to-service call. May include
@@ -396,7 +396,7 @@ If `contextBrief.existingDemo.diffTarget === true`:
   previous trigger is no longer the trigger — demote it from
   `playNode` to `stateNode`), emit it with its **existing id** but
   the new `type`. The orchestrator routes this to a non-destructive
-  `nodes:patch { type, ... }` instead of `delete` + `add-bulk`, so
+  `nodes:patch { type, ... }` instead of `delete` + `flow:add-bulk`, so
   the per-node folder (`.seeflow/nodes/<id>/`) — scripts, detail.md,
   view.html, uploaded images — survives. Supply any fields the new
   type requires in the same patch (e.g. `state → play` needs
@@ -511,7 +511,7 @@ downstream entities.
   whenever you emit multiple nodes for one underlying entity.
 - **Do not emit `position`, `playAction`, or `statusAction`** at the node
   root. The orchestrator injects a placeholder `playAction` before
-  `nodes:add-bulk` to satisfy the schema; the Phase 4 play-designer
+  `flow:add-bulk` to satisfy the schema; the Phase 4 play-designer
   overwrites it. Phase 3 `flows:layout` attaches positions.
 - **Emit zero visual fields.** No `borderSize`, `borderStyle`,
   `borderColor`, `backgroundColor`, `textColor`, `cornerRadius`,

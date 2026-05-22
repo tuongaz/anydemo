@@ -56,7 +56,7 @@ async function restCreateProject(name: string): Promise<CreateProjectResponse> {
 }
 
 async function seedShapeNodesViaRest(flowId: string, ids: string[]): Promise<void> {
-  const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/nodes/bulk`, {
+  const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/bulk`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
@@ -70,10 +70,9 @@ async function seedShapeNodesViaRest(flowId: string, ids: string[]): Promise<voi
 // is intentional: adding or removing a tool should require an explicit update
 // to this snapshot AND a new per-tool test below.
 const EXPECTED_TOOL_NAMES = [
+  'seeflow_add_bulk',
   'seeflow_add_connector',
-  'seeflow_add_connectors',
   'seeflow_add_node',
-  'seeflow_add_nodes',
   'seeflow_create_project',
   'seeflow_delete_connector',
   'seeflow_delete_flow',
@@ -299,22 +298,27 @@ describe('integration: MCP — node tools', () => {
     expect((data.node as { type?: string }).type).toBe('shapeNode');
   });
 
-  it('seeflow_add_nodes appends multiple nodes in one transactional write', async () => {
-    const seeded = await restCreateProject(uniqueFlowId('mcp-add-nodes'));
+  it('seeflow_add_bulk appends nodes + connectors atomically in one transactional write', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-add-bulk'));
 
-    const result = await client.callTool('seeflow_add_nodes', {
+    const result = await client.callTool('seeflow_add_bulk', {
       flowId: seeded.id,
       nodes: [
         { id: 'm1', type: 'shapeNode', data: { shape: 'rectangle' } },
         { id: 'm2', type: 'shapeNode', data: { shape: 'ellipse' } },
       ],
+      // Connector references nodes from the same batch — only valid because the
+      // merged-graph parse runs once after both arrays land.
+      connectors: [{ id: 'm1-to-m2', source: 'm1', target: 'm2', kind: 'default' }],
     });
     const data = okJson<{
       ok: boolean;
       nodes: Array<{ id: string; node: Record<string, unknown> }>;
+      connectors: Array<{ id: string }>;
     }>(result);
     expect(data.ok).toBe(true);
     expect(data.nodes.map((n) => n.id)).toEqual(['m1', 'm2']);
+    expect(data.connectors.map((c) => c.id)).toEqual(['m1-to-m2']);
   });
 
   it('seeflow_patch_node partial-merges into node.data', async () => {
@@ -413,25 +417,6 @@ describe('integration: MCP — connector tools', () => {
     const data = okJson<{ ok: boolean; id: string }>(result);
     expect(data.ok).toBe(true);
     expect(data.id).toBe('c1');
-  });
-
-  it('seeflow_add_connectors appends many connectors in one write', async () => {
-    const seeded = await restCreateProject(uniqueFlowId('mcp-add-conns'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b']);
-
-    const result = await client.callTool('seeflow_add_connectors', {
-      flowId: seeded.id,
-      connectors: [
-        { id: 'c1', source: 'a', target: 'b', kind: 'default' },
-        { id: 'c2', source: 'b', target: 'a', kind: 'event', eventName: 'evt.one' },
-      ],
-    });
-    const data = okJson<{
-      ok: boolean;
-      connectors: Array<{ id: string; connector: Record<string, unknown> }>;
-    }>(result);
-    expect(data.ok).toBe(true);
-    expect(data.connectors.map((c) => c.id)).toEqual(['c1', 'c2']);
   });
 
   it('seeflow_patch_connector partial-merges into the connector', async () => {

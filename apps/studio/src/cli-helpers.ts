@@ -101,10 +101,26 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
       return `Flow file is not valid JSON: ${String(outcome.detail ?? outcome.message ?? '')}`;
     case 'badSchema':
       return `Flow failed schema validation: ${JSON.stringify(outcome.issues ?? [])}`;
-    case 'duplicateIdInBatch':
-      return `Duplicate id in batch: ${String(outcome.id ?? '')}`;
-    case 'idAlreadyExists':
-      return `Id already exists: ${String(outcome.id ?? '')}`;
+    case 'duplicateIdInBatch': {
+      // `collection` is present on the FlowBulk outcome ('nodes' | 'connectors')
+      // and absent on legacy singular outcomes — keep both shapes working.
+      const collection = outcome.collection;
+      const prefix =
+        collection === 'nodes' || collection === 'connectors'
+          ? `Duplicate ${collection} id in batch`
+          : 'Duplicate id in batch';
+      return `${prefix}: ${String(outcome.id ?? '')}`;
+    }
+    case 'idAlreadyExists': {
+      const collection = outcome.collection;
+      const prefix =
+        collection === 'nodes'
+          ? 'Node id already exists'
+          : collection === 'connectors'
+            ? 'Connector id already exists'
+            : 'Id already exists';
+      return `${prefix}: ${String(outcome.id ?? '')}`;
+    }
     case 'writeFailed':
       return `Failed to write demo file: ${String(outcome.message ?? '')}`;
     case 'sdkWriteFailed':

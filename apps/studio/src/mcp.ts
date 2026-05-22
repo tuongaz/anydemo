@@ -8,15 +8,16 @@ import { type ZodTypeAny, z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
   ConnectorPatchBodySchema,
-  ConnectorsBulkBodySchema,
   CreateProjectBodySchema,
+  FLOW_BULK_NON_EMPTY_MESSAGE,
+  FlowBulkBodyShape,
   NodePatchBodySchema,
-  NodesBulkBodySchema,
   type Operations,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
   createOperations,
+  flowBulkNonEmpty,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
 import type { FlowWatcher } from './watcher.ts';
@@ -103,13 +104,16 @@ const AddNodeInputSchema = z.object({
   node: z.record(z.unknown()),
 });
 
-// add_nodes input: { flowId, nodes: [...] }. Same loose per-item shape as
-// add_node — ResolvedFlowSchema runs once over the whole batch server-side
-// after the merge. Min/max bounds come from NodesBulkBodySchema so the
-// 100-item cap shows up in the JSON Schema the agent introspects.
-const AddNodesInputSchema = NodesBulkBodySchema.extend({
+// add_bulk input: { flowId, nodes?: [...], connectors?: [...] }. Same loose
+// per-item shape as add_node / add_connector — ResolvedFlowSchema runs once
+// over the whole merged graph server-side after the batch lands. The
+// 100-per-kind cap and "at least one non-empty" invariant come from
+// FlowBulkBodyShape + flowBulkNonEmpty (the unrefined object + reusable
+// predicate exported by operations.ts) so the JSON Schema the agent
+// introspects stays a clean object — not an intersection.
+const AddBulkInputSchema = FlowBulkBodyShape.extend({
   flowId: z.string().min(1),
-});
+}).refine(flowBulkNonEmpty, { message: FLOW_BULK_NON_EMPTY_MESSAGE });
 
 const DeleteNodeInputSchema = FlowNodeIdBaseSchema;
 
@@ -151,11 +155,6 @@ const PatchNodeInputSchema = NodePatchBodySchema.extend({
 const AddConnectorInputSchema = z.object({
   flowId: z.string().min(1),
   connector: z.record(z.unknown()),
-});
-
-// add_connectors input: { flowId, connectors: [...] }. Mirrors add_nodes.
-const AddConnectorsInputSchema = ConnectorsBulkBodySchema.extend({
-  flowId: z.string().min(1),
 });
 
 // patch_connector input: { flowId, connectorId } merged with the strict
@@ -407,20 +406,24 @@ const buildTools = (ops: Operations): McpTool[] => [
     },
   },
   {
-    name: 'seeflow_add_nodes',
+    name: 'seeflow_add_bulk',
     description:
-      'Append 1–100 nodes to a flow in a single transactional write. Either every node lands or nothing does — if any item fails schema validation the whole batch is rejected. Use this instead of multiple seeflow_add_node calls when seeding a flow; it avoids per-item round-trips. Same per-item shape and externalization rules as seeflow_add_node.',
-    inputSchema: inputSchemaFromZod(AddNodesInputSchema),
+      'Append 1–100 nodes and 1–100 connectors to a flow in a SINGLE transactional write. Either every item lands or nothing does — a dangling connector source/target, a duplicate id, or any per-item schema failure rolls back BOTH arrays together (no flow:reload broadcast emitted). Connectors may reference nodes added in the same call. Body: { flowId, nodes?, connectors? } with at least one non-empty. Use this — not multiple seeflow_add_node / seeflow_add_connector round-trips — when seeding a flow. Same per-item shape and externalization rules as the singular tools.',
+    inputSchema: inputSchemaFromZod(AddBulkInputSchema),
     handler: async (args) => {
-      const parsed = AddNodesInputSchema.safeParse(args);
+      const parsed = AddBulkInputSchema.safeParse(args);
       if (!parsed.success) {
-        return errorResult(`Invalid add_nodes arguments: ${JSON.stringify(parsed.error.issues)}`);
+        return errorResult(`Invalid add_bulk arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, nodes } = parsed.data;
-      const result = await ops.addNodesBulk(flowId, { nodes });
+      const { flowId, nodes, connectors } = parsed.data;
+      const result = await ops.addBulk(flowId, { nodes, connectors });
       switch (result.kind) {
         case 'ok':
-          return okResult({ ok: true, nodes: result.data.nodes });
+          return okResult({
+            ok: true,
+            nodes: result.data.nodes,
+            connectors: result.data.connectors,
+          });
         case 'flowNotFound':
           return errorResult('unknown demo');
         case 'fileNotFound':
@@ -430,9 +433,11 @@ const buildTools = (ops: Operations): McpTool[] => [
         case 'badSchema':
           return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
         case 'duplicateIdInBatch':
-          return errorResult(`Duplicate id in batch: ${result.id}`);
+          return errorResult(`Duplicate ${result.collection} id in batch: ${result.id}`);
         case 'idAlreadyExists':
-          return errorResult(`Node id already exists: ${result.id}`);
+          return errorResult(
+            `${result.collection === 'nodes' ? 'Node' : 'Connector'} id already exists: ${result.id}`,
+          );
         case 'writeFailed':
           return errorResult(`Failed to write demo file: ${result.message}`);
       }
@@ -587,40 +592,6 @@ const buildTools = (ops: Operations): McpTool[] => [
           return errorResult(`Flow file is not valid JSON: ${result.message}`);
         case 'badSchema':
           return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
-        case 'writeFailed':
-          return errorResult(`Failed to write demo file: ${result.message}`);
-      }
-    },
-  },
-  {
-    name: 'seeflow_add_connectors',
-    description:
-      'Append 1–100 connectors to a flow in a single transactional write. Either every connector lands or nothing does — a dangling source/target on any item rolls back the whole batch. Use after seeflow_add_nodes when seeding a flow.',
-    inputSchema: inputSchemaFromZod(AddConnectorsInputSchema),
-    handler: async (args) => {
-      const parsed = AddConnectorsInputSchema.safeParse(args);
-      if (!parsed.success) {
-        return errorResult(
-          `Invalid add_connectors arguments: ${JSON.stringify(parsed.error.issues)}`,
-        );
-      }
-      const { flowId, connectors } = parsed.data;
-      const result = await ops.addConnectorsBulk(flowId, { connectors });
-      switch (result.kind) {
-        case 'ok':
-          return okResult({ ok: true, connectors: result.data.connectors });
-        case 'flowNotFound':
-          return errorResult('unknown demo');
-        case 'fileNotFound':
-          return errorResult(`Flow file not found: ${result.path}`);
-        case 'badJson':
-          return errorResult(`Flow file is not valid JSON: ${result.message}`);
-        case 'badSchema':
-          return errorResult(`Flow failed schema validation: ${JSON.stringify(result.issues)}`);
-        case 'duplicateIdInBatch':
-          return errorResult(`Duplicate id in batch: ${result.id}`);
-        case 'idAlreadyExists':
-          return errorResult(`Connector id already exists: ${result.id}`);
         case 'writeFailed':
           return errorResult(`Failed to write demo file: ${result.message}`);
       }

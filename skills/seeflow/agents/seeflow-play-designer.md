@@ -182,8 +182,8 @@ Do not emit overlays for ids that exist nowhere.
 Synthetic nodes (plus their connectors) you inject so the audience has
 something to click on an otherwise observer-only graph. Shape matches
 the `seeflow-node-planner` output for `nodes` + `connectors` — the
-orchestrator forwards them to `seeflow nodes:add-bulk` and
-`seeflow connectors:add-bulk`:
+orchestrator forwards them together in one body to
+`seeflow flow:add-bulk` (one atomic write covering both arrays):
 
 ```json
 {
