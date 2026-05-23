@@ -54,6 +54,7 @@ import {
 } from '../lib/floating-edge-geometry.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
+import { ComponentNode } from '../nodes/component-node.tsx';
 import {
   GeometricNode,
   SHAPE_DEFAULT_SIZE,
@@ -1153,6 +1154,10 @@ const nodeTypes = {
   // `<project>/<htmlPath>`, sanitizes (US-013), and renders with Tailwind
   // Play CDN (US-012). Missing files render PlaceholderCard.
   html: HtmlNode,
+  // Component nodes carry a json-render spec inlined from
+  // `<project>/nodes/<id>/spec.json` and render a reactive UI driven by
+  // ComponentRuntime (state + set/script actions).
+  component: ComponentNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 
