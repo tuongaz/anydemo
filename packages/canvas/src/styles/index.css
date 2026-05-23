@@ -58,8 +58,61 @@ layer(base);
   }
 }
 
-/* All tokens live on the wrapper, NOT :root. Consumer's :root is untouched. */
+/* All tokens live on the wrapper, NOT :root. Consumer's :root is untouched.
+   Light theme is the default; embedders opt into dark by adding `.dark` to
+   any ancestor of the canvas wrapper. */
 .seeflow-canvas-root {
+  --background: 0 0% 100%;
+  --foreground: 240 10% 3.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 240 10% 3.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 240 10% 3.9%;
+  --primary: 160 84% 39.4%;
+  --primary-foreground: 0 0% 98%;
+  --secondary: 240 4.8% 95.9%;
+  --secondary-foreground: 240 5.9% 10%;
+  --muted: 240 4.8% 95.9%;
+  --muted-foreground: 240 4% 40%;
+  --accent: 240 4.8% 95.9%;
+  --accent-foreground: 240 5.9% 10%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 240 5.9% 90%;
+  --input: 240 5.9% 84%;
+  --ring: 160 84% 39.4%;
+  --radius: 0.5rem;
+
+  --bg-canvas: #fafafa;
+  --emerald-glow: rgba(16, 185, 129, 0.18);
+  --shadow-card: 0 4px 12px -2px rgba(15, 23, 42, 0.08);
+  --shadow-window: 0 30px 80px -20px rgba(15, 23, 42, 0.12), 0 0 60px -20px var(--emerald-glow);
+  --shadow-glow-ok: 0 0 30px -4px rgba(16, 185, 129, 0.30);
+  --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.30);
+  --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 0 40px -6px rgba(16, 185, 129, 0.35);
+  --glow-dot-color: rgba(0, 0, 0, 0.18);
+
+  /* Status colors are theme-agnostic (--amber/--amber-hi/--danger) so flow
+     state reads the same under both palettes. */
+  --amber: #f59e0b;
+  --amber-hi: #fbbf24;
+  --danger: #ef4444;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --seeflow-handle-fill: hsl(var(--background));
+  --seeflow-handle-border-color: hsl(var(--primary) / 0.6);
+  --seeflow-handle-border-width: calc(1px / var(--rf-zoom, 1));
+  --seeflow-handle-size: calc(17px / var(--rf-zoom, 1));
+
+  /* Font + background scoped to the wrapper — outside, consumer rules win */
+  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+  color: hsl(var(--foreground));
+}
+
+/* Dark token overrides: any `.dark` ancestor of the canvas wrapper flips
+   the palette. Status colors, font, handle vars, and font-family are
+   inherited from the light block above. */
+.dark .seeflow-canvas-root {
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
   --card: 240 5.9% 10.6%;
@@ -79,7 +132,6 @@ layer(base);
   --border: 240 3.7% 15.9%;
   --input: 240 3.7% 26.1%;
   --ring: 160 84% 39.4%;
-  --radius: 0.5rem;
 
   --bg-canvas: #0a0a0c;
   --emerald-glow: rgba(16, 185, 129, 0.35);
@@ -88,19 +140,7 @@ layer(base);
   --shadow-glow-ok: 0 0 30px -4px rgba(16, 185, 129, 0.45);
   --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.45);
   --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 0 40px -6px rgba(16, 185, 129, 0.55);
-  --amber: #f59e0b;
-  --amber-hi: #fbbf24;
-  --danger: #ef4444;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-
-  --seeflow-handle-fill: hsl(var(--background));
-  --seeflow-handle-border-color: hsl(var(--primary) / 0.6);
-  --seeflow-handle-border-width: calc(1px / var(--rf-zoom, 1));
-  --seeflow-handle-size: calc(17px / var(--rf-zoom, 1));
-
-  /* Font + background scoped to the wrapper — outside, consumer rules win */
-  font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
-  color: hsl(var(--foreground));
+  --glow-dot-color: rgba(255, 255, 255, 0.55);
 }
 
 /* Utilities scoped to the wrapper */
@@ -474,7 +514,7 @@ layer(base);
   pointer-events: none;
   z-index: 1;
 
-  background-image: radial-gradient(rgba(255, 255, 255, 0.55) 0.6px, transparent 1px);
+  background-image: radial-gradient(var(--glow-dot-color) 0.6px, transparent 1px);
 
   --mx: 50%;
   --my: 50%;
