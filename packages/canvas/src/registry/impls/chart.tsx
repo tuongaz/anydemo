@@ -26,6 +26,13 @@ interface ChartProps {
   data?: Array<Record<string, unknown>>;
   xKey?: string;
   series?: ChartSeries[];
+  // Intrinsic dimensions in pixels. Needed when the chart paints inside an
+  // inline-block parent (e.g. an auto-sized component node), because
+  // recharts' ResponsiveContainer collapses to 0×0 without a sized parent.
+  // Defaults give a sensible standalone size; specs that want to fit a
+  // fixed-size node can pass smaller values or rely on these.
+  width?: number;
+  height?: number;
 }
 
 const PALETTE = [
@@ -40,11 +47,18 @@ function colorAt(idx: number): string {
   return PALETTE[idx % PALETTE.length] ?? '#6366f1';
 }
 
-export default function Chart({ kind = 'bar', data = [], xKey = 'name', series = [] }: ChartProps) {
+export default function Chart({
+  kind = 'bar',
+  data = [],
+  xKey = 'name',
+  series = [],
+  width = 480,
+  height = 280,
+}: ChartProps) {
   if (kind === 'pie') {
     const valueKey = series[0]?.key ?? 'value';
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width={width} height={height}>
         <PieChart>
           <Tooltip />
           <Pie data={data} dataKey={valueKey} nameKey={xKey} outerRadius="80%">
@@ -61,7 +75,7 @@ export default function Chart({ kind = 'bar', data = [], xKey = 'name', series =
 
   if (kind === 'line') {
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width={width} height={height}>
         <LineChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey={xKey} />
@@ -84,7 +98,7 @@ export default function Chart({ kind = 'bar', data = [], xKey = 'name', series =
 
   if (kind === 'area') {
     return (
-      <ResponsiveContainer width="100%" height="100%">
+      <ResponsiveContainer width={width} height={height}>
         <AreaChart data={data}>
           <CartesianGrid strokeDasharray="3 3" />
           <XAxis dataKey={xKey} />
@@ -108,7 +122,7 @@ export default function Chart({ kind = 'bar', data = [], xKey = 'name', series =
   }
 
   return (
-    <ResponsiveContainer width="100%" height="100%">
+    <ResponsiveContainer width={width} height={height}>
       <BarChart data={data}>
         <CartesianGrid strokeDasharray="3 3" />
         <XAxis dataKey={xKey} />

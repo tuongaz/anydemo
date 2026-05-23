@@ -54,7 +54,9 @@
           { "key": "revenue", "label": "Revenue" },
           { "key": "users", "label": "Users" },
           { "key": "orders", "label": "Orders" }
-        ]
+        ],
+        "width": 480,
+        "height": 260
       }
     }
   },

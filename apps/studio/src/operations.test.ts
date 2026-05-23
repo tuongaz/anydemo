@@ -130,7 +130,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     expect((node.data as Record<string, unknown>).autoSize).toBe(false);
   });
 
-  it('leaves non-html patches unaffected (no spurious autoSize on rectangle resize)', () => {
+  it('leaves non-html / non-component patches unaffected (no spurious autoSize on rectangle resize)', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
       type: 'rectangle',
@@ -141,6 +141,34 @@ describe('mergeNodeUpdates autoSize invariant', () => {
     expect(data.width).toBe(200);
     expect(data.height).toBe(100);
     expect('autoSize' in data).toBe(false);
+  });
+
+  it('component: flips autoSize to false when width is written', () => {
+    const node: Record<string, unknown> = {
+      id: 'c1',
+      type: 'component',
+      data: { spec: { root: 'r', elements: { r: { type: 'Text', props: { text: 'x' } } } } },
+    };
+    mergeNodeUpdates(node, { width: 480, height: 320 });
+    expect(node.data).toMatchObject({ autoSize: false, width: 480, height: 320 });
+  });
+
+  it('component: strips width/height when autoSize: true is written', () => {
+    const node: Record<string, unknown> = {
+      id: 'c1',
+      type: 'component',
+      data: {
+        spec: { root: 'r', elements: { r: { type: 'Text', props: { text: 'x' } } } },
+        autoSize: false,
+        width: 480,
+        height: 320,
+      },
+    };
+    mergeNodeUpdates(node, { autoSize: true });
+    const data = node.data as Record<string, unknown>;
+    expect(data.autoSize).toBe(true);
+    expect('width' in data).toBe(false);
+    expect('height' in data).toBe(false);
   });
 });
 

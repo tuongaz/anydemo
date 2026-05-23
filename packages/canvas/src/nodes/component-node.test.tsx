@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 import { Handle, type NodeProps } from '@xyflow/react';
 import type { CSSProperties } from 'react';
 import * as React from 'react';
@@ -214,16 +214,95 @@ describe('ComponentNode wrapper style', () => {
     expect(style.borderRadius).toBe(8);
   });
 
-  it('falls back to COMPONENT_DEFAULT_SIZE when user-sized and width/height are absent', () => {
-    const style = getContainerStyle(callComponentNode());
+  it('defaults to auto-size: outer style has no width/height and chrome is inline-block', () => {
+    const tree = callComponentNode();
+    const outer = getContainerStyle(tree);
+    expect(outer.width).toBeUndefined();
+    expect(outer.height).toBeUndefined();
+    const chrome = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-chrome';
+    });
+    const chromeClass = ((chrome?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(chromeClass).toContain('sf:inline-block');
+  });
+
+  it('mounts the measuring body with the 800×600 cap when auto-sizing', () => {
+    const tree = callComponentNode();
+    const body = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-body';
+    });
+    expect(body).not.toBeNull();
+    const bodyClass = ((body?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(bodyClass).toContain('sf:inline-block');
+    const style = (body?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.maxWidth).toBe(800);
+    expect(style.maxHeight).toBe(600);
+    expect(style.overflow).toBe('auto');
+  });
+
+  it('uses width/height from data when autoSize: false', () => {
+    const style = getContainerStyle(
+      callComponentNode({ autoSize: false, width: 480, height: 360 }),
+    );
+    expect(style.width).toBe(480);
+    expect(style.height).toBe(360);
+  });
+
+  it('falls back to COMPONENT_DEFAULT_SIZE when autoSize: false and width/height absent', () => {
+    const style = getContainerStyle(callComponentNode({ autoSize: false }));
     expect(style.width).toBe(COMPONENT_DEFAULT_SIZE.width);
     expect(style.height).toBe(COMPONENT_DEFAULT_SIZE.height);
   });
+});
 
-  it('uses width/height from data when set', () => {
-    const style = getContainerStyle(callComponentNode({ width: 480, height: 360 }));
-    expect(style.width).toBe(480);
-    expect(style.height).toBe(360);
+describe('ComponentNode fit-to-content button', () => {
+  const userSizedData = { autoSize: false, width: 480, height: 320 };
+
+  function findFitButton(tree: unknown) {
+    return findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-fit-to-content';
+    });
+  }
+
+  it('is hidden when not selected', () => {
+    const tree = callComponentNode({ ...userSizedData, onFitToContent: () => {} });
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is hidden when autoSize is true (default)', () => {
+    const tree = callComponentNode({ onFitToContent: () => {} }, {
+      selected: true,
+    } as Partial<NodeProps>);
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is hidden when onFitToContent is not wired (view/mini mode)', () => {
+    const tree = callComponentNode(userSizedData, { selected: true } as Partial<NodeProps>);
+    expect(findFitButton(tree)).toBeNull();
+  });
+
+  it('is visible when selected + user-sized + callback wired', () => {
+    const tree = callComponentNode({ ...userSizedData, onFitToContent: () => {} }, {
+      selected: true,
+    } as Partial<NodeProps>);
+    expect(findFitButton(tree)).not.toBeNull();
+  });
+
+  it('click calls data.onFitToContent with the node id', () => {
+    const onFit = mock(() => {});
+    const tree = callComponentNode({ ...userSizedData, onFitToContent: onFit }, {
+      selected: true,
+    } as Partial<NodeProps>);
+    const btn = findFitButton(tree);
+    expect(btn).not.toBeNull();
+    (btn?.props as { onClick?: (e: { stopPropagation: () => void }) => void }).onClick?.({
+      stopPropagation: () => {},
+    });
+    expect(onFit).toHaveBeenCalledTimes(1);
+    expect(onFit).toHaveBeenCalledWith('c1');
   });
 });
 

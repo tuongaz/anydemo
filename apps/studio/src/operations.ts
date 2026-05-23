@@ -334,12 +334,13 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     }
   }
 
-  // type:'html'-only invariant enforcement:
+  // type:'html' + type:'component' invariant enforcement:
   //   autoSize === true ⊻ (width and height set).
   // autoSize: true is the dominant signal — it strips width/height even if
   // the same patch tried to write them. Writing width/height implicitly
-  // flips autoSize to false.
-  if (node.type === 'html') {
+  // flips autoSize to false. Both node types default to autoSize:true in the
+  // renderer and share the same shrink-wrap-to-content mechanism.
+  if (node.type === 'html' || node.type === 'component') {
     // The autoSize invariant requires `width`/`height` to be ABSENT from the
     // serialized JSON when autoSize is true — not present with value
     // `undefined` (which would serialize as a stray `"width": null` or get

@@ -572,9 +572,11 @@ export function DemoView({
     ],
   );
 
-  // type:'html'-only: flip the node back to auto-size mode. The studio's
-  // mergeNodeUpdates strips width/height server-side per the autoSize
-  // invariant, so we don't need to send explicit width/height clears.
+  // Flip the node back to auto-size mode. Used by both type:'html' and
+  // type:'component' (the canvas wires this same handler to both fit-to-
+  // content props). The studio's mergeNodeUpdates strips width/height server-
+  // side per the autoSize invariant, so we don't need to send explicit
+  // width/height clears.
   const onHtmlNodeFitToContent = useCallback(
     (nodeId: string) => {
       if (!flowId || !adapter) return;
@@ -2986,6 +2988,7 @@ export function DemoView({
           onNodeResize={onNodeResize}
           onNodeResizeEnd={onNodeResizeEnd}
           onHtmlNodeFitToContent={onHtmlNodeFitToContent}
+          onComponentNodeFitToContent={onHtmlNodeFitToContent}
           onMultiResize={onMultiResize}
           onNodeNameChange={onNodeNameChange}
           onNodeDescriptionChange={onNodeDescriptionChange}

@@ -432,6 +432,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onHtmlNodeFitToContent?: (nodeId: string) => void;
   /**
+   * type:'component'-only: invoked when the user clicks the "Fit to content"
+   * button on a user-sized component node. Same shape and semantics as
+   * onHtmlNodeFitToContent — the host's handler is type-agnostic, so this is
+   * normally wired to the same callback. Kept as a separate prop to mirror
+   * the html variant and keep the renderer's `data.onFitToContent` gated on
+   * node type at injection time.
+   */
+  onComponentNodeFitToContent?: (nodeId: string) => void;
+  /**
    * US-007: atomic multi-select bounding-box resize. Fired once per resize-stop
    * with EVERY scaled node's final position (and, for sized nodes, width/
    * height). The selection bounding overlay renders when ≥ 2 loose nodes are
@@ -1719,6 +1728,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeResize,
     onNodeResizeEnd,
     onHtmlNodeFitToContent,
+    onComponentNodeFitToContent,
     onMultiResize,
     onNodeNameChange,
     onNodeDescriptionChange,
@@ -2592,10 +2602,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           onResize: onNodeResize,
           onResizeEnd: onNodeResizeEnd,
           setResizing,
-          // type:'html'-only: routed through to the renderer's fit-to-content
-          // button. Gated on type so other node variants don't pick up an
-          // unused callback in their runtime data.
-          onFitToContent: merged.type === 'html' ? onHtmlNodeFitToContent : undefined,
+          // type:'html' + type:'component': routed through to the renderer's
+          // fit-to-content button. Gated on type so other node variants don't
+          // pick up an unused callback in their runtime data.
+          onFitToContent:
+            merged.type === 'html'
+              ? onHtmlNodeFitToContent
+              : merged.type === 'component'
+                ? onComponentNodeFitToContent
+                : undefined,
           onNameChange: (() => {
             // US-027: view mode → inline name edit is suppressed (the node's
             // dblclick-to-edit path gates on this callback being wired).
@@ -2693,6 +2708,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeResize,
     onNodeResizeEnd,
     onHtmlNodeFitToContent,
+    onComponentNodeFitToContent,
     setResizing,
     nodeOverrides,
     onNodeNameChange,
