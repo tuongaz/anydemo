@@ -1,14 +1,13 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import { AlertCircle, Check, Play } from 'lucide-react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
 import { IconPickerPopover } from '../components/icon-picker-popover.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import type { GeometricNodeData, NodeStatus, StatusReport } from '../types.ts';
-import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
-import { type VisualStatus, deriveVisualStatus } from './lib/visual-status.ts';
+import { PlayButton } from './lib/play-button.tsx';
+import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusBadge } from './status-badge.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -48,80 +47,6 @@ type EditField = 'name' | 'description' | null;
 const MIN_W = 100;
 const MIN_H = 44;
 const DEFAULT_W = 250;
-
-function PlayButton({
-  visualStatus,
-  disabled,
-  buttonLabel,
-  isError,
-  onClick,
-}: {
-  visualStatus: VisualStatus;
-  disabled: boolean;
-  buttonLabel: string;
-  isError: boolean;
-  onClick: (e: ReactMouseEvent<HTMLButtonElement>) => void;
-}) {
-  return (
-    <Button
-      type="button"
-      size="sm"
-      variant="secondary"
-      disabled={disabled}
-      data-testid="play-button"
-      data-status={visualStatus === 'idle' ? 'idle' : visualStatus}
-      data-visual-status={visualStatus}
-      aria-label={buttonLabel}
-      title={buttonLabel}
-      onClick={onClick}
-      className={cn(
-        'sf:group sf:relative sf:h-8 sf:w-8 sf:rounded-full sf:p-0',
-        'sf:hover:bg-primary sf:hover:text-primary-foreground',
-        'sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground',
-        visualStatus === 'success' && 'sf:seeflow-play-pop',
-        visualStatus === 'error' && 'sf:inline-edit-shake',
-        isError && 'sf:border-2 sf:border-rose-500',
-      )}
-    >
-      {visualStatus === 'active' ? (
-        <span
-          aria-hidden
-          data-testid="play-button-ring"
-          className={cn('sf:absolute sf:inset-0 sf:rounded-full sf:seeflow-ring-spin')}
-          style={{
-            background:
-              'conic-gradient(from 0deg, var(--emerald-glow) 0deg, transparent 200deg, var(--emerald-glow) 360deg)',
-            WebkitMask:
-              'radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))',
-            mask: 'radial-gradient(circle, transparent calc(50% - 2px), #000 calc(50% - 2px))',
-          }}
-        />
-      ) : null}
-      {visualStatus === 'success' ? (
-        <>
-          <Check
-            className="sf:h-4 sf:w-4 sf:relative sf:text-emerald-300 sf:group-hover:hidden"
-            aria-hidden
-          />
-          <Play className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block" aria-hidden />
-        </>
-      ) : visualStatus === 'error' ? (
-        <>
-          <AlertCircle
-            className="sf:h-4 sf:w-4 sf:relative sf:text-rose-300 sf:group-hover:hidden"
-            aria-hidden
-          />
-          <Play className="sf:h-4 sf:w-4 sf:relative sf:hidden sf:group-hover:block" aria-hidden />
-        </>
-      ) : (
-        <Play
-          className={cn('sf:h-4 sf:w-4 sf:relative', visualStatus === 'active' && 'sf:opacity-80')}
-          aria-hidden
-        />
-      )}
-    </Button>
-  );
-}
 
 function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<RectangleNodeType>) {
   const status = data.status;

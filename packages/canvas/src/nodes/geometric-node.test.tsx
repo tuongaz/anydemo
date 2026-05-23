@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import type { NodeProps } from '@xyflow/react';
 import * as React from 'react';
-import { GeometricNode, type GeometricNodeFlowNode } from './geometric-node.tsx';
+import {
+  GeometricNode,
+  type GeometricNodeFlowNode,
+  SKIRT_HEIGHT,
+  isIllustrativeShape,
+} from './geometric-node.tsx';
 import { StatusBadge } from './status-badge.tsx';
 import { StatusIconPill } from './status-icon-pill.tsx';
 
@@ -74,6 +79,34 @@ function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): R
   return out;
 }
 
+// Biome's noNonNullAssertion bans `!`, but every consumer below first
+// asserts `toHaveLength(1)` and would crash anyway on an empty match. This
+// helper turns the empty case into a readable throw instead.
+function unwrap<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
+// The shim doesn't execute component bodies, so JSX inside a function
+// component (like `<PlayButton data-testid="play-button" />`) is invisible
+// to findAll. Locate the component element itself by its function `.name`,
+// the same pattern rectangle-node.test.tsx uses.
+function findByComponentName(tree: unknown, name: string): ReactElementLike[] {
+  return findAll(tree, (el) => {
+    const t = el.type as { name?: string } | { type?: { name?: string } } | unknown;
+    if (typeof t === 'function' && (t as { name?: string }).name === name) return true;
+    if (
+      typeof t === 'object' &&
+      t !== null &&
+      typeof (t as { type?: unknown }).type === 'function' &&
+      (t as { type: { name?: string } }).type.name === name
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
 function callGeometric(
   type:
     | 'rectangle'
@@ -109,23 +142,40 @@ function callGeometric(
   return renderWithHooks(() => impl(props));
 }
 
-// US-009: capability-chrome-rectangle-only invariant — second half. The
-// 8 non-rectangle geometric tags route through GeometricNode, which parses
-// + persists capabilities (per the schema) but draws NO capability chrome.
-// This is the Renderer phasing invariant from the flat-node-types design
-// doc — fence it with a per-tag snapshot so a future "let's add a status
-// pill to databases" tweak surfaces here first.
-describe('US-009: GeometricNode draws NO capability chrome', () => {
-  const NON_RECTANGLE_GEOMETRIC = [
-    'ellipse',
-    'sticky',
-    'text',
-    'database',
-    'server',
-    'user',
-    'queue',
-    'cloud',
-  ] as const;
+// SKIRT_HEIGHT + isIllustrativeShape are the load-bearing constants for the
+// capability-chrome skirt. SKIRT_HEIGHT pins the bottom row size; the
+// predicate gates which shapes opt into the skirt (database / server /
+// queue / cloud / user). Future changes — moving the skirt to ellipse,
+// resizing it, etc. — must surface here first.
+describe('capability-chrome skirt derivation', () => {
+  it('exposes SKIRT_HEIGHT = 32 (matches the design spec)', () => {
+    expect(SKIRT_HEIGHT).toBe(32);
+  });
+
+  it('isIllustrativeShape returns true for the 5 illustrative tags', () => {
+    expect(isIllustrativeShape('database')).toBe(true);
+    expect(isIllustrativeShape('server')).toBe(true);
+    expect(isIllustrativeShape('queue')).toBe(true);
+    expect(isIllustrativeShape('cloud')).toBe(true);
+    expect(isIllustrativeShape('user')).toBe(true);
+  });
+
+  it('isIllustrativeShape returns false for rectangle / ellipse / sticky / text', () => {
+    expect(isIllustrativeShape('rectangle')).toBe(false);
+    expect(isIllustrativeShape('ellipse')).toBe(false);
+    expect(isIllustrativeShape('sticky')).toBe(false);
+    expect(isIllustrativeShape('text')).toBe(false);
+  });
+});
+
+// US-009 (narrowed): GeometricNode still draws NO capability chrome on
+// ellipse / sticky / text — those shapes are deferred from the
+// capability-chrome-illustrative-shapes design (curved / borderless
+// geometries need a separate placement decision). The 5 illustrative
+// shapes (database / server / queue / cloud / user) opted IN and are
+// covered by the chrome-matrix block below.
+describe('US-009 (narrowed): GeometricNode draws NO chrome on ellipse / sticky / text', () => {
+  const CHROMELESS_GEOMETRIC = ['ellipse', 'sticky', 'text'] as const;
 
   const playAction = {
     kind: 'script' as const,
@@ -139,7 +189,7 @@ describe('US-009: GeometricNode draws NO capability chrome', () => {
   };
   const statusReport = { state: 'ok' as const, summary: 'all good', ts: 1 };
 
-  for (const type of NON_RECTANGLE_GEOMETRIC) {
+  for (const type of CHROMELESS_GEOMETRIC) {
     it(`${type} with playAction draws no play-button testid`, () => {
       const tree = callGeometric(type, {
         name: type,
@@ -165,7 +215,7 @@ describe('US-009: GeometricNode draws NO capability chrome', () => {
       expect(pills).toHaveLength(0);
     });
 
-    it(`${type} with playAction + statusAction draws no rectangle-node-status-badge testid`, () => {
+    it(`${type} with playAction + statusAction draws no geometric-node-skirt`, () => {
       const tree = callGeometric(type, {
         name: type,
         onPlay: () => {},
@@ -175,8 +225,7 @@ describe('US-009: GeometricNode draws NO capability chrome', () => {
       });
       const matches = findAll(
         tree,
-        (el) =>
-          (el.props as { 'data-testid'?: string })['data-testid'] === 'rectangle-node-status-badge',
+        (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'geometric-node-skirt',
       );
       expect(matches).toHaveLength(0);
     });
@@ -189,5 +238,183 @@ describe('US-009: GeometricNode draws NO capability chrome', () => {
       (el) => (el.props as { 'data-node-type'?: string })['data-node-type'] === 'database',
     );
     expect(matches).toHaveLength(1);
+  });
+});
+
+// Capability-chrome skirt for illustrative shapes (database / server /
+// queue / cloud / user). The skirt is a 32px-high horizontal flex row
+// pinned to the bottom of the wrapper, rendered only when at least one
+// capability is present. The illustrative SVG shortens by SKIRT_HEIGHT so
+// the wrapper bounding box (and the bottom Handle's Y) stay invariant.
+describe('capability-chrome skirt rendering on illustrative shapes', () => {
+  const playAction = {
+    kind: 'script' as const,
+    interpreter: 'bun',
+    scriptPath: 'scripts/play.ts',
+  };
+  const statusReport = { state: 'ok' as const, summary: 'all good', ts: 1 };
+
+  const findSkirts = (tree: unknown) =>
+    findAll(
+      tree,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'geometric-node-skirt',
+    );
+  // The shim doesn't recurse into the PlayButton body — locate the component
+  // element by name (the same pattern rectangle-node.test.tsx uses).
+  const findPlayButtons = (tree: unknown) => findByComponentName(tree, 'PlayButton');
+  const findBadges = (tree: unknown) => findAll(tree, (el) => el.type === StatusBadge);
+  // The SVG renderer is the only element in the tree that receives both a
+  // numeric `width` AND a numeric `height` prop, so this matches it
+  // regardless of which illustrative shape is mounted.
+  const findRenderers = (tree: unknown) =>
+    findAll(
+      tree,
+      (el) =>
+        typeof (el.props as { height?: unknown }).height === 'number' &&
+        typeof (el.props as { width?: unknown }).width === 'number',
+    );
+
+  it('database with no capabilities renders no skirt + full-height SVG', () => {
+    const tree = callGeometric('database', { name: 'db', width: 120, height: 140 });
+    expect(findSkirts(tree)).toHaveLength(0);
+    const renderers = findRenderers(tree);
+    expect(renderers).toHaveLength(1);
+    const first = unwrap(renderers[0], 'expected one renderer');
+    expect((first.props as { height: number }).height).toBe(140);
+  });
+
+  it('database with playAction renders skirt + PlayButton, no StatusBadge', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      onPlay: () => {},
+      playAction,
+    });
+    expect(findSkirts(tree)).toHaveLength(1);
+    expect(findPlayButtons(tree)).toHaveLength(1);
+    expect(findBadges(tree)).toHaveLength(0);
+  });
+
+  it('database with playAction shrinks the SVG height by SKIRT_HEIGHT', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      width: 120,
+      height: 140,
+      onPlay: () => {},
+      playAction,
+    });
+    const renderers = findRenderers(tree);
+    expect(renderers).toHaveLength(1);
+    const first = unwrap(renderers[0], 'expected one renderer');
+    expect((first.props as { height: number }).height).toBe(140 - SKIRT_HEIGHT);
+  });
+
+  it('database with statusReport renders skirt + StatusBadge, no PlayButton', () => {
+    const tree = callGeometric('database', { name: 'db', statusReport });
+    expect(findSkirts(tree)).toHaveLength(1);
+    expect(findBadges(tree)).toHaveLength(1);
+    expect(findPlayButtons(tree)).toHaveLength(0);
+  });
+
+  it('database with playAction + statusReport renders both', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      onPlay: () => {},
+      playAction,
+      statusReport,
+    });
+    expect(findSkirts(tree)).toHaveLength(1);
+    expect(findBadges(tree)).toHaveLength(1);
+    expect(findPlayButtons(tree)).toHaveLength(1);
+  });
+
+  for (const shape of ['server', 'queue', 'cloud', 'user'] as const) {
+    it(`${shape} with playAction + statusReport renders the same skirt structure`, () => {
+      const tree = callGeometric(shape, {
+        name: shape,
+        onPlay: () => {},
+        playAction,
+        statusReport,
+      });
+      expect(findSkirts(tree)).toHaveLength(1);
+      expect(findBadges(tree)).toHaveLength(1);
+      expect(findPlayButtons(tree)).toHaveLength(1);
+    });
+  }
+
+  it('clicking the skirt PlayButton calls data.onPlay with the node id', () => {
+    const calls: string[] = [];
+    const onPlay = (id: string) => calls.push(id);
+    const tree = callGeometric('database', { name: 'db', onPlay, playAction });
+    const buttons = findPlayButtons(tree);
+    expect(buttons).toHaveLength(1);
+    type ClickHandler = (e: { stopPropagation: () => void }) => void;
+    const button = unwrap(buttons[0], 'expected one PlayButton');
+    const onClick = (button.props as { onClick: ClickHandler }).onClick;
+    onClick({ stopPropagation: () => {} });
+    expect(calls).toEqual(['n1']);
+  });
+
+  it('PlayButton receives error visual status + summary in its buttonLabel when statusReport.state === error', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      onPlay: () => {},
+      playAction,
+      statusReport: { state: 'error' as const, summary: 'boom', ts: 2 },
+    });
+    const buttons = findPlayButtons(tree);
+    expect(buttons).toHaveLength(1);
+    // GeometricNode passes visualStatus + buttonLabel as props into PlayButton.
+    // The component itself maps them to data-visual-status + title; we assert
+    // the inputs here since the shim doesn't recurse into PlayButton's body.
+    const button = unwrap(buttons[0], 'expected one PlayButton');
+    const props = button.props as { visualStatus: string; buttonLabel: string };
+    expect(props.visualStatus).toBe('error');
+    expect(props.buttonLabel.toLowerCase()).toContain('boom');
+  });
+});
+
+// Edge-case from the design doc: when the skirt is active, the user must not
+// be able to resize the node so small that the 32px skirt crowds the SVG.
+// Bump ResizeControls.minHeight to SKIRT_HEIGHT + 40 only when the skirt
+// renders; default 40 otherwise.
+describe('capability-chrome skirt: resize min-height', () => {
+  const playAction = {
+    kind: 'script' as const,
+    interpreter: 'bun',
+    scriptPath: 'scripts/play.ts',
+  };
+
+  const findResizeControls = (tree: unknown) => findByComponentName(tree, 'ResizeControls');
+
+  const firstMinHeight = (tree: unknown): number => {
+    const ctrls = findResizeControls(tree);
+    expect(ctrls).toHaveLength(1);
+    const first = unwrap(ctrls[0], 'expected one ResizeControls');
+    return (first.props as { minHeight: number }).minHeight;
+  };
+
+  it('database with no capabilities passes default minHeight 40 to ResizeControls', () => {
+    const tree = callGeometric('database', { name: 'db', onResize: () => {} });
+    expect(firstMinHeight(tree)).toBe(40);
+  });
+
+  it('database with playAction passes minHeight = SKIRT_HEIGHT + 40 to ResizeControls', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      onResize: () => {},
+      onPlay: () => {},
+      playAction,
+    });
+    expect(firstMinHeight(tree)).toBe(SKIRT_HEIGHT + 40);
+  });
+
+  it('ellipse with playAction stays at default minHeight 40 (no skirt)', () => {
+    const tree = callGeometric('ellipse', {
+      name: 'e',
+      onResize: () => {},
+      onPlay: () => {},
+      playAction,
+    });
+    expect(firstMinHeight(tree)).toBe(40);
   });
 });

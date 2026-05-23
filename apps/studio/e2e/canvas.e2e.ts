@@ -155,13 +155,10 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(root).toHaveScreenshot('render-matrix.png', { maxDiffPixelRatio: 0.02 });
   });
 
-  test('database with playAction renders NO play button (capability-chrome-rectangle-only)', async ({
-    page,
-    studio,
-  }) => {
+  test('database with playAction renders the inline skirt PlayButton', async ({ page, studio }) => {
     const resolvedFlow = {
       version: 2 as const,
-      name: 'Database Capability Fence',
+      name: 'Database Capability Skirt',
       nodes: [
         {
           id: 'db1',
@@ -179,24 +176,58 @@ test.describe('canvas — flat node types (US-009)', () => {
       ],
       connectors: [],
     };
-    const registered = await registerFlow(studio.studio, 'capability-fence', resolvedFlow, {
-      name: 'Capability Fence',
+    const registered = await registerFlow(studio.studio, 'capability-skirt', resolvedFlow, {
+      name: 'Capability Skirt',
     });
     await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
 
-    // The database node mounts and carries the playAction capability in its
-    // data (the disk-side flow.json keeps it — verified by integration tests).
-    // But the renderer is GeometricNode, which draws no capability chrome.
+    // The database node mounts and renders the capability-chrome skirt with
+    // an inline PlayButton — this is the visual end of the data path the
+    // schema has been threading since the flat-node-types refactor.
     await expect(page.locator('[data-node-type="database"]')).toHaveCount(1);
-    // The play button testid is rectangle-only chrome — must not appear
-    // anywhere on the canvas for this single-node database flow.
-    await expect(page.locator('[data-testid="play-button"]')).toHaveCount(0);
-    // The rectangle-node status badge testid must also be absent (different
-    // chrome but same invariant — only rectangle draws it).
+    await expect(page.locator('[data-testid="geometric-node-skirt"]')).toHaveCount(1);
+    await expect(page.locator('[data-testid="play-button"]')).toHaveCount(1);
+    // The rectangle-only status-badge testid still must not appear — the
+    // illustrative skirt uses geometric-node-status-badge, distinct from
+    // rectangle-node-status-badge.
     await expect(page.locator('[data-testid="rectangle-node-status-badge"]')).toHaveCount(0);
+  });
+
+  test('database with playAction visual snapshot', async ({ page, studio }) => {
+    const resolvedFlow = {
+      version: 2 as const,
+      name: 'DB With Play',
+      nodes: [
+        {
+          id: 'db1',
+          type: 'database' as const,
+          position: { x: 100, y: 100 },
+          data: {
+            name: 'Orders',
+            playAction: {
+              kind: 'script' as const,
+              interpreter: 'bun',
+              scriptPath: 'scripts/play.ts',
+            },
+          },
+        },
+      ],
+      connectors: [],
+    };
+    const registered = await registerFlow(studio.studio, 'db-with-play', resolvedFlow, {
+      name: 'DB With Play',
+    });
+    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
+    await page.waitForLoadState('networkidle');
+
+    const node = page.locator('[data-node-type="database"]');
+    await expect(node).toBeVisible();
+    await expect(node).toHaveScreenshot('database-with-play.png', { maxDiffPixelRatio: 0.02 });
   });
 
   test('draw-mode database creates a node with type:database', async ({ page, studio }) => {
