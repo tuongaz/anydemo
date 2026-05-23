@@ -8,6 +8,7 @@
 - The repo `bun test` output shows a `[registry] failed to load …` warning from `apps/studio/src/registry.test.ts` — this is an intentional malformed-JSON case, NOT a regression.
 - @seeflow/canvas builds via `tsup` with multi-entry config (`{ index, catalog }`). Adding a new public-API subpath = (1) add entry to `tsup.config.ts`, (2) add the matching `"./<sub>"` block to `package.json` `exports`, (3) run `cd packages/canvas && bun run build:js`. `dist/` is in `.gitignore` — GHA commits it on `main` for external npm consumers; local dev resolves via the workspace symlink.
 - `Record<K, V>` index access in canvas tests is treated as possibly-undefined under `noUncheckedIndexedAccess`. Pattern: pull the entry into a local, then `if (!entry) throw new Error('unreachable')` before chaining off it. Don't try `expect(entry).toBeDefined()` as a type guard — Bun's `expect` does not narrow.
+- Adding a new `NodeType` enum member is a multi-file change: `Record<NodeType, …>` maps in `apps/studio/src/layout.ts` (`DEFAULT_DIMENSIONS`) and `apps/studio/src/operations.ts` (`SEMANTIC_KEYS_BY_TYPE`) MUST gain the new key or `bun run typecheck` fails. Grep for `Record<NodeType` / `Record<z.infer<typeof NodeTypeSchema>` before declaring schema-only changes "done". The matrix tests at the bottom of `schema.test.ts` use a hard-coded `ALL_TYPES` array (NOT the enum), so they don't need updates when adding a new type — though future stories may want to extend them.
 
 ---
 
@@ -37,4 +38,20 @@
   - The plan's "25 entries" wording is wrong — there are 24 unique component names. The Label/Heading overlap accounts for the off-by-one.
   - `@seeflow/canvas` had no `zod` in its `dependencies` before this story (the runtime was being satisfied by root hoisting); adding it explicitly is required because the catalog imports zod and ships in `dist/`.
   - Subpath exports work end-to-end via the workspace symlink: studio's `@seeflow/canvas/catalog` import resolves through `apps/studio/node_modules/@seeflow/canvas/dist/catalog.js`. No additional `bun install` needed after `build:js`.
+---
+
+## 2026-05-23 - US-003
+- Promoted `ScriptActionSchema` from file-private to exported in `apps/studio/src/schema.ts` so the new `ComponentActionSchema` discriminated union can reuse it.
+- Added `ComponentSpecElementSchema`, `SetActionSchema` (path enforced to start with `/` via Zod's `.startsWith('/')`), `ComponentActionSchema` (discriminated union of set | script), and `ComponentSpecSchema` (root + elements + state + actions). Exported `ComponentSpec`, `ComponentAction`, `ComponentSpecElement` types.
+- Added `ResolvedComponentNodeData` (semantic + visual + capabilities + `spec: ComponentSpecSchema` + optional `autoSize`) and `FlowComponentNodeData` (`.strict()`, no `spec` field — sidecar-only).
+- Extended `NodeTypeSchema` enum and the `NodeSchema` + `FlowNodeSchema` discriminated unions to accept the new variant. `FlowComponentNodeSchema` is exported alongside the other Flow*NodeSchema for parity.
+- Appended a `US-003` describe block to `apps/studio/src/schema.test.ts` covering (a) `NodeTypeSchema.safeParse('component')`, (b) full ResolvedFlow round-trip with both set + script actions, and (c) negative case for a set-action `path` lacking the leading `/`.
+- Added `component` entries to `DEFAULT_DIMENSIONS` (`apps/studio/src/layout.ts`, 320×240 to match the planned COMPONENT_DEFAULT_SIZE) and `SEMANTIC_KEYS_BY_TYPE` (`apps/studio/src/operations.ts`, GEOMETRIC_SEMANTIC_KEYS — `spec` is intentionally absent because US-007 routes it to the sidecar). Both maps are `Record<NodeType, …>` and the compiler flagged the missing key.
+- Files changed: `apps/studio/src/schema.ts`, `apps/studio/src/schema.test.ts`, `apps/studio/src/layout.ts`, `apps/studio/src/operations.ts`.
+- Quality checks: `bun run typecheck` ✓, `bun run format` (1 file rewrapped), `bun run lint` ✓, `bun test` ✓ (1711 pass / 1 skip / 0 fail — registry.test.ts JSON warning is the intentional malformed-fixture case).
+- **Learnings for future iterations:**
+  - When extending `NodeTypeSchema`, also touch every `Record<NodeType, …>` map (currently 2: `DEFAULT_DIMENSIONS` in layout.ts, `SEMANTIC_KEYS_BY_TYPE` in operations.ts). Typecheck pins this for you; just don't forget when reading the plan.
+  - Zod 3's `.startsWith('/', { message })` works directly on `z.string()` — no need for `.refine()`. We use this for `SetActionSchema.path` (JSON Pointer enforcement).
+  - The implementation plan's Tasks 2.1 + 2.3 specify three separate test blocks (T-001/T-002/T-003). T-003 belongs to US-004 (catalog superRefine) — keep them in separate stories so each commit's tests pass cleanly. The PRD acceptance for US-003 calls out only the round-trip + negative-path cases, which is what landed.
+  - The `FlowComponentNodeData` is `.strict()` and intentionally has no `spec` field. The resolver (US-005) is responsible for inlining spec.json into the resolved-side `spec`; the writer (US-007) is responsible for stripping it back out. If you forget the strip, the on-disk write will fail validation.
 ---

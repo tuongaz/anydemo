@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { FlowSchema, ResolvedFlowSchema, StatusReportSchema, StyleSchema } from './schema.ts';
+import {
+  FlowSchema,
+  NodeTypeSchema,
+  ResolvedFlowSchema,
+  StatusReportSchema,
+  StyleSchema,
+} from './schema.ts';
 
 const fixturePath = (name: string) => new URL(`../test/fixtures/${name}`, import.meta.url).pathname;
 
@@ -2583,5 +2589,94 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
         );
       }
     }
+  });
+});
+
+// US-003: 'component' node lands in NodeTypeSchema with the spec/action shapes
+// needed to drive a json-render reactive tree. The round-trip below proves the
+// Resolved schema accepts spec + state + both action kinds; the negative case
+// fences SetAction.path against missing leading '/'.
+describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
+  it('NodeTypeSchema accepts "component"', () => {
+    expect(NodeTypeSchema.safeParse('component').success).toBe(true);
+  });
+
+  it('ResolvedFlowSchema round-trips a component node with set + script actions', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'demo',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'component' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            spec: {
+              root: 'root',
+              state: { '/tab': 'a' },
+              actions: {
+                switchTab: {
+                  kind: 'set' as const,
+                  path: '/tab',
+                  value: { $param: 'to' },
+                },
+                refresh: {
+                  kind: 'script' as const,
+                  interpreter: 'bun',
+                  scriptPath: 'actions/refresh.ts',
+                },
+              },
+              elements: {
+                root: {
+                  type: 'Button',
+                  props: { label: 'Hi', onClick: { $action: 'refresh' } },
+                },
+              },
+            },
+          },
+        },
+      ],
+      connectors: [],
+    };
+    const result = ResolvedFlowSchema.safeParse(flow);
+    if (!result.success) {
+      throw new Error(
+        `expected component round-trip to parse, got: ${JSON.stringify(result.error.issues)}`,
+      );
+    }
+    const node = result.data.nodes[0];
+    if (node?.type !== 'component') throw new Error('expected component node');
+    expect(node.data.spec.root).toBe('root');
+    expect(node.data.spec.actions?.switchTab?.kind).toBe('set');
+    expect(node.data.spec.actions?.refresh?.kind).toBe('script');
+  });
+
+  it('ResolvedFlowSchema rejects a set action whose path lacks the leading "/"', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'demo',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'component' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            spec: {
+              root: 'root',
+              actions: { bad: { kind: 'set' as const, path: 'no-slash', value: 1 } },
+              elements: { root: { type: 'Text', props: { text: 'x' } } },
+            },
+          },
+        },
+      ],
+      connectors: [],
+    };
+    const result = ResolvedFlowSchema.safeParse(flow);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const pathIssue = result.error.issues.find(
+      (i) => i.path.some((seg) => seg === 'bad') && i.path.includes('path'),
+    );
+    expect(pathIssue).toBeDefined();
   });
 });

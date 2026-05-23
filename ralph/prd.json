@@ -53,8 +53,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Schema exports ScriptActionSchema + new ComponentSpecElementSchema/SetActionSchema/ComponentActionSchema/ComponentSpecSchema (with ComponentSpec/ComponentAction/ComponentSpecElement types). ResolvedComponentNodeData and FlowComponentNodeData/FlowComponentNodeSchema landed and both discriminated unions accept 'component'. Two new tests in schema.test.ts cover round-trip (set + script actions) and the leading-'/' refine; the existing 12-type matrix tests stay green because they iterate a hardcoded ALL_TYPES list. Had to add 'component' entries to operations.ts SEMANTIC_KEYS_BY_TYPE (universal capability set — sidecar 'spec' is intentionally absent) and layout.ts DEFAULT_DIMENSIONS (320×240, matching the planned COMPONENT_DEFAULT_SIZE) — both are Record<NodeType,...> maps the compiler enforces."
     },
     {
       "id": "US-004",

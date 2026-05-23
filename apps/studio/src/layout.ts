@@ -76,6 +76,7 @@ const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: numb
   image: { width: 200, height: 150 },
   html: { width: 320, height: 200 },
   icon: { width: 80, height: 80 },
+  component: { width: 320, height: 240 },
 };
 
 // Sticky / text variants are floating annotations. They never participate in

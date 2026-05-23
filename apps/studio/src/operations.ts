@@ -238,6 +238,10 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
     'statusAction',
     'alt',
   ]),
+  // Component nodes externalize `spec` to <project>/nodes/<id>/spec.json; the
+  // semantic-key set covers only the universal capability fields so retype
+  // never drags `spec` through `data`. (US-007 wires the sidecar writer.)
+  component: GEOMETRIC_SEMANTIC_KEYS,
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here

@@ -67,7 +67,7 @@ const isCleanRelativePath = (s: string): boolean => {
 // interpreter; `input` (optional) gets JSON-serialized and written to the
 // child's stdin then closed; `timeoutMs` caps execution (default applied at
 // the spawn layer, not here).
-const ScriptActionSchema = z.object({
+export const ScriptActionSchema = z.object({
   kind: z.literal('script'),
   interpreter: z.string().min(1),
   args: z.array(z.string()).optional(),
@@ -140,7 +140,58 @@ export const GEOMETRIC_NODE_TYPES = [
   'cloud',
 ] as const;
 
-export const NodeTypeSchema = z.enum([...GEOMETRIC_NODE_TYPES, 'image', 'html', 'icon']);
+export const NodeTypeSchema = z.enum([
+  ...GEOMETRIC_NODE_TYPES,
+  'image',
+  'html',
+  'icon',
+  'component',
+]);
+
+// --- Component node spec/action schemas --------------------------------------
+// The 'component' node renders a json-render-driven reactive UI on the canvas.
+// `spec` is the source of truth for layout + interactivity; on disk it lives at
+// `<project>/nodes/<id>/spec.json` (the resolver inlines it into data.spec for
+// ResolvedFlowSchema). Element types and props are catalog-validated by a
+// superRefine wired in a later story.
+
+export const ComponentSpecElementSchema = z.object({
+  type: z.string().min(1),
+  props: z.record(z.string(), z.unknown()).optional(),
+  children: z.array(z.string()).optional(),
+  watch: z.record(z.string(), z.unknown()).optional(),
+});
+
+// Declarative state mutation. `path` is a JSON Pointer (starts with '/');
+// `value` may itself carry { $param } / { $state } refs resolved by the
+// runtime at dispatch time.
+const SetActionSchema = z.object({
+  kind: z.literal('set'),
+  path: z
+    .string()
+    .min(1)
+    .startsWith('/', { message: 'path must be a JSON Pointer (start with /)' }),
+  value: z.unknown(),
+});
+
+// Script-kind component actions reuse the existing ScriptActionSchema shape
+// (interpreter, scriptPath, timeoutMs, ...). The action runner roots scriptPath
+// under `<projectRoot>/nodes/<nodeId>/`.
+export const ComponentActionSchema = z.discriminatedUnion('kind', [
+  SetActionSchema,
+  ScriptActionSchema,
+]);
+
+export const ComponentSpecSchema = z.object({
+  root: z.string().min(1),
+  elements: z.record(z.string(), ComponentSpecElementSchema),
+  state: z.record(z.string(), z.unknown()).optional(),
+  actions: z.record(z.string(), ComponentActionSchema).optional(),
+});
+
+export type ComponentSpec = z.infer<typeof ComponentSpecSchema>;
+export type ComponentAction = z.infer<typeof ComponentActionSchema>;
+export type ComponentSpecElement = z.infer<typeof ComponentSpecElementSchema>;
 
 // ---- Resolved (in-memory) per-type data -------------------------------------
 
@@ -188,6 +239,18 @@ const ResolvedIconNodeData = z.object({
   alt: z.string().optional(),
 });
 
+// Component node — `spec` is the json-render tree. On disk the spec lives in
+// `<project>/nodes/<id>/spec.json`; the resolver inlines it into data.spec
+// before ResolvedFlowSchema validates the merged shape. The on-disk
+// FlowComponentNodeData below has no `spec` field.
+const ResolvedComponentNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  spec: ComponentSpecSchema,
+  autoSize: z.boolean().optional(),
+});
+
 const NodeBaseShape = {
   id: z.string().min(1),
   position: PositionSchema,
@@ -213,6 +276,11 @@ const NodeSchema = z.discriminatedUnion('type', [
   z.object({ ...NodeBaseShape, type: z.literal('image'), data: ResolvedImageNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('html'), data: ResolvedHtmlNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('icon'), data: ResolvedIconNodeData }),
+  z.object({
+    ...NodeBaseShape,
+    type: z.literal('component'),
+    data: ResolvedComponentNodeData,
+  }),
 ]);
 
 // Connector — unchanged by the flat-types refactor.
@@ -365,6 +433,18 @@ const FlowIconNodeData = z
   })
   .strict();
 
+// Component node, on-disk shape. `spec` is intentionally absent — the sidecar
+// `<project>/nodes/<id>/spec.json` is the source of truth. `.strict()` rejects
+// any stray spec field that slips through (the resolver layer is responsible
+// for inlining + the writer for stripping it back out).
+const FlowComponentNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    autoSize: z.boolean().optional(),
+  })
+  .strict();
+
 const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
@@ -412,6 +492,14 @@ export const FlowIconNodeSchema = z
   })
   .strict();
 
+export const FlowComponentNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('component'),
+    data: FlowComponentNodeData,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowRectangleNodeSchema,
   FlowEllipseNodeSchema,
@@ -425,6 +513,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowImageNodeSchema,
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,
+  FlowComponentNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {
