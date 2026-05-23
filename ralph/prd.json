@@ -109,8 +109,8 @@
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "readMergedFlow now inlines component spec sidecars after mergeFlowAndStyle and re-validates the merged shape through ResolvedFlowSchema (so US-004's catalog superRefine activates on the inlined spec). Spec-inline errors surface as 'nodes/<id>/data/spec: <message>' joined with '; '; specRefs append to fileRefs so the watcher can wire live-reload in a later story. Two new tests in watcher.test.ts (T-004 attach + T-004 missing-spec error /nodes\\/c1\\/data\\/spec/). Full suite: 1720 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-007",
@@ -129,8 +129,8 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "NodePatchBodySchema gains optional `spec: ComponentSpecSchema` and `'spec'` joins NODE_DATA_PATCH_KEYS so mergeNodeUpdates puts the new spec on data for the post-mutation ResolvedFlowSchema reparse. patchNodeImpl, when node.type === 'component' && updates.spec !== undefined, writes `<repoPath>/nodes/<nodeId>/spec.json` via writeNodeFile (pretty-printed JSON + trailing newline) and surfaces failures as `{ kind: 'writeFailed', message }`. splitFlow strips `data.spec` for type==='component' nodes before writing flow.json so the sidecar stays the single source of truth on disk; readMergedFlow's existing inlineComponentSpecs re-attaches it on read. SEMANTIC_KEYS_BY_TYPE.component was already the universal GEOMETRIC_SEMANTIC_KEYS (no spec) since US-003 — no change there. Two new tests in operations.test.ts (T-005 sidecar write + flow.json strip + round-trip; T-006 deleteNodeImpl removes nodes/<id>/spec.json via removeNodeDir cascade). Full suite: 1722 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-008",

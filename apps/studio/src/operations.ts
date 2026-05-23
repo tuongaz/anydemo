@@ -24,6 +24,7 @@ import {
 import type { Registry } from './registry.ts';
 import {
   ColorTokenSchema,
+  ComponentSpecSchema,
   EdgePinSchema,
   type Flow,
   FlowSchema,
@@ -141,6 +142,12 @@ export const NodePatchBodySchema = z
     playAction: PlayActionSchema.optional(),
     statusAction: StatusActionSchema.optional(),
     stateSource: StateSourceSchema.optional(),
+    // type:'component'-only: json-render spec describing the reactive UI.
+    // Externalized to `<project>/nodes/<id>/spec.json` by patchNodeImpl; the
+    // in-memory ResolvedFlow keeps `data.spec` populated for the post-merge
+    // reparse + SSE broadcast, but splitFlow strips it from flow.json so the
+    // sidecar is the source of truth on disk.
+    spec: ComponentSpecSchema.optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -172,6 +179,7 @@ const NODE_DATA_PATCH_KEYS = [
   'playAction',
   'statusAction',
   'stateSource',
+  'spec',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
@@ -1535,6 +1543,22 @@ export async function patchNodeImpl(
         data[w.field] = w.ref;
       }
       node.data = data;
+    }
+    // Component spec sidecar — write the pretty-printed JSON to
+    // `<project>/nodes/<id>/spec.json` so the on-disk source of truth stays
+    // in sync. mergeNodeUpdates already put data.spec on the merged tree for
+    // the post-mutation ResolvedFlowSchema parse; splitFlow strips it from
+    // flow.json so we don't double-store the spec.
+    if (node.type === 'component' && updates.spec !== undefined) {
+      const specAbs = nodeFileAbsPath(entry.repoPath, nodeId, 'spec.json');
+      try {
+        writeNodeFile(specAbs, `${JSON.stringify(updates.spec, null, 2)}\n`);
+      } catch (err) {
+        return {
+          kind: 'writeFailed',
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
     }
     return { kind: 'ok' };
   });

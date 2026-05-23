@@ -133,6 +133,10 @@ export function splitFlow(resolved: {
     const flowData: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(data)) {
       if (v === undefined) continue;
+      // Component nodes externalize `spec` to <project>/nodes/<id>/spec.json
+      // (the sidecar). Drop it from flow.json so the strict on-disk schema
+      // doesn't reject it and the spec stays single-sourced on disk.
+      if (node.type === 'component' && k === 'spec') continue;
       if (NODE_DATA_FLOW_KEYS.has(k)) {
         flowData[k] = v;
       } else if (NODE_STYLE_KEYS.has(k)) {

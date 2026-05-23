@@ -30,7 +30,7 @@ import {
   validateImpl,
 } from './operations.ts';
 import { createRegistry } from './registry.ts';
-import { createWatcher } from './watcher.ts';
+import { createWatcher, readMergedFlow } from './watcher.ts';
 
 const STARTER_FLOW = {
   version: 2,
@@ -328,6 +328,81 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
     expect(del.kind).toBe('ok');
     expect(existsSync(detailAbs)).toBe(false);
     expect(existsSync(join(repoPath, 'nodes', nodeId))).toBe(false);
+  });
+});
+
+// US-007 / T-005 + T-006: PATCH spec on a component node externalizes to
+// `nodes/<id>/spec.json` and is stripped from flow.json; deleteNodeImpl
+// cascades the sidecar via the existing removeNodeDir.
+describe('patchNodeImpl + component spec sidecar (US-007)', () => {
+  const initialSpec = {
+    root: 'root',
+    elements: {
+      root: { type: 'Text', props: { text: 'v1' } },
+    },
+  };
+
+  const newSpec = {
+    root: 'root',
+    elements: {
+      root: { type: 'Text', props: { text: 'v2' } },
+    },
+  };
+
+  const writeComponentFixture = (
+    flowAbs: string,
+    repoPath: string,
+    spec: typeof initialSpec,
+  ): void => {
+    writeFileSync(
+      flowAbs,
+      JSON.stringify({
+        version: 2,
+        name: 'Component',
+        nodes: [{ id: 'c1', type: 'component', data: {} }],
+        connectors: [],
+      }),
+    );
+    mkdirSync(join(repoPath, 'nodes', 'c1'), { recursive: true });
+    writeFileSync(join(repoPath, 'nodes', 'c1', 'spec.json'), `${JSON.stringify(spec, null, 2)}\n`);
+  };
+
+  it('T-005: writes spec.json, strips data.spec from flow.json, and readMergedFlow round-trips the new spec', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    writeComponentFixture(flowAbs, repoPath, initialSpec);
+
+    const patch = await patchNodeImpl(deps, flowId, 'c1', { spec: newSpec });
+    expect(patch.kind).toBe('ok');
+
+    const specAbs = nodeFileAbsPath(repoPath, 'c1', 'spec.json');
+    const onDisk = readFileSync(specAbs, 'utf8');
+    expect(JSON.parse(onDisk)).toEqual(newSpec);
+    expect(onDisk.endsWith('\n')).toBe(true);
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === 'c1');
+    expect(node).toBeDefined();
+    expect('spec' in node.data).toBe(false);
+
+    const reread = readMergedFlow(flowAbs);
+    expect(reread.valid).toBe(true);
+    if (!reread.valid || !reread.flow) throw new Error('expected valid round-trip');
+    const reNode = reread.flow.nodes[0];
+    if (reNode?.type !== 'component') throw new Error('expected component node');
+    expect(reNode.data.spec).toEqual(newSpec);
+  });
+
+  it('T-006: deleteNodeImpl on a component node removes nodes/<id>/spec.json via removeNodeDir cascade', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    writeComponentFixture(flowAbs, repoPath, initialSpec);
+
+    const specAbs = nodeFileAbsPath(repoPath, 'c1', 'spec.json');
+    expect(existsSync(specAbs)).toBe(true);
+
+    const del = await deleteNodeImpl(deps, flowId, 'c1');
+    expect(del.kind).toBe('ok');
+    expect(existsSync(specAbs)).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'c1'))).toBe(false);
   });
 });
 
