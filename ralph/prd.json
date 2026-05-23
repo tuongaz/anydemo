@@ -150,8 +150,8 @@
         "Tests pass"
       ],
       "priority": 8,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/studio/src/component-action-runner.ts exporting runComponentAction(opts) -> ComponentActionResult and reusing proxy.ts's realpath-rooted resolveScript pattern (rooted at <cwd>/nodes/<nodeId>/). set-kind input short-circuits with {ok:false, error:'Only script actions are dispatched over HTTP', statusHint:400}; path-escape returns statusHint 400 with 'scriptPath escapes node root'. Spawns via ProcessSpawner with [interpreter, ...args, resolvedAbsPath] passing SEEFLOW_DEMO_ID/SEEFLOW_NODE_ID/SEEFLOW_ACTION_NAME/SEEFLOW_RUN_ID env. JSON.stringify(payload) goes to stdin then close. Default 5000ms timeout with SIGTERM -> 2s grace -> SIGKILL, statusHint 504. Non-zero exit returns stderr.trim() (or `exit <code>`) with statusHint 500. Success JSON.parses stdout (falls back to raw string) with statusHint 200. Test file apps/studio/src/component-action-runner.test.ts: 5 tests covering script success (parsed JSON + env vars + stdin payload + closed stream), non-JSON fallback, set-kind 400, path-escape 400, and non-zero exit trimmed stderr. Full suite: 1727 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-009",
