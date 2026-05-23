@@ -44,7 +44,6 @@ import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx'
 import { useCanvasExport } from '../hooks/use-canvas-export.ts';
 import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { cn } from '../lib/cn.ts';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { connectorToEdge } from '../lib/connector-to-edge.ts';
 import {
   type Side,
@@ -53,10 +52,12 @@ import {
   getNodeIntersection,
   projectCursorToPerimeter,
 } from '../lib/floating-edge-geometry.ts';
+import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
 import {
   GeometricNode,
   SHAPE_DEFAULT_SIZE,
+  resolveIllustrativeColors,
   shapeChromeClass,
   shapeChromeStyle,
 } from '../nodes/geometric-node.tsx';
@@ -3755,14 +3756,22 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
   // US-009: WYSIWYG ghost — mirror the committed shape's chrome via the same
   // helpers `ShapeNode` uses so background/border/radius/tilt match exactly.
-  // Approach: reuse the node's style module (shapeChromeClass/shapeChromeStyle
-  // from shape-node.tsx) with no `data` so we get the exact default look the
-  // drag-create flow commits via `onCreateShapeNode` (which sends only
-  // `{ shape, width, height }`). Text is intentionally chromeless on commit;
-  // we add a faint dashed outline ONLY for the ghost so the user can see
-  // what they're drawing — the placed text node still has no chrome.
+  // The commit path (`onCreateShapeNode` → `buildNewShapeData`) overlays the
+  // last-used node-style bucket on the factory defaults; we read the SAME
+  // bucket here so the ghost paints what the committed node will paint. Read
+  // direct from storage (rather than caching) so the very first draw of a
+  // session and any draw following a style-strip edit both see the fresh
+  // value — no prop-staleness window. Empty bucket → factory defaults (the
+  // historical behaviour). Text is intentionally chromeless on commit; we add
+  // a faint dashed outline ONLY for the ghost so the user can see what
+  // they're drawing — the placed text node still has no chrome.
+  const ghostLastUsedNodeStyle = drawShape
+    ? getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node
+    : undefined;
   const ghostShapeClass = drawShape ? shapeChromeClass(drawShape) : '';
-  const ghostShapeStyle = drawShape ? shapeChromeStyle(drawShape) : undefined;
+  const ghostShapeStyle = drawShape
+    ? shapeChromeStyle(drawShape, ghostLastUsedNodeStyle)
+    : undefined;
   const ghostTextOutline = drawShape === 'text';
 
   // Space-held pan mode (US-019). React Flow's panActivationKeyCode='Space'
@@ -4382,26 +4391,28 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               {/* US-010: illustrative shapes have no wrapper chrome — the SVG owns
               the visuals. Render the per-shape SVG directly inside the ghost
               so the drag preview matches the committed visual byte-for-byte.
-              The committed node (ShapeNodeImpl) calls `resolveIllustrativeColors`
-              on its `data` to fill defaults; the ghost has no `data`, so we
-              inline the same default resolution here: `borderColor` →
-              `colorTokenStyle(undefined, 'node').borderColor` (the design
-              emerald via `hsl(var(--primary))`), `backgroundColor` →
-              `NODE_DEFAULT_BG_WHITE` (US-021 dark card surface fallback).
-              US-022: dispatch through `ILLUSTRATIVE_SHAPE_RENDERERS` so adding
-              a new illustrative shape only touches the registry. */}
+              The committed node (`GeometricNodeImpl`) calls `resolveIllustrativeColors`
+              on its `data`; we call the same helper here with the last-used
+              snapshot read above, so the ghost matches what
+              `buildNewShapeData` will commit. `borderSize` and `borderStyle`
+              pull from the same snapshot, falling back to `NEW_NODE_BORDER_WIDTH`
+              / the renderer's default when unset. US-022: dispatch through
+              `ILLUSTRATIVE_SHAPE_RENDERERS` so adding a new illustrative shape
+              only touches the registry. */}
               {(() => {
                 const GhostRenderer = drawShape
                   ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape]
                   : undefined;
                 if (!GhostRenderer) return null;
+                const illustrativeColors = resolveIllustrativeColors(ghostLastUsedNodeStyle);
                 return (
                   <GhostRenderer
                     width={ghostRect.width}
                     height={ghostRect.height}
-                    borderColor={colorTokenStyle(undefined, 'node').borderColor}
-                    backgroundColor={NODE_DEFAULT_BG_WHITE}
-                    borderSize={NEW_NODE_BORDER_WIDTH}
+                    borderColor={illustrativeColors.borderColor}
+                    backgroundColor={illustrativeColors.backgroundColor}
+                    borderSize={ghostLastUsedNodeStyle?.borderSize ?? NEW_NODE_BORDER_WIDTH}
+                    borderStyle={ghostLastUsedNodeStyle?.borderStyle}
                   />
                 );
               })()}

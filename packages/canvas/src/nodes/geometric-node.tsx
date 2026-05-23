@@ -9,7 +9,11 @@ import {
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
-import type { GeometricNodeType as GeometricKind, GeometricNodeData } from '../types.ts';
+import type {
+  ColorToken,
+  GeometricNodeType as GeometricKind,
+  GeometricNodeData,
+} from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -125,14 +129,25 @@ export function shapeChromeStyle(
   };
 }
 
-function resolveIllustrativeColors(data: GeometricNodeData): {
+/**
+ * Resolve the border + background colours an illustrative shape (`cloud`,
+ * `server`, `database`, `user`, `queue`) paints. Shared by both the committed
+ * node render (`GeometricNodeImpl` → `Renderer`) and the drag-create ghost in
+ * `seeflow-canvas.tsx` so the two can't drift. Accepts any object exposing
+ * `borderColor` / `backgroundColor` — `GeometricNodeData` and a last-used
+ * `NodeStylePatch` snapshot both satisfy it.
+ */
+export function resolveIllustrativeColors(data?: {
+  borderColor?: ColorToken;
+  backgroundColor?: ColorToken;
+}): {
   borderColor: string | undefined;
   backgroundColor: string | undefined;
 } {
   return {
-    borderColor: colorTokenStyle(data.borderColor, 'node').borderColor,
+    borderColor: colorTokenStyle(data?.borderColor, 'node').borderColor,
     backgroundColor:
-      data.backgroundColor !== undefined
+      data?.backgroundColor !== undefined
         ? colorTokenStyle(data.backgroundColor, 'node').backgroundColor
         : NODE_DEFAULT_BG_WHITE,
   };

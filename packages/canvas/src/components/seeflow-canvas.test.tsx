@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { type Connection, Controls, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
@@ -1282,6 +1282,131 @@ describe('SeeflowCanvas', () => {
       if (!ghost) throw new Error('canvas-draw-ghost not found in tree');
       const cloudShape = findElement(ghost, (el) => el.type === CloudShape);
       expect(cloudShape).toBeNull();
+    });
+  });
+
+  // Ghost preview honours the last-used node-style bucket — see
+  // `docs/plans/2026-05-23-ghost-preview-last-used-style-design.md`. The
+  // commit path overlays `getLastUsedStyle().node` via `buildNewShapeData`;
+  // the ghost reads the same bucket directly at render time so the preview
+  // shown during drag matches what gets committed on pointer-up.
+  describe('ghost preview honours last-used node-style', () => {
+    const STORAGE_KEY = 'seeflow:last-used-style:v1';
+    const memStore = new Map<string, string>();
+    const mockLocalStorage = {
+      getItem: (k: string): string | null => memStore.get(k) ?? null,
+      setItem: (k: string, v: string): void => {
+        memStore.set(k, v);
+      },
+      removeItem: (k: string): void => {
+        memStore.delete(k);
+      },
+    };
+    const originalLocalStorage = (globalThis as { localStorage?: unknown }).localStorage;
+
+    beforeEach(() => {
+      memStore.clear();
+      (globalThis as { localStorage?: typeof mockLocalStorage }).localStorage = mockLocalStorage;
+    });
+
+    afterEach(() => {
+      (globalThis as { localStorage?: unknown }).localStorage = originalLocalStorage;
+    });
+
+    function seedNodeLastUsed(node: Record<string, unknown>): void {
+      memStore.set(STORAGE_KEY, JSON.stringify({ node, connector: {} }));
+    }
+
+    function getGhost(shape: string): ReactElementLike {
+      const overrides: unknown[] = [];
+      overrides[2] = { x: 100, y: 100 };
+      overrides[3] = { x: 300, y: 240 };
+      const tree = callSeeflowCanvas(
+        // biome-ignore lint/suspicious/noExplicitAny: shape is narrowed at the call site
+        { canvasMode: { kind: 'draw', shape: shape as any } },
+        { useStateOverrides: overrides },
+      );
+      const ghost = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'canvas-draw-ghost',
+      );
+      if (!ghost) throw new Error('canvas-draw-ghost not found in tree');
+      return ghost;
+    }
+
+    it('rectangle ghost wrapper picks up borderColor / backgroundColor / borderSize / cornerRadius from last-used', () => {
+      seedNodeLastUsed({
+        borderColor: 'amber',
+        backgroundColor: 'slate',
+        borderSize: 4,
+        cornerRadius: 12,
+      });
+      const ghost = getGhost('rectangle');
+      const style = ghost.props.style as Record<string, unknown>;
+      expect(style.borderColor).toBe(COLOR_TOKENS.amber.border);
+      expect(style.backgroundColor).toBe(COLOR_TOKENS.slate.background);
+      expect(style.borderWidth).toBe(4);
+      expect(style.borderRadius).toBe(12);
+    });
+
+    it('ellipse ghost wrapper picks up borderColor / backgroundColor / borderSize from last-used (no cornerRadius — not applicable to ellipse)', () => {
+      seedNodeLastUsed({
+        borderColor: 'red',
+        backgroundColor: 'blue',
+        borderSize: 2,
+        cornerRadius: 99, // dropped — ellipse renders no corner radius
+      });
+      const ghost = getGhost('ellipse');
+      const style = ghost.props.style as Record<string, unknown>;
+      expect(style.borderColor).toBe(COLOR_TOKENS.red.border);
+      expect(style.backgroundColor).toBe(COLOR_TOKENS.blue.background);
+      expect(style.borderWidth).toBe(2);
+      expect(style.borderRadius).toBeUndefined();
+    });
+
+    it('illustrative (cloud) ghost SVG picks up borderColor / backgroundColor / borderSize / borderStyle from last-used', () => {
+      seedNodeLastUsed({
+        borderColor: 'purple',
+        backgroundColor: 'amber',
+        borderSize: 3,
+        borderStyle: 'dashed',
+      });
+      const ghost = getGhost('cloud');
+      const cloudShape = findElement(ghost, (el) => el.type === CloudShape);
+      if (!cloudShape) throw new Error('CloudShape not found inside ghost');
+      const props = cloudShape.props as Record<string, unknown>;
+      expect(props.borderColor).toBe(COLOR_TOKENS.purple.border);
+      expect(props.backgroundColor).toBe(COLOR_TOKENS.amber.background);
+      expect(props.borderSize).toBe(3);
+      expect(props.borderStyle).toBe('dashed');
+    });
+
+    it('empty last-used bucket reproduces the factory-default ghost (no regression)', () => {
+      // No seedNodeLastUsed call — bucket is empty.
+      const ghost = getGhost('rectangle');
+      const style = ghost.props.style as Record<string, unknown>;
+      expect(style.borderColor).toBe(COLOR_TOKENS.default.border);
+      expect(style.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
+      expect(style.borderWidth).toBeUndefined();
+      expect(style.borderRadius).toBeUndefined();
+    });
+
+    it('text ghost ignores last-used (text has no chrome — only the dashed outline)', () => {
+      seedNodeLastUsed({
+        borderColor: 'amber',
+        backgroundColor: 'slate',
+        borderSize: 4,
+      });
+      const ghost = getGhost('text');
+      const style = ghost.props.style as Record<string, unknown>;
+      // shapeChromeStyle('text', ...) returns {} regardless of data, so the
+      // ghost wrapper exposes no border/background of its own — the dashed
+      // outline is contributed by the className branch only.
+      expect(style.borderColor).toBeUndefined();
+      expect(style.backgroundColor).toBeUndefined();
+      expect(style.borderWidth).toBeUndefined();
     });
   });
 
