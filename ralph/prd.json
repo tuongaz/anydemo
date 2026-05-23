@@ -71,8 +71,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "ResolvedFlowSchema.superRefine now iterates type==='component' nodes and validates each spec.elements entry: unknown component name => issue at ['nodes', idx, 'data', 'spec', 'elements', elId, 'type'] mentioning the bad name and listing valid catalog entries; props.safeParse failures are re-pathed under [...'props', ...issue.path]. Catalog imported from '@seeflow/canvas/catalog' (subpath landed in US-002). Two new tests in schema.test.ts (T-001 unknown-type + T-002 Button-empty-props) plus all 113 prior schema tests stay green. Full suite: 1713 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-005",

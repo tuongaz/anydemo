@@ -5,10 +5,12 @@
 - Use `bun pm view <pkg> versions` (NOT `npm view`) before pinning third-party deps — PRDs may suggest version ranges that pre-date the actual package history.
 - After modifying `package.json`, run `bun install` then `bun run typecheck` from repo root. `bun run typecheck` uses `--filter '*'` to typecheck every workspace.
 - `bun run format` (biome write) then `bun run lint` (biome check) before commit, per CLAUDE.md.
+- Biome's `organizeImports` enforces ALPHABETICAL named-import order — `{ COMPONENT_NAMES, componentCatalog }` (uppercase first), not insertion order. `bun run format` does NOT auto-fix this; only `bun run lint` flags it. Run lint before committing — format alone leaves named-import sort errors in place.
 - The repo `bun test` output shows a `[registry] failed to load …` warning from `apps/studio/src/registry.test.ts` — this is an intentional malformed-JSON case, NOT a regression.
 - @seeflow/canvas builds via `tsup` with multi-entry config (`{ index, catalog }`). Adding a new public-API subpath = (1) add entry to `tsup.config.ts`, (2) add the matching `"./<sub>"` block to `package.json` `exports`, (3) run `cd packages/canvas && bun run build:js`. `dist/` is in `.gitignore` — GHA commits it on `main` for external npm consumers; local dev resolves via the workspace symlink.
 - `Record<K, V>` index access in canvas tests is treated as possibly-undefined under `noUncheckedIndexedAccess`. Pattern: pull the entry into a local, then `if (!entry) throw new Error('unreachable')` before chaining off it. Don't try `expect(entry).toBeDefined()` as a type guard — Bun's `expect` does not narrow.
 - Adding a new `NodeType` enum member is a multi-file change: `Record<NodeType, …>` maps in `apps/studio/src/layout.ts` (`DEFAULT_DIMENSIONS`) and `apps/studio/src/operations.ts` (`SEMANTIC_KEYS_BY_TYPE`) MUST gain the new key or `bun run typecheck` fails. Grep for `Record<NodeType` / `Record<z.infer<typeof NodeTypeSchema>` before declaring schema-only changes "done". The matrix tests at the bottom of `schema.test.ts` use a hard-coded `ALL_TYPES` array (NOT the enum), so they don't need updates when adding a new type — though future stories may want to extend them.
+- `ResolvedFlowSchema.superRefine` (apps/studio/src/schema.ts) is the cross-field validation seam — every per-node invariant that depends on inter-field state (image-path prefix, component catalog match, future spec/action cross-refs) lives there. Add new checks as a separate `resolved.nodes.forEach((node, idx) => …)` block inside the existing superRefine; keep error `path:` rooted at `['nodes', idx, 'data', …]` so the watcher's joined-issue-paths error message highlights the offending node.
 
 ---
 
@@ -54,4 +56,22 @@
   - Zod 3's `.startsWith('/', { message })` works directly on `z.string()` — no need for `.refine()`. We use this for `SetActionSchema.path` (JSON Pointer enforcement).
   - The implementation plan's Tasks 2.1 + 2.3 specify three separate test blocks (T-001/T-002/T-003). T-003 belongs to US-004 (catalog superRefine) — keep them in separate stories so each commit's tests pass cleanly. The PRD acceptance for US-003 calls out only the round-trip + negative-path cases, which is what landed.
   - The `FlowComponentNodeData` is `.strict()` and intentionally has no `spec` field. The resolver (US-005) is responsible for inlining spec.json into the resolved-side `spec`; the writer (US-007) is responsible for stripping it back out. If you forget the strip, the on-disk write will fail validation.
+---
+
+## 2026-05-23 - US-004
+- Added `import { COMPONENT_NAMES, componentCatalog } from '@seeflow/canvas/catalog'` at the top of `apps/studio/src/schema.ts` (subpath landed in US-002). Biome's `organizeImports` forces alphabetical order on named imports — uppercase constant first.
+- Extended `ResolvedFlowSchema.superRefine` with a second `nodes.forEach` block that iterates type==='component' nodes, walks `spec.elements` via `Object.entries`, and:
+  - Pushes a custom issue at `['nodes', idx, 'data', 'spec', 'elements', elId, 'type']` when `componentCatalog.components[entry.type]` is undefined. Message includes the bad name plus the full valid-names list (`COMPONENT_NAMES.join(', ')`) so the error is actionable.
+  - On valid type, runs `def.props.safeParse(entry.props ?? {})` and re-paths every issue under `['nodes', idx, 'data', 'spec', 'elements', elId, 'props', ...issue.path]`.
+- Added a `describe('US-004: catalog superRefine on ResolvedFlowSchema')` block to `apps/studio/src/schema.test.ts`:
+  - T-001: `{ type: 'NotARealComponent', props: {} }` is rejected; issue path ends `…/elements/root/type`; message contains `'NotARealComponent'`.
+  - T-002: `{ type: 'Button', props: {} }` is rejected; issue path ends `…/elements/btn/props/label` (Button.props.label is required).
+- Existing US-003 round-trip test still parses (Button with `label: 'Hi'`, Text with `text: 'x'` both satisfy their catalog schemas), so catalog validation activating did not break the prior happy paths.
+- Files changed: `apps/studio/src/schema.ts`, `apps/studio/src/schema.test.ts`.
+- Quality checks: `bun run typecheck` ✓, `bun run format` (no-op), `bun run lint` ✓ (after fixing the import order), `bun test` ✓ (1713 pass / 1 skip / 0 fail).
+- **Learnings for future iterations:**
+  - `componentCatalog.components` is typed as `Record<string, { props: z.ZodTypeAny; description: string }>` so the lookup is `string -> T | undefined`; `noUncheckedIndexedAccess` is the source of the `def` undefined check. No need for a separate `COMPONENT_NAMES.includes(entry.type)` guard — the `if (!def)` covers it AND narrows for the safeParse below.
+  - When re-pathing nested Zod issues, spread `issue.path` last: `[…ours, ...issue.path]`. Zod paths are already arrays of string|number segments, so the spread produces a well-formed nested pointer (e.g. `…/elements/btn/props/label/0` for an array-element prop issue).
+  - The existing US-003 tests doubled as happy-path regression coverage for US-004 — they use real catalog names (Button, Text) with their required props, so once the catalog check activates, they confirm the validator is not over-zealous. Worth keeping that pattern when wiring future cross-field refinements.
+  - Biome's lint catches alphabetical named-import sort errors that `bun run format` silently leaves alone. Run `bun run lint` BEFORE `git commit` even when format reports zero changes.
 ---

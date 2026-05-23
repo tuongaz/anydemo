@@ -2680,3 +2680,74 @@ describe("US-003: 'component' node type + ComponentSpec/Action schemas", () => {
     expect(pathIssue).toBeDefined();
   });
 });
+
+describe('US-004: catalog superRefine on ResolvedFlowSchema', () => {
+  it('rejects an element whose type is not in the catalog', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'demo',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'component' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            spec: {
+              root: 'root',
+              elements: { root: { type: 'NotARealComponent', props: {} } },
+            },
+          },
+        },
+      ],
+      connectors: [],
+    };
+    const result = ResolvedFlowSchema.safeParse(flow);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const issue = result.error.issues.find(
+      (i) =>
+        i.path[0] === 'nodes' &&
+        i.path[2] === 'data' &&
+        i.path[3] === 'spec' &&
+        i.path[4] === 'elements' &&
+        i.path[5] === 'root' &&
+        i.path[6] === 'type',
+    );
+    expect(issue).toBeDefined();
+    expect(issue?.message).toContain('NotARealComponent');
+  });
+
+  it('rejects a Button element with empty props (label required)', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'demo',
+      nodes: [
+        {
+          id: 'n1',
+          type: 'component' as const,
+          position: { x: 0, y: 0 },
+          data: {
+            spec: {
+              root: 'btn',
+              elements: { btn: { type: 'Button', props: {} } },
+            },
+          },
+        },
+      ],
+      connectors: [],
+    };
+    const result = ResolvedFlowSchema.safeParse(flow);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const propIssue = result.error.issues.find(
+      (i) =>
+        i.path[0] === 'nodes' &&
+        i.path[3] === 'spec' &&
+        i.path[4] === 'elements' &&
+        i.path[5] === 'btn' &&
+        i.path[6] === 'props' &&
+        i.path[7] === 'label',
+    );
+    expect(propIssue).toBeDefined();
+  });
+});

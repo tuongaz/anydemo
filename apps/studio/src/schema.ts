@@ -1,3 +1,4 @@
+import { COMPONENT_NAMES, componentCatalog } from '@seeflow/canvas/catalog';
 import { z } from 'zod';
 
 const PositionSchema = z.object({
@@ -373,6 +374,34 @@ export const ResolvedFlowSchema = z
           path: ['nodes', idx, 'data', 'path'],
           message: `image node path must start with "${expected}"`,
         });
+      }
+    });
+    // type:'component' spec.elements entries are catalog-validated here so
+    // unknown component names and prop shape mismatches surface at flow-read
+    // time with paths pointing into the offending element.
+    resolved.nodes.forEach((node, idx) => {
+      if (node.type !== 'component') return;
+      const elements = node.data.spec.elements;
+      for (const [elId, entry] of Object.entries(elements)) {
+        const def = componentCatalog.components[entry.type];
+        if (!def) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['nodes', idx, 'data', 'spec', 'elements', elId, 'type'],
+            message: `Unknown component type "${entry.type}". Valid names: ${COMPONENT_NAMES.join(', ')}`,
+          });
+          continue;
+        }
+        const propsResult = def.props.safeParse(entry.props ?? {});
+        if (!propsResult.success) {
+          for (const issue of propsResult.error.issues) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['nodes', idx, 'data', 'spec', 'elements', elId, 'props', ...issue.path],
+              message: issue.message,
+            });
+          }
+        }
       }
     });
   });
