@@ -278,8 +278,8 @@
         "Tests pass"
       ],
       "priority": 15,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Fixture at apps/studio/e2e/fixtures/component-demo/: flow.json (single c1 component node, no position/spec — both filled by resolver chain), nodes/c1/spec.json (Card root with Metric bound to $state '/count' + two Buttons — Reset wired to set action /count=0, Fetch wired to script action 'inc'), nodes/c1/actions/inc.ts (reads JSON stdin, falls back to from=0 when payload is empty, writes {'/count': from+1}; uses `export {}` so top-level await typechecks). Initial state.count=5 so both tests have an observable transition (5→0 for Reset, 5→1 for Fetch since Button impl passes no payload). Test file at apps/studio/e2e/component-node.e2e.ts (NOT .spec.ts — playwright.config.ts testMatch is **/*.e2e.ts; .spec.ts would dodge discovery AND collide with bun test's pattern matcher). Two tests: (1) Reset click → Metric span.sf:tabular-nums transitions to '0', (2) Fetch click awaits a 200 response on /api/flows/:id/nodes/c1/actions/inc then asserts Metric shows '1'. Both also produce chromium-linux visual baselines. Added a local seedComponentDemo helper that cpSync-copies the fixture tree to studio.home/<slug>/ + POSTs /api/flows/register (the shared registerFlow helper can't be reused — it parses ResolvedFlowSchema which requires data.spec inline, but component nodes carry spec only on the sidecar). 2/2 component-node e2e tests pass through Docker; 9/9 total e2e suite stays green. Snapshots committed: component-node-after-reset-chromium-linux.png + component-node-after-fetch-chromium-linux.png."
     },
     {
       "id": "US-016",

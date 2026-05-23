@@ -1,0 +1,47 @@
+{
+  "root": "card",
+  "state": {
+    "/count": 5
+  },
+  "elements": {
+    "card": {
+      "type": "Card",
+      "props": { "title": "Counter" },
+      "children": ["metric", "reset", "fetch"]
+    },
+    "metric": {
+      "type": "Metric",
+      "props": {
+        "label": "Count",
+        "value": { "$state": "/count" }
+      }
+    },
+    "reset": {
+      "type": "Button",
+      "props": {
+        "label": "Reset",
+        "variant": "secondary",
+        "onClick": { "$action": "reset" }
+      }
+    },
+    "fetch": {
+      "type": "Button",
+      "props": {
+        "label": "Fetch",
+        "onClick": { "$action": "inc" }
+      }
+    }
+  },
+  "actions": {
+    "reset": {
+      "kind": "set",
+      "path": "/count",
+      "value": 0
+    },
+    "inc": {
+      "kind": "script",
+      "interpreter": "bun",
+      "scriptPath": "actions/inc.ts"
+    }
+  }
+}

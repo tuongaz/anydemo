@@ -1,0 +1,14 @@
+{
+  "version": 2,
+  "name": "Component Demo",
+  "nodes": [
+    {
+      "id": "c1",
+      "type": "component",
+      "data": {
+        "name": "Counter"
+      }
+    }
+  ],
+  "connectors": []
+}
