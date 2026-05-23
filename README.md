@@ -68,6 +68,10 @@ Once a flow is registered, agents can read it back as architectural ground truth
 
 Read-only. JSON output. Start cheapest (`list`) and drill in.
 
+## Component nodes
+
+The `component` node type turns a canvas node into a json-render-powered reactive UI driven by a small catalog of shadcn-styled primitives (Card, Button, Input, Chart, Markdown, etc.). The spec lives at `<project>/nodes/<id>/spec.json` — declaring an element tree, optional initial state, and a typed action vocabulary — while `flow.json` carries only the `type: 'component'` tag. Two action kinds are supported: `set` actions mutate local state via JSON Pointer paths, and `script` actions POST to `/api/flows/:id/nodes/:nodeId/actions/:name` which spawns the matching script under `nodes/<id>/` (e.g. `nodes/<id>/actions/<name>.ts`) and merges the JSON response back into state.
+
 ## Docker reference
 
 > ⚠️ Docker is the non-preferred path. Play/Status scripts execute inside the container and cannot reach host services or host binaries, so interactive nodes generated against your local app will not work. Prefer `npx -y @tuongaz/seeflow@latest start` for the full experience.

@@ -291,8 +291,8 @@
         "Typecheck passes"
       ],
       "priority": 16,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Flipped docs/plans/2026-05-23-component-node-design.md `Status: Design` -> `Status: Implemented` (US-001..US-015 collectively shipped the design). Added a one-paragraph 'Component nodes' H2 section to README.md between `/seeflow-lookup` and 'Docker reference' covering: what `component` is (json-render runtime + shadcn-styled catalog: Card/Button/Input/Chart/Markdown etc.), spec lives at `<project>/nodes/<id>/spec.json` while flow.json carries only the type tag, and the two action kinds — `set` (JSON Pointer state mutation) + `script` (POST `/api/flows/:id/nodes/:nodeId/actions/:name`, runner spawns the matching `nodes/<id>/actions/<name>.ts` and merges the JSON stdout into state). Intentionally did NOT include the forward reference to `apps/studio/examples/component-showcase/` because that example is US-017 and the link would dangle if US-017 ships separately or later. Files changed: docs/plans/2026-05-23-component-node-design.md (line-4 status flip), README.md (new H2 + paragraph). Quality checks: typecheck ✓ (3 workspaces, docs-only), format ✓ (biome leaves markdown alone), lint ✓, tests ✓ (1763 pass / 1 skip / 0 fail — unchanged from US-015 baseline)."
     },
     {
       "id": "US-017",
