@@ -1,6 +1,19 @@
 import { cpSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import type { Locator } from '@playwright/test';
 import { type RegisteredFlow, expect, test } from './support/studio-fixture.ts';
+
+// AutoSizeObserver in packages/canvas/src/nodes/component-node.tsx debounces
+// the ResizeObserver by 150ms before calling useUpdateNodeInternals. Without
+// an explicit wait, toHaveScreenshot races the auto-fit cycle — CI captures
+// the 208×452 shrink-wrapped node while a slower host captures the pre-fit
+// 640×480 default. Wait for the bounding box to stabilize at <320 (smaller
+// than React Flow's default node width) before taking the visual baseline.
+async function waitForAutoFit(node: Locator): Promise<void> {
+  await expect
+    .poll(async () => (await node.boundingBox())?.width ?? 0, { timeout: 5000 })
+    .toBeLessThan(320);
+}
 
 // US-015: end-to-end coverage for the component node — proves both dispatch
 // kinds light up against a real studio. (a) clicking a Button with a
@@ -79,6 +92,7 @@ test.describe('canvas — component node (US-015)', () => {
     // The spec seeds /count = 5 so the initial paint shows "5".
     const value = body.locator('span.sf\\:tabular-nums');
     await expect(value).toHaveText('5');
+    await waitForAutoFit(node);
 
     // Set-kind actions land synchronously: dispatchState({kind:'set'}) is
     // inside the same React event tick as onClick, so the next render sees
@@ -106,6 +120,7 @@ test.describe('canvas — component node (US-015)', () => {
     const body = node.locator('[data-testid="component-node-body"]');
     const value = body.locator('span.sf\\:tabular-nums');
     await expect(value).toHaveText('5');
+    await waitForAutoFit(node);
 
     // Race-safe wait: arm the response promise BEFORE clicking. The Button
     // impl invokes onClick with no payload, so the runtime POSTs `{}`. The

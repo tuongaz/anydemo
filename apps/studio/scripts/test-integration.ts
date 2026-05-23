@@ -22,7 +22,9 @@ import { join, resolve } from 'node:path';
 const STUDIO_DIR = resolve(import.meta.dir, '..');
 const REPO_ROOT = resolve(STUDIO_DIR, '../..');
 const DIST_INDEX = join(STUDIO_DIR, 'dist/web/index.html');
-const WEB_SRC = join(REPO_ROOT, 'apps/web/src');
+// apps/web bundles @seeflow/canvas inline at build time, so a canvas source
+// edit silently leaves the web bundle stale unless we invalidate against it.
+const WEB_SRC_ROOTS = [join(REPO_ROOT, 'apps/web/src'), join(REPO_ROOT, 'packages/canvas/src')];
 const ARTIFACT_ROOT = join(STUDIO_DIR, 'integration/.artifacts');
 // run-e2e.ts dispatches between native playwright (Linux/CI) and the official
 // Playwright Docker image (macOS/Windows dev) so visual baselines compare
@@ -59,10 +61,18 @@ async function ensureWebBundleFresh(): Promise<void> {
     reason = `${DIST_INDEX} missing`;
   } else {
     const distMtime = statSync(DIST_INDEX).mtimeMs;
-    const srcMtime = await newestMtimeMs(WEB_SRC);
-    if (srcMtime > distMtime) {
+    let newestSrc = 0;
+    let newestRoot = '';
+    for (const root of WEB_SRC_ROOTS) {
+      const m = await newestMtimeMs(root);
+      if (m > newestSrc) {
+        newestSrc = m;
+        newestRoot = root;
+      }
+    }
+    if (newestSrc > distMtime) {
       needsBuild = true;
-      reason = `apps/web/src newer than dist/web (src=${new Date(srcMtime).toISOString()}, dist=${new Date(distMtime).toISOString()})`;
+      reason = `${newestRoot} newer than dist/web (src=${new Date(newestSrc).toISOString()}, dist=${new Date(distMtime).toISOString()})`;
     }
   }
   if (!needsBuild) {
