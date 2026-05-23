@@ -223,8 +223,8 @@
         "Tests pass"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Replaced US-011's identity-passthrough stub at packages/canvas/src/registry/component-registry.tsx with real impls for all 24 catalog names. Eager primitives are shadcn-styled (using canvas's existing src/ui/{button,slider}.tsx where they fit; plain HTML + sf:* Tailwind for the rest because @json-render/shadcn requires React 19 + zod 4 while canvas is React 18 + zod 3 — using it would force a workspace-wide bump). SeeFlow extras land as separate impl files under packages/canvas/src/registry/impls/: heading.tsx (h1-h4), text.tsx (<p> + muted), icon.tsx (reuses ui/icon.tsx), table.tsx, metric.tsx. Heavy components (Chart via recharts, Markdown via react-markdown + remark-gfm, CodeBlock via shiki) use React.lazy with default exports — each wrapped in <Suspense fallback={null}> at the registry layer so the existing runtime needs no Suspense boundary. Added recharts + shiki to canvas package.json: peerDependencies (with peerDependenciesMeta.optional), devDependencies (for typecheck), and tsup external array (so the chunks stay externalized). Module-level assertion throws if any COMPONENT_NAMES entry lacks an impl. Smoke test packages/canvas/src/registry/component-registry.test.ts (3 tests): components map exists, every catalog name has an impl with type function|object, no stray names beyond catalog. Full suite: 1748 pass / 1 skip / 0 fail (+3 over US-011's 1745). Canvas build (tsup) still produces dist/{index,catalog}.{js,d.ts} cleanly."
     },
     {
       "id": "US-013",

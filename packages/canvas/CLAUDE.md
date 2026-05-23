@@ -25,3 +25,11 @@ Embeddable React Flow canvas. See `README.md` for the full public API.
 - Tests live beside sources (`foo.ts` + `foo.test.ts`). Run `bun test` from the repo root.
 - Typecheck: `cd packages/canvas && bun run typecheck`, or `bun run typecheck` from root for all workspaces.
 - When adding a public export, add it to `src/index.ts` in the matching numbered section and keep the barrel sorted within the section.
+
+## Component-node registry
+
+- `src/registry/component-registry.tsx` maps every `COMPONENT_NAMES` entry (from `src/catalog/component-catalog.ts`) to a React impl consumed by `src/nodes/component-runtime.tsx`. Adding a new catalog entry REQUIRES adding a matching impl here — the module-level assertion at the bottom of `component-registry.tsx` throws on import if the two ever drift.
+- Eager shadcn-styled primitives (Card, Separator, Tabs, …, Slider) live in `component-registry.tsx` itself. Reuse `src/ui/{button,slider,tabs}.tsx` when their API fits; otherwise build with plain HTML + `sf:*` Tailwind to avoid pulling in extra Radix packages just for the registry.
+- Heavy/optional impls (Chart, Markdown, CodeBlock) ship as default-export `.tsx` files under `src/registry/impls/` and are loaded via `React.lazy(() => import('./impls/...'))`. Wrap each lazy with `<Suspense fallback={null}>` AT THE REGISTRY LAYER so `ComponentRuntime` doesn't need a Suspense boundary of its own.
+- Optional peer deps (`recharts`, `shiki`) go in `peerDependencies` + `peerDependenciesMeta.<name>.optional = true` + `devDependencies` (for typecheck) + `tsup.config.ts:external` (so the bundler doesn't inline them). Forgetting the `external` entry will silently double the bundle size of `dist/index.js`.
+- DO NOT try to import from `@json-render/shadcn`. It requires React 19 + zod 4; the canvas is locked to React 18 + zod 3 until the monorepo upgrades. Build shadcn-styled primitives in-house instead.
