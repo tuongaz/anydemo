@@ -205,8 +205,8 @@
         "Tests pass"
       ],
       "priority": 11,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created packages/canvas/src/nodes/component-runtime.tsx exporting ComponentRuntime({ spec, nodeId, apiBaseUrl='/api', flowId }). Internal state via useReducer with set + merge actions; resolveValue handles $state (looks up state[path]), $action (returns a callable that dispatches by name), and $cond/$then/$else (recursively resolves both arms then returns the matching one). dispatch async function: set-kind resolves $param refs against payload + $state refs against current state then dispatchState({kind:'set'}); script-kind POSTs to ${apiBaseUrl}/flows/${flowId}/nodes/${nodeId}/actions/${name} with JSON payload, on res.ok parses body and dispatchState({kind:'merge'}), on !res.ok stores text under /__errors/<name>, on catch stores message under /__errors/<name>. renderElement recurses through spec.elements via spec.root, mounts componentRegistry.components[el.type] with resolved props + recursively-rendered children. Also created packages/canvas/src/registry/component-registry.tsx as a minimal identity-passthrough stub (each catalog name → a div with data-component=name) so the runtime can mount and tests can assert on resolved props; US-012 will replace this file with the real shadcn / SeeFlow / lazy impls. Test file packages/canvas/src/nodes/component-runtime.test.tsx: hook-shim with PERSISTENT slot-based useReducer + useState (the html-node shim's no-op setter wouldn't survive dispatch → re-render; this shim uses module-level slots cleared per test). 6 tests: (1) initial render reflects state ($state ref), (2) $action ref resolves to a Function, (3) set dispatch mutates state and re-rendered props pick up the new value (count: 0 → onClick({next:7}) → count: 7), (4) unknown spec.root returns null, (5) recursive children render with their own resolved props ($state inside a child resolves against the shared state), (6) $cond/$then/$else picks the right arm against state. Full suite: 1745 pass / 1 skip / 0 fail (+6 over US-010's 1739)."
     },
     {
       "id": "US-012",
