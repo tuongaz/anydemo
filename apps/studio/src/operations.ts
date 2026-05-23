@@ -11,6 +11,7 @@ import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSyn
 import { dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { writeFileAtomic } from './atomic-write.ts';
+import { inlineComponentSpecs } from './component-spec-resolver.ts';
 import { type LayoutOptions, computeLayout } from './layout.ts';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
@@ -769,7 +770,16 @@ export async function mutateMergedFlow<E extends { kind: string }>(
   const styleParse = StyleSchema.safeParse(read.rawStyle);
   if (!styleParse.success) return { kind: 'badSchema', issues: styleParse.error.issues };
 
-  const merged = mergeFlowAndStyle(flowParse.data, styleParse.data) as unknown as {
+  // Inline component spec sidecars (<project>/nodes/<id>/spec.json) before the
+  // mutator runs so the post-mutation ResolvedFlowSchema parse sees `data.spec`
+  // on every existing component node. splitFlow strips `spec` back out before
+  // we write flow.json, keeping the sidecar as the on-disk source of truth.
+  const projectRoot = dirname(flowPath);
+  const { flow: inlinedFlow } = inlineComponentSpecs(
+    mergeFlowAndStyle(flowParse.data, styleParse.data),
+    projectRoot,
+  );
+  const merged = inlinedFlow as unknown as {
     version: number;
     name: string;
     resetAction?: unknown;
