@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per dataset. Table is too fine; project is too coarse.
+- One node (`type:'rectangle'`) per dataset. Table is too fine; project is too coarse.
 - Duplicate the dataset node next to each consumer (same `kind` +
   `name`, unique `id`) when readability benefits.
 

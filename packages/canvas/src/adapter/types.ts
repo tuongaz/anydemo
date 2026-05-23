@@ -14,35 +14,43 @@ import type {
   ConnectorStyle,
   EdgePin,
   FlowNode,
+  NodeType,
   RunResult,
-  ShapeKind,
   StatusReport,
 } from '../types.ts';
 
-export type NodeKind =
-  | 'playNode'
-  | 'stateNode'
-  | 'shapeNode'
-  | 'imageNode'
-  | 'iconNode'
-  | 'htmlNode';
+/**
+ * Adapter-facing node-type union. Mirrors `NodeType` in `../types.ts` (the
+ * 12 flat tags: 9 geometric + image + html + icon). Kept as a named alias
+ * so the public barrel exposes a stable adapter-layer name while the
+ * canonical union lives in the schema-mirroring `types.ts`.
+ */
+export type NodeKind = NodeType;
 
 export interface NodeCreateInput {
   /** Optional client-allocated id. When set, server uses it verbatim. */
   id?: string;
   type: NodeKind;
   position: { x: number; y: number };
-  /** Node-kind-specific data payload (ShapeNodeData / IconNodeData / …). */
+  /** Per-type data payload (GeometricNodeData / ImageNodeData / HtmlNodeData / IconNodeData). */
   data: Record<string, unknown>;
 }
 
 export interface NodePatch {
+  /**
+   * Retype: change the node's visual kind in place. Type IS the shape in the
+   * flat model, so a retype patch swaps the variant without nesting in `data`.
+   * The studio re-parses the merged node against the new type's per-type
+   * schema and rejects patches missing required fields (e.g. retype to
+   * type:'image' without a `path`).
+   */
+  type?: NodeKind;
   position?: { x: number; y: number };
   name?: string;
   borderColor?: ColorToken;
   backgroundColor?: ColorToken;
   borderSize?: number;
-  /** Image node border-thickness (1–8). Distinct from shape nodes' `borderSize`. */
+  /** type:'image'-only: border thickness (1–8). Distinct from geometric `borderSize`. */
   borderWidth?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
@@ -51,24 +59,23 @@ export interface NodePatch {
   width?: number;
   height?: number;
   /**
-   * htmlNode-only: when true, the renderer measures content and React Flow
+   * type:'html'-only: when true, the renderer measures content and React Flow
    * sizes the wrapper around it. The studio adapter strips width/height when
    * autoSize:true is patched, and flips autoSize:false when width/height is
    * patched, per the autoSize invariant.
    */
   autoSize?: boolean;
-  shape?: ShapeKind;
-  /** iconNode-only: stroke color token. Lands at data.color. */
+  /** type:'icon'-only: stroke color token. Lands at data.color. */
   color?: ColorToken;
-  /** iconNode-only: glyph stroke width in [0.5, 4]. Lands at data.strokeWidth. */
+  /** type:'icon'-only: glyph stroke width in [0.5, 4]. Lands at data.strokeWidth. */
   strokeWidth?: number;
-  /** iconNode-only: accessible alt text. Lands at data.alt. */
+  /** type:'icon'/type:'image'-only: accessible alt text. Lands at data.alt. */
   alt?: string;
   /**
-   * Kebab-case Lucide icon name. Lands at data.icon. On play/state/html
-   * nodes the field is optional and `null` clears it (the studio strips the
-   * key from disk). On iconNode the post-merge reparse keeps the field
-   * required.
+   * Kebab-case Lucide icon name. Lands at data.icon. Decorative on every
+   * type except type:'icon', where the icon IS the visual and the field is
+   * required. Explicit `null` clears the field (the studio strips the key
+   * from disk).
    */
   icon?: string | null;
   /** Short body text rendered on the canvas and as light-bold in the sidebar. */
@@ -174,7 +181,7 @@ export interface UploadImageResult {
   path: string;
 }
 
-export interface PlayNodeResult {
+export interface PlayActionResult {
   runId: string;
   status?: number;
   body?: unknown;
@@ -237,13 +244,13 @@ export interface CanvasAdapter {
    * Upload an image file to the project, scoped to a specific node. The
    * server writes to <project>/nodes/<nodeId>/<filename> and the returned
    * path is `nodes/<nodeId>/<filename>` — used directly as `data.path` on
-   * an imageNode. Scoping the upload to the node id lets delete_node's
+   * a type:'image' node. Scoping the upload to the node id lets delete_node's
    * cascade clean up the asset along with the row.
    */
   uploadImage(nodeId: string, file: File, filename: string): Promise<UploadImageResult>;
   /** Optional: invoke the node's playAction. Adapters that don't support
    *  server-side execution can omit this — view-mode canvases never call it. */
-  playNode?(nodeId: string): Promise<PlayNodeResult>;
+  playAction?(nodeId: string): Promise<PlayActionResult>;
   /** Optional: ask the host to open the given project-scoped file in its editor. */
   openFile?(path: string): Promise<void>;
   /** Optional: ask the host to reveal the given project-scoped file in its OS file manager. */

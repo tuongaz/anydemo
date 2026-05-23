@@ -6,7 +6,7 @@ import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
-import { type CreateProjectResult, type FlowDetail, playNode, restartFlow } from '@/lib/api';
+import { type CreateProjectResult, type FlowDetail, playFlowNode, restartFlow } from '@/lib/api';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { navigate, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
@@ -153,7 +153,7 @@ export function App() {
       if (!flowId) return;
       // Fire and forget — the SSE node:* events drive the UI; the synchronous
       // response is currently surfaced through the same SSE stream.
-      playNode(flowId, nodeId).catch((err) => {
+      playFlowNode(flowId, nodeId).catch((err) => {
         applyRun({
           type: 'node:error',
           nodeId,

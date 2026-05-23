@@ -47,7 +47,7 @@ For node / connector / action field shapes, run `seeflow schema` (then `seeflow 
 
 What the schema can't tell you — runtime behavior the CLI assumes you know:
 
-- **Decorative node variants** (`shapeNode | iconNode | imageNode`, and `htmlNode` with empty content) are visual only — **skip them for architectural reasoning**.
+- **Decorative node types** — `sticky`, `text`, `icon`, `image`, `html` with empty content, and geometric shapes (`ellipse`, `database`, `queue`, `cloud`, `server`, `user`) carrying no capabilities — are visual only. **Skip them for architectural reasoning.** Treat any node as architectural when its `data.playAction` or `data.statusAction` is set, regardless of `type`.
 - **Semantics live on the nodes, not the connectors.** Read the source / target node's `data.name` (and `codePointers` from the brief) to understand what an edge means.
 - **`file://` content fields** (e.g. `detail`, `html`) are auto-externalised on write. Whether they come back inlined depends on the subcommand — check `seeflow help` for the variant that returns full content.
 - **Action `scriptPath` values** are relative under `nodes/<nodeId>/`. Read those files directly with `Read` if you need the script source.
@@ -62,6 +62,6 @@ Start with the cheapest lookup the CLI offers (a summary across flows), pick a f
 
 - **Assuming subcommand names from memory** — always confirm with `seeflow help` first.
 - **Reaching for the "full" variant first** on a large flow — burns context. Climb the ladder.
-- **Treating decorative nodes as architecture** — `shapeNode`/`iconNode`/`imageNode` are visual only.
+- **Treating decorative nodes as architecture** — geometric shapes without capabilities, plus `sticky` / `text` / `icon` / `image` / empty `html`, are visual only.
 - **Re-emitting JSON as prose** — pass the CLI output through unchanged. Don't rewrite it as markdown.
 - **Reading `file://` refs as filesystem paths** — let the CLI inline them; only fall back to direct `Read` for `scriptPath`.

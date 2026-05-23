@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per database **file** (`kind: "db"`, `icon: "database"`).
+- One node (`type:'rectangle'`) per database **file** (`kind: "db"`, `icon: "database"`).
   Table-level is too fine-grained; a single SQLite file is one
   dependency regardless of how many tables it holds.
 - Two-table flows are typical for embedded use cases (auth services:

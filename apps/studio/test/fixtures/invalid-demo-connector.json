@@ -4,7 +4,7 @@
   "nodes": [
     {
       "id": "api-checkout",
-      "type": "playNode",
+      "type": "rectangle",
       "position": {
         "x": 0,
         "y": 0

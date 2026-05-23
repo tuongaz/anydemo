@@ -12,7 +12,7 @@ const VALID_DEMO = {
   nodes: [
     {
       id: 'a',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'A',
         stateSource: { kind: 'request' },
@@ -166,9 +166,9 @@ describe('createWatcher', () => {
   // US-002: referenced-file watch set + `file:changed` SSE broadcast
   // ---------------------------------------------------------------------------
 
-  // Build a demo with one playNode that also carries a forward-compatible
-  // `path` on its data (imageNode-style path, the only field
-  // collectReferencedPaths still cares about — htmlNode content rides on the
+  // Build a demo with one rectangle that also carries a forward-compatible
+  // `path` on its data (image-style path, the only field
+  // collectReferencedPaths still cares about — html content rides on the
   // file:// resolver now).
   const demoWithImagePath = (imgPath: string) => ({
     version: 2,
@@ -176,7 +176,7 @@ describe('createWatcher', () => {
     nodes: [
       {
         id: 'img1',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'I',
           stateSource: { kind: 'request' },
@@ -188,7 +188,7 @@ describe('createWatcher', () => {
     connectors: [],
   });
 
-  it('emits file:changed when an imageNode-referenced path file is edited', async () => {
+  it('emits file:changed when an image-referenced path file is edited', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo(demoWithImagePath('assets/logo.png'));
     mkdirSync(join(repoPath, 'assets'));
@@ -288,7 +288,7 @@ describe('createWatcher', () => {
       nodes: [
         {
           id: 'abs',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'A',
             stateSource: { kind: 'request' },
@@ -298,7 +298,7 @@ describe('createWatcher', () => {
         },
         {
           id: 'trav',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'B',
             stateSource: { kind: 'request' },
@@ -308,7 +308,7 @@ describe('createWatcher', () => {
         },
         {
           id: 'data',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'C',
             stateSource: { kind: 'request' },
@@ -348,7 +348,7 @@ describe('createWatcher', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'N',
             stateSource: { kind: 'request' },

@@ -220,18 +220,18 @@ function callSeeflowCanvas(
 function makeShapeNode(id: string): FlowNode {
   return {
     id,
-    type: 'shapeNode',
+    type: 'rectangle',
     position: { x: 0, y: 0 },
-    data: { name: id, shape: 'rectangle' },
+    data: { name: id },
   };
 }
 
 function makeTextNode(id: string): FlowNode {
   return {
     id,
-    type: 'shapeNode',
+    type: 'text',
     position: { x: 0, y: 0 },
-    data: { name: id, shape: 'text' },
+    data: { name: id },
   };
 }
 
@@ -368,8 +368,8 @@ describe('SeeflowCanvas', () => {
     });
 
     it('accepts a connection between two non-text shape nodes (second coverage)', () => {
-      // The validator's text-shape predicate gates on `type === 'shapeNode'
-      // && data.shape === 'text'` — non-text shapes must pass through.
+      // The validator's text-shape predicate gates on `type === 'text'` —
+      // non-text shapes must pass through.
       const validator = getValidator([makeShapeNode('s1'), makeShapeNode('s2')]);
       expect(validator(makeConnection('s1', 's2'))).toBe(true);
     });
@@ -405,18 +405,18 @@ describe('SeeflowCanvas', () => {
     function makeShapeNodeOverride(id: string): Partial<FlowNode> {
       return {
         id,
-        type: 'shapeNode',
+        type: 'rectangle',
         position: { x: 100, y: 100 },
-        data: { shape: 'rectangle', width: 120, height: 80 },
+        data: { width: 120, height: 80 },
       };
     }
 
     function makeTextNodeOverride(id: string): Partial<FlowNode> {
       return {
         id,
-        type: 'shapeNode',
+        type: 'text',
         position: { x: 100, y: 100 },
-        data: { shape: 'text', width: 120, height: 80 },
+        data: { width: 120, height: 80 },
       };
     }
 
@@ -1331,9 +1331,9 @@ describe('SeeflowCanvas', () => {
     ): FlowNode {
       return {
         id,
-        type: 'shapeNode',
+        type: 'rectangle',
         position: pos,
-        data: { name: id, shape: 'rectangle', width: dims.width, height: dims.height },
+        data: { name: id, width: dims.width, height: dims.height },
       };
     }
 
@@ -2019,7 +2019,7 @@ describe('SeeflowCanvas', () => {
      * Synthesize a React DragEvent that carries the HTML block dataTransfer
      * marker. Mirrors `dragEvent` in the US-008 suite — the only difference is
      * that `types` defaults to the HTML_BLOCK_DND_TYPE marker (no Files in the
-     * payload), so this fixture exercises the htmlNode branch alone.
+     * payload), so this fixture exercises the type:'html' branch alone.
      */
     function htmlBlockDragEvent(args: {
       types?: string[];
@@ -2116,7 +2116,7 @@ describe('SeeflowCanvas', () => {
       // With onCreateHtmlNode unwired, a marker-bearing, file-less drop must
       // NOT dispatch onCreateImageFromFile (no Files in the payload —
       // handleCanvasFileDrop short-circuits). The image branch may still
-      // preventDefault (it always does when wired), but the htmlNode-create
+      // preventDefault (it always does when wired), but the type:'html'-create
       // path stays inert.
       const imgDispatched: unknown[] = [];
       const tree = callSeeflowCanvas({
@@ -2133,7 +2133,7 @@ describe('SeeflowCanvas', () => {
       expect(imgDispatched).toHaveLength(0);
     });
 
-    it('onDrop is a complete no-op when neither image nor htmlNode handlers are wired', () => {
+    it('onDrop is a complete no-op when neither image nor type:html handlers are wired', () => {
       // Read-only canvas: drop fires but no preventDefault, no dispatch — the
       // browser's native default still runs.
       const tree = callSeeflowCanvas({});
@@ -3045,5 +3045,112 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     // The controlled embed-dialog state lift exposes both prongs.
     expect(typeof menu?.props.onEmbedOpenChange).toBe('function');
     expect(menu?.props.embedOpen).toBe(false);
+  });
+});
+
+describe('US-004: flat node types — fixture coverage across the 12-tag set', () => {
+  // AC: "cover at least rectangle (with playAction + statusAction), one
+  // other geometric tag, image, html, and icon". Each fixture below renders
+  // through SeeflowCanvas and asserts the React Flow node payload carries the
+  // expected `type` discriminator. This guards the nodeTypes routing —
+  // rectangle → RectangleNode; the 8 other geometric tags → GeometricNode;
+  // image/html/icon → their dedicated renderers — against silent regressions.
+  function getRfNodes(
+    nodes: FlowNode[],
+  ): Array<{ id: string; type: string | undefined; data: Record<string, unknown> }> {
+    const tree = callSeeflowCanvas({ nodes });
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    return rf.props.nodes as Array<{
+      id: string;
+      type: string | undefined;
+      data: Record<string, unknown>;
+    }>;
+  }
+
+  it('renders a rectangle node carrying both playAction and statusAction capabilities', () => {
+    // Capabilities are independent optional fields on data — the canvas only
+    // threads them into the renderer payload (which decides whether to draw
+    // the play button / status pill). Asserting both pass through unchanged
+    // pins the new "capability is a field" contract end-to-end.
+    const node: FlowNode = {
+      id: 'r1',
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data: {
+        name: 'API call',
+        playAction: {
+          kind: 'script',
+          interpreter: 'bash',
+          scriptPath: 'scripts/play.sh',
+        },
+        statusAction: {
+          kind: 'script',
+          interpreter: 'bash',
+          scriptPath: 'scripts/status.sh',
+        },
+      },
+    };
+    const rfNodes = getRfNodes([node]);
+    expect(rfNodes).toHaveLength(1);
+    expect(rfNodes[0]?.type).toBe('rectangle');
+    expect(rfNodes[0]?.data.playAction).toEqual({
+      kind: 'script',
+      interpreter: 'bash',
+      scriptPath: 'scripts/play.sh',
+    });
+    expect(rfNodes[0]?.data.statusAction).toEqual({
+      kind: 'script',
+      interpreter: 'bash',
+      scriptPath: 'scripts/status.sh',
+    });
+  });
+
+  it('renders a database (non-rectangle geometric) node with the discriminator preserved', () => {
+    const node: FlowNode = {
+      id: 'db1',
+      type: 'database',
+      position: { x: 10, y: 20 },
+      data: { name: 'users' },
+    };
+    const rfNodes = getRfNodes([node]);
+    expect(rfNodes[0]?.type).toBe('database');
+  });
+
+  it('renders a type:image node with path/alt threaded into the runtime data', () => {
+    const node: FlowNode = {
+      id: 'img1',
+      type: 'image',
+      position: { x: 0, y: 0 },
+      data: { path: 'images/diagram.png', alt: 'flow diagram' },
+    };
+    const rfNodes = getRfNodes([node]);
+    expect(rfNodes[0]?.type).toBe('image');
+    expect(rfNodes[0]?.data.path).toBe('images/diagram.png');
+    expect(rfNodes[0]?.data.alt).toBe('flow diagram');
+  });
+
+  it('renders a type:html node with html content threaded into the runtime data', () => {
+    const node: FlowNode = {
+      id: 'h1',
+      type: 'html',
+      position: { x: 0, y: 0 },
+      data: { html: '<div>hello</div>' },
+    };
+    const rfNodes = getRfNodes([node]);
+    expect(rfNodes[0]?.type).toBe('html');
+    expect(rfNodes[0]?.data.html).toBe('<div>hello</div>');
+  });
+
+  it('renders a type:icon node with the icon name threaded into the runtime data', () => {
+    const node: FlowNode = {
+      id: 'i1',
+      type: 'icon',
+      position: { x: 0, y: 0 },
+      data: { icon: 'server' },
+    };
+    const rfNodes = getRfNodes([node]);
+    expect(rfNodes[0]?.type).toBe('icon');
+    expect(rfNodes[0]?.data.icon).toBe('server');
   });
 });

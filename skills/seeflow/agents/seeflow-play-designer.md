@@ -180,8 +180,11 @@ arrays).
 
 Rules for `newTriggerNodes`:
 
-- New nodes must be `playNode`s so the graph marks them clickable. The
-  matching `playOverlays` entry carries the actual play action.
+- New nodes must be `type:'rectangle'` so the play button renders
+  (capability chrome is rectangle-only in v1). The matching
+  `playOverlays` entry carries the actual play action; the
+  `newTriggerNodes` node carries an initial `data.playAction`
+  placeholder so the graph marks it clickable.
 - Set state source to `request` when the play directly causes the
   downstream state change; `event` when the play emits something others
   subscribe to. Consult the node schema in your launching prompt for
@@ -224,23 +227,24 @@ Apply these rules in order. The first rule that fits the node wins.
    that legitimately takes minutes or hours (carrier callback,
    third-party webhook, daily batch), add a Play that *simulates*
    the completion event so the audience does not wait. Typically a
-   stateNode like `"shipment-delivered"` gets a Play that POSTs the
-   delivery webhook payload directly into the handler.
+   downstream rectangle like `"shipment-delivered"` gets a Play that
+   POSTs the delivery webhook payload directly into the handler.
 
 4. **No natural trigger? Create one — functional, not human.** Quiet
    observer graphs (e.g. a worker that only consumes from a queue with
    no obvious producer in the demo's scope) need a synthetic source.
-   Emit a `newTriggerNodes` entry as a `playNode` with `kind:
-   "trigger" | "fixture" | "webhook" | "tick"` whose script does the
-   actual work (drops a file, POSTs a webhook body, fires a queue
-   message). **Do NOT inject a Human / Operator / Customer shapeNode
-   as the synthetic source** — the audience cannot click a `shapeNode`,
-   and a generic "User" before a backend pipeline adds zero information.
-   The only time a human shape belongs in the graph is when the demo's
-   subject IS the human action (UX click-through, support-agent
-   workflow). For backend, system, data-pipeline, worker, cron, and
-   webhook-driven flows, the synthetic trigger is a fixture / webhook /
-   tick playNode — never a person.
+   Emit a `newTriggerNodes` entry as a `type:'rectangle'` with a
+   `data.playAction` placeholder (and a matching `playOverlays` entry
+   whose script does the actual work — drops a file, POSTs a webhook
+   body, fires a queue message). **Do NOT inject a `type:'user'` shape
+   as the synthetic source** — the play button only renders on
+   `rectangle` in v1, so a `user` node is unclickable, and a generic
+   "User" before a backend pipeline adds zero information. The only
+   time a `user` shape belongs in the graph is when the demo's subject
+   IS the human action (UX click-through, support-agent workflow). For
+   backend, system, data-pipeline, worker, cron, and webhook-driven
+   flows, the synthetic trigger is a `rectangle` carrying a `playAction`
+   (a fixture / webhook / tick) — never a `user`.
 
 5. **Idempotency is mandatory.** The validator calls every Play once
    and the user clicks again. Scripts that crash on second call, or
@@ -255,19 +259,21 @@ Apply these rules in order. The first rule that fits the node wins.
    multiple Plays at the same logical entry just to expose internal
    detail.
 
-7. **No Play on pure observers.** Databases, caches, downstream
-   workers, queues, and shapeNodes have no trigger semantics. They
-   may carry a `statusAction` (the status-designer's job) but they
-   never get a `playAction`. If you find yourself wanting to "Play"
-   a database to inspect state, that is a status action, not a play
-   action — leave it for the status-designer.
+7. **No Play on pure observers.** Pure-resource nodes (databases,
+   caches, queues, downstream workers) and decorative shapes (sticky,
+   text, icon) have no trigger semantics. They may carry a
+   `statusAction` (the status-designer's job) but they never get a
+   `playAction`. If you find yourself wanting to "Play" a database to
+   inspect state, that is a status action, not a play action — leave
+   it for the status-designer.
 
 ## Workflow
 
 1. **Read the brief and the draft.** Map every node in
    `nodeDraft.nodes` to a placement-rule classification. The trigger
-   node from the node-planner (the one `type: "playNode"`) is your
-   default Play target.
+   node from the node-planner (the one `type:'rectangle'` whose
+   `data.playAction` was set as a placeholder) is your default Play
+   target.
 2. **Ground in code.** For each candidate Play, use `Grep`/`Read` to
    confirm the trigger surface (endpoint path + method, queue name,
    event topic, fixture directory). Avoid making the script fetch a
@@ -304,8 +310,9 @@ Apply these rules in order. The first rule that fits the node wins.
    does not confirm is locally runnable. Mark `true` for everything
    else.
 7. **Inject triggers if needed.** Walk every connector chain. If a
-   subgraph has no `playNode`-type entry, emit a `newTriggerNodes`
-   entry and a matching overlay.
+   subgraph has no clickable entry (no node with a `data.playAction`),
+   emit a `newTriggerNodes` entry (`type:'rectangle'` with a
+   placeholder `data.playAction`) and a matching overlay.
 8. **Emit.** Final message is the JSON code block — nothing else.
 
 ## Worked example
@@ -320,12 +327,12 @@ nodeDraft: {
   name: "Order Pipeline",
   slug: "order-pipeline",
   nodes: [
-    { id: "order-server",   type: "playNode",  data: { name: "POST /orders", ... } },
-    { id: "event-bus",      type: "stateNode", data: { name: "Event Bus", ... } },
-    { id: "inventory-worker", type: "stateNode", data: { name: "Inventory Worker", ... } },
-    { id: "shipping-worker",  type: "stateNode", data: { name: "Shipping Worker", ... } },
-    { id: "shipments-queue",  type: "stateNode", data: { name: "Shipments Queue", ... } },
-    { id: "order-store",      type: "stateNode", data: { name: "Order Store", ... } }
+    { id: "order-server",   type: "rectangle", data: { name: "POST /orders", icon: "server", playAction: { ... placeholder ... }, ... } },
+    { id: "event-bus",      type: "rectangle", data: { name: "Event Bus", icon: "radio-tower", ... } },
+    { id: "inventory-worker", type: "rectangle", data: { name: "Inventory Worker", icon: "cog", ... } },
+    { id: "shipping-worker",  type: "rectangle", data: { name: "Shipping Worker", icon: "cog", ... } },
+    { id: "shipments-queue",  type: "rectangle", data: { name: "Shipments Queue", icon: "list-ordered", ... } },
+    { id: "order-store",      type: "rectangle", data: { name: "Order Store", icon: "database", ... } }
   ],
   connectors: [ ... ]
 }
@@ -377,8 +384,9 @@ Notes on the example:
   repeat clicks become harmless upserts.
 - `validationSafe: true` because the server is local; no real money
   changes hands.
-- `newTriggerNodes` is empty because the node-planner already chose
-  `order-server` as the `playNode`.
+- `newTriggerNodes` is empty because the node-planner already picked
+  `order-server` as the trigger (`type:'rectangle'` with a
+  placeholder `data.playAction`).
 
 ## Counter-example (do not do this)
 

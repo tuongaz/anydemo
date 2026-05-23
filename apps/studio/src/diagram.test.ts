@@ -6,19 +6,17 @@ import { assembleDemo } from './diagram.ts';
 // along with them and the overlap assertions stay meaningful.
 const DEFAULT_W = 200;
 const DEFAULT_H = 120;
-const dims = (n: { type?: string; data?: { width?: number; height?: number; shape?: string } }) => {
+const dims = (n: { type?: string; data?: { width?: number; height?: number } }) => {
   const data = n.data ?? {};
-  const w =
-    typeof data.width === 'number'
-      ? data.width
-      : n.type === 'shapeNode' && data.shape === 'text'
-        ? 160
-        : DEFAULT_W;
+  // Flat-types refactor: the variant is the type itself. text + sticky have
+  // bespoke default dimensions; image is taller; everything else uses the
+  // shared default.
+  const w = typeof data.width === 'number' ? data.width : n.type === 'text' ? 160 : DEFAULT_W;
   let h = DEFAULT_H;
   if (typeof data.height === 'number') h = data.height;
-  else if (n.type === 'shapeNode' && data.shape === 'text') h = 40;
-  else if (n.type === 'shapeNode' && data.shape === 'sticky') h = 180;
-  else if (n.type === 'imageNode') h = 150;
+  else if (n.type === 'text') h = 40;
+  else if (n.type === 'sticky') h = 180;
+  else if (n.type === 'image') h = 150;
   return { w, h };
 };
 
@@ -39,9 +37,22 @@ const rectsOverlap = (a: OutNode, b: OutNode): boolean => {
   return a.position.x < bx2 && ax2 > b.position.x && a.position.y < by2 && ay2 > b.position.y;
 };
 
-const playNode = (id: string, x = 0, y = 0) => ({
+// Both old playNode + stateNode helpers collapsed to type:'rectangle' under
+// the flat schema. The layout tests in this file don't depend on playAction
+// presence, so a single rectangle helper covers every call site.
+// playRectangle + stateRectangle are aliases retained for sites where the
+// distinction documents intent (a node that "would be" the trigger vs. a
+// downstream observer).
+const rectangle = (id: string, x = 0, y = 0) => ({
   id,
-  type: 'playNode',
+  type: 'rectangle',
+  position: { x, y },
+  data: { label: id, stateSource: { kind: 'request' as const } },
+});
+
+const playRectangle = (id: string, x = 0, y = 0) => ({
+  id,
+  type: 'rectangle',
   position: { x, y },
   data: {
     label: id,
@@ -54,9 +65,9 @@ const playNode = (id: string, x = 0, y = 0) => ({
   },
 });
 
-const stateNode = (id: string, x = 0, y = 0) => ({
+const stateRectangle = (id: string, x = 0, y = 0) => ({
   id,
-  type: 'stateNode',
+  type: 'rectangle',
   position: { x, y },
   data: { label: id, stateSource: { kind: 'request' as const } },
 });
@@ -74,11 +85,11 @@ describe('assembleDemo auto-layout', () => {
         nodes: [
           // All five within 60px of each other — would all overlap under the
           // old exact-position breakOverlap.
-          playNode('a', 0, 0),
-          stateNode('b', 24, 24),
-          stateNode('c', 48, 48),
-          stateNode('d', 24, 72),
-          stateNode('e', 48, 24),
+          stateRectangle('a', 0, 0),
+          stateRectangle('b', 24, 24),
+          rectangle('c', 48, 48),
+          rectangle('d', 24, 72),
+          rectangle('e', 48, 24),
         ],
         connectors: [
           connector('a', 'b'),
@@ -103,7 +114,7 @@ describe('assembleDemo auto-layout', () => {
   test('linear chain A→B→C lays out left-to-right with widening x and same y', async () => {
     const result = await assembleDemo({
       wiring: {
-        nodes: [playNode('A', 0, 0), stateNode('B', 0, 0), stateNode('C', 0, 0)],
+        nodes: [rectangle('A', 0, 0), rectangle('B', 0, 0), rectangle('C', 0, 0)],
         connectors: [connector('A', 'B'), connector('B', 'C')],
       },
     });
@@ -122,7 +133,7 @@ describe('assembleDemo auto-layout', () => {
   test('connectors are long enough to fit label text (>= ~120px between rectangles)', async () => {
     const result = await assembleDemo({
       wiring: {
-        nodes: [playNode('A', 0, 0), stateNode('B', 0, 0)],
+        nodes: [rectangle('A', 0, 0), rectangle('B', 0, 0)],
         connectors: [connector('A', 'B')],
       },
     });
@@ -138,10 +149,10 @@ describe('assembleDemo auto-layout', () => {
     const result = await assembleDemo({
       wiring: {
         nodes: [
-          playNode('P', 0, 0),
-          stateNode('C1', 0, 0),
-          stateNode('C2', 0, 0),
-          stateNode('C3', 0, 0),
+          stateRectangle('P', 0, 0),
+          rectangle('C1', 0, 0),
+          rectangle('C2', 0, 0),
+          rectangle('C3', 0, 0),
         ],
         connectors: [connector('P', 'C1'), connector('P', 'C2'), connector('P', 'C3')],
       },
@@ -164,10 +175,10 @@ describe('assembleDemo auto-layout', () => {
     const result = await assembleDemo({
       wiring: {
         nodes: [
-          playNode('A1', 0, 0),
-          stateNode('A2', 0, 0),
-          playNode('B1', 0, 0),
-          stateNode('B2', 0, 0),
+          stateRectangle('A1', 0, 0),
+          rectangle('A2', 0, 0),
+          rectangle('B1', 0, 0),
+          rectangle('B2', 0, 0),
         ],
         connectors: [connector('A1', 'A2'), connector('B1', 'B2')],
       },
@@ -186,7 +197,7 @@ describe('assembleDemo auto-layout', () => {
   test('cycles do not crash and produce a layered layout', async () => {
     const result = await assembleDemo({
       wiring: {
-        nodes: [playNode('A', 0, 0), stateNode('B', 0, 0), stateNode('C', 0, 0)],
+        nodes: [rectangle('A', 0, 0), rectangle('B', 0, 0), rectangle('C', 0, 0)],
         // A -> B -> C -> A
         connectors: [connector('A', 'B'), connector('B', 'C'), connector('C', 'A')],
       },
@@ -207,10 +218,10 @@ describe('assembleDemo auto-layout', () => {
     const result = await assembleDemo({
       wiring: {
         nodes: [
-          playNode('A', 11, 23),
-          stateNode('B', 17, 41),
-          stateNode('C', 23, 59),
-          stateNode('D', 29, 77),
+          stateRectangle('A', 11, 23),
+          rectangle('B', 17, 41),
+          rectangle('C', 23, 59),
+          rectangle('D', 29, 77),
         ],
         connectors: [connector('A', 'B'), connector('B', 'C'), connector('A', 'D')],
       },
@@ -225,19 +236,21 @@ describe('assembleDemo auto-layout', () => {
     const result = await assembleDemo({
       wiring: {
         nodes: [
-          playNode('A', 0, 0),
-          stateNode('B', 0, 0),
+          rectangle('A', 0, 0),
+          rectangle('B', 0, 0),
           {
             id: 'note',
-            type: 'shapeNode',
+            // Flat-types refactor: sticky is now a top-level type tag.
+            // isFloatingAnnotation gates on the type itself.
+            type: 'sticky',
             position: { x: -1200, y: -720 },
-            data: { shape: 'sticky', label: 'Reminder' },
+            data: { label: 'Reminder' },
           },
           {
             id: 'caption',
-            type: 'shapeNode',
+            type: 'text',
             position: { x: 1440, y: 600 },
-            data: { shape: 'text', label: 'caption' },
+            data: { label: 'caption' },
           },
         ],
         connectors: [connector('A', 'B')],
@@ -257,10 +270,10 @@ describe('assembleDemo auto-layout', () => {
     const result = await assembleDemo({
       wiring: {
         nodes: [
-          playNode('P', 0, 0),
-          stateNode('top', 0, -500),
-          stateNode('mid', 0, 0),
-          stateNode('bot', 0, 500),
+          stateRectangle('P', 0, 0),
+          rectangle('top', 0, -500),
+          rectangle('mid', 0, 0),
+          rectangle('bot', 0, 500),
         ],
         connectors: [connector('P', 'top'), connector('P', 'mid'), connector('P', 'bot')],
       },

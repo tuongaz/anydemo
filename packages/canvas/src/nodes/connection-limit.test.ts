@@ -11,25 +11,25 @@ import { join } from 'node:path';
 //   • <ReactFlow isValidConnection={fn}> — vetoes connections at gesture time
 // `connectionLimit` is forbidden everywhere. `isValidConnection` is forbidden
 // in the per-node renderers (where adding it would re-introduce per-node
-// count gating); demo-canvas.tsx is allowed to use it ONLY for node-type-
-// level rejection — US-004 wires it to reject text-shape endpoints (pure
+// count gating); seeflow-canvas.tsx is allowed to use it ONLY for node-type-
+// level rejection — US-004 wires it to reject text endpoints (pure
 // annotations are never connectable). The text-only invariant is verified
-// positively by the US-004 runtime tests in demo-canvas.test.tsx.
+// positively by the US-004 runtime tests in seeflow-canvas.test.tsx.
 const repoRoot = join(import.meta.dir, '..', '..', '..', '..');
 const noConnectionLimit = [
-  'packages/canvas/src/nodes/shape-node.tsx',
-  'packages/canvas/src/nodes/play-node.tsx',
-  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/rectangle-node.tsx',
+  'packages/canvas/src/nodes/geometric-node.tsx',
   'packages/canvas/src/nodes/icon-node.tsx',
   'packages/canvas/src/nodes/image-node.tsx',
+  'packages/canvas/src/nodes/html-node.tsx',
   'packages/canvas/src/components/seeflow-canvas.tsx',
 ];
 const noIsValidConnection = [
-  'packages/canvas/src/nodes/shape-node.tsx',
-  'packages/canvas/src/nodes/play-node.tsx',
-  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/rectangle-node.tsx',
+  'packages/canvas/src/nodes/geometric-node.tsx',
   'packages/canvas/src/nodes/icon-node.tsx',
   'packages/canvas/src/nodes/image-node.tsx',
+  'packages/canvas/src/nodes/html-node.tsx',
 ];
 
 describe('US-015: no per-handle connection limit', () => {
@@ -48,16 +48,15 @@ describe('US-015: no per-handle connection limit', () => {
 });
 
 // US-025: every custom node renderer must forward NodeProps.isConnectable to
-// every <Handle> so the per-node `connectable: false` set in demo-canvas
+// every <Handle> so the per-node `connectable: false` set in seeflow-canvas
 // buildNode actually gates connection-start. xyflow's Handle defaults
 // `isConnectable = true` — if a renderer omits the prop, the Handle stays
 // hit-testable as a connection origin regardless of node.connectable, defeating
 // the gate. Static-text fence on each renderer source is sufficient; any new
 // custom node added to this list inherits the same check.
 const nodeRenderers = [
-  'packages/canvas/src/nodes/shape-node.tsx',
-  'packages/canvas/src/nodes/play-node.tsx',
-  'packages/canvas/src/nodes/state-node.tsx',
+  'packages/canvas/src/nodes/rectangle-node.tsx',
+  'packages/canvas/src/nodes/geometric-node.tsx',
   'packages/canvas/src/nodes/icon-node.tsx',
   'packages/canvas/src/nodes/image-node.tsx',
 ];

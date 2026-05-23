@@ -9,7 +9,7 @@ import {
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
-import type { GeometricNodeData, GeometricNodeType as GeometricKind } from '../types.ts';
+import type { GeometricNodeType as GeometricKind, GeometricNodeData } from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
 import { useResizeGesture } from './use-resize-gesture.ts';

@@ -79,7 +79,7 @@ export const buildUploadingOverride = (args: {
   dims: { width: number; height: number };
   originalFilename: string;
 }): Partial<FlowNode> => ({
-  type: 'imageNode',
+  type: 'image',
   position: args.position,
   data: {
     path: '',
@@ -99,7 +99,7 @@ export const buildUploadedOverride = (args: {
   originalFilename: string;
   lastUsed?: Partial<NodeStylePatch>;
 }): Partial<FlowNode> => ({
-  type: 'imageNode',
+  type: 'image',
   data: buildUploadedImageData(args),
 });
 
@@ -111,7 +111,7 @@ export const buildFailedOverride = (args: {
   originalFilename: string;
   message: string;
 }): Partial<FlowNode> => ({
-  type: 'imageNode',
+  type: 'image',
   position: args.position,
   data: {
     path: '',
@@ -164,7 +164,7 @@ export const performImageDropUpload = async (
   const data = buildUploadedImageData({ path, dims, originalFilename, lastUsed });
   const payload: NodeCreateInput = {
     id: nodeId,
-    type: 'imageNode',
+    type: 'image',
     position,
     data,
   };

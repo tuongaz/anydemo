@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per queue (or per exchange-binding pair when the
+- One node (`type:'rectangle'`) per queue (or per exchange-binding pair when the
   codebase emphasises routing). Don't model the exchange separately
   unless the topology fan-out is the story.
 - Mirror the queue node next to each consumer for readability

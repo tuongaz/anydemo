@@ -59,27 +59,27 @@ describe('createRestAdapter (US-024)', () => {
       stubResponse({
         ok: true,
         id: 'server-id',
-        node: { id: 'server-id', type: 'shapeNode', position: { x: 10, y: 20 } },
+        node: { id: 'server-id', type: 'rectangle', position: { x: 10, y: 20 } },
       }),
     );
     const adapter = createRestAdapter({ baseUrl: '', flowId: 'demo-42', fetch: impl });
 
     const result = await adapter.createNode({
-      type: 'shapeNode',
+      type: 'rectangle',
       position: { x: 10, y: 20 },
-      data: { shape: 'rectangle' },
+      data: { name: 'Hello' },
     });
 
     expect(result.id).toBe('server-id');
-    expect(result.node).toEqual({ id: 'server-id', type: 'shapeNode', position: { x: 10, y: 20 } });
+    expect(result.node).toEqual({ id: 'server-id', type: 'rectangle', position: { x: 10, y: 20 } });
     expect(calls).toHaveLength(1);
     expect(calls[0]?.url).toBe('/api/flows/demo-42/nodes');
     expect(calls[0]?.method).toBe('POST');
     expect(calls[0]?.headers?.['content-type']).toBe('application/json');
     expect(JSON.parse(String(calls[0]?.body))).toEqual({
-      type: 'shapeNode',
+      type: 'rectangle',
       position: { x: 10, y: 20 },
-      data: { shape: 'rectangle' },
+      data: { name: 'Hello' },
     });
   });
 

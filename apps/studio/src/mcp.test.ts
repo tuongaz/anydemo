@@ -377,7 +377,8 @@ describe('seeflow_get_flow_graph', () => {
         ...VALID_DEMO.nodes,
         {
           id: 'shape-1',
-          type: 'rectangle', data: { name: 'note', detail: '# secrets' },
+          type: 'rectangle',
+          data: { name: 'note', detail: '# secrets' },
         },
         { id: 'html-1', type: 'html', data: { html: '<p>also secret</p>' } },
       ],
@@ -421,7 +422,8 @@ describe('seeflow_get_node', () => {
       await callTool(app, 'seeflow_add_node', {
         flowId: reg.id,
         node: {
-          type: 'rectangle', data: { name: 'A', detail: '# inlined body' },
+          type: 'rectangle',
+          data: { name: 'A', detail: '# inlined body' },
         },
       }),
     ) as { id: string };
@@ -630,7 +632,8 @@ describe('seeflow_add_node', () => {
     const envelope = await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
       node: {
-        type: 'rectangle', data: { name: 'Note A' },
+        type: 'rectangle',
+        data: { name: 'Note A' },
       },
     });
     const body = expectOk(envelope) as { ok: boolean; id: string };
@@ -676,7 +679,8 @@ describe('seeflow_add_node', () => {
       flowId: reg.id,
       node: {
         id: 'with-detail',
-        type: 'rectangle', data: { detail: 'hello' },
+        type: 'rectangle',
+        data: { detail: 'hello' },
       },
     });
     expect(expectOk(envelope)).toMatchObject({ ok: true });
@@ -697,7 +701,8 @@ describe('seeflow_add_node', () => {
       flowId: reg.id,
       node: {
         id: 'no-detail',
-        type: 'rectangle', data: { },
+        type: 'rectangle',
+        data: {},
       },
     });
 
@@ -781,7 +786,7 @@ describe('seeflow_patch_node + detail externalization', () => {
 
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'n1', type: 'rectangle', data: { } },
+      node: { id: 'n1', type: 'rectangle', data: {} },
     });
     await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
@@ -805,7 +810,8 @@ describe('seeflow_patch_node + detail externalization', () => {
       flowId: reg.id,
       node: {
         id: 'n1',
-        type: 'rectangle', data: { detail: 'starts non-empty' },
+        type: 'rectangle',
+        data: { detail: 'starts non-empty' },
       },
     });
     await callTool(app, 'seeflow_patch_node', {
@@ -848,7 +854,8 @@ describe('seeflow_delete_node', () => {
       flowId: reg.id,
       node: {
         id: 'gone',
-        type: 'rectangle', data: { detail: 'bye' },
+        type: 'rectangle',
+        data: { detail: 'bye' },
       },
     });
     const folder = join(repoPath, 'nodes', 'gone');
@@ -988,7 +995,10 @@ describe('seeflow_patch_node', () => {
         'cornerRadius',
         'width',
         'height',
-        'shape',
+        // Flat-types refactor: `type` replaces `shape` for retype operations
+        // (the discriminator IS the variant; NodePatchBody.type takes any of
+        // the 12 NodeTypeSchema values).
+        'type',
       ]),
     );
     const required = tool?.inputSchema?.required as string[];
@@ -1094,11 +1104,11 @@ describe('seeflow_patch_node', () => {
     expect(expectError(envelope)).toContain('Invalid patch_node arguments');
   });
 
-  // Regression: NodePatchBodySchema.shape used to be a hard-coded 4-value enum
-  // (rectangle/ellipse/sticky/text). After ShapeKindSchema grew the
-  // illustrative variants (database, server, user, queue, cloud), patching to
-  // any of them silently failed at the Zod parse before any IO. Lock the
-  // current enum widening so the next drift caught here is a real one.
+  // Regression: under the flat-types refactor, retyping is via NodePatchBody.type
+  // (the discriminator IS the variant). NodePatchBodySchema accepts the full
+  // 12-tag NodeTypeSchema; this test pins the 5 illustrative geometric
+  // variants (database/server/user/queue/cloud) so a future schema split
+  // narrowing the allowed retype set surfaces here.
   it('accepts the illustrative shape variants (database/server/user/queue/cloud)', async () => {
     const shapeDemo = {
       version: 2,
@@ -1113,14 +1123,14 @@ describe('seeflow_patch_node', () => {
       const envelope = await callTool(app, 'seeflow_patch_node', {
         flowId: reg.id,
         nodeId: 'shape-a',
-        shape: next,
+        type: next,
       });
       expect(expectOk(envelope)).toEqual({ ok: true });
 
       const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
-        nodes: Array<{ id: string; data: { shape: string } }>;
+        nodes: Array<{ id: string; type: string }>;
       };
-      expect(onDisk.nodes.find((n) => n.id === 'shape-a')?.data.shape).toBe(next);
+      expect(onDisk.nodes.find((n) => n.id === 'shape-a')?.type).toBe(next);
     }
   });
 
@@ -1151,11 +1161,16 @@ describe('seeflow_patch_node', () => {
     const { demoFile, reg } = await registerFixture(app);
     const before = readFileSync(demoFile, 'utf8');
 
-    // Empty name still trips ResolvedFlowSchema after merge (name optional in schema, but '' is the clear-on-serialize signal — the merge strips it, which the test below relies on).
+    // Under the flat-types refactor, `name` is optional on every variant —
+    // the legacy "empty name" rejection no longer applies. Retype the
+    // rectangle to `image` without a `path` in the same patch; the merge
+    // succeeds and the post-merge ResolvedFlowSchema reparse surfaces it
+    // as a badSchema error (because image requires path under
+    // `nodes/<id>/`).
     const envelope = await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
       nodeId: 'api-checkout',
-      name: '',
+      type: 'image',
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
@@ -1487,7 +1502,7 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'n1', type: 'rectangle', data: { name: 'A'} },
+        { id: 'n1', type: 'rectangle', data: { name: 'A' } },
         { id: 'n2', type: 'ellipse', data: { name: 'B', detail: 'd2' } },
         { id: 'n3', type: 'html', data: { html: '<p>hi</p>' } },
       ],
@@ -1573,8 +1588,8 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'a', type: 'rectangle', data: { name: 'A'} },
-        { id: 'b', type: 'rectangle', data: { name: 'B'} },
+        { id: 'a', type: 'rectangle', data: { name: 'A' } },
+        { id: 'b', type: 'rectangle', data: { name: 'B' } },
       ],
       connectors: [{ source: 'a', target: 'never-added' }],
     });
@@ -1590,7 +1605,7 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { type: 'rectangle', data: { name: 'A'} },
+        { type: 'rectangle', data: { name: 'A' } },
         // type:'image' without `path` — post-mutation parse rejects.
         { type: 'image', data: { name: 'B' } },
       ],
@@ -1605,8 +1620,8 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'dupe', type: 'rectangle', data: { name: 'A'} },
-        { id: 'dupe', type: 'ellipse', data: { name: 'B'} },
+        { id: 'dupe', type: 'rectangle', data: { name: 'A' } },
+        { id: 'dupe', type: 'ellipse', data: { name: 'B' } },
       ],
     });
     expect(expectError(envelope)).toContain('Duplicate nodes id in batch');
@@ -1631,12 +1646,12 @@ describe('seeflow_add_bulk', () => {
     const { reg } = await registerFixture(app);
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'taken', type: 'rectangle', data: { name: 'seed'} },
+      node: { id: 'taken', type: 'rectangle', data: { name: 'seed' } },
     });
 
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
-      nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X'} }],
+      nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X' } }],
     });
     expect(expectError(envelope)).toContain('Node id already exists');
   });
@@ -1652,7 +1667,7 @@ describe('seeflow_add_bulk', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: 'does-not-exist',
-      nodes: [{ type: 'rectangle', data: { name: 'A'} }],
+      nodes: [{ type: 'rectangle', data: { name: 'A' } }],
     });
     expect(expectError(envelope)).toBe('unknown demo');
   });

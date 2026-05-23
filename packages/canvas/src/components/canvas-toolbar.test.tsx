@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import * as React from 'react';
-import type { CanvasMode, ShapeKind } from '../types.ts';
+import type { CanvasMode, GeometricNodeType } from '../types.ts';
 import { CanvasToolbar, TOOLBAR_MODES, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 
 // Bun runs apps/web tests without a DOM. The hook-shim pattern (also used by
@@ -116,10 +116,10 @@ describe('CanvasToolbar', () => {
   describe('US-010: Database illustrative-shape palette entry', () => {
     it('includes a Database entry in TOOLBAR_SHAPES', () => {
       // The illustrative-shape entry must be registered alongside the other
-      // shapes so drag-create produces a `shapeNode` with
-      // `data.shape: 'database'`. Pinning the registry (not just the rendered
-      // button) so the drop-on-pane popover (US-015) and any other consumer of
-      // TOOLBAR_SHAPES picks the entry up automatically.
+      // shapes so drag-create produces a node with `type: 'database'`. Pinning
+      // the registry (not just the rendered button) so the drop-on-pane
+      // popover (US-015) and any other consumer of TOOLBAR_SHAPES picks the
+      // entry up automatically.
       const entry = TOOLBAR_SHAPES.find((s) => s.shape === 'database');
       expect(entry).toBeDefined();
       expect(entry?.label).toBe('Database');
@@ -305,7 +305,7 @@ describe('CanvasToolbar', () => {
       // asserting that it renders here would require walking arbitrary props.
       // Pin the shape tiles instead.
       const tree = callToolbar({ onPickIcon: () => {} });
-      const primaryShapes: ShapeKind[] = ['rectangle', 'ellipse', 'sticky', 'text'];
+      const primaryShapes: GeometricNodeType[] = ['rectangle', 'ellipse', 'sticky', 'text'];
       for (const shape of primaryShapes) {
         expect(findElement(tree, testIdEquals(`toolbar-shape-${shape}`))).not.toBeNull();
       }
@@ -437,7 +437,7 @@ describe('CanvasToolbar', () => {
       expect(findElement(tree, testIdEquals('toolbar-mode-select'))).not.toBeNull();
       expect(findElement(tree, testIdEquals('toolbar-mode-hand'))).not.toBeNull();
       // Every shape affordance is gone.
-      const primaries: ShapeKind[] = ['rectangle', 'ellipse', 'sticky', 'text'];
+      const primaries: GeometricNodeType[] = ['rectangle', 'ellipse', 'sticky', 'text'];
       for (const shape of primaries) {
         expect(findElement(tree, testIdEquals(`toolbar-shape-${shape}`))).toBeNull();
       }

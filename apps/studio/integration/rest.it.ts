@@ -111,9 +111,9 @@ async function patchJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
+async function seedRectangleNodes(flowId: string, ids: string[]): Promise<void> {
   const res = await postJson(`/api/flows/${flowId}/bulk`, {
-    nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
+    nodes: ids.map((id) => ({ id, type: 'rectangle', data: {} })),
   });
   expect(res.status).toBe(200);
 }
@@ -225,12 +225,12 @@ describe('integration: REST — flow lifecycle', () => {
       const name = uniqueFlowId('graph-flow');
       const created = await createProject(name);
 
-      // Add a shapeNode with detail through the standard write path so
+      // Add a rectangle node with detail through the standard write path so
       // detail.md is externalized; the graph endpoint should still hide it.
       await postJson(`/api/flows/${created.id}/nodes`, {
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'note', shape: 'rectangle', detail: '# secret body' },
+        type: 'rectangle',
+        data: { name: 'note', detail: '# secret body' },
       });
 
       const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/graph`);
@@ -253,8 +253,8 @@ describe('integration: REST — flow lifecycle', () => {
 
       await postJson(`/api/flows/${created.id}/nodes`, {
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'note', shape: 'rectangle', detail: '# inlined body' },
+        type: 'rectangle',
+        data: { name: 'note', detail: '# inlined body' },
       });
 
       const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/shape-1`);
@@ -410,8 +410,8 @@ describe('integration: REST — nodes', () => {
     it('adds a single node and persists to flow.json', async () => {
       const created = await createProject(uniqueFlowId('node-add'));
       const res = await postJson(`/api/flows/${created.id}/nodes`, {
-        type: 'shapeNode',
-        data: { shape: 'rectangle', name: 'Note' },
+        type: 'rectangle',
+        data: { name: 'Note' },
       });
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -425,8 +425,7 @@ describe('integration: REST — nodes', () => {
       const onDisk = await readFlowJson(created.slug);
       expect(onDisk.nodes).toHaveLength(1);
       expect(onDisk.nodes[0]?.id).toBe(body.id);
-      expect(onDisk.nodes[0]?.type).toBe('shapeNode');
-      expect(onDisk.nodes[0]?.data?.shape).toBe('rectangle');
+      expect(onDisk.nodes[0]?.type).toBe('rectangle');
       expect(onDisk.nodes[0]?.data?.name).toBe('Note');
     });
   });
@@ -436,9 +435,9 @@ describe('integration: REST — nodes', () => {
       const created = await createProject(uniqueFlowId('flow-bulk'));
       const res = await postJson(`/api/flows/${created.id}/bulk`, {
         nodes: [
-          { id: 'b1', type: 'shapeNode', data: { shape: 'rectangle', name: 'B1' } },
-          { id: 'b2', type: 'shapeNode', data: { shape: 'ellipse', name: 'B2' } },
-          { id: 'b3', type: 'shapeNode', data: { shape: 'sticky', name: 'B3' } },
+          { id: 'b1', type: 'rectangle', data: { name: 'B1' } },
+          { id: 'b2', type: 'ellipse', data: { name: 'B2' } },
+          { id: 'b3', type: 'sticky', data: { name: 'B3' } },
         ],
         // Connector references nodes from THIS batch — proves transactional shape.
         connectors: [{ id: 'b1-to-b2', source: 'b1', target: 'b2' }],
@@ -464,8 +463,8 @@ describe('integration: REST — nodes', () => {
       const created = await createProject(uniqueFlowId('node-patch'));
       const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
         id: 'p1',
-        type: 'shapeNode',
-        data: { shape: 'rectangle', name: 'Original' },
+        type: 'rectangle',
+        data: { name: 'Original' },
       });
       expect(addRes.status).toBe(200);
 
@@ -476,8 +475,9 @@ describe('integration: REST — nodes', () => {
       const onDisk = await readFlowJson(created.slug);
       const node = onDisk.nodes.find((n) => n.id === 'p1');
       expect(node?.data?.name).toBe('Updated');
-      // The non-patched field still survives the round-trip.
-      expect(node?.data?.shape).toBe('rectangle');
+      // The discriminator survives the partial patch — type IS the kind
+      // under the flat schema, so no nested key needs to round-trip.
+      expect(node?.type).toBe('rectangle');
     });
   });
 
@@ -489,8 +489,8 @@ describe('integration: REST — nodes', () => {
       const created = await createProject(uniqueFlowId('node-position'));
       await postJson(`/api/flows/${created.id}/nodes`, {
         id: 'pos1',
-        type: 'shapeNode',
-        data: { shape: 'rectangle' },
+        type: 'rectangle',
+        data: {},
       });
 
       const res = await patchJson(`/api/flows/${created.id}/nodes/pos1/position`, {
@@ -510,7 +510,7 @@ describe('integration: REST — nodes', () => {
   describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
     it('moves a node within flow.nodes[] (toFront)', async () => {
       const created = await createProject(uniqueFlowId('node-order'));
-      await seedShapeNodes(created.id, ['a', 'b', 'c']);
+      await seedRectangleNodes(created.id, ['a', 'b', 'c']);
 
       const res = await patchJson(`/api/flows/${created.id}/nodes/a/order`, { op: 'toFront' });
       expect(res.status).toBe(200);
@@ -524,7 +524,7 @@ describe('integration: REST — nodes', () => {
   describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     it('removes the node and cascades adjacent connectors in one write', async () => {
       const created = await createProject(uniqueFlowId('node-delete'));
-      await seedShapeNodes(created.id, ['a', 'b']);
+      await seedRectangleNodes(created.id, ['a', 'b']);
       const connRes = await postJson(`/api/flows/${created.id}/bulk`, {
         connectors: [
           { id: 'a-b', source: 'a', target: 'b' },
@@ -551,7 +551,7 @@ describe('integration: REST — connectors', () => {
   describe('POST /api/flows/:id/connectors', () => {
     it('adds a single connector and persists to flow.json', async () => {
       const created = await createProject(uniqueFlowId('conn-add'));
-      await seedShapeNodes(created.id, ['a', 'b']);
+      await seedRectangleNodes(created.id, ['a', 'b']);
 
       const res = await postJson(`/api/flows/${created.id}/connectors`, {
         id: 'c1',
@@ -576,7 +576,7 @@ describe('integration: REST — connectors', () => {
   describe('PATCH /api/flows/:id/connectors/:connId', () => {
     it('partial-merges into the connector', async () => {
       const created = await createProject(uniqueFlowId('conn-patch'));
-      await seedShapeNodes(created.id, ['a', 'b']);
+      await seedRectangleNodes(created.id, ['a', 'b']);
       await postJson(`/api/flows/${created.id}/connectors`, {
         id: 'c1',
         source: 'a',
@@ -599,7 +599,7 @@ describe('integration: REST — connectors', () => {
   describe('DELETE /api/flows/:id/connectors/:connId', () => {
     it('removes the connector from flow.json (nodes are untouched)', async () => {
       const created = await createProject(uniqueFlowId('conn-delete'));
-      await seedShapeNodes(created.id, ['a', 'b']);
+      await seedRectangleNodes(created.id, ['a', 'b']);
       await postJson(`/api/flows/${created.id}/connectors`, {
         id: 'c1',
         source: 'a',
@@ -619,19 +619,123 @@ describe('integration: REST — connectors', () => {
   });
 });
 
+// US-006: per-type REST coverage. Each test exercises POST /nodes (create)
+// + PATCH /nodes/:id (merge) for one of the four discriminator boundaries the
+// AC calls out — a geometric type (database), image, html, icon — through
+// the REST surface. Together they pin that the studio's HTTP layer accepts
+// the flat-tag payloads and persists per-type required fields.
+describe('integration: REST — per-type create + patch (geometric + image + html + icon)', () => {
+  it("database (non-rectangle geometric): create → patch description → on-disk type stays 'database'", async () => {
+    const created = await createProject(uniqueFlowId('rest-rt-database'));
+
+    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      id: 'db1',
+      type: 'database',
+      data: { name: 'Orders DB' },
+    });
+    expect(addRes.status).toBe(200);
+
+    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/db1`, {
+      description: 'Primary store',
+    });
+    expect(patchRes.status).toBe(200);
+
+    const onDisk = await readFlowJson(created.slug);
+    const node = onDisk.nodes.find((n) => n.id === 'db1');
+    expect(node?.type).toBe('database');
+    expect(node?.data?.name).toBe('Orders DB');
+    expect(node?.data?.description).toBe('Primary store');
+  });
+
+  it('image: create with nodes/<id>/-relative path → patch alt → required `path` survives', async () => {
+    const created = await createProject(uniqueFlowId('rest-rt-image'));
+
+    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      id: 'img1',
+      type: 'image',
+      // image's required `path` must start with `nodes/<id>/` per the
+      // ResolvedFlowSchema superRefine — the node folder owns its cleanup.
+      data: { path: 'nodes/img1/cover.png', alt: 'cover' },
+    });
+    expect(addRes.status).toBe(200);
+
+    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/img1`, {
+      alt: 'updated cover',
+    });
+    expect(patchRes.status).toBe(200);
+
+    const onDisk = await readFlowJson(created.slug);
+    const node = onDisk.nodes.find((n) => n.id === 'img1');
+    expect(node?.type).toBe('image');
+    expect(node?.data?.path).toBe('nodes/img1/cover.png');
+    expect(node?.data?.alt).toBe('updated cover');
+  });
+
+  it('html: create with inline html → patch html content → externalizes to view.html', async () => {
+    const created = await createProject(uniqueFlowId('rest-rt-html'));
+
+    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      id: 'h1',
+      type: 'html',
+      data: { name: 'Markup', html: '<p>first</p>' },
+    });
+    expect(addRes.status).toBe(200);
+
+    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/h1`, {
+      html: '<p>second</p>',
+    });
+    expect(patchRes.status).toBe(200);
+
+    // patchNodeImpl externalizes html to nodes/<id>/view.html; the
+    // single-node GET inlines it back into data.html on read.
+    const getRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/h1`);
+    expect(getRes.status).toBe(200);
+    const body = (await getRes.json()) as {
+      node: { type: string; data: { html?: string } };
+    };
+    expect(body.node.type).toBe('html');
+    expect(body.node.data.html).toBe('<p>second</p>');
+  });
+
+  it('icon: create with required `icon` glyph → patch alt → required `icon` survives', async () => {
+    const created = await createProject(uniqueFlowId('rest-rt-icon'));
+
+    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      id: 'i1',
+      type: 'icon',
+      data: { icon: 'box', name: 'Box' },
+    });
+    expect(addRes.status).toBe(200);
+
+    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/i1`, {
+      alt: 'a labelled box',
+    });
+    expect(patchRes.status).toBe(200);
+
+    const onDisk = await readFlowJson(created.slug);
+    const node = onDisk.nodes.find((n) => n.id === 'i1');
+    expect(node?.type).toBe('icon');
+    expect(node?.data?.icon).toBe('box');
+    expect(node?.data?.alt).toBe('a labelled box');
+  });
+});
+
 describe('integration: REST — runtime (play / emit / SSE)', () => {
   describe('POST /api/flows/:id/play/:nodeId', () => {
-    // Seed a playNode with a scriptPath that resolves under the node folder.
-    // addNodeImpl externalizes `detail` to <repoPath>/nodes/<id>/detail.md,
-    // which creates the node directory; we then drop a tiny scripts/play.ts
-    // beside it so resolveScript's realpath check passes. The script exits 0
-    // and prints a JSON line so runPlay parses it as the body.
+    // Seed a type:'rectangle' node carrying a playAction capability whose
+    // scriptPath resolves under the node folder. addNodeImpl externalizes
+    // `detail` to <repoPath>/nodes/<id>/detail.md, which creates the node
+    // directory; we then drop a tiny scripts/play.ts beside it so
+    // resolveScript's realpath check passes. The script exits 0 and prints
+    // a JSON line so runPlay parses it as the body. Under the flat schema,
+    // playAction is a capability valid on every node type — rectangle is the
+    // canonical host because it draws the play-button chrome.
     it('spawns the node script, returns runId, and broadcasts node:done over SSE', async () => {
       const created = await createProject(uniqueFlowId('play-node'));
       const nodeId = 'play-it-1';
       const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
         id: nodeId,
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'Play',
           stateSource: { kind: 'request' },
@@ -765,15 +869,19 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
           nodes: [
             {
               id: 'ext-1',
-              type: 'shapeNode',
-              data: { shape: 'rectangle', name: 'External' },
+              type: 'rectangle',
+              data: { name: 'External' },
             },
           ],
           connectors: [],
         };
         writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
 
-        const reload = await sse.waitFor((e) => e.event === 'flow:reload', 3_000);
+        // fs.watch reload events can take a few seconds under host load (the
+        // orchestrator runs this concurrently with the e2e Docker container);
+        // 8s gives the watcher debounce + reparse + SSE broadcast generous
+        // headroom without slowing down green runs.
+        const reload = await sse.waitFor((e) => e.event === 'flow:reload', 8_000);
         const parsed = JSON.parse(reload.data) as {
           valid?: boolean;
           flow?: { name?: string; nodes?: Array<{ id: string }> };
@@ -788,4 +896,140 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       }
     });
   });
+});
+
+// US-009: full 12-tag create → patch → delete round-trip through the REST
+// surface. Earlier per-type blocks above cover database / image / html / icon
+// individually; this table-driven test fences the rest of the matrix
+// (rectangle / ellipse / sticky / text / server / user / queue / cloud) so
+// every variant survives an add+patch+delete via /api/flows/:id/nodes.
+describe('integration: REST — round-trip every one of the 12 type tags', () => {
+  interface PerTypeCase {
+    type: string;
+    createData: Record<string, unknown>;
+    // Patch body — must use a key present in NodePatchBodySchema. `description`
+    // works for every type since the field lives in NodeSemanticBaseShape.
+    patchBody: Record<string, unknown>;
+    assertPatched: (data: Record<string, unknown>) => void;
+  }
+
+  const cases: PerTypeCase[] = [
+    {
+      type: 'rectangle',
+      createData: { name: 'r' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'ellipse',
+      createData: { name: 'e' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'sticky',
+      createData: { name: 's' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'text',
+      createData: { name: 't' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'database',
+      createData: { name: 'db' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'server',
+      createData: { name: 'svr' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'user',
+      createData: { name: 'u' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'queue',
+      createData: { name: 'q' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'cloud',
+      createData: { name: 'c' },
+      patchBody: { description: 'updated' },
+      assertPatched: (d) => expect(d.description).toBe('updated'),
+    },
+    {
+      type: 'image',
+      // image's required `path` must start with `nodes/<id>/` per the
+      // ResolvedFlowSchema superRefine — the on-disk cleanup contract.
+      createData: { path: 'nodes/n1/cover.png' },
+      patchBody: { alt: 'a caption' },
+      assertPatched: (d) => {
+        expect(d.path).toBe('nodes/n1/cover.png');
+        expect(d.alt).toBe('a caption');
+      },
+    },
+    {
+      type: 'html',
+      createData: { html: '<p>first</p>' },
+      patchBody: { html: '<p>second</p>' },
+      assertPatched: () => {
+        // html is externalized to nodes/<id>/view.html on write and inlined
+        // back on the per-node GET. Asserted via the single-node endpoint in
+        // the per-block test above; here we just confirm the patch succeeded.
+      },
+    },
+    {
+      type: 'icon',
+      createData: { icon: 'shopping-cart' },
+      patchBody: { alt: 'a cart' },
+      assertPatched: (d) => {
+        expect(d.icon).toBe('shopping-cart');
+        expect(d.alt).toBe('a cart');
+      },
+    },
+  ];
+
+  for (const c of cases) {
+    it(`${c.type}: create → patch → delete round-trip via REST`, async () => {
+      const created = await createProject(uniqueFlowId(`rest-rt-12-${c.type}`));
+      // Use 'n1' for the seed id so the image fixture's path matches the
+      // node id (the ResolvedFlowSchema superRefine requires path to start
+      // with `nodes/<id>/`).
+      const nodeId = 'n1';
+
+      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+        id: nodeId,
+        type: c.type,
+        data: c.createData,
+      });
+      expect(addRes.status).toBe(200);
+
+      const patchRes = await patchJson(`/api/flows/${created.id}/nodes/${nodeId}`, c.patchBody);
+      expect(patchRes.status).toBe(200);
+
+      const onDisk = await readFlowJson(created.slug);
+      const node = onDisk.nodes.find((n) => n.id === nodeId);
+      expect(node?.type).toBe(c.type);
+      c.assertPatched((node?.data ?? {}) as Record<string, unknown>);
+
+      const delRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/${nodeId}`, {
+        method: 'DELETE',
+      });
+      expect(delRes.status).toBe(200);
+
+      const finalDisk = await readFlowJson(created.slug);
+      expect(finalDisk.nodes.find((n) => n.id === nodeId)).toBeUndefined();
+    });
+  }
 });

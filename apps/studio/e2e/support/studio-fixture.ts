@@ -49,9 +49,12 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
   writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flow, null, 2)}\n`);
   writeFileSync(join(repoPath, 'style.json'), `${JSON.stringify(style, null, 2)}\n`);
 
-  // playNode's playAction.scriptPath is relative to `<repoPath>/nodes/<id>/`.
-  // resolveScript realpaths the target, so the script file MUST exist before
-  // any /play call. The fixture pins the playNode id to `n1`.
+  // The rectangle node's playAction.scriptPath is relative to
+  // `<repoPath>/nodes/<id>/`. resolveScript realpaths the target, so the
+  // script file MUST exist before any /play call. The fixture pins the
+  // playable rectangle id to `n1` — under the flat schema, rectangle is
+  // the sole renderer that draws capability chrome, and playAction lives
+  // as an optional data field rather than encoded in the type tag.
   const noopDest = join(repoPath, 'nodes', 'n1', 'scripts', 'noop.ts');
   mkdirSync(dirname(noopDest), { recursive: true });
   copyFileSync(FIXTURE_NOOP_PATH, noopDest);
@@ -107,3 +110,38 @@ export const test = base.extend<EmptyTestArgs, WorkerFixtures>({
 });
 
 export { expect } from '@playwright/test';
+
+// US-009: per-test flow registration helper. Lets new e2e tests seed
+// arbitrary flow shapes (12-tag render matrix, capability-chrome-rectangle-
+// only fences, draw-mode interactions) on top of the shared worker-scoped
+// studio without polluting the kitchen-sink fixture. Each call provisions
+// a new project dir + slug under the studio's home so flows stay isolated.
+export async function registerFlow(
+  studio: StudioHandle,
+  slug: string,
+  resolvedFlow: unknown,
+  options: { name?: string } = {},
+): Promise<RegisteredFlow> {
+  const repoPath = join(studio.home, slug);
+  mkdirSync(repoPath, { recursive: true });
+  const resolved = ResolvedFlowSchema.parse(resolvedFlow);
+  const { flow, style } = splitFlow(resolved);
+  writeFileSync(join(repoPath, 'flow.json'), `${JSON.stringify(flow, null, 2)}\n`);
+  writeFileSync(join(repoPath, 'style.json'), `${JSON.stringify(style, null, 2)}\n`);
+
+  const res = await fetch(`${studio.baseURL}/api/flows/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: options.name ?? slug,
+      repoPath,
+      flowPath: 'flow.json',
+    }),
+  });
+  if (res.status !== 200) {
+    const detail = await res.text();
+    throw new Error(`Failed to register flow ${slug}: ${res.status} ${detail}`);
+  }
+  const { id, slug: registeredSlug } = (await res.json()) as RegisterResponse;
+  return { id, slug: registeredSlug, repoPath };
+}

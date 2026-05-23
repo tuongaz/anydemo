@@ -6,7 +6,14 @@ import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
 import { useUndoStack } from '@/hooks/use-undo-stack';
-import type { Connector, EdgePin, FlowDetail, FlowNode, FlowSummary, ShapeKind } from '@/lib/api';
+import type {
+  Connector,
+  EdgePin,
+  FlowDetail,
+  FlowNode,
+  FlowSummary,
+  GeometricNodeType,
+} from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { shortId } from '@/lib/short-id';
@@ -565,7 +572,7 @@ export function DemoView({
     ],
   );
 
-  // htmlNode-only: flip the node back to auto-size mode. The studio's
+  // type:'html'-only: flip the node back to auto-size mode. The studio's
   // mergeNodeUpdates strips width/height server-side per the autoSize
   // invariant, so we don't need to send explicit width/height clears.
   const onHtmlNodeFitToContent = useCallback(
@@ -1286,9 +1293,9 @@ export function DemoView({
       const node = demoNodes?.find((n) => n.id === nodeId);
       const prevName = node && 'name' in node.data ? node.data.name : undefined;
       // Undo must restore the previous name including the "no name" case.
-      // Required-name nodes (playNode/stateNode) always have a non-empty
-      // prevName; optional-name variants (icon/shape/group/html) treat '' as
-      // clear.
+      // Rectangle nodes with capability chrome (playAction/statusAction)
+      // typically carry a non-empty prevName; optional-name variants (icon/
+      // other geometric/html) treat '' as clear.
       const undoName = prevName ?? '';
       setNodeOverride(nodeId, { data: { name } } as Partial<FlowNode>);
       setEditError(null);
@@ -1402,7 +1409,7 @@ export function DemoView({
   );
 
   const onCreateShapeNode = useCallback(
-    (shape: ShapeKind, position: Position, dims: { width: number; height: number }) => {
+    (shape: GeometricNodeType, position: Position, dims: { width: number; height: number }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
       // Generate the id client-side so the optimistic override and the
@@ -1417,7 +1424,7 @@ export function DemoView({
       const data = buildNewShapeData(shape, dims, getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node);
       const payload = {
         id,
-        type: 'shapeNode' as const,
+        type: shape,
         position,
         data,
       };
@@ -1427,7 +1434,7 @@ export function DemoView({
       // size on the next paint.
       const optimistic: FlowNode = {
         id,
-        type: 'shapeNode',
+        type: shape,
         position,
         data,
       };
@@ -1457,7 +1464,7 @@ export function DemoView({
     [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
-  // US-013 (icon picker): commit a new iconNode at the picked viewport
+  // US-013 (icon picker): commit a new type:'icon' node at the picked viewport
   // position. Mirrors `onCreateShapeNode`: client-side id, optimistic override
   // so the node appears before the SSE echo arrives, single undo entry pushed
   // from the .then so it binds to the server-issued id. The new node is also
@@ -1474,13 +1481,13 @@ export function DemoView({
       };
       const payload = {
         id,
-        type: 'iconNode' as const,
+        type: 'icon' as const,
         position,
         data,
       };
       const optimistic: FlowNode = {
         id,
-        type: 'iconNode',
+        type: 'icon',
         position,
         data,
       };
@@ -1508,12 +1515,12 @@ export function DemoView({
     [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
   );
 
-  // Commit a new htmlNode at the drop position from the toolbar's HTML block
-  // tile. Mirrors `onCreateShapeNode`: client-side id, optimistic override so
-  // the node appears before the SSE echo arrives, single undo entry pushed
+  // Commit a new type:'html' node at the drop position from the toolbar's HTML
+  // block tile. Mirrors `onCreateShapeNode`: client-side id, optimistic override
+  // so the node appears before the SSE echo arrives, single undo entry pushed
   // from the .then so it binds to the server-issued id.
   //
-  // Body sent is `{ id, type: 'htmlNode', position, data: {} }` — empty data
+  // Body sent is `{ id, type: 'html', position, data: {} }` — empty data
   // means no inline HTML; the server externalizes (an empty) `view.html` per
   // the per-node-files spec and persists `data.html = "file://nodes/<id>/view.html"`.
   // The renderer reads resolved content from `data.html` on the SSE echo.
@@ -1524,13 +1531,13 @@ export function DemoView({
       const id = `node-${shortId()}`;
       const payload = {
         id,
-        type: 'htmlNode' as const,
+        type: 'html' as const,
         position: args.position,
         data: {},
       };
       const optimistic: FlowNode = {
         id,
-        type: 'htmlNode',
+        type: 'html',
         position: args.position,
         data: {},
       };
@@ -1552,7 +1559,7 @@ export function DemoView({
         .catch((err) => {
           dropNodeOverride(id);
           setEditError(err instanceof Error ? err.message : String(err));
-          console.error('createNode (htmlNode) failed', err);
+          console.error("createNode (type:'html') failed", err);
         });
     },
     [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
@@ -1705,7 +1712,7 @@ export function DemoView({
         if (flowId && adapter) {
           const targetId = iconPicker.nodeId;
           const node = demoNodes?.find((n) => n.id === targetId);
-          const prevIcon = node?.type === 'iconNode' ? node.data.icon : undefined;
+          const prevIcon = node?.type === 'icon' ? node.data.icon : undefined;
           setNodeOverride(targetId, { data: { icon: name } } as Partial<FlowNode>);
           setEditError(null);
           markMutation();
@@ -1863,7 +1870,7 @@ export function DemoView({
     }: {
       sourceNodeId: string;
       position: Position;
-      shape: ShapeKind;
+      shape: GeometricNodeType;
     }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
@@ -1878,7 +1885,7 @@ export function DemoView({
       const shapeData = buildNewShapeData(shape, dims, lastUsed.node);
       const nodePayload = {
         id: newNodeId,
-        type: 'shapeNode' as const,
+        type: shape,
         position,
         data: shapeData,
       };
@@ -1894,7 +1901,7 @@ export function DemoView({
       // the result before the round-trip resolves.
       const optimisticNode: FlowNode = {
         id: newNodeId,
-        type: 'shapeNode',
+        type: shape,
         position,
         data: shapeData,
       };

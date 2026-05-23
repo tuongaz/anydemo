@@ -55,12 +55,12 @@ async function restCreateProject(name: string): Promise<CreateProjectResponse> {
   return (await res.json()) as CreateProjectResponse;
 }
 
-async function seedShapeNodesViaRest(flowId: string, ids: string[]): Promise<void> {
+async function seedRectangleNodesViaRest(flowId: string, ids: string[]): Promise<void> {
   const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/bulk`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
+      nodes: ids.map((id) => ({ id, type: 'rectangle', data: {} })),
     }),
   });
   expect(res.status).toBe(200);
@@ -168,8 +168,8 @@ describe('integration: MCP — read-only tools', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'note', shape: 'rectangle', detail: '# inside' },
+        type: 'rectangle',
+        data: { name: 'note', detail: '# inside' },
       }),
     });
 
@@ -191,8 +191,8 @@ describe('integration: MCP — read-only tools', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+        type: 'rectangle',
+        data: { name: 'A', detail: '# inlined body' },
       }),
     });
 
@@ -222,13 +222,22 @@ describe('integration: MCP — read-only tools', () => {
       nodeResult,
     );
     expect(node.name).toBe('node');
+    // Flat 12-tag set: 9 geometric (rectangle/ellipse/sticky/text/database/
+    // server/user/queue/cloud) + image + html + icon. The schema-catalog
+    // returns one entry per FlowNodeSchema variant — visual kind is the type.
     expect(Object.keys(node.schemas).sort()).toEqual([
-      'htmlNode',
-      'iconNode',
-      'imageNode',
-      'playNode',
-      'shapeNode',
-      'stateNode',
+      'cloud',
+      'database',
+      'ellipse',
+      'html',
+      'icon',
+      'image',
+      'queue',
+      'rectangle',
+      'server',
+      'sticky',
+      'text',
+      'user',
     ]);
     expect(Array.isArray(node.notes)).toBe(true);
 
@@ -351,12 +360,12 @@ describe('integration: MCP — node tools', () => {
 
     const result = await client.callTool('seeflow_add_node', {
       flowId: seeded.id,
-      node: { type: 'shapeNode', data: { shape: 'rectangle', name: 'MCP' } },
+      node: { type: 'rectangle', data: { name: 'MCP' } },
     });
     const data = okJson<{ ok: boolean; id: string; node: Record<string, unknown> }>(result);
     expect(data.ok).toBe(true);
     expect(data.id).toMatch(/^node-/);
-    expect((data.node as { type?: string }).type).toBe('shapeNode');
+    expect((data.node as { type?: string }).type).toBe('rectangle');
   });
 
   it('seeflow_add_bulk appends nodes + connectors atomically in one transactional write', async () => {
@@ -365,8 +374,8 @@ describe('integration: MCP — node tools', () => {
     const result = await client.callTool('seeflow_add_bulk', {
       flowId: seeded.id,
       nodes: [
-        { id: 'm1', type: 'shapeNode', data: { shape: 'rectangle' } },
-        { id: 'm2', type: 'shapeNode', data: { shape: 'ellipse' } },
+        { id: 'm1', type: 'rectangle', data: {} },
+        { id: 'm2', type: 'ellipse', data: {} },
       ],
       // Connector references nodes from the same batch — only valid because the
       // merged-graph parse runs once after both arrays land.
@@ -384,7 +393,7 @@ describe('integration: MCP — node tools', () => {
 
   it('seeflow_patch_node partial-merges into node.data', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-patch-node'));
-    await seedShapeNodesViaRest(seeded.id, ['p1']);
+    await seedRectangleNodesViaRest(seeded.id, ['p1']);
 
     const result = await client.callTool('seeflow_patch_node', {
       flowId: seeded.id,
@@ -394,18 +403,21 @@ describe('integration: MCP — node tools', () => {
     const data = okJson<{ ok: boolean }>(result);
     expect(data.ok).toBe(true);
 
-    // Re-fetch via REST and verify the merge landed.
+    // Re-fetch via REST and verify the merge landed. The node's flat
+    // discriminator `type` (still 'rectangle') is preserved across the
+    // partial patch — under the flat schema the type IS the geometric kind,
+    // so no nested data field needs to round-trip the variant.
     const get = (await (await fetch(`${studio.baseURL}/api/flows/${seeded.id}`)).json()) as {
-      flow: { nodes: Array<{ id: string; data?: { name?: string; shape?: string } }> };
+      flow: { nodes: Array<{ id: string; type: string; data?: { name?: string } }> };
     };
     const node = get.flow.nodes.find((n) => n.id === 'p1');
+    expect(node?.type).toBe('rectangle');
     expect(node?.data?.name).toBe('Renamed');
-    expect(node?.data?.shape).toBe('rectangle');
   });
 
   it('seeflow_move_node updates position and echoes it', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-move-node'));
-    await seedShapeNodesViaRest(seeded.id, ['m1']);
+    await seedRectangleNodesViaRest(seeded.id, ['m1']);
 
     const result = await client.callTool('seeflow_move_node', {
       flowId: seeded.id,
@@ -420,7 +432,7 @@ describe('integration: MCP — node tools', () => {
 
   it('seeflow_reorder_node moves a node within flow.nodes[] (toFront)', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-reorder'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b', 'c']);
+    await seedRectangleNodesViaRest(seeded.id, ['a', 'b', 'c']);
 
     const result = await client.callTool('seeflow_reorder_node', {
       flowId: seeded.id,
@@ -439,7 +451,7 @@ describe('integration: MCP — node tools', () => {
 
   it('seeflow_delete_node removes the node and cascades adjacent connectors', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-delete-node'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b']);
+    await seedRectangleNodesViaRest(seeded.id, ['a', 'b']);
     // Seed a connector touching 'a' so the cascade has something to clean up.
     const connRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
@@ -469,7 +481,7 @@ describe('integration: MCP — node tools', () => {
 describe('integration: MCP — connector tools', () => {
   it('seeflow_add_connector appends a single connector', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-add-conn'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b']);
+    await seedRectangleNodesViaRest(seeded.id, ['a', 'b']);
 
     const result = await client.callTool('seeflow_add_connector', {
       flowId: seeded.id,
@@ -482,7 +494,7 @@ describe('integration: MCP — connector tools', () => {
 
   it('seeflow_patch_connector partial-merges into the connector', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-patch-conn'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b']);
+    await seedRectangleNodesViaRest(seeded.id, ['a', 'b']);
     const addRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -507,7 +519,7 @@ describe('integration: MCP — connector tools', () => {
 
   it('seeflow_delete_connector removes a connector (nodes preserved)', async () => {
     const seeded = await restCreateProject(uniqueFlowId('mcp-delete-conn'));
-    await seedShapeNodesViaRest(seeded.id, ['a', 'b']);
+    await seedRectangleNodesViaRest(seeded.id, ['a', 'b']);
     const addRes = await fetch(`${studio.baseURL}/api/flows/${seeded.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -527,5 +539,156 @@ describe('integration: MCP — connector tools', () => {
     };
     expect(get.flow.connectors).toEqual([]);
     expect(get.flow.nodes.map((n) => n.id)).toEqual(['a', 'b']);
+  });
+});
+
+// US-006: per-type round-trip coverage for the four discriminator boundaries
+// the AC calls out — a geometric type (database), image, html, icon — through
+// the MCP tool surface. Each case exercises add → patch → delete and verifies
+// the per-type required field (path / html / icon) survives the round-trip.
+describe('integration: MCP — per-type round-trip (geometric + image + html + icon)', () => {
+  it("database (geometric): add → patch description → delete; type stays 'database' across the merge", async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-rt-database'));
+
+    const addResult = await client.callTool('seeflow_add_node', {
+      flowId: seeded.id,
+      node: { id: 'db1', type: 'database', data: { name: 'Orders DB' } },
+    });
+    const added = okJson<{ ok: boolean; id: string; node: { type: string } }>(addResult);
+    expect(added.ok).toBe(true);
+    expect(added.id).toBe('db1');
+    expect(added.node.type).toBe('database');
+
+    const patchResult = await client.callTool('seeflow_patch_node', {
+      flowId: seeded.id,
+      nodeId: 'db1',
+      description: 'Primary store',
+    });
+    expect(okJson<{ ok: boolean }>(patchResult).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${seeded.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string; type: string; data?: { description?: string } }> };
+    };
+    const node = get.flow.nodes.find((n) => n.id === 'db1');
+    expect(node?.type).toBe('database');
+    expect(node?.data?.description).toBe('Primary store');
+
+    const delResult = await client.callTool('seeflow_delete_node', {
+      flowId: seeded.id,
+      nodeId: 'db1',
+    });
+    expect(okJson<{ ok: boolean }>(delResult).ok).toBe(true);
+
+    const after = (await (await fetch(`${studio.baseURL}/api/flows/${seeded.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string }> };
+    };
+    expect(after.flow.nodes.find((n) => n.id === 'db1')).toBeUndefined();
+  });
+
+  it('image: add with nodes/<id>/-relative path → patch alt → delete; required `path` survives the merge', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-rt-image'));
+
+    const addResult = await client.callTool('seeflow_add_node', {
+      flowId: seeded.id,
+      // image's required `path` must start with `nodes/<id>/` per the
+      // ResolvedFlowSchema superRefine — the node folder owns its cleanup.
+      node: { id: 'img1', type: 'image', data: { path: 'nodes/img1/cover.png', alt: 'cover' } },
+    });
+    const added = okJson<{ ok: boolean; id: string; node: { type: string } }>(addResult);
+    expect(added.ok).toBe(true);
+    expect(added.node.type).toBe('image');
+
+    const patchResult = await client.callTool('seeflow_patch_node', {
+      flowId: seeded.id,
+      nodeId: 'img1',
+      alt: 'updated cover',
+    });
+    expect(okJson<{ ok: boolean }>(patchResult).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${seeded.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string; type: string; data?: { path?: string; alt?: string } }> };
+    };
+    const node = get.flow.nodes.find((n) => n.id === 'img1');
+    expect(node?.type).toBe('image');
+    expect(node?.data?.path).toBe('nodes/img1/cover.png');
+    expect(node?.data?.alt).toBe('updated cover');
+
+    const delResult = await client.callTool('seeflow_delete_node', {
+      flowId: seeded.id,
+      nodeId: 'img1',
+    });
+    expect(okJson<{ ok: boolean }>(delResult).ok).toBe(true);
+  });
+
+  it('html: add with inline html → patch html content → delete; html externalizes to view.html', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-rt-html'));
+
+    const addResult = await client.callTool('seeflow_add_node', {
+      flowId: seeded.id,
+      node: {
+        id: 'h1',
+        type: 'html',
+        data: { name: 'Markup', html: '<p>first</p>' },
+      },
+    });
+    const added = okJson<{ ok: boolean; id: string; node: { type: string } }>(addResult);
+    expect(added.ok).toBe(true);
+    expect(added.node.type).toBe('html');
+
+    const patchResult = await client.callTool('seeflow_patch_node', {
+      flowId: seeded.id,
+      nodeId: 'h1',
+      html: '<p>second</p>',
+    });
+    expect(okJson<{ ok: boolean }>(patchResult).ok).toBe(true);
+
+    const getNodeResult = await client.callTool('seeflow_get_node', {
+      flowId: seeded.id,
+      nodeId: 'h1',
+    });
+    const node = okJson<{ node: { type: string; data: { html?: string } } }>(getNodeResult);
+    expect(node.node.type).toBe('html');
+    // patchNodeImpl externalizes html to nodes/<id>/view.html; seeflow_get_node
+    // inlines the file content back into data.html on read.
+    expect(node.node.data.html).toBe('<p>second</p>');
+
+    const delResult = await client.callTool('seeflow_delete_node', {
+      flowId: seeded.id,
+      nodeId: 'h1',
+    });
+    expect(okJson<{ ok: boolean }>(delResult).ok).toBe(true);
+  });
+
+  it('icon: add with required `icon` glyph → patch alt → delete; required `icon` survives', async () => {
+    const seeded = await restCreateProject(uniqueFlowId('mcp-rt-icon'));
+
+    const addResult = await client.callTool('seeflow_add_node', {
+      flowId: seeded.id,
+      node: { id: 'i1', type: 'icon', data: { icon: 'box', name: 'Box' } },
+    });
+    const added = okJson<{ ok: boolean; id: string; node: { type: string } }>(addResult);
+    expect(added.ok).toBe(true);
+    expect(added.node.type).toBe('icon');
+
+    const patchResult = await client.callTool('seeflow_patch_node', {
+      flowId: seeded.id,
+      nodeId: 'i1',
+      alt: 'a labelled box',
+    });
+    expect(okJson<{ ok: boolean }>(patchResult).ok).toBe(true);
+
+    const get = (await (await fetch(`${studio.baseURL}/api/flows/${seeded.id}`)).json()) as {
+      flow: { nodes: Array<{ id: string; type: string; data?: { icon?: string; alt?: string } }> };
+    };
+    const node = get.flow.nodes.find((n) => n.id === 'i1');
+    expect(node?.type).toBe('icon');
+    expect(node?.data?.icon).toBe('box');
+    expect(node?.data?.alt).toBe('a labelled box');
+
+    const delResult = await client.callTool('seeflow_delete_node', {
+      flowId: seeded.id,
+      nodeId: 'i1',
+    });
+    expect(okJson<{ ok: boolean }>(delResult).ok).toBe(true);
   });
 });

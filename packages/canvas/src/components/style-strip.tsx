@@ -44,11 +44,11 @@ export interface NodeStylePatch {
    * backward compat with older demos that stored their text color there. */
   textColor?: ColorToken;
   cornerRadius?: number;
-  /** iconNode-only: stroke color token. Lands at data.color. */
+  /** type:'icon'-only: stroke color token. Lands at data.color. */
   color?: ColorToken;
-  /** iconNode-only: glyph stroke width. Lands at data.strokeWidth. */
+  /** type:'icon'-only: glyph stroke width. Lands at data.strokeWidth. */
   strokeWidth?: number;
-  /** iconNode-only: accessible alt text. Lands at data.alt. */
+  /** type:'icon'-only: accessible alt text. Lands at data.alt. */
   alt?: string;
 }
 
@@ -82,8 +82,8 @@ export interface StyleStripProps {
   onStyleConnectorPreview?: (connId: string, patch: ConnectorStylePatch) => void;
   /**
    * US-022: open the icon picker in replace mode against the selected
-   * iconNode. Same callback the iconNode's double-click handler invokes
-   * (US-016). Plumbed from demo-view via demo-canvas. Absent → the
+   * type:'icon' node. Same callback the icon node's double-click handler
+   * invokes (US-016). Plumbed from demo-view via demo-canvas. Absent → the
    * Change-icon button hides.
    */
   onRequestIconReplace?: (nodeId: string) => void;
@@ -169,31 +169,30 @@ export function StyleStrip({
   // value; the value is purely cosmetic for the trigger swatch/icon.
   const firstNode = nodes[0];
   const firstConnector = connectors[0];
-  // iconNode is unboxed (no border/background/cornerRadius/fontSize). Filter
-  // it out for the shared border/font/corner controls — the iconNode-only
+  // type:'icon' is unboxed (no border/background/cornerRadius/fontSize).
+  // Filter it out for the shared border/font/corner controls — the icon-only
   // color picker handled below writes `data.color` via a dedicated apply.
   const visualNodes = nodes.filter(
-    (n): n is Exclude<FlowNode, { type: 'iconNode' }> => n.type !== 'iconNode',
+    (n): n is Exclude<FlowNode, { type: 'icon' }> => n.type !== 'icon',
   );
   const firstVisualNode = visualNodes[0];
-  // US-014: when every selected node is an iconNode the strip collapses to
+  // US-014: when every selected node is type:'icon' the strip collapses to
   // a single icon-color swatch (icons have no border/background/font/corner
-  // to control). Mixed selections (iconNode + shape) hide the icon picker
-  // and let the shared controls drive the non-icon nodes only.
-  const pureIconNode = pureNode && nodes.every((n) => n.type === 'iconNode');
-  const firstIconNode = pureIconNode
-    ? (nodes.find((n) => n.type === 'iconNode') as Extract<FlowNode, { type: 'iconNode' }>)
+  // to control). Mixed selections (icon + other) hide the icon picker and
+  // let the shared controls drive the non-icon nodes only.
+  const pureIconType = pureNode && nodes.every((n) => n.type === 'icon');
+  const firstIconNode = pureIconType
+    ? (nodes.find((n) => n.type === 'icon') as Extract<FlowNode, { type: 'icon' }>)
     : undefined;
-  // US-014: dedicated image-node branch. Image borders use `borderWidth` (1–8),
-  // NOT shape nodes' open-ended `borderSize`.
+  // US-014: dedicated image branch. Image borders use `borderWidth` (1–8),
+  // NOT the geometric nodes' open-ended `borderSize`.
   // Multi-image selections fan out across every selected node so the user can
   // restyle a batch of screenshots in one pass.
-  const pureImageNode = pureNode && nodes.every((n) => n.type === 'imageNode');
-  // Text-shape simplification only applies to pure-node selections of a single
-  // text shape. Mixed selections (text-shape node + connector) still need the
+  const pureImageType = pureNode && nodes.every((n) => n.type === 'image');
+  // Text-type simplification only applies to pure-node selections of a single
+  // type:'text' node. Mixed selections (text + connector) still need the
   // shared border controls visible, so the guard is gated on `pureNode`.
-  const isTextShape =
-    pureNode && firstNode?.type === 'shapeNode' && firstNode.data.shape === 'text';
+  const isTextShape = pureNode && firstNode?.type === 'text';
 
   // Resolve current visual state. For pure-connector selections, the
   // border-color trigger reflects the connector's color; for pure-node
@@ -305,8 +304,8 @@ export function StyleStrip({
   const applyConnectorDirection = (direction: ConnectorDirection) => {
     for (const c of connectors) onStyleConnector(c.id, { direction });
   };
-  // US-014: iconNode stroke color writes to data.color via the same
-  // onStyleNode path the shapeNode color picker uses — no new update plumbing.
+  // US-014: type:'icon' stroke color writes to data.color via the same
+  // onStyleNode path the geometric color picker uses — no new update plumbing.
   const applyIconColor = (token: ColorToken) => {
     for (const n of nodes) onStyleNode(n.id, { color: token });
   };
@@ -331,10 +330,10 @@ export function StyleStrip({
   const colorTokenPrefix =
     pureConnector || isTextShape ? 'style-tab-color' : 'style-tab-border-color';
 
-  if (pureIconNode) {
-    // US-022: Change-icon button reuses the same callback the iconNode's
+  if (pureIconType) {
+    // US-022: Change-icon button reuses the same callback the icon node's
     // double-click handler invokes (US-016) — `firstIconNode.id` is the
-    // representative target; for a multi-iconNode selection the button is
+    // representative target; for a multi-icon-node selection the button is
     // hidden because "change icon" is ambiguous across the set.
     const showChangeIcon = !!onRequestIconReplace && nodes.length === 1 && !!firstIconNode;
     const onChangeIconClick = () => {
@@ -383,13 +382,13 @@ export function StyleStrip({
     );
   }
 
-  if (pureImageNode) {
-    // US-014: image-node border editor. Border color + style + width (1–8) —
-    // the same three controls the group editor exposes. Edits dispatch via
+  if (pureImageType) {
+    // US-014: image border editor. Border color + style + width (1–8) — the
+    // same three controls the group editor exposes. Edits dispatch via
     // onStyleNode (per-node fan-out for multi-image selections), reusing the
     // existing PATCH+undo path. Image nodes also keep their cornerRadius
     // control (already supported by the renderer's containerStyle).
-    const firstImage = nodes[0] as Extract<FlowNode, { type: 'imageNode' }> | undefined;
+    const firstImage = nodes[0] as Extract<FlowNode, { type: 'image' }> | undefined;
     const imageBorderColor: ColorToken = firstImage?.data.borderColor ?? 'default';
     const imageBorderStyle = (firstImage?.data.borderStyle ?? 'solid') as
       | 'solid'

@@ -56,7 +56,7 @@ node lives in `<projectPath>/nodes/<nodeId>/`:
 └── nodes/
     └── <nodeId>/
         ├── detail.md          # auto-externalized from data.detail
-        ├── view.html          # auto-externalized from data.html (htmlNode)
+        ├── view.html          # auto-externalized from data.html (type:'html')
         └── scripts/
             ├── play.ts
             └── status.ts
@@ -110,60 +110,89 @@ This section is the **decision guide** — what each variant is for and
 when to pick it. Pair it with the live schema before composing any
 patch body.
 
-### `playNode`
+The schema is **flat**: `type` is the visual shape (one of 12 tags),
+and `playAction` / `statusAction` / `stateSource` are top-level data
+fields valid on every type. There is no separate "play node" or "state
+node" tag — those are now `type:'rectangle'` with a `playAction` /
+`statusAction` capability on `data`.
 
-Has a clickable Play button. Use for entities that are *triggers* the
-audience can act on (HTTP endpoints, cron-fire surfaces, click sources,
-fixture producers).
+### Capabilities — top-level data fields on every type
 
-**RULE — detail on important nodes:** Every `playNode` and `stateNode`
-that carries meaningful behaviour MUST include a `detail` field. The
+| Capability | What it does | Renders chrome on |
+|---|---|---|
+| `data.playAction` | Adds a clickable Play button that runs the configured action. | `type:'rectangle'` only in v1 |
+| `data.statusAction` | Adds a status pill driven by a long-running probe script. | `type:'rectangle'` only in v1 |
+| `data.stateSource` | Informational metadata about where state comes from. Pair with `statusAction` when relevant — optional everywhere. | (no chrome) |
+
+**Renderer phasing — capability chrome is rectangle-only in v1.** Every
+type accepts capabilities at the schema + MCP layer (they round-trip
+through `seeflow_patch_node` and `seeflow_get_node` regardless of
+type), but the canvas only draws play buttons / status pills on
+`type:'rectangle'`. A `database` carrying a `playAction` is legal —
+the action just won't have a button. **If you want a button or status
+pill to appear, use `type:'rectangle'`.** The non-rectangle chrome
+design is a downstream exercise.
+
+### `rectangle`
+
+The named card with a header (name + optional icon), description, body,
+and capability chrome. **Use for every important node** — HTTP
+endpoints, services, workers, queues / DBs / topics that need a status
+pill, anything the audience triggers or watches. This is the workhorse
+type.
+
+**RULE — detail on important nodes:** Every `rectangle` that carries
+`playAction` or `statusAction` MUST include a `detail` field. The
 content renders as **markdown** — use it to explain what the node does,
 what it emits, why it matters, sample payloads, links to source files,
-or anything an audience member would ask. Decorative `shapeNode` /
-`iconNode` entries are exempt.
+or anything an audience member would ask. Decorative shapes (sticky,
+text, icon) are exempt.
 
-**RULE — icon on important nodes:** Every `playNode` and `stateNode`
-SHOULD include an icon — a kebab-case Lucide icon name that visually
-echoes the node's role. Renders left of the name. Decorative; not a
-status indicator. Run `$SEEFLOW schema node` for the field shape.
+**RULE — icon on important nodes:** Every `rectangle` that carries
+`playAction` or `statusAction` SHOULD include an icon — a kebab-case
+Lucide icon name (`server`, `database`, `radio-tower`, `cog`,
+`list-ordered`) that visually echoes the node's role. Renders left of
+the name. Decorative; not a status indicator. Run `$SEEFLOW schema
+node` for the field shape.
 
-### `stateNode`
+### `ellipse`, `sticky`, `text`, `database`, `server`, `user`, `queue`, `cloud`
 
-No mandatory Play; audience watches but doesn't trigger. Pair with a
-status action when the node has live state worth probing. For the exact
-field shape, run `$SEEFLOW schema node`.
-
-### `shapeNode`
-
-Decorative / illustrative. No actions or live state. For the legal
-shape values, run `$SEEFLOW schema node` and inspect the `shapeNode`
-variant's enum.
+The eight other geometric shapes. Same data schema as `rectangle`
+(every capability field accepted, every visual base field accepted) —
+the renderer just draws the matching shape. In v1 they draw **no
+capability chrome**, so a `statusAction` on a `database` is persisted
+but the status pill won't appear. Pick these when the visual shape
+carries the meaning and you don't need the button / pill — purely
+decorative resources, illustrative annotations, sticky-note callouts.
 
 A few placement rules that don't live in the schema:
 
-- **Human / actor shape** belongs only when the human action is itself
-  part of the demo (UX click-through, support-agent workflow). Never as
-  a generic "start" for backend / pipeline / worker / cron / webhook
+- **`user` shape** belongs only when the human action is itself part of
+  the demo (UX click-through, support-agent workflow). Never as a
+  generic "start" for backend / pipeline / worker / cron / webhook
   flows.
-- **Database / queue shapes** are decorative; use a `stateNode` when you
-  need monitoring or live status.
-- **Cloud / external shapes** stand in for SaaS whose health isn't
-  tracked. If you do want to track it, use a `stateNode` with kind
-  `external-api`.
+- **`database`, `queue`, `cloud`, `server`** are decorative resource
+  shapes. If the audience needs to see live state, switch the node to
+  `rectangle` (so the status pill renders) and set `data.icon` to the
+  matching Lucide name (`database`, `list-ordered`, `cloud`, `server`).
+- **`sticky`, `text`** are inline labels and notes. They never carry
+  capabilities in practice.
 
-### `iconNode`
+### `icon`
 
-Single Lucide glyph. Decorative only.
+Single Lucide glyph. The `data.icon` field is **required** here
+(unlike on geometric types, where it's optional decorative chrome).
+Decorative; carries no chrome in v1.
 
-### `htmlNode`
+### `html`
 
 Escape-hatch for content no curated node covers: legends, data tables,
-rich annotations, custom UI widgets. The studio externalises the content
-to `<projectPath>/nodes/<id>/view.html` and stores a `file://` ref
-in `flow.json`; the renderer injects Tailwind Play CDN (utility classes
-work) and **sanitises before painting** (strips `<script>`, `<style>`,
-`<iframe>`, `on*=` attributes, `javascript:` URLs).
+rich annotations, custom UI widgets. The studio externalises the
+`data.html` content to `<projectPath>/nodes/<id>/view.html` and stores
+a `file://` ref in `flow.json`; the renderer injects Tailwind Play CDN
+(utility classes work) and **sanitises before painting** (strips
+`<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:`
+URLs).
 
 Presentation overrides (size, colors, borders, fonts) live in
 `style.json` — studio-owned. The renderer applies defaults when
@@ -173,16 +202,86 @@ To edit the markup outside Claude, open
 `<projectPath>/nodes/<id>/view.html` directly — saves trigger a
 live reload.
 
-**When NOT to use:** If a `shapeNode` with a label, an `iconNode`, or a
-`stateNode` covers the content, prefer those — they participate in
-theming and status updates automatically.
+**When NOT to use:** If a sticky-note / text label, an `icon` glyph, or
+a `rectangle` with a status pill covers the content, prefer those —
+they participate in theming and status updates automatically.
 
-### `imageNode`
+### `image`
 
 Decorative image. Uploads land in the node's own folder
-(`<projectPath>/nodes/<id>/<filename>`); the studio's per-node
-upload endpoint enforces the path anchor and `delete_node` cascades the
-folder cleanup. For the exact field shape, run `$SEEFLOW schema node`.
+(`<projectPath>/nodes/<id>/<filename>`); the studio's per-node upload
+endpoint enforces the path anchor and `delete_node` cascades the
+folder cleanup. The `data.path` field must start with `nodes/<id>/`
+(superRefine enforced). For the exact field shape, run `$SEEFLOW
+schema node`.
+
+## Payload examples — by type
+
+Concrete `seeflow nodes:add` / `seeflow nodes:patch` payload shapes for
+each variant. Pair with `$SEEFLOW schema node` for the authoritative
+field list; the examples below illustrate the **flat-discriminator
+pattern** — `type` carries the shape; capabilities live as top-level
+data fields.
+
+```json
+// 1. rectangle with playAction + statusAction (a trigger that's also observable)
+{
+  "id": "node-Ab12cd34Ef",
+  "type": "rectangle",
+  "data": {
+    "name": "POST /orders",
+    "icon": "server",
+    "description": "Accepts a cart, creates an order, publishes order.created.",
+    "detail": "## POST /orders\n\nHTTP entry point for the pipeline.",
+    "stateSource": { "kind": "request" },
+    "playAction":  { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts",   "input": { "cart": [{ "sku": "SKU-1", "qty": 1 }] }, "timeoutMs": 15000 },
+    "statusAction":{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 }
+  }
+}
+
+// 2. non-rectangle geometric — database visual, capability persisted but no chrome in v1
+{
+  "id": "node-Gh56ij78Kl",
+  "type": "database",
+  "data": {
+    "name": "Order Store",
+    "stateSource": { "kind": "event" },
+    "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 }
+  }
+}
+
+// 3. image — path MUST start with nodes/<id>/
+{
+  "id": "node-Mn90op12Qr",
+  "type": "image",
+  "data": {
+    "path": "nodes/node-Mn90op12Qr/logo.png",
+    "alt":  "Company logo",
+    "borderWidth": 1
+  }
+}
+
+// 4. html — inline html string (studio externalises to view.html on write)
+{
+  "id": "node-St34uv56Wx",
+  "type": "html",
+  "data": {
+    "html": "<div class=\"p-4 bg-white rounded shadow\"><h3 class=\"font-bold\">Legend</h3><p>Solid = sync; dashed = async.</p></div>",
+    "autoSize": true
+  }
+}
+
+// 5. icon — `icon` field required; this variant only
+{
+  "id": "node-Yz78ab90Cd",
+  "type": "icon",
+  "data": {
+    "icon": "shield-check",
+    "color": "green-600",
+    "strokeWidth": 2
+  }
+}
+```
 
 ## Connectors
 

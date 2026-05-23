@@ -15,8 +15,10 @@ category: local-infra | storage | messaging | language
 
 Direct guidance for `seeflow-node-planner`. Two bullets max:
 
-- One `stateNode` per <thing> (bucket / topic / table / queue), not per
-  producer or consumer.
+- One node per <thing> (bucket / topic / table / queue), not per
+  producer or consumer. Use `type:'rectangle'` so the status pill
+  renders; set `data.icon` to a Lucide name that matches the resource
+  (`database`, `list-ordered`, `radio-tower`, `cloud`).
 - Duplicate the node next to each consumer when it improves readability
   (per Phase 2 abstraction rules: same `kind` + `name`, unique `id`).
 

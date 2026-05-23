@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per topic, not per publisher or subscriber. Label the
+- One node (`type:'rectangle'`) per topic, not per publisher or subscriber. Label the
   node with the topic; mention the subscription in `data.note`.
 - A subscription that fans into N workers is one consumer node — not N.
 - Duplicate the topic node next to each subscriber for readability

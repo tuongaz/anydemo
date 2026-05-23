@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per topic, not per partition. Mention the partition
+- One node (`type:'rectangle'`) per topic, not per partition. Mention the partition
   count in `data.note` when ordering matters.
 - Consumer groups are separate consumer nodes — one node per group, not
   per member.

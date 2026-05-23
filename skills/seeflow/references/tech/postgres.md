@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per database, not per table — table-level nodes
+- One node (`type:'rectangle'`) per database, not per table — table-level nodes
   fragment the canvas and hide the bigger picture.
 - Duplicate the DB node next to each consumer (same `kind` + `name`,
   unique `id`) when it improves readability.

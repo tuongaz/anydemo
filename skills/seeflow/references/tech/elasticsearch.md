@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per index, not per shard or alias.
+- One node (`type:'rectangle'`) per index, not per shard or alias.
 - Duplicate the index node next to each consumer (same `kind` +
   `name`, unique `id`) when it improves readability.
 - If the project writes to an alias, model the alias as the node.

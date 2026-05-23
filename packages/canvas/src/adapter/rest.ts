@@ -14,7 +14,7 @@ import type {
   LayoutResult,
   NodeCreateInput,
   NodePatch,
-  PlayNodeResult,
+  PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,
   UploadImageResult,
@@ -139,8 +139,13 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       return (await res.json()) as UploadImageResult;
     },
 
-    async playNode(nodeId: string): Promise<PlayNodeResult> {
-      return await requestJson<PlayNodeResult>(fetchImpl, 'POST', `${demoBase}/play/${nodeId}`, {});
+    async playAction(nodeId: string): Promise<PlayActionResult> {
+      return await requestJson<PlayActionResult>(
+        fetchImpl,
+        'POST',
+        `${demoBase}/play/${nodeId}`,
+        {},
+      );
     },
 
     async openFile(path: string): Promise<void> {

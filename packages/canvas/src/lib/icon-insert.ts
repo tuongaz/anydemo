@@ -10,16 +10,16 @@ export interface IconInsertViewport {
 }
 
 export interface IconInsertPayload {
-  type: 'iconNode';
+  type: 'icon';
   position: { x: number; y: number };
   data: { icon: string; width: number; height: number };
 }
 
 /**
- * Compute the flow-space position for a new iconNode that should land visually
- * centered on the viewport. The result is the node's top-left corner — already
- * offset by half the default icon size so the node's center matches the
- * viewport center after React Flow positions it.
+ * Compute the flow-space position for a new type:'icon' node that should land
+ * visually centered on the viewport. The result is the node's top-left corner
+ * — already offset by half the default icon size so the node's center matches
+ * the viewport center after React Flow positions it.
  */
 export function computeIconInsertPosition(
   rfInstance: IconInsertRfInstance,
@@ -36,10 +36,10 @@ export function computeIconInsertPosition(
 }
 
 /**
- * Build the full iconNode create payload (type + position + data) for the
+ * Build the full type:'icon' create payload (type + position + data) for the
  * toolbar's insert-mode pick. Separates the math + shape construction from any
- * particular dispatcher, so the same payload is shared by demo-view's
- * onCreateIconNode call site and by the unit test.
+ * particular dispatcher, so the same payload is shared by demo-view's icon
+ * insert call site and by the unit test.
  */
 export function buildIconInsertPayload(args: {
   iconName: string;
@@ -48,7 +48,7 @@ export function buildIconInsertPayload(args: {
 }): IconInsertPayload {
   const position = computeIconInsertPosition(args.rfInstance, args.viewport);
   return {
-    type: 'iconNode',
+    type: 'icon',
     position,
     data: {
       icon: args.iconName,

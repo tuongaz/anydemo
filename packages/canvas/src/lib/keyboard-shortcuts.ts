@@ -3,7 +3,7 @@
 // the dispatcher reads and returns the resolved action (or null for unrelated
 // keys). Wiring lives in `demo-view.tsx`.
 
-import type { ShapeKind } from '../types.ts';
+import type { GeometricNodeType } from '../types.ts';
 
 export type ModifierEvent = Pick<
   KeyboardEvent,
@@ -483,7 +483,7 @@ export const resolveClipboardChord = ({
 // these bindings are intentionally bare-only so they don't collide with Cmd+V
 // (paste), Cmd+D (duplicate), Shift+letter (inputs), etc. Uppercase variants
 // resolve identically (key.toLowerCase normalization).
-export type ToolShortcutResult = 'select' | 'hand' | ShapeKind | null;
+export type ToolShortcutResult = 'select' | 'hand' | GeometricNodeType | null;
 
 export const resolveToolShortcut = (e: ModifierEvent): ToolShortcutResult => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null;

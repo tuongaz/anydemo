@@ -13,7 +13,7 @@ const writeNodeFile = (root: string, nodeId: string, name: string, content: stri
 };
 
 const nodeWrap = (id: string, data: Record<string, unknown>) => ({
-  nodes: [{ id, type: 'stateNode', data }],
+  nodes: [{ id, type: 'rectangle', data }],
 });
 
 describe('resolveFileRefs', () => {
@@ -60,16 +60,16 @@ describe('resolveFileRefs', () => {
     const { resolved, refs } = resolveFileRefs(
       {
         nodes: [
-          { id: 'node-A', type: 'stateNode', data: { detail: 'file://detail.md' } },
-          { id: 'node-B', type: 'htmlNode', data: { html: 'file://view.html' } },
+          { id: 'node-A', type: 'rectangle', data: { detail: 'file://detail.md' } },
+          { id: 'node-B', type: 'html', data: { html: 'file://view.html' } },
         ],
       },
       root,
     );
     expect(resolved).toEqual({
       nodes: [
-        { id: 'node-A', type: 'stateNode', data: { detail: 'AAA' } },
-        { id: 'node-B', type: 'htmlNode', data: { html: 'BBB' } },
+        { id: 'node-A', type: 'rectangle', data: { detail: 'AAA' } },
+        { id: 'node-B', type: 'html', data: { html: 'BBB' } },
       ],
     });
     expect(refs).toEqual(['nodes/node-A/detail.md', 'nodes/node-B/view.html']);

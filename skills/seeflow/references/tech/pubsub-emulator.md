@@ -13,7 +13,7 @@ category: local-infra
 
 ## Node modelling
 
-- Model exactly as the real `google-pubsub` ref: one `stateNode` per **topic**
+- Model exactly as the real `google-pubsub` ref: one node (`type:'rectangle'`) per **topic**
   (and optionally one per **subscription** if the demo needs to show fan-out).
 - Producers and consumers stay as their own nodes; the emulator endpoint is a
   scripting concern, not a topology concern.

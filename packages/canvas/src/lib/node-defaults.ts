@@ -23,7 +23,7 @@
  * (e.g. `cornerRadius` on ellipse, `borderSize` on text) is silently dropped.
  */
 import type { NodeStylePatch } from '../components/style-strip.tsx';
-import type { ShapeKind } from '../types.ts';
+import type { GeometricNodeType } from '../types.ts';
 
 /** Default border thickness for new nodes. */
 export const NEW_NODE_BORDER_WIDTH = 1;
@@ -68,7 +68,6 @@ export interface ShapeDataDefaults {
   // (`Record<string, unknown>`) without a per-call-site cast. Every concrete
   // field below is assignable to `unknown`, so the broader type is sound.
   [key: string]: unknown;
-  shape: ShapeKind;
   width: number;
   height: number;
   borderSize?: number;
@@ -78,15 +77,16 @@ export interface ShapeDataDefaults {
 /** Build the `data` object for a freshly-created shape node. Text variant
  * skips `borderSize` so text shapes stay chromeless (US-003). Optional
  * `lastUsed` overlays the user's most recently chosen style on top of the
- * factory defaults. */
+ * factory defaults. Under the flat schema `type` IS the shape, so no
+ * `shape` field is emitted on `data` (the strict on-disk schema would
+ * reject it as an unknown key). */
 export function buildNewShapeData(
-  shape: ShapeKind,
+  shape: GeometricNodeType,
   dims: { width: number; height: number },
   lastUsed?: Partial<NodeStylePatch>,
 ): ShapeDataDefaults {
   if (shape === 'text') {
     return {
-      shape,
       width: dims.width,
       height: dims.height,
       fontSize: NEW_NODE_FONT_SIZE,
@@ -95,7 +95,6 @@ export function buildNewShapeData(
   }
   const fields = shape === 'ellipse' ? SHAPE_ELLIPSE_FIELDS : SHAPE_RECT_FIELDS;
   return {
-    shape,
     width: dims.width,
     height: dims.height,
     borderSize: NEW_NODE_BORDER_WIDTH,

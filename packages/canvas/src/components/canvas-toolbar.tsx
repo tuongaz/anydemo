@@ -16,17 +16,17 @@ import {
 import { useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { type CommandId, getCommandTooltip } from '../lib/keyboard-shortcuts.ts';
-import type { CanvasMode, ShapeKind } from '../types.ts';
+import type { CanvasMode, GeometricNodeType } from '../types.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
 
 /**
- * dataTransfer MIME-like type recognised by the canvas drop handler as an
- * htmlNode-create gesture (vs. an OS image-file drop). The toolbar no longer
- * surfaces a draggable tile for it — html nodes are now created via the
- * programmatic createNode REST endpoint (API/LLM path). Kept so the existing
- * drop branch in demo-canvas continues to compile against a single source of
- * truth for the marker literal.
+ * dataTransfer MIME-like type recognised by the canvas drop handler as a
+ * type:'html'-create gesture (vs. an OS image-file drop). The toolbar no
+ * longer surfaces a draggable tile for it — html nodes are now created via
+ * the programmatic createNode REST endpoint (API/LLM path). Kept so the
+ * existing drop branch in demo-canvas continues to compile against a single
+ * source of truth for the marker literal.
  */
 export const HTML_BLOCK_DND_TYPE = 'application/x-seeflow-create-html-block';
 
@@ -82,7 +82,7 @@ export const TOOLBAR_MODES: ToolbarModeEntry[] = [
 ];
 
 export interface ToolbarShapeEntry {
-  shape: ShapeKind;
+  shape: GeometricNodeType;
   label: string;
   /**
    * US-008: registry CommandId for the matching tool-switch entry. Drives
@@ -110,9 +110,9 @@ const SECONDARY_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
 // Illustrative shapes live behind a single "Shape" toolbar trigger that
 // opens a popover. Append-only as more illustrative shapes land.
 const ILLUSTRATIVE_SHAPES: ToolbarShapeEntry[] = [
-  // US-010: drag-create commits a shapeNode with `data.shape: 'database'`;
-  // the ghost preview in demo-canvas.tsx renders <DatabaseShape> directly
-  // (not the wrapper chrome) so the preview matches the committed visual.
+  // US-010: drag-create commits a node with `type: 'database'`; the ghost
+  // preview in demo-canvas.tsx renders <DatabaseShape> directly (not the
+  // wrapper chrome) so the preview matches the committed visual.
   { shape: 'database', label: 'Database', commandId: 'tool.database', Icon: Database },
   // US-022: rack-chassis illustrative shape, same ghost-dispatch contract as
   // Database — both consult `ILLUSTRATIVE_SHAPE_RENDERERS` for the SVG to draw.
@@ -157,7 +157,7 @@ export function CanvasToolbar({
   // the toolbar since there's no insert/replace mode duality like the icon
   // picker has.
   const [shapePickerOpen, setShapePickerOpen] = useState(false);
-  const activeShape: ShapeKind | null = mode.kind === 'draw' ? mode.shape : null;
+  const activeShape: GeometricNodeType | null = mode.kind === 'draw' ? mode.shape : null;
   const illustrativeActive =
     activeShape !== null && ILLUSTRATIVE_SHAPES.some((s) => s.shape === activeShape);
 
@@ -318,7 +318,7 @@ export function CanvasToolbar({
                   <Sticker className="sf:h-4 sf:w-4" aria-hidden="true" />
                 </button>
               }
-              // Toolbar inserts a new iconNode — "no icon" has no meaning here, so
+              // Toolbar inserts a new type:'icon' node — "no icon" has no meaning here, so
               // the picker hides the synthetic No-icon tile. With `clearable=false`
               // the picker only ever emits real names; the guard below is a
               // type narrowing for the widened `(name: string | null)` signature.

@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per database, not per table.
+- One node (`type:'rectangle'`) per database, not per table.
 - Duplicate the DB node next to each consumer for readability
   (same `kind` + `name`, unique `id`).
 

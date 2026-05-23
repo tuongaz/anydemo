@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per stream key, not per consumer or group.
+- One node (`type:'rectangle'`) per stream key, not per consumer or group.
 - Consumer groups are separate consumer nodes — one node per group.
 - Duplicate the stream node next to each consumer for readability
   (same `kind` + `name`, unique `id`).

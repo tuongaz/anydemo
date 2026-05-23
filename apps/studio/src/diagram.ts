@@ -240,9 +240,10 @@ const normalizeConnectors = (
 // Single-flow-node graphs short-circuit so callers can pin standalone
 // nodes via `layout.positions`.
 const isFloatingAnnotation = (n: Record<string, unknown>): boolean => {
-  if (n.type !== 'shapeNode') return false;
-  const shape = (n.data as { shape?: string } | undefined)?.shape;
-  return shape === 'sticky' || shape === 'text';
+  // Flat-types refactor: visual kind IS the type. The annotation shapes
+  // (sticky + text) live as top-level type tags rather than nested shape
+  // under a generic shape variant.
+  return n.type === 'sticky' || n.type === 'text';
 };
 
 const autoLayout = async (
@@ -354,12 +355,14 @@ export const validateDemo = (req: ValidateRequest): ValidateReport => {
 
   const playable = nodes.filter((n) => {
     const data = n.data as { playAction?: unknown } | undefined;
-    return n.type === 'playNode' || (n.type === 'stateNode' && data?.playAction !== undefined);
+    // Flat-types refactor: a node is playable iff it carries a playAction
+    // capability, regardless of variant.
+    return data?.playAction !== undefined;
   });
   if (tier !== 'static' && playable.length === 0) {
     issues.push({
       kind: 'tier-mismatch',
-      message: `Tier '${tier}' requires at least one playable node; found 0. Either add a playNode or set tier=static.`,
+      message: `Tier '${tier}' requires at least one playable node; found 0. Set data.playAction on a node or set tier=static.`,
     });
   }
 

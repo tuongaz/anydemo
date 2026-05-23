@@ -55,11 +55,26 @@ describe('schema-catalog', () => {
       expect(payload.notes[0]).toMatch(/source.*target.*nodes\[\]\.id/);
     });
 
-    it('node → all six variants', () => {
+    it('node → all 12 flat variants', () => {
       const payload = loadCategory('node');
       const keys = Object.keys(payload.schemas).sort();
+      // Flat-types refactor: schema-catalog returns one schema per
+      // FlowNodeSchema variant — 9 geometric tags + image + html + icon.
       expect(keys).toEqual(
-        ['htmlNode', 'iconNode', 'imageNode', 'playNode', 'shapeNode', 'stateNode'].sort(),
+        [
+          'cloud',
+          'database',
+          'ellipse',
+          'html',
+          'icon',
+          'image',
+          'queue',
+          'rectangle',
+          'server',
+          'sticky',
+          'text',
+          'user',
+        ].sort(),
       );
       for (const variantName of Object.keys(payload.schemas)) {
         const schema = payload.schemas[variantName] as Record<string, unknown>;
@@ -69,8 +84,8 @@ describe('schema-catalog', () => {
         expect(props.type).toBeDefined();
         expect(props.data).toBeDefined();
       }
-      // imageNode path prefix note must surface.
-      expect(payload.notes.some((n) => /imageNode.*path.*nodes/.test(n))).toBe(true);
+      // image path prefix note must surface.
+      expect(payload.notes.some((n) => /image.*path.*nodes/.test(n))).toBe(true);
     });
 
     it('connector → single shape', () => {
@@ -96,10 +111,10 @@ describe('schema-catalog', () => {
     it('mutating the returned payload does not affect later reads', () => {
       const first = loadCategory('node');
       first.notes.push('tampered');
-      first.schemas.playNode = { tampered: true };
+      first.schemas.rectangle = { tampered: true };
       const second = loadCategory('node');
       expect(second.notes.some((n) => n === 'tampered')).toBe(false);
-      expect((second.schemas.playNode as { type?: string })?.type).toBe('object');
+      expect((second.schemas.rectangle as { type?: string })?.type).toBe('object');
     });
   });
 

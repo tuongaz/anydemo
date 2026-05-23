@@ -4,7 +4,7 @@
   "nodes": [
     {
       "id": "n1",
-      "type": "playNode",
+      "type": "rectangle",
       "position": {
         "x": 100,
         "y": 100
@@ -14,7 +14,7 @@
         "stateSource": {
           "kind": "request"
         },
-        "description": "playNode — kitchen sink fixture trigger.",
+        "description": "type:'rectangle' — kitchen sink fixture trigger with playAction capability.",
         "playAction": {
           "kind": "script",
           "interpreter": "bun",
@@ -24,7 +24,7 @@
     },
     {
       "id": "n2",
-      "type": "stateNode",
+      "type": "database",
       "position": {
         "x": 500,
         "y": 100
@@ -34,24 +34,24 @@
         "stateSource": {
           "kind": "event"
         },
-        "description": "stateNode — kitchen sink fixture worker."
+        "description": "type:'database' — kitchen sink fixture worker (non-rectangle geometric with statusAction capability)."
       }
     },
     {
       "id": "n3",
-      "type": "shapeNode",
+      "type": "ellipse",
       "position": {
         "x": 100,
         "y": 300
       },
       "data": {
-        "shape": "rectangle",
-        "name": "Shape"
+        "name": "Shape",
+        "description": "type:'ellipse' — kitchen sink fixture geometric shape (description-only label under flat schema)."
       }
     },
     {
       "id": "n4",
-      "type": "imageNode",
+      "type": "image",
       "position": {
         "x": 500,
         "y": 300
@@ -63,19 +63,19 @@
     },
     {
       "id": "n5",
-      "type": "htmlNode",
+      "type": "html",
       "position": {
         "x": 100,
         "y": 500
       },
       "data": {
         "name": "Markup",
-        "html": "<p>Kitchen sink htmlNode</p>"
+        "html": "<p>Kitchen sink type:'html'</p>"
       }
     },
     {
       "id": "n6",
-      "type": "iconNode",
+      "type": "icon",
       "position": {
         "x": 500,
         "y": 500

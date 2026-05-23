@@ -15,7 +15,7 @@ category: local-infra
 
 - LocalStack itself is **infra glue, not a node**. Model each LocalStack-
   backed AWS service (s3 bucket, sqs queue, sns topic, dynamodb table) as its
-  own `stateNode` with the matching `kind` (`s3`, `aws-sqs`, etc.).
+  own node (`type:'rectangle'`) with the matching `kind` (`s3`, `aws-sqs`, etc.).
 - The node's play/status scripts override the AWS endpoint to point at
   `http://localhost:4566` — otherwise identical to the real-cloud refs.
 

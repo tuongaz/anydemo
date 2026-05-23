@@ -95,10 +95,7 @@ export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
-export interface GeometricNodeData
-  extends NodeSemanticBase,
-    NodeVisual,
-    NodeCapabilities {}
+export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
 
 export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
   path: string;
@@ -106,10 +103,7 @@ export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabil
   borderWidth?: number;
 }
 
-export interface IconNodeData
-  extends Omit<NodeSemanticBase, 'icon'>,
-    NodeVisual,
-    NodeCapabilities {
+export interface IconNodeData extends Omit<NodeSemanticBase, 'icon'>, NodeVisual, NodeCapabilities {
   /** Required for type:'icon' — the icon IS the visual. */
   icon: string;
   color?: ColorToken;

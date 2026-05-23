@@ -14,14 +14,18 @@ export type {
   FlowNode,
   EdgePin,
   EdgePinSide,
+  GeometricNodeData,
+  GeometricNodeType,
   HtmlNodeData,
-  HttpAction,
   IconNodeData,
-  NodeData,
+  NodeCapabilities,
   NodeDescription,
+  NodeSemanticBase,
+  NodeType,
   NodeVisual,
-  ShapeKind,
-  ShapeNodeData,
+  ScriptAction,
+  StateSource,
+  StatusAction,
   StatusReport,
   StatusReportState,
 } from '@seeflow/canvas';
@@ -211,7 +215,7 @@ export const revealProjectFile = async (
   path: string,
 ): Promise<FileActionResult> => requestFileAction(projectId, 'reveal', path);
 
-export const playNode = async (flowId: string, nodeId: string): Promise<PlayResult> => {
+export const playFlowNode = async (flowId: string, nodeId: string): Promise<PlayResult> => {
   const res = await fetch(`/api/flows/${flowId}/play/${nodeId}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },

@@ -15,20 +15,16 @@ const FIXTURE_PATH = resolve(import.meta.dir, 'fixtures/kitchen-sink.flow.json')
 const NOOP_SCRIPT_PATH = resolve(import.meta.dir, 'fixtures/scripts/noop.ts');
 
 describe('integration: fixtures — kitchen-sink', () => {
-  it('parses as a ResolvedFlow with 6 nodes (one of each type) + 4 connectors covering every kind', () => {
+  it('parses as a ResolvedFlow with 6 nodes covering the flat-type discriminator boundaries + 4 connectors', () => {
     const raw = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
     const parsed = ResolvedFlowSchema.parse(raw);
 
     expect(parsed.nodes).toHaveLength(6);
     const nodeTypes = parsed.nodes.map((n) => n.type).sort();
-    expect(nodeTypes).toEqual([
-      'htmlNode',
-      'iconNode',
-      'imageNode',
-      'playNode',
-      'shapeNode',
-      'stateNode',
-    ]);
+    // Covers rectangle (capability-carrying), a non-rectangle geometric
+    // (database, ellipse), and each of the dedicated per-type tags
+    // (image, html, icon) — one fixture per discriminator boundary.
+    expect(nodeTypes).toEqual(['database', 'ellipse', 'html', 'icon', 'image', 'rectangle']);
 
     expect(parsed.connectors).toHaveLength(4);
   });
@@ -42,14 +38,14 @@ describe('integration: fixtures — kitchen-sink', () => {
     expect(() => StyleSchema.parse(style)).not.toThrow();
   });
 
-  it('playNode scriptPath resolves to the bundled noop.ts script', () => {
+  it("type:'rectangle' fixture carries a playAction whose scriptPath points at the bundled noop.ts script", () => {
     expect(existsSync(NOOP_SCRIPT_PATH)).toBe(true);
     const raw = JSON.parse(readFileSync(FIXTURE_PATH, 'utf8'));
     const parsed = ResolvedFlowSchema.parse(raw);
-    const playNode = parsed.nodes.find((n) => n.type === 'playNode');
-    expect(playNode).toBeDefined();
-    if (playNode && playNode.type === 'playNode') {
-      expect(playNode.data.playAction.scriptPath).toBe('scripts/noop.ts');
+    const rectangle = parsed.nodes.find((n) => n.type === 'rectangle');
+    expect(rectangle).toBeDefined();
+    if (rectangle && rectangle.type === 'rectangle') {
+      expect(rectangle.data.playAction?.scriptPath).toBe('scripts/noop.ts');
     }
   });
 });

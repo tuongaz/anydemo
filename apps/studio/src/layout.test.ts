@@ -8,7 +8,7 @@ const PLAY_H = 120;
 const STICKY_W = 180;
 const STICKY_H = 180;
 
-const playNode = (id: string): LayoutNode => ({ id, type: 'rectangle' });
+const rectangle = (id: string): LayoutNode => ({ id, type: 'rectangle' });
 const stickyNode = (id: string): LayoutNode => ({ id, type: 'sticky' });
 const edge = (id: string, source: string, target: string): LayoutEdge => ({
   id,
@@ -29,14 +29,14 @@ describe('computeLayout', () => {
   });
 
   test('single connected node still gets a position', async () => {
-    const r = await computeLayout([playNode('a')], []);
+    const r = await computeLayout([rectangle('a')], []);
     expect(Object.keys(r.nodes)).toEqual(['a']);
     expect(r.connectors).toEqual({});
   });
 
   test('linear chain A→B→C lays out left-to-right with the same y', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), playNode('c')],
+      [rectangle('a'), rectangle('b'), rectangle('c')],
       [edge('e1', 'a', 'b'), edge('e2', 'b', 'c')],
     );
     const a = r.nodes.a?.position;
@@ -53,7 +53,7 @@ describe('computeLayout', () => {
   });
 
   test('layered LR leaves >=200px between sibling rectangles for label room', async () => {
-    const r = await computeLayout([playNode('a'), playNode('b')], [edge('e1', 'a', 'b')]);
+    const r = await computeLayout([rectangle('a'), rectangle('b')], [edge('e1', 'a', 'b')]);
     const a = r.nodes.a?.position;
     const b = r.nodes.b?.position;
     if (!a || !b) throw new Error('missing positions');
@@ -63,7 +63,7 @@ describe('computeLayout', () => {
 
   test('no two laid-out nodes overlap', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), playNode('c'), playNode('d')],
+      [rectangle('a'), rectangle('b'), rectangle('c'), rectangle('d')],
       [edge('e1', 'a', 'b'), edge('e2', 'a', 'c'), edge('e3', 'b', 'd'), edge('e4', 'c', 'd')],
     );
     const rects = Object.entries(r.nodes).map(([_, v]) => ({
@@ -84,7 +84,7 @@ describe('computeLayout', () => {
 
   test('disconnected components both get laid out (no (0,0) pileup)', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), playNode('x'), playNode('y')],
+      [rectangle('a'), rectangle('b'), rectangle('x'), rectangle('y')],
       [edge('e1', 'a', 'b'), edge('e2', 'x', 'y')],
     );
     const positions = Object.values(r.nodes).map((v) => v.position);
@@ -93,14 +93,14 @@ describe('computeLayout', () => {
   });
 
   test('self-loop edge does not crash', async () => {
-    const r = await computeLayout([playNode('a')], [edge('self', 'a', 'a')]);
+    const r = await computeLayout([rectangle('a')], [edge('self', 'a', 'a')]);
     expect(r.nodes.a).toBeDefined();
     expect(r.connectors.self).toBeDefined();
   });
 
   test('parallel edges between the same pair both get handle assignments', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b')],
+      [rectangle('a'), rectangle('b')],
       [edge('e1', 'a', 'b'), edge('e2', 'a', 'b')],
     );
     expect(r.connectors.e1).toBeDefined();
@@ -109,7 +109,7 @@ describe('computeLayout', () => {
 
   test('sticky and unreferenced decoratives are placed in a right-side column, not at (0,0)', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), stickyNode('note')],
+      [rectangle('a'), rectangle('b'), stickyNode('note')],
       [edge('e1', 'a', 'b')],
     );
     const a = r.nodes.a?.position;
@@ -134,7 +134,7 @@ describe('computeLayout', () => {
   });
 
   test('output is deterministic across two runs with the same input', async () => {
-    const nodes = [playNode('a'), playNode('b'), playNode('c'), playNode('d')];
+    const nodes = [rectangle('a'), rectangle('b'), rectangle('c'), rectangle('d')];
     const edges = [edge('e1', 'a', 'b'), edge('e2', 'a', 'c'), edge('e3', 'b', 'd')];
     const a = await computeLayout(nodes, edges);
     const b = await computeLayout(nodes, edges);
@@ -143,7 +143,7 @@ describe('computeLayout', () => {
 
   test('positions are integers', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), playNode('c')],
+      [rectangle('a'), rectangle('b'), rectangle('c')],
       [edge('e1', 'a', 'b'), edge('e2', 'b', 'c')],
     );
     for (const v of Object.values(r.nodes)) {
@@ -153,7 +153,7 @@ describe('computeLayout', () => {
   });
 
   test('vertical handoff (target below source) uses bottom→top handles', async () => {
-    const r = await computeLayout([playNode('a'), playNode('b')], [edge('e1', 'a', 'b')], {
+    const r = await computeLayout([rectangle('a'), rectangle('b')], [edge('e1', 'a', 'b')], {
       direction: 'DOWN',
     });
     expect(r.connectors.e1).toEqual({ sourceHandle: 'b', targetHandle: 't' });
@@ -161,7 +161,7 @@ describe('computeLayout', () => {
 
   test('connector handles vocabulary is always r|b for source and t|l for target', async () => {
     const r = await computeLayout(
-      [playNode('a'), playNode('b'), playNode('c'), playNode('d')],
+      [rectangle('a'), rectangle('b'), rectangle('c'), rectangle('d')],
       [edge('e1', 'a', 'b'), edge('e2', 'b', 'c'), edge('e3', 'c', 'd'), edge('e4', 'a', 'd')],
     );
     for (const v of Object.values(r.connectors)) {

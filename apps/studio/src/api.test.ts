@@ -22,7 +22,7 @@ const VALID_DEMO = {
   nodes: [
     {
       id: 'api-checkout',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'POST /checkout',
         stateSource: { kind: 'request' },
@@ -222,8 +222,8 @@ describe('POST /api/flows/validate', () => {
       nodes: [
         {
           id: 'box',
-          type: 'shapeNode',
-          data: { shape: 'rectangle' },
+          type: 'rectangle',
+          data: {},
         },
       ],
       connectors: [],
@@ -242,8 +242,8 @@ describe('POST /api/flows/validate', () => {
       name: 'Too big',
       nodes: Array.from({ length: 31 }, (_, i) => ({
         id: `n${i}`,
-        type: 'shapeNode',
-        data: { shape: 'rectangle' as const },
+        type: 'rectangle' as const,
+        data: {},
       })),
       connectors: [],
     };
@@ -320,7 +320,7 @@ describe('POST /api/diagram/assemble', () => {
         nodes: [
           {
             id: 'API',
-            type: 'playNode',
+            type: 'rectangle',
             position: { x: 11, y: 23 },
             data: {
               name: 'API',
@@ -330,7 +330,7 @@ describe('POST /api/diagram/assemble', () => {
           },
           {
             id: 'db',
-            type: 'stateNode',
+            type: 'rectangle',
             position: { x: 100, y: 100 },
             data: { name: 'DB', stateSource: { kind: 'request' } },
           },
@@ -389,7 +389,7 @@ describe('POST /api/layout', () => {
     nodes: [
       {
         id: 'api',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'API',
           stateSource: { kind: 'request' },
@@ -398,7 +398,7 @@ describe('POST /api/layout', () => {
       },
       {
         id: 'db',
-        type: 'stateNode',
+        type: 'rectangle',
         data: { name: 'DB', stateSource: { kind: 'event' } },
       },
     ],
@@ -461,8 +461,8 @@ describe('POST /api/layout', () => {
     const { app } = buildApp();
     const res = await post(app, '/api/layout', {
       nodes: [
-        { id: 'a', type: 'playNode', width: 220, height: 100 },
-        { id: 'b', type: 'playNode', width: 220, height: 100 },
+        { id: 'a', type: 'rectangle', width: 220, height: 100 },
+        { id: 'b', type: 'rectangle', width: 220, height: 100 },
       ],
       edges: [{ id: 'e1', source: 'a', target: 'b' }],
     });
@@ -503,7 +503,7 @@ describe('POST /api/flows/:id/layout', () => {
     nodes: [
       {
         id: 'api',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'API',
           stateSource: { kind: 'request' },
@@ -512,7 +512,7 @@ describe('POST /api/flows/:id/layout', () => {
       },
       {
         id: 'db',
-        type: 'stateNode',
+        type: 'rectangle',
         data: { name: 'DB', stateSource: { kind: 'event' } },
       },
     ],
@@ -1155,15 +1155,15 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
 
   it('returns 400 when the node has no playAction', async () => {
     const { app } = buildPlayApp({ stdout: '{}' });
-    // Build a demo whose node is a shapeNode (no playAction by definition).
+    // Build a demo whose node is a rectangle (no playAction by definition).
     const demo = {
       version: 2,
       name: 'Shape only',
       nodes: [
         {
           id: 'shape-only',
-          type: 'shapeNode',
-          data: { shape: 'rectangle' },
+          type: 'rectangle',
+          data: {},
         },
       ],
       connectors: [],
@@ -1714,18 +1714,18 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
     nodes: [
       {
         id: 'a',
-        type: 'shapeNode',
-        data: { shape: 'rectangle' },
+        type: 'rectangle',
+        data: {},
       },
       {
         id: 'b',
-        type: 'shapeNode',
-        data: { shape: 'rectangle' },
+        type: 'rectangle',
+        data: {},
       },
       {
         id: 'c',
-        type: 'shapeNode',
-        data: { shape: 'rectangle' },
+        type: 'rectangle',
+        data: {},
       },
     ],
     connectors: [],
@@ -1942,7 +1942,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     expect(readFileSync(demoFile, 'utf8')).toBe(before);
   });
 
-  it('returns 400 when the resulting demo violates FlowSchema (empty name on functional node)', async () => {
+  it('returns 400 when the resulting demo violates FlowSchema (retype to image without path)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -1955,7 +1955,12 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { name: '' });
+    // Under the flat schema, `name` is optional on every type, so the legacy
+    // "empty name" rejection no longer applies. The schema-fence test now
+    // retypes a rectangle to `image` without supplying the required `path`
+    // field — the merge succeeds, then the post-merge ResolvedFlowSchema
+    // reparse surfaces it as badSchema (400).
+    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { type: 'image' });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toContain('schema');
@@ -2117,7 +2122,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     expect('icon' in (node?.data ?? {})).toBe(false);
   });
 
-  it('patches html on an htmlNode by writing nodes/<id>/view.html', async () => {
+  it('patches html on an html by writing nodes/<id>/view.html', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -2129,7 +2134,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
 
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'html-patch',
-      type: 'htmlNode',
+      type: 'html',
       data: { html: 'initial' },
     });
     const res = await patch(app, `/api/flows/${reg.id}/nodes/html-patch`, {
@@ -2161,8 +2166,8 @@ describe('POST /api/flows/:id/nodes', () => {
     const demoFile = join(repoPath, 'flow.json');
 
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
-      type: 'shapeNode',
-      data: { shape: 'rectangle', name: 'Note A' },
+      type: 'rectangle',
+      data: { name: 'Note A' },
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; id: string };
@@ -2174,7 +2179,7 @@ describe('POST /api/flows/:id/nodes', () => {
     };
     expect(onDisk.nodes).toHaveLength(2);
     const created = onDisk.nodes.find((n) => n.id === body.id);
-    expect(created?.type).toBe('shapeNode');
+    expect(created?.type).toBe('rectangle');
   });
 
   it('honors a caller-provided id when given', async () => {
@@ -2189,8 +2194,8 @@ describe('POST /api/flows/:id/nodes', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'sticky-note-1',
-      type: 'shapeNode',
-      data: { shape: 'sticky' },
+      type: 'sticky',
+      data: {},
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string };
@@ -2210,9 +2215,11 @@ describe('POST /api/flows/:id/nodes', () => {
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    // type 'shapeNode' but missing required `shape`.
+    // type 'image' requires a `path` field anchored under `nodes/<id>/`;
+    // omitting it surfaces as a post-merge ResolvedFlowSchema reparse
+    // failure (badSchema → 400) per US-009's per-type required-field gate.
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
-      type: 'shapeNode',
+      type: 'image',
       data: {},
     });
     expect(res.status).toBe(400);
@@ -2225,8 +2232,8 @@ describe('POST /api/flows/:id/nodes', () => {
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
     const res = await post(app, '/api/flows/nope/nodes', {
-      type: 'shapeNode',
-      data: { shape: 'rectangle' },
+      type: 'rectangle',
+      data: {},
     });
     expect(res.status).toBe(404);
   });
@@ -2244,8 +2251,8 @@ describe('POST /api/flows/:id/nodes', () => {
     const demoFile = join(repoPath, 'flow.json');
     const res = await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'with-detail',
-      type: 'shapeNode',
-      data: { shape: 'rectangle', detail: 'hello world' },
+      type: 'rectangle',
+      data: { detail: 'hello world' },
     });
     expect(res.status).toBe(200);
 
@@ -2272,8 +2279,8 @@ describe('POST /api/flows/:id/nodes', () => {
     const demoFile = join(repoPath, 'flow.json');
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'no-detail',
-      type: 'shapeNode',
-      data: { shape: 'rectangle' },
+      type: 'rectangle',
+      data: {},
     });
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
@@ -2284,9 +2291,9 @@ describe('POST /api/flows/:id/nodes', () => {
     expect(readFileSync(join(repoPath, 'nodes', 'no-detail', 'detail.md'), 'utf8')).toBe('');
   });
 
-  // htmlNode externalization: every htmlNode write lands in
+  // html externalization: every html write lands in
   // `nodes/<id>/view.html`; flow.json carries the file:// ref.
-  describe('htmlNode html externalization', () => {
+  describe('html html externalization', () => {
     it('writes nodes/<id>/view.html (empty) and persists file:// ref when html is omitted', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
@@ -2299,7 +2306,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         id: 'hero-block',
-        type: 'htmlNode',
+        type: 'html',
         data: {},
       });
       expect(res.status).toBe(200);
@@ -2324,7 +2331,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         id: 'with-content',
-        type: 'htmlNode',
+        type: 'html',
         data: { html: '<p>inline</p>' },
       });
       expect(res.status).toBe(200);
@@ -2351,7 +2358,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
       const res = await post(app, `/api/flows/${reg.id}/nodes`, {
         id: 'pricing',
-        type: 'htmlNode',
+        type: 'html',
         data: { name: 'Pricing card', icon: 'tag' },
       });
       expect(res.status).toBe(200);
@@ -2380,9 +2387,9 @@ describe('POST /api/flows/:id/bulk', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
-        { id: 'b1', type: 'shapeNode', data: { name: 'B1', shape: 'rectangle' } },
-        { id: 'b2', type: 'shapeNode', data: { name: 'B2', shape: 'ellipse', detail: 'hi' } },
-        { id: 'b3', type: 'htmlNode', data: { html: '<div>x</div>' } },
+        { id: 'b1', type: 'rectangle', data: { name: 'B1' } },
+        { id: 'b2', type: 'ellipse', data: { name: 'B2', detail: 'hi' } },
+        { id: 'b3', type: 'html', data: { html: '<div>x</div>' } },
       ],
       // Connector references nodes from THIS batch — only works because the
       // merged-graph parse runs after both arrays are pushed.
@@ -2424,7 +2431,7 @@ describe('POST /api/flows/:id/bulk', () => {
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
-      nodes: [{ id: 'only', type: 'shapeNode', data: { shape: 'rectangle', name: 'only' } }],
+      nodes: [{ id: 'only', type: 'rectangle', data: { name: 'only' } }],
     });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { nodes: unknown[]; connectors: unknown[] };
@@ -2447,8 +2454,8 @@ describe('POST /api/flows/:id/bulk', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
-        { id: 'good-a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'good-b', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+        { id: 'good-a', type: 'rectangle', data: { name: 'A' } },
+        { id: 'good-b', type: 'ellipse', data: { name: 'B' } },
       ],
       connectors: [{ source: 'good-a', target: 'never-added' }],
     });
@@ -2474,9 +2481,10 @@ describe('POST /api/flows/:id/bulk', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
-        { id: 'ok-1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        // shapeNode without shape — trips the post-mutation parse.
-        { id: 'bad', type: 'shapeNode', data: { name: 'B' } },
+        { id: 'ok-1', type: 'rectangle', data: { name: 'A' } },
+        // type:'image' requires a `path` field anchored under `nodes/<id>/`;
+        // omitting it trips the post-mutation parse and rolls back the batch.
+        { id: 'bad', type: 'image', data: { name: 'B' } },
       ],
     });
     expect(res.status).toBe(400);
@@ -2500,8 +2508,8 @@ describe('POST /api/flows/:id/bulk', () => {
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
       nodes: [
-        { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+        { id: 'dupe', type: 'rectangle', data: { name: 'A' } },
+        { id: 'dupe', type: 'ellipse', data: { name: 'B' } },
       ],
     });
     expect(res.status).toBe(400);
@@ -2521,7 +2529,7 @@ describe('POST /api/flows/:id/bulk', () => {
     ).json()) as { id: string };
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
-      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      nodes: [{ id: 'a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [
         { id: 'c-dupe', source: 'a', target: 'a' },
         { id: 'c-dupe', source: 'a', target: 'a' },
@@ -2544,12 +2552,12 @@ describe('POST /api/flows/:id/bulk', () => {
 
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'taken',
-      type: 'shapeNode',
-      data: { name: 'seed', shape: 'rectangle' },
+      type: 'rectangle',
+      data: { name: 'seed' },
     });
 
     const res = await post(app, `/api/flows/${reg.id}/bulk`, {
-      nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
+      nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X' } }],
     });
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
@@ -2597,8 +2605,8 @@ describe('POST /api/flows/:id/bulk', () => {
     ).json()) as { id: string };
 
     const oversized = Array.from({ length: 101 }, (_, i) => ({
-      type: 'shapeNode',
-      data: { name: `n${i}`, shape: 'rectangle' },
+      type: 'rectangle',
+      data: { name: `n${i}` },
     }));
     const res = await post(app, `/api/flows/${reg.id}/bulk`, { nodes: oversized });
     expect(res.status).toBe(400);
@@ -2607,7 +2615,7 @@ describe('POST /api/flows/:id/bulk', () => {
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
     const res = await post(app, '/api/flows/nope/bulk', {
-      nodes: [{ type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
+      nodes: [{ type: 'rectangle', data: { name: 'A' } }],
     });
     expect(res.status).toBe(404);
   });
@@ -2620,7 +2628,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     nodes: [
       {
         id: 'a',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'A',
           stateSource: { kind: 'request' },
@@ -2629,7 +2637,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       },
       {
         id: 'b',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'B',
           stateSource: { kind: 'request' },
@@ -2675,7 +2683,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         ...VALID_DEMO_TWO_NODES.nodes,
         {
           id: 'c',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'C',
             stateSource: { kind: 'request' },
@@ -2741,8 +2749,8 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
 
     await post(app, `/api/flows/${reg.id}/nodes`, {
       id: 'gone',
-      type: 'shapeNode',
-      data: { shape: 'rectangle', detail: 'temp' },
+      type: 'rectangle',
+      data: { detail: 'temp' },
     });
     const folder = join(repoPath, 'nodes', 'gone');
     expect(existsSync(folder)).toBe(true);
@@ -2752,7 +2760,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     expect(existsSync(folder)).toBe(false);
   });
 
-  describe('htmlNode per-node folder cascade', () => {
+  describe('html per-node folder cascade', () => {
     it('removes nodes/<id>/view.html and the whole folder on delete', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
@@ -2766,7 +2774,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const created = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           id: 'cascade-html',
-          type: 'htmlNode',
+          type: 'html',
           data: { html: '<p>x</p>' },
         })
       ).json()) as { id: string };
@@ -2787,7 +2795,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       expect(onDisk.nodes.find((n) => n.id === created.id)).toBeUndefined();
     });
 
-    it('does not touch other htmlNode folders when an unrelated node is deleted', async () => {
+    it('does not touch other html folders when an unrelated node is deleted', async () => {
       const { app } = buildApp();
       const repoPath = tmpRepoWithDemo();
       const reg = (await (
@@ -2800,14 +2808,14 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
       const first = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           id: 'first-html',
-          type: 'htmlNode',
+          type: 'html',
           data: { html: '<p>1</p>' },
         })
       ).json()) as { id: string };
       const second = (await (
         await post(app, `/api/flows/${reg.id}/nodes`, {
           id: 'second-html',
-          type: 'htmlNode',
+          type: 'html',
           data: { html: '<p>2</p>' },
         })
       ).json()) as { id: string };
@@ -2831,7 +2839,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     nodes: [
       {
         id: 'a',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'A',
           stateSource: { kind: 'request' },
@@ -2840,7 +2848,7 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
       },
       {
         id: 'b',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'B',
           stateSource: { kind: 'request' },
@@ -3079,7 +3087,7 @@ describe('POST /api/flows/:id/connectors', () => {
     nodes: [
       {
         id: 'a',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'A',
           stateSource: { kind: 'request' },
@@ -3088,7 +3096,7 @@ describe('POST /api/flows/:id/connectors', () => {
       },
       {
         id: 'b',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'B',
           stateSource: { kind: 'request' },
@@ -3199,13 +3207,13 @@ describe('POST /api/flows/:id/connectors', () => {
     expect(res.status).toBe(404);
   });
 
-  // US-023: an iconNode is a valid connector endpoint in either role. The
+  // US-023: an icon is a valid connector endpoint in either role. The
   // schema's discriminated NodeSchema doesn't constrain who can be a source or
   // target — only that the referenced id exists in nodes[]. These two cases
   // fence that against a future change to operations.ts / schema.ts that might
   // add a node-type whitelist (the bug the user reports is UX-shaped, not
   // server-shaped, but a REST round-trip is the cheapest regression fence).
-  it('accepts a connector pointing AT an iconNode (US-023)', async () => {
+  it('accepts a connector pointing AT an icon (US-023)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
       version: 2,
@@ -3213,12 +3221,12 @@ describe('POST /api/flows/:id/connectors', () => {
       nodes: [
         {
           id: 'svc',
-          type: 'stateNode',
+          type: 'rectangle',
           data: { name: 'S', stateSource: { kind: 'request' } },
         },
         {
           id: 'icon-1',
-          type: 'iconNode',
+          type: 'icon',
           data: { icon: 'shopping-cart' },
         },
       ],
@@ -3246,7 +3254,7 @@ describe('POST /api/flows/:id/connectors', () => {
     expect(onDisk.connectors[0]?.target).toBe('icon-1');
   });
 
-  it('accepts a connector pointing FROM an iconNode (US-023)', async () => {
+  it('accepts a connector pointing FROM an icon (US-023)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
       version: 2,
@@ -3254,12 +3262,12 @@ describe('POST /api/flows/:id/connectors', () => {
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode',
+          type: 'icon',
           data: { icon: 'shopping-cart' },
         },
         {
           id: 'svc',
-          type: 'stateNode',
+          type: 'rectangle',
           data: { name: 'S', stateSource: { kind: 'request' } },
         },
       ],
@@ -3293,12 +3301,12 @@ describe('POST /api/flows/:id/connectors', () => {
       nodes: [
         {
           id: 'icon-a',
-          type: 'iconNode',
+          type: 'icon',
           data: { icon: 'circle' },
         },
         {
           id: 'icon-b',
-          type: 'iconNode',
+          type: 'icon',
           data: { icon: 'square' },
         },
       ],
@@ -3331,7 +3339,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
     nodes: [
       {
         id: 'a',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'A',
           stateSource: { kind: 'request' },
@@ -3340,7 +3348,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
       },
       {
         id: 'b',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'B',
           stateSource: { kind: 'request' },
@@ -3417,7 +3425,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
     nodes: [
       {
         id: 'a',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'A',
           stateSource: { kind: 'request' },
@@ -3426,7 +3434,7 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
       },
       {
         id: 'b',
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'B',
           stateSource: { kind: 'request' },
@@ -3722,12 +3730,12 @@ describe('GET /api/flows/:id/graph', () => {
         ...VALID_DEMO.nodes,
         {
           id: 'shape-1',
-          type: 'shapeNode',
-          data: { name: 'note', shape: 'rectangle', detail: '# secrets here' },
+          type: 'rectangle',
+          data: { name: 'note', detail: '# secrets here' },
         },
         {
           id: 'html-1',
-          type: 'htmlNode',
+          type: 'html',
           data: { html: '<p>also secret</p>' },
         },
       ],
@@ -3783,18 +3791,16 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
     ).json()) as { id: string };
 
     // Add a node via the existing add endpoint so detail.md is externalized
-    // through the canonical write path.
+    // through the canonical write path. Pin the id so we can fetch the same
+    // node by id below (the seed VALID_DEMO already carries an `api-checkout`
+    // rectangle — finding "the rectangle" by type would return the seed).
     await post(app, `/api/flows/${reg.id}/nodes`, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+      id: 'with-detail',
+      type: 'rectangle',
+      data: { name: 'A', detail: '# inlined body' },
     });
 
-    // Discover the node id via the graph endpoint.
-    const graph = (await (await app.request(`/api/flows/${reg.id}/graph`)).json()) as {
-      nodes: Array<{ id: string; type: string }>;
-    };
-    const shapeId = graph.nodes.find((n) => n.type === 'shapeNode')?.id;
-    if (!shapeId) throw new Error('shape node missing from graph');
+    const shapeId = 'with-detail';
 
     const res = await app.request(`/api/flows/${reg.id}/nodes/${shapeId}`);
     expect(res.status).toBe(200);

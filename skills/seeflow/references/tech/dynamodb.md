@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per table, not per partition or GSI.
+- One node (`type:'rectangle'`) per table, not per partition or GSI.
 - Duplicate the table node next to each consumer for readability
   (same `kind` + `name`, unique `id`).
 

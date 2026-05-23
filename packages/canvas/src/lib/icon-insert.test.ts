@@ -46,14 +46,14 @@ describe('computeIconInsertPosition', () => {
 });
 
 describe('buildIconInsertPayload', () => {
-  it('produces an iconNode payload with the picked name and default size', () => {
+  it('produces a type:"icon" payload with the picked name and default size', () => {
     const payload = buildIconInsertPayload({
       iconName: 'shopping-cart',
       rfInstance: identityRf,
       viewport: { width: 800, height: 600 },
     });
     expect(payload).toEqual({
-      type: 'iconNode',
+      type: 'icon',
       position: {
         x: 400 - ICON_DEFAULT_SIZE.width / 2,
         y: 300 - ICON_DEFAULT_SIZE.height / 2,

@@ -110,13 +110,13 @@ function findByTestId(tree: unknown, testId: string): ReactElementLike | null {
   return matches[0] ?? null;
 }
 
-function makePlayNode(overrides: Partial<FlowNode> = {}): FlowNode {
+function makeRectangleNode(overrides: Partial<FlowNode> = {}): FlowNode {
   return {
     id: 'n1',
-    type: 'playNode',
+    type: 'rectangle',
     position: { x: 0, y: 0 },
     data: {
-      name: 'A play node',
+      name: 'A rectangle node',
       stateSource: { kind: 'request' },
       description: 'Short body text',
       detail: 'Long-form notes',
@@ -217,7 +217,7 @@ describe('DetailPanel', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -235,7 +235,7 @@ describe('DetailPanel', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -255,7 +255,7 @@ describe('DetailPanel', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         // No onNameChange/onDescriptionChange/onDetailChange — read-only.
@@ -275,7 +275,7 @@ describe('DetailPanel', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -297,7 +297,7 @@ describe('DetailPanel', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         statusReport: report,
@@ -406,7 +406,7 @@ describe('DetailPanel icon trigger', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(),
+        node: makeRectangleNode(),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -422,7 +422,7 @@ describe('DetailPanel icon trigger', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode({ data: { icon: 'database' } } as Partial<FlowNode>),
+        node: makeRectangleNode({ data: { icon: 'database' } } as Partial<FlowNode>),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -443,7 +443,7 @@ describe('DetailPanel icon trigger', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode(), // no icon in data
+        node: makeRectangleNode(), // no icon in data
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -456,17 +456,21 @@ describe('DetailPanel icon trigger', () => {
     expect(readOnly.length).toBe(0);
   });
 
-  it('icon trigger is hidden for unsupported node types even with onIconChange', () => {
-    const shapeNode = {
+  it('icon trigger is hidden for non-rectangle geometric types even with onIconChange', () => {
+    // Database (one of the 8 non-rectangle geometric tags) parses + persists
+    // the `icon` field but the renderer doesn't surface it, so the detail
+    // panel hides the trigger too. Capability-chrome-rectangle-only invariant
+    // extends to the icon row.
+    const databaseNode = {
       id: 's1',
-      type: 'shapeNode',
+      type: 'database',
       position: { x: 0, y: 0 },
-      data: { shape: 'rect', name: 'rect' },
+      data: { name: 'db' },
     } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: shapeNode,
+        node: databaseNode,
         connector: null,
         onClose: () => {},
         onIconChange: () => {},
@@ -475,17 +479,17 @@ describe('DetailPanel icon trigger', () => {
     expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
-  it('icon trigger is hidden for htmlNode (icon support stripped)', () => {
-    const htmlNode = {
+  it('icon trigger is hidden for type:"html" (no header icon affordance)', () => {
+    const htmlFixture = {
       id: 'h1',
-      type: 'htmlNode',
+      type: 'html',
       position: { x: 0, y: 0 },
-      data: { name: 'h', htmlPath: 'blocks/a.html' },
+      data: { name: 'h', html: '<div>hi</div>' },
     } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: htmlNode,
+        node: htmlFixture,
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -495,11 +499,51 @@ describe('DetailPanel icon trigger', () => {
     expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
-  it('icon trigger is visible for a playNode when onIconChange is provided', () => {
+  it('icon trigger is hidden for type:"image" (no header icon affordance)', () => {
+    const imageFixture = {
+      id: 'i1',
+      type: 'image',
+      position: { x: 0, y: 0 },
+      data: { name: 'img', path: 'nodes/i1/pic.png', alt: 'pic' },
+    } as unknown as FlowNode;
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: makePlayNode({ data: { icon: 'database' } } as Partial<FlowNode>),
+        node: imageFixture,
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
+  });
+
+  it('icon trigger is hidden for type:"icon" (icon IS the visual, not a header glyph)', () => {
+    const iconFixture = {
+      id: 'ic1',
+      type: 'icon',
+      position: { x: 0, y: 0 },
+      data: { icon: 'server', name: 'i' },
+    } as unknown as FlowNode;
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: iconFixture,
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
+  });
+
+  it('icon trigger is visible for a rectangle node when onIconChange is provided', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeRectangleNode({ data: { icon: 'database' } } as Partial<FlowNode>),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},
@@ -512,17 +556,24 @@ describe('DetailPanel icon trigger', () => {
     expect((triggers[0]?.props as { icon?: string | null }).icon).toBe('database');
   });
 
-  it('icon trigger is also visible for stateNode', () => {
-    const stateNode = {
-      id: 's1',
-      type: 'stateNode',
-      position: { x: 0, y: 0 },
-      data: { name: 's', status: 'idle' },
-    } as unknown as FlowNode;
+  it('icon trigger is also visible for a rectangle with statusAction (capability chrome)', () => {
+    // Pre-refactor, the "stateful" variant covered the icon trigger when the
+    // node carried a statusAction capability. Under the flat schema, both old
+    // play- and state-flavored types collapse to type:'rectangle' — the icon
+    // trigger condition is type-based, not capability-based, but this test
+    // guards that adding a capability doesn't accidentally hide the trigger.
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
-        node: stateNode,
+        node: makeRectangleNode({
+          data: {
+            statusAction: {
+              kind: 'script',
+              interpreter: 'bash',
+              scriptPath: 'status.sh',
+            },
+          },
+        } as Partial<FlowNode>),
         connector: null,
         onClose: () => {},
         onNameChange: () => {},

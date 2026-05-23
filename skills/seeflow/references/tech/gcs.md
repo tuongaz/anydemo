@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per bucket, not per object or prefix.
+- One node (`type:'rectangle'`) per bucket, not per object or prefix.
 - Duplicate the bucket node next to each consumer for readability
   (same `kind` + `name`, unique `id`).
 - Long-lived storage — model as `kind: state`, not `event`.

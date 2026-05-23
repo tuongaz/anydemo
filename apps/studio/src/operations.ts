@@ -408,7 +408,7 @@ export type GetFlowOutcome =
   | { kind: 'fileNotFound'; path: string };
 
 // Lightweight graph projection — flow + nodes + connectors with file-backed
-// fields (`detail` on every node, `html` on htmlNode) stripped so the
+// fields (`detail` on every node, `html` on type:'html') stripped so the
 // caller can navigate the topology without paying for inlined bodies.
 export interface FlowGraphResponse {
   id: string;

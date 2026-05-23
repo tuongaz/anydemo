@@ -86,8 +86,8 @@ describe('integration: edges — cross-boundary failure modes', () => {
       const bulkBody = {
         nodes: Array.from({ length: bulkSize }, (_, i) => ({
           id: `n-${i}`,
-          type: 'shapeNode',
-          data: { shape: 'rectangle', name: `n${i}` },
+          type: 'rectangle',
+          data: { name: `n${i}` },
         })),
       };
 
@@ -173,7 +173,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
       const edited = {
         version: 2,
         name,
-        nodes: [{ id: 'edge-1', type: 'shapeNode', data: { shape: 'rectangle', name: 'Edge' } }],
+        nodes: [{ id: 'edge-1', type: 'rectangle', data: { name: 'Edge' } }],
         connectors: [],
       };
       const flowPath = join(studio.workspace, project.slug, 'flow.json');
@@ -200,13 +200,13 @@ describe('integration: edges — cross-boundary failure modes', () => {
       const name = uniqueFlowId('parallel-patch');
       const project = await createProject(studio.baseURL, studio.workspace, name);
 
-      // Seed a single shape node — easiest valid target for /position.
+      // Seed a single rectangle node — easiest valid target for /position.
       const nodeId = 'pp-1';
       const seedRes = await fetch(`${studio.baseURL}/api/flows/${project.id}/bulk`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
-          nodes: [{ id: nodeId, type: 'shapeNode', data: { shape: 'rectangle' } }],
+          nodes: [{ id: nodeId, type: 'rectangle', data: {} }],
         }),
       });
       expect(seedRes.status).toBe(200);

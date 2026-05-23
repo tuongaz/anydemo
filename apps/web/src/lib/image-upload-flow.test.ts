@@ -155,7 +155,7 @@ describe('performImageDropUpload (US-008)', () => {
     expect(ctx.createCalls).toHaveLength(1);
     expect(ctx.createCalls[0]?.flowId).toBe('demo-1');
     expect(ctx.createCalls[0]?.body.id).toBe('node-test-1');
-    expect(ctx.createCalls[0]?.body.type).toBe('imageNode');
+    expect(ctx.createCalls[0]?.body.type).toBe('image');
     expect(ctx.createCalls[0]?.body.position).toEqual({ x: 100, y: 200 });
     const data = ctx.createCalls[0]?.body.data as Record<string, unknown>;
     expect(data.path).toBe('nodes/node-test-1/hero.png');
@@ -236,13 +236,13 @@ describe('performImageDropUpload (US-008)', () => {
 });
 
 describe('override builders (US-008)', () => {
-  it('buildUploadingOverride yields type=imageNode + _uploading=true + empty path', () => {
+  it('buildUploadingOverride yields type=image + _uploading=true + empty path', () => {
     const o = buildUploadingOverride({
       position: { x: 1, y: 2 },
       dims: { width: 10, height: 20 },
       originalFilename: 'A.PNG',
     });
-    expect(o.type).toBe('imageNode');
+    expect(o.type).toBe('image');
     expect(o.position).toEqual({ x: 1, y: 2 });
     const data = (o.data ?? {}) as Record<string, unknown>;
     expect(data._uploading).toBe(true);

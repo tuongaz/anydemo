@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per queue. A DLQ is a separate node — never conflate
+- One node (`type:'rectangle'`) per queue. A DLQ is a separate node — never conflate
   it with its source queue.
 - FIFO queues (`*.fifo`) and standard queues have different ordering
   guarantees; label `data.note` accordingly.

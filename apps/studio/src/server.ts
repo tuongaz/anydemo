@@ -100,7 +100,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   // don't churn. Route is unauthenticated and stateless.
   app.get('/healthz', (c) => c.json({ status: 'ok' }));
 
-  // Vendored runtime assets (e.g. @tailwindcss/browser@4 for htmlNode).
+  // Vendored runtime assets (e.g. @tailwindcss/browser@4 for type:'html').
   // Served identically in dev and prod so they don't depend on the web
   // bundle. The `{[A-Za-z0-9._-]+}` regex constrains :file to a single safe
   // segment, making traversal (`..`, `/`) impossible by construction.

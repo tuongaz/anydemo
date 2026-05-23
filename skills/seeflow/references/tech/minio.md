@@ -13,7 +13,7 @@ category: local-infra
 
 ## Node modelling
 
-- One `stateNode` per **bucket** the flow touches — same shape as the real
+- One node (`type:'rectangle'`) per **bucket** the flow touches — same shape as the real
   `s3` ref; only the endpoint and creds differ.
 - If the demo shows upload → process → archive, model the two buckets as two
   nodes; do not collapse them just because they share a server.

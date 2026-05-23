@@ -14,7 +14,7 @@ category: local-infra
 ## Node modelling
 
 - Testcontainers is the **launcher, not a node**. The started container
-  (postgres, redis, kafka) IS the `stateNode` — use the matching `kind`.
+  (postgres, redis, kafka) IS the node (`type:'rectangle'`) — use the matching `kind`.
 - Prefer reuse mode (`Reuse: true` / `with_reuse=True`) so the SeeFlow play and
   status scripts hit the same long-lived container across ticks.
 - One node per container; do **not** model the testcontainers wrapper itself.

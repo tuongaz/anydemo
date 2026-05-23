@@ -7,9 +7,12 @@ import {
 } from './node-defaults.ts';
 
 describe('buildNewShapeData', () => {
-  it('rectangle gets borderSize=1 and fontSize=12', () => {
+  it('rectangle gets borderSize=1 and fontSize=12 (flat schema: no data.shape)', () => {
     const data = buildNewShapeData('rectangle', { width: 200, height: 120 });
-    expect(data.shape).toBe('rectangle');
+    // Under the flat schema `type` IS the shape — buildNewShapeData no longer
+    // emits a `data.shape` field (the strict on-disk FlowSchema would reject
+    // it as an unknown key).
+    expect('shape' in data).toBe(false);
     expect(data.width).toBe(200);
     expect(data.height).toBe(120);
     expect(data.borderSize).toBe(NEW_NODE_BORDER_WIDTH);
@@ -30,7 +33,7 @@ describe('buildNewShapeData', () => {
 
   it('text variant gets the default fontSize but NO borderSize (text stays chromeless)', () => {
     const data = buildNewShapeData('text', { width: 120, height: 36 });
-    expect(data.shape).toBe('text');
+    expect('shape' in data).toBe(false);
     expect(data.fontSize).toBe(NEW_NODE_FONT_SIZE);
     expect(data.borderSize).toBeUndefined();
     expect('borderSize' in data).toBe(false);

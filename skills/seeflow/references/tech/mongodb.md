@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per database — collection-level is too fine-grained
+- One node (`type:'rectangle'`) per database — collection-level is too fine-grained
   and clutters the canvas.
 - Duplicate the DB node next to each consumer for readability
   (same `kind` + `name`, unique `id`).

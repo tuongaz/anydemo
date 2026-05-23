@@ -19,13 +19,13 @@ export async function exportToCloud(
   }
   const demo = detail.flow;
 
-  // Bundle imageNode binaries. Text-content fields (detail, htmlNode html)
+  // Bundle type:'image' binaries. Text-content fields (detail, type:'html' html)
   // ride on the file:// resolver and are already inlined in the flow JSON,
   // so no separate bundling is needed for them.
   const seen = new Set<string>();
   const filePaths: string[] = [];
   for (const node of demo.nodes) {
-    if (node.type === 'imageNode' && node.data.path && !seen.has(node.data.path)) {
+    if (node.type === 'image' && node.data.path && !seen.has(node.data.path)) {
       seen.add(node.data.path);
       filePaths.push(node.data.path);
     }

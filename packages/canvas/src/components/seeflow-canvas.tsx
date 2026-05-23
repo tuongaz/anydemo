@@ -54,25 +54,24 @@ import {
   projectCursorToPerimeter,
 } from '../lib/floating-edge-geometry.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
+import {
+  GeometricNode,
+  SHAPE_DEFAULT_SIZE,
+  shapeChromeClass,
+  shapeChromeStyle,
+} from '../nodes/geometric-node.tsx';
 import { HtmlNode } from '../nodes/html-node.tsx';
 import { IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
-import { PlayNode } from '../nodes/play-node.tsx';
-import {
-  SHAPE_DEFAULT_SIZE,
-  ShapeNode,
-  shapeChromeClass,
-  shapeChromeStyle,
-} from '../nodes/shape-node.tsx';
+import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
-import { StateNode } from '../nodes/state-node.tsx';
 import type {
   CanvasMode,
   Connector,
   EdgePin,
   FlowNode,
+  GeometricNodeType,
   NodeStatus,
-  ShapeKind,
   StatusReport,
 } from '../types.ts';
 import {
@@ -333,7 +332,7 @@ export function resolveFlags(
  */
 interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
-   * US-004: project id used by file-backed nodes (imageNode, future htmlNode)
+   * US-004: project id used by file-backed nodes (type:'image', type:'html')
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
    * into each node's runtime `data` so renderers can fetch from
    * `GET /api/projects/:id/files/:path`. Absent → file-backed nodes render
@@ -343,7 +342,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   projectId?: string;
   /**
    * Optional override for the file-serving URL prefix used by file-backed
-   * nodes (imageNode, htmlNode). Default `/api/projects` is correct for the
+   * nodes (type:'image', type:'html'). Default `/api/projects` is correct for the
    * studio (same-origin). Embedders that serve files from a different host
    * or route shape pass an absolute prefix here — e.g. the public viewer
    * passes `https://seeflow.dev/api/flows` so files resolve to
@@ -415,8 +414,8 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   /**
-   * htmlNode-only: invoked when the user clicks the "Fit to content" button
-   * on a user-sized htmlNode. The host's handler typically PATCHes
+   * type:'html'-only: invoked when the user clicks the "Fit to content" button
+   * on a user-sized html node. The host's handler typically PATCHes
    * { autoSize: true } through the adapter; the studio's mergeNodeUpdates
    * then strips width/height to maintain the autoSize invariant.
    */
@@ -447,12 +446,12 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * enables the toolbar; absent → toolbar is hidden.
    */
   onCreateShapeNode?: (
-    shape: ShapeKind,
+    shape: GeometricNodeType,
     position: { x: number; y: number },
     dims: { width: number; height: number },
   ) => void;
   /**
-   * US-008: commit a new imageNode from an OS-image file drop. The canvas
+   * US-008: commit a new type:'image' node from an OS-image file drop. The canvas
    * detects the drop, computes the natural dims (capped at 400px longest side),
    * and projects the drop client-position into flow-space; the parent owns id
    * allocation, optimistic override, upload POST, and createNode persistence.
@@ -466,21 +465,21 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   }) => void;
   /**
    * US-008: dispatched when the user clicks the 'Upload failed (click to
-   * retry)' placeholder on an imageNode whose initial upload failed. Receives
-   * the node id; the parent retries the upload using the file reference stored
-   * in its retry map. Threaded into every imageNode's runtime data so the
-   * renderer can call it on click.
+   * retry)' placeholder on a type:'image' node whose initial upload failed.
+   * Receives the node id; the parent retries the upload using the file
+   * reference stored in its retry map. Threaded into every image node's
+   * runtime data so the renderer can call it on click.
    */
   onRetryImageUpload?: (nodeId: string) => void;
   /**
-   * US-017: commit a new htmlNode at the drop position from the toolbar's
-   * HTML block tile (HTML5 drag-and-drop). The canvas detects the
+   * US-017: commit a new type:'html' node at the drop position from the
+   * toolbar's HTML block tile (HTML5 drag-and-drop). The canvas detects the
    * {@link HTML_BLOCK_DND_TYPE} dataTransfer marker on the wrapper drop
    * handler, projects the drop clientX/Y into flow space, and dispatches
    * here. The parent owns id allocation, optimistic override, and the
-   * createNode persistence (server fills `data.htmlPath` per US-015).
-   * Wiring this enables the HTML block toolbar tile; absent → the section
-   * is hidden and any stray drop is a no-op.
+   * createNode persistence (server fills `data.html` per US-015). Wiring
+   * this enables the HTML block toolbar tile; absent → the section is
+   * hidden and any stray drop is a no-op.
    */
   onCreateHtmlNode?: (args: { position: { x: number; y: number } }) => void;
   /**
@@ -641,7 +640,7 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   onCreateAndConnectFromPane?: (args: {
     sourceNodeId: string;
     position: { x: number; y: number };
-    shape: ShapeKind;
+    shape: GeometricNodeType;
   }) => void;
   /**
    * US-015: id of the most recently created node that should mount directly in
@@ -666,14 +665,14 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /** Handle a tile-pick from the popover (mode + viewport are owned upstream). */
   onPickIcon?: (name: string) => void;
   /**
-   * US-003: dispatched by the right-click "Change icon" menu item on an
-   * iconNode. The canvas uses this from the menu's onSelect to request the
-   * picker open in replace mode for that node. Same handler the detail
-   * panel's "Change icon…" button uses (US-015), just a different entry
-   * point. Absent → the menu item is hidden. (Previously US-016 also wired
-   * this onto iconNode dblclick; US-004 replaced that path with inline
-   * label edit and the picker is now reachable only via the right-click
-   * menu and the StyleStrip button.)
+   * US-003: dispatched by the right-click "Change icon" menu item on a
+   * type:'icon' node. The canvas uses this from the menu's onSelect to
+   * request the picker open in replace mode for that node. Same handler the
+   * detail panel's "Change icon…" button uses (US-015), just a different
+   * entry point. Absent → the menu item is hidden. (Previously US-016 also
+   * wired this onto type:'icon' dblclick; US-004 replaced that path with
+   * inline label edit and the picker is now reachable only via the
+   * right-click menu and the StyleStrip button.)
    */
   onRequestIconReplace?: (nodeId: string) => void;
   /**
@@ -1131,16 +1130,28 @@ const mergeConnectorOverride = (
   return { ...conn, ...override } as Connector;
 };
 
+// Flat-node-types routing: `rectangle` → RectangleNode (the only renderer that
+// draws capability chrome — play button, status pill, header layout, icon
+// trigger); the 8 other geometric tags → GeometricNode (shared SVG/box visual
+// keyed by `type`); image/html/icon → their dedicated renderers. Non-rectangle
+// renderers parse + persist capabilities but draw no chrome (Renderer
+// phasing — see docs/plans/2026-05-23-flat-node-types-design.md).
 const nodeTypes = {
-  playNode: PlayNode,
-  stateNode: StateNode,
-  shapeNode: ShapeNode,
-  imageNode: ImageNode,
-  iconNode: IconNode,
+  rectangle: RectangleNode,
+  ellipse: GeometricNode,
+  sticky: GeometricNode,
+  text: GeometricNode,
+  database: GeometricNode,
+  server: GeometricNode,
+  user: GeometricNode,
+  queue: GeometricNode,
+  cloud: GeometricNode,
+  image: ImageNode,
+  icon: IconNode,
   // US-014: file-backed escape-hatch node — fetches author HTML at
   // `<project>/<htmlPath>`, sanitizes (US-013), and renders with Tailwind
   // Play CDN (US-012). Missing files render PlaceholderCard.
-  htmlNode: HtmlNode,
+  html: HtmlNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 
@@ -1670,7 +1681,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const {
     mode,
     // US-007: `adapter` is forwarded to the built-in DetailPanel so its
-    // htmlNode file-action buttons (Open in editor / Reveal in OS file
+    // type:'html' file-action buttons (Open in editor / Reveal in OS file
     // manager) route through `adapter.openFile` / `adapter.revealFile`. Every
     // other mutation site still goes through the explicit callback props the
     // parent supplies.
@@ -1897,7 +1908,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // legacy `drawShape` view (the armed shape, or null when not drawing) so
   // existing gesture/cursor code keeps reading the same value. `handMode` is
   // the new flag for the four React Flow lock-down props.
-  const drawShape: ShapeKind | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
+  const drawShape: GeometricNodeType | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
   const handMode = canvasMode.kind === 'hand';
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
@@ -1954,7 +1965,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     sourceNodeId: string;
   } | null>(null);
   // US-013/015 (icon picker): the state slice + pick handlers live in demo-view
-  // so the detail panel's "Change icon…" button (US-015) and the iconNode
+  // so the detail panel's "Change icon…" button (US-015) and the type:'icon'
   // double-click (US-016) can dispatch openIconPicker('replace', nodeId)
   // without going through this component. demo-canvas is a transparent
   // pass-through for the toolbar's controlled-open chrome only.
@@ -2078,7 +2089,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // offsets just for paint.
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
-  const drawShapeRef = useRef<ShapeKind | null>(null);
+  const drawShapeRef = useRef<GeometricNodeType | null>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const drawCurrentRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
@@ -2363,8 +2374,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // pair below.
   const [contextOnNode, setContextOnNode] = useState(false);
   // US-003: track the right-clicked node's type so icon-node-specific items
-  // (currently just 'Change icon') render only when the cursor landed on an
-  // iconNode. Cleared whenever the menu closes or the right-click hit the pane.
+  // (currently just 'Change icon') render only when the cursor landed on a
+  // type:'icon' node. Cleared whenever the menu closes or the right-click hit the pane.
   const [contextNodeType, setContextNodeType] = useState<string | null>(null);
   // US-007: track an endpoint right-click so the menu shows an "Unpin" item
   // tied to a specific connector + endpoint. `pinned` mirrors the dot's data-
@@ -2536,30 +2547,31 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         position: viewOverridePos ?? merged.position,
         data: {
           ...merged.data,
-          // US-004: file-backed renderers (imageNode, future htmlNode) read
+          // US-004: file-backed renderers (type:'image', type:'html') read
           // `projectId` to construct project-scoped file URLs. `fileBaseUrl`
           // (optional) lets embedders override the URL prefix so file fetches
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
-          // US-008: imageNode placeholder uses this callback when the user
+          // US-008: type:'image' placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
-          // every imageNode picks it up uniformly; non-imageNodes ignore it.
+          // every image node picks it up uniformly; non-image types ignore it.
           onRetryUpload: onRetryImageUpload,
           status: dataStatusFor(runs, merged.id),
           errorMessage: dataErrorMessageFor(runs, merged.id),
-          // US-007: latest StatusReport for this node (if any). play-node /
-          // state-node read this to render their badge row. Undefined → row
-          // is suppressed and the node renders byte-identical to legacy.
+          // US-007: latest StatusReport for this node (if any). The rectangle
+          // renderer reads this to draw its status badge row when a
+          // statusAction capability is set. Undefined → row is suppressed
+          // and the node renders byte-identical to legacy.
           statusReport: statusByNode?.[merged.id],
           onPlay: onPlayNode,
           onResize: onNodeResize,
           onResizeEnd: onNodeResizeEnd,
           setResizing,
-          // htmlNode-only: routed through to the renderer's fit-to-content
+          // type:'html'-only: routed through to the renderer's fit-to-content
           // button. Gated on type so other node variants don't pick up an
           // unused callback in their runtime data.
-          onFitToContent: merged.type === 'htmlNode' ? onHtmlNodeFitToContent : undefined,
+          onFitToContent: merged.type === 'html' ? onHtmlNodeFitToContent : undefined,
           onNameChange: (() => {
             // US-027: view mode → inline name edit is suppressed (the node's
             // dblclick-to-edit path gates on this callback being wired).
@@ -2567,42 +2579,39 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // Ellipse drops the Name concept entirely — its centered label
             // renders `description`, and the detail panel hides the Name
             // field. Suppressing the callback also makes
-            // `data.onNameChange === undefined`, which the shape-node uses to
-            // skip the dblclick-to-edit-name path.
-            if (merged.type === 'shapeNode') {
-              const shapeKind = (merged.data as { shape?: ShapeKind }).shape;
-              if (shapeKind === 'ellipse') return undefined;
-            }
+            // `data.onNameChange === undefined`, which the geometric-node uses
+            // to skip the dblclick-to-edit-name path.
+            if (merged.type === 'ellipse') return undefined;
             return onNodeNameChange;
           })(),
           onDescriptionChange: (() => {
             // US-027: same read-only gate as onNameChange above.
             if (!isEditMode) return undefined;
-            // Rectangle, ellipse, and sticky shapes render a description body — wire
+            // Rectangle, ellipse, and sticky render a description body — wire
             // the canvas-side inline edit so dblclick on the body lands an
-            // edit. Other shape kinds (text/database) and imageNode /
-            // iconNode have no on-canvas body text, so the inline-edit
-            // callback stays undefined.
-            if (merged.type === 'shapeNode') {
-              const shapeKind = (merged.data as { shape?: ShapeKind }).shape;
-              return shapeKind === 'rectangle' || shapeKind === 'ellipse' || shapeKind === 'sticky'
-                ? onNodeDescriptionChange
-                : undefined;
+            // edit. Text + the illustrative-shape tags (database/server/
+            // user/queue/cloud) and type:'image' / type:'icon' have no
+            // on-canvas body text, so the inline-edit callback stays
+            // undefined.
+            if (
+              merged.type === 'rectangle' ||
+              merged.type === 'ellipse' ||
+              merged.type === 'sticky'
+            ) {
+              return onNodeDescriptionChange;
             }
-            if (merged.type === 'imageNode' || merged.type === 'iconNode') return undefined;
-            return onNodeDescriptionChange;
+            return undefined;
           })(),
           onIconChange: (() => {
             // Same edit-mode + node-type gate as the inline-edit callbacks.
-            // Only playNode + stateNode render the header icon trigger — every
-            // other node type either has no `icon` field on its data schema
-            // (state-source nodes) or owns the icon presentation differently
-            // (iconNode, imageNode). htmlNode previously carried an icon but
-            // its caption affordance was removed; the field stays on disk
-            // for any pre-existing flows, but the canvas no longer offers a
-            // way to edit it.
+            // Only type:'rectangle' renders the header icon trigger — every
+            // other node type either suppresses the icon affordance (geometric
+            // illustrative shapes don't draw header chrome; text/sticky/
+            // ellipse have no header) or owns the icon presentation
+            // differently (type:'icon', type:'image'). type:'html' previously
+            // carried an icon but its caption affordance was removed.
             if (!isEditMode) return undefined;
-            if (merged.type !== 'playNode' && merged.type !== 'stateNode') return undefined;
+            if (merged.type !== 'rectangle') return undefined;
             return onIconChange;
           })(),
           // US-015: inject autoEditOnMount on the freshly drop-popover-created
@@ -3352,15 +3361,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // created nodes live in `nodeOverrides` until the SSE echo lands — they
   // appear in `rfNodes` immediately but only flow into the `nodes` prop
   // after the server round-trip. Reading from the ref means the validator
-  // sees the fresh node and rejects-or-accepts based on its real
-  // data.shape, not on a (stale) "id not found → fall through to valid"
-  // path that would let a fresh TEXT node bypass the gate.
+  // sees the fresh node and rejects-or-accepts based on its real `type`,
+  // not on a (stale) "id not found → fall through to valid" path that
+  // would let a fresh TEXT node bypass the gate.
   const isValidConnection = useCallback((conn: Connection | Edge) => {
     const isTextShape = (id: string | null | undefined): boolean => {
       if (!id) return false;
       const node = rfNodesRef.current.find((n) => n.id === id);
       if (!node) return false;
-      return node.type === 'shapeNode' && (node.data as { shape?: ShapeKind }).shape === 'text';
+      return node.type === 'text';
     };
     return !isTextShape(conn.source) && !isTextShape(conn.target);
   }, []);
@@ -3938,7 +3947,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const sidebarConnector = sidebarConnectorId
     ? (connectors.find((c) => c.id === sidebarConnectorId) ?? null)
     : null;
-  // The DetailPanel only reads `flowId` to gate htmlNode file-action visibility;
+  // The DetailPanel only reads `flowId` to gate type:'html' file-action visibility;
   // CanvasAdapter doesn't expose its bound flowId on the type, so we route via
   // the existing `projectId` prop (which the studio already passes — identical
   // value, no new wiring at the host).
@@ -4450,12 +4459,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 ) : null}
                 {contextOnNode &&
                 (onCopyNode || onPasteAt) &&
-                ((contextNodeType === 'iconNode' && !!onRequestIconReplace) ||
+                ((contextNodeType === 'icon' && !!onRequestIconReplace) ||
                   onReorderNode ||
                   onDeleteNode) ? (
                   <ContextMenuSeparator />
                 ) : null}
-                {contextOnNode && contextNodeType === 'iconNode' && onRequestIconReplace ? (
+                {contextOnNode && contextNodeType === 'icon' && onRequestIconReplace ? (
                   <ContextMenuItem
                     data-testid="node-context-menu-change-icon"
                     onSelect={handleChangeIconPick}
@@ -4464,7 +4473,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   </ContextMenuItem>
                 ) : null}
                 {contextOnNode &&
-                contextNodeType === 'iconNode' &&
+                contextNodeType === 'icon' &&
                 onRequestIconReplace &&
                 (onReorderNode || onDeleteNode) ? (
                   <ContextMenuSeparator />

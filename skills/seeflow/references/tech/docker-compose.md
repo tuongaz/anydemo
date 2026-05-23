@@ -14,7 +14,7 @@ category: local-infra
 ## Node modelling
 
 - Compose itself is **not** a node. Model each compose **service** (postgres,
-  localstack, kafka) as its own `stateNode`, named after the service.
+  localstack, kafka) as its own node (`type:'rectangle'`), named after the service.
 - If a play script must start a service before another node fires, treat
   `docker compose up -d <svc>` as setup inside that node's play script,
   not as its own node.

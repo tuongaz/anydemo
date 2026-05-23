@@ -23,7 +23,7 @@ const VALID_DEMO_TWO_NODES = {
   nodes: [
     {
       id: 'a',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'A',
         stateSource: { kind: 'request' },
@@ -32,7 +32,7 @@ const VALID_DEMO_TWO_NODES = {
     },
     {
       id: 'b',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'B',
         stateSource: { kind: 'request' },
@@ -55,7 +55,7 @@ const VALID_DEMO_THREE_NODES = {
   nodes: [
     {
       id: 'a',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'A',
         stateSource: { kind: 'request' },
@@ -64,7 +64,7 @@ const VALID_DEMO_THREE_NODES = {
     },
     {
       id: 'b',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'B',
         stateSource: { kind: 'request' },
@@ -73,7 +73,7 @@ const VALID_DEMO_THREE_NODES = {
     },
     {
       id: 'c',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'C',
         stateSource: { kind: 'request' },
@@ -227,8 +227,8 @@ const SCENARIOS: ParityScenario[] = [
       // would diverge between REST and MCP runs even with identical inputs.
       const newNode = {
         id: 'parity-new',
-        type: 'shapeNode',
-        data: { shape: 'rectangle', name: 'New' },
+        type: 'rectangle',
+        data: { name: 'New' },
       };
       return {
         demoFile: fix.demoFile,
@@ -372,8 +372,8 @@ const SCENARIOS: ParityScenario[] = [
         nodes: [
           {
             id: 'parity-bulk-c',
-            type: 'shapeNode' as const,
-            data: { shape: 'rectangle' as const, name: 'C' },
+            type: 'rectangle' as const,
+            data: { name: 'C' },
           },
         ],
         connectors: [

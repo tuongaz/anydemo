@@ -8,8 +8,8 @@ import { type NodeStylePatch, StyleStrip, type StyleStripProps } from './style-s
 // can't mount the real Radix Popover/Tooltip tree. Calling StyleStrip as a
 // function under the shim returns the first render with sub-components
 // (SwatchButton, PopoverButton, etc.) captured as `{ type, props }`
-// placeholders. We walk that tree to find the iconNode color SwatchButton
-// and invoke its `onSelect` to assert the apply wiring.
+// placeholders. We walk that tree to find the icon-color SwatchButton and
+// invoke its `onSelect` to assert the apply wiring.
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
@@ -112,33 +112,33 @@ function callStrip(overrides: Partial<StyleStripProps> = {}): unknown {
   return renderWithHooks(() => (StyleStrip as unknown as (p: StyleStripProps) => unknown)(props));
 }
 
-function iconNode(id: string, color?: string): FlowNode {
+function iconFixture(id: string, color?: string): FlowNode {
   return {
     id,
-    type: 'iconNode',
+    type: 'icon',
     position: { x: 0, y: 0 },
     data: { icon: 'shopping-cart', ...(color ? { color } : {}) },
   } as FlowNode;
 }
 
-function shapeNode(id: string): FlowNode {
+function rectangleFixture(id: string): FlowNode {
   return {
     id,
-    type: 'shapeNode',
+    type: 'rectangle',
     position: { x: 0, y: 0 },
-    data: { shape: 'rectangle', label: 's' },
+    data: { name: 's' },
   } as FlowNode;
 }
 
-describe('StyleStrip — iconNode color picker (US-014)', () => {
-  it('renders only the icon-color swatch when an iconNode is selected', () => {
-    const tree = callStrip({ nodes: [iconNode('n1', 'blue')] });
+describe('StyleStrip — icon color picker (US-014)', () => {
+  it('renders only the icon-color swatch when a type:"icon" node is selected', () => {
+    const tree = callStrip({ nodes: [iconFixture('n1', 'blue')] });
     const iconSwatch = findElement(tree, testIdEquals('style-strip-icon-color'));
     expect(iconSwatch).not.toBeNull();
     expect((iconSwatch?.props as { activeToken?: string }).activeToken).toBe('blue');
     expect((iconSwatch?.props as { previewKind?: string }).previewKind).toBe('edge');
 
-    // None of the shared / shape controls should appear in the iconNode-only
+    // None of the shared / geometric controls should appear in the icon-only
     // strip — no fill, no border style/size, no font size, no corner radius.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-fill'))).toBeNull();
@@ -150,7 +150,7 @@ describe('StyleStrip — iconNode color picker (US-014)', () => {
 
   it('clicking a swatch token dispatches onStyleNode with { color }', () => {
     const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [iconNode('n1')], onStyleNode });
+    const tree = callStrip({ nodes: [iconFixture('n1')], onStyleNode });
     const iconSwatch = findElement(tree, testIdEquals('style-strip-icon-color'));
     if (!iconSwatch) throw new Error('icon-color swatch missing');
     const onSelect = (iconSwatch.props as { onSelect: (token: string) => void }).onSelect;
@@ -159,10 +159,10 @@ describe('StyleStrip — iconNode color picker (US-014)', () => {
     expect(onStyleNode).toHaveBeenCalledWith('n1', { color: 'green' });
   });
 
-  it('fans out the picked color to every selected iconNode', () => {
+  it('fans out the picked color to every selected icon node', () => {
     const onStyleNode = mock(() => {});
     const tree = callStrip({
-      nodes: [iconNode('n1', 'blue'), iconNode('n2')],
+      nodes: [iconFixture('n1', 'blue'), iconFixture('n2')],
       onStyleNode,
     });
     const iconSwatch = findElement(tree, testIdEquals('style-strip-icon-color'));
@@ -175,7 +175,7 @@ describe('StyleStrip — iconNode color picker (US-014)', () => {
   });
 
   it("active token falls back to 'default' when data.color is unset", () => {
-    const tree = callStrip({ nodes: [iconNode('n1')] });
+    const tree = callStrip({ nodes: [iconFixture('n1')] });
     const iconSwatch = findElement(tree, testIdEquals('style-strip-icon-color'));
     expect((iconSwatch?.props as { activeToken?: string }).activeToken).toBe('default');
   });
@@ -187,51 +187,53 @@ describe('StyleStrip — iconNode color picker (US-014)', () => {
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
   });
 
-  it('does NOT render the icon-color swatch when a non-iconNode is selected', () => {
-    const tree = callStrip({ nodes: [shapeNode('s1')] });
+  it('does NOT render the icon-color swatch when a non-icon node is selected', () => {
+    const tree = callStrip({ nodes: [rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
-    // The existing shape strip should still be present.
+    // The existing geometric strip should still be present.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
   });
 
-  it('does NOT render the icon-color swatch in a mixed (iconNode + shape) selection', () => {
-    const tree = callStrip({ nodes: [iconNode('n1', 'blue'), shapeNode('s1')] });
+  it('does NOT render the icon-color swatch in a mixed (icon + geometric) selection', () => {
+    const tree = callStrip({ nodes: [iconFixture('n1', 'blue'), rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
     // Shared controls drive the non-icon nodes; border-color swatch is visible.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
   });
 
   it('the patch shape uses `color` (not borderColor/backgroundColor) — type-level check', () => {
-    // Compile-time guard: the iconNode patch must be a NodeStylePatch with a
+    // Compile-time guard: the icon patch must be a NodeStylePatch with a
     // `color` field. If the field is removed from the interface this test
     // fails to compile.
     const patch: NodeStylePatch = { color: 'amber' };
     expect(patch.color).toBe('amber');
   });
 
-  it('handles multiple sibling iconNodes without leaking other controls', () => {
-    const tree = callStrip({ nodes: [iconNode('a'), iconNode('b'), iconNode('c')] });
+  it('handles multiple sibling icon nodes without leaking other controls', () => {
+    const tree = callStrip({
+      nodes: [iconFixture('a'), iconFixture('b'), iconFixture('c')],
+    });
     const swatches = findAll(tree, testIdEquals('style-strip-icon-color'));
     expect(swatches.length).toBe(1);
   });
 
-  it('hides the icon-color swatch when iconNode + connector are selected together', () => {
-    // pureIconNode requires no connectors; the shared/connector strip takes
+  it('hides the icon-color swatch when an icon node + connector are selected together', () => {
+    // pureIconType requires no connectors; the shared/connector strip takes
     // over for mixed selections so the icon-only branch stays narrow.
     const cn: Connector = {
       id: 'c1',
       source: 'a',
       target: 'b',
     } as Connector;
-    const tree = callStrip({ nodes: [iconNode('n1')], connectors: [cn] });
+    const tree = callStrip({ nodes: [iconFixture('n1')], connectors: [cn] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
   });
 });
 
-describe('StyleStrip — iconNode Change-icon button (US-022)', () => {
-  it('renders the Change-icon button when a single iconNode is selected and the callback is wired', () => {
+describe('StyleStrip — Change-icon button (US-022)', () => {
+  it('renders the Change-icon button when a single icon node is selected and the callback is wired', () => {
     const tree = callStrip({
-      nodes: [iconNode('n1')],
+      nodes: [iconFixture('n1')],
       onRequestIconReplace: () => {},
     });
     const btn = findElement(tree, testIdEquals('style-strip-change-icon'));
@@ -241,7 +243,7 @@ describe('StyleStrip — iconNode Change-icon button (US-022)', () => {
   it('clicking the Change-icon button calls onRequestIconReplace with the node id', () => {
     const onRequestIconReplace = mock((_id: string) => {});
     const tree = callStrip({
-      nodes: [iconNode('n-42')],
+      nodes: [iconFixture('n-42')],
       onRequestIconReplace,
     });
     const btn = findElement(tree, testIdEquals('style-strip-change-icon'));
@@ -253,40 +255,40 @@ describe('StyleStrip — iconNode Change-icon button (US-022)', () => {
   });
 
   it('hides the Change-icon button when onRequestIconReplace is undefined', () => {
-    const tree = callStrip({ nodes: [iconNode('n1')] });
+    const tree = callStrip({ nodes: [iconFixture('n1')] });
     expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
     // The color swatch is still present — only the change button hides.
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).not.toBeNull();
   });
 
-  it('hides the Change-icon button on a multi-iconNode selection (ambiguous target)', () => {
+  it('hides the Change-icon button on a multi-icon-node selection (ambiguous target)', () => {
     const tree = callStrip({
-      nodes: [iconNode('a'), iconNode('b')],
+      nodes: [iconFixture('a'), iconFixture('b')],
       onRequestIconReplace: () => {},
     });
     expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).not.toBeNull();
   });
 
-  it('hides the Change-icon button on a non-iconNode selection', () => {
+  it('hides the Change-icon button on a non-icon selection', () => {
     const tree = callStrip({
-      nodes: [shapeNode('s1')],
+      nodes: [rectangleFixture('s1')],
       onRequestIconReplace: () => {},
     });
     expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
   });
 });
 
-// US-014: image-node border editor. Image borders use `borderWidth` (1–8)
+// US-014: image border editor. Image borders use `borderWidth` (1–8)
 // color picker, border style toggle, border width 1–8) but writes through
-// onStyleNode for any selected imageNode. Multi-image fan-out follows the
-// pureIconNode pattern; mixed selections (image + shape) fall through to the
-// shared shape strip.
+// onStyleNode for any selected image node. Multi-image fan-out follows the
+// pureIconType pattern; mixed selections (image + geometric) fall through to
+// the shared geometric strip.
 // US-004: image nodes reference a relative `path` (resolved at render time
 // against the project file endpoint) instead of an inline base64 data URL.
 const SAMPLE_PATH = 'assets/pixel.png';
 
-function imageNode(
+function imageFixture(
   id: string,
   opts: {
     borderColor?: string;
@@ -297,7 +299,7 @@ function imageNode(
 ): FlowNode {
   return {
     id,
-    type: 'imageNode',
+    type: 'image',
     position: { x: 0, y: 0 },
     data: {
       path: SAMPLE_PATH,
@@ -309,14 +311,16 @@ function imageNode(
   } as FlowNode;
 }
 
-describe('StyleStrip — image-node border editor (US-014)', () => {
-  it('renders the image border controls when a single imageNode is selected', () => {
-    const tree = callStrip({ nodes: [imageNode('i1', { borderColor: 'blue', borderWidth: 3 })] });
+describe('StyleStrip — image border editor (US-014)', () => {
+  it('renders the image border controls when a single type:"image" node is selected', () => {
+    const tree = callStrip({
+      nodes: [imageFixture('i1', { borderColor: 'blue', borderWidth: 3 })],
+    });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-style'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-width'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-corner-radius'))).not.toBeNull();
-    // Shape-only controls must NOT leak into the image branch.
+    // Geometric-only controls must NOT leak into the image branch.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-size'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-font-size'))).toBeNull();
@@ -329,20 +333,20 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
   });
 
   it('seeds the active border-color token from data.borderColor', () => {
-    const tree = callStrip({ nodes: [imageNode('i1', { borderColor: 'amber' })] });
+    const tree = callStrip({ nodes: [imageFixture('i1', { borderColor: 'amber' })] });
     const swatch = findElement(tree, testIdEquals('style-strip-image-border-color'));
     expect((swatch?.props as { activeToken?: string }).activeToken).toBe('amber');
   });
 
   it("falls back to 'default' border-color when data.borderColor is unset", () => {
-    const tree = callStrip({ nodes: [imageNode('i1')] });
+    const tree = callStrip({ nodes: [imageFixture('i1')] });
     const swatch = findElement(tree, testIdEquals('style-strip-image-border-color'));
     expect((swatch?.props as { activeToken?: string }).activeToken).toBe('default');
   });
 
   it('clicking a border-color swatch dispatches onStyleNode with { borderColor }', () => {
     const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [imageNode('i1')], onStyleNode });
+    const tree = callStrip({ nodes: [imageFixture('i1')], onStyleNode });
     const swatch = findElement(tree, testIdEquals('style-strip-image-border-color'));
     if (!swatch) throw new Error('image border-color swatch missing');
     (swatch.props as { onSelect: (t: string) => void }).onSelect('green');
@@ -350,10 +354,10 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
     expect(onStyleNode).toHaveBeenCalledWith('i1', { borderColor: 'green' });
   });
 
-  it('fans out the border-color pick to every selected imageNode (multi-select)', () => {
+  it('fans out the border-color pick to every selected image node (multi-select)', () => {
     const onStyleNode = mock(() => {});
     const tree = callStrip({
-      nodes: [imageNode('i1'), imageNode('i2', { borderColor: 'red' })],
+      nodes: [imageFixture('i1'), imageFixture('i2', { borderColor: 'red' })],
       onStyleNode,
     });
     const swatch = findElement(tree, testIdEquals('style-strip-image-border-color'));
@@ -367,7 +371,7 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
   it('the border-style toggle dispatches onStyleNode with { borderStyle }', () => {
     const onStyleNode = mock(() => {});
     const tree = callStrip({
-      nodes: [imageNode('i1', { borderStyle: 'solid' })],
+      nodes: [imageFixture('i1', { borderStyle: 'solid' })],
       onStyleNode,
     });
     const popover = findElement(tree, testIdEquals('style-strip-image-border-style'));
@@ -386,7 +390,7 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
     const onStyleNode = mock(() => {});
     const onStyleNodePreview = mock(() => {});
     const tree = callStrip({
-      nodes: [imageNode('i1', { borderWidth: 2 })],
+      nodes: [imageFixture('i1', { borderWidth: 2 })],
       onStyleNode,
       onStyleNodePreview,
     });
@@ -413,10 +417,10 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
     expect(onStyleNode).toHaveBeenCalledWith('i1', { borderWidth: 6 });
   });
 
-  it('does NOT render the image branch in a mixed (image + shape) selection', () => {
-    const tree = callStrip({ nodes: [imageNode('i1'), shapeNode('s1')] });
+  it('does NOT render the image branch in a mixed (image + geometric) selection', () => {
+    const tree = callStrip({ nodes: [imageFixture('i1'), rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).toBeNull();
-    // Mixed selection falls through to the shared shape strip.
+    // Mixed selection falls through to the shared geometric strip.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
   });
 
@@ -426,7 +430,7 @@ describe('StyleStrip — image-node border editor (US-014)', () => {
       source: 'a',
       target: 'b',
     } as Connector;
-    const tree = callStrip({ nodes: [imageNode('i1')], connectors: [cn] });
+    const tree = callStrip({ nodes: [imageFixture('i1')], connectors: [cn] });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).toBeNull();
   });
 });

@@ -13,7 +13,7 @@ category: storage
 
 ## Node modelling
 
-- One `stateNode` per Redis instance. Only split per DB index
+- One node (`type:'rectangle'`) per Redis instance. Only split per DB index
   (0, 1, ...) if the project uses indexes as logical namespaces.
 - Duplicate the node next to each consumer for readability
   (same `kind` + `name`, unique `id`).

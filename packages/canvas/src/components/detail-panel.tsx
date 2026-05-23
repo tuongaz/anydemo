@@ -34,7 +34,7 @@ export interface DetailPanelProps {
   node: FlowNode | null;
   connector: Connector | null;
   /**
-   * Optional canvas adapter used for project-scoped file actions on htmlNode
+   * Optional canvas adapter used for project-scoped file actions on type:'html'
    * details (Open in editor / Reveal in OS file manager). When omitted or when
    * a method (`openFile` / `revealFile`) is undefined, the corresponding
    * button is hidden so embedders without filesystem support don't render
@@ -50,9 +50,11 @@ export interface DetailPanelProps {
   onDetailChange?: (nodeId: string, value: string) => void;
   /**
    * US-008: persist a new icon name (or clear it via `null`) from the
-   * DetailPanel's Icon row. The row only renders for playNode / stateNode /
-   * htmlNode selections; when this callback is undefined the row is hidden
-   * (mirroring the read-only gate used by onNameChange / onDescriptionChange).
+   * DetailPanel's Icon row. The row only renders for type:'rectangle'
+   * selections (the one renderer that draws a header icon under the flat
+   * schema's Renderer phasing); when this callback is undefined the row is
+   * hidden (mirroring the read-only gate used by onNameChange /
+   * onDescriptionChange).
    */
   onIconChange?: (nodeId: string, icon: string | null) => void;
   /**
@@ -77,19 +79,16 @@ export function DetailPanel({
   statusReport,
   onClose,
 }: DetailPanelProps) {
-  // Text shape nodes are pure on-canvas labels — the sidebar would only
-  // duplicate the inline-edited text and offer no extra fields, so the panel
-  // stays closed for them. Clicking a text node still selects it on the
-  // canvas; double-click still opens inline edit.
-  const isTextShapeNode =
-    node?.type === 'shapeNode' && (node.data as { shape?: string }).shape === 'text';
-  // Ellipse + sticky shape nodes have no Name concept — their on-canvas label
-  // is the `description` field, so the panel suppresses the Name row entirely.
+  // Text nodes are pure on-canvas labels — the sidebar would only duplicate
+  // the inline-edited text and offer no extra fields, so the panel stays
+  // closed for them. Clicking a text node still selects it on the canvas;
+  // double-click still opens inline edit.
+  const isTextNode = node?.type === 'text';
+  // Ellipse + sticky nodes have no Name concept — their on-canvas label is
+  // the `description` field, so the panel suppresses the Name row entirely.
   // The panel still opens to expose Description / Detail / style fields.
-  const shapeKind =
-    node?.type === 'shapeNode' ? (node.data as { shape?: string }).shape : undefined;
-  const isDescriptionLabelShapeNode = shapeKind === 'ellipse' || shapeKind === 'sticky';
-  const inspectableNode = isTextShapeNode ? null : node;
+  const isDescriptionLabelShapeNode = node?.type === 'ellipse' || node?.type === 'sticky';
+  const inspectableNode = isTextNode ? null : node;
   const open = inspectableNode !== null || connector !== null;
   const nodeName =
     inspectableNode && 'name' in inspectableNode.data ? (inspectableNode.data.name ?? '') : '';
@@ -97,13 +96,10 @@ export function DetailPanel({
   const detail = inspectableNode?.data.detail ?? '';
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
   // Icon trigger sits inline with the title (left of the name). It's only
-  // meaningful for playNode + stateNode — the node types whose header renders
-  // an icon next to the name. htmlNode previously rendered an icon in its
-  // bottom-center label; that affordance was removed alongside the standalone
-  // sidebar Icon row, so the trigger no longer surfaces for htmlNode either.
-  const supportsIconField =
-    inspectableNode !== null &&
-    (inspectableNode.type === 'playNode' || inspectableNode.type === 'stateNode');
+  // meaningful for type:'rectangle' — the one renderer that draws a header
+  // icon next to the name under the flat schema's Renderer phasing (other
+  // geometric variants parse + persist `icon` but don't surface it).
+  const supportsIconField = inspectableNode !== null && inspectableNode.type === 'rectangle';
   const showIconField = supportsIconField && typeof onIconChange === 'function';
   // currentIcon is decoupled from showIconField so the read-only fallback
   // below can render the same icon the node body shows when the canvas is in
@@ -259,7 +255,7 @@ export function DetailPanel({
                 textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground/90"
               />
 
-              {inspectableNode.type === 'htmlNode' && flowId ? (
+              {inspectableNode.type === 'html' && flowId ? (
                 <HtmlNodeSection
                   adapter={adapter}
                   nodeId={inspectableNode.id}
@@ -524,7 +520,7 @@ export function TitleIconTrigger({
   );
 }
 
-// htmlNode detail section — displays the node-relative html path (e.g.
+// type:'html' detail section — displays the node-relative html path (e.g.
 // `view.html`, matching the `file://view.html` ref in flow.json) and provides
 // Open-in-editor + Reveal-in-file-manager shellout buttons. Both route through
 // the host-supplied `adapter.openFile` / `adapter.revealFile`. The studio's

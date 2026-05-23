@@ -15,7 +15,7 @@ const VALID_DEMO = {
   nodes: [
     {
       id: 'api-checkout',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'POST /checkout',
         stateSource: { kind: 'request' },
@@ -224,12 +224,12 @@ describe('seeflow CLI new subcommands', () => {
         nodes: [
           {
             id: 'n1',
-            type: 'stateNode',
+            type: 'rectangle',
             data: { name: 'one', stateSource: { kind: 'request' } },
           },
           {
             id: 'n2',
-            type: 'stateNode',
+            type: 'rectangle',
             data: { name: 'two', stateSource: { kind: 'request' } },
           },
         ],
@@ -273,12 +273,12 @@ describe('seeflow CLI new subcommands', () => {
         nodes: [
           {
             id: 'same',
-            type: 'stateNode',
+            type: 'rectangle',
             data: { name: 'a', stateSource: { kind: 'request' } },
           },
           {
             id: 'same',
-            type: 'stateNode',
+            type: 'rectangle',
             data: { name: 'b', stateSource: { kind: 'request' } },
           },
         ],
@@ -364,8 +364,8 @@ describe('seeflow CLI new subcommands', () => {
             ...VALID_DEMO.nodes,
             {
               id: 'shape-1',
-              type: 'shapeNode',
-              data: { name: 'note', shape: 'rectangle', detail: '# hidden' },
+              type: 'rectangle',
+              data: { name: 'note', detail: '# hidden' },
             },
           ],
         }),
@@ -426,10 +426,25 @@ describe('seeflow CLI new subcommands', () => {
         notes: string[];
       };
       expect(parsed.name).toBe('node');
+      // Flat-types refactor: schema-catalog returns 12 variants (9 geometric
+      // + image + html + icon) — pinned in alphabetical order.
       expect(Object.keys(parsed.schemas).sort()).toEqual(
-        ['htmlNode', 'iconNode', 'imageNode', 'playNode', 'shapeNode', 'stateNode'].sort(),
+        [
+          'cloud',
+          'database',
+          'ellipse',
+          'html',
+          'icon',
+          'image',
+          'queue',
+          'rectangle',
+          'server',
+          'sticky',
+          'text',
+          'user',
+        ].sort(),
       );
-      expect(parsed.schemas.playNode?.type).toBe('object');
+      expect(parsed.schemas.rectangle?.type).toBe('object');
       expect(parsed.notes.length).toBeGreaterThan(0);
     } finally {
       studio.stop();
@@ -466,8 +481,8 @@ describe('seeflow CLI new subcommands', () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          type: 'shapeNode',
-          data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+          type: 'rectangle',
+          data: { name: 'A', detail: '# inlined body' },
         }),
       });
       const added = (await addRes.json()) as { id: string };

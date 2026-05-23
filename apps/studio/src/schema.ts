@@ -140,12 +140,7 @@ export const GEOMETRIC_NODE_TYPES = [
   'cloud',
 ] as const;
 
-export const NodeTypeSchema = z.enum([
-  ...GEOMETRIC_NODE_TYPES,
-  'image',
-  'html',
-  'icon',
-]);
+export const NodeTypeSchema = z.enum([...GEOMETRIC_NODE_TYPES, 'image', 'html', 'icon']);
 
 // ---- Resolved (in-memory) per-type data -------------------------------------
 

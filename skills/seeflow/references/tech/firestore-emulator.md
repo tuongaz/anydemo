@@ -13,7 +13,7 @@ category: local-infra
 
 ## Node modelling
 
-- One `stateNode` per **collection** the flow touches — keyed by collection
+- One node (`type:'rectangle'`) per **collection** the flow touches — keyed by collection
   path (`users`, `orders/{id}/items`).
 - Subcollections that the demo reads independently get their own node;
   otherwise fold them into the parent collection's status view.

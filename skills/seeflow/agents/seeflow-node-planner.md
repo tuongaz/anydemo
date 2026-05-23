@@ -71,27 +71,45 @@ nothing else outside the fence. The envelope carries:
   1/2/3`). The orchestrator strips this before forwarding and surfaces
   each entry to the user during the Phase 3 review checkpoint.
 
-**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. **Conform to the schema in your launching prompt** — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary. **Emit zero visual fields** — presentation lives in `style.json`, written by `flows:layout` and the canvas. **Don't emit any play or status action** — the orchestrator injects a minimal placeholder before `flow:add-bulk` so every `playNode` satisfies its requirement; the Phase 4 designers overwrite it with the real actions via `nodes:patch`.
+**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. **Conform to the schema in your launching prompt** — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary. **Emit zero visual fields** — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas. **Mark the trigger by setting `data.playAction` to a placeholder object** (the orchestrator fills in the required fields before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`). **Do not emit `statusAction`** — the Phase 4 status-designer attaches those.
 
-### Picking node types
+### Picking node `type`
 
-- **`playNode`** — node that will host a play action in Phase 4. Use for
-  entities that are *triggers* the audience can act on (HTTP endpoints,
-  cron-fire surfaces, click sources, fixture producers).
-- **`stateNode`** — node whose state evolves and is observable. Use for
-  everything that participates in the flow and may carry a status action
-  (workers, queues, DBs, workflow engines, external APIs, caches).
-- **`shapeNode`** — illustrative node with no actions. Use ONLY for
-  external systems / actors the demo references but does not monitor.
-  Everything with observable state must be a `stateNode`, not a
-  `shapeNode`. **Human shapes** are allowed ONLY when the human action
-  is itself part of the demo (UX click-through, support-agent workflow,
+The schema is **flat**: `type` is the visual shape, and `playAction` /
+`statusAction` / `stateSource` are top-level data fields valid on every
+type. There is no separate "play node" or "state node" tag.
+
+- **`rectangle`** — the named card with chrome (header, description,
+  capability buttons / pills). **Use for every important node** —
+  HTTP endpoints, services, workers, observable DBs / queues / topics,
+  anything the audience will trigger or watch. Capability chrome is
+  rectangle-only in v1: if you want a play button or status pill to
+  render, the node MUST be a `rectangle`.
+- **`database`, `queue`, `cloud`, `server`** — resource shapes. Use
+  ONLY when the audience does not need to see live state on the
+  resource (no status pill, no play button). If the audience needs
+  monitoring, switch to `rectangle` and set `data.icon` to the
+  matching Lucide name (`database`, `list-ordered`, `cloud`,
+  `server`).
+- **`user`** — human-actor shape. Allowed ONLY when the human action is
+  itself part of the demo (UX click-through, support-agent workflow,
   consent capture). Backend / system / data-pipeline / worker / cron /
-  webhook-driven flows MUST NOT add a human shape just to give the
-  canvas a starting point. The trigger surface IS the start. For the
-  legal shape values, consult the `shapeNode` variant in your launching
-  prompt's schema.
-- **`iconNode`, `htmlNode`, `imageNode`** — do NOT use at this phase.
+  webhook-driven flows MUST NOT add a `user` shape just to give the
+  canvas a starting point. The trigger surface IS the start.
+- **`ellipse`, `sticky`, `text`** — decorative geometric shapes for
+  callouts, labels, and notes. No capability chrome in v1.
+- **`icon`, `html`, `image`** — do NOT use at this phase. The
+  Phase 4 designers and the canvas author them when needed.
+
+**Trigger nodes are rectangles.** The audience clicks the play button;
+the button only renders on `type:'rectangle'`. So every node that
+should host a Play action — including the planner's designated initial
+trigger — is `type:'rectangle'` with `data.playAction` set.
+
+**Observable nodes are rectangles too** when you want a status pill —
+the pill is rectangle-only in v1. A `database` carrying a
+`statusAction` is legal but the pill won't appear; for the audience to
+see live state, use `rectangle` + `data.icon: "database"`.
 
 ### State source
 
@@ -103,12 +121,13 @@ in `$SEEFLOW schema node`.
 
 ### Semantic requirements (not schema)
 
-- **`data.detail` is required on every `playNode` and `stateNode`** — 1–3
-  short markdown paragraphs from the audience's perspective: what this
-  node does, what it emits or stores, why it matters, source file(s)
-  when known. The studio auto-externalises to `nodes/<id>/detail.md`;
-  pass the raw markdown, never a `file://…` link. Omission renders a
-  blank card. Decorative variants are exempt.
+- **`data.detail` is required on every `rectangle` that carries
+  `playAction` or `statusAction`** — 1–3 short markdown paragraphs from
+  the audience's perspective: what this node does, what it emits or
+  stores, why it matters, source file(s) when known. The studio
+  auto-externalises to `nodes/<id>/detail.md`; pass the raw markdown,
+  never a `file://…` link. Omission renders a blank card. Decorative
+  shapes (sticky, text, icon) are exempt.
 - **`data.description` ≤ 15 words** — tight verb phrase
   (`"Accepts cart, creates order"`); longer text overflows the card.
 - **`data.name`** uses the spelling the audience would recognise
@@ -227,9 +246,11 @@ exceptions, collapse it.
   bus plus three event connectors from bus to each consumer. Cite
   exception 2.
 - **A payments service exposing `charge`, `refund`, and `subscription`
-  with independent state machines.** → 3 nodes (`payments-charge`,
-  `payments-refund`, `payments-subscription`), each with its own
-  `playNode` candidacy and its own status probe. Cite exception 4.
+  with independent state machines.** → 3 `rectangle` nodes
+  (`payments-charge`, `payments-refund`, `payments-subscription`),
+  each a candidate trigger (one of them carries the initial
+  `playAction` placeholder) and each with its own status probe later.
+  Cite exception 4.
   Contrast with a payments service whose `charge` and `refund` routes
   both mutate the same ledger row — that stays one node.
   - Variant: if the brief did not mention an explicit bus
@@ -266,7 +287,10 @@ exceptions, collapse it.
 
    **Pass A — named resources:** scan `rootEntities` and `codePointers`
    for anything that is a database, queue, event bus, cache, file store,
-   or external SaaS. Add each as a candidate `stateNode`.
+   or external SaaS. Add each as a candidate `rectangle` node with a
+   matching `data.icon` (`database`, `list-ordered`, `radio-tower`,
+   `cloud`, `server`) and a `data.stateSource.kind` of `event` (or
+   `request` for sync-only resources).
 
    **Pass B — inferred resources:** for each service node, ask "where
    does its state land?" If a service saves records → there is a store.
@@ -281,20 +305,21 @@ exceptions, collapse it.
    (default) or N nodes (only if it matches an exception). Write the
    rationale as you go — if you cannot articulate a clean rationale,
    default to ONE.
-5. **Pick the trigger.** Exactly one node should be a `playNode`. It is
-   the entity the audience clicks first to start the flow. The
-   play-designer may later inject more triggers, but you produce
-   exactly one initial `playNode`. Mark every other functional entity
-   as `stateNode`.
-   - Pick the playNode based on `userIntent`: synchronous-API demos
+5. **Pick the trigger.** Exactly one node carries an initial
+   `data.playAction` placeholder — the entity the audience clicks first
+   to start the flow. The play-designer may later inject more triggers
+   via `newTriggerNodes`, but you produce exactly one initial trigger.
+   The trigger node MUST be `type:'rectangle'` (the play button only
+   renders on rectangles in v1).
+   - Pick the trigger based on `userIntent`: synchronous-API demos
      trigger on the endpoint; pipeline / event demos trigger on the
      fixture-producer or first publisher.
-   - **Do NOT prepend a Human / Operator / Customer shapeNode** as the
-     "start" of a backend or system flow. The endpoint / worker /
-     scheduler IS the start. A `shape: "user"` node belongs only in
-     flows whose subject is a human action (UX click-through,
-     support-agent workflow, consent capture). If the user did not ask
-     for a human-centred flow, skip the user shape entirely.
+   - **Do NOT prepend a `type:'user'` shape** as the "start" of a
+     backend or system flow. The endpoint / worker / scheduler IS the
+     start. A `user` node belongs only in flows whose subject is a
+     human action (UX click-through, support-agent workflow, consent
+     capture). If the user did not ask for a human-centred flow, skip
+     the user shape entirely.
 6. **Wire connectors.** For every flow edge implied by the brief, add a
    connector, including edges from services INTO their resource nodes
    (service → DB, service → queue, service → event bus). Pick the most
@@ -302,9 +327,10 @@ exceptions, collapse it.
    Connectors are directional: `source` produces, `target` consumes.
 7. **Sanity-check.** No orphan nodes (every node either has an inbound
    connector OR is the trigger). No connector points to or from an id
-   that is not in `nodes[]`. Exactly one `playNode`. Slug is unique and
-   kebab-case. Every resource — whether named in the brief or inferred
-   from service behavior — has a node and at least one connector.
+   that is not in `nodes[]`. Exactly one node carries an initial
+   `data.playAction` placeholder. Slug is unique and kebab-case. Every
+   resource — whether named in the brief or inferred from service
+   behavior — has a node and at least one connector.
 8. **Emit.** Final message is the JSON code block. No preamble, no
    explanation around the fence.
 
@@ -318,16 +344,15 @@ If `contextBrief.existingDemo.diffTarget === true`:
 - Remove nodes whose underlying entity is no longer in scope.
 - Add nodes for entities the user is now asking about.
 - **Retype in place when an entity's role changes.** If a node's
-  underlying entity is the same but its role flipped (e.g. the
-  previous trigger is no longer the trigger — demote it from
-  `playNode` to `stateNode`), emit it with its **existing id** but
-  the new `type`. The orchestrator routes this to a non-destructive
-  `nodes:patch { type, ... }` instead of `delete` + `flow:add-bulk`, so
-  the per-node folder (`nodes/<id>/`) — scripts, detail.md,
-  view.html, uploaded images — survives. Supply any fields the new
-  type requires in the same patch (e.g. `state → play` needs
-  `playAction`, `* → shape` needs `shape`, `* → icon` needs `icon`,
-  `* → image` needs `path`); the server fails the call with `badSchema`
+  underlying entity is the same but its shape flipped (e.g. the
+  previous trigger `rectangle` is now a decorative `database`), emit
+  it with its **existing id** but the new `type`. The orchestrator
+  routes this to a non-destructive `nodes:patch { type, ... }` instead
+  of `delete` + `flow:add-bulk`, so the per-node folder
+  (`nodes/<id>/`) — scripts, detail.md, view.html, uploaded images —
+  survives. Supply any fields the new type requires in the same patch
+  (e.g. `* → image` needs `path` starting with `nodes/<id>/`,
+  `* → icon` needs `icon`); the server fails the call with `badSchema`
   otherwise.
 - The orchestrator computes the `+ / ~ / -` diff from your output
   against `editTarget`; you do not annotate the diff yourself.
@@ -371,12 +396,12 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "order-server",     "type": "playNode",  "data": { "name": "POST /orders",     "icon": "server",         "stateSource": { "kind": "request" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
-    { "id": "event-bus",        "type": "stateNode", "data": { "name": "Event Bus",        "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
-    { "id": "inventory-worker", "type": "stateNode", "data": { "name": "Inventory Worker", "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
-    { "id": "shipping-worker",  "type": "stateNode", "data": { "name": "Shipping Worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
-    { "id": "shipments-queue",  "type": "stateNode", "data": { "name": "Shipments Queue",  "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
-    { "id": "order-store",      "type": "stateNode", "data": { "name": "Order Store",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
+    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server",         "stateSource": { "kind": "request" }, "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
+    { "id": "event-bus",        "type": "rectangle", "data": { "name": "Event Bus",        "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
+    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
+    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
+    { "id": "shipments-queue",  "type": "rectangle", "data": { "name": "Shipments Queue",  "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
+    { "id": "order-store",      "type": "rectangle", "data": { "name": "Order Store",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
   ],
   "connectors": [
     { "id": "c-order-server-event-bus",          "source": "order-server",     "target": "event-bus",        "label": "order.created" },
@@ -405,10 +430,10 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "validate-cart", "type": "stateNode", "data": { "name": "validate cart", "stateSource": { "kind": "event" } } },
-    { "id": "compute-tax",   "type": "stateNode", "data": { "name": "compute tax",   "stateSource": { "kind": "event" } } },
-    { "id": "charge-card",   "type": "stateNode", "data": { "name": "charge card",   "stateSource": { "kind": "event" } } },
-    { "id": "publish-event", "type": "stateNode", "data": { "name": "publish event", "stateSource": { "kind": "event" } } }
+    { "id": "validate-cart", "type": "rectangle", "data": { "name": "validate cart", "stateSource": { "kind": "event" } } },
+    { "id": "compute-tax",   "type": "rectangle", "data": { "name": "compute tax",   "stateSource": { "kind": "event" } } },
+    { "id": "charge-card",   "type": "rectangle", "data": { "name": "charge card",   "stateSource": { "kind": "event" } } },
+    { "id": "publish-event", "type": "rectangle", "data": { "name": "publish event", "stateSource": { "kind": "event" } } }
   ],
   "connectors": [],
   "rationales": { "validate-cart": "step 1", "compute-tax": "step 2", "charge-card": "step 3", "publish-event": "step 4" }
@@ -418,10 +443,11 @@ editTarget: null
 This is wrong because (a) the four "steps" are internal routes / handlers
 of a single service — they fail the abstraction rule (one node per
 microservice), and "step 1/2/3/4" does NOT match any exception; (b) no
-node is a `playNode`, so the audience has nothing to click; (c) there
-are zero connectors, so the orchestrator cannot render the flow direction.
-Collapse to a single `order-server` `playNode` and wire connectors to the
-downstream entities.
+node carries an initial `data.playAction` placeholder, so the audience
+has nothing to click; (c) there are zero connectors, so the
+orchestrator cannot render the flow direction. Collapse to a single
+`order-server` `type:'rectangle'` with `data.playAction` set, and wire
+connectors to the downstream entities.
 
 ## Constraints recap
 
@@ -430,16 +456,20 @@ downstream entities.
 - Conform to the node + connector contracts in your launching prompt
   (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
   the contract rejects.
-- Exactly one `playNode`; everything else `stateNode`.
+- Exactly one node carries an initial `data.playAction` placeholder (the trigger), and it is `type:'rectangle'`. Every other node is shaped by its visual role — default to `rectangle` for important / observable nodes; pick `database` / `queue` / `cloud` / `server` / `user` only when the audience does not need capability chrome on it.
 - Every connector references node ids that exist in `nodes[]`.
 - Every database, queue, event bus, cache, file store, and external SaaS
   mentioned in the brief MUST have a node. Omitting a resource node is
   always wrong.
 - Cite an exception by number (`Exception 1/2/3/4`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
-- Don't emit any action — the orchestrator injects a placeholder so
-  every `playNode` satisfies its requirement; Phase 4 designers
-  overwrite. Don't emit positions — `flows:layout` attaches them.
+- Mark the trigger node by setting `data.playAction` to a placeholder
+  object (`{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }`
+  is enough); the orchestrator fills any remaining required fields
+  before `flow:add-bulk`, and the Phase 4 play-designer overwrites the
+  placeholder with the real action via `nodes:patch`. Don't emit
+  `statusAction` — Phase 4 attaches those. Don't emit positions —
+  `flows:layout` attaches them.
 - **Emit zero presentation fields.** Borders, colors, sizes, fonts,
   positions, handles all live in `style.json`, written exclusively by
   `flows:layout` and the canvas. The renderer applies sensible defaults

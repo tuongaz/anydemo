@@ -114,13 +114,13 @@ describe('exportToCloud', () => {
     expect(parsed.name).toBe('Test');
   });
 
-  it('fetches imageNode files and includes them under files/ in the zip', async () => {
+  it("fetches type:'image' files and includes them under files/ in the zip", async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71]);
     const demo: Flow = {
       version: 2,
       name: 'Img Flow',
       nodes: [
-        { id: 'n1', type: 'imageNode', position: { x: 0, y: 0 }, data: { path: 'assets/img.png' } },
+        { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'assets/img.png' } },
       ],
       connectors: [],
     };
@@ -152,14 +152,14 @@ describe('exportToCloud', () => {
     expect(entries['files/assets/img.png']).toEqual(pngBytes);
   });
 
-  it('inlines htmlNode content into flow.json without bundling files/ (resolver inlined it)', async () => {
+  it("inlines type:'html' content into flow.json without bundling files/ (resolver inlined it)", async () => {
     const demo: Flow = {
       version: 2,
       name: 'Html Flow',
       nodes: [
         {
           id: 'n1',
-          type: 'htmlNode',
+          type: 'html',
           position: { x: 0, y: 0 },
           data: { html: '<p>inlined</p>', name: 'Widget' },
         },
@@ -182,7 +182,7 @@ describe('exportToCloud', () => {
 
     await exportToCloud('proj-1', 'test@example.com', 'Html Flow', 'public');
 
-    // No file bundling needed for htmlNode — content rides inside flow.json.
+    // No file bundling needed for type:'html' — content rides inside flow.json.
     expect(requests.some((u) => u.includes('/files/'))).toBe(false);
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -199,13 +199,13 @@ describe('exportToCloud', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'imageNode',
+          type: 'image',
           position: { x: 0, y: 0 },
           data: { path: 'assets/shared.png' },
         },
         {
           id: 'n2',
-          type: 'imageNode',
+          type: 'image',
           position: { x: 100, y: 0 },
           data: { path: 'assets/shared.png' },
         },
@@ -236,7 +236,7 @@ describe('exportToCloud', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'imageNode',
+          type: 'image',
           position: { x: 0, y: 0 },
           data: { path: 'assets/missing.png' },
         },

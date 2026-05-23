@@ -106,7 +106,7 @@ describe('renderCommandHelp', () => {
     expect(out).toContain('## Input (body)');
     // example body
     expect(out).toContain('Example body');
-    expect(out).toContain('"stateNode"');
+    expect(out).toContain('"rectangle"');
     // output envelope
     expect(out).toContain('## Output');
     expect(out).toContain('"ok": true');

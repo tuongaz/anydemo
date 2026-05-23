@@ -71,12 +71,12 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
   return (await res.json()) as CreateProjectResponse;
 }
 
-async function seedShapeNodes(flowId: string, ids: string[]): Promise<void> {
+async function seedRectangleNodes(flowId: string, ids: string[]): Promise<void> {
   const res = await fetch(`${studio.baseURL}/api/flows/${flowId}/bulk`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
-      nodes: ids.map((id) => ({ id, type: 'shapeNode', data: { shape: 'rectangle' } })),
+      nodes: ids.map((id) => ({ id, type: 'rectangle', data: {} })),
     }),
   });
   expect(res.status).toBe(200);
@@ -226,8 +226,8 @@ describe('integration: CLI — projects + flows', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'note', shape: 'rectangle', detail: '# hidden' },
+        type: 'rectangle',
+        data: { name: 'note', detail: '# hidden' },
       }),
     });
     expect(addRes.status).toBe(200);
@@ -251,8 +251,8 @@ describe('integration: CLI — projects + flows', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         id: 'shape-1',
-        type: 'shapeNode',
-        data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+        type: 'rectangle',
+        data: { name: 'A', detail: '# inlined body' },
       }),
     });
     expect(addRes.status).toBe(200);
@@ -330,11 +330,13 @@ describe('integration: CLI — projects + flows', () => {
     expect(list.find((f) => f.name === slug)).toBeDefined();
   });
 
-  it('flows:play triggers a playNode and prints { ok, runId, status, body }', async () => {
-    // Mirrors rest.it.ts US-007: seed a playNode whose scriptPath resolves
-    // under <repoPath>/nodes/<id>/, then drop a tiny script that prints a
-    // JSON line and exits 0. CLI's flows:play POSTs to /play and the response
-    // is printed via printOk → `{"ok":true, runId, status, body}`.
+  it('flows:play triggers a rectangle node with playAction and prints { ok, runId, status, body }', async () => {
+    // Mirrors rest.it.ts: seed a type:'rectangle' node carrying a playAction
+    // capability whose scriptPath resolves under <repoPath>/nodes/<id>/, then
+    // drop a tiny script that prints a JSON line and exits 0. CLI's flows:play
+    // POSTs to /play and the response is printed via printOk →
+    // `{"ok":true, runId, status, body}`. Under the flat schema, playAction is
+    // a capability valid on every node type — rectangle is the canonical host.
     const created = await createProject(uniqueFlowId('cli-flows-play'));
     const nodeId = 'cli-play-1';
     const addRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes`, {
@@ -342,7 +344,7 @@ describe('integration: CLI — projects + flows', () => {
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
         id: nodeId,
-        type: 'playNode',
+        type: 'rectangle',
         data: {
           name: 'Play',
           stateSource: { kind: 'request' },
@@ -381,12 +383,7 @@ describe('integration: CLI — nodes', () => {
   it('nodes:add adds a single node and prints { ok, id, node }', async () => {
     const created = await createProject(uniqueFlowId('cli-nodes-add'));
     const r = await runCli(
-      [
-        'nodes:add',
-        created.id,
-        '--json',
-        JSON.stringify({ type: 'shapeNode', data: { shape: 'rectangle' } }),
-      ],
+      ['nodes:add', created.id, '--json', JSON.stringify({ type: 'rectangle', data: {} })],
       { env: cliEnv },
     );
     expect(r.code).toBe(0);
@@ -405,8 +402,8 @@ describe('integration: CLI — nodes', () => {
         '--json',
         JSON.stringify({
           nodes: [
-            { id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } },
-            { id: 'b', type: 'shapeNode', data: { shape: 'ellipse' } },
+            { id: 'a', type: 'rectangle', data: {} },
+            { id: 'b', type: 'ellipse', data: {} },
           ],
           connectors: [
             { id: 'c1', source: 'a', target: 'b' },
@@ -428,7 +425,7 @@ describe('integration: CLI — nodes', () => {
 
   it('nodes:patch partial-merges into node.data', async () => {
     const created = await createProject(uniqueFlowId('cli-nodes-patch'));
-    await seedShapeNodes(created.id, ['p1']);
+    await seedRectangleNodes(created.id, ['p1']);
 
     const r = await runCli(
       ['nodes:patch', created.id, 'p1', '--json', JSON.stringify({ name: 'CLI patched' })],
@@ -445,7 +442,7 @@ describe('integration: CLI — nodes', () => {
 
   it('nodes:move persists x/y to style.json (echoed in response)', async () => {
     const created = await createProject(uniqueFlowId('cli-nodes-move'));
-    await seedShapeNodes(created.id, ['m1']);
+    await seedRectangleNodes(created.id, ['m1']);
 
     const r = await runCli(['nodes:move', created.id, 'm1', '--x', '123', '--y', '456'], {
       env: cliEnv,
@@ -458,7 +455,7 @@ describe('integration: CLI — nodes', () => {
 
   it('nodes:reorder moves a node within flow.nodes[]', async () => {
     const created = await createProject(uniqueFlowId('cli-nodes-reorder'));
-    await seedShapeNodes(created.id, ['a', 'b', 'c']);
+    await seedRectangleNodes(created.id, ['a', 'b', 'c']);
 
     const r = await runCli(['nodes:reorder', created.id, 'a', '--op', 'toFront'], { env: cliEnv });
     expect(r.code).toBe(0);
@@ -472,7 +469,7 @@ describe('integration: CLI — nodes', () => {
 
   it('nodes:delete removes the node from the flow', async () => {
     const created = await createProject(uniqueFlowId('cli-nodes-delete'));
-    await seedShapeNodes(created.id, ['d1', 'd2']);
+    await seedRectangleNodes(created.id, ['d1', 'd2']);
 
     const r = await runCli(['nodes:delete', created.id, 'd1'], { env: cliEnv });
     expect(r.code).toBe(0);
@@ -488,7 +485,7 @@ describe('integration: CLI — nodes', () => {
 describe('integration: CLI — connectors', () => {
   it('connectors:add adds a single connector', async () => {
     const created = await createProject(uniqueFlowId('cli-connectors-add'));
-    await seedShapeNodes(created.id, ['a', 'b']);
+    await seedRectangleNodes(created.id, ['a', 'b']);
 
     const r = await runCli(
       [
@@ -507,7 +504,7 @@ describe('integration: CLI — connectors', () => {
 
   it('connectors:patch partial-merges a connector field', async () => {
     const created = await createProject(uniqueFlowId('cli-connectors-patch'));
-    await seedShapeNodes(created.id, ['a', 'b']);
+    await seedRectangleNodes(created.id, ['a', 'b']);
     await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -535,7 +532,7 @@ describe('integration: CLI — connectors', () => {
 
   it('connectors:delete removes the connector', async () => {
     const created = await createProject(uniqueFlowId('cli-connectors-delete'));
-    await seedShapeNodes(created.id, ['a', 'b']);
+    await seedRectangleNodes(created.id, ['a', 'b']);
     await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -614,11 +611,12 @@ describe('integration: CLI — ids', () => {
 });
 
 describe('integration: CLI — e2e', () => {
-  // e2e iterates every playNode + statusNode and runs them. With no
-  // playNodes/statusNodes, both arrays are empty and the validator
-  // vacuously passes — sufficient as a smoke test for the subcommand wiring
-  // (arg parsing, SSE channel open, hard-ceiling, printOk).
-  it('e2e <flowId> runs against a flow with no play/status nodes and exits ok', async () => {
+  // e2e iterates every node carrying playAction + every node carrying
+  // statusAction and runs them. With no nodes carrying either capability,
+  // both arrays are empty and the validator vacuously passes — sufficient as
+  // a smoke test for the subcommand wiring (arg parsing, SSE channel open,
+  // hard-ceiling, printOk).
+  it('e2e <flowId> runs against a flow with no play/status capabilities and exits ok', async () => {
     const created = await createProject(uniqueFlowId('cli-e2e'));
     const r = await runCli(['e2e', created.id], { env: cliEnv });
     expect(r.code).toBe(0);

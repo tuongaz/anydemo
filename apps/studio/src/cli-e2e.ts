@@ -1,5 +1,5 @@
 // End-to-end validator used by `seeflow e2e <flowId>`. Opens an SSE channel to
-// the studio, triggers every playNode's playAction (sequentially), then drains
+// the studio, triggers every node carrying a playAction (sequentially), then drains
 // the channel for node:done/error + node:status reports. Mirrors the algorithm
 // in skills/seeflow/scripts/validate-end-to-end.ts — kept here so the CLI does
 // not depend on the skill folder.
@@ -167,15 +167,14 @@ function openSseChannel(body: ReadableStream<Uint8Array>): SseChannel {
 }
 
 function hasPlayAction(node: NodeShape): boolean {
-  return (
-    (node.type === 'playNode' || node.type === 'stateNode') && node.data?.playAction !== undefined
-  );
+  // Flat-types refactor: capabilities are top-level data fields on every
+  // type, not gated by the type tag. The e2e runner iterates every node
+  // carrying a playAction regardless of variant.
+  return node.data?.playAction !== undefined;
 }
 
 function hasStatusAction(node: NodeShape): boolean {
-  return (
-    (node.type === 'playNode' || node.type === 'stateNode') && node.data?.statusAction !== undefined
-  );
+  return node.data?.statusAction !== undefined;
 }
 
 export async function validateEndToEnd(options: ValidateOptions): Promise<ValidationReport> {

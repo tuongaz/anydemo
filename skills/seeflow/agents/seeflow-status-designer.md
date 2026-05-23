@@ -221,13 +221,14 @@ see, with sketches of what the script should observe:
 **Don't place a `statusAction` on:**
 
 - **Pure trigger nodes.** The Play click IS the event; there is no
-  continuous state to observe. A `playNode` for a webhook or a
+  continuous state to observe. A trigger rectangle for a webhook or a
   fixture drop already shows "I was clicked"; layering a status on
   top adds noise.
-- **Decorative nodes** — `shapeNode`, `iconNode`, `htmlNode`,
-  `imageNode`. The CLI does not even accept it for most of these,
-  but the rule holds for any node that exists for layout reasons
-  rather than because the system has an observable state there.
+- **Decorative shapes** — `sticky`, `text`, `icon`, `html`, `image`,
+  and any geometric shape (`ellipse`, `database`, `queue`, `cloud`,
+  `server`, `user`) used purely for visual annotation. The schema
+  accepts the field on every type, but the status pill is
+  rectangle-only chrome and adds noise without one.
 - **Nodes whose state would simply repeat the playAction return.**
   If a Play's `body` already says `"order ord_123 created"`, a
   status that polls the same DB and prints "1 order: ord_123" is
@@ -285,12 +286,12 @@ nodeDraft: {
   name: "Order Pipeline",
   slug: "order-pipeline",
   nodes: [
-    { id: "order-server",     type: "playNode",  data: { name: "POST /orders" } },
-    { id: "event-bus",        type: "stateNode", data: { name: "Event Bus" } },
-    { id: "inventory-worker", type: "stateNode", data: { name: "Inventory Worker" } },
-    { id: "shipping-worker",  type: "stateNode", data: { name: "Shipping Worker" } },
-    { id: "shipments-queue",  type: "stateNode", data: { name: "Shipments Queue" } },
-    { id: "order-store",      type: "stateNode", data: { name: "Order Store" } }
+    { id: "order-server",     type: "rectangle", data: { name: "POST /orders", icon: "server", playAction: { /* placeholder */ } } },
+    { id: "event-bus",        type: "rectangle", data: { name: "Event Bus", icon: "radio-tower" } },
+    { id: "inventory-worker", type: "rectangle", data: { name: "Inventory Worker", icon: "cog" } },
+    { id: "shipping-worker",  type: "rectangle", data: { name: "Shipping Worker", icon: "cog" } },
+    { id: "shipments-queue",  type: "rectangle", data: { name: "Shipments Queue", icon: "list-ordered" } },
+    { id: "order-store",      type: "rectangle", data: { name: "Order Store", icon: "database" } }
   ],
   connectors: [ ... ]
 }

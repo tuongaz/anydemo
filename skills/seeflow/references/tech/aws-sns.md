@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- One `stateNode` per topic. If the topic fans out to N subscribers
+- One node (`type:'rectangle'`) per topic. If the topic fans out to N subscribers
   (SQS / Lambda / HTTPS), model each subscriber as its own consumer
   node — the SNS node is just the broadcast point.
 - Duplicate the topic node next to each subscriber for readability

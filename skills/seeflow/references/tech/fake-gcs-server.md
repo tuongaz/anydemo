@@ -13,7 +13,7 @@ category: local-infra
 
 ## Node modelling
 
-- One `stateNode` per **bucket** the flow uses (`uploads`, `reports`). Same
+- One node (`type:'rectangle'`) per **bucket** the flow uses (`uploads`, `reports`). Same
   shape as the real `gcs` ref — only the endpoint differs.
 - Group objects under one bucket node unless the demo specifically contrasts
   two buckets; do not model individual objects as nodes.

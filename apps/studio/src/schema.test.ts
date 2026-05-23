@@ -164,9 +164,7 @@ describe('ResolvedFlowSchema', () => {
     ] as const) {
       const result = ResolvedFlowSchema.safeParse(make(type));
       if (!result.success) {
-        throw new Error(
-          `expected ${type} to parse, got: ${JSON.stringify(result.error.issues)}`,
-        );
+        throw new Error(`expected ${type} to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
       if (node?.type !== type) throw new Error(`expected ${type}`);
@@ -190,9 +188,7 @@ describe('ResolvedFlowSchema', () => {
     };
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
-      throw new Error(
-        `expected database to parse, got: ${JSON.stringify(result.error.issues)}`,
-      );
+      throw new Error(`expected database to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
     if (node?.type !== 'database') throw new Error('expected database');
@@ -2274,5 +2270,318 @@ describe('flow description field', () => {
   it('rejects a non-string description on FlowSchema', () => {
     const result = FlowSchema.safeParse({ ...baseFlow, description: 123 });
     expect(result.success).toBe(false);
+  });
+});
+
+// US-009: flat-node-types refactor — coverage that pins the 12-tag discriminator
+// surface, the per-type required fields, and the capability-on-every-type
+// invariant at the schema level. The flat schema's central claim is that
+// `playAction` / `statusAction` / `stateSource` are independent of `type` —
+// these tests fence that claim against drift.
+describe('US-009: flat node types — 12-tag matrix + capability invariants', () => {
+  const ALL_TYPES = [
+    'rectangle',
+    'ellipse',
+    'sticky',
+    'text',
+    'database',
+    'server',
+    'user',
+    'queue',
+    'cloud',
+    'image',
+    'html',
+    'icon',
+  ] as const;
+
+  // Minimal valid `data` per type, satisfying each variant's required fields
+  // and nothing else. Geometric types accept `data: {}`; image needs path
+  // (anchored under `nodes/<id>/`); icon needs a non-empty icon name; html
+  // accepts an empty object (html field is optional).
+  const minimalData = (type: (typeof ALL_TYPES)[number], id: string): Record<string, unknown> => {
+    if (type === 'image') return { path: `nodes/${id}/pixel.png` };
+    if (type === 'icon') return { icon: 'shopping-cart' };
+    return {};
+  };
+
+  it('every one of the 12 type tags parses with a minimal valid payload', () => {
+    for (const type of ALL_TYPES) {
+      const id = `n-${type}`;
+      const demo = {
+        version: 2 as const,
+        name: `minimal-${type}`,
+        nodes: [{ id, type, position: { x: 0, y: 0 }, data: minimalData(type, id) }],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(
+          `expected ${type} minimal payload to parse, got: ${JSON.stringify(result.error.issues)}`,
+        );
+      }
+      expect(result.data.nodes[0]?.type).toBe(type);
+    }
+  });
+
+  it('rejects an unknown type tag (only the 12 flat tags are valid)', () => {
+    const demo = {
+      version: 2 as const,
+      name: 'unknown-type',
+      nodes: [{ id: 'n', type: 'triangle' as const, position: { x: 0, y: 0 }, data: {} }],
+      connectors: [],
+    };
+    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+  });
+
+  it('rejects type:image without the required path field', () => {
+    const demo = {
+      version: 2 as const,
+      name: 'image-missing-path',
+      nodes: [{ id: 'img-1', type: 'image' as const, position: { x: 0, y: 0 }, data: {} }],
+      connectors: [],
+    };
+    const result = ResolvedFlowSchema.safeParse(demo);
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects type:icon without the required icon field', () => {
+    const demo = {
+      version: 2 as const,
+      name: 'icon-missing-icon',
+      nodes: [{ id: 'i', type: 'icon' as const, position: { x: 0, y: 0 }, data: {} }],
+      connectors: [],
+    };
+    expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+  });
+
+  // The on-disk FlowSchema (FlowGeometricNodeData) is `.strict()`, so the
+  // image-only fields `path` and `alt` are rejected on a geometric variant.
+  // ResolvedFlowSchema is the merged-with-style shape and is intentionally
+  // non-strict to allow forward-compat fields — the strict gate lives at
+  // the persist boundary.
+  it('FlowSchema rejects type:rectangle carrying the image-only `path` field', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'rect-with-image-fields',
+      nodes: [
+        {
+          id: 'n',
+          type: 'rectangle' as const,
+          data: { name: 'X', path: 'nodes/n/cover.png' },
+        },
+      ],
+      connectors: [],
+    };
+    expect(FlowSchema.safeParse(flow).success).toBe(false);
+  });
+
+  it('FlowSchema rejects type:rectangle carrying the image-only `alt` field', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'rect-with-alt',
+      nodes: [
+        {
+          id: 'n',
+          type: 'rectangle' as const,
+          data: { name: 'X', alt: 'a label' },
+        },
+      ],
+      connectors: [],
+    };
+    expect(FlowSchema.safeParse(flow).success).toBe(false);
+  });
+
+  it('FlowSchema rejects type:rectangle carrying the html-only `html` field', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'rect-with-html',
+      nodes: [
+        {
+          id: 'n',
+          type: 'rectangle' as const,
+          data: { name: 'X', html: '<p>nope</p>' },
+        },
+      ],
+      connectors: [],
+    };
+    expect(FlowSchema.safeParse(flow).success).toBe(false);
+  });
+
+  it('FlowSchema rejects type:image carrying the html-only `html` field', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'image-with-html',
+      nodes: [
+        {
+          id: 'img-1',
+          type: 'image' as const,
+          data: { path: 'nodes/img-1/cover.png', html: '<p>nope</p>' },
+        },
+      ],
+      connectors: [],
+    };
+    expect(FlowSchema.safeParse(flow).success).toBe(false);
+  });
+
+  it('FlowSchema rejects type:html carrying the image-only `path` field', () => {
+    const flow = {
+      version: 2 as const,
+      name: 'html-with-path',
+      nodes: [
+        {
+          id: 'h',
+          type: 'html' as const,
+          data: { html: '<p>x</p>', path: 'nodes/h/x.png' },
+        },
+      ],
+      connectors: [],
+    };
+    expect(FlowSchema.safeParse(flow).success).toBe(false);
+  });
+
+  // Core schema-level claim of the flat-types refactor: capabilities
+  // (playAction, statusAction, stateSource) are independent of `type` and
+  // accepted on every variant. The renderer phasing gates *chrome* to
+  // rectangle, but the schema accepts the data fields on all 12 types.
+  it('every one of the 12 type tags accepts playAction in data', () => {
+    for (const type of ALL_TYPES) {
+      const id = `n-${type}`;
+      const demo = {
+        version: 2 as const,
+        name: `playable-${type}`,
+        nodes: [
+          {
+            id,
+            type,
+            position: { x: 0, y: 0 },
+            data: {
+              ...minimalData(type, id),
+              playAction: {
+                kind: 'script' as const,
+                interpreter: 'bun',
+                scriptPath: 'scripts/play.ts',
+              },
+            },
+          },
+        ],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(
+          `expected ${type} with playAction to parse, got: ${JSON.stringify(result.error.issues)}`,
+        );
+      }
+      const node = result.data.nodes[0];
+      if (node?.type !== type) throw new Error(`expected ${type}`);
+      expect((node.data as { playAction?: unknown }).playAction).toBeDefined();
+    }
+  });
+
+  it('every one of the 12 type tags accepts statusAction in data', () => {
+    for (const type of ALL_TYPES) {
+      const id = `n-${type}`;
+      const demo = {
+        version: 2 as const,
+        name: `stateful-${type}`,
+        nodes: [
+          {
+            id,
+            type,
+            position: { x: 0, y: 0 },
+            data: {
+              ...minimalData(type, id),
+              statusAction: {
+                kind: 'script' as const,
+                interpreter: 'bun',
+                scriptPath: 'scripts/status.ts',
+              },
+            },
+          },
+        ],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(
+          `expected ${type} with statusAction to parse, got: ${JSON.stringify(result.error.issues)}`,
+        );
+      }
+      const node = result.data.nodes[0];
+      if (node?.type !== type) throw new Error(`expected ${type}`);
+      expect((node.data as { statusAction?: unknown }).statusAction).toBeDefined();
+    }
+  });
+
+  it('every one of the 12 type tags accepts stateSource in data', () => {
+    for (const type of ALL_TYPES) {
+      const id = `n-${type}`;
+      const demo = {
+        version: 2 as const,
+        name: `sourced-${type}`,
+        nodes: [
+          {
+            id,
+            type,
+            position: { x: 0, y: 0 },
+            data: {
+              ...minimalData(type, id),
+              stateSource: { kind: 'event' as const },
+            },
+          },
+        ],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(
+          `expected ${type} with stateSource to parse, got: ${JSON.stringify(result.error.issues)}`,
+        );
+      }
+      const node = result.data.nodes[0];
+      if (node?.type !== type) throw new Error(`expected ${type}`);
+      expect((node.data as { stateSource?: unknown }).stateSource).toEqual({ kind: 'event' });
+    }
+  });
+
+  // FlowSchema (disk-side) variant of the capability-on-every-type claim —
+  // since the disk-side data schemas are `.strict()`, this is a stronger
+  // assertion than the ResolvedFlowSchema variant above: the capability fields
+  // are explicitly enumerated in each variant's allowed-keys set.
+  it('FlowSchema accepts playAction + statusAction + stateSource on every one of the 12 types', () => {
+    const minimalFlowData = (type: (typeof ALL_TYPES)[number], id: string) => {
+      const base = {
+        playAction: {
+          kind: 'script' as const,
+          interpreter: 'bun',
+          scriptPath: 'scripts/play.ts',
+        },
+        statusAction: {
+          kind: 'script' as const,
+          interpreter: 'bun',
+          scriptPath: 'scripts/status.ts',
+        },
+        stateSource: { kind: 'request' as const },
+      };
+      if (type === 'image') return { ...base, path: `nodes/${id}/pixel.png` };
+      if (type === 'icon') return { ...base, icon: 'shopping-cart' };
+      return base;
+    };
+
+    for (const type of ALL_TYPES) {
+      const id = `n-${type}`;
+      const flow = {
+        version: 2 as const,
+        name: `caps-${type}`,
+        nodes: [{ id, type, data: minimalFlowData(type, id) }],
+        connectors: [],
+      };
+      const result = FlowSchema.safeParse(flow);
+      if (!result.success) {
+        throw new Error(
+          `expected ${type} with all 3 capabilities to parse, got: ${JSON.stringify(result.error.issues)}`,
+        );
+      }
+    }
   });
 });

@@ -1,7 +1,7 @@
 import { sanitizeHtml } from './sanitize-html.ts';
 
 /**
- * US-014: trust boundary for the htmlNode renderer. This helper is the ONE
+ * US-014: trust boundary for the type:'html' renderer. This helper is the ONE
  * place in the codebase that builds React's inner-HTML prop from author HTML.
  * Author HTML is first passed through `sanitizeHtml` (US-013), which strips
  * dangerous tags (script / style / iframe / object / embed / link), every

@@ -98,7 +98,7 @@ Don't log:
 `~/.seeflow/feedback.jsonl` is append-only. Each line is one complete JSON object terminated by `\n`. Example:
 
 ```jsonl
-{"ts":"2026-05-22T09:28:11Z","skill":"seeflow","skillVersion":"0.1.56","phase":"P3","kind":"agent-output-corrected","severity":"corrected","agent":"seeflow-node-planner","details":"type-rename resourceNode→stateNode (×3); field-rename label→name (×12); bidir-connector-strip (×5)","status":"pending","summary":"node-planner emitted unknown types/fields; orchestrator normalized 20 issues across 12 nodes before flow:add-bulk"}
+{"ts":"2026-05-22T09:28:11Z","skill":"seeflow","skillVersion":"0.1.56","phase":"P3","kind":"agent-output-corrected","severity":"corrected","agent":"seeflow-node-planner","details":"type-rename resourceNode→rectangle (×3); field-rename label→name (×12); bidir-connector-strip (×5)","status":"pending","summary":"node-planner emitted unknown types/fields; orchestrator normalized 20 issues across 12 nodes before flow:add-bulk"}
 ```
 
 Fields:
@@ -137,7 +137,7 @@ print(json.dumps({
   "kind": "agent-output-corrected",
   "severity": "corrected",
   "agent": "seeflow-node-planner",
-  "details": "type-rename resourceNode→stateNode (×3)",
+  "details": "type-rename resourceNode→rectangle (×3)",
   "status": "pending",
   "summary": "node-planner emitted unknown types; normalized 3 nodes before flow:add-bulk",
 }))

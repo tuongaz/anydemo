@@ -13,7 +13,7 @@ category: messaging
 
 ## Node modelling
 
-- Core NATS: one `stateNode` per subject. JetStream: one `stateNode`
+- Core NATS: one node (`type:'rectangle'`) per subject. JetStream: one node (`type:'rectangle'`)
   per stream (a stream wraps one or more subjects).
 - Durable consumers are separate consumer nodes; mention the durable
   name in `data.note`.

@@ -360,9 +360,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: [
-      'seeflow nodes:add abc12345 --json \'{"type":"rectangle","data":{}}\'',
-    ],
+    examples: ['seeflow nodes:add abc12345 --json \'{"type":"rectangle","data":{}}\''],
   },
   {
     name: 'nodes:get',
