@@ -260,8 +260,8 @@
         "Verify in browser using dev-browser skill"
       ],
       "priority": 14,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "The sourceNodes builder is in packages/canvas/src/components/seeflow-canvas.tsx (NOT apps/web/src/ as the AC grep hint suggested — apps/web threads `projectId={flowId ?? undefined}` into SeeflowCanvas which then owns the per-node data assembly, mirroring the existing projectId/fileBaseUrl/onRetryUpload injection pattern). Added a new `apiBaseUrl?: string` prop on SeeflowCanvasBaseProps (default '/api', JSDoc'd alongside fileBaseUrl), destructured at the impl head with a default param, and gated injection on `merged.type === 'component'` inside the sourceNodes useMemo so non-component nodes don't carry stray fields they'd ignore: `flowId: merged.type === 'component' ? projectId : undefined, apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined`. apiBaseUrl added to the useMemo deps array between fileBaseUrl and nodes. 4 new tests in a new `describe('US-014: …')` block in seeflow-canvas.test.tsx (placed between US-008 and US-017 to keep the existing block ordering): (1) component nodes get `data.flowId === projectId`, (2) `data.apiBaseUrl` defaults to '/api', (3) apiBaseUrl prop override threads through, (4) non-component nodes (e.g. shape) have BOTH fields === undefined (gating proof). ComponentSpec imported from '../types.ts' alongside Connector + FlowNode. Manual browser smoke deferred to US-017's component-showcase example + US-015's Playwright e2e — both depend on this wiring, so a regression here would surface there. Full suite: 1763 pass / 1 skip / 0 fail (+4 over US-013's 1759 baseline)."
     },
     {
       "id": "US-015",

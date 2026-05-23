@@ -353,6 +353,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * alongside `projectId`.
    */
   fileBaseUrl?: string;
+  /**
+   * Base URL the component-node runtime uses to POST script-kind actions:
+   * `${apiBaseUrl}/flows/:flowId/nodes/:nodeId/actions/:name`. Defaults to
+   * `/api` (correct for the studio, same-origin). Embedders that mount the
+   * studio under a different prefix or proxy through another host pass an
+   * absolute prefix here. Threaded into `data.apiBaseUrl` for every
+   * `type:'component'` node alongside `data.flowId = projectId`.
+   */
+  apiBaseUrl?: string;
   nodes: FlowNode[];
   connectors: Connector[];
   /** Currently selected node ids (US-019: multi-select). */
@@ -1694,6 +1703,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     adapter,
     projectId,
     fileBaseUrl,
+    apiBaseUrl = '/api',
     nodes,
     connectors,
     selectedNodeIds,
@@ -2559,6 +2569,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
+          // US-014: component-node runtime POSTs script-kind actions to
+          // `${apiBaseUrl}/flows/:flowId/nodes/:nodeId/actions/:name`. Gated
+          // on type so non-component nodes don't carry stray fields they'd
+          // ignore. `flowId` mirrors the canvas's `projectId` prop (the
+          // studio's registry uses the two terms interchangeably; see
+          // adapter/types.ts).
+          flowId: merged.type === 'component' ? projectId : undefined,
+          apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined,
           // US-008: type:'image' placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every image node picks it up uniformly; non-image types ignore it.
@@ -2666,6 +2684,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, [
     projectId,
     fileBaseUrl,
+    apiBaseUrl,
     nodes,
     selectedNodeIdSet,
     runs,

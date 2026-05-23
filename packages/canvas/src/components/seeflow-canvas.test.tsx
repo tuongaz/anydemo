@@ -8,7 +8,7 @@ import { DatabaseShape } from '../nodes/shapes/database.tsx';
 import { QueueShape } from '../nodes/shapes/queue.tsx';
 import { ServerShape } from '../nodes/shapes/server.tsx';
 import { UserShape } from '../nodes/shapes/user.tsx';
-import type { Connector, FlowNode } from '../types.ts';
+import type { ComponentSpec, Connector, FlowNode } from '../types.ts';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import {
@@ -2129,6 +2129,73 @@ describe('SeeflowCanvas', () => {
       expect(rfNodes).toHaveLength(1);
       const data = rfNodes[0]?.data as { onRetryUpload?: (id: string) => void };
       expect(data.onRetryUpload).toBe(onRetryImageUpload);
+    });
+  });
+
+  describe('US-014: component-node flowId + apiBaseUrl injection', () => {
+    const COMPONENT_SPEC: ComponentSpec = {
+      root: 'root',
+      elements: {
+        root: { type: 'Card', children: ['t'] },
+        t: { type: 'Text', props: { text: 'hi' } },
+      },
+    };
+
+    function makeComponentNode(id: string): FlowNode {
+      return {
+        id,
+        type: 'component',
+        position: { x: 0, y: 0 },
+        data: { spec: COMPONENT_SPEC },
+      };
+    }
+
+    function findRfNode(tree: unknown, id: string): Node | undefined {
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found');
+      return (rf.props.nodes as Node[]).find((n) => n.id === id);
+    }
+
+    it('injects data.flowId === projectId for component nodes', () => {
+      const tree = callSeeflowCanvas({
+        projectId: 'demo-42',
+        nodes: [makeComponentNode('c1')],
+      });
+      const data = findRfNode(tree, 'c1')?.data as { flowId?: string };
+      expect(data.flowId).toBe('demo-42');
+    });
+
+    it("defaults data.apiBaseUrl to '/api' when the prop is omitted", () => {
+      const tree = callSeeflowCanvas({
+        projectId: 'demo-42',
+        nodes: [makeComponentNode('c1')],
+      });
+      const data = findRfNode(tree, 'c1')?.data as { apiBaseUrl?: string };
+      expect(data.apiBaseUrl).toBe('/api');
+    });
+
+    it('threads the apiBaseUrl prop override into component node data', () => {
+      const tree = callSeeflowCanvas({
+        projectId: 'demo-42',
+        apiBaseUrl: 'https://embedder.example/api',
+        nodes: [makeComponentNode('c1')],
+      });
+      const data = findRfNode(tree, 'c1')?.data as { apiBaseUrl?: string };
+      expect(data.apiBaseUrl).toBe('https://embedder.example/api');
+    });
+
+    it('omits flowId + apiBaseUrl on non-component nodes (gated by type)', () => {
+      const tree = callSeeflowCanvas({
+        projectId: 'demo-42',
+        apiBaseUrl: '/custom',
+        nodes: [makeShapeNode('a')],
+      });
+      const data = findRfNode(tree, 'a')?.data as {
+        flowId?: string;
+        apiBaseUrl?: string;
+      };
+      expect(data.flowId).toBeUndefined();
+      expect(data.apiBaseUrl).toBeUndefined();
     });
   });
 
