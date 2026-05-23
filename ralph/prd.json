@@ -171,8 +171,8 @@
         "Tests pass"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Wired POST /api/flows/:id/nodes/:nodeId/actions/:name in apps/studio/src/api.ts (below the /play route). Imports runComponentAction + ComponentAction. Handler: registry lookup (404 unknown demo), events bus guard (500 events not enabled), resolveFilePath + existsSync (404 missing flow file), readMergedFlow (400 on read failure), node lookup (404 unknown nodeId), type==='component' guard (400 'not a component node'), spec.actions[name] lookup (404 'Unknown action'), JSON body parse with `.catch(() => ({}))` default, runComponentAction call with processSpawner injected, on ok:true returns c.json(result.body), on ok:false returns c.json({error}, statusHint) cast to the 400|404|500|504 literal union. 6 new tests in apps/studio/src/api.test.ts under 'POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)': success path (200 + parsed JSON body + spawn cmd shape + env vars + stdin payload), 404 unknown action, 400 non-component node, 400 set-kind action, 404 unknown flow id, 404 unknown nodeId. Full suite: 1733 pass / 1 skip / 0 fail (+6 over US-008's 1727 baseline)."
     },
     {
       "id": "US-010",

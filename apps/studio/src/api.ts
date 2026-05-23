@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { runComponentAction } from './component-action-runner.ts';
 import {
   AssembleRequestSchema,
   ProposeScopeRequestSchema,
@@ -38,6 +39,7 @@ import {
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
+import type { ComponentAction } from './schema.ts';
 import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
@@ -848,6 +850,58 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: result.error }, 400);
     }
     return c.json(result);
+  });
+
+  // POST /api/flows/:id/nodes/:nodeId/actions/:name — dispatch a component
+  // node's named action over HTTP. Only `script`-kind actions cross this seam;
+  // `set`-kind actions mutate canvas state locally and never round-trip
+  // through the API (the runner rejects them with statusHint 400).
+  // Payload is the JSON request body (defaults to {} on parse failure) and is
+  // piped to the script's stdin by `runComponentAction`. Response is the
+  // script's parsed JSON stdout on success.
+  api.post('/flows/:id/nodes/:nodeId/actions/:name', async (c) => {
+    const id = c.req.param('id');
+    const nodeId = c.req.param('nodeId');
+    const actionName = c.req.param('name');
+
+    const entry = registry.getById(id);
+    if (!entry) return c.json({ error: 'unknown demo' }, 404);
+    if (!events) return c.json({ error: 'events not enabled' }, 500);
+
+    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
+    if (!existsSync(fullPath)) {
+      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
+    }
+    const merged = readMergedFlow(fullPath);
+    if (!merged.flow) {
+      return c.json({ error: merged.error ?? 'Flow read failed' }, 400);
+    }
+
+    const node = merged.flow.nodes.find((n) => n.id === nodeId);
+    if (!node) return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
+    if (node.type !== 'component') {
+      return c.json({ error: `Node ${nodeId} is not a component node` }, 400);
+    }
+
+    const action = (node.data as { spec: { actions?: Record<string, ComponentAction> } }).spec
+      .actions?.[actionName];
+    if (!action) return c.json({ error: `Unknown action: ${actionName}` }, 404);
+
+    const payload = await c.req.json().catch(() => ({}));
+    const result = await runComponentAction({
+      events,
+      flowId: id,
+      nodeId,
+      cwd: entry.repoPath,
+      actionName,
+      action,
+      payload,
+      spawner: processSpawner,
+    });
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.statusHint as 400 | 404 | 500 | 504);
+    }
+    return c.json(result.body);
   });
 
   // POST /api/flows/:id/reset — the "Restart demo" workflow (US-008). Order:

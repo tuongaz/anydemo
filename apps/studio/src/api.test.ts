@@ -3833,3 +3833,206 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
     expect(body.error).toContain('Unknown nodeId');
   });
 });
+
+// US-009 / T-007: POST /api/flows/:id/nodes/:nodeId/actions/:name dispatches
+// the named action defined under spec.actions for a component node. The
+// runner spawns the script via the injected ProcessSpawner (shared in-memory
+// fake from the /play suite) so we can drive the success + failure branches
+// without spinning up real child processes.
+describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
+  type SpawnOpts = {
+    cmd: string[];
+    cwd: string;
+    env: Record<string, string>;
+    stdin: 'pipe' | 'ignore';
+  };
+  type FakeRecord = { spawnCalls: SpawnOpts[]; stdinPayloads: string[] };
+
+  const makeFakeSpawner = (
+    config: { stdout?: string; stderr?: string; exitCode?: number } = {},
+  ): { spawner: import('./process-spawner.ts').ProcessSpawner; record: FakeRecord } => {
+    const record: FakeRecord = { spawnCalls: [], stdinPayloads: [] };
+    const streamFromString = (s: string): ReadableStream<Uint8Array> =>
+      new ReadableStream<Uint8Array>({
+        start(c) {
+          if (s.length > 0) c.enqueue(new TextEncoder().encode(s));
+          c.close();
+        },
+      });
+    const spawner: import('./process-spawner.ts').ProcessSpawner = {
+      spawn(opts) {
+        record.spawnCalls.push({ cmd: opts.cmd, cwd: opts.cwd, env: opts.env, stdin: opts.stdin });
+        let resolveExit: (code: number) => void = () => {};
+        const exited = new Promise<number>((res) => {
+          resolveExit = res;
+        });
+        queueMicrotask(() => resolveExit(config.exitCode ?? 0));
+        let stdinStream: WritableStream<Uint8Array> | undefined;
+        if (opts.stdin === 'pipe') {
+          const idx = record.stdinPayloads.push('') - 1;
+          const decoder = new TextDecoder();
+          stdinStream = new WritableStream<Uint8Array>({
+            write(chunk) {
+              record.stdinPayloads[idx] += decoder.decode(chunk, { stream: true });
+            },
+            close() {},
+            abort() {},
+          });
+        }
+        return {
+          pid: 22222,
+          stdout: streamFromString(config.stdout ?? ''),
+          stderr: streamFromString(config.stderr ?? ''),
+          stdin: stdinStream,
+          exited,
+          kill() {},
+        };
+      },
+    };
+    return { spawner, record };
+  };
+
+  // Seed a project containing one component node + nodes/c1/spec.json carrying
+  // the supplied actions map. Optionally writes a stub script at
+  // nodes/c1/actions/<name>.ts so the realpath check in component-action-runner
+  // passes.
+  const seedComponentProject = (
+    actions: Record<string, unknown>,
+    scriptFiles: string[] = [],
+  ): string => {
+    const repoPath = tmpRepoWithDemo({
+      version: 2,
+      name: 'Component flow',
+      nodes: [{ id: 'c1', type: 'component', data: {} }],
+      connectors: [],
+    });
+    mkdirSync(join(repoPath, 'nodes', 'c1', 'actions'), { recursive: true });
+    const spec = {
+      root: 'root',
+      elements: { root: { type: 'Text', props: { text: 'hello' } } },
+      actions,
+    };
+    writeFileSync(join(repoPath, 'nodes', 'c1', 'spec.json'), `${JSON.stringify(spec, null, 2)}\n`);
+    for (const name of scriptFiles) {
+      writeFileSync(join(repoPath, 'nodes', 'c1', 'actions', name), '// stub\n');
+    }
+    return repoPath;
+  };
+
+  const buildActionApp = (
+    spawnerConfig: { stdout?: string; stderr?: string; exitCode?: number } = {},
+  ) => {
+    const { spawner, record } = makeFakeSpawner(spawnerConfig);
+    const bus = createEventBus();
+    const registry = createRegistry({ path: tmpRegistry() });
+    const app = createApp({
+      mode: 'prod',
+      staticRoot: './dist/web',
+      registry,
+      events: bus,
+      disableWatcher: true,
+      processSpawner: spawner,
+    });
+    return { app, registry, bus, spawnerRecord: record };
+  };
+
+  it('dispatches a script-kind action and returns its parsed JSON body with status 200', async () => {
+    const { app, spawnerRecord } = buildActionApp({ stdout: '{"queueDepth":3}' });
+    const repoPath = seedComponentProject(
+      {
+        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
+      },
+      ['refresh.ts'],
+    );
+
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/refresh`, { force: true });
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { queueDepth: number };
+    expect(body).toEqual({ queueDepth: 3 });
+
+    // Spawn invocation shape: interpreter + resolved abs script path, plus
+    // the per-run env vars and the JSON-encoded payload on stdin.
+    expect(spawnerRecord.spawnCalls).toHaveLength(1);
+    const call = spawnerRecord.spawnCalls[0];
+    expect(call?.cmd[0]).toBe('bun');
+    expect(call?.cmd[1]?.endsWith('/nodes/c1/actions/refresh.ts')).toBe(true);
+    expect(call?.env.SEEFLOW_DEMO_ID).toBe(reg.id);
+    expect(call?.env.SEEFLOW_NODE_ID).toBe('c1');
+    expect(call?.env.SEEFLOW_ACTION_NAME).toBe('refresh');
+    expect(spawnerRecord.stdinPayloads[0]).toBe('{"force":true}');
+  });
+
+  it('404s when the action name is not present in spec.actions', async () => {
+    const { app } = buildActionApp({ stdout: '{}' });
+    const repoPath = seedComponentProject(
+      {
+        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
+      },
+      ['refresh.ts'],
+    );
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/missing`, {});
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('Unknown action');
+  });
+
+  it('400s when the target node is not a component node', async () => {
+    const { app } = buildActionApp({ stdout: '{}' });
+    // Default VALID_DEMO carries a rectangle node id 'api-checkout'.
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/nodes/api-checkout/actions/refresh`, {});
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('not a component node');
+  });
+
+  it('400s when the resolved action is set-kind', async () => {
+    const { app } = buildActionApp({ stdout: '{}' });
+    const repoPath = seedComponentProject({
+      toggle: { kind: 'set', path: '/open', value: true },
+    });
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string };
+
+    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/toggle`, {});
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('Only script actions are dispatched over HTTP');
+  });
+
+  it('returns 404 for an unknown flow id', async () => {
+    const { app } = buildActionApp();
+    const res = await post(app, '/api/flows/nope/nodes/c1/actions/refresh', {});
+    expect(res.status).toBe(404);
+  });
+
+  it('returns 404 for an unknown node id', async () => {
+    const { app } = buildActionApp({ stdout: '{}' });
+    const repoPath = seedComponentProject(
+      {
+        refresh: { kind: 'script', interpreter: 'bun', scriptPath: 'actions/refresh.ts' },
+      },
+      ['refresh.ts'],
+    );
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string };
+    const res = await post(app, `/api/flows/${reg.id}/nodes/ghost/actions/refresh`, {});
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toContain('Unknown nodeId');
+  });
+});
