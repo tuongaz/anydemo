@@ -20,6 +20,10 @@
 export type {
   CanvasMode,
   ColorToken,
+  ComponentAction,
+  ComponentNodeData,
+  ComponentSpec,
+  ComponentSpecElement,
   Connector,
   ConnectorBase,
   ConnectorDirection,
@@ -42,6 +46,7 @@ export type {
   NodeVisual,
   RunResult,
   ScriptAction,
+  SetComponentAction,
   StateSource,
   StatusAction,
   StatusReport,

@@ -187,8 +187,8 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added ComponentSpecElement / SetComponentAction / ComponentAction (set | ScriptAction) / ComponentSpec / ComponentNodeData (extends NodeSemanticBase + NodeVisual + NodeCapabilities, has `spec` + optional `autoSize`) to packages/canvas/src/types.ts. NodeType union grew 'component' (now 13 flat tags); FlowNode union grew `(NodeBase & { type: 'component'; data: ComponentNodeData })` as the 5th variant. Public barrel exports ComponentAction, ComponentNodeData, ComponentSpec, ComponentSpecElement, SetComponentAction (alphabetical). NodeKind = NodeType in adapter/types.ts cascades automatically, so no adapter changes needed. New types.test.ts (6 tests) verifies NodeType-includes-component, ComponentSpecElement shape, ComponentAction kind discrimination, ComponentSpec round-trip, FlowNode union extracts the variant, and an exhaustive-switch test with `never`-typed default arm that pins compile-time exhaustiveness for every future NodeType addition. Full suite: 1739 pass / 1 skip / 0 fail (+6 over US-009's 1733)."
     },
     {
       "id": "US-011",

@@ -76,7 +76,7 @@ export interface NodeSemanticBase extends NodeDescription {
 }
 
 /**
- * The 12 flat node types. Visual kind is the type. Capabilities are
+ * The 13 flat node types. Visual kind is the type. Capabilities are
  * independent optional fields on `data`.
  */
 export const GEOMETRIC_NODE_TYPES = [
@@ -92,7 +92,7 @@ export const GEOMETRIC_NODE_TYPES = [
 ] as const;
 export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 
-export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon';
+export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'component';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
@@ -127,6 +127,66 @@ export interface HtmlNodeData extends NodeSemanticBase, NodeVisual, NodeCapabili
   autoSize?: boolean;
 }
 
+/**
+ * A single node in a component spec tree. `type` names a catalog entry (e.g.
+ * 'Card', 'Button', 'Metric'); `props` carries that catalog entry's expected
+ * fields, with values that may carry `$state` / `$action` / `$cond` runtime
+ * refs resolved by ComponentRuntime. `children` lists element ids defined
+ * elsewhere in `ComponentSpec.elements`.
+ */
+export interface ComponentSpecElement {
+  type: string;
+  props?: Record<string, unknown>;
+  children?: string[];
+  watch?: Record<string, unknown>;
+}
+
+/**
+ * Declarative state mutation: write `value` at JSON Pointer `path` in the
+ * component's internal state. `value` may itself reference `{ $param }` /
+ * `{ $state }` resolved at dispatch time by ComponentRuntime.
+ */
+export interface SetComponentAction {
+  kind: 'set';
+  path: string;
+  value: unknown;
+}
+
+/**
+ * A component-node action. `set` mutates internal state in-place; `script`
+ * spawns a node-rooted script over HTTP (`POST /api/flows/:id/nodes/:nodeId/
+ * actions/:name`) and merges the JSON response into state.
+ */
+export type ComponentAction = SetComponentAction | ScriptAction;
+
+/**
+ * The json-render tree backing a `type:'component'` node. On disk this lives
+ * at `<project>/nodes/<id>/spec.json`; the studio resolver inlines it into
+ * `data.spec` before the canvas sees it.
+ */
+export interface ComponentSpec {
+  root: string;
+  elements: Record<string, ComponentSpecElement>;
+  state?: Record<string, unknown>;
+  actions?: Record<string, ComponentAction>;
+}
+
+/**
+ * `type:'component'` node data — json-render-powered reactive UI. `spec` is
+ * inlined from the sidecar by the studio; the runtime maintains internal
+ * state seeded from `spec.state`, resolves `$state` / `$action` / `$cond`
+ * refs in element props, and dispatches `spec.actions` on user interaction.
+ */
+export interface ComponentNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  spec: ComponentSpec;
+  /**
+   * When true, the renderer measures its content and React Flow sizes the
+   * wrapper around it (mirrors HtmlNodeData.autoSize). Default behaviour
+   * matches the explicit width/height path.
+   */
+  autoSize?: boolean;
+}
+
 interface NodeBase {
   id: string;
   position: { x: number; y: number };
@@ -136,7 +196,8 @@ export type FlowNode =
   | (NodeBase & { type: GeometricNodeType; data: GeometricNodeData })
   | (NodeBase & { type: 'image'; data: ImageNodeData })
   | (NodeBase & { type: 'html'; data: HtmlNodeData })
-  | (NodeBase & { type: 'icon'; data: IconNodeData });
+  | (NodeBase & { type: 'icon'; data: IconNodeData })
+  | (NodeBase & { type: 'component'; data: ComponentNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.
