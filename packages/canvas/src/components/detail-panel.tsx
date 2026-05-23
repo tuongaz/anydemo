@@ -364,7 +364,11 @@ export function EditableField({
   }
 
   const commit = () => {
-    const text = editorRef.current?.textContent ?? value;
+    const el = editorRef.current;
+    // innerText resolves <br> and block boundaries to '\n'; textContent
+    // ignores them. Use innerText for multiline so Enter-inserted newlines
+    // round-trip; textContent for single-line keeps things simple.
+    const text = el ? (multiline ? el.innerText : (el.textContent ?? '')) : value;
     onSave(nodeId, text);
     setIsEditing(false);
   };
