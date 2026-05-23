@@ -1,0 +1,87 @@
+{
+  "root": "card",
+  "state": {
+    "/name": "",
+    "/tier": "free",
+    "/users": [
+      { "name": "Ada", "tier": "pro" },
+      { "name": "Linus", "tier": "free" },
+      { "name": "Grace", "tier": "team" }
+    ]
+  },
+  "elements": {
+    "card": {
+      "type": "Card",
+      "props": { "title": "Form Demo" },
+      "children": [
+        "heading",
+        "intro",
+        "nameLabel",
+        "nameInput",
+        "tierLabel",
+        "tierSelect",
+        "table",
+        "clear"
+      ]
+    },
+    "heading": {
+      "type": "Heading",
+      "props": { "level": 3, "text": "$state + $param binding" }
+    },
+    "intro": {
+      "type": "Text",
+      "props": {
+        "text": "Each control writes back to state via a set-kind action that pulls the new value from the event payload ($param).",
+        "muted": true
+      }
+    },
+    "nameLabel": {
+      "type": "Label",
+      "props": { "text": "Name" }
+    },
+    "nameInput": {
+      "type": "Input",
+      "props": {
+        "placeholder": "Type a name…",
+        "value": { "$state": "/name" },
+        "onChange": { "$action": "setName" }
+      }
+    },
+    "tierLabel": {
+      "type": "Label",
+      "props": { "text": "Tier" }
+    },
+    "tierSelect": {
+      "type": "Select",
+      "props": {
+        "value": { "$state": "/tier" },
+        "items": [
+          { "value": "free", "label": "Free" },
+          { "value": "pro", "label": "Pro" },
+          { "value": "team", "label": "Team" }
+        ],
+        "onChange": { "$action": "setTier" }
+      }
+    },
+    "table": {
+      "type": "Table",
+      "props": {
+        "columns": [{ "key": "name", "label": "Name" }, { "key": "tier", "label": "Tier" }],
+        "rows": { "$state": "/users" }
+      }
+    },
+    "clear": {
+      "type": "Button",
+      "props": {
+        "label": "Clear name",
+        "variant": "secondary",
+        "onClick": { "$action": "clearName" }
+      }
+    }
+  },
+  "actions": {
+    "setName": { "kind": "set", "path": "/name", "value": { "$param": "value" } },
+    "setTier": { "kind": "set", "path": "/tier", "value": { "$param": "value" } },
+    "clearName": { "kind": "set", "path": "/name", "value": "" }
+  }
+}

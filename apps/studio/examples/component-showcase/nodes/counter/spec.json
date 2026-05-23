@@ -1,0 +1,57 @@
+{
+  "root": "card",
+  "state": {
+    "/count": 0
+  },
+  "elements": {
+    "card": {
+      "type": "Card",
+      "props": { "title": "Counter" },
+      "children": ["heading", "intro", "metric", "setTen", "reset", "footer"]
+    },
+    "heading": {
+      "type": "Heading",
+      "props": { "level": 3, "text": "Set-kind actions" }
+    },
+    "intro": {
+      "type": "Text",
+      "props": {
+        "text": "Both buttons dispatch a set-kind action. State updates happen entirely in the browser — no script spawns.",
+        "muted": true
+      }
+    },
+    "metric": {
+      "type": "Metric",
+      "props": {
+        "label": "Count",
+        "value": { "$state": "/count" }
+      }
+    },
+    "setTen": {
+      "type": "Button",
+      "props": {
+        "label": "Set to 10",
+        "onClick": { "$action": "setTen" }
+      }
+    },
+    "reset": {
+      "type": "Button",
+      "props": {
+        "label": "Reset",
+        "variant": "secondary",
+        "onClick": { "$action": "reset" }
+      }
+    },
+    "footer": {
+      "type": "Text",
+      "props": {
+        "text": "Each click triggers an immediate, in-memory state write. No fetch round-trip required.",
+        "muted": true
+      }
+    }
+  },
+  "actions": {
+    "setTen": { "kind": "set", "path": "/count", "value": 10 },
+    "reset": { "kind": "set", "path": "/count", "value": 0 }
+  }
+}

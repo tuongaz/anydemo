@@ -1,0 +1,32 @@
+{
+  "version": 2,
+  "name": "Component Showcase",
+  "description": "Three component nodes demonstrating json-render-powered reactive UIs on the canvas: client-side state with set actions, server-side state with script actions, and a form with live $state binding plus a Table.",
+  "nodes": [
+    {
+      "id": "counter",
+      "type": "component",
+      "data": {
+        "name": "Counter",
+        "description": "Card + Metric + Buttons driven by set-kind actions."
+      }
+    },
+    {
+      "id": "fetcher",
+      "type": "component",
+      "data": {
+        "name": "Random Stats",
+        "description": "Card + Metric + Progress + Markdown updated by a script-kind action."
+      }
+    },
+    {
+      "id": "form",
+      "type": "component",
+      "data": {
+        "name": "Form Demo",
+        "description": "Card + Input + Select + Table — live $state binding via set with $param."
+      }
+    }
+  ],
+  "connectors": []
+}

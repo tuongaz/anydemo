@@ -1,0 +1,28 @@
+{
+  "nodes": {
+    "counter": {
+      "position": { "x": -460, "y": 0 },
+      "width": 340,
+      "height": 300,
+      "borderColor": "green",
+      "borderSize": 1,
+      "fontSize": 14
+    },
+    "fetcher": {
+      "position": { "x": -60, "y": 0 },
+      "width": 380,
+      "height": 460,
+      "borderColor": "green",
+      "borderSize": 1,
+      "fontSize": 14
+    },
+    "form": {
+      "position": { "x": 380, "y": 0 },
+      "width": 360,
+      "height": 460,
+      "borderColor": "green",
+      "borderSize": 1,
+      "fontSize": 14
+    }
+  }
+}

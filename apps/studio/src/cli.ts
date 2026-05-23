@@ -350,6 +350,7 @@ async function runStart() {
 async function seedExamples(registry: Registry) {
   await seedExample(registry, 'order-pipeline');
   await seedExample(registry, 'ecommerce-platform');
+  await seedExample(registry, 'component-showcase');
 }
 
 async function seedExample(registry: Registry, exampleName: string) {
