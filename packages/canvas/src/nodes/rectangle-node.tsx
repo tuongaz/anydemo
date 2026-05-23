@@ -159,7 +159,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
       <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted/30 sf:px-3 sf:py-3"
+        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted sf:px-3 sf:py-3"
         data-testid="node-header"
       >
         {data.icon ? (

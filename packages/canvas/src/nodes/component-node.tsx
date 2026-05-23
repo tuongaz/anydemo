@@ -83,7 +83,13 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
   // 800×600 to match HtmlNode). User-sized branch fills the outer (which
   // carries explicit width/height) and scrolls inside.
   const body = userSized ? (
-    <div data-testid="component-node-body" className="sf:h-full sf:w-full sf:overflow-auto">
+    // flex-1 + min-h-0 lets the body fill the chrome height that's left after
+    // the header bar (when present) without forcing the body taller than the
+    // chrome — keeps overflow-auto scrolling correctly inside flex column.
+    <div
+      data-testid="component-node-body"
+      className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto"
+    >
       <ComponentRuntime
         spec={data.spec}
         nodeId={id}
@@ -162,10 +168,32 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         data-testid="component-node-chrome"
         className={cn(
           'sf:overflow-hidden',
-          innerShrinkWraps ? 'sf:inline-block' : 'sf:h-full sf:w-full',
+          innerShrinkWraps ? 'sf:inline-block' : 'sf:flex sf:h-full sf:w-full sf:flex-col',
         )}
         style={chromeStyle}
       >
+        {data.name !== undefined && data.name !== '' ? (
+          <div
+            data-testid="component-node-header"
+            className="sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:border-border sf:border-b sf:bg-muted sf:px-3 sf:py-3"
+          >
+            {data.icon ? (
+              <Icon
+                name={data.icon}
+                size={16}
+                className="sf:shrink-0"
+                style={colorTokenStyle(data.textColor, 'text')}
+                aria-hidden
+              />
+            ) : null}
+            <div
+              data-testid="component-node-title"
+              className="sf:min-w-0 sf:flex-1 sf:wrap-break-word sf:whitespace-pre-wrap sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90"
+            >
+              {data.name}
+            </div>
+          </div>
+        ) : null}
         {body}
       </div>
       <Handle
@@ -182,21 +210,6 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         isConnectable={isConnectable}
         className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
-      {data.name !== undefined && data.name !== '' ? (
-        <div
-          data-testid="component-node-label"
-          className="sf:-bottom-5 sf:absolute sf:right-0 sf:left-0 sf:truncate sf:text-center sf:text-[11px] sf:text-muted-foreground"
-        >
-          {data.icon ? (
-            <div className="sf:flex sf:items-center sf:justify-center sf:gap-1">
-              <Icon name={data.icon} size={12} aria-hidden />
-              <span className="truncate">{data.name}</span>
-            </div>
-          ) : (
-            data.name
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

@@ -306,36 +306,57 @@ describe('ComponentNode fit-to-content button', () => {
   });
 });
 
-describe('ComponentNode label', () => {
-  it('renders a label element below the content when data.name is set', () => {
+describe('ComponentNode header', () => {
+  // Header lives INSIDE the chrome at the top so it doesn't sit in the band
+  // where selected-edge endpoint outlets land — fixes the bug where the old
+  // outside-chrome label intercepted clicks on edge endpoints behind it.
+  it('renders a header bar inside the chrome when data.name is set', () => {
     const tree = callComponentNode({ name: 'Counter card' });
-    const label = findElement(tree, (el) => {
+    const header = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-label';
+      return p['data-testid'] === 'component-node-header';
     });
-    expect(label).not.toBeNull();
-    expect((label?.props as { children?: unknown }).children).toBe('Counter card');
+    expect(header).not.toBeNull();
+    const chrome = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-chrome';
+    });
+    if (!chrome) throw new Error('expected chrome wrapper');
+    const headerInsideChrome = findElement(chrome, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-header';
+    });
+    expect(headerInsideChrome).not.toBeNull();
   });
 
-  it('omits the label element when data.name is absent', () => {
-    const tree = callComponentNode();
-    const label = findElement(tree, (el) => {
+  it('renders the name as the header title text', () => {
+    const tree = callComponentNode({ name: 'Counter card' });
+    const title = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-label';
+      return p['data-testid'] === 'component-node-title';
     });
-    expect(label).toBeNull();
+    expect((title?.props as { children?: unknown })?.children).toBe('Counter card');
+  });
+
+  it('omits the header when data.name is absent', () => {
+    const tree = callComponentNode();
+    const header = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-header';
+    });
+    expect(header).toBeNull();
   });
 
   it('renders an Icon inline with the caption when data.icon is set', () => {
     const tree = callComponentNode({ name: 'Counter card', icon: 'sparkles' });
-    const label = findElement(tree, (el) => {
+    const header = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-label';
+      return p['data-testid'] === 'component-node-header';
     });
-    if (!label) throw new Error('expected component-node-label');
-    const icon = findElement(label, (el) => el.type === Icon);
-    if (!icon) throw new Error('expected Icon in component-node-label');
+    if (!header) throw new Error('expected component-node-header');
+    const icon = findElement(header, (el) => el.type === Icon);
+    if (!icon) throw new Error('expected Icon in component-node-header');
     expect((icon.props as { name?: string }).name).toBe('sparkles');
-    expect((icon.props as { size?: number }).size).toBe(12);
+    expect((icon.props as { size?: number }).size).toBe(16);
   });
 });
