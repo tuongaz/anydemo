@@ -43,7 +43,7 @@ The launching prompt will give you:
    topic, one node per bucket, etc.) and supersedes the generic
    abstraction rules below for matched resources.
 4. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<projectPath>/LEARN.md` `## Tech stack
+   overrides from the host's shared `<host>/.seeflow/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.conventions` says the project models
    one bucket per tenant, follow that — not the ref's generic "one

@@ -27,8 +27,8 @@ codebase, so your half of the brief must stand on its own.
 2. **`projectRoot`** — absolute path to the user's project.
 3. **`existingDemo`** *(optional)* — parsed `flow.json` for the matching
    slug when the prompt obviously targets an existing flow. May be `null`.
-4. **`learnContext`** *(optional)* — raw text of
-   `<projectPath>/LEARN.md` if it exists. Past runs left this as
+4. **`learnContext`** *(optional)* — raw text of the host's shared
+   `<host>/.seeflow/LEARN.md` if it exists. Past runs left this as
    a crib sheet: known endpoints, prior `Flows already created`, scope
    hints. **Treat it as authoritative for what it covers** — don't
    re-grep to "verify" known endpoints unless code obviously

@@ -2,8 +2,8 @@
 
 Per-tech reference cards covering **how to use this tech locally from Play
 and Status node scripts**. Refs are general guidance only — the project's
-own helpers, fixtures, and conventions (captured in
-`<projectPath>/LEARN.md` under `## Tech stack adaptations`) always win.
+own helpers, fixtures, and conventions (captured in the shared
+`<host>/.seeflow/LEARN.md` under `## Tech stack adaptations`) always win.
 
 ## How the catalog is used
 
@@ -14,7 +14,8 @@ own helpers, fixtures, and conventions (captured in
    conventions and emits them under `learnUpdates.techAdaptations.<techId>`.
 2. **Orchestrator** maps each `techId` to `references/tech/<techId>.md`
    and forwards the file paths (plus the matching `techAdaptations`
-   entries from LEARN.md) into the launch prompts of:
+   entries from the shared `<host>/.seeflow/LEARN.md`) into the launch
+   prompts of:
    - `seeflow-node-planner` (Phase 2) — for node modelling guidance.
    - `seeflow-play-designer` (Phase 4) — for the canonical local trigger
      recipe.
@@ -101,7 +102,7 @@ hits, emit the corresponding `techId` in `learnUpdates.techStack`.
 Every per-tech ref follows `_template.md` exactly:
 
 1. Frontmatter (`techId`, `category`).
-2. "General guidance only" banner pointing to LEARN.md adaptations.
+2. "General guidance only" banner pointing to the shared `<host>/.seeflow/LEARN.md` adaptations.
 3. **Node modelling** — guidance for `seeflow-node-planner`.
 4. **Play (trigger locally)** — guidance + 1 short template for
    `seeflow-play-designer`.

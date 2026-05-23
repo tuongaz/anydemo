@@ -1,9 +1,11 @@
 # `LEARN.md` — project memory for flow authoring
 
-`<projectPath>/LEARN.md` is the persistent crib sheet the `seeflow`
-skill writes for itself. Every `/seeflow` invocation reads it before
-discovery and updates it at the end of discovery (and again whenever
-later phases surface a non-obvious fact).
+`<host>/.seeflow/LEARN.md` is the persistent crib sheet the `seeflow`
+skill writes for itself. It is **shared across every flow in the host
+repo** — there is exactly one `LEARN.md` per host, living next to (not
+inside) the per-flow project directories. Every `/seeflow` invocation
+reads it before discovery and updates it at the end of discovery (and
+again whenever later phases surface a non-obvious fact).
 
 The file is **for the skill**, not for the user — keep it terse, keep it
 factual, keep it scannable. Treat it like an internal handbook: a future
@@ -24,9 +26,12 @@ run should be able to skip a lot of grep work by reading it.
   uncovered a new gotcha (port mismatch, hidden env var, fixture
   factory, surprising auth).
 
-The file always lives at `<projectPath>/LEARN.md`. Create the
-seeflow project directory (`<host>/.seeflow/<slug>/`) if missing.
-Never write outside the project directory.
+The file always lives at `<host>/.seeflow/LEARN.md` — one shared
+file per host repo, **never** inside a per-flow folder
+(`<host>/.seeflow/<slug>/LEARN.md` is wrong; if you find one there
+from an older run, move its contents into the shared file and delete
+the stray copy). Create the `<host>/.seeflow/` directory if missing.
+Never write outside that directory.
 
 ## File structure
 

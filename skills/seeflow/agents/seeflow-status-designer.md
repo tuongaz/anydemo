@@ -47,7 +47,7 @@ The launching prompt will give you:
    that tech (which client method to call, what tick cadence, what
    `StatusReport` shape).
 5. **(optional) `techAdaptations`** — per-`techId` project-specific
-   overrides from `<projectPath>/LEARN.md` `## Tech stack
+   overrides from the host's shared `<host>/.seeflow/LEARN.md` `## Tech stack
    adaptations`. **These ALWAYS win over the tech ref's defaults.**
    If `techAdaptations.<techId>.helpers` names a consumer / reader /
    repository the project already ships, call that helper — don't

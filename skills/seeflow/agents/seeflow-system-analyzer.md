@@ -21,8 +21,8 @@ to write faithful scripts without re-reading the codebase.
 ## Inputs
 
 1. **`projectRoot`** — absolute path to the user's project.
-2. **`learnContext`** *(optional)* — raw text of
-   `<projectPath>/LEARN.md` if it exists. Past runs left this as
+2. **`learnContext`** *(optional)* — raw text of the host's shared
+   `<host>/.seeflow/LEARN.md` if it exists. Past runs left this as
    a crib sheet: runtime profile, dev setup, integration tests,
    fixtures, data-entry paths, gotchas, tech adaptations.
    **Treat it as authoritative for what it covers.** When LEARN.md
@@ -221,7 +221,7 @@ Field-by-field:
     integration tests do to start the app and call its endpoints.
     Use `"unknown"` if no integration tests found.
 - **`learnUpdates`** *(object, required)* — structured facts the
-  orchestrator merges into `<projectPath>/LEARN.md`. Every
+  orchestrator merges into the host's shared `<host>/.seeflow/LEARN.md`. Every
   child field is optional; emit what you investigated, plus the
   inherited facts from `learnContext` so they survive the merge.
   Schema and merge rules: `references/learn-format.md`. **Do not** emit

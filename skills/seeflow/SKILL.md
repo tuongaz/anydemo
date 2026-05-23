@@ -9,17 +9,17 @@ Turn a natural-language prompt into a registered SeeFlow flow at `<projectPath>/
 
 ## Project layout convention
 
-A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **only** place this skill introduces a `.seeflow` folder — the studio itself is path-agnostic). Each flow lives in its own subdirectory:
+A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **only** place this skill introduces a `.seeflow` folder — the studio itself is path-agnostic). `LEARN.md` is shared across every flow in the host and lives at `<host>/.seeflow/LEARN.md`; each flow lives in its own subdirectory beside it:
 
 ```
 <host>/                          ← the user's repo
   .seeflow/                      ← container, created by this skill
+    LEARN.md                     ← shared crib for this skill (project-wide, used by every flow)
     <flow-name>/                 ← seeflow project root — passed to projects:create --path
       flow.json                  ← envelope + nodes/connectors
       style.json                 ← layout/visuals (managed by `flows:layout`)
       nodes/<id>/                ← per-node sidecar files (detail.md, view.html, scripts/)
       sdk/emit.ts                ← optional: auto-generated event SDK helper
-      LEARN.md                   ← persistent crib for this skill (per-flow)
       .tmp/                      ← per-flow scratch ($SEEFLOW_TMP)
       state/                     ← per-flow runtime script state
 ```
@@ -42,7 +42,7 @@ Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --n
 
 - User's prompt; project root (`$PWD`); `~/.seeflow/config.json` (optional studio host:port).
 - Existing `<project>/flow.json` (skip the creation path if already present — fall back to `register --flow flow.json`).
-- `<projectPath>/LEARN.md` — persistent crib sheet from prior runs. **Read before Phase 1.** Format: `references/learn-format.md`.
+- `$learnPath` (`$PWD/.seeflow/LEARN.md`) — persistent crib sheet **shared across every flow in this host repo**, written by prior `/seeflow` runs. **Read before Phase 1.** Format: `references/learn-format.md`.
 
 ## Conventions
 
@@ -50,6 +50,7 @@ Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --n
 |---|---|
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
 | `$repoPath` | `$PWD/.seeflow/<flow-name>` (the seeflow project root the skill creates and passes to `projects:create --path`). |
+| `$learnPath` | `$PWD/.seeflow/LEARN.md` — **shared across every flow** in the host repo. Lives next to the flow folders, never inside one. |
 | `$SEEFLOW_TMP` | `$projectPath/.tmp/` — project-local scratch directory. Create on demand (`mkdir -p`), write all intermediate files here, **never** under system `/tmp`. Already inside the project tree, so no extra write permission is needed. Cleaned up at end of the run (see "Scratch files & cleanup"). |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
@@ -69,7 +70,7 @@ Any intermediate file the orchestrator or a generated Play/Status script needs (
 ## Pipeline
 
 ```
-P0    /health probe ‖ read LEARN.md
+P0    /health probe ‖ read $learnPath
 P1    code-analyzer ‖ system-analyzer
 P2    node-planner (kicks off when code-analyzer returns;
                    system-analyzer continues in background)
@@ -106,6 +107,7 @@ Full text in `references/core-rules.md`:
 - **Asking "what's your codebase?".** Launch the analyzers — that is their job.
 - **Skipping or simulating Phase 6.** Mandatory; the retry budget handles flakiness.
 - **Bypassing the Phase 0 consent check.** Never default to `enabled: true`; always read `~/.seeflow/consent.json` first.
+- **Writing `LEARN.md` inside a flow folder (`<host>/.seeflow/<flow-name>/LEARN.md`).** It is **shared across every flow** in the host repo — always read/write `$learnPath` = `$PWD/.seeflow/LEARN.md`, never anywhere else.
 - **Touching `status` after the initial `pending` write.** The `SessionEnd` hook owns that field — see `feedback.md`.
 - **Logging without a redacted summary.** If the summary would leak a path, hostname, project name, or prompt text, **skip the entry** rather than emit a leaky one.
 - **Writing scratch files to `/tmp` (or `$TMPDIR`).** Use `$SEEFLOW_TMP` (`<projectPath>/.tmp/`) — project-local, no permission prompts, and cleaned up at end of run. Same rule applies to scripts the Phase 4 designers emit.
@@ -139,7 +141,7 @@ If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), log `en
 Then in a single message:
 
 1. `curl --max-time 0.5 -fsS "$STUDIO_URL/health"`
-2. Read `<projectPath>/LEARN.md` if present → `learnContext` (else `null`). Format: `references/learn-format.md`.
+2. Read `$learnPath` (`$PWD/.seeflow/LEARN.md`) if present → `learnContext` (else `null`). **This file is shared across every flow in this host** — do not look inside any `<flow-name>/` folder for it. Format: `references/learn-format.md`.
 
 - **200** → Phase 1.
 - **!200** → tell the user the studio isn't running, warn the first launch can take a minute or two if it has to fall back to `npx`, then run the CLI's `start` subcommand. Re-probe `/health` once. If still unreachable, log `env-service-unreachable` (`severity: blocker`, `phase: P0`, `summary: studio /health unreachable after start retry`), surface and stop.
@@ -193,7 +195,7 @@ Log `mode-fallback` (`severity: degraded`, `phase: P1`, `details: design-only`, 
 Downstream consequences:
 - **Phase 3 dynamic gate:** default to **static** without re-asking. Without `runtimeProfile`, Phase 4 designers cannot pick a real interpreter or fixture; tell the user to populate code first if they later want dynamic.
 - **Phase 6 (e2e):** N/A — skip with a one-line note when summarising the run.
-- **LEARN.md:** still write the flow row, but mark it `(design-only)` in the purpose column so the next run knows the canvas is not wired to a real system.
+- **`$learnPath`:** still write the flow row, but mark it `(design-only)` in the purpose column so the next run knows the canvas is not wired to a real system.
 
 ### Phase 1 → Phase 2 overlap
 
@@ -201,11 +203,11 @@ Start `seeflow-node-planner` as soon as the code-analyzer returns — it only ne
 
 When the system-analyzer returns:
 
-1. Merge `learnUpdates` into `<projectPath>/LEARN.md` (create the project dir if missing). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
-2. Splice `runtimeProfile` + LEARN.md facts into the in-memory context brief used by Phase 4.
+1. Merge `learnUpdates` into `$learnPath` (`$PWD/.seeflow/LEARN.md` — create `$PWD/.seeflow/` if missing; the file is shared across every flow in this host). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
+2. Splice `runtimeProfile` + `$learnPath` facts into the in-memory context brief used by Phase 4.
 3. Merge `knownEndpoints` / `techStack` from the code-analyzer into the same write.
 
-**Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Forward those paths and the matching `## Tech stack adaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` LEARN.md already had; the planner produces a first draft and the user reviews in Phase 3 anyway.
+**Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Forward those paths and the matching `## Tech stack adaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` `$learnPath` already had; the planner produces a first draft and the user reviews in Phase 3 anyway.
 
 ## Phase 2 — plan nodes
 
@@ -329,7 +331,7 @@ If the run is design-only (Phase 1 fallback), skip Phase 6 entirely and log `pha
 
 ### Polish LEARN.md with anything learned
 
-If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `<projectPath>/LEARN.md` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise.
+If Phases 5-6 surfaced something the next run would want — port mismatch, fixture path, missed env var, working seed command, useful data-entry path — append to `$learnPath` (`Gotchas` bullet or the relevant section). Also append the flow to the "Flows already created" table with today's date and a one-line purpose. Skip if nothing new — empty updates are noise. The file is shared across every flow in this host, so the table accumulates every flow the skill has ever scaffolded here.
 
 **Tech-specific learnings** (a helper, a required attribute, an emulator quirk, a fixture path) go in `## Tech stack adaptations` → `### <techId>`, not just `## Gotchas`. If the code-analyzer missed a tech entirely, also append the `techId` to `## Tech stack`. This is what makes the next `/seeflow` run reuse the work.
 
@@ -341,7 +343,7 @@ If Phases 5-6 surfaced something the next run would want — port mismatch, fixt
 | Error handling, retry caps, sub-agent table | `references/operations.md` |
 | Per-node file convention, action runtime budgets, when-to-use guidance | `references/schema.md` |
 | Core rules | `references/core-rules.md` |
-| `LEARN.md` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
+| `$learnPath` format, lifecycle, merging, `learnUpdates` contract | `references/learn-format.md` |
 | Tech-specific best practices | `references/tech/README.md` |
 | Sub-agent prompts | `agents/seeflow-*.md` |
 | Feedback collection — consent, kinds, format, redaction, hook handoff | `feedback.md` |
