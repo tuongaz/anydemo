@@ -159,7 +159,8 @@ interface StatusNode {
 function collectStatusNodes(demo: ResolvedFlow): StatusNode[] {
   const out: StatusNode[] = [];
   for (const node of demo.nodes) {
-    if (node.type !== 'playNode' && node.type !== 'stateNode') continue;
+    // Capabilities are valid on every node type post-flat-types — gate purely
+    // on `statusAction` presence, not on the visual kind.
     const action = node.data.statusAction;
     if (!action) continue;
     out.push({ nodeId: node.id, action });

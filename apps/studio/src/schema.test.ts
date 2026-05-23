@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import {
-  FlowSchema,
-  HtmlNodeDataSchema,
-  ResolvedFlowSchema,
-  StatusReportSchema,
-  StyleSchema,
-} from './schema.ts';
+import { FlowSchema, ResolvedFlowSchema, StatusReportSchema, StyleSchema } from './schema.ts';
 
 const fixturePath = (name: string) => new URL(`../test/fixtures/${name}`, import.meta.url).pathname;
 
@@ -73,7 +67,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'playNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
@@ -87,19 +81,19 @@ describe('ResolvedFlowSchema', () => {
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'c',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 200, y: 0 },
           data: { name: 'C', stateSource: { kind: 'event' as const } },
         },
         {
           id: 'd',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 300, y: 0 },
           data: { name: 'D', stateSource: { kind: 'event' as const } },
         },
@@ -128,15 +122,16 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.connectors[2]?.queueName).toBe('work-queue');
   });
 
-  it('round-trips a shapeNode with each shape variant', () => {
-    // US-009 extended ShapeKind with `database` — the first illustrative
-    // shape. The enum now drives both the schema validation here and the
-    // per-shape renderer dispatch in apps/web's shape-node.tsx.
+  it('round-trips each geometric node variant', () => {
+    // Flat-types refactor: visual kind is the `type` field. The 9 geometric
+    // variants share the same data schema; the discriminated union routes
+    // them to the right renderer via `type` alone.
     const make = (
-      shape:
+      type:
         | 'rectangle'
         | 'ellipse'
         | 'sticky'
+        | 'text'
         | 'database'
         | 'server'
         | 'user'
@@ -147,48 +142,48 @@ describe('ResolvedFlowSchema', () => {
       name: 'shape-demo',
       nodes: [
         {
-          id: `shape-${shape}`,
-          type: 'shapeNode' as const,
+          id: `shape-${type}`,
+          type,
           position: { x: 10, y: 20 },
-          data: { shape, name: `${shape} note` },
+          data: { name: `${type} note` },
         },
       ],
       connectors: [],
     });
 
-    for (const shape of [
+    for (const type of [
       'rectangle',
       'ellipse',
       'sticky',
+      'text',
       'database',
       'server',
       'user',
       'queue',
       'cloud',
     ] as const) {
-      const result = ResolvedFlowSchema.safeParse(make(shape));
+      const result = ResolvedFlowSchema.safeParse(make(type));
       if (!result.success) {
         throw new Error(
-          `expected ${shape} shapeNode to parse, got: ${JSON.stringify(result.error.issues)}`,
+          `expected ${type} to parse, got: ${JSON.stringify(result.error.issues)}`,
         );
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'shapeNode') throw new Error('expected shapeNode');
-      expect(node.data.shape).toBe(shape);
-      expect(node.data.name).toBe(`${shape} note`);
+      if (node?.type !== type) throw new Error(`expected ${type}`);
+      expect(node.data.name).toBe(`${type} note`);
     }
   });
 
-  it('accepts a shapeNode with shape=database and no label (US-009 illustrative)', () => {
+  it('accepts a database node with no label (illustrative geometric)', () => {
     const demo = {
       version: 2 as const,
       name: 'db-shape',
       nodes: [
         {
           id: 'db-1',
-          type: 'shapeNode' as const,
+          type: 'database' as const,
           position: { x: 0, y: 0 },
-          data: { shape: 'database' as const },
+          data: {},
         },
       ],
       connectors: [],
@@ -196,24 +191,23 @@ describe('ResolvedFlowSchema', () => {
     const result = ResolvedFlowSchema.safeParse(demo);
     if (!result.success) {
       throw new Error(
-        `expected database shapeNode to parse, got: ${JSON.stringify(result.error.issues)}`,
+        `expected database to parse, got: ${JSON.stringify(result.error.issues)}`,
       );
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'shapeNode') throw new Error('expected shapeNode');
-    expect(node.data.shape).toBe('database');
+    if (node?.type !== 'database') throw new Error('expected database');
   });
 
-  it('accepts a shapeNode without an optional label', () => {
+  it('accepts a geometric node without an optional label', () => {
     const demo = {
       version: 2 as const,
       name: 'no-label-shape',
       nodes: [
         {
           id: 'shape-1',
-          type: 'shapeNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
-          data: { shape: 'rectangle' as const },
+          data: {},
         },
       ],
       connectors: [],
@@ -222,16 +216,16 @@ describe('ResolvedFlowSchema', () => {
     expect(result.success).toBe(true);
   });
 
-  it('rejects a shapeNode with an unknown shape variant', () => {
+  it('rejects an unknown node type', () => {
     const demo = {
       version: 2 as const,
       name: 'bad-shape',
       nodes: [
         {
           id: 'shape-1',
-          type: 'shapeNode' as const,
+          type: 'triangle' as const,
           position: { x: 0, y: 0 },
-          data: { shape: 'triangle' },
+          data: {},
         },
       ],
       connectors: [],
@@ -247,7 +241,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'p',
-          type: 'playNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
@@ -265,7 +259,7 @@ describe('ResolvedFlowSchema', () => {
         },
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: {
             name: 'S',
@@ -276,10 +270,9 @@ describe('ResolvedFlowSchema', () => {
         },
         {
           id: 'shape-1',
-          type: 'shapeNode' as const,
+          type: 'sticky' as const,
           position: { x: 200, y: 0 },
           data: {
-            shape: 'sticky' as const,
             width: 240,
             height: 140,
             borderColor: 'amber' as const,
@@ -303,7 +296,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
@@ -320,7 +313,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
@@ -344,7 +337,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'S',
@@ -371,13 +364,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -399,13 +392,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -452,13 +445,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -489,13 +482,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -518,13 +511,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -555,13 +548,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -584,13 +577,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -614,13 +607,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -647,13 +640,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -670,13 +663,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -693,13 +686,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -716,7 +709,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'A',
@@ -726,7 +719,7 @@ describe('ResolvedFlowSchema', () => {
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -747,7 +740,7 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(ok.error.issues)}`);
     }
     const node = ok.data.nodes[0];
-    if (node?.type !== 'stateNode') throw new Error('expected stateNode');
+    if (node?.type !== 'rectangle') throw new Error('expected rectangle');
     expect(node.data.borderSize).toBe(3);
     expect(ok.data.connectors[0]?.borderSize).toBe(4);
 
@@ -763,7 +756,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'p',
-          type: 'playNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
@@ -787,7 +780,7 @@ describe('ResolvedFlowSchema', () => {
       );
     }
     const node12 = ok12.data.nodes[0];
-    if (node12?.type !== 'playNode') throw new Error('expected playNode');
+    if (node12?.type !== 'rectangle') throw new Error('expected rectangle');
     expect(node12.data.cornerRadius).toBe(12);
 
     const ok0 = ResolvedFlowSchema.safeParse(make(0));
@@ -802,14 +795,14 @@ describe('ResolvedFlowSchema', () => {
   // relative `path` under the project root. The renderer resolves it via
   // the file-serving endpoint added in US-001. Path-safety:
   // no absolute paths, no `..` traversal, no leading slash.
-  it('parses a demo containing one imageNode with data.path (US-004)', () => {
+  it('parses a demo containing one type:image node with data.path (US-004)', () => {
     const demo = {
       version: 2 as const,
       name: 'image-demo',
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 10, y: 20 },
           data: {
             path: 'nodes/img-1/pixel.png',
@@ -826,12 +819,12 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'imageNode') throw new Error('expected imageNode');
+    if (node?.type !== 'image') throw new Error('expected image');
     expect(node.data.path).toBe('nodes/img-1/pixel.png');
     expect(node.data.alt).toBe('pixel');
   });
 
-  it('rejects an imageNode whose data carries the legacy `image` key (US-004 hard-cut)', () => {
+  it('rejects an image node whose data carries the legacy `image` key (US-004 hard-cut)', () => {
     // The pre-US-004 schema accepted `data.image` as a base64 data URL. After
     // the hard-cut, `image` is an unknown key and `path` is required — the
     // result is that the schema rejects the legacy payload, with no compat
@@ -842,7 +835,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { image: 'data:image/png;base64,iVBORw0KGgo=' },
         },
@@ -852,14 +845,14 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
-  it('rejects an imageNode whose path is absolute (US-004)', () => {
+  it('rejects an image node whose path is absolute (US-004)', () => {
     const demo = {
       version: 2 as const,
       name: 'bad-image-abs',
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: '/etc/passwd' },
         },
@@ -869,14 +862,14 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
-  it('rejects an imageNode whose path uses `..` traversal (US-004)', () => {
+  it('rejects an image node whose path uses `..` traversal (US-004)', () => {
     const demo = {
       version: 2 as const,
       name: 'bad-image-traversal',
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: '../../etc/passwd' },
         },
@@ -886,14 +879,14 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
-  it('rejects an imageNode whose path is outside its nodes/<id>/ folder', () => {
+  it('rejects an image node whose path is outside its nodes/<id>/ folder', () => {
     const result = ResolvedFlowSchema.safeParse({
       version: 2 as const,
       name: 'wrong-folder',
       nodes: [
         {
           id: 'node-abc',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: 'assets/foo.png' },
         },
@@ -903,14 +896,14 @@ describe('ResolvedFlowSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts an imageNode whose path is under its own nodes/<id>/ folder', () => {
+  it('accepts an image node whose path is under its own nodes/<id>/ folder', () => {
     const result = ResolvedFlowSchema.safeParse({
       version: 2 as const,
       name: 'good-folder',
       nodes: [
         {
           id: 'node-abc',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: 'nodes/node-abc/foo.png' },
         },
@@ -930,7 +923,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: {
             path: 'nodes/img-1/pixel.png',
@@ -947,7 +940,7 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'imageNode') throw new Error('expected imageNode');
+    if (node?.type !== 'image') throw new Error('expected image');
     expect(node.data.borderColor).toBe('blue');
     expect(node.data.borderWidth).toBe(4);
     expect(node.data.borderStyle).toBe('dashed');
@@ -960,7 +953,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: 'nodes/img-1/pixel.png' },
         },
@@ -972,7 +965,7 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'imageNode') throw new Error('expected imageNode');
+    if (node?.type !== 'image') throw new Error('expected image');
     expect(node.data.borderColor).toBeUndefined();
     expect(node.data.borderWidth).toBeUndefined();
     expect(node.data.borderStyle).toBeUndefined();
@@ -986,7 +979,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 0, y: 0 },
           data: { path: basePath, borderWidth: 0 },
         },
@@ -1002,20 +995,20 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(tooLarge).success).toBe(false);
   });
 
-  it('accepts a connector pointing at an imageNode id (US-002)', () => {
+  it('accepts a connector pointing at a type:image node id (US-002)', () => {
     const demo = {
       version: 2 as const,
       name: 'image-conn',
       nodes: [
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'img-1',
-          type: 'imageNode' as const,
+          type: 'image' as const,
           position: { x: 100, y: 0 },
           data: { path: 'nodes/img-1/pixel.png' },
         },
@@ -1029,40 +1022,40 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.connectors).toHaveLength(1);
   });
 
-  // US-023: an iconNode is a valid connector endpoint in either role — the
+  // US-023: a type:icon node is a valid connector endpoint in either role — the
   // connector→node superRefine cares only that the referenced id exists in
   // nodes[], not about the node's discriminator. Schema-level fence so a future
   // change can't add a hidden node-type whitelist.
-  it('accepts a connector pointing at an iconNode id as source AND target (US-023)', () => {
+  it('accepts a connector pointing at a type:icon node id as source AND target (US-023)', () => {
     const demo = {
       version: 2 as const,
       name: 'icon-conn',
       nodes: [
         {
           id: 's',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'S', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 100, y: 0 },
           data: { icon: 'shopping-cart' },
         },
         {
           id: 'icon-2',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 200, y: 0 },
           data: { icon: 'circle' },
         },
       ],
       connectors: [
-        // stateNode → iconNode
+        // rectangle → icon
         { id: 'c1', source: 's', target: 'icon-1' },
-        // iconNode → stateNode
+        // icon → rectangle
         { id: 'c2', source: 'icon-1', target: 's' },
-        // iconNode → iconNode
+        // icon → icon
         { id: 'c3', source: 'icon-1', target: 'icon-2' },
       ],
     };
@@ -1080,7 +1073,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
@@ -1109,7 +1102,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
@@ -1123,14 +1116,14 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.resetAction).toBeUndefined();
   });
 
-  it('parses an iconNode with only the required icon field (US-008)', () => {
+  it('parses a type:icon node with only the required icon field (US-008)', () => {
     const demo = {
       version: 2 as const,
       name: 'icon-demo',
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 10, y: 20 },
           data: { icon: 'shopping-cart' },
         },
@@ -1142,20 +1135,20 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'iconNode') throw new Error('expected iconNode');
+    if (node?.type !== 'icon') throw new Error('expected icon');
     expect(node.data.icon).toBe('shopping-cart');
     expect(node.data.color).toBeUndefined();
     expect(node.data.strokeWidth).toBeUndefined();
   });
 
-  it('parses an iconNode with every optional field set (US-008)', () => {
+  it('parses a type:icon node with every optional field set (US-008)', () => {
     const demo = {
       version: 2 as const,
       name: 'icon-full',
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 0, y: 0 },
           data: {
             icon: 'help-circle',
@@ -1175,7 +1168,7 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'iconNode') throw new Error('expected iconNode');
+    if (node?.type !== 'icon') throw new Error('expected icon');
     expect(node.data.icon).toBe('help-circle');
     expect(node.data.color).toBe('blue');
     expect(node.data.strokeWidth).toBe(1.5);
@@ -1185,7 +1178,7 @@ describe('ResolvedFlowSchema', () => {
     expect(node.data.name).toBe('Help');
   });
 
-  it('parses an iconNode with an empty label (US-002 backwards compat sentinel)', () => {
+  it('parses a type:icon node with an empty label (US-002 backwards compat sentinel)', () => {
     // Empty string is the documented "no label" sentinel and must round-trip
     // through the schema (consumers can treat empty + absent the same way at
     // render time without needing a coercion step).
@@ -1195,7 +1188,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 0, y: 0 },
           data: { icon: 'shopping-cart', name: '' },
         },
@@ -1207,18 +1200,18 @@ describe('ResolvedFlowSchema', () => {
       throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
     }
     const node = result.data.nodes[0];
-    if (node?.type !== 'iconNode') throw new Error('expected iconNode');
+    if (node?.type !== 'icon') throw new Error('expected icon');
     expect(node.data.name).toBe('');
   });
 
-  it('rejects an iconNode with an empty icon string (US-008)', () => {
+  it('rejects a type:icon node with an empty icon string (US-008)', () => {
     const demo = {
       version: 2 as const,
       name: 'bad-icon',
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 0, y: 0 },
           data: { icon: '' },
         },
@@ -1228,14 +1221,14 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
-  it('rejects an iconNode strokeWidth outside [0.5, 4] (US-008)', () => {
+  it('rejects a type:icon node strokeWidth outside [0.5, 4] (US-008)', () => {
     const make = (strokeWidth: number) => ({
       version: 2 as const,
       name: 'bad-stroke',
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 0, y: 0 },
           data: { icon: 'shopping-cart', strokeWidth },
         },
@@ -1248,14 +1241,14 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(make(4)).success).toBe(true);
   });
 
-  it('rejects an iconNode with non-positive width or height (US-008)', () => {
+  it('rejects a type:icon node with non-positive width or height (US-008)', () => {
     const make = (width: number, height: number) => ({
       version: 2 as const,
       name: 'bad-icon-size',
       nodes: [
         {
           id: 'icon-1',
-          type: 'iconNode' as const,
+          type: 'icon' as const,
           position: { x: 0, y: 0 },
           data: { icon: 'shopping-cart', width, height },
         },
@@ -1275,13 +1268,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -1303,13 +1296,13 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: { name: 'A', stateSource: { kind: 'request' as const } },
         },
         {
           id: 'b',
-          type: 'stateNode' as const,
+          type: 'rectangle' as const,
           position: { x: 100, y: 0 },
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
@@ -1329,7 +1322,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'svc',
-          type: 'playNode',
+          type: 'rectangle',
           position: { x: 0, y: 0 },
           data: {
             name: 'POST /action',
@@ -1344,7 +1337,7 @@ describe('ResolvedFlowSchema', () => {
         },
         {
           id: 'worker',
-          type: 'stateNode',
+          type: 'rectangle',
           position: { x: 300, y: 0 },
           data: { name: 'my-worker', stateSource: { kind: 'event' } },
         },
@@ -1367,7 +1360,7 @@ describe('ResolvedFlowSchema', () => {
     const baseDemo = (data: Record<string, unknown>) => ({
       version: 2 as const,
       name: 'minimal',
-      nodes: [{ id: 'n1', type: 'stateNode' as const, position: { x: 0, y: 0 }, data }],
+      nodes: [{ id: 'n1', type: 'rectangle' as const, position: { x: 0, y: 0 }, data }],
       connectors: [],
     });
 
@@ -1396,7 +1389,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'play',
           node: {
             id: 'n-play',
-            type: 'playNode',
+            type: 'rectangle',
             position: { x: 0, y: 0 },
             data: {
               name: 'p',
@@ -1411,7 +1404,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'state',
           node: {
             id: 'n-state',
-            type: 'stateNode',
+            type: 'rectangle',
             position: { x: 0, y: 0 },
             data: {
               name: 's',
@@ -1425,10 +1418,9 @@ describe('ResolvedFlowSchema', () => {
           id: 'shape',
           node: {
             id: 'n-shape',
-            type: 'shapeNode',
+            type: 'rectangle',
             position: { x: 0, y: 0 },
             data: {
-              shape: 'rectangle',
               description: 'short body',
               detail: 'long-form\nnotes',
             },
@@ -1438,7 +1430,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'image',
           node: {
             id: 'n-image',
-            type: 'imageNode',
+            type: 'image',
             position: { x: 0, y: 0 },
             data: {
               path: 'nodes/n-image/captioned.png',
@@ -1451,7 +1443,7 @@ describe('ResolvedFlowSchema', () => {
           id: 'icon',
           node: {
             id: 'n-icon',
-            type: 'iconNode',
+            type: 'icon',
             position: { x: 0, y: 0 },
             data: {
               icon: 'shopping-cart',
@@ -1480,9 +1472,9 @@ describe('ResolvedFlowSchema', () => {
     it('accepts nodes with NO description / detail (back-compat)', () => {
       const demo = makeDemoWithNode({
         id: 'n1',
-        type: 'shapeNode',
+        type: 'rectangle',
         position: { x: 0, y: 0 },
-        data: { shape: 'rectangle' },
+        data: {},
       });
       expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
     });
@@ -1491,16 +1483,16 @@ describe('ResolvedFlowSchema', () => {
       const big = 'line\n'.repeat(2000); // 10kB of newlines
       const demo = makeDemoWithNode({
         id: 'n1',
-        type: 'shapeNode',
+        type: 'rectangle',
         position: { x: 0, y: 0 },
-        data: { shape: 'rectangle', description: big },
+        data: { description: big },
       });
       const parsed = ResolvedFlowSchema.safeParse(demo);
       if (!parsed.success) {
         throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
       }
       const first = parsed.data.nodes[0];
-      if (first?.type !== 'shapeNode') throw new Error('expected shape node');
+      if (first?.type !== 'rectangle') throw new Error('expected rectangle');
       expect(first.data.description).toBe(big);
     });
 
@@ -1511,26 +1503,26 @@ describe('ResolvedFlowSchema', () => {
       // SSE echo replays it back.
       const demo = makeDemoWithNode({
         id: 'n1',
-        type: 'shapeNode',
+        type: 'rectangle',
         position: { x: 0, y: 0 },
-        data: { shape: 'rectangle', description: '', detail: '' },
+        data: { description: '', detail: '' },
       });
       expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
     });
   });
 
-  // htmlNode carries author-written HTML inline via `data.html`. The studio
+  // type:'html' carries author-written HTML inline via `data.html`. The studio
   // externalizes content to `<project>/nodes/<id>/view.html` and stores a
   // `file://` ref in flow.json; the file-ref resolver inlines on read.
-  describe('htmlNode', () => {
-    it('parses a minimal htmlNode with optional html (omitted)', () => {
+  describe('type:html', () => {
+    it('parses a minimal type:html node with optional html (omitted)', () => {
       const demo = {
         version: 2 as const,
         name: 'html-demo',
         nodes: [
           {
             id: 'html-1',
-            type: 'htmlNode' as const,
+            type: 'html' as const,
             position: { x: 10, y: 20 },
             data: {},
           },
@@ -1542,31 +1534,43 @@ describe('ResolvedFlowSchema', () => {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'htmlNode') throw new Error('expected htmlNode');
+      if (node?.type !== 'html') throw new Error('expected html');
       expect(node.data.html).toBeUndefined();
       expect(node.data.name).toBeUndefined();
     });
 
     it('accepts html as free-form content', () => {
-      const result = HtmlNodeDataSchema.safeParse({ html: '<div>hi</div>' });
-      expect(result.success).toBe(true);
-    });
-
-    it('accepts html as a file:// ref (round-trip from disk)', () => {
-      const result = HtmlNodeDataSchema.safeParse({
-        html: 'file://view.html',
+      const result = ResolvedFlowSchema.safeParse({
+        version: 2,
+        name: 'html-free',
+        nodes: [
+          { id: 'n', type: 'html', position: { x: 0, y: 0 }, data: { html: '<div>hi</div>' } },
+        ],
+        connectors: [],
       });
       expect(result.success).toBe(true);
     });
 
-    it('round-trips an htmlNode with label + every NodeVisualBaseShape field', () => {
+    it('accepts html as a file:// ref (round-trip from disk)', () => {
+      const result = ResolvedFlowSchema.safeParse({
+        version: 2,
+        name: 'html-file',
+        nodes: [
+          { id: 'n', type: 'html', position: { x: 0, y: 0 }, data: { html: 'file://view.html' } },
+        ],
+        connectors: [],
+      });
+      expect(result.success).toBe(true);
+    });
+
+    it('round-trips a type:html node with label + every NodeVisualBaseShape field', () => {
       const demo = {
         version: 2 as const,
         name: 'html-styled',
         nodes: [
           {
             id: 'html-1',
-            type: 'htmlNode' as const,
+            type: 'html' as const,
             position: { x: 0, y: 0 },
             data: {
               html: '<p>card</p>',
@@ -1589,7 +1593,7 @@ describe('ResolvedFlowSchema', () => {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'htmlNode') throw new Error('expected htmlNode');
+      if (node?.type !== 'html') throw new Error('expected html');
       expect(node.data.html).toBe('<p>card</p>');
       expect(node.data.name).toBe('Promo card');
       expect(node.data.width).toBe(320);
@@ -1602,14 +1606,14 @@ describe('ResolvedFlowSchema', () => {
       expect(node.data.cornerRadius).toBe(8);
     });
 
-    it('round-trips description / detail on an htmlNode', () => {
+    it('round-trips description / detail on a type:html node', () => {
       const demo = {
         version: 2 as const,
         name: 'html-meta',
         nodes: [
           {
             id: 'html-1',
-            type: 'htmlNode' as const,
+            type: 'html' as const,
             position: { x: 0, y: 0 },
             data: {
               html: '<p>x</p>',
@@ -1628,20 +1632,20 @@ describe('ResolvedFlowSchema', () => {
       expect(serialized).toEqual(demo);
     });
 
-    it('accepts an htmlNode as a connector endpoint (source AND target)', () => {
+    it('accepts a type:html node as a connector endpoint (source AND target)', () => {
       const demo = {
         version: 2 as const,
         name: 'html-conn',
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: { name: 'S', stateSource: { kind: 'request' as const } },
           },
           {
             id: 'html-1',
-            type: 'htmlNode' as const,
+            type: 'html' as const,
             position: { x: 100, y: 0 },
             data: { html: '<p>note</p>' },
           },
@@ -1669,7 +1673,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'p',
-          type: 'playNode' as const,
+          type: 'rectangle' as const,
           position: { x: 0, y: 0 },
           data: {
             name: 'P',
@@ -1695,8 +1699,9 @@ describe('ResolvedFlowSchema', () => {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'playNode') throw new Error('expected play node');
+      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
       const action = node.data.playAction;
+      if (!action) throw new Error('expected playAction');
       expect(action.kind).toBe('script');
       expect(action.interpreter).toBe('bun');
       expect(action.scriptPath).toBe('scripts/play.ts');
@@ -1770,14 +1775,14 @@ describe('ResolvedFlowSchema', () => {
       expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
     });
 
-    it('parses a valid statusAction on a playNode', () => {
+    it('parses a valid statusAction on a rectangle', () => {
       const demo = {
         version: 2 as const,
         name: 'status-demo',
         nodes: [
           {
             id: 'p',
-            type: 'playNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'P',
@@ -1804,20 +1809,20 @@ describe('ResolvedFlowSchema', () => {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'playNode') throw new Error('expected play node');
+      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
       expect(node.data.statusAction?.kind).toBe('script');
       expect(node.data.statusAction?.scriptPath).toBe('scripts/status.ts');
       expect(node.data.statusAction?.maxLifetimeMs).toBe(60_000);
     });
 
-    it('parses a valid statusAction on a stateNode (no playAction required)', () => {
+    it('parses a valid statusAction on a rectangle (no playAction required)', () => {
       const demo = {
         version: 2 as const,
         name: 'state-status-demo',
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -1837,7 +1842,7 @@ describe('ResolvedFlowSchema', () => {
         throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
       }
       const node = result.data.nodes[0];
-      if (node?.type !== 'stateNode') throw new Error('expected state node');
+      if (node?.type !== 'rectangle') throw new Error('expected rectangle');
       expect(node.data.statusAction?.scriptPath).toBe('scripts/status.ts');
     });
 
@@ -1848,7 +1853,7 @@ describe('ResolvedFlowSchema', () => {
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -1874,7 +1879,7 @@ describe('ResolvedFlowSchema', () => {
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -1900,7 +1905,7 @@ describe('ResolvedFlowSchema', () => {
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -1959,7 +1964,7 @@ describe('ResolvedFlowSchema', () => {
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -1990,7 +1995,7 @@ describe('ResolvedFlowSchema', () => {
         nodes: [
           {
             id: 's',
-            type: 'stateNode' as const,
+            type: 'rectangle' as const,
             position: { x: 0, y: 0 },
             data: {
               name: 'S',
@@ -2010,36 +2015,37 @@ describe('ResolvedFlowSchema', () => {
   });
 });
 
-describe('HtmlNodeDataSchema autoSize', () => {
+describe("type:'html' autoSize (via ResolvedFlowSchema)", () => {
+  const makeHtmlData = (data: Record<string, unknown>) =>
+    ResolvedFlowSchema.safeParse({
+      version: 2,
+      name: 'html-autosize',
+      nodes: [{ id: 'n', type: 'html', position: { x: 0, y: 0 }, data }],
+      connectors: [],
+    });
+
   it('parses with autoSize: true and no width/height', () => {
-    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>', autoSize: true });
+    const r = makeHtmlData({ html: '<p>x</p>', autoSize: true });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.autoSize).toBe(true);
   });
 
   it('parses with autoSize: false plus width/height', () => {
-    const r = HtmlNodeDataSchema.safeParse({
+    const r = makeHtmlData({
       html: '<p>x</p>',
       autoSize: false,
       width: 480,
       height: 320,
     });
     expect(r.success).toBe(true);
-    if (r.success) {
-      expect(r.data.autoSize).toBe(false);
-      expect(r.data.width).toBe(480);
-      expect(r.data.height).toBe(320);
-    }
   });
 
   it('parses with autoSize absent (field is optional)', () => {
-    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>' });
+    const r = makeHtmlData({ html: '<p>x</p>' });
     expect(r.success).toBe(true);
-    if (r.success) expect(r.data.autoSize).toBeUndefined();
   });
 
   it('rejects non-boolean autoSize', () => {
-    const r = HtmlNodeDataSchema.safeParse({ html: '<p>x</p>', autoSize: 'yes' });
+    const r = makeHtmlData({ html: '<p>x</p>', autoSize: 'yes' });
     expect(r.success).toBe(false);
   });
 });
@@ -2052,7 +2058,7 @@ describe('FlowSchema', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'POST /x',
             stateSource: { kind: 'request' },
@@ -2072,7 +2078,7 @@ describe('FlowSchema', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'X',
             stateSource: { kind: 'request' },
@@ -2093,7 +2099,7 @@ describe('FlowSchema', () => {
       nodes: [
         {
           id: 'n1',
-          type: 'playNode',
+          type: 'rectangle',
           position: { x: 0, y: 0 },
           data: {
             name: 'X',
@@ -2114,7 +2120,7 @@ describe('FlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'A',
             stateSource: { kind: 'request' },
@@ -2123,7 +2129,7 @@ describe('FlowSchema', () => {
         },
         {
           id: 'b',
-          type: 'stateNode',
+          type: 'rectangle',
           data: { name: 'B', stateSource: { kind: 'event' } },
         },
       ],
@@ -2149,7 +2155,7 @@ describe('FlowSchema', () => {
       nodes: [
         {
           id: 'a',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'A',
             stateSource: { kind: 'request' },
@@ -2158,7 +2164,7 @@ describe('FlowSchema', () => {
         },
         {
           id: 'b',
-          type: 'stateNode',
+          type: 'rectangle',
           data: { name: 'B', stateSource: { kind: 'event' } },
         },
       ],
@@ -2188,7 +2194,7 @@ describe('StyleSchema', () => {
     expect(r.success).toBe(true);
   });
 
-  it('accepts iconNode-specific color/strokeWidth and htmlNode autoSize', () => {
+  it('accepts type:icon-specific color/strokeWidth and type:html autoSize', () => {
     const r = StyleSchema.safeParse({
       nodes: {
         i1: { color: 'red', strokeWidth: 2 },

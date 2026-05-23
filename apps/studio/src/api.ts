@@ -345,14 +345,7 @@ export function createApi(options: ApiOptions): Hono {
       }
       const flow = flowParse.data;
       const result = await computeLayout(
-        flow.nodes.map((n) => ({
-          id: n.id,
-          type: n.type,
-          // Only `shape` matters for layout (floating-annotation detection +
-          // shape-specific sizing). Other Flow data fields are irrelevant.
-          data:
-            n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
-        })),
+        flow.nodes.map((n) => ({ id: n.id, type: n.type })),
         flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
         options,
       );
@@ -375,12 +368,18 @@ export function createApi(options: ApiOptions): Hono {
         .map((n) => ({
           id: n.id,
           type: n.type as
-            | 'playNode'
-            | 'stateNode'
-            | 'shapeNode'
-            | 'imageNode'
-            | 'iconNode'
-            | 'htmlNode',
+            | 'rectangle'
+            | 'ellipse'
+            | 'sticky'
+            | 'text'
+            | 'database'
+            | 'server'
+            | 'user'
+            | 'queue'
+            | 'cloud'
+            | 'image'
+            | 'html'
+            | 'icon',
           data:
             typeof n.width === 'number' && typeof n.height === 'number'
               ? { width: n.width, height: n.height }
@@ -582,7 +581,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // POST /api/projects/:id/files/open — shell out to `$EDITOR <abs>` so the
-  // user can edit a project-scoped file (htmlNode block, image asset) in
+  // user can edit a project-scoped file (type:'html' block, image asset) in
   // their IDE. The endpoint always returns the resolved absolute path in
   // the response body so the frontend can copy-to-clipboard when $EDITOR
   // isn't set or the spawn fails. Path safety mirrors the GET route.
@@ -815,13 +814,10 @@ export function createApi(options: ApiOptions): Hono {
 
     const node = merged.flow.nodes.find((n) => n.id === nodeId);
     if (!node) return c.json({ error: `Unknown nodeId: ${nodeId}` }, 404);
-    if (
-      node.type === 'shapeNode' ||
-      node.type === 'imageNode' ||
-      node.type === 'iconNode' ||
-      node.type === 'htmlNode' ||
-      !node.data.playAction
-    ) {
+    // playAction is optional on every node type post-flat-types. The runtime
+    // gate is purely "is the field set?" — visual kind doesn't constrain
+    // playability.
+    if (!node.data.playAction) {
       return c.json({ error: `Node ${nodeId} has no playAction` }, 400);
     }
 
@@ -1007,7 +1003,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // PATCH a single node — partial update of position, label, detail, visual
-  // fields, or shapeNode-only fields. Every UI-driven node edit (other than
+  // fields, or geometric-only fields. Every UI-driven node edit (other than
   // the high-frequency drag fast-path above) flows through here. The mutation
   // is performed against the raw parsed JSON (so unknown v2 fields the schema
   // doesn't yet recognize survive round-trips) and the WHOLE resulting demo

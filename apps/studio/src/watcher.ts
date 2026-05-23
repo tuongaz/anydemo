@@ -75,7 +75,7 @@ export interface FlowWatcher {
   ): void;
   /**
    * Relative paths (under the project root) currently being watched because
-   * they're referenced by a node's `data.path` (imageNode). htmlNode content
+   * they're referenced by a node's `data.path` (type:'image' node). type:'html' node content
    * rides on the file:// resolver via `data.html`, not this list. Sorted for
    * stable assertion order. Used by tests.
    */
@@ -96,7 +96,7 @@ interface WatchHandle {
   filePath: string;
   /**
    * Per-directory file watchers for files referenced by node data
-   * (imageNode `path`). Each directory watcher dispatches to
+   * (type:'image' node `path`). Each directory watcher dispatches to
    * specific basenames in its `files` map.
    */
   fileWatchers: Map<string, FileWatchEntry>;
@@ -108,7 +108,7 @@ const resolveFilePath = (repoPath: string, flowPath: string): string =>
 const isCleanRelativePath = (p: string): boolean => {
   if (!p) return false;
   // Reject data URLs early — the pre-launch hard-cut (US-004) replaces
-  // imageNode.data.image with data.path, but defensively skip any lingering
+  // type:'image' node.data.image with data.path, but defensively skip any lingering
   // base64 payloads so we don't try to fs.watch a 5MB string.
   if (p.startsWith('data:')) return false;
   if (isAbsolute(p) || p.startsWith('/') || p.startsWith('\\')) return false;
@@ -119,7 +119,7 @@ const isCleanRelativePath = (p: string): boolean => {
 
 /**
  * Walk raw flow JSON (pre-schema-parse) collecting referenced file paths:
- * `nodes[].data.path` (imageNode). htmlNode content now flows through the
+ * `nodes[].data.path` (type:'image' node). type:'html' node content now flows through the
  * `file://nodes/<id>/view.html` ref handled by the file-ref resolver, so it
  * does NOT need a separate fs.watch entry here. Operates on the raw JSON so
  * the watcher works before those fields are formally validated.
@@ -152,7 +152,7 @@ export interface ReadMergedFlowResult {
   error: string | null;
   /** Sorted relative paths under the project root resolved via file://. */
   fileRefs: string[];
-  /** Flow file paths referenced via imageNode.path. */
+  /** Flow file paths referenced via type:'image' node.path. */
   staticRefs: string[];
 }
 
@@ -337,7 +337,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
 
       if (!existsSync(dir)) {
         // Directory hasn't been created on disk yet (e.g. blocks/ before any
-        // htmlNode is dropped). Skip silently — next reparse will retry.
+        // type:'html' node is dropped). Skip silently — next reparse will retry.
         continue;
       }
 
@@ -397,7 +397,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     snapshots.set(flowId, next);
     lastSeenMtimes.set(flowId, combinedMtimeMs(filePath));
 
-    // Reconcile the referenced-file watch set: imageNode.path from
+    // Reconcile the referenced-file watch set: type:'image' node.path from
     // flow + any file:// targets that resolved cleanly. Schema errors
     // shouldn't drop the watch set — the user is mid-edit and the referenced
     // files are still valid targets, so this reconciles whenever the JSON

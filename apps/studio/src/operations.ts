@@ -27,10 +27,10 @@ import {
   EdgePinSchema,
   type Flow,
   FlowSchema,
+  NodeTypeSchema,
   PlayActionSchema,
   type ResolvedFlow,
   ResolvedFlowSchema,
-  ShapeKindSchema,
   SourceHandleIdSchema,
   StateSourceSchema,
   StatusActionSchema,
@@ -82,25 +82,16 @@ export type ReorderBody = z.infer<typeof ReorderBodySchema>;
 // other key lands inside node.data. Final validity is enforced by re-parsing
 // the whole demo through ResolvedFlowSchema after the merge — this body schema just
 // rejects unknown top-level keys to catch typos.
-const NodeTypeSchema = z.enum([
-  'playNode',
-  'stateNode',
-  'shapeNode',
-  'imageNode',
-  'iconNode',
-  'htmlNode',
-]);
-
 export const NodePatchBodySchema = z
   .object({
     // When supplied AND different from the node's current type, the merged
     // node is reclassified in place: data keys not allowed on the new type's
     // FlowDataSchema are stripped, visuals (which route to style.json) are
     // preserved, and the post-merge ResolvedFlowSchema reparse enforces the
-    // new type's required fields (e.g. stateNode → playNode without a
-    // playAction in the same body surfaces as `badSchema`). The per-node
-    // folder under `nodes/<id>/` is keyed by id, so retype keeps scripts,
-    // detail.md, and view.html attached.
+    // new type's required fields (e.g. type:'image' without a `path` in the
+    // same body surfaces as `badSchema`). The per-node folder under
+    // `nodes/<id>/` is keyed by id, so retype keeps scripts, detail.md, and
+    // view.html attached.
     type: NodeTypeSchema.optional(),
     position: PositionBodySchema.optional(),
     name: z.string().optional(),
@@ -114,22 +105,22 @@ export const NodePatchBodySchema = z
     cornerRadius: z.number().min(0).optional(),
     width: z.number().positive().optional(),
     height: z.number().positive().optional(),
-    // htmlNode-only: when true, the renderer measures content and React Flow
+    // type:'html'-only: when true, the renderer measures content and React Flow
     // sizes the wrapper around it. mergeNodeUpdates enforces the invariant
     // that autoSize:true never coexists with persisted width/height.
     autoSize: z.boolean().optional(),
-    shape: ShapeKindSchema.optional(),
-    // iconNode-only: stroke color token. Lands at data.color; ResolvedFlowSchema's
-    // post-merge reparse gates that this is only valid on an iconNode.
+    // type:'icon'-only: stroke color token. Lands at data.color; the
+    // post-merge ResolvedFlowSchema reparse gates that this is only valid on
+    // type:'icon'.
     color: ColorTokenSchema.optional(),
-    // iconNode-only: glyph stroke width. Lands at data.strokeWidth; the
+    // type:'icon'-only: glyph stroke width. Lands at data.strokeWidth; the
     // post-merge reparse gates the [0.5, 4] bound and arm validity.
     strokeWidth: z.number().min(0.5).max(4).optional(),
-    // iconNode-only: accessible alt text for the icon. Lands at data.alt.
+    // type:'icon'/type:'image'-only: accessible alt text. Lands at data.alt.
     alt: z.string().optional(),
     // kebab-case Lucide icon name. Lands at data.icon. The post-merge reparse
     // enforces the schema's `.min(1)` non-empty rule for nodes that require
-    // icon (iconNode), and gates which variants allow it. Explicit `null`
+    // icon (type:'icon'), and gates which variants allow it. Explicit `null`
     // clears the field (mergeNodeUpdates strips the key from disk) — mirrors
     // the empty-string clear convention used for description / detail.
     icon: z.string().min(1).nullable().optional(),
@@ -138,14 +129,15 @@ export const NodePatchBodySchema = z
     // serialize signal — `mergeNodeUpdates` strips the key from disk.
     description: z.string().optional(),
     detail: z.string().optional(),
-    // htmlNode-only: inline HTML content. Externalized to
+    // type:'html'-only: inline HTML content. Externalized to
     // `<project>/nodes/<id>/view.html` by patchNodeImpl; the file:// ref on
     // the node persists. Empty string empties the file but keeps the ref.
     html: z.string().optional(),
-    // P5 overlay attach: lets the skill (or any consumer) wire executable
-    // behaviour onto a previously-created node without re-issuing it. Final
-    // validity is enforced by the post-merge ResolvedFlowSchema reparse —
-    // e.g. statusAction is only valid on playNode / stateNode.
+    // Capability attach: lets the skill (or any consumer) wire executable
+    // behaviour onto a previously-created node without re-issuing it. All
+    // capabilities are valid on every node type — presence drives renderer
+    // chrome. Final validity is enforced by the post-merge
+    // ResolvedFlowSchema reparse.
     playAction: PlayActionSchema.optional(),
     statusAction: StatusActionSchema.optional(),
     stateSource: StateSourceSchema.optional(),
@@ -170,7 +162,6 @@ const NODE_DATA_PATCH_KEYS = [
   'width',
   'height',
   'autoSize',
-  'shape',
   'color',
   'strokeWidth',
   'alt',
@@ -190,35 +181,63 @@ const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e
 // they route to style.json on write. Everything else gets stripped from
 // `data` when a node changes type so the post-merge ResolvedFlowSchema reparse
 // doesn't reject lingering fields from the previous variant. Missing required
-// fields on the new type (e.g. stateNode → playNode without playAction)
+// fields on the new type (e.g. retype to type:'image' without a `path`)
 // surface as the normal `badSchema` outcome from the reparse.
+const GEOMETRIC_SEMANTIC_KEYS: ReadonlySet<string> = new Set([
+  'name',
+  'description',
+  'detail',
+  'icon',
+  'stateSource',
+  'handlerModule',
+  'playAction',
+  'statusAction',
+]);
+
 const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<string>> = {
-  playNode: new Set([
+  rectangle: GEOMETRIC_SEMANTIC_KEYS,
+  ellipse: GEOMETRIC_SEMANTIC_KEYS,
+  sticky: GEOMETRIC_SEMANTIC_KEYS,
+  text: GEOMETRIC_SEMANTIC_KEYS,
+  database: GEOMETRIC_SEMANTIC_KEYS,
+  server: GEOMETRIC_SEMANTIC_KEYS,
+  user: GEOMETRIC_SEMANTIC_KEYS,
+  queue: GEOMETRIC_SEMANTIC_KEYS,
+  cloud: GEOMETRIC_SEMANTIC_KEYS,
+  image: new Set([
     'name',
-    'kind',
-    'stateSource',
-    'handlerModule',
-    'icon',
     'description',
     'detail',
-    'playAction',
-    'statusAction',
-  ]),
-  stateNode: new Set([
-    'name',
-    'kind',
+    'icon',
     'stateSource',
     'handlerModule',
-    'icon',
-    'description',
-    'detail',
     'playAction',
     'statusAction',
+    'path',
+    'alt',
   ]),
-  shapeNode: new Set(['shape', 'name', 'description', 'detail']),
-  imageNode: new Set(['path', 'alt', 'description', 'detail']),
-  iconNode: new Set(['icon', 'alt', 'name', 'description', 'detail']),
-  htmlNode: new Set(['html', 'name', 'icon', 'description', 'detail']),
+  html: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'html',
+  ]),
+  icon: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'alt',
+  ]),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here
@@ -288,7 +307,7 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
   // doesn't reject lingering fields. The per-node folder under
   // `nodes/<id>/` is keyed by id (unchanged), so scripts and externalized
   // files stay attached. Missing required fields on the new type (e.g.
-  // stateNode → playNode without a playAction in the same patch) surface as
+  // retype to type:'image' without a `path` in the same patch) surface as
   // `badSchema` from the ResolvedFlowSchema reparse.
   if (updates.type !== undefined && updates.type !== node.type) {
     node.type = updates.type;
@@ -302,12 +321,12 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
     }
   }
 
-  // htmlNode-only invariant enforcement:
+  // type:'html'-only invariant enforcement:
   //   autoSize === true ⊻ (width and height set).
   // autoSize: true is the dominant signal — it strips width/height even if
   // the same patch tried to write them. Writing width/height implicitly
   // flips autoSize to false.
-  if (node.type === 'htmlNode') {
+  if (node.type === 'html') {
     // The autoSize invariant requires `width`/`height` to be ABSENT from the
     // serialized JSON when autoSize is true — not present with value
     // `undefined` (which would serialize as a stray `"width": null` or get
@@ -1381,7 +1400,7 @@ export async function addFlowBulkImpl(
 // schema violation surfaces honestly instead of being silently papered over.
 // After the flow.json write, `removeNodeDir` cascades the node's whole
 // `<project>/nodes/<id>/` folder — covering detail.md, view.html, and any
-// imageNode upload that lived there.
+// type:'image' upload that lived there.
 export async function deleteNodeImpl(
   deps: OperationsDeps,
   flowId: string,
@@ -1768,11 +1787,7 @@ export async function applyLayoutImpl(
 
   const flow = flowParse.data;
   const result = await computeLayout(
-    flow.nodes.map((n) => ({
-      id: n.id,
-      type: n.type,
-      data: n.type === 'shapeNode' ? { shape: (n.data as { shape?: string }).shape } : undefined,
-    })),
+    flow.nodes.map((n) => ({ id: n.id, type: n.type })),
     flow.connectors.map((c) => ({ id: c.id, source: c.source, target: c.target })),
     options,
   );

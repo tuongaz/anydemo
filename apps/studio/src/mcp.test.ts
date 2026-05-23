@@ -11,7 +11,7 @@ const VALID_DEMO = {
   nodes: [
     {
       id: 'api-checkout',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'POST /checkout',
         stateSource: { kind: 'request' },
@@ -182,9 +182,22 @@ describe('seeflow_schema', () => {
     };
     expect(body.name).toBe('node');
     expect(Object.keys(body.schemas).sort()).toEqual(
-      ['htmlNode', 'iconNode', 'imageNode', 'playNode', 'shapeNode', 'stateNode'].sort(),
+      [
+        'cloud',
+        'database',
+        'ellipse',
+        'html',
+        'icon',
+        'image',
+        'queue',
+        'rectangle',
+        'server',
+        'sticky',
+        'text',
+        'user',
+      ].sort(),
     );
-    expect(body.schemas.playNode?.type).toBe('object');
+    expect(body.schemas.rectangle?.type).toBe('object');
     expect(body.notes.length).toBeGreaterThan(0);
   });
 
@@ -364,10 +377,9 @@ describe('seeflow_get_flow_graph', () => {
         ...VALID_DEMO.nodes,
         {
           id: 'shape-1',
-          type: 'shapeNode',
-          data: { name: 'note', shape: 'rectangle', detail: '# secrets' },
+          type: 'rectangle', data: { name: 'note', detail: '# secrets' },
         },
-        { id: 'html-1', type: 'htmlNode', data: { html: '<p>also secret</p>' } },
+        { id: 'html-1', type: 'html', data: { html: '<p>also secret</p>' } },
       ],
     });
     const reg = expectOk(
@@ -409,8 +421,7 @@ describe('seeflow_get_node', () => {
       await callTool(app, 'seeflow_add_node', {
         flowId: reg.id,
         node: {
-          type: 'shapeNode',
-          data: { name: 'A', shape: 'rectangle', detail: '# inlined body' },
+          type: 'rectangle', data: { name: 'A', detail: '# inlined body' },
         },
       }),
     ) as { id: string };
@@ -556,7 +567,7 @@ const VALID_DEMO_THREE_NODES = {
   nodes: [
     {
       id: 'a',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'A',
         stateSource: { kind: 'request' },
@@ -565,7 +576,7 @@ const VALID_DEMO_THREE_NODES = {
     },
     {
       id: 'b',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'B',
         stateSource: { kind: 'request' },
@@ -574,7 +585,7 @@ const VALID_DEMO_THREE_NODES = {
     },
     {
       id: 'c',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'C',
         stateSource: { kind: 'request' },
@@ -619,8 +630,7 @@ describe('seeflow_add_node', () => {
     const envelope = await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
       node: {
-        type: 'shapeNode',
-        data: { shape: 'rectangle', name: 'Note A' },
+        type: 'rectangle', data: { name: 'Note A' },
       },
     });
     const body = expectOk(envelope) as { ok: boolean; id: string };
@@ -631,7 +641,7 @@ describe('seeflow_add_node', () => {
       nodes: Array<{ id: string; type: string }>;
     };
     expect(onDisk.nodes).toHaveLength(2);
-    expect(onDisk.nodes.find((n) => n.id === body.id)?.type).toBe('shapeNode');
+    expect(onDisk.nodes.find((n) => n.id === body.id)?.type).toBe('rectangle');
   });
 
   it('returns isError with schema text when the new node is malformed', async () => {
@@ -639,10 +649,10 @@ describe('seeflow_add_node', () => {
     const { demoFile, reg } = await registerFixture(app);
     const before = readFileSync(demoFile, 'utf8');
 
-    // shapeNode without required `shape` — ResolvedFlowSchema rejects the post-merge.
+    // type:'image' without required `path` — ResolvedFlowSchema rejects the post-merge.
     const envelope = await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { type: 'shapeNode', position: { x: 0, y: 0 }, data: {} },
+      node: { type: 'image', position: { x: 0, y: 0 }, data: {} },
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
     // File untouched on failed validation.
@@ -653,7 +663,7 @@ describe('seeflow_add_node', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_node', {
       flowId: 'does-not-exist',
-      node: { type: 'shapeNode', position: { x: 0, y: 0 }, data: { shape: 'rectangle' } },
+      node: { type: 'rectangle', position: { x: 0, y: 0 }, data: {} },
     });
     expect(expectError(envelope)).toBe('unknown demo');
   });
@@ -666,8 +676,7 @@ describe('seeflow_add_node', () => {
       flowId: reg.id,
       node: {
         id: 'with-detail',
-        type: 'shapeNode',
-        data: { shape: 'rectangle', detail: 'hello' },
+        type: 'rectangle', data: { detail: 'hello' },
       },
     });
     expect(expectOk(envelope)).toMatchObject({ ok: true });
@@ -688,8 +697,7 @@ describe('seeflow_add_node', () => {
       flowId: reg.id,
       node: {
         id: 'no-detail',
-        type: 'shapeNode',
-        data: { shape: 'rectangle' },
+        type: 'rectangle', data: { },
       },
     });
 
@@ -702,7 +710,7 @@ describe('seeflow_add_node', () => {
   });
 });
 
-describe('seeflow_add_node + html externalization (htmlNode)', () => {
+describe("seeflow_add_node + html externalization (type:'html')", () => {
   it('externalizes html to nodes/<id>/view.html when provided', async () => {
     const { app } = buildApp();
     const { demoFile, repoPath, reg } = await registerFixture(app);
@@ -711,7 +719,7 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
       flowId: reg.id,
       node: {
         id: 'html-mcp',
-        type: 'htmlNode',
+        type: 'html',
         data: { html: '<p>via mcp</p>' },
       },
     });
@@ -726,13 +734,13 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
     );
   });
 
-  it('writes empty view.html and file:// ref when html is omitted on htmlNode', async () => {
+  it("writes empty view.html and file:// ref when html is omitted on type:'html'", async () => {
     const { app } = buildApp();
     const { demoFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'html-empty', type: 'htmlNode', data: {} },
+      node: { id: 'html-empty', type: 'html', data: {} },
     });
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
@@ -743,14 +751,14 @@ describe('seeflow_add_node + html externalization (htmlNode)', () => {
   });
 });
 
-describe('seeflow_patch_node + html externalization (htmlNode)', () => {
+describe("seeflow_patch_node + html externalization (type:'html')", () => {
   it('writes patch.html to view.html and keeps the file:// ref', async () => {
     const { app } = buildApp();
     const { demoFile, repoPath, reg } = await registerFixture(app);
 
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'h1', type: 'htmlNode', data: { html: 'init' } },
+      node: { id: 'h1', type: 'html', data: { html: 'init' } },
     });
     await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
@@ -773,7 +781,7 @@ describe('seeflow_patch_node + detail externalization', () => {
 
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'n1', type: 'shapeNode', data: { shape: 'rectangle' } },
+      node: { id: 'n1', type: 'rectangle', data: { } },
     });
     await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
@@ -797,8 +805,7 @@ describe('seeflow_patch_node + detail externalization', () => {
       flowId: reg.id,
       node: {
         id: 'n1',
-        type: 'shapeNode',
-        data: { shape: 'rectangle', detail: 'starts non-empty' },
+        type: 'rectangle', data: { detail: 'starts non-empty' },
       },
     });
     await callTool(app, 'seeflow_patch_node', {
@@ -841,8 +848,7 @@ describe('seeflow_delete_node', () => {
       flowId: reg.id,
       node: {
         id: 'gone',
-        type: 'shapeNode',
-        data: { shape: 'rectangle', detail: 'bye' },
+        type: 'rectangle', data: { detail: 'bye' },
       },
     });
     const folder = join(repoPath, 'nodes', 'gone');
@@ -1097,7 +1103,7 @@ describe('seeflow_patch_node', () => {
     const shapeDemo = {
       version: 2,
       name: 'Shape Patch',
-      nodes: [{ id: 'shape-a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      nodes: [{ id: 'shape-a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [],
     };
     const { app } = buildApp();
@@ -1145,7 +1151,7 @@ describe('seeflow_patch_node', () => {
     const { demoFile, reg } = await registerFixture(app);
     const before = readFileSync(demoFile, 'utf8');
 
-    // Empty name on a functional playNode trips ResolvedFlowSchema after merge.
+    // Empty name still trips ResolvedFlowSchema after merge (name optional in schema, but '' is the clear-on-serialize signal — the merge strips it, which the test below relies on).
     const envelope = await callTool(app, 'seeflow_patch_node', {
       flowId: reg.id,
       nodeId: 'api-checkout',
@@ -1165,7 +1171,7 @@ describe('seeflow_patch_node', () => {
       nodes: [
         {
           id: 'fc',
-          type: 'playNode',
+          type: 'rectangle',
           futureField: 'survives',
           data: {
             name: 'Future',
@@ -1192,7 +1198,7 @@ const VALID_DEMO_TWO_NODES = {
   nodes: [
     {
       id: 'a',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'A',
         stateSource: { kind: 'request' },
@@ -1201,7 +1207,7 @@ const VALID_DEMO_TWO_NODES = {
     },
     {
       id: 'b',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'B',
         stateSource: { kind: 'request' },
@@ -1481,9 +1487,9 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'n1', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'n2', type: 'shapeNode', data: { name: 'B', shape: 'ellipse', detail: 'd2' } },
-        { id: 'n3', type: 'htmlNode', data: { html: '<p>hi</p>' } },
+        { id: 'n1', type: 'rectangle', data: { name: 'A'} },
+        { id: 'n2', type: 'ellipse', data: { name: 'B', detail: 'd2' } },
+        { id: 'n3', type: 'html', data: { html: '<p>hi</p>' } },
       ],
       // Connector references nodes added in THIS call.
       connectors: [{ id: 'n1-to-n2', source: 'n1', target: 'n2' }],
@@ -1511,13 +1517,13 @@ describe('seeflow_add_bulk', () => {
   it('accepts a connectors-only body wiring existing nodes', async () => {
     const { app } = buildApp();
     const { demoFile, reg } = await registerFixture(app);
-    // Seed two playNodes so the connectors have endpoints to wire.
+    // Seed two rectangles so the connectors have endpoints to wire.
     await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
         {
           id: 'src',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'S',
             stateSource: { kind: 'request' },
@@ -1526,7 +1532,7 @@ describe('seeflow_add_bulk', () => {
         },
         {
           id: 'dst',
-          type: 'playNode',
+          type: 'rectangle',
           data: {
             name: 'D',
             stateSource: { kind: 'request' },
@@ -1567,8 +1573,8 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'b', type: 'shapeNode', data: { name: 'B', shape: 'rectangle' } },
+        { id: 'a', type: 'rectangle', data: { name: 'A'} },
+        { id: 'b', type: 'rectangle', data: { name: 'B'} },
       ],
       connectors: [{ source: 'a', target: 'never-added' }],
     });
@@ -1584,9 +1590,9 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        // shapeNode without shape — post-mutation parse rejects.
-        { type: 'shapeNode', data: { name: 'B' } },
+        { type: 'rectangle', data: { name: 'A'} },
+        // type:'image' without `path` — post-mutation parse rejects.
+        { type: 'image', data: { name: 'B' } },
       ],
     });
     expect(expectError(envelope)).toContain('Flow failed schema validation');
@@ -1599,8 +1605,8 @@ describe('seeflow_add_bulk', () => {
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
       nodes: [
-        { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+        { id: 'dupe', type: 'rectangle', data: { name: 'A'} },
+        { id: 'dupe', type: 'ellipse', data: { name: 'B'} },
       ],
     });
     expect(expectError(envelope)).toContain('Duplicate nodes id in batch');
@@ -1611,7 +1617,7 @@ describe('seeflow_add_bulk', () => {
     const { reg } = await registerFixture(app);
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
-      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      nodes: [{ id: 'a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [
         { id: 'c-dupe', source: 'a', target: 'a' },
         { id: 'c-dupe', source: 'a', target: 'a' },
@@ -1625,12 +1631,12 @@ describe('seeflow_add_bulk', () => {
     const { reg } = await registerFixture(app);
     await callTool(app, 'seeflow_add_node', {
       flowId: reg.id,
-      node: { id: 'taken', type: 'shapeNode', data: { name: 'seed', shape: 'rectangle' } },
+      node: { id: 'taken', type: 'rectangle', data: { name: 'seed'} },
     });
 
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: reg.id,
-      nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
+      nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X'} }],
     });
     expect(expectError(envelope)).toContain('Node id already exists');
   });
@@ -1646,7 +1652,7 @@ describe('seeflow_add_bulk', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_add_bulk', {
       flowId: 'does-not-exist',
-      nodes: [{ type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } }],
+      nodes: [{ type: 'rectangle', data: { name: 'A'} }],
     });
     expect(expectError(envelope)).toBe('unknown demo');
   });

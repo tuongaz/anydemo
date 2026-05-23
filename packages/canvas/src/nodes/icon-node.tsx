@@ -25,7 +25,7 @@ export type IconNodeRuntimeData = IconNodeData & {
   // name edits aren't wired).
   onNameChange?: (nodeId: string, name: string) => void;
 } & Record<string, unknown>;
-export type IconNodeType = Node<IconNodeRuntimeData, 'iconNode'>;
+export type IconNodeType = Node<IconNodeRuntimeData, 'icon'>;
 
 export const ICON_DEFAULT_SIZE = { width: 48, height: 48 } as const;
 export const ICON_FALLBACK_NAME = 'help-circle';
@@ -93,7 +93,7 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
       className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="icon-node"
-      data-node-type="iconNode"
+      data-node-type="icon"
       onDoubleClick={handleDoubleClick}
     >
       <ResizeControls

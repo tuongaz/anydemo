@@ -27,7 +27,7 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
   // which strips width/height server-side per the autoSize invariant.
   onFitToContent?: (nodeId: string) => void;
 } & Record<string, unknown>;
-export type HtmlNodeType = Node<HtmlNodeRuntimeData, 'htmlNode'>;
+export type HtmlNodeType = Node<HtmlNodeRuntimeData, 'html'>;
 
 export const HTML_DEFAULT_SIZE = { width: 320, height: 200 } as const;
 
@@ -144,7 +144,7 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
       className={cn('sf:group sf:relative', userSized ? 'sf:h-full sf:w-full' : '')}
       style={outerStyle}
       data-testid="html-node"
-      data-node-type="htmlNode"
+      data-node-type="html"
     >
       {observerActive ? <AutoSizeObserver nodeId={id} measureRef={measureRef} /> : null}
       <ResizeControls

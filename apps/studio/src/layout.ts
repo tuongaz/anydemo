@@ -51,7 +51,7 @@ export interface LayoutResult {
 export interface LayoutNode {
   id: string;
   type: FlowNode['type'];
-  data?: { width?: number; height?: number; shape?: string };
+  data?: { width?: number; height?: number };
 }
 
 export interface LayoutEdge {
@@ -60,42 +60,38 @@ export interface LayoutEdge {
   target: string;
 }
 
+// Per-type default size used when a node has no explicit width/height. Mirrors
+// the canvas's SHAPE_DEFAULT_SIZE so ELK's layout matches what the canvas will
+// paint.
 const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: number }> = {
-  playNode: { width: 220, height: 100 },
-  stateNode: { width: 220, height: 100 },
-  shapeNode: { width: 160, height: 80 },
-  iconNode: { width: 80, height: 80 },
-  htmlNode: { width: 320, height: 200 },
-  imageNode: { width: 200, height: 150 },
-};
-
-const SHAPE_OVERRIDES: Record<string, { width: number; height: number }> = {
+  rectangle: { width: 200, height: 120 },
+  ellipse: { width: 200, height: 120 },
+  sticky: { width: 180, height: 180 },
   text: { width: 160, height: 40 },
-  sticky: { width: 160, height: 180 },
+  database: { width: 120, height: 140 },
+  server: { width: 140, height: 120 },
+  user: { width: 100, height: 140 },
+  queue: { width: 220, height: 80 },
+  cloud: { width: 180, height: 120 },
+  image: { width: 200, height: 150 },
+  html: { width: 320, height: 200 },
+  icon: { width: 80, height: 80 },
 };
 
-const FLOATING_SHAPES = new Set(['sticky', 'text']);
+// Sticky / text variants are floating annotations. They never participate in
+// layered layout — they sit in a side column so the orthogonal flow stays
+// clean.
+const FLOATING_TYPES: ReadonlySet<FlowNode['type']> = new Set(['sticky', 'text']);
 
 const nodeDimensions = (node: LayoutNode): { width: number; height: number } => {
   const data = node.data ?? {};
   if (typeof data.width === 'number' && typeof data.height === 'number') {
     return { width: data.width, height: data.height };
   }
-  if (node.type === 'shapeNode' && data.shape) {
-    const override = SHAPE_OVERRIDES[data.shape];
-    if (override) return override;
-  }
   return DEFAULT_DIMENSIONS[node.type];
 };
 
-// Sticky / text shapes are floating annotations. They never participate in
-// layered layout — they sit in a side column so the orthogonal flow stays
-// clean.
-const isFloatingAnnotation = (node: LayoutNode): boolean => {
-  if (node.type !== 'shapeNode') return false;
-  const shape = node.data?.shape;
-  return shape !== undefined && FLOATING_SHAPES.has(shape);
-};
+const isFloatingAnnotation = (node: LayoutNode): boolean => FLOATING_TYPES.has(node.type);
 
 // Schema vocabulary: SourceHandle ∈ {r, b}, TargetHandle ∈ {t, l}. After
 // ELK lays out positions we pick handles geometrically — the layered LR
@@ -162,7 +158,7 @@ export const computeLayout = async (
         'elk.separateConnectedComponents': 'true',
       },
       children: laidOut.map((n) => {
-        const d = dims.get(n.id) ?? DEFAULT_DIMENSIONS.playNode;
+        const d = dims.get(n.id) ?? DEFAULT_DIMENSIONS.rectangle;
         return { id: n.id, width: d.width, height: d.height };
       }),
       edges: connectors
@@ -193,7 +189,7 @@ export const computeLayout = async (
     const columnX = laidOut.length > 0 ? maxRight + 200 : 0;
     let cursorY = 0;
     for (const n of floatingNodes) {
-      const d = dims.get(n.id) ?? DEFAULT_DIMENSIONS.shapeNode;
+      const d = dims.get(n.id) ?? DEFAULT_DIMENSIONS.rectangle;
       result.nodes[n.id] = { position: { x: columnX, y: cursorY } };
       cursorY += d.height + nodeSpacing;
     }

@@ -1,16 +1,15 @@
 import { describe, expect, test } from 'bun:test';
 import { type LayoutEdge, type LayoutNode, computeLayout } from './layout.ts';
 
-const PLAY_W = 220;
-const PLAY_H = 100;
-const SHAPE_W = 160;
+// Rectangle is the canonical "playable" node — these dimensions mirror the
+// canvas SHAPE_DEFAULT_SIZE.rectangle entry that layout.ts uses by default.
+const PLAY_W = 200;
+const PLAY_H = 120;
+const STICKY_W = 180;
+const STICKY_H = 180;
 
-const playNode = (id: string): LayoutNode => ({ id, type: 'playNode' });
-const stickyNode = (id: string): LayoutNode => ({
-  id,
-  type: 'shapeNode',
-  data: { shape: 'sticky' },
-});
+const playNode = (id: string): LayoutNode => ({ id, type: 'rectangle' });
+const stickyNode = (id: string): LayoutNode => ({ id, type: 'sticky' });
 const edge = (id: string, source: string, target: string): LayoutEdge => ({
   id,
   source,
@@ -123,13 +122,13 @@ describe('computeLayout', () => {
     expect(
       rectsOverlap(
         { x: a.x, y: a.y, w: PLAY_W, h: PLAY_H },
-        { x: note.x, y: note.y, w: SHAPE_W, h: 180 },
+        { x: note.x, y: note.y, w: STICKY_W, h: STICKY_H },
       ),
     ).toBe(false);
     expect(
       rectsOverlap(
         { x: b.x, y: b.y, w: PLAY_W, h: PLAY_H },
-        { x: note.x, y: note.y, w: SHAPE_W, h: 180 },
+        { x: note.x, y: note.y, w: STICKY_W, h: STICKY_H },
       ),
     ).toBe(false);
   });
@@ -172,8 +171,8 @@ describe('computeLayout', () => {
   });
 
   test('explicit data.width/data.height override the per-type defaults', async () => {
-    const wide: LayoutNode = { id: 'wide', type: 'playNode', data: { width: 600, height: 100 } };
-    const small: LayoutNode = { id: 'small', type: 'playNode' };
+    const wide: LayoutNode = { id: 'wide', type: 'rectangle', data: { width: 600, height: 100 } };
+    const small: LayoutNode = { id: 'small', type: 'rectangle' };
     const r = await computeLayout([wide, small], [edge('e1', 'wide', 'small')]);
     const w = r.nodes.wide?.position;
     const s = r.nodes.small?.position;

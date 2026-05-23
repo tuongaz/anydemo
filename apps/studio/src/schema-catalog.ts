@@ -8,14 +8,20 @@
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
+  FlowCloudNodeSchema,
   FlowConnectorSchema,
+  FlowDatabaseNodeSchema,
+  FlowEllipseNodeSchema,
   FlowEnvelopeSchema,
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,
   FlowImageNodeSchema,
-  FlowPlayNodeSchema,
-  FlowShapeNodeSchema,
-  FlowStateNodeSchema,
+  FlowQueueNodeSchema,
+  FlowRectangleNodeSchema,
+  FlowServerNodeSchema,
+  FlowStickyNodeSchema,
+  FlowTextNodeSchema,
+  FlowUserNodeSchema,
   PlayActionSchema,
   ResetActionSchema,
   StatusActionSchema,
@@ -44,7 +50,7 @@ const CATEGORIES: SchemaCategory[] = [
   {
     name: 'node',
     description:
-      'All six node variants (playNode, stateNode, shapeNode, imageNode, iconNode, htmlNode).',
+      'All 12 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, image, html, icon). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant.',
   },
   {
     name: 'connector',
@@ -64,15 +70,21 @@ const PAYLOADS: Record<string, SchemaPayload> = {
   },
   node: {
     schemas: {
-      playNode: toJsonSchema(FlowPlayNodeSchema),
-      stateNode: toJsonSchema(FlowStateNodeSchema),
-      shapeNode: toJsonSchema(FlowShapeNodeSchema),
-      imageNode: toJsonSchema(FlowImageNodeSchema),
-      iconNode: toJsonSchema(FlowIconNodeSchema),
-      htmlNode: toJsonSchema(FlowHtmlNodeSchema),
+      rectangle: toJsonSchema(FlowRectangleNodeSchema),
+      ellipse: toJsonSchema(FlowEllipseNodeSchema),
+      sticky: toJsonSchema(FlowStickyNodeSchema),
+      text: toJsonSchema(FlowTextNodeSchema),
+      database: toJsonSchema(FlowDatabaseNodeSchema),
+      server: toJsonSchema(FlowServerNodeSchema),
+      user: toJsonSchema(FlowUserNodeSchema),
+      queue: toJsonSchema(FlowQueueNodeSchema),
+      cloud: toJsonSchema(FlowCloudNodeSchema),
+      image: toJsonSchema(FlowImageNodeSchema),
+      html: toJsonSchema(FlowHtmlNodeSchema),
+      icon: toJsonSchema(FlowIconNodeSchema),
     },
     notes: [
-      "imageNode.data.path must start with 'nodes/<id>/'.",
+      "type:'image' data.path must start with 'nodes/<id>/'.",
       "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
     ],
   },

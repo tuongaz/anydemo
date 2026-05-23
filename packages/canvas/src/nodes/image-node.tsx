@@ -44,7 +44,7 @@ export type ImageNodeRuntimeData = ImageNodeData & {
   _uploading?: boolean;
   _uploadError?: string;
 } & Record<string, unknown>;
-export type ImageNodeType = Node<ImageNodeRuntimeData, 'imageNode'>;
+export type ImageNodeType = Node<ImageNodeRuntimeData, 'image'>;
 
 export const IMAGE_DEFAULT_SIZE = { width: 200, height: 150 } as const;
 
@@ -94,7 +94,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
       className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="image-node"
-      data-node-type="imageNode"
+      data-node-type="image"
     >
       <ResizeControls
         visible={!!selected && !!data.onResize}

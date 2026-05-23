@@ -85,7 +85,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
   it('flips autoSize to false when width is written', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { width: 480, height: 320 });
@@ -95,7 +95,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
   it('strips width/height when autoSize: true is written', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>a</p>', autoSize: false, width: 480, height: 320 },
     };
     mergeNodeUpdates(node, { autoSize: true });
@@ -110,7 +110,7 @@ describe('mergeNodeUpdates autoSize invariant', () => {
   it('autoSize: true wins when both autoSize: true and width are in the same patch', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { autoSize: true, width: 500, height: 300 });
@@ -123,18 +123,18 @@ describe('mergeNodeUpdates autoSize invariant', () => {
   it('autoSize: false alone (no width/height) is a no-op normalization-wise', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>a</p>' },
     };
     mergeNodeUpdates(node, { autoSize: false });
     expect((node.data as Record<string, unknown>).autoSize).toBe(false);
   });
 
-  it('leaves non-htmlNode patches unaffected (no spurious autoSize on shapeNode resize)', () => {
+  it('leaves non-html patches unaffected (no spurious autoSize on rectangle resize)', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'shapeNode',
-      data: { shape: 'rectangle' },
+      type: 'rectangle',
+      data: {},
     };
     mergeNodeUpdates(node, { width: 200, height: 100 });
     const data = node.data as Record<string, unknown>;
@@ -150,7 +150,7 @@ describe('validateImpl', () => {
       flow: {
         version: 2,
         name: 'T',
-        nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
+        nodes: [{ id: 'n', type: 'rectangle', data: { } }],
         connectors: [],
       },
       style: { nodes: { n: { fontSize: 14 } } },
@@ -189,8 +189,7 @@ describe('addNodeImpl + detail externalization', () => {
   it('writes detail.md and stores file:// ref when detail is provided', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'hello world' },
+      type: 'rectangle', data: { name: 'A', detail: 'hello world' },
     });
     expect(res.kind).toBe('ok');
     if (res.kind !== 'ok') return;
@@ -208,8 +207,7 @@ describe('addNodeImpl + detail externalization', () => {
   it('writes empty detail.md and stores file:// ref when detail is omitted', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
+      type: 'rectangle', data: { name: 'A'},
     });
     expect(res.kind).toBe('ok');
     if (res.kind !== 'ok') return;
@@ -227,8 +225,7 @@ describe('addNodeImpl + detail externalization', () => {
   it('get_flow returns resolved detail content, not the file:// ref', async () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'inlined-on-read' },
+      type: 'rectangle', data: { name: 'A', detail: 'inlined-on-read' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const get = await getFlowImpl(deps, flowId);
@@ -242,8 +239,7 @@ describe('patchNodeImpl + detail externalization', () => {
   it('writes detail content to detail.md and keeps file:// ref in flow.json', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
+      type: 'rectangle', data: { name: 'A'},
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -262,8 +258,7 @@ describe('patchNodeImpl + detail externalization', () => {
   it('empty-string detail empties the file but keeps the file:// ref', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'starts non-empty' },
+      type: 'rectangle', data: { name: 'A', detail: 'starts non-empty' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -282,8 +277,7 @@ describe('patchNodeImpl + detail externalization', () => {
   it('empty-string description still clears the inline field (unchanged behavior)', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', description: 'starts' },
+      type: 'rectangle', data: { name: 'A', description: 'starts' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -297,8 +291,7 @@ describe('patchNodeImpl + detail externalization', () => {
   it('patching an unrelated field preserves the detail file:// ref round-trip', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'survive' },
+      type: 'rectangle', data: { name: 'A', detail: 'survive' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -316,8 +309,7 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
   it('removes nodes/<id>/ folder after flow.json write', async () => {
     const { deps, flowId, repoPath } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'bye' },
+      type: 'rectangle', data: { name: 'A', detail: 'bye' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -336,9 +328,9 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle', detail: 'aye' } },
-        { id: 'b', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
-        { type: 'htmlNode', data: { html: '<div>hi</div>' } },
+        { id: 'a', type: 'rectangle', data: { name: 'A', detail: 'aye' } },
+        { id: 'b', type: 'ellipse', data: { name: 'B'} },
+        { type: 'html', data: { html: '<div>hi</div>' } },
       ],
       connectors: [
         // Connector references nodes from the SAME batch — proves the merged
@@ -369,7 +361,7 @@ describe('addFlowBulkImpl', () => {
   it('accepts a nodes-only body', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
-      nodes: [{ id: 'only', type: 'shapeNode', data: { shape: 'rectangle', name: 'only' } }],
+      nodes: [{ id: 'only', type: 'rectangle', data: { name: 'only' } }],
     });
     expect(res.kind).toBe('ok');
     if (res.kind !== 'ok') return;
@@ -384,8 +376,8 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const seed = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } },
-        { id: 'b', type: 'shapeNode', data: { shape: 'rectangle', name: 'B' } },
+        { id: 'a', type: 'rectangle', data: { name: 'A' } },
+        { id: 'b', type: 'rectangle', data: { name: 'B' } },
       ],
     });
     if (seed.kind !== 'ok') throw new Error('seed failed');
@@ -405,8 +397,8 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'roll-a', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'roll-b', type: 'shapeNode', data: { name: 'B', shape: 'rectangle' } },
+        { id: 'roll-a', type: 'rectangle', data: { name: 'A'} },
+        { id: 'roll-b', type: 'rectangle', data: { name: 'B'} },
       ],
       connectors: [{ source: 'roll-a', target: 'never-added' }],
     });
@@ -426,9 +418,9 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'rollback-a', type: 'shapeNode', data: { name: 'good-1', shape: 'rectangle' } },
-        // shapeNode requires `shape` — omitting it trips the post-mutation parse.
-        { id: 'rollback-b', type: 'shapeNode', data: { name: 'bad-no-shape' } },
+        { id: 'rollback-a', type: 'rectangle', data: { name: 'good-1' } },
+        // type:'image' requires `path` — omitting it trips the post-mutation parse.
+        { id: 'rollback-b', type: 'image', data: { name: 'bad-no-path' } },
       ],
     });
     expect(res.kind).toBe('badSchema');
@@ -443,8 +435,8 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
       nodes: [
-        { id: 'dupe', type: 'shapeNode', data: { name: 'A', shape: 'rectangle' } },
-        { id: 'dupe', type: 'shapeNode', data: { name: 'B', shape: 'ellipse' } },
+        { id: 'dupe', type: 'rectangle', data: { name: 'A'} },
+        { id: 'dupe', type: 'ellipse', data: { name: 'B'} },
       ],
     });
     expect(res.kind).toBe('duplicateIdInBatch');
@@ -459,7 +451,7 @@ describe('addFlowBulkImpl', () => {
   it('rejects intra-batch duplicate connector ids with collection=connectors', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, flowId, {
-      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle', name: 'A' } }],
+      nodes: [{ id: 'a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [
         { id: 'c-dupe', source: 'a', target: 'a' },
         { id: 'c-dupe', source: 'a', target: 'a' },
@@ -479,13 +471,12 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const seed = await addNodeImpl(deps, flowId, {
       id: 'taken',
-      type: 'shapeNode',
-      data: { name: 'seed', shape: 'rectangle' },
+      type: 'rectangle', data: { name: 'seed'},
     });
     if (seed.kind !== 'ok') throw new Error('seed failed');
 
     const res = await addFlowBulkImpl(deps, flowId, {
-      nodes: [{ id: 'taken', type: 'shapeNode', data: { name: 'X', shape: 'ellipse' } }],
+      nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X'} }],
     });
     expect(res.kind).toBe('idAlreadyExists');
     if (res.kind === 'idAlreadyExists') {
@@ -500,8 +491,7 @@ describe('addFlowBulkImpl', () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const a = await addNodeImpl(deps, flowId, {
       id: 'a',
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle' },
+      type: 'rectangle', data: { name: 'A'},
     });
     if (a.kind !== 'ok') throw new Error('seed node failed');
     const seedConn = await addConnectorImpl(deps, flowId, {
@@ -526,7 +516,7 @@ describe('addFlowBulkImpl', () => {
   it('returns flowNotFound for an unknown flowId', async () => {
     const { deps } = await setupProjectWithFlow();
     const res = await addFlowBulkImpl(deps, 'no-such-flow', {
-      nodes: [{ type: 'shapeNode', data: { name: 'X', shape: 'rectangle' } }],
+      nodes: [{ type: 'rectangle', data: { name: 'X'} }],
     });
     expect(res.kind).toBe('flowNotFound');
   });
@@ -563,7 +553,7 @@ describe('NodePatchBodySchema — action overlays', () => {
   });
 
   it('mergeNodeUpdates writes playAction onto node.data', () => {
-    const node: Record<string, unknown> = { id: 'n1', type: 'playNode', data: {} };
+    const node: Record<string, unknown> = { id: 'n1', type: 'rectangle', data: {} };
     mergeNodeUpdates(node, {
       playAction: {
         kind: 'script',
@@ -614,8 +604,7 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
   it('moveNodeImpl leaves the snapshot with detail.md content inlined, not the file:// ref', async () => {
     const { deps, watcher, flowId } = await setupWithWatcher();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: '# resolved' },
+      type: 'rectangle', data: { name: 'A', detail: '# resolved' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -631,8 +620,7 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
   it('patchNodeImpl (non-externalized field) keeps detail.md content inlined in the snapshot', async () => {
     const { deps, watcher, flowId } = await setupWithWatcher();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: 'keep me' },
+      type: 'rectangle', data: { name: 'A', detail: 'keep me' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
@@ -645,10 +633,10 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
     expect((node?.data as { detail?: string }).detail).toBe('keep me');
   });
 
-  it('moveNodeImpl on an htmlNode leaves view.html content inlined in the snapshot', async () => {
+  it('moveNodeImpl on a type:html node leaves view.html content inlined in the snapshot', async () => {
     const { deps, watcher, flowId } = await setupWithWatcher();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>hello</p>', autoSize: true },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
@@ -660,7 +648,7 @@ describe('mutateMergedFlow snapshot resolves file:// refs', () => {
     const snap = watcher.snapshot(flowId);
     const node = snap?.flow?.nodes.find((n) => n.id === nodeId);
     expect((node?.data as { html?: string }).html).toBe('<p>hello</p>');
-    // detail is externalized for every node type (including htmlNode), so the
+    // detail is externalized for every node type (including type:'html'), so the
     // same resolution must apply to it too — initialized to empty by addNode.
     expect((node?.data as { detail?: string }).detail).toBe('');
   });
@@ -782,13 +770,12 @@ describe('getFlowGraphImpl', () => {
     const { deps, flowId } = await setupProjectWithFlow();
 
     const detailAdd = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: '# long form body' },
+      type: 'rectangle', data: { name: 'A', detail: '# long form body' },
     });
     if (detailAdd.kind !== 'ok') throw new Error('addNode A failed');
 
     const htmlAdd = await addNodeImpl(deps, flowId, {
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>fancy</p>', autoSize: true },
     });
     if (htmlAdd.kind !== 'ok') throw new Error('addNode B failed');
@@ -808,15 +795,15 @@ describe('getFlowGraphImpl', () => {
     expect(result.data.description).toBe('demo flow');
     expect(result.data.nodes).toHaveLength(2);
 
-    const shapeNode = result.data.nodes.find((n) => n.id === detailAdd.data.id);
-    expect(shapeNode).toBeDefined();
-    expect((shapeNode?.data as Record<string, unknown>).detail).toBeUndefined();
+    const rectNode = result.data.nodes.find((n) => n.id === detailAdd.data.id);
+    expect(rectNode).toBeDefined();
+    expect((rectNode?.data as Record<string, unknown>).detail).toBeUndefined();
     // Non-stripped fields persist.
-    expect((shapeNode?.data as { name?: string }).name).toBe('A');
+    expect((rectNode?.data as { name?: string }).name).toBe('A');
 
-    const htmlNode = result.data.nodes.find((n) => n.id === htmlAdd.data.id);
-    expect((htmlNode?.data as Record<string, unknown>).html).toBeUndefined();
-    expect((htmlNode?.data as Record<string, unknown>).detail).toBeUndefined();
+    const htmlN = result.data.nodes.find((n) => n.id === htmlAdd.data.id);
+    expect((htmlN?.data as Record<string, unknown>).html).toBeUndefined();
+    expect((htmlN?.data as Record<string, unknown>).detail).toBeUndefined();
   });
 
   it('returns fileNotFound when flow.json has been removed from disk', async () => {
@@ -844,8 +831,7 @@ describe('getNodeImpl', () => {
   it('returns the node with detail content inlined', async () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'shapeNode',
-      data: { name: 'A', shape: 'rectangle', detail: '# body text' },
+      type: 'rectangle', data: { name: 'A', detail: '# body text' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
 
@@ -858,10 +844,10 @@ describe('getNodeImpl', () => {
     expect((result.data.node.data as { detail?: string }).detail).toBe('# body text');
   });
 
-  it('returns the htmlNode with html content inlined', async () => {
+  it('returns the type:html node with html content inlined', async () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'htmlNode',
+      type: 'html',
       data: { html: '<p>resolved html</p>', autoSize: true },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
@@ -934,8 +920,8 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
     if (!entry) throw new Error('seed lookup failed');
     const res = await addFlowBulkImpl(deps, entry.slug, {
       nodes: [
-        { id: 'src', type: 'shapeNode', data: { name: 'src', shape: 'rectangle' } },
-        { id: 'dst', type: 'shapeNode', data: { name: 'dst', shape: 'ellipse' } },
+        { id: 'src', type: 'rectangle', data: { name: 'src'} },
+        { id: 'dst', type: 'ellipse', data: { name: 'dst'} },
       ],
       connectors: [{ id: 'c1', source: 'src', target: 'dst' }],
     });
@@ -947,7 +933,7 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
     const entry = deps.registry.resolve(flowId);
     if (!entry) throw new Error('seed lookup failed');
     const seed = await addFlowBulkImpl(deps, flowId, {
-      nodes: [{ id: 'only', type: 'shapeNode', data: { name: 'only', shape: 'rectangle' } }],
+      nodes: [{ id: 'only', type: 'rectangle', data: { name: 'only'} }],
     });
     if (seed.kind !== 'ok') throw new Error(`seed failed: ${seed.kind}`);
     const res = await applyLayoutImpl(deps, entry.slug, undefined);
@@ -956,44 +942,54 @@ describe('registry.resolve() + slug-tolerant *Impl', () => {
 });
 
 describe('NodePatchBodySchema type field', () => {
-  it('accepts a valid node type', () => {
-    const r = NodePatchBodySchema.safeParse({ type: 'stateNode' });
+  it('accepts a valid flat node type', () => {
+    const r = NodePatchBodySchema.safeParse({ type: 'rectangle' });
     expect(r.success).toBe(true);
+  });
+
+  it('accepts every other flat node type', () => {
+    for (const t of [
+      'ellipse',
+      'sticky',
+      'text',
+      'database',
+      'server',
+      'user',
+      'queue',
+      'cloud',
+      'image',
+      'html',
+      'icon',
+    ] as const) {
+      expect(NodePatchBodySchema.safeParse({ type: t }).success).toBe(true);
+    }
   });
 
   it('rejects an unknown node type', () => {
     const r = NodePatchBodySchema.safeParse({ type: 'notANode' });
     expect(r.success).toBe(false);
   });
+
+  it('rejects the legacy shapeNode/playNode tags', () => {
+    for (const t of ['shapeNode', 'playNode', 'stateNode', 'imageNode', 'iconNode', 'htmlNode']) {
+      expect(NodePatchBodySchema.safeParse({ type: t }).success).toBe(false);
+    }
+  });
 });
 
 describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
   // mergeNodeUpdates is the pure mutator; the post-merge ResolvedFlowSchema
-  // reparse is what enforces required fields on the new type. These cases
-  // assert the mutator's contract: type flips, visuals survive, lingering
-  // semantic fields from the previous type get stripped.
+  // reparse is what enforces required fields on the new type (e.g. type:'image'
+  // needs `path`). These cases assert the mutator's contract: type flips,
+  // visuals survive, lingering semantic fields not allowed on the new type get
+  // stripped. Capability fields (playAction / statusAction / stateSource) are
+  // valid on every type post-flat-types, so a geometric→geometric retype is
+  // strip-free.
 
-  it('play → state preserves playAction (allowed on both variants)', () => {
+  it('rectangle → ellipse preserves capabilities + visuals (geometric → geometric is strip-free)', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'playNode',
-      data: {
-        name: 'svc',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-        borderColor: 'teal',
-      },
-    };
-    mergeNodeUpdates(node, { type: 'stateNode' });
-    expect(node.type).toBe('stateNode');
-    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
-    expect((node.data as Record<string, unknown>).borderColor).toBe('teal');
-  });
-
-  it('play → shape strips action + kind + stateSource, keeps visuals', () => {
-    const node: Record<string, unknown> = {
-      id: 'n1',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'svc',
         stateSource: { kind: 'request' },
@@ -1003,122 +999,102 @@ describe('mergeNodeUpdates type retype (in-memory semantics)', () => {
         cornerRadius: 8,
       },
     };
-    mergeNodeUpdates(node, { type: 'shapeNode', shape: 'rectangle' });
-    expect(node.type).toBe('shapeNode');
+    mergeNodeUpdates(node, { type: 'ellipse' });
+    expect(node.type).toBe('ellipse');
     const data = node.data as Record<string, unknown>;
-    expect(data.shape).toBe('rectangle');
-    expect('playAction' in data).toBe(false);
-    expect('statusAction' in data).toBe(false);
-    expect('kind' in data).toBe(false);
-    expect('stateSource' in data).toBe(false);
+    expect(data.playAction).toBeDefined();
+    expect(data.statusAction).toBeDefined();
+    expect(data.stateSource).toBeDefined();
     expect(data.borderColor).toBe('teal');
     expect(data.cornerRadius).toBe(8);
   });
 
-  it('state → play accepts a playAction supplied in the same patch', () => {
+  it('image → rectangle strips path + alt, keeps capabilities + visuals', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'stateNode',
+      type: 'image',
       data: {
-        name: 'queue',
-        kind: 'queue',
-        stateSource: { kind: 'event' },
+        name: 'pic',
+        path: 'nodes/n1/upload.png',
+        alt: 'a picture',
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+        borderColor: 'teal',
       },
     };
-    mergeNodeUpdates(node, {
-      type: 'playNode',
-      playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-    });
-    expect(node.type).toBe('playNode');
-    expect((node.data as Record<string, unknown>).playAction).toBeDefined();
-  });
-
-  it('shape → state requires kind + stateSource in the same patch (mutator carries them through)', () => {
-    const node: Record<string, unknown> = {
-      id: 'n1',
-      type: 'shapeNode',
-      data: { name: 'placeholder', shape: 'rectangle', borderColor: 'teal' },
-    };
-    mergeNodeUpdates(node, {
-      type: 'stateNode',
-      stateSource: { kind: 'event' },
-    });
-    expect(node.type).toBe('stateNode');
+    mergeNodeUpdates(node, { type: 'rectangle' });
+    expect(node.type).toBe('rectangle');
     const data = node.data as Record<string, unknown>;
-    expect(data.stateSource).toEqual({ kind: 'event' });
-    expect('shape' in data).toBe(false);
+    expect('path' in data).toBe(false);
+    expect('alt' in data).toBe(false);
+    expect(data.playAction).toBeDefined();
     expect(data.borderColor).toBe('teal');
   });
 
-  it('any → icon strips semantic fields outside iconNode allowlist; visuals survive', () => {
+  it('rectangle → icon supplies icon via the same patch; preserves capabilities + visuals', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'stateNode',
+      type: 'rectangle',
       data: {
         name: 'svc',
-        stateSource: { kind: 'event' },
         statusAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/status.ts' },
         borderColor: 'teal',
       },
     };
-    mergeNodeUpdates(node, { type: 'iconNode', icon: 'server' });
-    expect(node.type).toBe('iconNode');
+    mergeNodeUpdates(node, { type: 'icon', icon: 'server' });
+    expect(node.type).toBe('icon');
     const data = node.data as Record<string, unknown>;
     expect(data.icon).toBe('server');
-    expect('kind' in data).toBe(false);
-    expect('stateSource' in data).toBe(false);
-    expect('statusAction' in data).toBe(false);
+    expect(data.statusAction).toBeDefined();
     expect(data.borderColor).toBe('teal');
   });
 
-  it('any → html drops kind / stateSource / actions; html is externalized at the patchNodeImpl layer, not here', () => {
+  it('image → html strips path + alt; html is externalized by patchNodeImpl, not the mutator', () => {
     // mergeNodeUpdates intentionally skips externalized fields (detail, html
     // — see EXTERNALIZED_FIELD_NAMES); patchNodeImpl writes the file and
     // rewrites data[field] to a file:// ref. This test asserts the retype
-    // strip contract on the in-memory mutator; the externalize round-trip
-    // is covered by the patchNodeImpl integration cases below.
+    // strip contract on the in-memory mutator only.
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'stateNode',
+      type: 'image',
       data: {
-        name: 'svc',
-        stateSource: { kind: 'event' },
+        name: 'pic',
+        path: 'nodes/n1/upload.png',
+        alt: 'a picture',
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     };
-    mergeNodeUpdates(node, { type: 'htmlNode' });
-    expect(node.type).toBe('htmlNode');
+    mergeNodeUpdates(node, { type: 'html' });
+    expect(node.type).toBe('html');
     const data = node.data as Record<string, unknown>;
-    expect('kind' in data).toBe(false);
-    expect('stateSource' in data).toBe(false);
-    expect('playAction' in data).toBe(false);
+    expect('path' in data).toBe(false);
+    expect('alt' in data).toBe(false);
+    expect(data.playAction).toBeDefined();
     expect(data.name).toBe('svc');
   });
 
   it('no-op when patch type equals current type', () => {
     const node: Record<string, unknown> = {
       id: 'n1',
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'svc',
         stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
       },
     };
-    mergeNodeUpdates(node, { type: 'playNode' });
-    expect(node.type).toBe('playNode');
+    mergeNodeUpdates(node, { type: 'rectangle' });
+    expect(node.type).toBe('rectangle');
     expect((node.data as Record<string, unknown>).playAction).toBeDefined();
   });
 });
 
 describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', () => {
-  it('demotes playNode to stateNode without touching the per-node folder', async () => {
+  it('flips rectangle to ellipse without touching the per-node folder', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'playNode',
+      type: 'rectangle',
       data: {
         name: 'svc',
-        stateSource: { kind: 'request' },
         playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
         detail: 'docs survive retype',
       },
@@ -1130,84 +1106,61 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     expect(existsSync(detailAbs)).toBe(true);
     expect(readFileSync(detailAbs, 'utf8')).toBe('docs survive retype');
 
-    const patch = await patchNodeImpl(deps, flowId, nodeId, { type: 'stateNode' });
+    const patch = await patchNodeImpl(deps, flowId, nodeId, { type: 'ellipse' });
     expect(patch.kind).toBe('ok');
 
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     const node = flow.nodes.find((n: { id: string }) => n.id === nodeId);
-    expect(node.type).toBe('stateNode');
+    expect(node.type).toBe('ellipse');
     expect(existsSync(detailAbs)).toBe(true);
     expect(readFileSync(detailAbs, 'utf8')).toBe('docs survive retype');
   });
 
-  it('stateNode → playNode without a playAction in the same patch fails badSchema', async () => {
+  it('rectangle → image without a path in the same patch fails badSchema', async () => {
     const { deps, flowId } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'stateNode',
-      data: { name: 'queue', stateSource: { kind: 'event' } },
+      type: 'rectangle',
+      data: { name: 'svc' },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
 
-    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'playNode' });
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'image' });
     expect(patch.kind).toBe('badSchema');
   });
 
-  it('stateNode → playNode succeeds when the same patch carries a playAction', async () => {
+  it('rectangle → icon without an icon in the same patch fails badSchema', async () => {
+    const { deps, flowId } = await setupProjectWithFlow();
+    const add = await addNodeImpl(deps, flowId, {
+      type: 'rectangle',
+      data: { name: 'svc' },
+    });
+    if (add.kind !== 'ok') throw new Error('add failed');
+
+    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'icon' });
+    expect(patch.kind).toBe('badSchema');
+  });
+
+  it('rectangle → icon succeeds when the same patch carries an icon name', async () => {
     const { deps, flowId, flowAbs } = await setupProjectWithFlow();
     const add = await addNodeImpl(deps, flowId, {
-      type: 'stateNode',
-      data: { name: 'queue', stateSource: { kind: 'event' } },
+      type: 'rectangle',
+      data: {
+        name: 'svc',
+        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      },
     });
     if (add.kind !== 'ok') throw new Error('add failed');
 
     const patch = await patchNodeImpl(deps, flowId, add.data.id, {
-      type: 'playNode',
-      playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
+      type: 'icon',
+      icon: 'server',
     });
     expect(patch.kind).toBe('ok');
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
-    expect(node.type).toBe('playNode');
+    expect(node.type).toBe('icon');
+    expect(node.data.icon).toBe('server');
+    // Capabilities are valid on every type, so playAction carries through.
     expect(node.data.playAction.scriptPath).toBe('scripts/play.ts');
-  });
-
-  it('playNode → shapeNode without a shape in the same patch fails badSchema', async () => {
-    const { deps, flowId } = await setupProjectWithFlow();
-    const add = await addNodeImpl(deps, flowId, {
-      type: 'playNode',
-      data: {
-        name: 'svc',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-      },
-    });
-    if (add.kind !== 'ok') throw new Error('add failed');
-
-    const patch = await patchNodeImpl(deps, flowId, add.data.id, { type: 'shapeNode' });
-    expect(patch.kind).toBe('badSchema');
-  });
-
-  it('playNode → shapeNode succeeds when the same patch carries a shape', async () => {
-    const { deps, flowId, flowAbs } = await setupProjectWithFlow();
-    const add = await addNodeImpl(deps, flowId, {
-      type: 'playNode',
-      data: {
-        name: 'svc',
-        stateSource: { kind: 'request' },
-        playAction: { kind: 'script', interpreter: 'bun', scriptPath: 'scripts/play.ts' },
-      },
-    });
-    if (add.kind !== 'ok') throw new Error('add failed');
-
-    const patch = await patchNodeImpl(deps, flowId, add.data.id, {
-      type: 'shapeNode',
-      shape: 'rectangle',
-    });
-    expect(patch.kind).toBe('ok');
-    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
-    const node = flow.nodes.find((n: { id: string }) => n.id === add.data.id);
-    expect(node.type).toBe('shapeNode');
-    expect(node.data.shape).toBe('rectangle');
-    expect('playAction' in node.data).toBe(false);
   });
 });

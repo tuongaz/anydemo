@@ -7,7 +7,7 @@ describe('mergeFlowAndStyle', () => {
     const flow: Flow = {
       version: 2,
       name: 'T',
-      nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
+      nodes: [{ id: 'n', type: 'rectangle', data: {} }],
       connectors: [],
     };
     const style: Style = { nodes: { n: { position: { x: 10, y: 20 } } } };
@@ -19,7 +19,7 @@ describe('mergeFlowAndStyle', () => {
     const flow: Flow = {
       version: 2,
       name: 'T',
-      nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
+      nodes: [{ id: 'n', type: 'rectangle', data: {} }],
       connectors: [],
     };
     const resolved = mergeFlowAndStyle(flow, {});
@@ -30,13 +30,12 @@ describe('mergeFlowAndStyle', () => {
     const flow: Flow = {
       version: 2,
       name: 'T',
-      nodes: [{ id: 'n', type: 'shapeNode', data: { shape: 'rectangle' } }],
+      nodes: [{ id: 'n', type: 'rectangle', data: {} }],
       connectors: [],
     };
     const style: Style = { nodes: { n: { fontSize: 14, borderColor: 'blue' } } };
     const resolved = mergeFlowAndStyle(flow, style);
     expect(resolved.nodes[0]?.data).toMatchObject({
-      shape: 'rectangle',
       fontSize: 14,
       borderColor: 'blue',
     });
@@ -47,8 +46,8 @@ describe('mergeFlowAndStyle', () => {
       version: 2,
       name: 'T',
       nodes: [
-        { id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } },
-        { id: 'b', type: 'shapeNode', data: { shape: 'rectangle' } },
+        { id: 'a', type: 'rectangle', data: {} },
+        { id: 'b', type: 'rectangle', data: {} },
       ],
       connectors: [{ id: 'c', source: 'a', target: 'b' }],
     };
@@ -67,7 +66,7 @@ describe('mergeFlowAndStyle', () => {
     const flow: Flow = {
       version: 2,
       name: 'T',
-      nodes: [{ id: 'a', type: 'shapeNode', data: { shape: 'rectangle' } }],
+      nodes: [{ id: 'a', type: 'rectangle', data: {} }],
       connectors: [],
     };
     const style: Style = { nodes: { b: { fontSize: 14 } } };

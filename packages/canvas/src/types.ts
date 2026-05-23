@@ -32,71 +32,104 @@ export interface NodeDescription {
   detail?: string;
 }
 
-export interface NodeData extends NodeVisual, NodeDescription {
-  name: string;
-  stateSource: { kind: 'request' | 'event' };
-  playAction?: HttpAction;
+export interface ScriptAction {
+  kind: 'script';
+  interpreter: string;
+  args?: string[];
+  scriptPath: string;
+  input?: unknown;
+  timeoutMs?: number;
+}
+
+export interface StatusAction {
+  kind: 'script';
+  interpreter: string;
+  args?: string[];
+  scriptPath: string;
+  maxLifetimeMs?: number;
+}
+
+export type StateSource = { kind: 'request' } | { kind: 'event' };
+
+/**
+ * Capabilities — any subset of these makes a node Playable / Stateful. All
+ * optional, valid on every node type. A node is Playable iff `playAction` is
+ * set; Stateful iff `statusAction` is set; Both iff both. `stateSource` is
+ * informational metadata that pairs with statusAction.
+ */
+export interface NodeCapabilities {
+  playAction?: ScriptAction;
+  statusAction?: StatusAction;
+  stateSource?: StateSource;
+  /** Reserved for v2 skills runtime. Schema-only at v1. */
   handlerModule?: string;
+}
+
+/**
+ * Semantic-data fields shared by every node type. `name` is optional —
+ * every visual works without a label. `icon` is decorative on every type
+ * except `type:'icon'`, where it becomes the main visual and is required.
+ */
+export interface NodeSemanticBase extends NodeDescription {
+  name?: string;
   icon?: string;
 }
 
-export interface HttpAction {
-  kind: 'http';
-  method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
-  url: string;
-  body?: unknown;
-  bodySchema?: unknown;
-}
+/**
+ * The 12 flat node types. Visual kind is the type. Capabilities are
+ * independent optional fields on `data`.
+ */
+export const GEOMETRIC_NODE_TYPES = [
+  'rectangle',
+  'ellipse',
+  'sticky',
+  'text',
+  'database',
+  'server',
+  'user',
+  'queue',
+  'cloud',
+] as const;
+export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 
-export type ShapeKind =
-  | 'rectangle'
-  | 'ellipse'
-  | 'sticky'
-  | 'text'
-  | 'database'
-  | 'server'
-  | 'user'
-  | 'queue'
-  | 'cloud';
+export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon';
 
-// Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
-// `select` is the neutral default — click/marquee selects, pane-drag pans.
-// `hand` locks node interaction; left-drag pans (cursor: grab/grabbing).
-// `draw` carries the armed shape for click/drag-to-create gestures.
-export type CanvasMode = { kind: 'select' } | { kind: 'hand' } | { kind: 'draw'; shape: ShapeKind };
+/** Geometric nodes share the same data schema; type drives the SVG variant. */
+export interface GeometricNodeData
+  extends NodeSemanticBase,
+    NodeVisual,
+    NodeCapabilities {}
 
-export interface ShapeNodeData extends NodeVisual, NodeDescription {
-  shape: ShapeKind;
-  name?: string;
-}
-
-export interface ImageNodeData extends NodeVisual, NodeDescription {
+export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
   path: string;
   alt?: string;
   borderWidth?: number;
 }
 
-export interface IconNodeData extends NodeDescription {
+export interface IconNodeData
+  extends Omit<NodeSemanticBase, 'icon'>,
+    NodeVisual,
+    NodeCapabilities {
+  /** Required for type:'icon' — the icon IS the visual. */
   icon: string;
   color?: ColorToken;
   strokeWidth?: number;
-  width?: number;
-  height?: number;
   alt?: string;
-  name?: string;
 }
 
-export interface HtmlNodeData extends NodeVisual, NodeDescription {
-  // Inline HTML content. Studio externalizes this to
-  // `<project>/nodes/<id>/view.html` and stores a `file://` ref in flow.json;
-  // the file-ref resolver inlines the resolved content on read, so the
-  // renderer always sees the actual HTML string.
+export interface HtmlNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  /**
+   * Inline HTML content. Studio externalizes this to
+   * `<project>/nodes/<id>/view.html` and stores a `file://` ref in flow.json;
+   * the file-ref resolver inlines the resolved content on read, so the
+   * renderer always sees the actual HTML string.
+   */
   html?: string;
-  name?: string;
-  icon?: string;
-  // When true (or absent), the renderer measures content and React Flow sizes
-  // the wrapper around it (capped at 800×600 by CSS). The studio adapter
-  // enforces that autoSize:true and persisted width/height never coexist.
+  /**
+   * When true (or absent), the renderer measures content and React Flow sizes
+   * the wrapper around it (capped at 800×600 by CSS). The studio adapter
+   * enforces that autoSize:true and persisted width/height never coexist.
+   */
   autoSize?: boolean;
 }
 
@@ -106,12 +139,21 @@ interface NodeBase {
 }
 
 export type FlowNode =
-  | (NodeBase & { type: 'playNode'; data: NodeData })
-  | (NodeBase & { type: 'stateNode'; data: NodeData })
-  | (NodeBase & { type: 'shapeNode'; data: ShapeNodeData })
-  | (NodeBase & { type: 'imageNode'; data: ImageNodeData })
-  | (NodeBase & { type: 'iconNode'; data: IconNodeData })
-  | (NodeBase & { type: 'htmlNode'; data: HtmlNodeData });
+  | (NodeBase & { type: GeometricNodeType; data: GeometricNodeData })
+  | (NodeBase & { type: 'image'; data: ImageNodeData })
+  | (NodeBase & { type: 'html'; data: HtmlNodeData })
+  | (NodeBase & { type: 'icon'; data: IconNodeData });
+
+// Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
+// `select` is the neutral default — click/marquee selects, pane-drag pans.
+// `hand` locks node interaction; left-drag pans (cursor: grab/grabbing).
+// `draw` carries the armed geometric node type for click/drag-to-create
+// gestures. Image / html / icon are NOT drawable — they need an upload or
+// dedicated authoring flow, not a click-drop on the canvas.
+export type CanvasMode =
+  | { kind: 'select' }
+  | { kind: 'hand' }
+  | { kind: 'draw'; shape: GeometricNodeType };
 
 export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
 export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';
@@ -149,18 +191,15 @@ export interface Connector extends ConnectorBase {
   queueName?: string;
 }
 
-// US-012: mirror of `StatusReportSchema['state']` in apps/studio/src/schema.ts.
-// `apps/web/src/lib/api.ts` re-exports this type from `@seeflow/canvas` so
-// the canvas remains the single source of truth.
+// Mirror of `StatusReportSchema['state']` in apps/studio/src/schema.ts.
+// `apps/web/src/lib/api.ts` re-exports this type from `@seeflow/canvas` so the
+// canvas remains the single source of truth.
 export type StatusReportState = 'ok' | 'warn' | 'error' | 'pending';
 
-// US-013: runtime status payload emitted by a node's statusAction script and
-// fanned out via SSE. The canvas needs the type so play-node + state-node can
-// reference it without an `@/lib/api` import; apps/web/src/lib/api.ts now
-// re-exports this from @seeflow/canvas (same pattern as `StatusReportState`).
-// The hook that produces these values stays in apps/web; US-026 added the
-// adapter-side `CanvasRuntime` type that references this so demo-canvas can
-// receive a single bundled runtime prop.
+// Runtime status payload emitted by a node's statusAction script and fanned
+// out via SSE. The canvas needs the type so the rectangle renderer can
+// reference it without an `@/lib/api` import; apps/web/src/lib/api.ts re-
+// exports this from @seeflow/canvas.
 export interface StatusReport {
   state: StatusReportState;
   summary?: string;
@@ -169,11 +208,7 @@ export interface StatusReport {
   ts?: number;
 }
 
-// US-026: per-node SSE run state. The leaf type that backs `NodeRuns` in
-// apps/web/src/hooks/use-node-runs.ts; promoted into the canvas package so
-// CanvasRuntime (in apps/web/src/lib/canvas-adapter.ts) can reference it
-// without reaching back into a hook file. The hook continues to produce the
-// values; only the type lives here.
+// Per-node SSE run state.
 export interface RunResult {
   status: NodeStatus;
   runId?: string;

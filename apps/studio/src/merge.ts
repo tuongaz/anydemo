@@ -39,10 +39,12 @@ export function mergeFlowAndStyle(flow: Flow, style: Style): ResolvedFlow {
 }
 
 // Fields that live in a node's `data` block on flow.json. Every other data
-// field is visual and routes to style.json.
+// field is visual and routes to style.json. The flat-types refactor folds
+// the visual kind into `node.type` itself (no more `data.shape` / `data.kind`)
+// and makes every capability (playAction / statusAction / stateSource) valid
+// on every type.
 const NODE_DATA_FLOW_KEYS = new Set([
   'name',
-  'kind',
   'stateSource',
   'handlerModule',
   'icon',
@@ -50,7 +52,6 @@ const NODE_DATA_FLOW_KEYS = new Set([
   'detail',
   'playAction',
   'statusAction',
-  'shape',
   'path',
   'alt',
   'html',

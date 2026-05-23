@@ -14,7 +14,7 @@ export interface ExternalizedFieldSpec {
 
 export const EXTERNALIZED_NODE_FIELDS: readonly ExternalizedFieldSpec[] = [
   { field: 'detail', fileName: 'detail.md' },
-  { field: 'html', fileName: 'view.html', nodeTypes: ['htmlNode'] },
+  { field: 'html', fileName: 'view.html', nodeTypes: ['html'] },
 ];
 
 export const externalizedFieldsForNodeType = (

@@ -281,7 +281,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     },
     requiresStudio: false,
     examples: [
-      'seeflow flow:add-bulk abc12345 --json \'{"nodes":[{"id":"a","type":"shapeNode","data":{"shape":"rectangle"}}],"connectors":[]}\'',
+      'seeflow flow:add-bulk abc12345 --json \'{"nodes":[{"id":"a","type":"rectangle","data":{}}],"connectors":[]}\'',
       'seeflow flow:add-bulk abc12345 --file batch.json',
     ],
   },
@@ -344,7 +344,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     flags: BODY_FLAGS,
     body: {
       example: {
-        type: 'stateNode',
+        type: 'rectangle',
         data: { name: 'hello', stateSource: { kind: 'request' } },
       },
     },
@@ -361,7 +361,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     },
     requiresStudio: false,
     examples: [
-      'seeflow nodes:add abc12345 --json \'{"type":"shapeNode","data":{"shape":"rectangle"}}\'',
+      'seeflow nodes:add abc12345 --json \'{"type":"rectangle","data":{}}\'',
     ],
   },
   {
