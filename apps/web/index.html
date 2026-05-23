@@ -8,6 +8,31 @@
     <meta name="theme-color" content="#09090b" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>SeeFlow Studio</title>
+    <script>
+      // FOUC guard: applies the stored/system theme to <html> before React boots.
+      // Keep storage key and media query in sync with apps/web/src/hooks/use-theme.ts.
+      (function () {
+        try {
+          var stored = null;
+          try {
+            stored = localStorage.getItem('seeflow:theme');
+          } catch (_) {}
+          var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+          var resolved = theme;
+          if (theme === 'system') {
+            resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+          var cls = document.documentElement.classList;
+          if (resolved === 'dark') {
+            cls.add('dark');
+            cls.remove('light');
+          } else {
+            cls.add('light');
+            cls.remove('dark');
+          }
+        } catch (_) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
