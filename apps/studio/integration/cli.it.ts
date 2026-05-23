@@ -668,6 +668,40 @@ describe('integration: CLI — lifecycle (start / stop)', () => {
     }
   });
 
+  it(
+    'start ignores a busy 5173 (Vite owns that port in `bun run dev`)',
+    async () => {
+      // Reproduces the `make dev` flow: Vite binds 5173 first, then the
+      // studio dev script runs `seeflow start`. The studio doesn't bind 5173
+      // — only the dev-mode proxy targets it — so a listener on 5173 must
+      // NOT block the studio from coming up on its own port.
+      let blocker: ReturnType<typeof Bun.serve> | undefined;
+      try {
+        blocker = Bun.serve({
+          port: 5173,
+          hostname: '127.0.0.1',
+          fetch: () => new Response('pretend-vite'),
+        });
+      } catch {
+        // 5173 already busy with someone else's process — can't run this
+        // test in this environment. Skipping is safer than a false positive.
+        return;
+      }
+      try {
+        const own = await spawnStudio();
+        try {
+          const res = await fetch(`${own.baseURL}/healthz`);
+          expect(res.ok).toBe(true);
+        } finally {
+          await own.stop();
+        }
+      } finally {
+        blocker.stop(true);
+      }
+    },
+    15_000,
+  );
+
   it('stop signals a running studio and clears the pid file', async () => {
     // Spawn a dedicated studio for this test — using the shared one would
     // kill every later test in the file. The harness writes the pid file

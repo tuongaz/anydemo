@@ -17,7 +17,6 @@ import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
   DEFAULT_CONFIG,
-  VITE_DEV_PORT,
   clearPid,
   defaultPidPath,
   isPidAlive,
@@ -268,24 +267,16 @@ async function runHelp() {
   console.log(renderCommandList());
 }
 
-// Pre-flight: refuse to start if either the studio port OR the Vite dev port
-// (5173) already has a TCP listener. Callers MUST run the `/health` shortcut
-// first when relevant — this helper treats any responder as a conflict, so
-// "it's actually our own seeflow" needs to be filtered out upstream.
-async function assertPortsFree(studioPort: number, host: string): Promise<void> {
-  const [studioBusy, viteBusy] = await Promise.all([
-    portInUse(host, studioPort),
-    portInUse('127.0.0.1', VITE_DEV_PORT),
-  ]);
-  const busy: number[] = [];
-  if (studioBusy) busy.push(studioPort);
-  if (viteBusy) busy.push(VITE_DEV_PORT);
-  if (busy.length === 0) return;
-  const plural = busy.length > 1;
-  const list = busy.join(' and ');
+// Pre-flight: refuse to start if the studio port already has a TCP listener.
+// We deliberately do NOT probe Vite's port (5173) here — `bun run dev` spawns
+// Vite alongside the studio, so Vite legitimately owns 5173 in dev mode and a
+// probe can't distinguish "our Vite" from a stranger. If Vite's port is taken
+// by something else, Vite itself surfaces the conflict.
+async function assertPortFree(studioPort: number, host: string): Promise<void> {
+  if (!(await portInUse(host, studioPort))) return;
   console.error(
-    `Cannot start SeeFlow: port${plural ? 's' : ''} ${list} already in use.\n` +
-      `Stop the running server${plural ? 's' : ''} on ${list} first, then retry.`,
+    `Cannot start SeeFlow: port ${studioPort} already in use.\n` +
+      `Stop the running server on ${studioPort} first, then retry.`,
   );
   process.exit(1);
 }
@@ -320,9 +311,9 @@ async function runStart() {
 
   // Defense-in-depth: parent already checked in spawnDaemon, but a race
   // between parent-check and child-bind can still let another process grab
-  // either port. Re-check here so the child fails fast with a clear error
-  // instead of EADDRINUSE / a broken Vite proxy at request time.
-  await assertPortsFree(port, config.host);
+  // the port. Re-check here so the child fails fast with a clear error
+  // instead of EADDRINUSE at bind time.
+  await assertPortFree(port, config.host);
 
   // persist the chosen address so other subcommands can find us
   writeConfig({ port, host: config.host });
@@ -398,10 +389,10 @@ async function spawnDaemon(port: number, host: string) {
     return;
   }
 
-  // Studio port and Vite port (5173) must both be free before we fork a
-  // detached child — otherwise the user waits HEALTH_TIMEOUT_MS for a doomed
-  // health probe before seeing a generic timeout error.
-  await assertPortsFree(port, host);
+  // Studio port must be free before we fork a detached child — otherwise the
+  // user waits HEALTH_TIMEOUT_MS for a doomed health probe before seeing a
+  // generic timeout error.
+  await assertPortFree(port, host);
 
   const proc = spawnDetachedStudio(port);
   writePid(proc.pid);

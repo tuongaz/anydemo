@@ -9,12 +9,6 @@ export interface StudioConfig {
 
 export const DEFAULT_CONFIG: StudioConfig = { port: 4321, host: '0.0.0.0' };
 
-// Vite dev server port. `seeflow start` doesn't bind this — Vite (in apps/web)
-// does — but the studio dev-mode proxy targets it, so a port collision here
-// breaks the dev workflow just as surely as one on the studio port. The
-// pre-flight check in the CLI surfaces both upfront with a clean error.
-export const VITE_DEV_PORT = 5173;
-
 export function defaultConfigPath(): string {
   return join(seeflowHome(), 'config.json');
 }
