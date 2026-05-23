@@ -26,6 +26,14 @@
         "name": "Form Demo",
         "description": "Card + Input + Select + Table — live $state binding via set with $param."
       }
+    },
+    {
+      "id": "chart",
+      "type": "component",
+      "data": {
+        "name": "Chart & Tabs",
+        "description": "Card + Tabs + Metric + multi-series bar Chart — value/onChange binding plus a recharts-lazy Chart."
+      }
     }
   ],
   "connectors": []

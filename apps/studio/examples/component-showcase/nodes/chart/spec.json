@@ -1,0 +1,64 @@
+{
+  "root": "card",
+  "state": {
+    "/tab": "revenue",
+    "/chartData": [
+      { "month": "Jan", "revenue": 4200, "users": 120, "orders": 38 },
+      { "month": "Feb", "revenue": 5100, "users": 145, "orders": 47 },
+      { "month": "Mar", "revenue": 4800, "users": 160, "orders": 52 },
+      { "month": "Apr", "revenue": 6200, "users": 180, "orders": 61 },
+      { "month": "May", "revenue": 7100, "users": 205, "orders": 74 },
+      { "month": "Jun", "revenue": 6800, "users": 230, "orders": 81 }
+    ]
+  },
+  "elements": {
+    "card": {
+      "type": "Card",
+      "props": { "title": "Chart & Tabs" },
+      "children": ["heading", "intro", "tabs", "current", "chart"]
+    },
+    "heading": {
+      "type": "Heading",
+      "props": { "level": 3, "text": "Tabs binding + multi-series Chart" }
+    },
+    "intro": {
+      "type": "Text",
+      "props": {
+        "text": "The Tabs control writes the active id to /tab via a set action; the Metric below reads it back from state to prove the loop is closed. The Chart renders a static six-month dataset with three series.",
+        "muted": true
+      }
+    },
+    "tabs": {
+      "type": "Tabs",
+      "props": {
+        "value": { "$state": "/tab" },
+        "items": [
+          { "id": "revenue", "label": "Revenue" },
+          { "id": "users", "label": "Users" },
+          { "id": "orders", "label": "Orders" }
+        ],
+        "onChange": { "$action": "setTab" }
+      }
+    },
+    "current": {
+      "type": "Metric",
+      "props": { "label": "Active tab", "value": { "$state": "/tab" } }
+    },
+    "chart": {
+      "type": "Chart",
+      "props": {
+        "kind": "bar",
+        "data": { "$state": "/chartData" },
+        "xKey": "month",
+        "series": [
+          { "key": "revenue", "label": "Revenue" },
+          { "key": "users", "label": "Users" },
+          { "key": "orders", "label": "Orders" }
+        ]
+      }
+    }
+  },
+  "actions": {
+    "setTab": { "kind": "set", "path": "/tab", "value": { "$param": "value" } }
+  }
+}
