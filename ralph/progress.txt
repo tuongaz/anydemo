@@ -1,4 +1,4 @@
-# Ralph Progress Log — ralph/component-node-implementation
+# Ralph Progress Log — component-node-implementation (main)
 
 ## Codebase Patterns
 (Populated by Ralph as it discovers reusable patterns.)

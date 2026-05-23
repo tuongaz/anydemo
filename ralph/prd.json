@@ -1,6 +1,6 @@
 {
   "project": "SeeFlow",
-  "branchName": "ralph/component-node-implementation",
+  "branchName": "main",
   "description": "Component node implementation — ship the 'component' flat node type: json-render-powered reactive UI on the canvas with set + script actions, backed by a catalog of ~24 shadcn-styled primitives. Spec lives in <project>/nodes/<id>/spec.json; flow.json carries only the type tag. Plan: docs/plans/2026-05-23-component-node-implementation.md",
   "userStories": [
     {
