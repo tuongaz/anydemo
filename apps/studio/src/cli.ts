@@ -17,9 +17,11 @@ import { defaultProcessSpawner } from './process-spawner.ts';
 import { type Registry, createRegistry } from './registry.ts';
 import {
   DEFAULT_CONFIG,
+  VITE_DEV_PORT,
   clearPid,
   defaultPidPath,
   isPidAlive,
+  portInUse,
   readConfig,
   readPid,
   studioUrl,
@@ -266,6 +268,28 @@ async function runHelp() {
   console.log(renderCommandList());
 }
 
+// Pre-flight: refuse to start if either the studio port OR the Vite dev port
+// (5173) already has a TCP listener. Callers MUST run the `/health` shortcut
+// first when relevant — this helper treats any responder as a conflict, so
+// "it's actually our own seeflow" needs to be filtered out upstream.
+async function assertPortsFree(studioPort: number, host: string): Promise<void> {
+  const [studioBusy, viteBusy] = await Promise.all([
+    portInUse(host, studioPort),
+    portInUse('127.0.0.1', VITE_DEV_PORT),
+  ]);
+  const busy: number[] = [];
+  if (studioBusy) busy.push(studioPort);
+  if (viteBusy) busy.push(VITE_DEV_PORT);
+  if (busy.length === 0) return;
+  const plural = busy.length > 1;
+  const list = busy.join(' and ');
+  console.error(
+    `Cannot start SeeFlow: port${plural ? 's' : ''} ${list} already in use.\n` +
+      `Stop the running server${plural ? 's' : ''} on ${list} first, then retry.`,
+  );
+  process.exit(1);
+}
+
 async function runStart() {
   mkdirSync(seeflowHome(), { recursive: true });
   const config = readConfig();
@@ -293,6 +317,12 @@ async function runStart() {
     await spawnDaemon(port, config.host);
     return;
   }
+
+  // Defense-in-depth: parent already checked in spawnDaemon, but a race
+  // between parent-check and child-bind can still let another process grab
+  // either port. Re-check here so the child fails fast with a clear error
+  // instead of EADDRINUSE / a broken Vite proxy at request time.
+  await assertPortsFree(port, config.host);
 
   // persist the chosen address so other subcommands can find us
   writeConfig({ port, host: config.host });
@@ -367,6 +397,11 @@ async function spawnDaemon(port: number, host: string) {
     console.log(`Studio already running at ${url}`);
     return;
   }
+
+  // Studio port and Vite port (5173) must both be free before we fork a
+  // detached child — otherwise the user waits HEALTH_TIMEOUT_MS for a doomed
+  // health probe before seeing a generic timeout error.
+  await assertPortsFree(port, host);
 
   const proc = spawnDetachedStudio(port);
   writePid(proc.pid);

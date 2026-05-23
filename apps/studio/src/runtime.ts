@@ -9,6 +9,12 @@ export interface StudioConfig {
 
 export const DEFAULT_CONFIG: StudioConfig = { port: 4321, host: '0.0.0.0' };
 
+// Vite dev server port. `seeflow start` doesn't bind this — Vite (in apps/web)
+// does — but the studio dev-mode proxy targets it, so a port collision here
+// breaks the dev workflow just as surely as one on the studio port. The
+// pre-flight check in the CLI surfaces both upfront with a clean error.
+export const VITE_DEV_PORT = 5173;
+
 export function defaultConfigPath(): string {
   return join(seeflowHome(), 'config.json');
 }
@@ -74,5 +80,42 @@ export function isPidAlive(pid: number): boolean {
     return true;
   } catch {
     return false;
+  }
+}
+
+// `0.0.0.0` / `::` are wildcard bind addresses, not connectable destinations —
+// probe loopback when the caller passes one. IPv6 unspecified `::` maps to
+// `::1`; everything else is treated as IPv4 wildcard → `127.0.0.1`.
+function probeHost(host: string): string {
+  if (host === '::' || host === '[::]') return '::1';
+  if (host === '0.0.0.0' || host === '') return '127.0.0.1';
+  return host;
+}
+
+/**
+ * Detects whether a TCP listener is responding on host:port. Uses a short
+ * connect probe (300 ms default) so we catch actively-listening servers
+ * without padding fast paths. Returns false on any connect error or timeout.
+ */
+export async function portInUse(host: string, port: number, timeoutMs = 300): Promise<boolean> {
+  const hostname = probeHost(host);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const socket = await Promise.race([
+      Bun.connect({
+        hostname,
+        port,
+        socket: { data() {}, open() {}, close() {}, error() {} },
+      }),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error('timeout')), timeoutMs);
+      }),
+    ]);
+    socket.end();
+    return true;
+  } catch {
+    return false;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }

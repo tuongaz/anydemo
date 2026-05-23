@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   clearPid,
   isPidAlive,
+  portInUse,
   readConfig,
   readPid,
   studioUrl,
@@ -79,5 +80,42 @@ describe('pid', () => {
   it('isPidAlive: true for our own pid, false for impossibly large pid', () => {
     expect(isPidAlive(process.pid)).toBe(true);
     expect(isPidAlive(2_147_483_646)).toBe(false);
+  });
+});
+
+describe('portInUse', () => {
+  // Bun.serve's typings declare `port` as `number | undefined`, but a freshly
+  // spawned listener always has one — narrow once so the test bodies stay clean.
+  const portOf = (server: { port?: number }): number => {
+    if (typeof server.port !== 'number') throw new Error('Bun.serve returned no port');
+    return server.port;
+  };
+
+  it('returns true when a listener is responding', async () => {
+    const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') });
+    try {
+      expect(await portInUse('127.0.0.1', portOf(server))).toBe(true);
+    } finally {
+      server.stop(true);
+    }
+  });
+
+  it('returns false when nothing is listening', async () => {
+    // Find an unused port by binding/releasing, then probe it.
+    const probe = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response() });
+    const closedPort = portOf(probe);
+    probe.stop(true);
+    expect(await portInUse('127.0.0.1', closedPort)).toBe(false);
+  });
+
+  it('rewrites 0.0.0.0 to loopback for the probe', async () => {
+    const server = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: () => new Response('ok') });
+    try {
+      // host=0.0.0.0 means "wildcard bind"; the probe should reach the
+      // loopback-bound server because we rewrite to 127.0.0.1.
+      expect(await portInUse('0.0.0.0', portOf(server))).toBe(true);
+    } finally {
+      server.stop(true);
+    }
   });
 });

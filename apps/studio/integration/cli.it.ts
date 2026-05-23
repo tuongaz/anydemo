@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it } from 'bun:test';
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { slugify } from '../src/registry.ts';
 import { runCli } from './support/cli-runner.ts';
 import { uniqueFlowId } from './support/ids.ts';
-import { type StudioHandle, spawnStudio } from './support/studio-harness.ts';
+import { type StudioHandle, getFreePort, spawnStudio } from './support/studio-harness.ts';
 
 // One shared studio per file for the HTTP-passthrough subcommands. The CLI
 // is pointed at it via SEEFLOW_STUDIO_URL so studioUrlOrDie short-circuits
@@ -637,6 +638,36 @@ describe('integration: CLI — lifecycle (start / stop)', () => {
     expect(r.code).toBe(0);
     expect(r.stdout).toContain('start');
     expect(r.stdout).toContain('--foreground');
+  });
+
+  it('start refuses with a clean error when the studio port is already in use', async () => {
+    // Pre-flight: occupy a port with a plain Bun.serve, then ask the CLI to
+    // bind to the same port. The pre-flight check should fire BEFORE we try
+    // to bind / write the pid file and exit 1 with a port-conflict message.
+    const blockedPort = await getFreePort();
+    const blocker = Bun.serve({
+      port: blockedPort,
+      hostname: '127.0.0.1',
+      fetch: () => new Response('block'),
+    });
+    const home = mkdtempSync(join(tmpdir(), 'seeflow-port-conflict-'));
+    const pidPath = join(home, '.seeflow', 'seeflow.pid');
+
+    try {
+      const r = await runCli(['start', '--foreground', `--port=${blockedPort}`], {
+        env: { SEEFLOW_WORKSPACE: home },
+        timeoutMs: 10_000,
+      });
+      expect(r.code).not.toBe(0);
+      expect(r.stderr).toContain('Cannot start SeeFlow');
+      expect(r.stderr).toContain(String(blockedPort));
+      expect(r.stderr).toContain('Stop the running server');
+      // Pre-flight must short-circuit before writePid runs.
+      expect(existsSync(pidPath)).toBe(false);
+    } finally {
+      blocker.stop(true);
+      rmSync(home, { recursive: true, force: true });
+    }
   });
 
   it('stop signals a running studio and clears the pid file', async () => {
