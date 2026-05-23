@@ -1,7 +1,17 @@
 import { ProjectSwitcher } from '@/components/project-switcher';
+import { type Theme, useTheme } from '@/hooks/use-theme';
 import type { CreateProjectResult, FlowSummary } from '@/lib/api';
 import { navigate } from '@/lib/router';
-import { Workflow } from 'lucide-react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '@seeflow/canvas';
+import { Settings, Workflow } from 'lucide-react';
 
 export interface HeaderProps {
   demos: FlowSummary[];
@@ -10,12 +20,20 @@ export interface HeaderProps {
   onProjectUnregistered?: (id: string) => void;
 }
 
+const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: 'light', label: 'Light' },
+  { value: 'dark', label: 'Dark' },
+  { value: 'system', label: 'System' },
+];
+
 export function Header({
   demos,
   currentSlug,
   onProjectCreated,
   onProjectUnregistered,
 }: HeaderProps) {
+  const { theme, setTheme } = useTheme();
+
   return (
     <header className="relative flex h-14 shrink-0 items-center justify-between border-b border-border/60 bg-background/85 px-5 backdrop-blur-md shadow-[0_4px_12px_-6px_rgba(0,0,0,0.6)]">
       <button
@@ -36,6 +54,41 @@ export function Header({
           onProjectCreated={onProjectCreated}
           onProjectUnregistered={onProjectUnregistered}
         />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              type="button"
+              variant="outline"
+              size="icon"
+              aria-label="Settings"
+              data-testid="settings-trigger"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            sideOffset={6}
+            className="w-44"
+            data-testid="settings-menu"
+          >
+            <DropdownMenuLabel>Theme</DropdownMenuLabel>
+            <DropdownMenuRadioGroup
+              value={theme}
+              onValueChange={(value) => setTheme(value as Theme)}
+            >
+              {THEME_OPTIONS.map((option) => (
+                <DropdownMenuRadioItem
+                  key={option.value}
+                  value={option.value}
+                  data-testid={`theme-${option.value}`}
+                >
+                  {option.label}
+                </DropdownMenuRadioItem>
+              ))}
+            </DropdownMenuRadioGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   );

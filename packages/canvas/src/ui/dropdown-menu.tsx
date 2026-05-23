@@ -1,4 +1,5 @@
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { Check } from 'lucide-react';
 import * as React from 'react';
 
 import { useCanvasPortalContainer } from '../components/canvas-portal-container.tsx';
@@ -6,6 +7,7 @@ import { cn } from '../lib/cn.ts';
 
 const DropdownMenu = DropdownMenuPrimitive.Root;
 const DropdownMenuTrigger = DropdownMenuPrimitive.Trigger;
+const DropdownMenuRadioGroup = DropdownMenuPrimitive.RadioGroup;
 
 const DropdownMenuContent = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Content>,
@@ -55,10 +57,50 @@ const DropdownMenuSeparator = React.forwardRef<
 ));
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
+const DropdownMenuLabel = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.Label>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Label>
+>(({ className, ...props }, ref) => (
+  <DropdownMenuPrimitive.Label
+    ref={ref}
+    className={cn(
+      'sf:px-2 sf:py-1.5 sf:text-xs sf:font-semibold sf:uppercase sf:tracking-wide sf:text-muted-foreground',
+      className,
+    )}
+    {...props}
+  />
+));
+DropdownMenuLabel.displayName = DropdownMenuPrimitive.Label.displayName;
+
+const DropdownMenuRadioItem = React.forwardRef<
+  React.ElementRef<typeof DropdownMenuPrimitive.RadioItem>,
+  React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.RadioItem>
+>(({ className, children, ...props }, ref) => (
+  <DropdownMenuPrimitive.RadioItem
+    ref={ref}
+    className={cn(
+      'sf:relative sf:flex sf:cursor-default sf:select-none sf:items-center sf:rounded-sm sf:py-1.5 sf:pl-8 sf:pr-2 sf:text-sm sf:outline-hidden sf:data-disabled:pointer-events-none sf:data-highlighted:bg-accent sf:data-highlighted:text-accent-foreground sf:data-disabled:opacity-50',
+      className,
+    )}
+    {...props}
+  >
+    <span className="sf:absolute sf:left-2 sf:flex sf:h-3.5 sf:w-3.5 sf:items-center sf:justify-center">
+      <DropdownMenuPrimitive.ItemIndicator>
+        <Check className="sf:h-4 sf:w-4" />
+      </DropdownMenuPrimitive.ItemIndicator>
+    </span>
+    {children}
+  </DropdownMenuPrimitive.RadioItem>
+));
+DropdownMenuRadioItem.displayName = DropdownMenuPrimitive.RadioItem.displayName;
+
 export {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 };
