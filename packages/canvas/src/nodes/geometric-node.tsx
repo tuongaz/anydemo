@@ -9,7 +9,12 @@ import {
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
-import type { GeometricNodeType as GeometricKind, GeometricNodeData } from '../types.ts';
+import type {
+  GeometricNodeType as GeometricKind,
+  GeometricNodeData,
+  NodeStatus,
+  StatusReport,
+} from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -22,11 +27,39 @@ const ILLUSTRATIVE_SHAPES: ReadonlySet<GeometricKind> = new Set(
   Object.keys(ILLUSTRATIVE_SHAPE_RENDERERS) as GeometricKind[],
 );
 
-function isIllustrativeShape(shape: GeometricKind): boolean {
+export function isIllustrativeShape(shape: GeometricKind): boolean {
   return ILLUSTRATIVE_SHAPES.has(shape);
 }
 
+/**
+ * Height in pixels of the capability-chrome skirt rendered below the
+ * illustrative-shape SVG when `data.playAction` or `data.statusReport` is
+ * present. The wrapper bounding box stays invariant — the SVG renderer's
+ * `height` shrinks by this amount so connectors anchored at the wrapper's
+ * bottom edge don't shift when status first arrives.
+ */
+export const SKIRT_HEIGHT = 32;
+
 export type GeometricNodeRuntimeData = GeometricNodeData & {
+  /**
+   * Latest run status (from the runs map). Undefined when the node has
+   * never been played. Threaded onto every node's data by seeflow-canvas;
+   * the type catches up here so the skirt renderer derives the visual
+   * status without a cast.
+   */
+  status?: NodeStatus;
+  /** Filled when status === 'error' — surfaces as the PlayButton tooltip. */
+  errorMessage?: string;
+  /**
+   * Latest StatusReport from this node's statusAction script (if any).
+   * Presence drives the skirt's StatusBadge for illustrative shapes; the
+   * field has always been on RectangleNodeData and was already threaded
+   * canvas-wide. Carrying it on the GeometricNode type makes the skirt
+   * conditional type-safe.
+   */
+  statusReport?: StatusReport & { ts: number };
+  /** Invoked when the user clicks the inline PlayButton in the skirt. */
+  onPlay?: (nodeId: string) => void;
   onResize?: (
     nodeId: string,
     dims: { width: number; height: number; x: number; y: number },

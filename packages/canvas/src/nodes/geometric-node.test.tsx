@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import type { NodeProps } from '@xyflow/react';
 import * as React from 'react';
-import { GeometricNode, type GeometricNodeFlowNode } from './geometric-node.tsx';
+import {
+  GeometricNode,
+  type GeometricNodeFlowNode,
+  SKIRT_HEIGHT,
+  isIllustrativeShape,
+} from './geometric-node.tsx';
 import { StatusBadge } from './status-badge.tsx';
 import { StatusIconPill } from './status-icon-pill.tsx';
 
@@ -108,6 +113,32 @@ function callGeometric(
   ).type;
   return renderWithHooks(() => impl(props));
 }
+
+// SKIRT_HEIGHT + isIllustrativeShape are the load-bearing constants for the
+// capability-chrome skirt. SKIRT_HEIGHT pins the bottom row size; the
+// predicate gates which shapes opt into the skirt (database / server /
+// queue / cloud / user). Future changes — moving the skirt to ellipse,
+// resizing it, etc. — must surface here first.
+describe('capability-chrome skirt derivation', () => {
+  it('exposes SKIRT_HEIGHT = 32 (matches the design spec)', () => {
+    expect(SKIRT_HEIGHT).toBe(32);
+  });
+
+  it('isIllustrativeShape returns true for the 5 illustrative tags', () => {
+    expect(isIllustrativeShape('database')).toBe(true);
+    expect(isIllustrativeShape('server')).toBe(true);
+    expect(isIllustrativeShape('queue')).toBe(true);
+    expect(isIllustrativeShape('cloud')).toBe(true);
+    expect(isIllustrativeShape('user')).toBe(true);
+  });
+
+  it('isIllustrativeShape returns false for rectangle / ellipse / sticky / text', () => {
+    expect(isIllustrativeShape('rectangle')).toBe(false);
+    expect(isIllustrativeShape('ellipse')).toBe(false);
+    expect(isIllustrativeShape('sticky')).toBe(false);
+    expect(isIllustrativeShape('text')).toBe(false);
+  });
+});
 
 // US-009: capability-chrome-rectangle-only invariant — second half. The
 // 8 non-rectangle geometric tags route through GeometricNode, which parses
