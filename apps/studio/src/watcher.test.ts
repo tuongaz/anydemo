@@ -505,6 +505,68 @@ describe('createWatcher', () => {
     watcher.closeAll();
   });
 
+  // ---------------------------------------------------------------------------
+  // US-006 / T-004: component node spec sidecar inlining via readMergedFlow.
+  // ---------------------------------------------------------------------------
+
+  const componentFlow = {
+    version: 2,
+    name: 'Component Flow',
+    nodes: [{ id: 'c1', type: 'component', data: {} }],
+    connectors: [],
+  };
+
+  const componentSpec = {
+    root: 'root',
+    elements: {
+      root: { type: 'Text', props: { text: 'hello' } },
+    },
+  };
+
+  it('inlines nodes/<id>/spec.json into data.spec for component nodes', () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo(componentFlow);
+    mkdirSync(join(repoPath, 'nodes', 'c1'), { recursive: true });
+    writeFileSync(join(repoPath, 'nodes', 'c1', 'spec.json'), JSON.stringify(componentSpec));
+
+    const entry = reg.upsert({
+      name: 'Component Flow',
+      repoPath,
+      flowPath: 'flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
+
+    watcher.watch(entry.id);
+    const snap = watcher.snapshot(entry.id);
+    expect(snap?.valid).toBe(true);
+    expect(snap?.error).toBeNull();
+    const node = snap?.flow?.nodes[0];
+    if (node?.type !== 'component') throw new Error('expected component node');
+    expect(node.data.spec.root).toBe('root');
+    expect(node.data.spec.elements.root?.type).toBe('Text');
+    watcher.closeAll();
+  });
+
+  it('surfaces a missing spec.json as a validation error with the node-spec path', () => {
+    const reg = createRegistry({ path: tmpRegistryPath() });
+    const repoPath = tmpRepo(componentFlow);
+
+    const entry = reg.upsert({
+      name: 'Component Flow',
+      repoPath,
+      flowPath: 'flow.json',
+    });
+    const events = createEventBus();
+    const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
+
+    watcher.watch(entry.id);
+    const snap = watcher.snapshot(entry.id);
+    expect(snap?.valid).toBe(false);
+    expect(snap?.error).toMatch(/nodes\/c1\/data\/spec/);
+    watcher.closeAll();
+  });
+
   it('hash ring holds the last 4 self-writes so back-to-back writes still suppress', async () => {
     const reg = createRegistry({ path: tmpRegistryPath() });
     const repoPath = tmpRepo();

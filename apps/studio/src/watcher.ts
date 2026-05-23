@@ -5,11 +5,18 @@ import { basename, dirname, isAbsolute, join } from 'node:path';
 // contains flow.json). The studio is path-agnostic — whatever path the caller
 // supplied is the project root.
 const projectRootForFlow = (flowPath: string): string => dirname(flowPath);
+import { inlineComponentSpecs } from './component-spec-resolver.ts';
 import type { EventBus } from './events.ts';
 import { resolveFileRefs } from './file-ref.ts';
 import { mergeFlowAndStyle } from './merge.ts';
 import type { Registry } from './registry.ts';
-import { type Flow, FlowSchema, type ResolvedFlow, StyleSchema } from './schema.ts';
+import {
+  type Flow,
+  FlowSchema,
+  type ResolvedFlow,
+  ResolvedFlowSchema,
+  StyleSchema,
+} from './schema.ts';
 
 const DEFAULT_DEBOUNCE_MS = 100;
 
@@ -225,8 +232,37 @@ export function readMergedFlow(flowPath: string): ReadMergedFlowResult {
     };
   }
 
-  const flow = mergeFlowAndStyle(flowParse.data as Flow, styleParse.data);
-  return { flow, valid: true, error: null, fileRefs: refs, staticRefs };
+  const merged = mergeFlowAndStyle(flowParse.data as Flow, styleParse.data);
+  const {
+    flow: inlined,
+    errors: specErrors,
+    refs: specRefs,
+  } = inlineComponentSpecs(merged, projectRoot);
+  const fileRefs = [...refs, ...specRefs];
+
+  if (specErrors.length > 0) {
+    return {
+      ...empty,
+      error: specErrors.map((e) => `${e.path}: ${e.message}`).join('; '),
+      fileRefs,
+      staticRefs,
+    };
+  }
+
+  const resolvedParse = ResolvedFlowSchema.safeParse(inlined);
+  if (!resolvedParse.success) {
+    const message = resolvedParse.error.issues
+      .map((i) => `${i.path.join('.') || '<root>'}: ${i.message}`)
+      .join('; ');
+    return {
+      ...empty,
+      error: `ResolvedFlow validation failed: ${message}`,
+      fileRefs,
+      staticRefs,
+    };
+  }
+
+  return { flow: resolvedParse.data, valid: true, error: null, fileRefs, staticRefs };
 }
 
 const closeFileWatchers = (handle: WatchHandle): void => {
