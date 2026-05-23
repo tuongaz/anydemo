@@ -91,15 +91,52 @@
 
 @layer base {
   :root {
-    /* ── Shadcn HSL tokens (dark-first, zinc/emerald palette) ──
+    /* ── Shadcn HSL tokens (light default, zinc/emerald palette) ──
      * Mirrored from @seeflow/canvas so the studio chrome (header,
      * project switcher, command palette) reads the same theme as the
-     * canvas. Canvas-only tokens (--shadow-*, --seeflow-handle-*,
+     * canvas. Light is the default; the .dark block below overrides
+     * when an ancestor (typically <html>) carries the `.dark` class.
+     * Canvas-only tokens (--shadow-*, --seeflow-handle-*,
      * --amber, --danger, --font-mono, --bg-canvas, --emerald-glow,
-     * --ring-selected) live under .seeflow-canvas-root in the canvas
-     * package — they don't belong at :root because the studio chrome
-     * doesn't use them and a consumer importing the canvas CSS shouldn't
-     * have their :root mutated. */
+     * --ring-selected, --glow-dot-color) live under .seeflow-canvas-root
+     * in the canvas package — they don't belong at :root because the
+     * studio chrome doesn't use them and a consumer importing the
+     * canvas CSS shouldn't have their :root mutated. */
+    --background: 0 0% 100%;
+    --foreground: 240 10% 3.9%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 240 10% 3.9%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 240 10% 3.9%;
+
+    --primary: 160 84% 39.4%;
+    --primary-foreground: 0 0% 98%;
+
+    --secondary: 240 4.8% 95.9%;
+    --secondary-foreground: 240 5.9% 10%;
+
+    --muted: 240 4.8% 95.9%;
+    --muted-foreground: 240 4% 40%;
+
+    --accent: 240 4.8% 95.9%;
+    --accent-foreground: 240 5.9% 10%;
+
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 240 5.9% 90%;
+    --input: 240 5.9% 84%;
+    --ring: 160 84% 39.4%;
+
+    --radius: 0.5rem;
+  }
+
+  /* Dark token overrides: any `.dark` ancestor (typically <html>) flips
+     the studio palette. --radius is theme-agnostic and inherits from
+     :root above. */
+  .dark {
     --background: 240 10% 3.9%;
     --foreground: 0 0% 98%;
 
@@ -127,8 +164,6 @@
     --border: 240 3.7% 15.9%;
     --input: 240 3.7% 26.1%;
     --ring: 160 84% 39.4%;
-
-    --radius: 0.5rem;
   }
 }
 
