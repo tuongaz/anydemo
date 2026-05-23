@@ -19,7 +19,6 @@ A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **
       flow.json                  ← envelope + nodes/connectors
       style.json                 ← layout/visuals (managed by `flows:layout`)
       nodes/<id>/                ← per-node sidecar files (detail.md, view.html, scripts/)
-      sdk/emit.ts                ← optional: auto-generated event SDK helper
       .tmp/                      ← per-flow scratch ($SEEFLOW_TMP)
       state/                     ← per-flow runtime script state
 ```
