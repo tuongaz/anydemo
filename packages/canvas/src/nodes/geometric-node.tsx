@@ -488,7 +488,9 @@ function GeometricNodeImpl({
         visible={!!selected && !!data.onResize && !isEditing}
         cornerVariant="visible"
         minWidth={80}
-        minHeight={40}
+        // When the chrome skirt is active, lift the floor so the 32px skirt
+        // can't be squashed into the SVG. Otherwise the default 40px floor.
+        minHeight={showSkirt ? SKIRT_HEIGHT + 40 : 40}
         onResizeStart={onResizeStart}
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}

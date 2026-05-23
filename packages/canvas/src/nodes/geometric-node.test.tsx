@@ -362,3 +362,48 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     expect(props.buttonLabel.toLowerCase()).toContain('boom');
   });
 });
+
+// Edge-case from the design doc: when the skirt is active, the user must not
+// be able to resize the node so small that the 32px skirt crowds the SVG.
+// Bump ResizeControls.minHeight to SKIRT_HEIGHT + 40 only when the skirt
+// renders; default 40 otherwise.
+describe('capability-chrome skirt: resize min-height', () => {
+  const playAction = {
+    kind: 'script' as const,
+    interpreter: 'bun',
+    scriptPath: 'scripts/play.ts',
+  };
+
+  const findResizeControls = (tree: unknown) => findByComponentName(tree, 'ResizeControls');
+
+  it('database with no capabilities passes default minHeight 40 to ResizeControls', () => {
+    const tree = callGeometric('database', { name: 'db', onResize: () => {} });
+    const ctrls = findResizeControls(tree);
+    expect(ctrls).toHaveLength(1);
+    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(40);
+  });
+
+  it('database with playAction passes minHeight = SKIRT_HEIGHT + 40 to ResizeControls', () => {
+    const tree = callGeometric('database', {
+      name: 'db',
+      onResize: () => {},
+      onPlay: () => {},
+      playAction,
+    });
+    const ctrls = findResizeControls(tree);
+    expect(ctrls).toHaveLength(1);
+    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(SKIRT_HEIGHT + 40);
+  });
+
+  it('ellipse with playAction stays at default minHeight 40 (no skirt)', () => {
+    const tree = callGeometric('ellipse', {
+      name: 'e',
+      onResize: () => {},
+      onPlay: () => {},
+      playAction,
+    });
+    const ctrls = findResizeControls(tree);
+    expect(ctrls).toHaveLength(1);
+    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(40);
+  });
+});
