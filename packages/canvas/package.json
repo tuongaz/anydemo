@@ -10,6 +10,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./catalog": {
+      "import": "./dist/catalog.js",
+      "types": "./dist/catalog.d.ts"
+    },
     "./style.css": "./dist/style.css"
   },
   "scripts": {
@@ -43,7 +47,8 @@
     "cmdk": "^1.0.0",
     "html-to-image": "^1.11.13",
     "jspdf": "^4.2.1",
-    "tailwind-merge": "^2.5.4"
+    "tailwind-merge": "^2.5.4",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
     "@tailwindcss/cli": "^4.3.0",

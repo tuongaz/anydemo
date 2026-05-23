@@ -35,8 +35,8 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Catalog landed at packages/canvas/src/catalog/{component-catalog.ts,index.ts,component-catalog.test.ts}. zod added as a declared dep on @seeflow/canvas (was working via root hoisting only). tsup emits dist/catalog.{js,d.ts} (3.58 KB JS, 57.9 KB DTS) — verified `import { COMPONENT_NAMES } from '@seeflow/canvas/catalog'` resolves from apps/studio and prints 24."
     },
     {
       "id": "US-003",

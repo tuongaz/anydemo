@@ -6,6 +6,8 @@
 - After modifying `package.json`, run `bun install` then `bun run typecheck` from repo root. `bun run typecheck` uses `--filter '*'` to typecheck every workspace.
 - `bun run format` (biome write) then `bun run lint` (biome check) before commit, per CLAUDE.md.
 - The repo `bun test` output shows a `[registry] failed to load …` warning from `apps/studio/src/registry.test.ts` — this is an intentional malformed-JSON case, NOT a regression.
+- @seeflow/canvas builds via `tsup` with multi-entry config (`{ index, catalog }`). Adding a new public-API subpath = (1) add entry to `tsup.config.ts`, (2) add the matching `"./<sub>"` block to `package.json` `exports`, (3) run `cd packages/canvas && bun run build:js`. `dist/` is in `.gitignore` — GHA commits it on `main` for external npm consumers; local dev resolves via the workspace symlink.
+- `Record<K, V>` index access in canvas tests is treated as possibly-undefined under `noUncheckedIndexedAccess`. Pattern: pull the entry into a local, then `if (!entry) throw new Error('unreachable')` before chaining off it. Don't try `expect(entry).toBeDefined()` as a type guard — Bun's `expect` does not narrow.
 
 ---
 
@@ -20,4 +22,19 @@
   - `recharts` and `shiki` are top-level apps/web deps (the heavy chart + code-block primitives live in the canvas registry but the host app provides them as peer-like deps via the React tree).
   - `apps/studio` previously had no React/canvas deps because it's a pure Hono+Bun backend; adding `@seeflow/canvas` enables importing the catalog (e.g. `import { COMPONENT_NAMES } from '@seeflow/canvas/catalog'`) in US-002+.
   - Workspace symlinks land at `apps/<app>/node_modules/<pkg>` — not the root `node_modules/`. Verify with `ls apps/web/node_modules/@json-render/` rather than root.
+---
+
+## 2026-05-23 - US-002
+- Created `packages/canvas/src/catalog/component-catalog.ts` (Zod-only, React-free) with 24 entries (Card, Separator, Tabs, Accordion, Badge, Avatar, Progress, Skeleton, Label, Button, Input, Checkbox, Switch, Select, Textarea, Slider, Heading, Text, Icon, Chart, Table, Metric, CodeBlock, Markdown). Helper `refOr` builds a union of the concrete prop schema with `$state` / `$action` / `$cond` reference shapes.
+- Created barrel at `packages/canvas/src/catalog/index.ts` exporting `componentCatalog`, `COMPONENT_NAMES`, and `ComponentName`.
+- Created `packages/canvas/src/catalog/component-catalog.test.ts` — 3 tests: 24-entry shape, every entry has a `safeParse` schema, Button requires `label` and accepts `{ $action }` refs.
+- Wired the subpath export: added `catalog: 'src/catalog/index.ts'` to `tsup.config.ts` and a `"./catalog"` block to `package.json` exports. Added `zod: ^3.23.8` as a real dep (canvas was relying on root hoisting). `cd packages/canvas && bun run build:js` produces `dist/catalog.{js,d.ts}`.
+- Verified import: `cd apps/studio && bun -e "import('@seeflow/canvas/catalog').then(m => ...)"` prints 24.
+- Files changed: `packages/canvas/src/catalog/{component-catalog.ts,index.ts,component-catalog.test.ts}` (new), `packages/canvas/package.json`, `packages/canvas/tsup.config.ts`, `bun.lock`.
+- Quality checks: `bun run typecheck` ✓, `bun run format` (1 file rewrapped), `bun run lint` ✓, `bun test` ✓ (1708 pass / 1 skip / 0 fail).
+- **Learnings for future iterations:**
+  - `noUncheckedIndexedAccess` is on for the canvas package — `componentCatalog.components[name]` is `T | undefined`. Tests must narrow with an early `throw` (not `expect(...).toBeDefined()`) before chaining.
+  - The plan's "25 entries" wording is wrong — there are 24 unique component names. The Label/Heading overlap accounts for the off-by-one.
+  - `@seeflow/canvas` had no `zod` in its `dependencies` before this story (the runtime was being satisfied by root hoisting); adding it explicitly is required because the catalog imports zod and ships in `dist/`.
+  - Subpath exports work end-to-end via the workspace symlink: studio's `@seeflow/canvas/catalog` import resolves through `apps/studio/node_modules/@seeflow/canvas/dist/catalog.js`. No additional `bun install` needed after `build:js`.
 ---
