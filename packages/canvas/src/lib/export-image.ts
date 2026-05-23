@@ -13,24 +13,27 @@ export const viewportExportFilter = (node: Node): boolean => {
   return true;
 };
 
-/** Fallback when the canvas wrapper or its `--bg-canvas` token can't be resolved. */
-const CANVAS_BACKGROUND_FALLBACK = '#0a0a0c';
-
 /**
  * Walk up from a captured viewport element to the nearest `.seeflow-canvas-root`
- * and return the live `--bg-canvas` token. Keeps PNG / PDF exports in sync with
- * the design system instead of hardcoding a color in two places. Falls back to
- * the default dark when the ancestor or token isn't available so the export is
- * never transparent.
+ * and return the live `--bg-canvas` token via getComputedStyle. The runtime
+ * read keeps PNG / PDF exports in sync with the active theme — light theme
+ * exports use the light background, dark theme exports use the dark one.
+ *
+ * If the wrapper or token isn't resolvable, derive the fallback from the
+ * `.dark` class on `<html>` so the export still matches the active theme
+ * instead of being pinned to a hardcoded color.
  */
 export const resolveCanvasBackground = (element: Element): string => {
   let current: Element | null = element;
   while (current && !current.classList.contains('seeflow-canvas-root')) {
     current = current.parentElement;
   }
-  if (!current) return CANVAS_BACKGROUND_FALLBACK;
-  const token = getComputedStyle(current).getPropertyValue('--bg-canvas').trim();
-  return token.length > 0 ? token : CANVAS_BACKGROUND_FALLBACK;
+  if (current) {
+    const token = getComputedStyle(current).getPropertyValue('--bg-canvas').trim();
+    if (token.length > 0) return token;
+  }
+  const html = element.ownerDocument?.documentElement;
+  return html?.classList.contains('dark') ? '#0a0a0c' : '#fafafa';
 };
 
 export interface CapturedImage {
@@ -46,8 +49,8 @@ export interface CapturedImage {
  * dimensions so the page format matches the captured aspect ratio.
  *
  * `backgroundColor` is sourced from the canvas wrapper's `--bg-canvas` token so
- * exports match the dark in-app canvas instead of html-to-image's transparent
- * default (which renders white in most viewers).
+ * exports match the active theme's in-app canvas instead of html-to-image's
+ * transparent default (which renders white in most viewers).
  */
 export const captureViewportPng = async (element: HTMLElement): Promise<CapturedImage> => {
   const dataUrl = await toPng(element, {

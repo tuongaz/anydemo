@@ -64,7 +64,13 @@ describe('viewportExportFilter (US-009)', () => {
 });
 
 describe('resolveCanvasBackground', () => {
+  // Each case resets `<html>` classes so the theme-aware fallback is deterministic.
+  const resetHtmlTheme = () => {
+    doc.documentElement.classList.remove('dark');
+  };
+
   it('returns the --bg-canvas token from the nearest .seeflow-canvas-root', () => {
+    resetHtmlTheme();
     const root = makeEl('div', 'seeflow-canvas-root');
     root.setAttribute('style', '--bg-canvas: #123456');
     const viewport = makeEl('div', 'react-flow__viewport');
@@ -77,23 +83,38 @@ describe('resolveCanvasBackground', () => {
     }
   });
 
-  it('falls back to #0a0a0c when no .seeflow-canvas-root ancestor exists', () => {
+  it('falls back to the light default when no .seeflow-canvas-root ancestor exists and html lacks .dark', () => {
+    resetHtmlTheme();
+    const orphan = makeEl('div', 'react-flow__viewport');
+    doc.body.appendChild(orphan);
+    try {
+      expect(resolveCanvasBackground(orphan as unknown as Element)).toBe('#fafafa');
+    } finally {
+      doc.body.removeChild(orphan);
+    }
+  });
+
+  it('falls back to the dark default when no .seeflow-canvas-root ancestor exists and html has .dark', () => {
+    resetHtmlTheme();
+    doc.documentElement.classList.add('dark');
     const orphan = makeEl('div', 'react-flow__viewport');
     doc.body.appendChild(orphan);
     try {
       expect(resolveCanvasBackground(orphan as unknown as Element)).toBe('#0a0a0c');
     } finally {
       doc.body.removeChild(orphan);
+      resetHtmlTheme();
     }
   });
 
-  it('falls back to #0a0a0c when the ancestor exists but the token is empty', () => {
+  it('falls back to the theme-derived default when the ancestor exists but the token is empty', () => {
+    resetHtmlTheme();
     const root = makeEl('div', 'seeflow-canvas-root');
     const viewport = makeEl('div', 'react-flow__viewport');
     root.appendChild(viewport);
     doc.body.appendChild(root);
     try {
-      expect(resolveCanvasBackground(viewport as unknown as Element)).toBe('#0a0a0c');
+      expect(resolveCanvasBackground(viewport as unknown as Element)).toBe('#fafafa');
     } finally {
       doc.body.removeChild(root);
     }
