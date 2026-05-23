@@ -1,319 +1,180 @@
 {
   "project": "SeeFlow",
-  "branchName": "main",
-  "description": "Component node implementation — ship the 'component' flat node type: json-render-powered reactive UI on the canvas with set + script actions, backed by a catalog of ~24 shadcn-styled primitives. Spec lives in <project>/nodes/<id>/spec.json; flow.json carries only the type tag. Plan: docs/plans/2026-05-23-component-node-implementation.md",
+  "branchName": "ralph/light-theme-support",
+  "description": "Light/Dark Theme Support — split canvas + studio CSS tokens, add useTheme hook with Cog menu toggle (Light/Dark/System), FOUC-prevention script, iframe embed ?theme= support, and Playwright coverage. Default becomes light; existing dark behavior preserved via .dark class on <html>.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Add json-render + canvas workspace dependencies",
-      "description": "As a developer, I need the json-render runtime packages in apps/web and the @seeflow/canvas workspace dep wired into apps/studio so the catalog can be imported from both sides.",
+      "title": "Split canvas CSS tokens into light default + dark override",
+      "description": "As a canvas consumer, I want the package to ship a light-default palette with a .dark override so embedders can theme by adding .dark to any ancestor.",
       "acceptanceCriteria": [
-        "apps/web/package.json adds @json-render/core, @json-render/react, @json-render/shadcn, recharts, shiki",
-        "apps/studio/package.json adds \"@seeflow/canvas\": \"workspace:*\"",
-        "bun install resolves with no errors and node_modules/@json-render/core exists",
+        "In packages/canvas/src/styles/index.css:62-104, move current dark token values into `.dark .seeflow-canvas-root { ... }`",
+        "Add new light token defaults on `.seeflow-canvas-root` per PRD spec (zinc/slate neutrals, emerald primary unchanged, --muted-foreground at 4.6:1 WCAG AA)",
+        "Add light variants for non-token vars at lines 84-90: --bg-canvas (#fafafa), --emerald-glow (rgba(16,185,129,0.18)), --shadow-card (rgba(15,23,42,0.08)), --shadow-window (softened), --shadow-glow-ok (emerald 0.30), --shadow-glow-pending (amber 0.30), --ring-selected (outer halo alpha trimmed)",
+        "Promote the hardcoded rgba(255,255,255,0.55) at line 477 to a new `--glow-dot-color` token: light = rgba(0,0,0,0.18), dark = current value",
+        "Leave status colors (--amber, --amber-hi, --danger) and keyframe rgbas (lines 145, 148, 200, 203) unchanged",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
-      "notes": "Used ^0.19.0 for json-render packages (the PRD-suggested ^0.1.0 doesn't exist on npm — earliest published versions are 0.5.x for core/react and 0.0.1 then 0.7.x for shadcn). Workspace symlinks resolved cleanly under apps/web/node_modules/@json-render/ and apps/studio/node_modules/@seeflow/canvas."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Build component catalog (Zod-only, React-free) with subpath export",
-      "description": "As the system, I need a single-source-of-truth catalog of ~24 component definitions so studio validation and canvas registry stay aligned.",
+      "title": "Fix canvas image export to read computed background color",
+      "description": "As a canvas user, I want exported images to use the current theme's background instead of a hardcoded dark color.",
       "acceptanceCriteria": [
-        "Create packages/canvas/src/catalog/component-catalog.ts exporting componentCatalog + COMPONENT_NAMES with 24 entries (Card, Separator, Tabs, Accordion, Badge, Avatar, Progress, Skeleton, Label, Button, Input, Checkbox, Switch, Select, Textarea, Slider, Heading, Text, Icon, Chart, Table, Metric, CodeBlock, Markdown)",
-        "Every entry carries a Zod props schema supporting $state/$action/$cond refs via union helper",
-        "Button.props requires { label }; missing label fails parse",
-        "Create packages/canvas/src/catalog/index.ts barrel",
-        "packages/canvas/tsup.config.ts gains a second entry { index, catalog }",
-        "packages/canvas/package.json exports adds \"./catalog\" subpath pointing at dist/catalog.{js,d.ts}",
-        "cd packages/canvas && bun run build:js succeeds and dist/catalog.js + dist/catalog.d.ts exist",
-        "Catalog can be imported from apps/studio as `import { COMPONENT_NAMES } from '@seeflow/canvas/catalog'`",
-        "bun test packages/canvas/src/catalog/component-catalog.test.ts passes",
+        "In packages/canvas/src/lib/export-image.ts:17, replace the hardcoded CANVAS_BACKGROUND_FALLBACK (#0a0a0c) with a runtime read of `--bg-canvas` computed style",
+        "Exported PNGs in light theme use the light background, dark theme uses dark background",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 2,
-      "passes": true,
-      "notes": "Catalog landed at packages/canvas/src/catalog/{component-catalog.ts,index.ts,component-catalog.test.ts}. zod added as a declared dep on @seeflow/canvas (was working via root hoisting only). tsup emits dist/catalog.{js,d.ts} (3.58 KB JS, 57.9 KB DTS) — verified `import { COMPONENT_NAMES } from '@seeflow/canvas/catalog'` resolves from apps/studio and prints 24."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Extend studio schema with 'component' node type and ComponentSpecSchema",
-      "description": "As the system, I need apps/studio/src/schema.ts to recognise the new 'component' node type with its spec/action shapes so flow.json can carry component nodes.",
+      "title": "Split apps/web CSS tokens into light default + dark override",
+      "description": "As a studio user, I want the web app to have matching light/dark token blocks so the toggle can flip the whole UI.",
       "acceptanceCriteria": [
-        "Add ComponentSpecElementSchema, SetActionSchema (path must start with '/'), ComponentActionSchema (discriminated union of set + ScriptActionSchema), ComponentSpecSchema, and exported types ComponentSpec/ComponentAction/ComponentSpecElement",
-        "Export ScriptActionSchema (currently file-private) so ComponentActionSchema can reuse it",
-        "Add ResolvedComponentNodeData (with `spec: ComponentSpecSchema` + autoSize) and FlowComponentNodeData (strict, no `spec` field) plus FlowComponentNodeSchema",
-        "NodeTypeSchema includes 'component'; NodeSchema and FlowNodeSchema discriminated unions both accept the new variant",
-        "Round-trip test: ResolvedFlowSchema parses a valid component node with set + script actions (passes)",
-        "Validation test: ResolvedFlowSchema rejects a set action whose path lacks the leading '/' (passes)",
-        "Typecheck passes",
-        "Tests pass"
+        "In apps/web/src/index.css:93-132, keep light tokens at `:root` and move current values verbatim into `.dark { ... }`",
+        "Light defaults mirror the PRD palette (matches canvas package light tokens)",
+        "Typecheck passes"
       ],
       "priority": 3,
-      "passes": true,
-      "notes": "Schema exports ScriptActionSchema + new ComponentSpecElementSchema/SetActionSchema/ComponentActionSchema/ComponentSpecSchema (with ComponentSpec/ComponentAction/ComponentSpecElement types). ResolvedComponentNodeData and FlowComponentNodeData/FlowComponentNodeSchema landed and both discriminated unions accept 'component'. Two new tests in schema.test.ts cover round-trip (set + script actions) and the leading-'/' refine; the existing 12-type matrix tests stay green because they iterate a hardcoded ALL_TYPES list. Had to add 'component' entries to operations.ts SEMANTIC_KEYS_BY_TYPE (universal capability set — sidecar 'spec' is intentionally absent) and layout.ts DEFAULT_DIMENSIONS (320×240, matching the planned COMPONENT_DEFAULT_SIZE) — both are Record<NodeType,...> maps the compiler enforces."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Catalog superRefine on ResolvedFlowSchema",
-      "description": "As an author, I need invalid component types or invalid props to be rejected at validation time with an actionable error path pointing into the spec.",
+      "title": "Create useTheme hook with localStorage + matchMedia",
+      "description": "As a studio user, I want the app to remember my theme choice and respond to OS-level changes.",
       "acceptanceCriteria": [
-        "Import componentCatalog from '@seeflow/canvas/catalog' in apps/studio/src/schema.ts",
-        "ResolvedFlowSchema.superRefine iterates component nodes; for every spec.elements entry it checks (a) entry.type is in catalog and (b) entry.props satisfies the catalog props schema",
-        "Unknown component type produces an issue with path ['nodes', idx, 'data', 'spec', 'elements', elId, 'type'] mentioning the bad type name and listing valid names",
-        "Invalid props produce issues re-pathed into ['nodes', idx, 'data', 'spec', 'elements', elId, 'props', ...issue.path]",
-        "Test: { type: 'NotARealComponent' } is rejected and error mentions 'NotARealComponent'",
-        "Test: Button with empty props is rejected (label required)",
+        "New file apps/web/src/hooks/use-theme.ts",
+        "On mount reads localStorage['seeflow:theme'] (default 'system')",
+        "Resolves 'system' to 'light' | 'dark' via window.matchMedia('(prefers-color-scheme: dark)')",
+        "Subscribes to matchMedia changes so OS-level theme flips propagate while app is open",
+        "Imperatively toggles document.documentElement.classList between 'light' and 'dark'",
+        "Writes changes back to localStorage",
+        "Returns { theme, setTheme, resolvedTheme }",
+        "New apps/web/src/hooks/use-theme.test.ts covers: localStorage roundtrip, 'system' → matchMedia resolution, OS-preference change subscription, <html> class application",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 4,
-      "passes": true,
-      "notes": "ResolvedFlowSchema.superRefine now iterates type==='component' nodes and validates each spec.elements entry: unknown component name => issue at ['nodes', idx, 'data', 'spec', 'elements', elId, 'type'] mentioning the bad name and listing valid catalog entries; props.safeParse failures are re-pathed under [...'props', ...issue.path]. Catalog imported from '@seeflow/canvas/catalog' (subpath landed in US-002). Two new tests in schema.test.ts (T-001 unknown-type + T-002 Button-empty-props) plus all 113 prior schema tests stay green. Full suite: 1713 pass / 1 skip / 0 fail."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Implement inlineComponentSpecs spec-sidecar resolver",
-      "description": "As the studio, I need to inline nodes/<id>/spec.json into data.spec for component nodes when reading a flow, returning a new flow plus error/ref lists.",
+      "title": "Add FOUC-prevention inline script to apps/web/index.html",
+      "description": "As a studio user, I want zero flash of wrong theme on first paint.",
       "acceptanceCriteria": [
-        "Create apps/studio/src/component-spec-resolver.ts exporting inlineComponentSpecs(flow, projectRoot) returning { flow, errors, refs }",
-        "For every node with type === 'component', reads <projectRoot>/nodes/<id>/spec.json, JSON.parses, sets data.spec on a new node object (no input mutation)",
-        "Missing spec.json yields a SpecInlineError with path 'nodes/<id>/data/spec'",
-        "Malformed JSON yields a SpecInlineError quoting the parse failure",
-        "refs lists every spec.json relative path read (for watcher live-reload)",
-        "Non-component nodes pass through untouched",
-        "Test file apps/studio/src/component-spec-resolver.test.ts covers attach / missing-file / non-component pass-through",
-        "Typecheck passes",
-        "Tests pass"
+        "Inline `<script>` added to apps/web/index.html `<head>` before React boots, per PRD spec (IIFE that reads localStorage['seeflow:theme'], resolves 'system' via matchMedia, adds 'light' or 'dark' class to document.documentElement)",
+        "No flash on hard reload — initial paint matches stored preference",
+        "Typecheck passes"
       ],
       "priority": 5,
-      "passes": true,
-      "notes": "Created apps/studio/src/component-spec-resolver.ts exporting inlineComponentSpecs(flow, projectRoot) -> { flow, errors, refs }. Maps over flow.nodes; for each node.type === 'component' reads <projectRoot>/nodes/<id>/spec.json, JSON.parses, and returns a new node with data.spec attached (no input mutation — verified by a dedicated test). Missing or malformed spec.json pushes a SpecInlineError with path 'nodes/<id>/data/spec'. refs lists every successfully-read relative path for watcher live-reload. Test file covers attach / missing-file / malformed-JSON / non-component pass-through / input-non-mutation (5 tests, all pass). Full suite: 1718 pass / 1 skip / 0 fail."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Wire inlineComponentSpecs into watcher.readMergedFlow",
-      "description": "As the studio, readMergedFlow must inline component specs after the FlowSchema parse and then re-validate against ResolvedFlowSchema so the catalog superRefine runs.",
+      "title": "Add Cog menu theme toggle to web app header",
+      "description": "As a studio user, I want a visible theme toggle so I can switch between Light, Dark, and System.",
       "acceptanceCriteria": [
-        "apps/studio/src/watcher.ts calls inlineComponentSpecs(merged, projectRoot) after mergeFlowAndStyle",
-        "specErrors are surfaced as a flow read error joined with '; '; fileRefs include returned specRefs",
-        "After inlining, the result is re-validated with ResolvedFlowSchema; failure returns 'ResolvedFlow validation failed: ...' with joined issue paths",
-        "On success, returns { flow: resolvedParse.data, valid: true, error: null, fileRefs, staticRefs }",
-        "Test (T-004): a flow with one component node + a valid spec.json parses with valid === true and data.spec populated",
-        "Test (T-004): same flow without spec.json returns valid === false and error matches /nodes\\/c1\\/data\\/spec/",
-        "All previously passing watcher.test.ts cases continue to pass (resolver is a no-op for non-component flows)",
+        "In apps/web/src/components/header.tsx, add a Cog button (lucide-react Settings icon) immediately right of <ProjectSwitcher>",
+        "Button opens a DropdownMenu re-exported from @seeflow/canvas",
+        "Menu contains one group titled 'Theme' with three radio items: Light, Dark, System",
+        "Selecting an item calls useTheme().setTheme(...) and the checkmark updates",
+        "Layout is list-based so future settings groups can append in one line",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 6,
-      "passes": true,
-      "notes": "readMergedFlow now inlines component spec sidecars after mergeFlowAndStyle and re-validates the merged shape through ResolvedFlowSchema (so US-004's catalog superRefine activates on the inlined spec). Spec-inline errors surface as 'nodes/<id>/data/spec: <message>' joined with '; '; specRefs append to fileRefs so the watcher can wire live-reload in a later story. Two new tests in watcher.test.ts (T-004 attach + T-004 missing-spec error /nodes\\/c1\\/data\\/spec/). Full suite: 1720 pass / 1 skip / 0 fail."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-007",
-      "title": "PATCH spec externalizes to nodes/<id>/spec.json sidecar",
-      "description": "As an editor, when I PATCH a component node's spec, the studio must write it to the sidecar file and strip it from flow.json on disk.",
+      "title": "Pin existing Playwright e2e baselines to dark theme",
+      "description": "As a CI maintainer, I want existing chromium-linux baselines to keep passing after the default flips to light.",
       "acceptanceCriteria": [
-        "apps/studio/src/operations.ts NodePatchBodySchema adds optional `spec: ComponentSpecSchema`",
-        "NODE_DATA_PATCH_KEYS includes 'spec'",
-        "SEMANTIC_KEYS_BY_TYPE.component is added (omits 'spec' — sidecar-only) with the universal capability set",
-        "patchNodeImpl, when node.type === 'component' and spec update present, writes <repoPath>/nodes/<nodeId>/spec.json (pretty-printed JSON + trailing newline) using writeNodeFile and surfaces failures as { kind: 'writeFailed', message }",
-        "apps/studio/src/merge.ts splitFlow strips data.spec for component nodes before writing flow.json",
-        "Test (T-005): PATCH spec on a component node writes sidecar (text update visible), flow.json contains no spec field, readMergedFlow round-trips the new spec",
-        "Test (T-006): deleteNodeImpl on a component node removes nodes/<id>/spec.json via existing removeNodeDir cascade",
-        "Existing operations.test.ts / merge.test.ts / watcher.test.ts continue to pass",
+        "Test setup in apps/studio/e2e/ writes localStorage['seeflow:theme'] = 'dark' before each existing test navigates",
+        "All existing *-chromium-linux.png baselines still pass without regeneration",
+        "Approach is reusable (helper or fixture) so new dark tests don't repeat the boilerplate",
         "Typecheck passes",
-        "Tests pass"
+        "bun run test:it:e2e passes (Docker on non-Linux)"
       ],
       "priority": 7,
-      "passes": true,
-      "notes": "NodePatchBodySchema gains optional `spec: ComponentSpecSchema` and `'spec'` joins NODE_DATA_PATCH_KEYS so mergeNodeUpdates puts the new spec on data for the post-mutation ResolvedFlowSchema reparse. patchNodeImpl, when node.type === 'component' && updates.spec !== undefined, writes `<repoPath>/nodes/<nodeId>/spec.json` via writeNodeFile (pretty-printed JSON + trailing newline) and surfaces failures as `{ kind: 'writeFailed', message }`. splitFlow strips `data.spec` for type==='component' nodes before writing flow.json so the sidecar stays the single source of truth on disk; readMergedFlow's existing inlineComponentSpecs re-attaches it on read. SEMANTIC_KEYS_BY_TYPE.component was already the universal GEOMETRIC_SEMANTIC_KEYS (no spec) since US-003 — no change there. Two new tests in operations.test.ts (T-005 sidecar write + flow.json strip + round-trip; T-006 deleteNodeImpl removes nodes/<id>/spec.json via removeNodeDir cascade). Full suite: 1722 pass / 1 skip / 0 fail."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Implement component-action-runner (script-kind spawn over HTTP)",
-      "description": "As the studio, I need a runner that resolves a node-relative scriptPath under nodes/<id>/, spawns the interpreter, pipes the payload to stdin, and parses JSON stdout.",
+      "title": "Add e2e spec for theme cycling and light baseline",
+      "description": "As a CI maintainer, I want at least one test covering the new Cog menu and capturing a light baseline.",
       "acceptanceCriteria": [
-        "Create apps/studio/src/component-action-runner.ts exporting runComponentAction(opts) and ComponentActionResult",
-        "Reuses realpath-based resolveScript rooted at <cwd>/nodes/<nodeId>/; refuses paths that escape the node root with statusHint 400",
-        "set-kind actions return ok:false with statusHint 400 and error 'Only script actions are dispatched over HTTP'",
-        "Spawns via injectable ProcessSpawner (defaultProcessSpawner) using [interpreter, ...args, resolvedAbsPath]; passes SEEFLOW_DEMO_ID / SEEFLOW_NODE_ID / SEEFLOW_ACTION_NAME / SEEFLOW_RUN_ID env vars",
-        "Pipes JSON.stringify(payload) to stdin then closes it",
-        "Honours timeoutMs (default 5000ms): SIGTERM then SIGKILL after 2s grace; statusHint 504",
-        "Non-zero exit returns ok:false with stderr trimmed (or `exit <code>` fallback) and statusHint 500",
-        "Success parses stdout as JSON (falls back to raw string) and returns ok:true + body + statusHint 200",
-        "Test file apps/studio/src/component-action-runner.test.ts covers script success path returning parsed JSON and 400 on set-kind input",
+        "New e2e spec in apps/studio/e2e/ opens the Cog menu, cycles through Light / Dark / System",
+        "Asserts on document.documentElement.classList after each selection",
+        "Captures one new light-mode baseline of a representative canvas (one new *-chromium-linux.png)",
+        "Spec uses the same Docker-on-non-Linux workflow as existing tests",
         "Typecheck passes",
-        "Tests pass"
+        "bun run test:it:e2e passes"
       ],
       "priority": 8,
-      "passes": true,
-      "notes": "Created apps/studio/src/component-action-runner.ts exporting runComponentAction(opts) -> ComponentActionResult and reusing proxy.ts's realpath-rooted resolveScript pattern (rooted at <cwd>/nodes/<nodeId>/). set-kind input short-circuits with {ok:false, error:'Only script actions are dispatched over HTTP', statusHint:400}; path-escape returns statusHint 400 with 'scriptPath escapes node root'. Spawns via ProcessSpawner with [interpreter, ...args, resolvedAbsPath] passing SEEFLOW_DEMO_ID/SEEFLOW_NODE_ID/SEEFLOW_ACTION_NAME/SEEFLOW_RUN_ID env. JSON.stringify(payload) goes to stdin then close. Default 5000ms timeout with SIGTERM -> 2s grace -> SIGKILL, statusHint 504. Non-zero exit returns stderr.trim() (or `exit <code>`) with statusHint 500. Success JSON.parses stdout (falls back to raw string) with statusHint 200. Test file apps/studio/src/component-action-runner.test.ts: 5 tests covering script success (parsed JSON + env vars + stdin payload + closed stream), non-JSON fallback, set-kind 400, path-escape 400, and non-zero exit trimmed stderr. Full suite: 1727 pass / 1 skip / 0 fail."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-009",
-      "title": "POST /api/flows/:id/nodes/:nodeId/actions/:name endpoint",
-      "description": "As a canvas runtime, I need an HTTP endpoint to dispatch script-kind actions for a component node and receive the JSON body.",
+      "title": "Add ?theme= query param to embed dialog URL builder",
+      "description": "As a canvas embedder using the iframe viewer, I want the embed URL to carry the theme so iframes match my host page.",
       "acceptanceCriteria": [
-        "apps/studio/src/api.ts registers POST /api/flows/:id/nodes/:nodeId/actions/:name",
-        "404 on unknown demo id; 500 when events bus disabled; 404 on missing flow file",
-        "400 with descriptive error when the target node is not type 'component'",
-        "404 when the action name is not present in spec.actions",
-        "400 when the resolved action is set-kind (delegates the rejection to runComponentAction.statusHint)",
-        "Reads body as JSON (defaults to {} on parse failure) and forwards as payload",
-        "Calls runComponentAction with events, flowId, nodeId, cwd=entry.repoPath, actionName, action, payload, spawner",
-        "On runner ok:true returns c.json(result.body); on ok:false returns c.json({ error }, statusHint)",
-        "Test (T-007) in apps/studio/src/api.test.ts seeds a component node + spec.json + actions/<name>.ts then asserts: 200+body on success, 404 on unknown action, 400 on non-component node, 400 on set-kind action",
+        "In packages/canvas/src/components/embed-dialog.tsx, add a toggle with three options: 'Match my theme', 'Light', 'Dark'",
+        "URL builder appends `?theme=<value>` based on selection; 'Match my theme' uses the calling canvas's current resolved theme",
+        "Generated URL is shown in the dialog and copied correctly",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 9,
-      "passes": true,
-      "notes": "Wired POST /api/flows/:id/nodes/:nodeId/actions/:name in apps/studio/src/api.ts (below the /play route). Imports runComponentAction + ComponentAction. Handler: registry lookup (404 unknown demo), events bus guard (500 events not enabled), resolveFilePath + existsSync (404 missing flow file), readMergedFlow (400 on read failure), node lookup (404 unknown nodeId), type==='component' guard (400 'not a component node'), spec.actions[name] lookup (404 'Unknown action'), JSON body parse with `.catch(() => ({}))` default, runComponentAction call with processSpawner injected, on ok:true returns c.json(result.body), on ok:false returns c.json({error}, statusHint) cast to the 400|404|500|504 literal union. 6 new tests in apps/studio/src/api.test.ts under 'POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)': success path (200 + parsed JSON body + spawn cmd shape + env vars + stdin payload), 404 unknown action, 400 non-component node, 400 set-kind action, 404 unknown flow id, 404 unknown nodeId. Full suite: 1733 pass / 1 skip / 0 fail (+6 over US-008's 1727 baseline)."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Add ComponentNodeData + 'component' to canvas types",
-      "description": "As the canvas, I need typed shapes for component nodes (spec, actions, runtime data) so the wrapper can be strongly typed.",
+      "title": "Add ?theme= reader and FOUC script to viewer page",
+      "description": "As an iframe consumer, I want the viewer to honor ?theme= without flashing the wrong theme.",
       "acceptanceCriteria": [
-        "packages/canvas/src/types.ts exports ComponentSpecElement, ComponentAction (set | script), ComponentSpec, and ComponentNodeData (extends NodeSemanticBase + NodeVisual + NodeCapabilities, has `spec` and optional autoSize)",
-        "FlowNode union adds (NodeBase & { type: 'component'; data: ComponentNodeData })",
-        "NodeType union adds 'component' (alongside 'image', 'html', 'icon')",
-        "cd packages/canvas && bun run typecheck passes — any exhaustive-switch tests gain a 'component' arm",
+        "Viewer entry HTML adds an inline FOUC-prevention script that reads URLSearchParams 'theme' and applies 'light' or 'dark' to document.documentElement before the viewer mounts",
+        "Missing/unknown ?theme= defaults to 'light' (matches new package default)",
+        "Existing embed URLs without the param render light without errors (backwards compatible)",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": "Added ComponentSpecElement / SetComponentAction / ComponentAction (set | ScriptAction) / ComponentSpec / ComponentNodeData (extends NodeSemanticBase + NodeVisual + NodeCapabilities, has `spec` + optional `autoSize`) to packages/canvas/src/types.ts. NodeType union grew 'component' (now 13 flat tags); FlowNode union grew `(NodeBase & { type: 'component'; data: ComponentNodeData })` as the 5th variant. Public barrel exports ComponentAction, ComponentNodeData, ComponentSpec, ComponentSpecElement, SetComponentAction (alphabetical). NodeKind = NodeType in adapter/types.ts cascades automatically, so no adapter changes needed. New types.test.ts (6 tests) verifies NodeType-includes-component, ComponentSpecElement shape, ComponentAction kind discrimination, ComponentSpec round-trip, FlowNode union extracts the variant, and an exhaustive-switch test with `never`-typed default arm that pins compile-time exhaustiveness for every future NodeType addition. Full suite: 1739 pass / 1 skip / 0 fail (+6 over US-009's 1733)."
+      "passes": false,
+      "notes": ""
     },
     {
       "id": "US-011",
-      "title": "ComponentRuntime — state store, action dispatch, prop resolution",
-      "description": "As the canvas, I need a runtime component that drives a json-render tree from spec, resolves $state/$action/$cond refs in props, and dispatches set + script actions.",
+      "title": "Visually verify the new white theme looks perfect",
+      "description": "As the design owner, I want to confirm the light theme is production-quality before shipping.",
       "acceptanceCriteria": [
-        "Create packages/canvas/src/nodes/component-runtime.tsx exporting ComponentRuntime({ spec, nodeId, apiBaseUrl='/api', flowId })",
-        "Internal state seeded from spec.state (keyed by JSON Pointer paths) via useReducer with set + merge actions",
-        "resolveValue replaces { $state }, { $action }, { $cond/$then/$else } in props at render time; { $action } becomes a callable that dispatches by name",
-        "dispatch('name', payload): for kind 'set', resolves { $param } refs against payload + { $state } refs against current state and applies set; for kind 'script', POSTs to `${apiBaseUrl}/flows/${flowId}/nodes/${nodeId}/actions/${name}` with JSON payload; ok-response object merges into state via { kind: 'merge' }; failures stash under /__errors/<name>",
-        "Renders the catalog-registered React component for spec.root and recursively for children",
-        "Test file packages/canvas/src/nodes/component-runtime.test.tsx (matching the local html-node test harness) verifies initial render reflects state and a set dispatch mutates the resolved props",
+        "Start `bun run dev` and navigate to the studio in a real browser using the dev-browser skill",
+        "Open the Cog menu, switch to Light",
+        "Take a screenshot of the canvas page in light mode and save it to docs/plans/ (or attach to ralph progress.txt) for the reviewer",
+        "Visually inspect: no leftover dark backgrounds, no low-contrast text, no leftover hardcoded dark colors in shadows/glows/dots, no flash on reload, embed dialog matches canvas theme",
+        "Cycle Light → Dark → System and confirm transitions are clean in both directions",
+        "Take one additional screenshot of a flow with the component-node (the most visually rich node) in light mode",
+        "ONLY mark this story passing if the white theme looks visually perfect — if any element looks off, file a note in progress.txt describing what to fix and leave passes:false",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser using dev-browser skill"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": "Created packages/canvas/src/nodes/component-runtime.tsx exporting ComponentRuntime({ spec, nodeId, apiBaseUrl='/api', flowId }). Internal state via useReducer with set + merge actions; resolveValue handles $state (looks up state[path]), $action (returns a callable that dispatches by name), and $cond/$then/$else (recursively resolves both arms then returns the matching one). dispatch async function: set-kind resolves $param refs against payload + $state refs against current state then dispatchState({kind:'set'}); script-kind POSTs to ${apiBaseUrl}/flows/${flowId}/nodes/${nodeId}/actions/${name} with JSON payload, on res.ok parses body and dispatchState({kind:'merge'}), on !res.ok stores text under /__errors/<name>, on catch stores message under /__errors/<name>. renderElement recurses through spec.elements via spec.root, mounts componentRegistry.components[el.type] with resolved props + recursively-rendered children. Also created packages/canvas/src/registry/component-registry.tsx as a minimal identity-passthrough stub (each catalog name → a div with data-component=name) so the runtime can mount and tests can assert on resolved props; US-012 will replace this file with the real shadcn / SeeFlow / lazy impls. Test file packages/canvas/src/nodes/component-runtime.test.tsx: hook-shim with PERSISTENT slot-based useReducer + useState (the html-node shim's no-op setter wouldn't survive dispatch → re-render; this shim uses module-level slots cleared per test). 6 tests: (1) initial render reflects state ($state ref), (2) $action ref resolves to a Function, (3) set dispatch mutates state and re-rendered props pick up the new value (count: 0 → onClick({next:7}) → count: 7), (4) unknown spec.root returns null, (5) recursive children render with their own resolved props ($state inside a child resolves against the shared state), (6) $cond/$then/$else picks the right arm against state. Full suite: 1745 pass / 1 skip / 0 fail (+6 over US-010's 1739)."
-    },
-    {
-      "id": "US-012",
-      "title": "componentRegistry maps catalog -> React impls (lazy heavy)",
-      "description": "As the canvas, I need a registry that pairs each catalog name with its React component implementation, with heavy components (Chart/Markdown/CodeBlock) lazy-loaded.",
-      "acceptanceCriteria": [
-        "Create packages/canvas/src/registry/component-registry.tsx exporting componentRegistry.components",
-        "Eager-imports shadcn-backed primitives from @json-render/shadcn (Card, Separator, Tabs, Accordion, Badge, Avatar, Progress, Skeleton, Label, Button, Input, Checkbox, Switch, Select, Textarea, Slider)",
-        "Includes SeeFlow extras as small impl files under packages/canvas/src/registry/impls/: heading.tsx (h1-h4), text.tsx (<p> + muted), icon.tsx (reuses existing Icon), table.tsx (columns + rows), metric.tsx (label + big number) — all using sf:-prefixed Tailwind classes per packages/canvas/CLAUDE.md",
-        "Heavy components are lazy: chart.tsx (recharts bar/line/area/pie by kind), markdown.tsx (ReactMarkdown + remarkGfm), code-block.tsx (shiki)",
-        "Load-time assertion throws if any catalog name lacks an impl",
-        "Smoke test packages/canvas/src/registry/component-registry.test.ts asserts every COMPONENT_NAMES entry has an impl",
-        "Typecheck passes",
-        "Tests pass"
-      ],
-      "priority": 12,
-      "passes": true,
-      "notes": "Replaced US-011's identity-passthrough stub at packages/canvas/src/registry/component-registry.tsx with real impls for all 24 catalog names. Eager primitives are shadcn-styled (using canvas's existing src/ui/{button,slider}.tsx where they fit; plain HTML + sf:* Tailwind for the rest because @json-render/shadcn requires React 19 + zod 4 while canvas is React 18 + zod 3 — using it would force a workspace-wide bump). SeeFlow extras land as separate impl files under packages/canvas/src/registry/impls/: heading.tsx (h1-h4), text.tsx (<p> + muted), icon.tsx (reuses ui/icon.tsx), table.tsx, metric.tsx. Heavy components (Chart via recharts, Markdown via react-markdown + remark-gfm, CodeBlock via shiki) use React.lazy with default exports — each wrapped in <Suspense fallback={null}> at the registry layer so the existing runtime needs no Suspense boundary. Added recharts + shiki to canvas package.json: peerDependencies (with peerDependenciesMeta.optional), devDependencies (for typecheck), and tsup external array (so the chunks stay externalized). Module-level assertion throws if any COMPONENT_NAMES entry lacks an impl. Smoke test packages/canvas/src/registry/component-registry.test.ts (3 tests): components map exists, every catalog name has an impl with type function|object, no stray names beyond catalog. Full suite: 1748 pass / 1 skip / 0 fail (+3 over US-011's 1745). Canvas build (tsup) still produces dist/{index,catalog}.{js,d.ts} cleanly."
-    },
-    {
-      "id": "US-013",
-      "title": "ComponentNode canvas wrapper + seeflow-canvas registration",
-      "description": "As an author, I need React Flow to render component nodes with chrome (handles + resize) wrapping the ComponentRuntime body.",
-      "acceptanceCriteria": [
-        "Create packages/canvas/src/nodes/component-node.tsx exporting ComponentNode, ComponentNodeRuntimeData (extends ComponentNodeData with onResize/onResizeEnd/setResizing/flowId/apiBaseUrl), ComponentNodeType, and COMPONENT_DEFAULT_SIZE = { width: 320, height: 240 }",
-        "Wrapper renders 4 Handles (top/left target, right/bottom source) with selected-only opacity and ResizeControls (minWidth 80, minHeight 40)",
-        "Chrome respects backgroundColor / borderColor / borderSize / borderStyle / cornerRadius (via colorTokenStyle helper)",
-        "Body wraps <ComponentRuntime spec={data.spec} nodeId={id} flowId={data.flowId} apiBaseUrl={data.apiBaseUrl} /> in a scrollable container",
-        "packages/canvas/src/nodes/index.ts re-exports COMPONENT_DEFAULT_SIZE, ComponentNode, ComponentNodeRuntimeData, ComponentNodeType",
-        "packages/canvas/src/index.ts re-exports the same in its sorted public-API block",
-        "packages/canvas/src/components/seeflow-canvas.tsx nodeTypes map adds `component: ComponentNode`",
-        "Test packages/canvas/src/nodes/component-node.test.tsx (mirrors html-node.test.tsx harness) renders the node and verifies data-node-type=\"component\"",
-        "Typecheck passes",
-        "Tests pass"
-      ],
-      "priority": 13,
-      "passes": true,
-      "notes": "Created packages/canvas/src/nodes/component-node.tsx exporting ComponentNode (memoized), ComponentNodeRuntimeData (extends ComponentNodeData with onResize/onResizeEnd/setResizing/flowId/apiBaseUrl), ComponentNodeType (Node<…,'component'>), and COMPONENT_DEFAULT_SIZE = { width: 320, height: 240 }. Wrapper mirrors HtmlNode's outer/inner split: outer div carries the resize gesture + 4 Handles (top/left target, right/bottom source) with selected-only opacity via HANDLE_CLASS; inner chrome wrapper holds backgroundColor/borderColor/borderSize/borderStyle/cornerRadius/fontSize/textColor (via colorTokenStyle) and `sf:overflow-hidden` so radius clips body content without clipping the connector handles and resize corners that paint outside the bounding box on selection. Body wraps <ComponentRuntime spec={data.spec} nodeId={id} flowId={data.flowId} apiBaseUrl={data.apiBaseUrl} /> in a `sf:overflow-auto` div so long content scrolls inside the user-sized box. ResizeControls (minWidth 80, minHeight 40) renders with cornerVariant='visible' when selected + onResize is wired (host-controlled — view/mini won't pass onResize so the handles stay invisible). Default size kicks in when userSized && data.width/height are undefined: outer style falls back to COMPONENT_DEFAULT_SIZE. autoSize defaults to false (component nodes are explicitly sized by default — opt-in to author-controlled measurement later). Caption label below the box renders data.name with optional data.icon (Icon at size=12), same pattern as HtmlNode. packages/canvas/src/nodes/index.ts re-exports COMPONENT_DEFAULT_SIZE, ComponentNode, ComponentNodeRuntimeData, ComponentNodeType; the existing `export * from './nodes/index.ts'` in packages/canvas/src/index.ts surfaces them to the public barrel. packages/canvas/src/components/seeflow-canvas.tsx imports ComponentNode and adds `component: ComponentNode` to the nodeTypes map alongside html: HtmlNode (with a comment block referencing the spec.json sidecar pattern). 11 new tests in component-node.test.tsx mirror html-node.test.tsx's hook-shim harness verbatim: container renders with data-node-type='component', ComponentRuntime receives spec/nodeId/flowId/apiBaseUrl from data, 4 handles render whether selected or not, chrome style omits unset tokens and applies set tokens via COLOR_TOKENS, COMPONENT_DEFAULT_SIZE fallback when width/height absent, override when set, label renders with optional Icon. Full suite: 1759 pass / 1 skip / 0 fail (+11 over US-012's 1748). Canvas tsup build emits dist/{index,catalog}.{js,d.ts} cleanly with the new component-node chunk."
-    },
-    {
-      "id": "US-014",
-      "title": "Inject flowId + apiBaseUrl into component node data in apps/web",
-      "description": "As the web host, I need to thread projectId -> data.flowId for every component node so its script-kind actions know where to POST.",
-      "acceptanceCriteria": [
-        "Locate the sourceNodes builder in apps/web/src/ that injects per-node fields like ImageNode's _uploading (grep 'projectId\\s*[:=]' apps/web/src/)",
-        "For each node with type === 'component', set data.flowId = projectId and data.apiBaseUrl to the configured base (default '/api')",
-        "bun run dev boots; manual smoke: a hand-written nodes/<id>/spec.json with a Button + set action renders and the click mutates resolved state",
-        "Existing apps/web tests continue to pass",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 14,
-      "passes": true,
-      "notes": "The sourceNodes builder is in packages/canvas/src/components/seeflow-canvas.tsx (NOT apps/web/src/ as the AC grep hint suggested — apps/web threads `projectId={flowId ?? undefined}` into SeeflowCanvas which then owns the per-node data assembly, mirroring the existing projectId/fileBaseUrl/onRetryUpload injection pattern). Added a new `apiBaseUrl?: string` prop on SeeflowCanvasBaseProps (default '/api', JSDoc'd alongside fileBaseUrl), destructured at the impl head with a default param, and gated injection on `merged.type === 'component'` inside the sourceNodes useMemo so non-component nodes don't carry stray fields they'd ignore: `flowId: merged.type === 'component' ? projectId : undefined, apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined`. apiBaseUrl added to the useMemo deps array between fileBaseUrl and nodes. 4 new tests in a new `describe('US-014: …')` block in seeflow-canvas.test.tsx (placed between US-008 and US-017 to keep the existing block ordering): (1) component nodes get `data.flowId === projectId`, (2) `data.apiBaseUrl` defaults to '/api', (3) apiBaseUrl prop override threads through, (4) non-component nodes (e.g. shape) have BOTH fields === undefined (gating proof). ComponentSpec imported from '../types.ts' alongside Connector + FlowNode. Manual browser smoke deferred to US-017's component-showcase example + US-015's Playwright e2e — both depend on this wiring, so a regression here would surface there. Full suite: 1763 pass / 1 skip / 0 fail (+4 over US-013's 1759 baseline)."
-    },
-    {
-      "id": "US-015",
-      "title": "Playwright e2e: component node set + script actions",
-      "description": "As a maintainer, I need end-to-end coverage proving that clicking a Button dispatches both action kinds with chromium-linux baselines.",
-      "acceptanceCriteria": [
-        "Create apps/studio/e2e/fixtures/component-demo/flow.json with one node id 'c1', type 'component'",
-        "Create apps/studio/e2e/fixtures/component-demo/nodes/c1/spec.json with a Card root containing a Metric bound to /count + two Buttons (Reset -> set action, Fetch -> script action)",
-        "Create apps/studio/e2e/fixtures/component-demo/nodes/c1/actions/inc.ts that reads JSON stdin and writes JSON stdout with { '/count': payload.from + 1 }",
-        "Create apps/studio/e2e/component-node.spec.ts with two tests: (a) clicking Reset mutates state via set action, (b) clicking Fetch POSTs to the action endpoint and the response merges into state",
-        "Run bun run test:it:update-snapshots and commit only the *-chromium-linux.png baselines (per CLAUDE.md)",
-        "bun run test:it:e2e passes locally (routes through Docker on non-Linux hosts)",
-        "Typecheck passes",
-        "Tests pass"
-      ],
-      "priority": 15,
-      "passes": true,
-      "notes": "Fixture at apps/studio/e2e/fixtures/component-demo/: flow.json (single c1 component node, no position/spec — both filled by resolver chain), nodes/c1/spec.json (Card root with Metric bound to $state '/count' + two Buttons — Reset wired to set action /count=0, Fetch wired to script action 'inc'), nodes/c1/actions/inc.ts (reads JSON stdin, falls back to from=0 when payload is empty, writes {'/count': from+1}; uses `export {}` so top-level await typechecks). Initial state.count=5 so both tests have an observable transition (5→0 for Reset, 5→1 for Fetch since Button impl passes no payload). Test file at apps/studio/e2e/component-node.e2e.ts (NOT .spec.ts — playwright.config.ts testMatch is **/*.e2e.ts; .spec.ts would dodge discovery AND collide with bun test's pattern matcher). Two tests: (1) Reset click → Metric span.sf:tabular-nums transitions to '0', (2) Fetch click awaits a 200 response on /api/flows/:id/nodes/c1/actions/inc then asserts Metric shows '1'. Both also produce chromium-linux visual baselines. Added a local seedComponentDemo helper that cpSync-copies the fixture tree to studio.home/<slug>/ + POSTs /api/flows/register (the shared registerFlow helper can't be reused — it parses ResolvedFlowSchema which requires data.spec inline, but component nodes carry spec only on the sidecar). 2/2 component-node e2e tests pass through Docker; 9/9 total e2e suite stays green. Snapshots committed: component-node-after-reset-chromium-linux.png + component-node-after-fetch-chromium-linux.png."
-    },
-    {
-      "id": "US-016",
-      "title": "Docs — mark design implemented and add component node note to README",
-      "description": "As a reader, I need the design doc flipped to Implemented and the README to introduce the 'component' type with a pointer to where spec.json lives.",
-      "acceptanceCriteria": [
-        "docs/plans/2026-05-23-component-node-design.md flips Status from Design to Implemented",
-        "README.md gains a one-paragraph entry covering: what 'component' is, that the spec lives at <project>/nodes/<id>/spec.json, and that script actions resolve under nodes/<id>/",
-        "Typecheck passes"
-      ],
-      "priority": 16,
-      "passes": true,
-      "notes": "Flipped docs/plans/2026-05-23-component-node-design.md `Status: Design` -> `Status: Implemented` (US-001..US-015 collectively shipped the design). Added a one-paragraph 'Component nodes' H2 section to README.md between `/seeflow-lookup` and 'Docker reference' covering: what `component` is (json-render runtime + shadcn-styled catalog: Card/Button/Input/Chart/Markdown etc.), spec lives at `<project>/nodes/<id>/spec.json` while flow.json carries only the type tag, and the two action kinds — `set` (JSON Pointer state mutation) + `script` (POST `/api/flows/:id/nodes/:nodeId/actions/:name`, runner spawns the matching `nodes/<id>/actions/<name>.ts` and merges the JSON stdout into state). Intentionally did NOT include the forward reference to `apps/studio/examples/component-showcase/` because that example is US-017 and the link would dangle if US-017 ships separately or later. Files changed: docs/plans/2026-05-23-component-node-design.md (line-4 status flip), README.md (new H2 + paragraph). Quality checks: typecheck ✓ (3 workspaces, docs-only), format ✓ (biome leaves markdown alone), lint ✓, tests ✓ (1763 pass / 1 skip / 0 fail — unchanged from US-015 baseline)."
-    },
-    {
-      "id": "US-017",
-      "title": "Example flow under apps/studio/examples/ showcasing the component node",
-      "description": "As a new user, I need a runnable example in apps/studio/examples/ that uses the component node to demonstrate Card / Metric / Button (set) / Button (script) / Input / Select / Chart / Table so I can see real usage patterns end-to-end.",
-      "acceptanceCriteria": [
-        "Create a new directory apps/studio/examples/component-showcase/ with flow.json + style.json mirroring the layout of apps/studio/examples/order-pipeline/ (so it auto-registers on `seeflow start`)",
-        "flow.json defines at least 3 component nodes positioned on the canvas, each carrying a meaningful capability (e.g. a 'Counter' card, a 'Fetch Demo' card driving a script action, and a 'Form Demo' card with Input + Select + Button)",
-        "Each component node has a nodes/<id>/spec.json sidecar exercising different catalog entries (cover at least: Card, Heading/Text, Metric, Button, Input, Select, Chart or Table, plus one Markdown or CodeBlock element)",
-        "At least one node carries a `script`-kind action with a real `nodes/<id>/actions/<name>.ts` file that reads JSON stdin and writes a JSON stdout patch (similar to the e2e fixture but more illustrative)",
-        "At least one node carries a `set`-kind action with a JSON Pointer path",
-        "Create apps/studio/examples/component-showcase/README.md describing the example, how to run it (`seeflow start`), and what each node demonstrates",
-        "Optional but encouraged: apps/studio/examples/component-showcase/package.json mirroring order-pipeline's (so the action script has typed Bun.stdin if needed)",
-        "Manual smoke: `bun run dev`, open the example in the studio, every node renders, the set-action button mutates its state, the script-action button reaches the runner and the response merges into state",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill"
-      ],
-      "priority": 17,
-      "passes": true,
-      "notes": "Created apps/studio/examples/component-showcase/ mirroring order-pipeline's layout: flow.json (3 component nodes: counter / fetcher / form), style.json (positions + dimensions matching content height — 300px for counter, 460px for fetcher and form), README.md (table mapping each node to catalog elements + action kind), package.json. Per-node sidecars under nodes/<id>/: counter/spec.json (Card + Heading + Text + Metric + 2 set-kind Buttons), fetcher/spec.json (Card + Heading + Label + Metric ×2 + Progress ×2 + Button + Markdown driven by a script-kind 'refresh' action) + fetcher/actions/refresh.ts (Bun script reading JSON stdin, writing JSON patch with /cpu, /memory, /notes; `export {}` module sentinel for top-level await; randomized values 15-95% / 40-90%), form/spec.json (Card + Heading + Text + Label ×2 + Input + Select + Table + Button — all wired through set-kind actions with `$param`/`$state` refs for live two-way binding). Across the three nodes the catalog coverage hits Card, Heading, Text, Label, Metric, Progress, Button, Input, Select, Table, Markdown (PRD's 'Chart or Table' satisfied by Table — Chart skipped because the catalog Chart impl uses ResponsiveContainer height=100% which collapses to 0 inside Card's flex column without a fixed-height parent; documented this in the progress log). Wired component-showcase into seedExamples() in apps/studio/src/cli.ts as the third entry (alongside order-pipeline + ecommerce-platform) so `seeflow start` auto-registers it on first launch. Validated the full resolver chain by running FlowSchema → StyleSchema → mergeFlowAndStyle → inlineComponentSpecs → ResolvedFlowSchema (with US-004's catalog superRefine) against the on-disk files — all three component nodes pass; refs lists nodes/{counter,fetcher,form}/spec.json. Smoke-tested in-browser via Playwright MCP at http://localhost:4329/d/component-showcase: (1) all 3 nodes rendered with their full catalog tree, (2) clicking 'Set to 10' in Counter flipped its Metric 0→10 (set-kind dispatch), (3) clicking 'Refresh' in Random Stats round-tripped a POST /api/flows/.../actions/refresh, the script spawned, and the Metric values flipped 0→82/0→44 (script-kind dispatch). Console SSE ERR_INCOMPLETE_CHUNKED_ENCODING messages are studio-wide (pre-existing) — not component-node-specific. Full suite: 1763 pass / 1 skip / 0 fail (unchanged baseline since the example only adds static fixtures + a 1-line addition to seedExamples)."
+      "passes": false,
+      "notes": ""
     }
   ]
 }
