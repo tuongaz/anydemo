@@ -1,6 +1,23 @@
 # Ralph Progress Log — component-node-implementation (main)
 
 ## Codebase Patterns
-(Populated by Ralph as it discovers reusable patterns.)
+- Bun workspaces: root `package.json` lists `apps/*` + `packages/*`. Cross-workspace deps use `"workspace:*"` (apps/studio → @seeflow/canvas) or `"file:../../packages/canvas"` (apps/web — already pinned that way). Both resolve as symlinks under the consuming app's `node_modules/`.
+- Use `bun pm view <pkg> versions` (NOT `npm view`) before pinning third-party deps — PRDs may suggest version ranges that pre-date the actual package history.
+- After modifying `package.json`, run `bun install` then `bun run typecheck` from repo root. `bun run typecheck` uses `--filter '*'` to typecheck every workspace.
+- `bun run format` (biome write) then `bun run lint` (biome check) before commit, per CLAUDE.md.
+- The repo `bun test` output shows a `[registry] failed to load …` warning from `apps/studio/src/registry.test.ts` — this is an intentional malformed-JSON case, NOT a regression.
 
+---
+
+## 2026-05-23 - US-001
+- Added json-render runtime deps to `apps/web/package.json`: `@json-render/core`, `@json-render/react`, `@json-render/shadcn` (all `^0.19.0` — `^0.1.0` from PRD didn't exist), plus `recharts ^2.13.0` and `shiki ^1.24.0`.
+- Added `"@seeflow/canvas": "workspace:*"` to `apps/studio/package.json` dependencies.
+- `bun install` resolved cleanly (warns about React peer drift but that's pre-existing in the workspace).
+- Files changed: `apps/web/package.json`, `apps/studio/package.json`, `bun.lock`.
+- Quality checks: `bun run typecheck` ✓, `bun run lint` ✓, `bun test` ✓ (1705 pass / 1 skip / 0 fail).
+- **Learnings for future iterations:**
+  - `@json-render/*` published versions start at 0.5.x (core/react) and 0.7.x (shadcn). Use `^0.19.0` for latest stable.
+  - `recharts` and `shiki` are top-level apps/web deps (the heavy chart + code-block primitives live in the canvas registry but the host app provides them as peer-like deps via the React tree).
+  - `apps/studio` previously had no React/canvas deps because it's a pure Hono+Bun backend; adding `@seeflow/canvas` enables importing the catalog (e.g. `import { COMPONENT_NAMES } from '@seeflow/canvas/catalog'`) in US-002+.
+  - Workspace symlinks land at `apps/<app>/node_modules/<pkg>` — not the root `node_modules/`. Verify with `ls apps/web/node_modules/@json-render/` rather than root.
 ---

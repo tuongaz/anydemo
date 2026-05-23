@@ -14,8 +14,8 @@
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Used ^0.19.0 for json-render packages (the PRD-suggested ^0.1.0 doesn't exist on npm — earliest published versions are 0.5.x for core/react and 0.0.1 then 0.7.x for shadcn). Workspace symlinks resolved cleanly under apps/web/node_modules/@json-render/ and apps/studio/node_modules/@seeflow/canvas."
     },
     {
       "id": "US-002",
