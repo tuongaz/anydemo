@@ -523,6 +523,8 @@ describe('seeflow_create_project', () => {
     const body = expectOk(envelope) as { id: string; slug: string };
     expect(body.slug).toBe('brand-new-flow');
     expect(existsSync(join(projectPath, 'flow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, '.tmp'))).toBe(true);
+    expect(readFileSync(join(projectPath, '.tmp', '.gitignore'), 'utf8')).toBe('*\n!.gitignore\n');
     expect(registry.list()).toHaveLength(1);
   });
 

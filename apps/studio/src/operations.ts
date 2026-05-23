@@ -1141,6 +1141,9 @@ export async function createProjectImpl(
   try {
     mkdirSync(folderPath, { recursive: true });
     writeFileSync(demoFullPath, `${JSON.stringify(scaffold, null, 2)}\n`);
+    const tmpDir = join(folderPath, '.tmp');
+    mkdirSync(tmpDir, { recursive: true });
+    writeFileSync(join(tmpDir, '.gitignore'), '*\n!.gitignore\n');
   } catch (err) {
     return { kind: 'scaffoldFailed', message: err instanceof Error ? err.message : String(err) };
   }
