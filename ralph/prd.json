@@ -90,8 +90,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Created apps/studio/src/component-spec-resolver.ts exporting inlineComponentSpecs(flow, projectRoot) -> { flow, errors, refs }. Maps over flow.nodes; for each node.type === 'component' reads <projectRoot>/nodes/<id>/spec.json, JSON.parses, and returns a new node with data.spec attached (no input mutation — verified by a dedicated test). Missing or malformed spec.json pushes a SpecInlineError with path 'nodes/<id>/data/spec'. refs lists every successfully-read relative path for watcher live-reload. Test file covers attach / missing-file / malformed-JSON / non-component pass-through / input-non-mutation (5 tests, all pass). Full suite: 1718 pass / 1 skip / 0 fail."
     },
     {
       "id": "US-006",
