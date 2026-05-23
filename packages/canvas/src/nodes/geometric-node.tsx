@@ -15,8 +15,11 @@ import type {
   NodeStatus,
   StatusReport,
 } from '../types.ts';
+import { PlayButton } from './lib/play-button.tsx';
+import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
+import { StatusBadge } from './status-badge.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
 // Illustrative shapes own their visuals via inline-SVG components under
@@ -258,6 +261,30 @@ function GeometricNodeImpl({
         }
       : undefined;
 
+  // Capability-chrome skirt: render the inline PlayButton + StatusBadge row
+  // for illustrative shapes whenever the node has a play or status capability.
+  // The wrapper's bounding box stays invariant — the SVG renderer's `height`
+  // shrinks by SKIRT_HEIGHT so connectors anchored at the wrapper's bottom
+  // edge (the Position.Bottom Handle) don't shift when status first arrives.
+  // Derivation is pure — no useState slot — per the hook-shim positional rule.
+  const hasPlayCapability = !!data.playAction && !!data.onPlay;
+  const hasStatusReport = !!data.statusReport;
+  const showSkirt = isIllustrativeShape(shape) && (hasPlayCapability || hasStatusReport);
+  const skirtOffset = showSkirt ? SKIRT_HEIGHT : 0;
+  const visualStatus = deriveVisualStatus(data.status, data.statusReport);
+  const buttonLabel =
+    visualStatus === 'active'
+      ? 'Running…'
+      : visualStatus === 'success'
+        ? 'Succeeded, run again'
+        : visualStatus === 'error'
+          ? data.errorMessage
+            ? `Failed: ${data.errorMessage}`
+            : data.statusReport?.summary
+              ? `Failed: ${data.statusReport.summary}`
+              : 'Failed, run again'
+          : 'Play';
+
   let illustrativeOverlay: ReactNode = null;
   const Renderer = ILLUSTRATIVE_SHAPE_RENDERERS[shape];
   if (Renderer) {
@@ -265,10 +292,13 @@ function GeometricNodeImpl({
     const h = data.height ?? size.height;
     const { borderColor, backgroundColor } = resolveIllustrativeColors(data);
     illustrativeOverlay = (
-      <div className="sf:pointer-events-none sf:absolute sf:inset-0">
+      <div
+        className="sf:pointer-events-none sf:absolute sf:left-0 sf:right-0 sf:top-0"
+        style={{ bottom: skirtOffset }}
+      >
         <Renderer
           width={w}
-          height={h}
+          height={h - skirtOffset}
           borderColor={borderColor}
           backgroundColor={backgroundColor}
           borderSize={data.borderSize}
@@ -277,6 +307,36 @@ function GeometricNodeImpl({
       </div>
     );
   }
+
+  const skirt: ReactNode = showSkirt ? (
+    <div
+      data-testid="geometric-node-skirt"
+      className="sf:absolute sf:bottom-0 sf:left-0 sf:right-0 sf:flex sf:items-center sf:justify-between sf:gap-2 sf:px-2 sf:py-1"
+      style={{ height: SKIRT_HEIGHT }}
+    >
+      {hasStatusReport && data.statusReport ? (
+        <StatusBadge
+          state={data.statusReport.state}
+          summary={data.statusReport.summary}
+          data-testid="geometric-node-status-badge"
+        />
+      ) : (
+        <span aria-hidden />
+      )}
+      {hasPlayCapability ? (
+        <PlayButton
+          visualStatus={visualStatus}
+          disabled={visualStatus === 'active'}
+          buttonLabel={buttonLabel}
+          isError={visualStatus === 'error'}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onPlay?.(id);
+          }}
+        />
+      ) : null}
+    </div>
+  ) : null;
 
   const description = data.description ?? '';
   const hasDescription = description !== '';
@@ -452,6 +512,7 @@ function GeometricNodeImpl({
         />
       )}
       {useHeaderLayout ? headerBodyContent : singleLabelContent}
+      {skirt}
       {!isText && (
         <Handle
           type="source"
