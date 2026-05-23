@@ -18,7 +18,7 @@ category: messaging
 - FIFO queues (`*.fifo`) and standard queues have different ordering
   guarantees; label `data.note` accordingly.
 - Duplicate the queue node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

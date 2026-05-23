@@ -20,7 +20,8 @@ Direct guidance for `seeflow-node-planner`. Two bullets max:
   renders; set `data.icon` to a Lucide name that matches the resource
   (`database`, `list-ordered`, `radio-tower`, `cloud`).
 - Duplicate the node next to each consumer when it improves readability
-  (per Phase 2 abstraction rules: same `kind` + `name`, unique `id`).
+  (per Phase 2 abstraction rules: same `type` + `data.icon` + `data.name`,
+  unique `id`).
 
 ## Play (trigger locally)
 

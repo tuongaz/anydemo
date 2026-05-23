@@ -18,7 +18,7 @@ category: messaging
 - Durable consumers are separate consumer nodes; mention the durable
   name in `data.note`.
 - Duplicate the stream node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

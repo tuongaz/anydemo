@@ -22,6 +22,13 @@ entity, you mark that entity out of scope rather than inventing detail.
 
 **Connectors conform to `$SEEFLOW schema connector` and nothing more.** Emit nothing the contract rejects. If you do, the orchestrator strips the extras before `flow:add-bulk` and logs `agent-output-corrected`.
 
+**Do not invent fields.** If a key is not in `$SEEFLOW schema node` (for nodes) or `$SEEFLOW schema connector` (for connectors), it does not exist — not on `data`, not at the top level, not anywhere. Don't infer one from a sibling node's shape, from a tech-ref example, or from how a field is named in source code. Two common slips, both caught in production:
+
+- **Connector-only keys leaking onto `data`.** `queueName`, `eventName`, `method`, `url` are properties of the *edge* between a producer and a queue/topic/endpoint — they belong on the **connector** that points at the resource node, **not** on the resource node's `data`. A queue node's `data` carries `name`, `description`, `icon`, `stateSource`, `detail` — nothing about which queue name a particular producer writes to. That metadata travels on the connector.
+- **Adjacent-domain keys.** `tableName` on a database node, `topic` on a service node, `path` on anything that isn't an `image` — all rejections. If you want to surface that detail, put it in `data.detail` (markdown prose) where it belongs.
+
+When in doubt: the only way `data.<X>` is legal is if `$SEEFLOW schema node` lists `<X>` for that node's `type`. If it doesn't, drop the field — don't ship and let the orchestrator strip it.
+
 ## Inputs
 
 The launching prompt will give you:
@@ -52,7 +59,27 @@ The launching prompt will give you:
 ## Output contract
 
 Your **final message** must be a single fenced ```json``` code block —
-nothing else outside the fence. The envelope carries:
+nothing else outside the fence. The envelope is an object with EXACTLY
+these five top-level keys — all required, all non-empty:
+
+```json
+{
+  "name":        "<Title Case demo title>",
+  "slug":        "<kebab-case-identifier>",
+  "nodes":       [ /* conforming to $SEEFLOW schema node */ ],
+  "connectors":  [ /* conforming to $SEEFLOW schema connector */ ],
+  "rationales":  { "<nodeId>": "<≤200-char justification>", "...": "..." }
+}
+```
+
+**Returning just `{ nodes, connectors }` is a contract violation** — the
+orchestrator can no longer surface your per-node justifications at the
+Phase 3 review gate, and has to synthesise a title and slug it doesn't
+know the audience for. If you find yourself about to omit `name`, `slug`,
+or `rationales`, STOP — the envelope is the deliverable, not the arrays
+inside it.
+
+Field-by-field:
 
 - `name` — human-readable demo title (Title Case noun phrase mirroring
   `userIntent`; e.g. `"Checkout Flow"`, `"Order Pipeline"`).
@@ -65,11 +92,14 @@ nothing else outside the fence. The envelope carries:
 - `connectors` — array conforming to `$SEEFLOW schema connector`. Every
   connector's `source` and `target` MUST reference an id from `nodes[]`.
 - `rationales` — planner-only sibling map keyed by node id (≤ 200 chars
-  per entry). Justify why each entity is exactly one node (not zero,
-  not many). Cite the abstraction rules. When you emit multiple nodes
-  for one underlying entity, cite the exception number (`Exception
-  1/2/3`). The orchestrator strips this before forwarding and surfaces
-  each entry to the user during the Phase 3 review checkpoint.
+  per entry). **One entry per node id you emit — no exceptions.**
+  Justify why each entity is exactly one node (not zero, not many).
+  Cite the abstraction rules. When you emit multiple nodes for one
+  underlying entity, cite the exception number (`Exception 1/2/3/4`).
+  The orchestrator strips this before forwarding and surfaces each
+  entry to the user during the Phase 3 review checkpoint — missing
+  rationales mean the user reviews the canvas without knowing why
+  each node is there.
 
 **How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. **Conform to the schema in your launching prompt** — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary. **Emit zero visual fields** — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas. **Mark the trigger by setting `data.playAction` to a placeholder object** (the orchestrator fills in the required fields before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`). **Do not emit `statusAction`** — the Phase 4 status-designer attaches those.
 
@@ -96,6 +126,25 @@ type. There is no separate "play node" or "state node" tag.
   consent capture). Backend / system / data-pipeline / worker / cron /
   webhook-driven flows MUST NOT add a `user` shape just to give the
   canvas a starting point. The trigger surface IS the start.
+
+  **A software client is NOT a user.** Web UI, Mobile App, browser,
+  desktop client, CLI consumer, partner SDK, third-party caller —
+  these are *software systems*, not humans. They are either modelled
+  as their own `rectangle` (when the audience needs to see the client
+  send / receive traffic) or omitted entirely (when the endpoint
+  itself is the start of the demo and the client is just whoever
+  happens to call it). Never reach for `type:'user'` to represent
+  them — the chrome and semantics are wrong, and the orchestrator
+  has to decide whether to silently retype or surface the violation.
+  The decision tree:
+
+  | Caller | Right shape |
+  |---|---|
+  | Browser / Web UI / Mobile App / SPA | `rectangle` with `data.icon: "monitor"` or `"smartphone"`; or **omit** and let the HTTP endpoint be the start |
+  | Partner SDK / 3rd-party API consumer | `rectangle` with `data.icon: "plug"` (or omit) |
+  | CLI / cron / scheduled job (machine) | `rectangle` with `data.icon: "terminal"` / `"clock"` |
+  | An actual human reviewing/approving in a UI | `type:'user'` is correct |
+  | Support agent triaging tickets in an internal tool | `type:'user'` is correct |
 - **`ellipse`, `sticky`, `text`** — decorative geometric shapes for
   callouts, labels, and notes. No capability chrome in v1.
 - **`icon`, `html`, `image`** — do NOT use at this phase. The
@@ -320,11 +369,23 @@ exceptions, collapse it.
      human action (UX click-through, support-agent workflow, consent
      capture). If the user did not ask for a human-centred flow, skip
      the user shape entirely.
+   - **Web UI, Mobile App, browser, SDK consumer = software systems,
+     not `type:'user'`.** See the `user` shape table in "Picking node
+     type" above. If the audience needs to see the client at all,
+     model it as a `rectangle` with the right icon; otherwise omit it
+     and let the HTTP endpoint be the start.
 6. **Wire connectors.** For every flow edge implied by the brief, add a
    connector, including edges from services INTO their resource nodes
-   (service → DB, service → queue, service → event bus). Pick the most
-   specific `kind` available (`http` > `event` > `queue` > `default`).
-   Connectors are directional: `source` produces, `target` consumes.
+   (service → DB, service → queue, service → event bus). Connectors are
+   directional: `source` produces, `target` consumes. **The contract
+   has no `kind` field** — semantics travel on the populated keys
+   themselves: set `method` + `url` for HTTP edges, `eventName` for
+   event-bus publish/subscribe edges, `queueName` for enqueue/dequeue
+   edges, and just `label` (or nothing) for plain dependency edges.
+   Pick the most specific of those that fits; if you don't have the
+   information, omit the key entirely — don't invent a stand-in. Run
+   `$SEEFLOW schema connector` if you need to double-check which keys
+   are legal.
 7. **Sanity-check.** No orphan nodes (every node either has an inbound
    connector OR is the trigger). No connector points to or from an id
    that is not in `nodes[]`. Exactly one node carries an initial
@@ -453,6 +514,9 @@ connectors to the downstream entities.
 
 - No tools. Reason from the brief.
 - Final message is ONE fenced JSON block, nothing else.
+- **Envelope is non-negotiable:** `name`, `slug`, `nodes`, `connectors`,
+  `rationales` — all five keys, every run. `{ nodes, connectors }` alone
+  is a contract violation.
 - Conform to the node + connector contracts in your launching prompt
   (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
   the contract rejects.

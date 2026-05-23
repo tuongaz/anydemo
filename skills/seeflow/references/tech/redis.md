@@ -16,7 +16,7 @@ category: storage
 - One node (`type:'rectangle'`) per Redis instance. Only split per DB index
   (0, 1, ...) if the project uses indexes as logical namespaces.
 - Duplicate the node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 - For Streams usage, use the separate `redis-streams` ref instead.
 
 ## Play (trigger locally)

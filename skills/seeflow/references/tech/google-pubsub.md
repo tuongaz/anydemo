@@ -17,7 +17,7 @@ category: messaging
   node with the topic; mention the subscription in `data.note`.
 - A subscription that fans into N workers is one consumer node — not N.
 - Duplicate the topic node next to each subscriber for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

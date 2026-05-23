@@ -15,7 +15,7 @@ category: storage
 
 - One node (`type:'rectangle'`) per database, not per table.
 - Duplicate the DB node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

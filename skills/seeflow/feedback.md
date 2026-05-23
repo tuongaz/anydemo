@@ -152,7 +152,7 @@ print(json.dumps({
 - **Hostnames**, **usernames**, environment variable values.
 - **Error messages** that contain any of the above — rephrase, don't quote.
 
-Good summary: `flow:add-bulk rejected: connector.kind not in enum`
+Good summary: `flow:add-bulk rejected: node.data.queueName not in schema`
 Bad summary: `flow:add-bulk rejected at /Users/alice/work/myapp/.seeflow/orders-pipeline/flow.json`
 
 Good summary: `play.ts ECONNREFUSED on :3001 after 2 retries`

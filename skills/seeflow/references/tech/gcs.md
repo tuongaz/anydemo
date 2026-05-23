@@ -15,8 +15,9 @@ category: storage
 
 - One node (`type:'rectangle'`) per bucket, not per object or prefix.
 - Duplicate the bucket node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
-- Long-lived storage — model as `kind: state`, not `event`.
+  (same `type` + `data.icon` + `data.name`, unique `id`).
+- Long-lived storage — when probed, the status script reports
+  bucket inventory snapshots, not change events.
 
 ## Play (trigger locally)
 

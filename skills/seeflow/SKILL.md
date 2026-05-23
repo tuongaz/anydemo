@@ -202,8 +202,9 @@ Start `seeflow-node-planner` as soon as the code-analyzer returns — it only ne
 
 When the system-analyzer returns:
 
-1. Merge `learnUpdates` into `$learnPath` (`$PWD/.seeflow/LEARN.md` — create `$PWD/.seeflow/` if missing; the file is shared across every flow in this host). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file.
-2. Splice `runtimeProfile` + `$learnPath` facts into the in-memory context brief used by Phase 4.
+0. **Size-check the payload first.** Measure the JSON byte length. If > 16 KB (twice the agent's budget — see `agents/seeflow-system-analyzer.md` § "Output budget"), the analyzer drifted. Apply the per-field caps from that section before merging: truncate `gotchas[]` to 10, `fixtures[]`/`factories[]` to 8, prose fields to 400 chars, etc. Drop any inherited fact that already appears verbatim in `$learnPath` (the merger would keep it anyway). Log `agent-output-corrected` once with `agent: seeflow-system-analyzer, details: oversize-learnupdates-truncated (Nb → Mb)`. The trimmed payload is what feeds steps 1–3.
+1. Merge `learnUpdates` into `$learnPath` (`$PWD/.seeflow/LEARN.md` — create `$PWD/.seeflow/` if missing; the file is shared across every flow in this host). Anything about boot, ports, env vars, fixtures, gotchas, or tech adaptations MUST land in the file. Re-cap `$learnPath` to ~6 KB after the merge per `references/learn-format.md` § "Merging rules" (push oldest gotchas into a collapsed `<details>` block).
+2. Splice `runtimeProfile` + `$learnPath` facts into the in-memory context brief used by Phase 4. **Forward the *trimmed* payload — never the raw analyzer output** — and only the fields each designer actually consumes (`runtimeProfile`, the matching `techAdaptations.<techId>` for techs in this flow, the relevant `dataEntryPaths`, top 5 `gotchas`). The rest stays in `$learnPath` for the next run; it doesn't need to ride along in every designer prompt.
 3. Merge `knownEndpoints` / `techStack` from the code-analyzer into the same write.
 
 **Resolve tech refs.** Map each `techId` in the merged `## Tech stack` to `references/tech/<techId>.md`. Forward those paths and the matching `## Tech stack adaptations` into Phase 2 / 4 prompts (~3–5 refs per flow). If the system-analyzer hasn't returned yet, forward whatever `techAdaptations` `$learnPath` already had; the planner produces a first draft and the user reviews in Phase 3 anyway.
@@ -218,9 +219,19 @@ Launch `seeflow-node-planner` with: the brief, the resolved tech-ref paths, the 
 
 - **Resource nodes first** — every DB, queue, event bus, cache, file store, external SaaS gets its own node, typed `rectangle` with a matching Lucide `icon` (`database`, `list-ordered`, `radio-tower`, `cloud`, `server`) and a `statusAction` capability when state is worth probing.
 - **Abstraction** — one node per service / workflow / worker / queue / DB. Exceptions: independently-meaningful pipeline stages, fan-out consumers, branches, and services hosting multiple independent state machines.
-- **Duplicate shared resources for clarity.** When a DB / queue / bus is referenced by many nodes and the lines tangle the canvas, split it into role-specific copies (`orders-db-read`, `orders-db-write`) sharing the same `kind` + `name` but distinct `id`s.
+- **Duplicate shared resources for clarity.** When a DB / queue / bus is referenced by many nodes and the lines tangle the canvas, split it into role-specific copies (`orders-db-read`, `orders-db-write`) sharing the same `type` + `data.icon` + `data.name` but distinct `id`s.
 
 Output: a single envelope carrying `name`, `slug`, `nodes`, `connectors`, and `rationales` (planner-only sibling map). The `nodes` and `connectors` arrays must conform to `$SEEFLOW schema node` and `$SEEFLOW schema connector` — they are forwarded verbatim in a single body to the `flow:add-bulk` subcommand in Phase 3. Any key the CLI rejects here is rejected at `flow:add-bulk` too. One retry on unparseable output, then surface and stop. Full contract: `agents/seeflow-node-planner.md`.
+
+**Validate the envelope before continuing.** A parseable JSON blob is not the same as a complete envelope. After `JSON.parse`, assert every required key is present and non-empty:
+
+- `typeof name === 'string' && name.length > 0`
+- `typeof slug === 'string' && slug.length > 0`
+- `Array.isArray(nodes) && nodes.length > 0`
+- `Array.isArray(connectors)` (may be empty for single-node flows)
+- `rationales && typeof rationales === 'object' && Object.keys(rationales).length === nodes.length` (one entry per node id)
+
+If any assertion fails, **re-dispatch the planner once** with the specific gap echoed back in the prompt (`Your previous output was missing: name, rationales[3 of 5 nodes]. Re-emit the full envelope.`). On second failure, log `agent-output-incomplete` (`severity: failure`, `phase: P2`, `agent: seeflow-node-planner`, `details: <missing-keys>`, `summary: planner returned partial envelope after retry`), surface, and stop. **Never silently synthesise the missing fields** — losing the planner's own justifications at the Phase 3 review gate is a real loss of signal, and a fabricated `name`/`slug` ships under the planner's authority without its review.
 
 ## Phase 3 — scaffold, populate, layout, review
 
@@ -258,7 +269,9 @@ The skeleton flow lands via four steps, in order. No `flow.json` authoring by ha
    - `nodes[].id`
    - `connectors[].id`, `connectors[].source`, `connectors[].target`
    - `rationales` keys (kept in memory for the review prompt)
-2b. **Log any silent corrections** from steps 2 and 2a (see `feedback.md`). For each correction kind that fired (placeholder-`playAction` injection, descriptive→canonical id rewrite, unknown-type rename, unknown-field rename, bidir-connector strip, …), emit **one** `agent-output-corrected` entry with `severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, and `details: <correction-kind> (×N)` where N is the count. Aggregate across nodes — never one entry per node. If no corrections were needed, log nothing. This is the signal that the planner drifted from the contract; without it, the orchestrator's silent patching is invisible.
+2b. **Log any silent corrections** from steps 2 and 2a (see `feedback.md`). For each correction kind that fired (placeholder-`playAction` injection, descriptive→canonical id rewrite, unknown-type rename, unknown-field rename, bidir-connector strip, user-to-system-rectangle retype, …), emit **one** `agent-output-corrected` entry with `severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, and `details: <correction-kind> (×N)` where N is the count. Aggregate across nodes — never one entry per node. If no corrections were needed, log nothing. This is the signal that the planner drifted from the contract; without it, the orchestrator's silent patching is invisible.
+
+   **`user-to-system-rectangle` retype rule.** If the planner shipped `type:'user'` for a node whose `data.name` is clearly a software system (`Web UI`, `Mobile App`, `Browser`, `SPA`, `Desktop Client`, `CLI`, `SDK`, anything ending in `Client`/`App`/`UI`/`Frontend`/`Service`), silently retype to `rectangle` with `data.icon` inferred from the name (`monitor` for web/UI/frontend, `smartphone` for mobile, `terminal` for CLI, `plug` for SDK/Client). Keep `type:'user'` only when `data.name` is a human role (`Customer`, `Support Agent`, `Reviewer`, `Approver`, `Operator`). Log one aggregate `agent-output-corrected` entry with `details: user-to-system-rectangle (×N)`. The Phase 3 canvas review surfaces the result to the user — they see the correction.
 3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
 4. `flows:layout` — run ELK and write `style.json`.
 

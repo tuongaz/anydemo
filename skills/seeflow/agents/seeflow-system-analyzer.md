@@ -50,9 +50,16 @@ processes. Prefer the dedicated tools over shelling out.
 1. **Inhale `learnContext`.** Parse runtime profile, local dev setup,
    integration tests, fixtures, factories, data entry paths, known
    gotchas, and tech adaptations. Anything covered there is inherited
-   fact — re-include it on the output so the merge doesn't lose it.
-   You only investigate gaps and changes since LEARN.md was last
-   written.
+   fact — the orchestrator's merger (`references/learn-format.md` §
+   "Merging rules") unions/replaces against the live file, so **you
+   only need to emit deltas**: new findings, plus *replacements* for
+   inherited facts you've discovered are wrong (date the change in
+   parens). Re-emitting an inherited fact verbatim is wasted tokens —
+   the merger keeps it either way. The one exception is when you've
+   verified an inherited fact is still correct AND you're changing
+   sibling fields in the same object (the merger replaces objects
+   whole, not field-by-field); in that case re-include the unchanged
+   siblings to avoid dropping them.
 2. **Profile the runtime.** Extract language, package manager, dev
    command, test command, default service port(s), required env vars.
    Check in this order:
@@ -238,6 +245,47 @@ Field-by-field:
   else. Intermediate messages can narrate freely.
 - **Honesty over confidence.** If `setupPattern` is genuinely unknown,
   say `"unknown"`. Don't invent a pattern.
+
+### Output budget
+
+Your JSON payload (after fence-strip) MUST stay under **~8 KB / ~2 000
+tokens total**. The orchestrator merges this into a ~6 KB `LEARN.md` and
+forwards it into Phase 4 designer prompts; a bloated payload poisons
+both. A first run on a medium repo that comes back with 100 KB of
+`learnUpdates` has misunderstood the contract — go back, prune, re-emit.
+
+Per-field caps (hard limits — exceed and the orchestrator truncates):
+
+| Field | Limit | Why |
+|---|---|---|
+| `learnUpdates.localDevSetup` | ≤ 3 short sentences | One-screen recipe, not a tutorial |
+| `learnUpdates.integrationTests.setupPattern` | ≤ 2 sentences | Pattern, not a code dump |
+| `learnUpdates.fixtures[]` | ≤ 8 entries; pick the ones a play script would actually reuse | The rest live in the repo — paths are pointers, not a manifest |
+| `learnUpdates.factories[]` | ≤ 8 entries | Same |
+| `learnUpdates.seedCommands[]` | ≤ 4 entries | Same |
+| `learnUpdates.dataEntryPaths[]` | ≤ 1 per major resource | One preferred path per resource is the whole point |
+| `learnUpdates.gotchas[]` | ≤ 10 entries, ≤ 200 chars each | Top-of-mind only — `LEARN.md` ages older ones into a `<details>` block |
+| `learnUpdates.techAdaptations.<techId>.helpers[]` | ≤ 6 entries | Pointers to existing helpers, not their implementations |
+| `learnUpdates.techAdaptations.<techId>.conventions[]` | ≤ 6 entries, ≤ 160 chars each | Rule, not rationale |
+| `learnUpdates.techAdaptations.<techId>.fixtures[]` | ≤ 6 entries | Sample-payload pointers |
+| Any prose value | ≤ 400 chars | Pointers, not prose |
+
+**Pruning heuristics** when you exceed:
+
+1. **Pointers, not contents.** A fixture entry is a *path* + one-line
+   `describes` — never the fixture body.
+2. **Top-N, not exhaustive.** If you found 40 fixture files, emit the 8
+   a play script would actually reuse. The rest are still in the repo.
+3. **Deltas over restatements.** If `learnContext` already has the
+   `gotcha` "port 3001 hardcoded", do not re-emit it — the merger keeps
+   it. Only emit *new* gotchas this run discovered.
+4. **Per-`techId` adaptations are project conventions, not refs.** If
+   you find yourself transcribing the official client's API, stop —
+   that lives in `references/tech/<techId>.md`. Adaptations are the
+   project-specific overrides only.
+5. **Omit a section entirely** when there's nothing project-specific
+   to say. An empty `factories: []` and a missing `factories` key are
+   equivalent to the merger; the missing key is cheaper.
 
 ## Worked example
 

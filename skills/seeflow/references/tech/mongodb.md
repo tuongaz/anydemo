@@ -16,7 +16,7 @@ category: storage
 - One node (`type:'rectangle'`) per database — collection-level is too fine-grained
   and clutters the canvas.
 - Duplicate the DB node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

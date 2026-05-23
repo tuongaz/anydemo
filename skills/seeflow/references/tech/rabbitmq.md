@@ -17,7 +17,7 @@ category: messaging
   codebase emphasises routing). Don't model the exchange separately
   unless the topology fan-out is the story.
 - Mirror the queue node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 - Note `durable: true|false` in `data.note` — it changes status
   behaviour across restarts.
 

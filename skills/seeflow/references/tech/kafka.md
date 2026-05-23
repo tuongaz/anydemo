@@ -18,7 +18,7 @@ category: messaging
 - Consumer groups are separate consumer nodes — one node per group, not
   per member.
 - Duplicate the topic node next to each consumer group for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

@@ -15,7 +15,7 @@ category: storage
 
 - One node (`type:'rectangle'`) per table, not per partition or GSI.
 - Duplicate the table node next to each consumer for readability
-  (same `kind` + `name`, unique `id`).
+  (same `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Play (trigger locally)
 

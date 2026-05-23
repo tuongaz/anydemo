@@ -15,8 +15,8 @@ category: storage
 
 - One node (`type:'rectangle'`) per database, not per table — table-level nodes
   fragment the canvas and hide the bigger picture.
-- Duplicate the DB node next to each consumer (same `kind` + `name`,
-  unique `id`) when it improves readability.
+- Duplicate the DB node next to each consumer (same `type` +
+  `data.icon` + `data.name`, unique `id`) when it improves readability.
 
 ## Play (trigger locally)
 
