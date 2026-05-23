@@ -79,6 +79,14 @@ function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): R
   return out;
 }
 
+// Biome's noNonNullAssertion bans `!`, but every consumer below first
+// asserts `toHaveLength(1)` and would crash anyway on an empty match. This
+// helper turns the empty case into a readable throw instead.
+function unwrap<T>(value: T | undefined, message: string): T {
+  if (value === undefined) throw new Error(message);
+  return value;
+}
+
 // The shim doesn't execute component bodies, so JSX inside a function
 // component (like `<PlayButton data-testid="play-button" />`) is invisible
 // to findAll. Locate the component element itself by its function `.name`,
@@ -271,7 +279,7 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     expect(findSkirts(tree)).toHaveLength(0);
     const renderers = findRenderers(tree);
     expect(renderers).toHaveLength(1);
-    const first = renderers[0]!;
+    const first = unwrap(renderers[0], 'expected one renderer');
     expect((first.props as { height: number }).height).toBe(140);
   });
 
@@ -296,7 +304,7 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     });
     const renderers = findRenderers(tree);
     expect(renderers).toHaveLength(1);
-    const first = renderers[0]!;
+    const first = unwrap(renderers[0], 'expected one renderer');
     expect((first.props as { height: number }).height).toBe(140 - SKIRT_HEIGHT);
   });
 
@@ -340,7 +348,8 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     const buttons = findPlayButtons(tree);
     expect(buttons).toHaveLength(1);
     type ClickHandler = (e: { stopPropagation: () => void }) => void;
-    const onClick = (buttons[0]!.props as { onClick: ClickHandler }).onClick;
+    const button = unwrap(buttons[0], 'expected one PlayButton');
+    const onClick = (button.props as { onClick: ClickHandler }).onClick;
     onClick({ stopPropagation: () => {} });
     expect(calls).toEqual(['n1']);
   });
@@ -357,7 +366,8 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     // GeometricNode passes visualStatus + buttonLabel as props into PlayButton.
     // The component itself maps them to data-visual-status + title; we assert
     // the inputs here since the shim doesn't recurse into PlayButton's body.
-    const props = buttons[0]!.props as { visualStatus: string; buttonLabel: string };
+    const button = unwrap(buttons[0], 'expected one PlayButton');
+    const props = button.props as { visualStatus: string; buttonLabel: string };
     expect(props.visualStatus).toBe('error');
     expect(props.buttonLabel.toLowerCase()).toContain('boom');
   });
@@ -376,11 +386,16 @@ describe('capability-chrome skirt: resize min-height', () => {
 
   const findResizeControls = (tree: unknown) => findByComponentName(tree, 'ResizeControls');
 
-  it('database with no capabilities passes default minHeight 40 to ResizeControls', () => {
-    const tree = callGeometric('database', { name: 'db', onResize: () => {} });
+  const firstMinHeight = (tree: unknown): number => {
     const ctrls = findResizeControls(tree);
     expect(ctrls).toHaveLength(1);
-    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(40);
+    const first = unwrap(ctrls[0], 'expected one ResizeControls');
+    return (first.props as { minHeight: number }).minHeight;
+  };
+
+  it('database with no capabilities passes default minHeight 40 to ResizeControls', () => {
+    const tree = callGeometric('database', { name: 'db', onResize: () => {} });
+    expect(firstMinHeight(tree)).toBe(40);
   });
 
   it('database with playAction passes minHeight = SKIRT_HEIGHT + 40 to ResizeControls', () => {
@@ -390,9 +405,7 @@ describe('capability-chrome skirt: resize min-height', () => {
       onPlay: () => {},
       playAction,
     });
-    const ctrls = findResizeControls(tree);
-    expect(ctrls).toHaveLength(1);
-    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(SKIRT_HEIGHT + 40);
+    expect(firstMinHeight(tree)).toBe(SKIRT_HEIGHT + 40);
   });
 
   it('ellipse with playAction stays at default minHeight 40 (no skirt)', () => {
@@ -402,8 +415,6 @@ describe('capability-chrome skirt: resize min-height', () => {
       onPlay: () => {},
       playAction,
     });
-    const ctrls = findResizeControls(tree);
-    expect(ctrls).toHaveLength(1);
-    expect((ctrls[0]!.props as { minHeight: number }).minHeight).toBe(40);
+    expect(firstMinHeight(tree)).toBe(40);
   });
 });

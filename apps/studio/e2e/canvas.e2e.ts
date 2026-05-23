@@ -155,10 +155,7 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(root).toHaveScreenshot('render-matrix.png', { maxDiffPixelRatio: 0.02 });
   });
 
-  test('database with playAction renders the inline skirt PlayButton', async ({
-    page,
-    studio,
-  }) => {
+  test('database with playAction renders the inline skirt PlayButton', async ({ page, studio }) => {
     const resolvedFlow = {
       version: 2 as const,
       name: 'Database Capability Skirt',
