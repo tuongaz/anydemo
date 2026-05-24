@@ -851,6 +851,10 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
     // own-write hash, broadcasts `flow:reload` with the merged payload. An
     // external writeFileSync from this test isn't in the writtenHashes ring,
     // so the broadcast fires. Event name is `flow:reload` (not `reloaded`).
+    //
+    // The in-test waitFor allows 8s for the reload broadcast (see comment below),
+    // but bun's default it() timeout is 5s — pass an explicit 12s timeout so the
+    // runner doesn't kill the test before its own deadline under host load.
     it('triggers a flow:reload SSE event after writing a modified flow.json to disk', async () => {
       const name = uniqueFlowId('external-edit');
       const created = await createProject(name);
@@ -894,7 +898,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       } finally {
         sse.close();
       }
-    });
+    }, 12_000);
   });
 });
 
