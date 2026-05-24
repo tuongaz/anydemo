@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { type Connection, Controls, type Node, ReactFlow } from '@xyflow/react';
+import { type Connection, Controls, MiniMap, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
 import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
 import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
@@ -3031,6 +3031,7 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: true,
       showControls: true,
       showShareMenu: true,
+      showMiniMap: true,
       showRestart: true,
       enableKeyboard: true,
       enableContextMenu: true,
@@ -3062,6 +3063,7 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: false,
       showControls: true,
       showShareMenu: true,
+      showMiniMap: true,
       showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
@@ -3089,6 +3091,9 @@ describe('US-027: resolveFlags helper', () => {
       showResizeHandles: false,
       showControls: false,
       showShareMenu: false,
+      // Mini IS the thumbnail — the high-level outline is suppressed so the
+      // canvas doesn't nest a minimap inside itself.
+      showMiniMap: false,
       showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
@@ -3174,6 +3179,19 @@ describe('US-027: resolveFlags helper', () => {
     expect(resolveFlags({ mode: 'view', enableEmbed: true }).enableEmbed).toBe(true);
     expect(resolveFlags({ mode: 'mini', enableEmbed: true }).enableEmbed).toBe(true);
   });
+
+  it('defaults showMiniMap ON for edit + view, OFF for mini, and accepts overrides', () => {
+    // The high-level outline box is a navigation aid for full / read-only
+    // canvases. Mini mode IS the thumbnail, so the default is OFF there to
+    // avoid nesting a minimap inside another minimap.
+    expect(resolveFlags({ mode: 'edit' }).showMiniMap).toBe(true);
+    expect(resolveFlags({ mode: 'view' }).showMiniMap).toBe(true);
+    expect(resolveFlags({ mode: 'mini' }).showMiniMap).toBe(false);
+    // Overrides compose on top of the mode preset in either direction.
+    expect(resolveFlags({ mode: 'edit', showMiniMap: false }).showMiniMap).toBe(false);
+    expect(resolveFlags({ mode: 'view', showMiniMap: false }).showMiniMap).toBe(false);
+    expect(resolveFlags({ mode: 'mini', showMiniMap: true }).showMiniMap).toBe(true);
+  });
 });
 
 describe('US-014: imperative handle + ShareMenu wiring', () => {
@@ -3218,6 +3236,32 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
   it('does NOT render the ShareMenu when showShareMenu is explicitly false', () => {
     const tree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter, showShareMenu: false });
     expect(findShareMenu(tree)).toBeNull();
+  });
+
+  it('renders the MiniMap in edit and view modes, suppresses it in mini', () => {
+    // The MiniMap is React Flow's outline / high-level box. It's a navigation
+    // aid for full / read-only canvases; mini mode IS the thumbnail so we
+    // gate it off there. Override `showMiniMap` flips this in either
+    // direction.
+    const editTree = callSeeflowCanvas({ mode: 'edit', adapter: noopAdapter });
+    expect(findElement(editTree, (el) => el.type === MiniMap)).not.toBeNull();
+
+    const viewTree = callSeeflowCanvas({ mode: 'view' });
+    expect(findElement(viewTree, (el) => el.type === MiniMap)).not.toBeNull();
+
+    const miniTree = callSeeflowCanvas({ mode: 'mini' });
+    expect(findElement(miniTree, (el) => el.type === MiniMap)).toBeNull();
+
+    // Mini consumer can opt back in, and edit consumer can opt out.
+    const miniOverride = callSeeflowCanvas({ mode: 'mini', showMiniMap: true });
+    expect(findElement(miniOverride, (el) => el.type === MiniMap)).not.toBeNull();
+
+    const editOverride = callSeeflowCanvas({
+      mode: 'edit',
+      adapter: noopAdapter,
+      showMiniMap: false,
+    });
+    expect(findElement(editOverride, (el) => el.type === MiniMap)).toBeNull();
   });
 
   it('threads projectId + onExportToCloud + the exportApi callbacks into ShareMenu', () => {

@@ -9,6 +9,7 @@ import {
   type EdgeMarker,
   type FinalConnectionState,
   type HandleType,
+  MiniMap,
   type Node,
   type NodeChange,
   Panel,
@@ -145,6 +146,13 @@ export interface CanvasFeatureOverrides {
    */
   showShareMenu?: boolean;
   /**
+   * Gates React Flow's bottom-right `<MiniMap>` overview (the outline / high-
+   * level box). Default ON for `edit` and `view` — helps users orient
+   * themselves in large flows. Default OFF for `mini` since the canvas IS the
+   * thumbnail; nesting a minimap inside it would be redundant chrome.
+   */
+  showMiniMap?: boolean;
+  /**
    * Gates the Embed item (and the inner EmbedDialog mount) inside the top-right
    * ShareMenu. Default OFF for every mode — Embed is a SeeFlow-studio-specific
    * affordance and most embedders of this package should not surface the
@@ -195,6 +203,7 @@ export interface ResolvedCanvasFlags {
   showResizeHandles: boolean;
   showControls: boolean;
   showShareMenu: boolean;
+  showMiniMap: boolean;
   showRestart: boolean;
   enableKeyboard: boolean;
   enableContextMenu: boolean;
@@ -215,6 +224,7 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showResizeHandles: true,
   showControls: true,
   showShareMenu: true,
+  showMiniMap: true,
   showRestart: true,
   enableKeyboard: true,
   enableContextMenu: true,
@@ -246,6 +256,9 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // View mode keeps ShareMenu so embedders can still download PDF/PNG; the
   // menu's own mode prop hides Embed + Export to seeflow.dev in view mode.
   showShareMenu: true,
+  // View mode keeps the MiniMap — it's a navigation aid that pairs with the
+  // pan/zoom that stays on in this mode.
+  showMiniMap: true,
   // Restart is a host-side runtime action — embedders never see it.
   showRestart: false,
   enableKeyboard: false,
@@ -281,6 +294,8 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   showResizeHandles: false,
   showControls: false,
   showShareMenu: false,
+  // Mini mode IS the thumbnail — nesting a MiniMap inside would be redundant.
+  showMiniMap: false,
   showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
@@ -313,6 +328,7 @@ export function resolveFlags(
     showResizeHandles: input.showResizeHandles ?? defaults.showResizeHandles,
     showControls: input.showControls ?? defaults.showControls,
     showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
+    showMiniMap: input.showMiniMap ?? defaults.showMiniMap,
     showRestart: input.showRestart ?? defaults.showRestart,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
@@ -1788,6 +1804,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     showResizeHandles,
     showControls,
     showShareMenu,
+    showMiniMap,
     showRestart,
     enableKeyboard,
     enableContextMenu,
@@ -1816,6 +1833,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         showResizeHandles,
         showControls,
         showShareMenu,
+        showMiniMap,
         showRestart,
         enableKeyboard,
         enableContextMenu,
@@ -1836,6 +1854,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       showResizeHandles,
       showControls,
       showShareMenu,
+      showMiniMap,
       showRestart,
       enableKeyboard,
       enableContextMenu,
@@ -4328,6 +4347,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 </ControlButton>
               </Controls>
             ) : null}
+            {/* React Flow's bottom-right MiniMap (the outline / high-level
+            box). Gated on flags.showMiniMap so mini-mode thumbnails don't
+            render a minimap inside themselves. Position defaults to
+            bottom-right which doesn't collide with the bottom-left
+            <Controls> cluster. The Radix-style scoped class lets
+            `src/styles/index.css` retheme it under `.seeflow-canvas-root`. */}
+            {flags.showMiniMap ? <MiniMap className="sf-canvas-minimap" /> : null}
             {/* US-007: multi-select bounding-box resize overlay. Renders only when
             ≥ 2 selected nodes are NOT all children of the same group; the
             internal check is in `<SelectionResizeOverlay>`. We pass through

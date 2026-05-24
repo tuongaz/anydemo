@@ -601,3 +601,24 @@ layer(base);
   opacity: 1;
   transition: opacity 120ms ease-out;
 }
+
+/* React Flow MiniMap theming. Mirrors the <Controls> cluster so the bottom
+   chrome reads as a single visual family in both light and dark themes. The
+   mask is the viewport rectangle's negative space; tinting it with a low-
+   alpha foreground keeps the rectangle legible without overpowering the
+   nodes underneath. */
+.seeflow-canvas-root .react-flow__minimap {
+  background: hsl(var(--card));
+  border: 1px solid hsl(var(--border));
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+}
+.seeflow-canvas-root .react-flow__minimap-mask {
+  fill: hsl(var(--foreground) / 0.08);
+}
+.seeflow-canvas-root .react-flow__minimap-node {
+  fill: hsl(var(--muted-foreground));
+  stroke: hsl(var(--border));
+  stroke-width: 1;
+}

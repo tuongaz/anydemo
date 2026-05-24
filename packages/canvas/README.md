@@ -55,7 +55,7 @@ import { SeeflowCanvas } from '@seeflow/canvas';
 ## Quickstart — mini mode (thumbnails)
 
 Static preview — every chrome affordance off (no Controls cluster, toolbar,
-style-strip, detail panel) and every input path inert (no pan, zoom,
+style-strip, detail panel, MiniMap) and every input path inert (no pan, zoom,
 selection, or node drag). `autoFitView` defaults to `true` so the flow
 self-frames inside whatever box you drop it into. No adapter required.
 
@@ -141,6 +141,25 @@ the same fit-view + snapshot + jspdf pipeline for free — no setup required.
   onExportToCloud={() => setExportDialogOpen(true)}
   /* ...other props */
 />
+```
+
+## MiniMap — outline / high-level box
+
+`<SeeflowCanvas>` renders React Flow's bottom-right `<MiniMap>` as a high-level
+outline of the whole flow — handy on large canvases where the viewport only
+shows a slice.
+
+- Default ON for `mode='edit'` and `mode='view'`; OFF for `mode='mini'` (the
+  canvas IS the thumbnail). Override with `showMiniMap={true|false}` to force
+  it on or off on any surface.
+- The minimap is themed under `.seeflow-canvas-root` so the background,
+  viewport mask, and node fills track the canvas's light / dark tokens.
+- PDF / PNG export already excludes the minimap from captured snapshots, so
+  enabling it does not affect downloaded artwork.
+
+```tsx
+// Hide the minimap on a specific embed surface:
+<SeeflowCanvas mode="view" showMiniMap={false} /* ... */ />;
 ```
 
 ### Imperative handle (`SeeflowCanvasHandle`)
