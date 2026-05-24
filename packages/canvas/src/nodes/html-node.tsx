@@ -105,14 +105,14 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     body = userSized ? (
       <div
         data-testid="html-node-content"
-        className="sf:h-full sf:w-full sf:overflow-auto"
+        className="sf:h-full sf:w-full sf:overflow-auto seeflow-themed-scrollbar"
         {...injectSanitizedHtml(html)}
       />
     ) : (
       <div
         ref={measureRef}
         data-testid="html-node-content"
-        className="sf:inline-block"
+        className="sf:inline-block seeflow-themed-scrollbar"
         style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
         {...injectSanitizedHtml(html)}
       />

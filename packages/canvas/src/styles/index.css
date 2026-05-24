@@ -176,6 +176,46 @@ layer(base);
   display: none;
 }
 
+/* Themed scrollbar — used on scrollable bodies inside nodes (component, html).
+   Thumb is invisible until the enclosing `sf:group` (the node wrapper) is
+   hovered, then fades in. Uses --muted-foreground so the color auto-flips
+   between light + dark without a separate .dark override. WebKit pseudo-
+   elements drive Chromium/Safari/Edge; `scrollbar-width` + `scrollbar-color`
+   cover Firefox. The transparent border + `background-clip: padding-box`
+   shrinks the thumb visually inside the 8px gutter (floating-pill look). */
+.seeflow-canvas-root .seeflow-themed-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 160ms ease-out;
+}
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar-track,
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  transition: background-color 160ms ease-out;
+}
+.seeflow-canvas-root .sf\:group:hover .seeflow-themed-scrollbar {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.45) transparent;
+}
+.seeflow-canvas-root .sf\:group:hover .seeflow-themed-scrollbar::-webkit-scrollbar-thumb {
+  background-color: hsl(var(--muted-foreground) / 0.35);
+}
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar-thumb:hover {
+  background-color: hsl(var(--muted-foreground) / 0.55) !important;
+}
+.seeflow-canvas-root .seeflow-themed-scrollbar::-webkit-scrollbar-thumb:active {
+  background-color: hsl(var(--muted-foreground) / 0.7) !important;
+}
+
 /* Hand mode: cursor over the pane is `grab` while idle and `grabbing` during
  * an active pan drag. React Flow doesn't expose a built-in cursor hook for
  * Hand mode, so we paint it via the wrapper's `data-canvas-mode="hand"`

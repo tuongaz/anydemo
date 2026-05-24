@@ -371,6 +371,16 @@ describe('HtmlNode autoSize', () => {
     expect(outerStyle.width).toBe(480);
     expect(outerStyle.height).toBe(320);
   });
+
+  it('tags the scrollable content with seeflow-themed-scrollbar in both size modes', () => {
+    const autoBody = findContent(callHtmlNode());
+    const autoClass = ((autoBody?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(autoClass).toContain('seeflow-themed-scrollbar');
+
+    const userBody = findContent(callHtmlNode({ autoSize: false, width: 480, height: 320 }));
+    const userClass = ((userBody?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(userClass).toContain('seeflow-themed-scrollbar');
+  });
 });
 
 describe('HtmlNode fit-to-content button', () => {

@@ -261,6 +261,27 @@ describe('ComponentNode wrapper style', () => {
     expect(style.width).toBe(COMPONENT_DEFAULT_SIZE.width);
     expect(style.height).toBe(COMPONENT_DEFAULT_SIZE.height);
   });
+
+  it('tags the scrollable body with seeflow-themed-scrollbar in both size modes', () => {
+    // Auto-size branch (inline-block measuring container).
+    const autoBody = findElement(callComponentNode(), (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-body';
+    });
+    const autoClass = ((autoBody?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(autoClass).toContain('seeflow-themed-scrollbar');
+
+    // User-sized branch (flex-1 fill).
+    const userBody = findElement(
+      callComponentNode({ autoSize: false, width: 480, height: 320 }),
+      (el) => {
+        const p = el.props as { 'data-testid'?: string };
+        return p['data-testid'] === 'component-node-body';
+      },
+    );
+    const userClass = ((userBody?.props as { className?: string }).className ?? '').split(/\s+/);
+    expect(userClass).toContain('seeflow-themed-scrollbar');
+  });
 });
 
 describe('ComponentNode fit-to-content button', () => {
