@@ -5,7 +5,7 @@ import * as React from 'react';
 
 const { ComponentNode, COMPONENT_DEFAULT_SIZE } = await import('./component-node.tsx');
 const { ComponentRuntime } = await import('./component-runtime.tsx');
-const { Icon } = await import('../ui/icon.tsx');
+const { NodeHeader } = await import('./lib/node-header.tsx');
 const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
 
 import type { ComponentSpec } from '../types.ts';
@@ -306,57 +306,72 @@ describe('ComponentNode fit-to-content button', () => {
   });
 });
 
+// Header now lives in the shared `<NodeHeader>` component (see
+// `./lib/node-header.tsx`). The hook-shim walker can't see inside its render
+// body, so these tests assert the ComponentNode → NodeHeader contract:
+// NodeHeader is mounted inside the chrome with the right testids and props.
+// NodeHeader's own rendering is covered by `./lib/node-header.test.tsx`.
+function findNodeHeader(tree: unknown): ReactElementLike | null {
+  return findElement(tree, (el) => el.type === NodeHeader);
+}
+
 describe('ComponentNode header', () => {
-  // Header lives INSIDE the chrome at the top so it doesn't sit in the band
-  // where selected-edge endpoint outlets land — fixes the bug where the old
-  // outside-chrome label intercepted clicks on edge endpoints behind it.
-  it('renders a header bar inside the chrome when data.name is set', () => {
+  it('mounts NodeHeader inside the chrome with the component-node testid props', () => {
     const tree = callComponentNode({ name: 'Counter card' });
-    const header = findElement(tree, (el) => {
-      const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-header';
-    });
+    const header = findNodeHeader(tree);
     expect(header).not.toBeNull();
+    const headerProps = header?.props as {
+      testId?: string;
+      titleTestId?: string;
+    };
+    expect(headerProps.testId).toBe('component-node-header');
+    expect(headerProps.titleTestId).toBe('component-node-title');
     const chrome = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
       return p['data-testid'] === 'component-node-chrome';
     });
     if (!chrome) throw new Error('expected chrome wrapper');
-    const headerInsideChrome = findElement(chrome, (el) => {
-      const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-header';
-    });
-    expect(headerInsideChrome).not.toBeNull();
+    expect(findElement(chrome, (el) => el.type === NodeHeader)).not.toBeNull();
   });
 
-  it('renders the name as the header title text', () => {
+  it('forwards the name to NodeHeader as the title source', () => {
     const tree = callComponentNode({ name: 'Counter card' });
-    const title = findElement(tree, (el) => {
-      const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-title';
-    });
-    expect((title?.props as { children?: unknown })?.children).toBe('Counter card');
+    const header = findNodeHeader(tree);
+    expect((header?.props as { name?: string })?.name).toBe('Counter card');
   });
 
-  it('omits the header when data.name is absent', () => {
+  it('omits NodeHeader when data.name is absent', () => {
     const tree = callComponentNode();
-    const header = findElement(tree, (el) => {
-      const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-header';
-    });
-    expect(header).toBeNull();
+    expect(findNodeHeader(tree)).toBeNull();
   });
 
-  it('renders an Icon inline with the caption when data.icon is set', () => {
-    const tree = callComponentNode({ name: 'Counter card', icon: 'sparkles' });
-    const header = findElement(tree, (el) => {
-      const p = el.props as { 'data-testid'?: string };
-      return p['data-testid'] === 'component-node-header';
-    });
-    if (!header) throw new Error('expected component-node-header');
-    const icon = findElement(header, (el) => el.type === Icon);
-    if (!icon) throw new Error('expected Icon in component-node-header');
-    expect((icon.props as { name?: string }).name).toBe('sparkles');
-    expect((icon.props as { size?: number }).size).toBe(16);
+  it('omits NodeHeader when data.name is the empty string', () => {
+    const tree = callComponentNode({ name: '' });
+    expect(findNodeHeader(tree)).toBeNull();
+  });
+
+  it('forwards icon + selected + edit callbacks to NodeHeader', () => {
+    const onName = () => {};
+    const onIcon = () => {};
+    const tree = callComponentNode(
+      {
+        name: 'Counter card',
+        icon: 'sparkles',
+        onNameChange: onName,
+        onIconChange: onIcon,
+      },
+      { selected: true } as Partial<NodeProps>,
+    );
+    const header = findNodeHeader(tree);
+    const props = header?.props as {
+      icon?: string | null;
+      selected?: boolean;
+      onNameChange?: unknown;
+      onIconChange?: unknown;
+    };
+    expect(props.icon).toBe('sparkles');
+    expect(props.selected).toBe(true);
+    expect(props.onNameChange).toBe(onName);
+    expect(props.onIconChange).toBe(onIcon);
   });
 });

@@ -59,15 +59,23 @@ function isElement(value: unknown): value is ReactElementLike {
   );
 }
 
+// JSX-bearing slot keys other than `children` that we want the walker to
+// descend into. `trailing` is NodeHeader's right-slot prop; `anchor` belongs
+// to IconPickerPopover. Both pass real React elements that callers (and tests)
+// reason about, so they should be reachable.
+const JSX_SLOT_KEYS = ['children', 'trailing', 'anchor'] as const;
+
 function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): ReactElementLike[] {
   const out: ReactElementLike[] = [];
   const visit = (node: unknown) => {
     if (!isElement(node)) return;
     if (predicate(node)) out.push(node);
-    const children = node.props.children;
-    if (children === undefined || children === null) return;
-    const arr = Array.isArray(children) ? children : [children];
-    for (const c of arr) visit(c);
+    for (const key of JSX_SLOT_KEYS) {
+      const slot = (node.props as Record<string, unknown>)[key];
+      if (slot === undefined || slot === null) continue;
+      const arr = Array.isArray(slot) ? slot : [slot];
+      for (const c of arr) visit(c);
+    }
   };
   visit(tree);
   return out;
