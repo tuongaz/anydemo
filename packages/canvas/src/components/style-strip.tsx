@@ -8,7 +8,7 @@ import {
   Sticker,
   Type,
 } from 'lucide-react';
-import { type ReactNode, useEffect, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { COLOR_TOKENS } from '../lib/color-tokens.ts';
 import type {
@@ -101,13 +101,25 @@ const DEFAULT_STROKE_WIDTH = 2;
 // than the harsher 0px the schema would imply.
 const DEFAULT_CORNER_RADIUS = 8;
 
+// 18-slot palette: 2 special tokens (`none`, `default`) + 16 named colors.
+// `'none'` renders transparent border / fill — hidden from text-color and
+// connector-color pickers via `<ColorSwatchGrid allowNone={false}>`.
 const PALETTE_TOKENS: ColorToken[] = [
+  'none',
   'default',
   'slate',
-  'blue',
-  'green',
-  'amber',
+  'gray',
   'red',
+  'rose',
+  'orange',
+  'amber',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'indigo',
+  'violet',
   'purple',
   'pink',
 ];
@@ -353,6 +365,7 @@ export function StyleStrip({
             previewKind="edge"
             tokenTestIdPrefix="style-tab-icon-color"
             innerTestId="style-tab-icon-color-trigger"
+            allowNone={false}
             onSelect={applyIconColor}
           />
           {showChangeIcon ? (
@@ -514,12 +527,18 @@ export function StyleStrip({
         />
       );
     }
-    const borderHex = COLOR_TOKENS[borderColorActive].border;
-    const fillHex = COLOR_TOKENS[backgroundActive].background;
+    // `'none'` falls back to a muted dashed border / theme card fill so the
+    // glyph stays visible even when both border + fill are transparent.
+    const borderIsNone = borderColorActive === 'none';
+    const fillIsNone = backgroundActive === 'none';
+    const borderStyle = borderIsNone
+      ? '2px dashed hsl(var(--muted-foreground))'
+      : `2px solid ${COLOR_TOKENS[borderColorActive].border}`;
+    const fillHex = fillIsNone ? 'hsl(var(--card))' : COLOR_TOKENS[backgroundActive].background;
     return (
       <span
         className="sf:inline-block sf:h-5 sf:w-5 sf:rounded-md sf:ring-1 sf:ring-border"
-        style={{ backgroundColor: fillHex, border: `2px solid ${borderHex}` }}
+        style={{ backgroundColor: fillHex, border: borderStyle }}
       />
     );
   };
@@ -549,6 +568,7 @@ export function StyleStrip({
                   tokenTestIdPrefix={colorTokenPrefix}
                   innerTestId={colorInnerTestId}
                   ariaLabel={colorAriaLabel}
+                  allowNone={!pureConnector}
                   onSelect={applyBorderColor}
                 />
               </PopoverSection>
@@ -660,6 +680,7 @@ export function StyleStrip({
                     tokenTestIdPrefix="style-tab-text-color"
                     innerTestId="style-tab-text-color-trigger"
                     ariaLabel="text color"
+                    allowNone={false}
                     onSelect={applyTextColor}
                   />
                 </PopoverSection>
@@ -732,21 +753,90 @@ export function StyleStrip({
   );
 }
 
+// Retained for back-compat with existing call sites that still thread a
+// preview kind through. With the unified swatch design every kind renders
+// the same saturated tint (palette.edge), so the value is effectively
+// cosmetic — kept on the SwatchButton/ColorSwatchGrid prop surfaces so any
+// host instrumentation that inspected it keeps working.
 type SwatchPreviewKind = 'border' | 'background' | 'edge';
 
-function swatchPreviewStyle(token: ColorToken, kind: SwatchPreviewKind) {
-  const palette = COLOR_TOKENS[token];
-  if (kind === 'background')
-    return { backgroundColor: palette.background, borderColor: palette.border };
-  if (kind === 'edge') return { backgroundColor: palette.edge, borderColor: palette.edge };
-  return { borderColor: palette.border, backgroundColor: palette.background };
+// Single source of truth for swatch fill across triggers and grid cells.
+// Tokens render as a flat saturated tint (palette.edge); `'default'` shows a
+// half-and-half split conveying "border + fill from theme"; `'none'` is
+// rendered separately by SwatchCell (transparent body + diagonal slash).
+function swatchFillStyle(token: ColorToken): CSSProperties {
+  if (token === 'default') {
+    return {
+      backgroundImage:
+        'linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) 50%, hsl(var(--card)) 50%, hsl(var(--card)) 100%)',
+    };
+  }
+  return { backgroundColor: COLOR_TOKENS[token].edge };
 }
 
-function swatchTriggerFillStyle(token: ColorToken, kind: SwatchPreviewKind) {
-  const palette = COLOR_TOKENS[token];
-  if (kind === 'background') return { backgroundColor: palette.background };
-  if (kind === 'edge') return { backgroundColor: palette.edge };
-  return { backgroundColor: palette.border };
+// Diagonal-slash overlay used for the `'none'` swatch (Figma-style "no fill"
+// affordance). Exported as a render helper so both the popover swatch and
+// the SwatchButton trigger share the same look.
+function NoColorSlash() {
+  return (
+    <span
+      aria-hidden="true"
+      className="sf:pointer-events-none sf:absolute sf:inset-0 sf:rounded-full"
+      style={{
+        backgroundImage:
+          'linear-gradient(45deg, transparent 45%, hsl(0, 75%, 55%) 45%, hsl(0, 75%, 55%) 55%, transparent 55%)',
+      }}
+    />
+  );
+}
+
+// One swatch cell. Renders three visual variants based on token:
+//   - 'none'     → empty circle + diagonal slash + 1px border (visibility)
+//   - 'default'  → half-and-half split (theme primary / theme card)
+//   - others     → flat saturated tint (palette.edge)
+// Active state surfaces as a focus-style ring; the check glyph is hidden on
+// the 'none' variant (the slash would obscure it — the ring conveys state).
+function SwatchCell({
+  token,
+  isActive,
+  onClick,
+  testId,
+  ariaLabel,
+}: {
+  token: ColorToken;
+  isActive: boolean;
+  onClick: () => void;
+  testId: string;
+  ariaLabel: string;
+}) {
+  const isNone = token === 'none';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      data-testid={testId}
+      data-active={isActive}
+      aria-label={ariaLabel}
+      aria-pressed={isActive}
+      title={token}
+      className={cn(
+        'sf:relative sf:flex sf:h-5 sf:w-5 sf:items-center sf:justify-center sf:rounded-full sf:transition-all',
+        isNone && 'sf:border sf:border-border sf:bg-card',
+        isActive
+          ? 'sf:ring-2 sf:ring-ring sf:ring-offset-1 sf:ring-offset-popover'
+          : 'sf:hover:scale-110',
+      )}
+      style={!isNone ? swatchFillStyle(token) : undefined}
+    >
+      {isNone ? <NoColorSlash /> : null}
+      {isActive && !isNone ? (
+        <Check
+          className="sf:h-2.5 sf:w-2.5 sf:drop-shadow-sm"
+          style={{ color: 'hsl(var(--foreground))' }}
+        />
+      ) : null}
+    </button>
+  );
 }
 
 // One strip button that opens a swatch palette in a popover. Mirrors the
@@ -757,9 +847,12 @@ function SwatchButton({
   tooltip,
   ariaLabel,
   activeToken,
-  previewKind,
+  // `previewKind` is retained for back-compat with call sites that still
+  // pass it; the unified swatch design makes it cosmetic. See SwatchPreviewKind.
+  previewKind: _previewKind,
   tokenTestIdPrefix,
   innerTestId,
+  allowNone,
   onSelect,
 }: {
   testId: string;
@@ -769,10 +862,12 @@ function SwatchButton({
   previewKind: SwatchPreviewKind;
   tokenTestIdPrefix: string;
   innerTestId: string;
+  /** Hide the `'none'` swatch — used by text/edge pickers where invisible has no use. */
+  allowNone?: boolean;
   onSelect: (token: ColorToken) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const isUnset = activeToken === 'default';
+  const isNone = activeToken === 'none';
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <Tooltip>
@@ -795,21 +890,13 @@ function SwatchButton({
               */}
               <span
                 data-testid={innerTestId}
-                className="sf:relative sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border"
-                style={swatchTriggerFillStyle(activeToken, previewKind)}
+                className={cn(
+                  'sf:relative sf:h-5 sf:w-5 sf:rounded-full sf:ring-1 sf:ring-border',
+                  isNone && 'sf:bg-card',
+                )}
+                style={!isNone ? swatchFillStyle(activeToken) : undefined}
               >
-                {isUnset ? (
-                  <span
-                    aria-hidden="true"
-                    className="sf:pointer-events-none sf:absolute sf:inset-0 sf:rounded-full"
-                    style={{
-                      backgroundImage:
-                        'linear-gradient(45deg, transparent 45%, currentColor 45%, currentColor 55%, transparent 55%)',
-                      color: 'hsl(var(--muted-foreground))',
-                      opacity: 0.5,
-                    }}
-                  />
-                ) : null}
+                {isNone ? <NoColorSlash /> : null}
               </span>
             </button>
           </PopoverTrigger>
@@ -821,58 +908,39 @@ function SwatchButton({
       <PopoverContent
         side="right"
         align="start"
-        className="sf:w-auto sf:p-2"
+        className="sf:w-auto sf:p-1.5"
         data-testid={`${innerTestId}-popover`}
       >
-        <div className="sf:grid sf:grid-cols-4 sf:gap-1.5">
-          {PALETTE_TOKENS.map((token) => {
-            const isActive = activeToken === token;
-            return (
-              <button
-                key={token}
-                type="button"
-                onClick={() => {
-                  onSelect(token);
-                  setOpen(false);
-                }}
-                data-testid={`${tokenTestIdPrefix}-${token}`}
-                data-active={isActive}
-                aria-label={`${ariaLabel} ${token}`}
-                aria-pressed={isActive}
-                title={token}
-                className={cn(
-                  'sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all',
-                  isActive
-                    ? 'sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover'
-                    : 'sf:hover:scale-110',
-                )}
-                style={swatchPreviewStyle(token, previewKind)}
-              >
-                {isActive ? (
-                  <Check
-                    className="sf:h-3 sf:w-3 sf:drop-shadow-sm"
-                    style={{ color: 'hsl(var(--foreground))' }}
-                  />
-                ) : null}
-              </button>
-            );
-          })}
-        </div>
+        <ColorSwatchGrid
+          testId={`${tokenTestIdPrefix}-grid`}
+          activeToken={activeToken}
+          previewKind={_previewKind}
+          tokenTestIdPrefix={tokenTestIdPrefix}
+          innerTestId={innerTestId}
+          ariaLabel={ariaLabel}
+          allowNone={allowNone}
+          onSelect={(t) => {
+            onSelect(t);
+            setOpen(false);
+          }}
+        />
       </PopoverContent>
     </Popover>
   );
 }
 
-// Color swatch grid — same swatch markup as SwatchButton's popover content but
-// without the wrapping button/popover. Used inside the consolidated Colors and
-// Text popovers so a single trigger can surface multiple color rows.
+// Color swatch grid — used inside SwatchButton's popover and the consolidated
+// Colors / Text popovers. 6-col × 3-row layout for the 18-slot palette;
+// `allowNone={false}` hides the `'none'` slot for text- and edge-color rows.
 function ColorSwatchGrid({
   testId,
   activeToken,
-  previewKind,
+  // Retained for back-compat; see SwatchPreviewKind.
+  previewKind: _previewKind,
   tokenTestIdPrefix,
   innerTestId,
   ariaLabel,
+  allowNone,
   onSelect,
 }: {
   testId: string;
@@ -881,44 +949,27 @@ function ColorSwatchGrid({
   tokenTestIdPrefix: string;
   innerTestId: string;
   ariaLabel: string;
+  allowNone?: boolean;
   onSelect: (token: ColorToken) => void;
 }) {
+  const tokens = allowNone === false ? PALETTE_TOKENS.filter((t) => t !== 'none') : PALETTE_TOKENS;
   return (
     <div
       data-testid={testId}
       data-active-token={activeToken}
       data-inner-testid={innerTestId}
-      className="sf:grid sf:grid-cols-4 sf:gap-1.5"
+      className="sf:grid sf:grid-cols-6 sf:gap-1"
     >
-      {PALETTE_TOKENS.map((token) => {
-        const isActive = activeToken === token;
-        return (
-          <button
-            key={token}
-            type="button"
-            onClick={() => onSelect(token)}
-            data-testid={`${tokenTestIdPrefix}-${token}`}
-            data-active={isActive}
-            aria-label={`${ariaLabel} ${token}`}
-            aria-pressed={isActive}
-            title={token}
-            className={cn(
-              'sf:relative sf:flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-full sf:border-2 sf:transition-all',
-              isActive
-                ? 'sf:ring-2 sf:ring-ring sf:ring-offset-2 sf:ring-offset-popover'
-                : 'sf:hover:scale-110',
-            )}
-            style={swatchPreviewStyle(token, previewKind)}
-          >
-            {isActive ? (
-              <Check
-                className="sf:h-3 sf:w-3 sf:drop-shadow-sm"
-                style={{ color: 'hsl(var(--foreground))' }}
-              />
-            ) : null}
-          </button>
-        );
-      })}
+      {tokens.map((token) => (
+        <SwatchCell
+          key={token}
+          token={token}
+          isActive={activeToken === token}
+          onClick={() => onSelect(token)}
+          testId={`${tokenTestIdPrefix}-${token}`}
+          ariaLabel={`${ariaLabel} ${token}`}
+        />
+      ))}
     </div>
   );
 }

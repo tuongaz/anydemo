@@ -6,12 +6,21 @@
 export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 
 export type ColorToken =
+  | 'none'
   | 'default'
   | 'slate'
-  | 'blue'
-  | 'green'
-  | 'amber'
+  | 'gray'
   | 'red'
+  | 'rose'
+  | 'orange'
+  | 'amber'
+  | 'lime'
+  | 'green'
+  | 'teal'
+  | 'cyan'
+  | 'blue'
+  | 'indigo'
+  | 'violet'
   | 'purple'
   | 'pink';
 

@@ -3,15 +3,29 @@ import type { ColorToken } from '../types.ts';
 import { COLOR_TOKENS, colorTokenStyle } from './color-tokens.ts';
 
 const ALL_TOKENS: ColorToken[] = [
+  'none',
   'default',
   'slate',
-  'blue',
-  'green',
-  'amber',
+  'gray',
   'red',
+  'rose',
+  'orange',
+  'amber',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'indigo',
+  'violet',
   'purple',
   'pink',
 ];
+
+// Tokens with concrete (non-transparent) color values. `'none'` is omitted
+// because its COLOR_TOKEN_MAP entry intentionally uses `transparent` strings;
+// `colorTokenStyle` short-circuits before reading them.
+const PAINTED_TOKENS: ColorToken[] = ALL_TOKENS.filter((t) => t !== 'none');
 
 describe('COLOR_TOKENS map', () => {
   it('has an entry for every ColorToken enum value', () => {
@@ -37,6 +51,13 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.default.background).toContain('var(--');
     expect(COLOR_TOKENS.default.edge).toContain('var(--');
     expect(COLOR_TOKENS.default.headerBackground).toContain('var(--');
+  });
+
+  it('uses transparent placeholders for the none token', () => {
+    expect(COLOR_TOKENS.none.border).toBe('transparent');
+    expect(COLOR_TOKENS.none.background).toBe('transparent');
+    expect(COLOR_TOKENS.none.edge).toBe('transparent');
+    expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
   });
 });
 
@@ -64,8 +85,8 @@ describe('colorTokenStyle', () => {
     expect(colorTokenStyle(undefined, 'edge')).toEqual(colorTokenStyle('default', 'edge'));
   });
 
-  it('maps each token to its COLOR_TOKENS entry', () => {
-    for (const token of ALL_TOKENS) {
+  it('maps each painted token to its COLOR_TOKENS entry', () => {
+    for (const token of PAINTED_TOKENS) {
       const node = colorTokenStyle(token, 'node');
       const edge = colorTokenStyle(token, 'edge');
       expect(node.borderColor).toBe(COLOR_TOKENS[token].border);
@@ -80,19 +101,42 @@ describe('colorTokenStyle', () => {
     expect(style.backgroundColor).toBe('hsl(var(--muted))');
   });
 
-  it('maps each token to its headerBackground for kind=node-header', () => {
-    for (const token of ALL_TOKENS) {
+  it('maps each painted token to its headerBackground for kind=node-header', () => {
+    for (const token of PAINTED_TOKENS) {
       const style = colorTokenStyle(token, 'node-header');
       expect(style.backgroundColor).toBe(COLOR_TOKENS[token].headerBackground);
     }
   });
 
-  it('returns a distinct header background from the body background for non-default tokens', () => {
-    const nonDefault: ColorToken[] = ['slate', 'blue', 'green', 'amber', 'red', 'purple', 'pink'];
+  it('returns a distinct header background from the body background for non-default painted tokens', () => {
+    const nonDefault = PAINTED_TOKENS.filter((t) => t !== 'default');
     for (const token of nonDefault) {
       const node = colorTokenStyle(token, 'node');
       const header = colorTokenStyle(token, 'node-header');
       expect(header.backgroundColor).not.toBe(node.backgroundColor);
     }
+  });
+
+  describe('none token', () => {
+    it('returns transparent border + background for kind=node', () => {
+      const style = colorTokenStyle('none', 'node');
+      expect(style.borderColor).toBe('transparent');
+      expect(style.backgroundColor).toBe('transparent');
+    });
+
+    it('returns transparent background for kind=node-header', () => {
+      const style = colorTokenStyle('none', 'node-header');
+      expect(style.backgroundColor).toBe('transparent');
+    });
+
+    it('returns transparent stroke for kind=edge', () => {
+      const style = colorTokenStyle('none', 'edge');
+      expect(style.stroke).toBe('transparent');
+    });
+
+    it('returns an empty style for kind=text (text inherits theme foreground)', () => {
+      const style = colorTokenStyle('none', 'text');
+      expect(style).toEqual({});
+    });
   });
 });

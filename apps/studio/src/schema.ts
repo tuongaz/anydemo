@@ -13,12 +13,24 @@ const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 // Curated palette tokens. Stored on disk as readable names; the frontend maps
 // them to actual CSS values (theme-aware, light + dark).
 export const ColorTokenSchema = z.enum([
+  // `'none'` renders transparent border / fill on nodes (no stroke, no fill).
+  // Hidden from the text-color and connector-color pickers — invisible text
+  // and edges aren't useful, and `'default'` already covers "inherit".
+  'none',
   'default',
   'slate',
-  'blue',
-  'green',
-  'amber',
+  'gray',
   'red',
+  'rose',
+  'orange',
+  'amber',
+  'lime',
+  'green',
+  'teal',
+  'cyan',
+  'blue',
+  'indigo',
+  'violet',
   'purple',
   'pink',
 ]);
