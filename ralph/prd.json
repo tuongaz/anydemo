@@ -124,7 +124,7 @@
         "bun run test:it:e2e passes"
       ],
       "priority": 8,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
