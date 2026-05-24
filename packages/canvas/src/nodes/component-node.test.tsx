@@ -367,23 +367,19 @@ describe('ComponentNode header', () => {
     expect((header?.props as { name?: string })?.name).toBe('Counter card');
   });
 
-  it('omits NodeHeader when data.name and data.icon are both absent', () => {
+  it('omits NodeHeader when data.name is absent', () => {
     const tree = callComponentNode();
     expect(findNodeHeader(tree)).toBeNull();
   });
 
-  it('omits NodeHeader when data.name is the empty string and no icon is set', () => {
+  it('omits NodeHeader when data.name is the empty string', () => {
     const tree = callComponentNode({ name: '' });
     expect(findNodeHeader(tree)).toBeNull();
   });
 
-  it('renders NodeHeader with an empty name when only data.icon is set', () => {
+  it('omits NodeHeader when only data.icon is set (icon does not surface a standalone header)', () => {
     const tree = callComponentNode({ icon: 'sparkles' });
-    const header = findNodeHeader(tree);
-    expect(header).not.toBeNull();
-    const props = header?.props as { name?: string; icon?: string | null };
-    expect(props.name).toBe('');
-    expect(props.icon).toBe('sparkles');
+    expect(findNodeHeader(tree)).toBeNull();
   });
 
   it('forwards icon + selected + edit callbacks to NodeHeader', () => {

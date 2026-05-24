@@ -177,10 +177,10 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         )}
         style={chromeStyle}
       >
-        {data.name || data.icon ? (
+        {data.name !== undefined && data.name !== '' ? (
           <NodeHeader
             nodeId={id}
-            name={data.name ?? ''}
+            name={data.name}
             icon={data.icon}
             selected={selected}
             fontSize={data.fontSize}

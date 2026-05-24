@@ -145,32 +145,34 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
         isConnectable={isConnectable}
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
-      <NodeHeader
-        nodeId={id}
-        name={data.name ?? ''}
-        icon={data.icon}
-        selected={selected}
-        fontSize={data.fontSize}
-        textColor={data.textColor}
-        onNameChange={data.onNameChange}
-        onIconChange={data.onIconChange}
-        trailing={
-          action ? (
-            <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
-              <PlayButton
-                visualStatus={visualStatus}
-                disabled={!playable || visualStatus === 'active'}
-                buttonLabel={buttonLabel}
-                isError={isError}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  data.onPlay?.(id);
-                }}
-              />
-            </div>
-          ) : undefined
-        }
-      />
+      {data.name !== undefined && data.name !== '' ? (
+        <NodeHeader
+          nodeId={id}
+          name={data.name}
+          icon={data.icon}
+          selected={selected}
+          fontSize={data.fontSize}
+          textColor={data.textColor}
+          onNameChange={data.onNameChange}
+          onIconChange={data.onIconChange}
+          trailing={
+            action ? (
+              <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
+                <PlayButton
+                  visualStatus={visualStatus}
+                  disabled={!playable || visualStatus === 'active'}
+                  buttonLabel={buttonLabel}
+                  isError={isError}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    data.onPlay?.(id);
+                  }}
+                />
+              </div>
+            ) : undefined
+          }
+        />
+      ) : null}
       <div
         className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2"
         data-testid="node-content"

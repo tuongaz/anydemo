@@ -188,6 +188,31 @@ describe('US-009: RectangleNode renders capability chrome', () => {
   });
 });
 
+// Empty-title guard: the rectangle header chrome (border + bg-muted strip)
+// only renders when there's something to label. An empty/missing name hides
+// the header entirely — icon presence does not override this.
+describe('RectangleNode header visibility', () => {
+  it('renders NodeHeader when data.name is set', () => {
+    const tree = callRectangleNode({ name: 'svc' });
+    expect(findByComponentName(tree, 'NodeHeader')).toHaveLength(1);
+  });
+
+  it('omits NodeHeader when data.name is undefined', () => {
+    const tree = callRectangleNode({});
+    expect(findByComponentName(tree, 'NodeHeader')).toHaveLength(0);
+  });
+
+  it('omits NodeHeader when data.name is the empty string', () => {
+    const tree = callRectangleNode({ name: '' });
+    expect(findByComponentName(tree, 'NodeHeader')).toHaveLength(0);
+  });
+
+  it('omits NodeHeader when only data.icon is set (icon does not surface a standalone header)', () => {
+    const tree = callRectangleNode({ icon: 'sparkles' });
+    expect(findByComponentName(tree, 'NodeHeader')).toHaveLength(0);
+  });
+});
+
 // Theme-aware elevation. `data.shadow` swaps the baseline `sf:shadow-sm`
 // class for the matching `var(--node-shadow-N)` so the two shadow sources
 // don't compound.
