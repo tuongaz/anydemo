@@ -5,8 +5,8 @@ import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { debouncedResizeObserver } from '../lib/debounced-resize-observer.ts';
 import type { ComponentNodeData } from '../types.ts';
-import { Icon } from '../ui/icon.tsx';
 import { ComponentRuntime } from './component-runtime.tsx';
+import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
 
@@ -29,6 +29,10 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
   // PATCHes { autoSize: true } through the adapter, which strips width/height
   // server-side per the autoSize invariant.
   onFitToContent?: (nodeId: string) => void;
+  /** When wired, double-clicking the header opens an inline name editor. */
+  onNameChange?: (nodeId: string, name: string) => void;
+  /** When wired (alongside selected + icon), the header icon becomes a picker trigger. */
+  onIconChange?: (nodeId: string, name: string | null) => void;
 } & Record<string, unknown>;
 export type ComponentNodeType = Node<ComponentNodeRuntimeData, 'component'>;
 
@@ -173,26 +177,18 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         style={chromeStyle}
       >
         {data.name !== undefined && data.name !== '' ? (
-          <div
-            data-testid="component-node-header"
-            className="sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:border-border sf:border-b sf:bg-muted sf:px-3 sf:py-3"
-          >
-            {data.icon ? (
-              <Icon
-                name={data.icon}
-                size={16}
-                className="sf:shrink-0"
-                style={colorTokenStyle(data.textColor, 'text')}
-                aria-hidden
-              />
-            ) : null}
-            <div
-              data-testid="component-node-title"
-              className="sf:min-w-0 sf:flex-1 sf:wrap-break-word sf:whitespace-pre-wrap sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90"
-            >
-              {data.name}
-            </div>
-          </div>
+          <NodeHeader
+            nodeId={id}
+            name={data.name}
+            icon={data.icon}
+            selected={selected}
+            fontSize={data.fontSize}
+            textColor={data.textColor}
+            onNameChange={data.onNameChange}
+            onIconChange={data.onIconChange}
+            testId="component-node-header"
+            titleTestId="component-node-title"
+          />
         ) : null}
         {body}
       </div>

@@ -1,11 +1,10 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
-import { IconPickerPopover } from '../components/icon-picker-popover.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import type { GeometricNodeData, NodeStatus, StatusReport } from '../types.ts';
-import { Icon } from '../ui/icon.tsx';
+import { NodeHeader } from './lib/node-header.tsx';
 import { PlayButton } from './lib/play-button.tsx';
 import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
@@ -42,8 +41,6 @@ export type RectangleNodeData = GeometricNodeData & {
 } & Record<string, unknown>;
 export type RectangleNodeType = Node<RectangleNodeData, 'rectangle'>;
 
-type EditField = 'name' | 'description' | null;
-
 const MIN_W = 100;
 const MIN_H = 44;
 const DEFAULT_W = 250;
@@ -71,17 +68,13 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
   });
-  const [editing, setEditing] = useState<EditField>(null);
-  const [iconPickerOpen, setIconPickerOpen] = useState(false);
-  const nameEditable = !!data.onNameChange;
+  const [descEditing, setDescEditing] = useState(false);
   const descEditable = !!data.onDescriptionChange;
-  const iconEditable = !!data.onIconChange && !!selected && !!data.icon;
   const sized = data.width !== undefined || data.height !== undefined;
-  const labelFontStyle: CSSProperties = {
+  const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
   };
-  const descriptionFontStyle: CSSProperties = labelFontStyle;
 
   const containerStyle: CSSProperties = {
     borderColor:
@@ -98,29 +91,17 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     ...(sized ? {} : { width: DEFAULT_W }),
   };
 
-  const handleWrapperDoubleClick =
-    nameEditable || descEditable
-      ? (e: ReactMouseEvent<HTMLDivElement>) => {
-          if (editing !== null) return;
-          const target = e.target as HTMLElement | null;
-          if (target?.closest('.react-flow__handle')) return;
-          if (target?.closest('.react-flow__resize-control')) return;
-          e.stopPropagation();
-          if (target?.closest('[data-testid="node-header"]')) {
-            if (nameEditable) setEditing('name');
-            return;
-          }
-          if (target?.closest('[data-testid="node-content"]')) {
-            if (descEditable) setEditing('description');
-            else if (nameEditable) setEditing('name');
-            return;
-          }
-          if (descEditable) setEditing('description');
-          else if (nameEditable) setEditing('name');
-        }
-      : undefined;
-
-  const nameText = data.name ?? '';
+  const handleWrapperDoubleClick = descEditable
+    ? (e: ReactMouseEvent<HTMLDivElement>) => {
+        if (descEditing) return;
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('.react-flow__handle')) return;
+        if (target?.closest('.react-flow__resize-control')) return;
+        if (target?.closest('[data-testid="node-header"]')) return;
+        e.stopPropagation();
+        setDescEditing(true);
+      }
+    : undefined;
 
   return (
     <div
@@ -158,108 +139,44 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
         isConnectable={isConnectable}
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
-      <div
-        className="sf:flex sf:shrink-0 sf:items-center sf:justify-between sf:gap-2 sf:border-b sf:border-border sf:bg-muted sf:px-3 sf:py-3"
-        data-testid="node-header"
-      >
-        {data.icon ? (
-          iconEditable && data.onIconChange ? (
-            <IconPickerPopover
-              open={iconPickerOpen}
-              onOpenChange={setIconPickerOpen}
-              onPick={(name) => {
-                data.onIconChange?.(id, name);
-                setIconPickerOpen(false);
-              }}
-              anchor={
-                <button
-                  type="button"
-                  data-testid="rectangle-node-icon-trigger"
-                  aria-label="Change icon"
-                  aria-pressed={iconPickerOpen}
-                  className={cn(
-                    'sf:inline-flex sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-sm sf:bg-transparent sf:p-0 sf:transition-shadow',
-                    'sf:hover:ring-2 sf:hover:ring-ring/40 sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring',
-                  )}
-                  onClick={(e) => e.stopPropagation()}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onDoubleClick={(e) => e.stopPropagation()}
-                >
-                  <Icon
-                    name={data.icon}
-                    size={16}
-                    style={colorTokenStyle(data.textColor, 'text')}
-                    aria-hidden
-                  />
-                </button>
-              }
-            />
-          ) : (
-            <Icon
-              name={data.icon}
-              size={16}
-              className="shrink-0"
-              style={colorTokenStyle(data.textColor, 'text')}
-              aria-hidden
-            />
-          )
-        ) : null}
-        <div
-          className="sf:min-w-0 sf:flex-1 sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90"
-          style={labelFontStyle}
-        >
-          {editing === 'name' && nameEditable ? (
-            <InlineEdit
-              initialValue={nameText}
-              field="node-name"
-              commitMode="blur-only"
-              onCommit={(v) => data.onNameChange?.(id, v)}
-              onExit={() => setEditing(null)}
-              className="sf:text-[18px] sf:font-semibold sf:text-foreground/90"
-              style={labelFontStyle}
-              placeholder="Name"
-            />
-          ) : (
-            <button
-              type="button"
-              className={cn(
-                'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:font-semibold sf:leading-tight sf:text-foreground/90',
-                nameEditable ? 'sf:hover:opacity-80' : '',
-                !nameText ? 'sf:italic sf:text-muted-foreground/40' : '',
-              )}
-              style={labelFontStyle}
-            >
-              {nameText}
-            </button>
-          )}
-        </div>
-        {action ? (
-          <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
-            <PlayButton
-              visualStatus={visualStatus}
-              disabled={!playable || visualStatus === 'active'}
-              buttonLabel={buttonLabel}
-              isError={isError}
-              onClick={(e) => {
-                e.stopPropagation();
-                data.onPlay?.(id);
-              }}
-            />
-          </div>
-        ) : null}
-      </div>
+      <NodeHeader
+        nodeId={id}
+        name={data.name ?? ''}
+        icon={data.icon}
+        selected={selected}
+        fontSize={data.fontSize}
+        textColor={data.textColor}
+        onNameChange={data.onNameChange}
+        onIconChange={data.onIconChange}
+        trailing={
+          action ? (
+            <div className="sf:flex sf:shrink-0 sf:items-center sf:gap-1">
+              <PlayButton
+                visualStatus={visualStatus}
+                disabled={!playable || visualStatus === 'active'}
+                buttonLabel={buttonLabel}
+                isError={isError}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  data.onPlay?.(id);
+                }}
+              />
+            </div>
+          ) : undefined
+        }
+      />
       <div
         className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:px-3 sf:py-2"
         data-testid="node-content"
         data-resizing={isResizing ? 'true' : undefined}
       >
-        {editing === 'description' && descEditable ? (
+        {descEditing && descEditable ? (
           <InlineEdit
             initialValue={description ?? ''}
             field="node-description"
             multiline
             onCommit={(v) => data.onDescriptionChange?.(id, v)}
-            onExit={() => setEditing(null)}
+            onExit={() => setDescEditing(false)}
             className="sf:w-full sf:text-[18px] sf:text-muted-foreground"
             style={descriptionFontStyle}
             placeholder="Description"
