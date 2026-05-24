@@ -103,10 +103,14 @@ export const SHAPE_DEFAULT_SIZE: Record<GeometricKind, { width: number; height: 
 // floating annotation. Selection still draws an outline via the unified
 // outer-rect outline so text and chromed shapes share the exact same
 // selection chrome.
+//
+// Sticky's `sf:shadow-md` baseline lives on `STICKY_BASELINE_SHADOW` so
+// `shapeChromeStyle` can swap it for the elevation token when `data.shadow`
+// is explicit — keeping the two shadow sources from compounding.
 export const SHAPE_CLASS: Record<GeometricKind, string> = {
   rectangle: 'sf:rounded-lg sf:border-[3px] sf:bg-transparent',
   ellipse: 'sf:rounded-full sf:border-[3px] sf:bg-transparent',
-  sticky: 'sf:rounded-md sf:border-[3px] sf:shadow-md sf:-rotate-2',
+  sticky: 'sf:rounded-md sf:border-[3px] sf:-rotate-2',
   text: 'sf:bg-transparent',
   // Illustrative shapes have no wrapper chrome — the inline SVG owns
   // border + fill so the wrapper stays a transparent positioning host.
@@ -116,6 +120,10 @@ export const SHAPE_CLASS: Record<GeometricKind, string> = {
   queue: '',
   cloud: '',
 };
+
+// Tailwind's `sf:shadow-md` resolved value — applied inline so an explicit
+// `data.shadow` can override it without class fighting.
+const STICKY_BASELINE_SHADOW = '0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)';
 
 /**
  * Tailwind class string for a shape's chrome. The pair of `shapeChromeClass` +
@@ -137,7 +145,7 @@ export function shapeChromeStyle(
   shape: GeometricKind,
   data?: Pick<
     GeometricNodeData,
-    'backgroundColor' | 'borderColor' | 'borderSize' | 'borderStyle' | 'cornerRadius'
+    'backgroundColor' | 'borderColor' | 'borderSize' | 'borderStyle' | 'cornerRadius' | 'shadow'
   >,
 ): CSSProperties {
   if (shape === 'text') return {};
@@ -152,6 +160,16 @@ export function shapeChromeStyle(
     backgroundColor = NODE_DEFAULT_BG_WHITE;
   }
   const supportsCornerRadius = shape === 'rectangle' || shape === 'sticky';
+  // Shadow resolution: explicit `data.shadow` wins via the elevation token.
+  // Sticky carries a baseline shadow when unset (its `sf:shadow-md` class
+  // moved off the SHAPE_CLASS map for the same reason); other shapes have
+  // no baseline so `undefined` leaves boxShadow off entirely.
+  let boxShadow: string | undefined;
+  if (data?.shadow !== undefined) {
+    boxShadow = `var(--node-shadow-${data.shadow})`;
+  } else if (shape === 'sticky') {
+    boxShadow = STICKY_BASELINE_SHADOW;
+  }
   return {
     borderColor: colorTokenStyle(data?.borderColor, 'node').borderColor,
     backgroundColor,
@@ -159,6 +177,7 @@ export function shapeChromeStyle(
     borderStyle: data?.borderStyle,
     borderRadius:
       supportsCornerRadius && data?.cornerRadius !== undefined ? data.cornerRadius : undefined,
+    ...(boxShadow !== undefined ? { boxShadow } : {}),
   };
 }
 

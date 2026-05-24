@@ -139,13 +139,15 @@ describe('StyleStrip — icon color picker (US-014)', () => {
     expect((iconSwatch?.props as { previewKind?: string }).previewKind).toBe('edge');
 
     // None of the shared / geometric controls should appear in the icon-only
-    // strip — no fill, no border style/size, no font size, no corner radius.
+    // strip — no fill, no border style/size, no font size, no corner radius
+    // or shadow.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-fill'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-style'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-size'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-font-size'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-shadow'))).toBeNull();
   });
 
   it('clicking a swatch token dispatches onStyleNode with { color }', () => {
@@ -316,10 +318,12 @@ describe('StyleStrip — image border editor (US-014)', () => {
     const tree = callStrip({
       nodes: [imageFixture('i1', { borderColor: 'blue', borderWidth: 3 })],
     });
+    expect(findElement(tree, testIdEquals('style-strip-image-colors'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-style'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-width'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-corner-radius'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-image-shadow'))).not.toBeNull();
     // Geometric-only controls must NOT leak into the image branch.
     expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-size'))).toBeNull();
@@ -432,5 +436,122 @@ describe('StyleStrip — image border editor (US-014)', () => {
     } as Connector;
     const tree = callStrip({ nodes: [imageFixture('i1')], connectors: [cn] });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).toBeNull();
+  });
+});
+
+// Plan: merge Corners + Shadow into the Colors popover.
+// Corners and Shadow are no longer standalone strip triggers; they live as
+// sections inside the same popover that already owns border-color + fill.
+describe('StyleStrip — merged Colors popover (corners + shadow)', () => {
+  function rectangleWith(id: string, data: Record<string, unknown>): FlowNode {
+    return {
+      id,
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data,
+    } as FlowNode;
+  }
+
+  function findSlider(tree: unknown, testId: string): ReactElementLike {
+    const section = findElement(tree, testIdEquals(testId));
+    if (!section) throw new Error(`section ${testId} missing`);
+    const slider = findElement(section, (el) => {
+      const p = el.props as { testId?: string };
+      return (
+        p.testId === 'style-tab-corner-radius-slider' || p.testId === 'style-tab-shadow-slider'
+      );
+    });
+    if (!slider) throw new Error(`slider inside ${testId} missing`);
+    return slider;
+  }
+
+  it('renders Corners + Shadow sections inside the Colors popover when a node is selected', () => {
+    const tree = callStrip({ nodes: [rectangleFixture('s1')] });
+    expect(findElement(tree, testIdEquals('style-strip-colors'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-shadow'))).not.toBeNull();
+  });
+
+  it('Shadow slider commits onStyleNode with { shadow: N }', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [rectangleFixture('s1')], onStyleNode });
+    const slider = findSlider(tree, 'style-strip-shadow');
+    (slider.props as { onCommit: (n: number) => void }).onCommit(3);
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('s1', { shadow: 3 });
+  });
+
+  it('Shadow slider previews onStyleNodePreview during the drag', () => {
+    const onStyleNodePreview = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('s1')],
+      onStyleNode: () => {},
+      onStyleNodePreview,
+    });
+    const slider = findSlider(tree, 'style-strip-shadow');
+    (slider.props as { onPreview?: (n: number) => void }).onPreview?.(4);
+    expect(onStyleNodePreview).toHaveBeenCalledWith('s1', { shadow: 4 });
+  });
+
+  it('Corners slider commits onStyleNode with { cornerRadius: N }', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [rectangleFixture('s1')], onStyleNode });
+    const slider = findSlider(tree, 'style-strip-corner-radius');
+    (slider.props as { onCommit: (n: number) => void }).onCommit(20);
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('s1', { cornerRadius: 20 });
+  });
+
+  it('Shadow fans the picked value out across multi-node selections', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('a'), rectangleFixture('b')],
+      onStyleNode,
+    });
+    const slider = findSlider(tree, 'style-strip-shadow');
+    (slider.props as { onCommit: (n: number) => void }).onCommit(2);
+    expect(onStyleNode).toHaveBeenCalledTimes(2);
+    expect(onStyleNode).toHaveBeenNthCalledWith(1, 'a', { shadow: 2 });
+    expect(onStyleNode).toHaveBeenNthCalledWith(2, 'b', { shadow: 2 });
+  });
+
+  it('Shadow shows the indeterminate placeholder when mixed values exist', () => {
+    const tree = callStrip({
+      nodes: [rectangleWith('a', { shadow: 1 }), rectangleWith('b', { shadow: 4 })],
+    });
+    const slider = findSlider(tree, 'style-strip-shadow');
+    expect((slider.props as { indeterminate?: boolean }).indeterminate).toBe(true);
+  });
+
+  it('Shadow slider uses the 0–5 range', () => {
+    const tree = callStrip({ nodes: [rectangleFixture('s1')] });
+    const slider = findSlider(tree, 'style-strip-shadow');
+    const p = slider.props as { min: number; max: number };
+    expect(p.min).toBe(0);
+    expect(p.max).toBe(5);
+  });
+
+  it('does NOT render the corners/shadow sections for a pure-connector selection', () => {
+    const cn: Connector = { id: 'c1', source: 'a', target: 'b' } as Connector;
+    const tree = callStrip({ nodes: [], connectors: [cn] });
+    // Colors popover still renders (for connector color) but corners + shadow
+    // are gated on hasNodes.
+    expect(findElement(tree, testIdEquals('style-strip-colors'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-shadow'))).toBeNull();
+  });
+
+  it('Image Colors popover commits shadow via onStyleNode with { shadow: N }', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [imageFixture('i1')], onStyleNode });
+    const section = findElement(tree, testIdEquals('style-strip-image-shadow'));
+    if (!section) throw new Error('image-shadow section missing');
+    const slider = findElement(section, (el) => {
+      const p = el.props as { testId?: string };
+      return p.testId === 'style-tab-image-shadow-slider';
+    });
+    if (!slider) throw new Error('image-shadow slider missing');
+    (slider.props as { onCommit: (n: number) => void }).onCommit(2);
+    expect(onStyleNode).toHaveBeenCalledWith('i1', { shadow: 2 });
   });
 });

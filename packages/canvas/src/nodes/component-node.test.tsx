@@ -195,6 +195,12 @@ describe('ComponentNode wrapper style', () => {
     expect(style.borderWidth).toBeUndefined();
     expect(style.borderStyle).toBeUndefined();
     expect(style.borderRadius).toBeUndefined();
+    expect((style as { boxShadow?: string }).boxShadow).toBeUndefined();
+  });
+
+  it('paints var(--node-shadow-N) on the chrome wrapper when data.shadow is set', () => {
+    const style = getChromeStyle(callComponentNode({ shadow: 3 }));
+    expect((style as { boxShadow?: string }).boxShadow).toBe('var(--node-shadow-3)');
   });
 
   it('applies border + background tokens to the chrome wrapper when fields are set', () => {

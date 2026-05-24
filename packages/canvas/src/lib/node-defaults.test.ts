@@ -123,6 +123,21 @@ describe('buildNewShapeData with lastUsed', () => {
     expect('cornerRadius' in data).toBe(false);
   });
 
+  it('rectangle, ellipse, and sticky inherit shadow from lastUsed', () => {
+    const rect = buildNewShapeData('rectangle', { width: 200, height: 120 }, { shadow: 3 });
+    const ell = buildNewShapeData('ellipse', { width: 160, height: 100 }, { shadow: 4 });
+    const sticky = buildNewShapeData('sticky', { width: 180, height: 180 }, { shadow: 2 });
+    expect(rect.shadow).toBe(3);
+    expect(ell.shadow).toBe(4);
+    expect(sticky.shadow).toBe(2);
+  });
+
+  it('text drops shadow alongside other chrome fields (stays chromeless)', () => {
+    const data = buildNewShapeData('text', { width: 120, height: 36 }, { fontSize: 22, shadow: 3 });
+    expect(data.fontSize).toBe(22);
+    expect('shadow' in data).toBe(false);
+  });
+
   it('text stays chromeless: only fontSize carries over, borderSize is dropped', () => {
     const data = buildNewShapeData(
       'text',
@@ -167,6 +182,11 @@ describe('buildNewImageData with lastUsed', () => {
     expect(data.borderColor).toBe('blue');
     expect(data.borderWidth).toBe(5);
     expect(data.borderStyle).toBe('dashed');
+  });
+
+  it('inherits shadow from lastUsed', () => {
+    const data = buildNewImageData('a/b.png', { width: 200, height: 150 }, { shadow: 3 });
+    expect((data as { shadow?: number }).shadow).toBe(3);
   });
 
   it('drops shape-only fields like fontSize and cornerRadius', () => {

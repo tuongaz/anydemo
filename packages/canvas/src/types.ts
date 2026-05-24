@@ -34,6 +34,8 @@ export interface NodeVisual {
   fontSize?: number;
   textColor?: ColorToken;
   cornerRadius?: number;
+  /** Elevation level 0–5; renders as `var(--node-shadow-N)`. */
+  shadow?: number;
 }
 
 export interface NodeDescription {

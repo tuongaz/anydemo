@@ -187,3 +187,39 @@ describe('US-009: RectangleNode renders capability chrome', () => {
     expect(rect).toHaveLength(1);
   });
 });
+
+// Theme-aware elevation. `data.shadow` swaps the baseline `sf:shadow-sm`
+// class for the matching `var(--node-shadow-N)` so the two shadow sources
+// don't compound.
+describe('RectangleNode shadow elevation', () => {
+  function getRoot(tree: unknown): {
+    style: Record<string, string | undefined>;
+    className: string;
+  } {
+    const root = findAll(
+      tree,
+      (el) => (el.props as { 'data-node-type'?: string })['data-node-type'] === 'rectangle',
+    )[0];
+    if (!root) throw new Error('rectangle root missing');
+    const props = root.props as { style?: Record<string, string>; className?: string };
+    return { style: props.style ?? {}, className: props.className ?? '' };
+  }
+
+  it('keeps the sf:shadow-sm baseline class when data.shadow is unset', () => {
+    const { style, className } = getRoot(callRectangleNode({ name: 's' }));
+    expect(style.boxShadow).toBeUndefined();
+    expect(className).toContain('sf:shadow-sm');
+  });
+
+  it('paints var(--node-shadow-N) and drops sf:shadow-sm when data.shadow is set', () => {
+    const { style, className } = getRoot(callRectangleNode({ name: 's', shadow: 3 }));
+    expect(style.boxShadow).toBe('var(--node-shadow-3)');
+    expect(className).not.toContain('sf:shadow-sm');
+  });
+
+  it('shadow: 0 paints var(--node-shadow-0) (none) and still drops the baseline class', () => {
+    const { style, className } = getRoot(callRectangleNode({ name: 's', shadow: 0 }));
+    expect(style.boxShadow).toBe('var(--node-shadow-0)');
+    expect(className).not.toContain('sf:shadow-sm');
+  });
+});

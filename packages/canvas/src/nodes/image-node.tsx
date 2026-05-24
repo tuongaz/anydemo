@@ -86,6 +86,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
     ...(data.borderWidth !== undefined ? { borderWidth: data.borderWidth } : {}),
     ...(data.borderStyle !== undefined ? { borderStyle: data.borderStyle } : {}),
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
+    ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(sized ? {} : { width: IMAGE_DEFAULT_SIZE.width, height: IMAGE_DEFAULT_SIZE.height }),
   };
 

@@ -52,6 +52,7 @@ const SHAPE_RECT_FIELDS = [
   'borderStyle',
   'fontSize',
   'cornerRadius',
+  'shadow',
 ] as const;
 const SHAPE_ELLIPSE_FIELDS = [
   'borderColor',
@@ -59,9 +60,10 @@ const SHAPE_ELLIPSE_FIELDS = [
   'borderSize',
   'borderStyle',
   'fontSize',
+  'shadow',
 ] as const;
 const SHAPE_TEXT_FIELDS = ['fontSize'] as const;
-const IMAGE_FIELDS = ['borderColor', 'borderWidth', 'borderStyle'] as const;
+const IMAGE_FIELDS = ['borderColor', 'borderWidth', 'borderStyle', 'shadow'] as const;
 
 export interface ShapeDataDefaults {
   // Index signature lets the result satisfy `CreateNodeBody.data`
