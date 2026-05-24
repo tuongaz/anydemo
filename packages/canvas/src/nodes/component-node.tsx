@@ -70,6 +70,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     ...(data.borderSize !== undefined ? { borderWidth: data.borderSize } : {}),
     ...(data.borderStyle !== undefined ? { borderStyle: data.borderStyle } : {}),
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
+    ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
   };

@@ -105,6 +105,7 @@ export const NodePatchBodySchema = z
     fontSize: z.number().positive().optional(),
     textColor: ColorTokenSchema.optional(),
     cornerRadius: z.number().min(0).optional(),
+    shadow: z.number().int().min(0).max(5).optional(),
     width: z.number().positive().optional(),
     height: z.number().positive().optional(),
     // type:'html'-only: when true, the renderer measures content and React Flow
@@ -167,6 +168,7 @@ const NODE_DATA_PATCH_KEYS = [
   'fontSize',
   'textColor',
   'cornerRadius',
+  'shadow',
   'width',
   'height',
   'autoSize',
@@ -266,6 +268,7 @@ const NODE_VISUAL_KEYS = new Set([
   'fontSize',
   'textColor',
   'cornerRadius',
+  'shadow',
   'borderWidth',
   'color',
   'strokeWidth',

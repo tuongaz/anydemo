@@ -198,6 +198,16 @@ describe('ImageNode border render (US-014)', () => {
     expect(style.borderWidth).toBe(2);
     expect(style.borderRadius).toBe(12);
   });
+
+  it('paints var(--node-shadow-N) when data.shadow is set', () => {
+    const style = getContainerStyle(callImageNode({ shadow: 3 }));
+    expect((style as { boxShadow?: string }).boxShadow).toBe('var(--node-shadow-3)');
+  });
+
+  it('omits boxShadow when data.shadow is unset', () => {
+    const style = getContainerStyle(callImageNode());
+    expect((style as { boxShadow?: string }).boxShadow).toBeUndefined();
+  });
 });
 
 // US-004: image src is built via `fileUrl(projectId, path)` (project file-

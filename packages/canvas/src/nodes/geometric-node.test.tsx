@@ -418,3 +418,41 @@ describe('capability-chrome skirt: resize min-height', () => {
     expect(firstMinHeight(tree)).toBe(40);
   });
 });
+
+// Theme-aware elevation. Sticky carries a baseline shadow (the old
+// `sf:shadow-md`); other shapes default to no shadow. `data.shadow` swaps
+// either default for `var(--node-shadow-N)`.
+describe('GeometricNode shadow elevation', () => {
+  function getRootStyle(tree: unknown): Record<string, string | undefined> {
+    const root = findAll(
+      tree,
+      (el) => (el.props as { 'data-testid'?: string })['data-testid'] === 'geometric-node',
+    )[0];
+    if (!root) throw new Error('geometric-node root missing');
+    return ((root.props as { style?: Record<string, string> }).style ?? {}) as Record<
+      string,
+      string
+    >;
+  }
+
+  it('sticky keeps its baseline boxShadow when data.shadow is unset', () => {
+    const style = getRootStyle(callGeometric('sticky', { description: 'hi' }));
+    expect(style.boxShadow).toBeDefined();
+    expect(style.boxShadow).not.toBe('var(--node-shadow-3)');
+  });
+
+  it('sticky paints var(--node-shadow-N) when data.shadow is set', () => {
+    const style = getRootStyle(callGeometric('sticky', { description: 'hi', shadow: 4 }));
+    expect(style.boxShadow).toBe('var(--node-shadow-4)');
+  });
+
+  it('rectangle (no baseline at this layer) paints var(--node-shadow-N) when shadow is set', () => {
+    const style = getRootStyle(callGeometric('rectangle', { name: 'r', shadow: 2 }));
+    expect(style.boxShadow).toBe('var(--node-shadow-2)');
+  });
+
+  it('rectangle (no baseline at this layer) omits boxShadow when shadow is unset', () => {
+    const style = getRootStyle(callGeometric('rectangle', { name: 'r' }));
+    expect(style.boxShadow).toBeUndefined();
+  });
+});

@@ -67,6 +67,7 @@ const NODE_STYLE_KEYS = new Set([
   'fontSize',
   'textColor',
   'cornerRadius',
+  'shadow',
   'borderWidth',
   'color',
   'strokeWidth',

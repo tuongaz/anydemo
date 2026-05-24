@@ -48,6 +48,10 @@ const NodeVisualBaseShape = {
   fontSize: z.number().positive().optional(),
   textColor: ColorTokenSchema.optional(),
   cornerRadius: z.number().min(0).optional(),
+  // Theme-aware elevation level (0 = none, 5 = deepest). Undefined preserves
+  // each renderer's baseline shadow (e.g. rectangle: sf:shadow-sm); explicit
+  // 0 removes it. Renderers translate this to `var(--node-shadow-N)`.
+  shadow: z.number().int().min(0).max(5).optional(),
 };
 
 // Semantic-data fields shared by every node type. `name` is optional —
@@ -641,6 +645,7 @@ const NodeStyleSchema = z
     fontSize: z.number().positive().optional(),
     textColor: ColorTokenSchema.optional(),
     cornerRadius: z.number().min(0).optional(),
+    shadow: z.number().int().min(0).max(5).optional(),
     // type:'image'-specific
     borderWidth: z.number().min(1).max(8).optional(),
     // type:'icon'-specific

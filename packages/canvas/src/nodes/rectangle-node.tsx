@@ -76,6 +76,10 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     ...colorTokenStyle(data.textColor, 'text'),
   };
 
+  // When data.shadow is set, the renderer paints `var(--node-shadow-N)`
+  // inline AND drops the baseline `sf:shadow-sm` class so the two don't
+  // compose. Undefined keeps the existing baseline; explicit 0 wipes it.
+  const shadowClass = data.shadow !== undefined ? '' : 'sf:shadow-sm';
   const containerStyle: CSSProperties = {
     borderColor:
       data.statusReport?.state === 'error'
@@ -88,6 +92,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     borderWidth: data.borderSize !== undefined ? data.borderSize : undefined,
     borderStyle: data.borderStyle,
     borderRadius: data.cornerRadius !== undefined ? data.cornerRadius : undefined,
+    ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(sized ? {} : { width: DEFAULT_W }),
   };
 
@@ -106,7 +111,8 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   return (
     <div
       className={cn(
-        'sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:shadow-sm sf:transition-shadow',
+        'sf:group sf:flex sf:flex-col sf:justify-center sf:overflow-hidden sf:rounded-lg sf:border-[3px] sf:transition-shadow',
+        shadowClass,
         sized ? 'sf:h-full sf:w-full' : '',
         isRunning ? 'seeflow-node-pulse' : '',
       )}

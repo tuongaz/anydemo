@@ -109,6 +109,17 @@ layer(base);
   --seeflow-handle-border-width: calc(1px / var(--rf-zoom, 1));
   --seeflow-handle-size: calc(17px / var(--rf-zoom, 1));
 
+  /* Node elevation tokens. 0 = none, 5 = deepest. Renderers map
+     data.shadow → `var(--node-shadow-N)`. Light theme uses softer slate
+     shadows; .dark overrides them below with deeper pure-black shadows so
+     elevation reads under low-contrast backgrounds. */
+  --node-shadow-0: none;
+  --node-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.08);
+  --node-shadow-2: 0 4px 6px -1px rgb(0 0 0 / 0.10);
+  --node-shadow-3: 0 10px 15px -3px rgb(0 0 0 / 0.12);
+  --node-shadow-4: 0 20px 25px -5px rgb(0 0 0 / 0.15);
+  --node-shadow-5: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+
   /* Font + background scoped to the wrapper — outside, consumer rules win */
   font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
   color: hsl(var(--foreground));
@@ -149,6 +160,12 @@ layer(base);
 
   --detail-panel-border-left: 1px;
   --detail-panel-shadow: -12px 0 40px -12px rgba(0, 0, 0, 0.6);
+
+  --node-shadow-1: 0 1px 2px 0 rgb(0 0 0 / 0.40);
+  --node-shadow-2: 0 4px 6px -1px rgb(0 0 0 / 0.50);
+  --node-shadow-3: 0 10px 15px -3px rgb(0 0 0 / 0.55);
+  --node-shadow-4: 0 20px 25px -5px rgb(0 0 0 / 0.60);
+  --node-shadow-5: 0 25px 50px -12px rgb(0 0 0 / 0.70);
 }
 
 /* Utilities scoped to the wrapper */

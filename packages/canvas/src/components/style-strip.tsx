@@ -1,13 +1,4 @@
-import {
-  ArrowLeftRight,
-  ArrowRight,
-  Check,
-  Minus,
-  MoveLeft,
-  Squircle,
-  Sticker,
-  Type,
-} from 'lucide-react';
+import { ArrowLeftRight, ArrowRight, Check, Minus, MoveLeft, Sticker, Type } from 'lucide-react';
 import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { COLOR_TOKENS } from '../lib/color-tokens.ts';
@@ -44,6 +35,8 @@ export interface NodeStylePatch {
    * backward compat with older demos that stored their text color there. */
   textColor?: ColorToken;
   cornerRadius?: number;
+  /** Elevation level 0–5; maps to `var(--node-shadow-N)` at render time. */
+  shadow?: number;
   /** type:'icon'-only: stroke color token. Lands at data.color. */
   color?: ColorToken;
   /** type:'icon'-only: glyph stroke width. Lands at data.strokeWidth. */
@@ -100,6 +93,9 @@ const DEFAULT_STROKE_WIDTH = 2;
 // `cornerRadius` set yet — picked to feel like a soft rounded-rect rather
 // than the harsher 0px the schema would imply.
 const DEFAULT_CORNER_RADIUS = 8;
+// Mid-elevation default the Shadow slider seeds with when a node has no
+// `shadow` set — keeps the readout meaningful when the popover first opens.
+const DEFAULT_SHADOW = 1;
 
 // 18-slot palette: 2 special tokens (`none`, `default`) + 16 named colors.
 // `'none'` renders transparent border / fill — hidden from text-color and
@@ -310,6 +306,18 @@ export function StyleStrip({
   const cornerRadiusIndeterminate =
     visualNodes.length > 1 &&
     new Set(visualNodes.map((n) => n.data.cornerRadius ?? DEFAULT_CORNER_RADIUS)).size > 1;
+  // Shadow apply/preview mirrors corner-radius fan-out so multi-select drags
+  // update every selected node and the live preview surfaces optimistic
+  // overrides during the drag.
+  const applyShadow = (n: number) => {
+    for (const node of nodes) onStyleNode(node.id, { shadow: n });
+  };
+  const previewShadow = (n: number) => {
+    for (const node of nodes) onStyleNodePreview?.(node.id, { shadow: n });
+  };
+  const shadowIndeterminate =
+    visualNodes.length > 1 &&
+    new Set(visualNodes.map((n) => n.data.shadow ?? DEFAULT_SHADOW)).size > 1;
   const applyConnectorPath = (path: ConnectorPath) => {
     for (const c of connectors) onStyleConnector(c.id, { path });
   };
@@ -396,11 +404,12 @@ export function StyleStrip({
   }
 
   if (pureImageType) {
-    // US-014: image border editor. Border color + style + width (1–8) — the
-    // same three controls the group editor exposes. Edits dispatch via
-    // onStyleNode (per-node fan-out for multi-image selections), reusing the
-    // existing PATCH+undo path. Image nodes also keep their cornerRadius
-    // control (already supported by the renderer's containerStyle).
+    // US-014: image border editor. The Colors popover owns border-color +
+    // corners + shadow (parallel to the geometric branch's merge); border
+    // style and width keep their own popovers because they describe line
+    // shape, not depth/color. Edits dispatch via onStyleNode (per-node
+    // fan-out for multi-image selections), reusing the existing PATCH+undo
+    // path. Image nodes have no fill section — the image itself IS the fill.
     const firstImage = nodes[0] as Extract<FlowNode, { type: 'image' }> | undefined;
     const imageBorderColor: ColorToken = firstImage?.data.borderColor ?? 'default';
     const imageBorderStyle = (firstImage?.data.borderStyle ?? 'solid') as
@@ -426,22 +435,73 @@ export function StyleStrip({
     const previewImageCornerRadius = (n: number) => {
       for (const node of nodes) onStyleNodePreview?.(node.id, { cornerRadius: n });
     };
+    const applyImageShadow = (n: number) => {
+      for (const node of nodes) onStyleNode(node.id, { shadow: n });
+    };
+    const previewImageShadow = (n: number) => {
+      for (const node of nodes) onStyleNodePreview?.(node.id, { shadow: n });
+    };
+    const renderImageColorsTrigger = () => {
+      const isNone = imageBorderColor === 'none';
+      const borderStyleCss = isNone
+        ? '2px dashed hsl(var(--muted-foreground))'
+        : `2px solid ${COLOR_TOKENS[imageBorderColor].border}`;
+      return (
+        <span
+          className="sf:inline-block sf:h-5 sf:w-5 sf:rounded-md sf:ring-1 sf:ring-border"
+          style={{ backgroundColor: 'hsl(var(--card))', border: borderStyleCss }}
+        />
+      );
+    };
     return (
       <TooltipProvider delayDuration={300}>
         <div
           data-testid="canvas-style-strip"
           className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
         >
-          <SwatchButton
-            testId="style-strip-image-border-color"
-            tooltip="Border color"
-            ariaLabel="image border color"
-            activeToken={imageBorderColor}
-            previewKind="border"
-            tokenTestIdPrefix="style-tab-image-border-color"
-            innerTestId="style-tab-image-border-color-trigger"
-            onSelect={applyImageBorderColor}
-          />
+          <PopoverButton
+            testId="style-strip-image-colors"
+            tooltip="Colors"
+            ariaLabel="image colors"
+            renderIcon={renderImageColorsTrigger}
+          >
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
+              <PopoverSection label="Border color">
+                <ColorSwatchGrid
+                  testId="style-strip-image-border-color"
+                  activeToken={imageBorderColor}
+                  previewKind="border"
+                  tokenTestIdPrefix="style-tab-image-border-color"
+                  innerTestId="style-tab-image-border-color-trigger"
+                  ariaLabel="image border color"
+                  onSelect={applyImageBorderColor}
+                />
+              </PopoverSection>
+              <PopoverSection label="Corners" testId="style-strip-image-corner-radius">
+                <SliderControl
+                  value={firstImage?.data.cornerRadius}
+                  defaultValue={DEFAULT_CORNER_RADIUS}
+                  min={0}
+                  max={32}
+                  suffix="px"
+                  onPreview={previewImageCornerRadius}
+                  onCommit={applyImageCornerRadius}
+                  testId="style-tab-image-corner-radius-slider"
+                />
+              </PopoverSection>
+              <PopoverSection label="Shadow" testId="style-strip-image-shadow">
+                <SliderControl
+                  value={firstImage?.data.shadow}
+                  defaultValue={DEFAULT_SHADOW}
+                  min={0}
+                  max={5}
+                  onPreview={previewImageShadow}
+                  onCommit={applyImageShadow}
+                  testId="style-tab-image-shadow-slider"
+                />
+              </PopoverSection>
+            </div>
+          </PopoverButton>
           <PopoverButton
             testId="style-strip-image-border-style"
             tooltip="Border style"
@@ -481,31 +541,15 @@ export function StyleStrip({
               testId="style-tab-image-border-width-slider"
             />
           </PopoverButton>
-          <PopoverButton
-            testId="style-strip-image-corner-radius"
-            tooltip="Corners"
-            ariaLabel="image corner radius"
-            renderIcon={() => <Squircle className="sf:h-4 sf:w-4" />}
-          >
-            <SliderControl
-              value={firstImage?.data.cornerRadius}
-              defaultValue={DEFAULT_CORNER_RADIUS}
-              min={0}
-              max={32}
-              suffix="px"
-              onPreview={previewImageCornerRadius}
-              onCommit={applyImageCornerRadius}
-              testId="style-tab-image-corner-radius-slider"
-            />
-          </PopoverButton>
         </div>
       </TooltipProvider>
     );
   }
 
   // Three consolidated popover triggers:
-  //   • Colors: border color + fill (fill section hidden for text shapes and
-  //     pure-connector selections where there's no fill concept).
+  //   • Colors: border color + fill + corners + shadow (fill, corners, shadow
+  //     gated as called out below; the popover itself is hidden for text shapes
+  //     which are chromeless).
   //   • Border: line style + width (hidden for text shapes — chromeless).
   //   • Text:   font size + text color (text color hidden for pure-connector,
   //     since a connector has no separate text color — its label tracks the
@@ -544,8 +588,8 @@ export function StyleStrip({
   };
 
   // For text shapes the user request collapses everything into one Text tool
-  // — there's no chrome to color or border-ify, so Colors + Border + Corners
-  // buttons are hidden.
+  // — there's no chrome to color or border-ify, so the Colors and Border
+  // buttons (which now own corners + shadow) are hidden.
   return (
     <TooltipProvider delayDuration={300}>
       <div
@@ -582,6 +626,35 @@ export function StyleStrip({
                     innerTestId="style-tab-background-color-trigger"
                     ariaLabel="fill"
                     onSelect={applyBackgroundColor}
+                  />
+                </PopoverSection>
+              ) : null}
+              {hasNodes ? (
+                <PopoverSection label="Corners" testId="style-strip-corner-radius">
+                  <SliderControl
+                    value={firstVisualNode?.data.cornerRadius}
+                    defaultValue={DEFAULT_CORNER_RADIUS}
+                    min={0}
+                    max={32}
+                    suffix="px"
+                    indeterminate={cornerRadiusIndeterminate}
+                    onPreview={previewCornerRadius}
+                    onCommit={applyCornerRadius}
+                    testId="style-tab-corner-radius-slider"
+                  />
+                </PopoverSection>
+              ) : null}
+              {hasNodes ? (
+                <PopoverSection label="Shadow" testId="style-strip-shadow">
+                  <SliderControl
+                    value={firstVisualNode?.data.shadow}
+                    defaultValue={DEFAULT_SHADOW}
+                    min={0}
+                    max={5}
+                    indeterminate={shadowIndeterminate}
+                    onPreview={previewShadow}
+                    onCommit={applyShadow}
+                    testId="style-tab-shadow-slider"
                   />
                 </PopoverSection>
               ) : null}
@@ -686,27 +759,6 @@ export function StyleStrip({
                 </PopoverSection>
               ) : null}
             </div>
-          </PopoverButton>
-        ) : null}
-
-        {hasNodes && !isTextShape ? (
-          <PopoverButton
-            testId="style-strip-corner-radius"
-            tooltip="Corners"
-            ariaLabel="corner radius"
-            renderIcon={() => <Squircle className="sf:h-4 sf:w-4" />}
-          >
-            <SliderControl
-              value={firstVisualNode?.data.cornerRadius}
-              defaultValue={DEFAULT_CORNER_RADIUS}
-              min={0}
-              max={32}
-              suffix="px"
-              indeterminate={cornerRadiusIndeterminate}
-              onPreview={previewCornerRadius}
-              onCommit={applyCornerRadius}
-              testId="style-tab-corner-radius-slider"
-            />
           </PopoverButton>
         ) : null}
 
