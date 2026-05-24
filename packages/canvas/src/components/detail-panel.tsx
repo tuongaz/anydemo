@@ -120,7 +120,15 @@ export function DetailPanel({
       onCommit: setStoredDetailPanelWidth,
     });
   };
-  const widthStyle = { ['--detail-panel-w' as string]: `${width}px` } as CSSProperties;
+  // Border + shadow are themed via CSS vars on `.seeflow-canvas-root` so the
+  // panel reads no-border + subtle shadow in light and the existing hairline +
+  // heavier shadow in dark. Inline style wins over the Sheet variant's
+  // `sf:border-l` without needing a tailwind-merge prefix shim.
+  const widthStyle = {
+    ['--detail-panel-w' as string]: `${width}px`,
+    borderLeftWidth: 'var(--detail-panel-border-left)',
+    boxShadow: 'var(--detail-panel-shadow)',
+  } as CSSProperties;
 
   return (
     <Sheet
@@ -132,7 +140,7 @@ export function DetailPanel({
     >
       <SheetContent
         side="right"
-        className="sf:w-full! sf:max-w-full! sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:shadow-[-12px_0_40px_-12px_rgba(0,0,0,0.6)] sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!"
+        className="sf:w-full! sf:max-w-full! sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!"
         style={widthStyle}
         data-testid="detail-panel"
         onEscapeKeyDown={(e) => {

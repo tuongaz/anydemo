@@ -92,6 +92,11 @@ layer(base);
   --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 0 40px -6px rgba(16, 185, 129, 0.35);
   --glow-dot-color: rgba(0, 0, 0, 0.18);
 
+  /* DetailPanel chrome: light theme drops the left divider in favor of a
+     subtle drop-shadow; dark theme keeps the hairline + heavier shadow. */
+  --detail-panel-border-left: 0px;
+  --detail-panel-shadow: -1px 0 2px -1px rgba(15, 23, 42, 0.05), -4px 0 16px -8px rgba(15, 23, 42, 0.08);
+
   /* Status colors are theme-agnostic (--amber/--amber-hi/--danger) so flow
      state reads the same under both palettes. */
   --amber: #f59e0b;
@@ -141,6 +146,9 @@ layer(base);
   --shadow-glow-pending: 0 0 30px -4px rgba(245, 158, 11, 0.45);
   --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.22), 0 0 40px -6px rgba(16, 185, 129, 0.55);
   --glow-dot-color: rgba(255, 255, 255, 0.55);
+
+  --detail-panel-border-left: 1px;
+  --detail-panel-shadow: -12px 0 40px -12px rgba(0, 0, 0, 0.6);
 }
 
 /* Utilities scoped to the wrapper */
