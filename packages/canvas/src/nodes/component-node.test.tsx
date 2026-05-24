@@ -262,14 +262,14 @@ describe('ComponentNode wrapper style', () => {
     expect(style.height).toBe(COMPONENT_DEFAULT_SIZE.height);
   });
 
-  it('tags the scrollable body with seeflow-themed-scrollbar in both size modes', () => {
+  it('leaves the scrollable body unthemed so the OS draws its native overlay scrollbar', () => {
     // Auto-size branch (inline-block measuring container).
     const autoBody = findElement(callComponentNode(), (el) => {
       const p = el.props as { 'data-testid'?: string };
       return p['data-testid'] === 'component-node-body';
     });
     const autoClass = ((autoBody?.props as { className?: string }).className ?? '').split(/\s+/);
-    expect(autoClass).toContain('seeflow-themed-scrollbar');
+    expect(autoClass).not.toContain('seeflow-themed-scrollbar');
 
     // User-sized branch (flex-1 fill).
     const userBody = findElement(
@@ -280,7 +280,7 @@ describe('ComponentNode wrapper style', () => {
       },
     );
     const userClass = ((userBody?.props as { className?: string }).className ?? '').split(/\s+/);
-    expect(userClass).toContain('seeflow-themed-scrollbar');
+    expect(userClass).not.toContain('seeflow-themed-scrollbar');
   });
 });
 
@@ -367,14 +367,23 @@ describe('ComponentNode header', () => {
     expect((header?.props as { name?: string })?.name).toBe('Counter card');
   });
 
-  it('omits NodeHeader when data.name is absent', () => {
+  it('omits NodeHeader when data.name and data.icon are both absent', () => {
     const tree = callComponentNode();
     expect(findNodeHeader(tree)).toBeNull();
   });
 
-  it('omits NodeHeader when data.name is the empty string', () => {
+  it('omits NodeHeader when data.name is the empty string and no icon is set', () => {
     const tree = callComponentNode({ name: '' });
     expect(findNodeHeader(tree)).toBeNull();
+  });
+
+  it('renders NodeHeader with an empty name when only data.icon is set', () => {
+    const tree = callComponentNode({ icon: 'sparkles' });
+    const header = findNodeHeader(tree);
+    expect(header).not.toBeNull();
+    const props = header?.props as { name?: string; icon?: string | null };
+    expect(props.name).toBe('');
+    expect(props.icon).toBe('sparkles');
   });
 
   it('forwards icon + selected + edit callbacks to NodeHeader', () => {

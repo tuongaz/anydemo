@@ -95,11 +95,14 @@ export function DetailPanel({
   const description = inspectableNode?.data.description ?? '';
   const detail = inspectableNode?.data.detail ?? '';
   const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
-  // Icon trigger sits inline with the title (left of the name). It's only
-  // meaningful for type:'rectangle' — the one renderer that draws a header
-  // icon next to the name under the flat schema's Renderer phasing (other
-  // geometric variants parse + persist `icon` but don't surface it).
-  const supportsIconField = inspectableNode !== null && inspectableNode.type === 'rectangle';
+  // Icon trigger sits inline with the title (left of the name). It's
+  // meaningful for type:'rectangle' and type:'component' — the renderers
+  // that draw a header icon next to the name under the flat schema's
+  // Renderer phasing (other geometric variants parse + persist `icon`
+  // but don't surface it).
+  const supportsIconField =
+    inspectableNode !== null &&
+    (inspectableNode.type === 'rectangle' || inspectableNode.type === 'component');
   const showIconField = supportsIconField && typeof onIconChange === 'function';
   // currentIcon is decoupled from showIconField so the read-only fallback
   // below can render the same icon the node body shows when the canvas is in

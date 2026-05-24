@@ -93,7 +93,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     // chrome — keeps overflow-auto scrolling correctly inside flex column.
     <div
       data-testid="component-node-body"
-      className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto seeflow-themed-scrollbar"
+      className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto"
     >
       <ComponentRuntime
         spec={data.spec}
@@ -106,7 +106,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     <div
       ref={measureRef}
       data-testid="component-node-body"
-      className="sf:inline-block seeflow-themed-scrollbar"
+      className="sf:inline-block"
       style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
     >
       <ComponentRuntime
@@ -177,10 +177,10 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         )}
         style={chromeStyle}
       >
-        {data.name !== undefined && data.name !== '' ? (
+        {data.name || data.icon ? (
           <NodeHeader
             nodeId={id}
-            name={data.name}
+            name={data.name ?? ''}
             icon={data.icon}
             selected={selected}
             fontSize={data.fontSize}

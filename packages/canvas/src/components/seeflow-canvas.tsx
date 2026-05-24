@@ -2662,14 +2662,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           })(),
           onIconChange: (() => {
             // Same edit-mode + node-type gate as the inline-edit callbacks.
-            // Only type:'rectangle' renders the header icon trigger — every
-            // other node type either suppresses the icon affordance (geometric
-            // illustrative shapes don't draw header chrome; text/sticky/
-            // ellipse have no header) or owns the icon presentation
-            // differently (type:'icon', type:'image'). type:'html' previously
-            // carried an icon but its caption affordance was removed.
+            // type:'rectangle' and type:'component' render the header icon
+            // trigger — every other node type either suppresses the icon
+            // affordance (geometric illustrative shapes don't draw header
+            // chrome; text/sticky/ellipse have no header) or owns the icon
+            // presentation differently (type:'icon', type:'image'). type:'html'
+            // previously carried an icon but its caption affordance was removed.
             if (!isEditMode) return undefined;
-            if (merged.type !== 'rectangle') return undefined;
+            if (merged.type !== 'rectangle' && merged.type !== 'component') return undefined;
             return onIconChange;
           })(),
           // US-015: inject autoEditOnMount on the freshly drop-popover-created
