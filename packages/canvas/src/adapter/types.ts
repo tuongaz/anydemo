@@ -50,7 +50,7 @@ export interface NodePatch {
   borderColor?: ColorToken;
   backgroundColor?: ColorToken;
   borderSize?: number;
-  /** type:'image'-only: border thickness (1–8). Distinct from geometric `borderSize`. */
+  /** type:'image'-only: border thickness (0–8; 0 = no border). Distinct from geometric `borderSize`. */
   borderWidth?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;

@@ -704,7 +704,7 @@ describe('ResolvedFlowSchema', () => {
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });
 
-  it('accepts a positive borderSize on nodes and connectors, rejects 0/negative', () => {
+  it('accepts a non-negative borderSize on nodes and connectors, rejects negatives', () => {
     const make = (nodeBorderSize: unknown, connBorderSize: unknown) => ({
       version: 2 as const,
       name: 'border-size',
@@ -746,9 +746,11 @@ describe('ResolvedFlowSchema', () => {
     expect(node.data.borderSize).toBe(3);
     expect(ok.data.connectors[0]?.borderSize).toBe(4);
 
-    // 0 and negative values rejected (positive constraint).
-    expect(ResolvedFlowSchema.safeParse(make(0, 4)).success).toBe(false);
+    // 0 is now accepted (exposes "no border" on the width slider).
+    expect(ResolvedFlowSchema.safeParse(make(0, 0)).success).toBe(true);
+    // Negatives still rejected.
     expect(ResolvedFlowSchema.safeParse(make(-2, 4)).success).toBe(false);
+    expect(ResolvedFlowSchema.safeParse(make(3, -1)).success).toBe(false);
   });
 
   it('accepts cornerRadius=12 and cornerRadius=0 on a node, rejects negative values (US-001)', () => {
@@ -973,11 +975,12 @@ describe('ResolvedFlowSchema', () => {
     expect(node.data.borderStyle).toBeUndefined();
   });
 
-  it('rejects an image node with borderWidth outside the 1–8 range (US-014)', () => {
+  it('rejects an image node with borderWidth outside the 0–8 range (US-014)', () => {
     const basePath = 'nodes/img-1/pixel.png';
-    const tooSmall = {
+    // 0 is now accepted (the user-facing slider exposes it as "no border").
+    const zero = {
       version: 2 as const,
-      name: 'bad-w',
+      name: 'zero-w',
       nodes: [
         {
           id: 'img-1',
@@ -988,11 +991,17 @@ describe('ResolvedFlowSchema', () => {
       ],
       connectors: [],
     };
+    expect(ResolvedFlowSchema.safeParse(zero).success).toBe(true);
+
+    const tooSmall = {
+      ...zero,
+      nodes: [{ ...zero.nodes[0], data: { path: basePath, borderWidth: -1 } }],
+    };
     expect(ResolvedFlowSchema.safeParse(tooSmall).success).toBe(false);
 
     const tooLarge = {
-      ...tooSmall,
-      nodes: [{ ...tooSmall.nodes[0], data: { path: basePath, borderWidth: 9 } }],
+      ...zero,
+      nodes: [{ ...zero.nodes[0], data: { path: basePath, borderWidth: 9 } }],
     };
     expect(ResolvedFlowSchema.safeParse(tooLarge).success).toBe(false);
   });

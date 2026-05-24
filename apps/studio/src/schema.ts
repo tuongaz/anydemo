@@ -43,7 +43,7 @@ const NodeVisualBaseShape = {
   height: z.number().positive().optional(),
   borderColor: ColorTokenSchema.optional(),
   backgroundColor: ColorTokenSchema.optional(),
-  borderSize: z.number().positive().optional(),
+  borderSize: z.number().min(0).optional(),
   borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
   fontSize: z.number().positive().optional(),
   textColor: ColorTokenSchema.optional(),
@@ -229,7 +229,7 @@ const ResolvedImageNodeData = z.object({
     message: 'path must be a relative path under the project root (no absolute / traversal)',
   }),
   alt: z.string().optional(),
-  borderWidth: z.number().min(1).max(8).optional(),
+  borderWidth: z.number().min(0).max(8).optional(),
 });
 
 // Html node — escape-hatch for content the curated visuals don't cover.
@@ -309,7 +309,7 @@ const ConnectorVisualBaseShape = {
   style: ConnectorStyleSchema.optional(),
   color: ColorTokenSchema.optional(),
   direction: ConnectorDirectionSchema.optional(),
-  borderSize: z.number().positive().optional(),
+  borderSize: z.number().min(0).optional(),
   path: ConnectorPathSchema.optional(),
   fontSize: z.number().positive().optional(),
 };
@@ -640,14 +640,14 @@ const NodeStyleSchema = z
     height: z.number().positive().optional(),
     borderColor: ColorTokenSchema.optional(),
     backgroundColor: ColorTokenSchema.optional(),
-    borderSize: z.number().positive().optional(),
+    borderSize: z.number().min(0).optional(),
     borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
     fontSize: z.number().positive().optional(),
     textColor: ColorTokenSchema.optional(),
     cornerRadius: z.number().min(0).optional(),
     shadow: z.number().int().min(0).max(5).optional(),
     // type:'image'-specific
-    borderWidth: z.number().min(1).max(8).optional(),
+    borderWidth: z.number().min(0).max(8).optional(),
     // type:'icon'-specific
     color: ColorTokenSchema.optional(),
     strokeWidth: z.number().min(0.5).max(4).optional(),
@@ -667,7 +667,7 @@ const ConnectorStyleEntrySchema = z
     style: ConnectorStyleSchema.optional(),
     color: ColorTokenSchema.optional(),
     direction: ConnectorDirectionSchema.optional(),
-    borderSize: z.number().positive().optional(),
+    borderSize: z.number().min(0).optional(),
     path: ConnectorPathSchema.optional(),
     fontSize: z.number().positive().optional(),
   })
