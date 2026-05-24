@@ -1,9 +1,40 @@
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
-import { test as base } from '@playwright/test';
+import { type Page, test as base } from '@playwright/test';
 import { type StudioHandle, spawnStudio } from '../../integration/support/studio-harness.ts';
 import { splitFlow } from '../../src/merge.ts';
 import { ResolvedFlowSchema } from '../../src/schema.ts';
+
+// US-007: pin every existing e2e test to the dark palette. All visual
+// baselines under e2e/*-snapshots/ were captured before the default flipped
+// to light, so we seed localStorage['seeflow:theme'] = 'dark' via an init
+// script that runs before any inline FOUC script on the document. Tests that
+// need a different theme (e.g. light baselines in US-008) call
+// `setStudioTheme(page, 'light')` before navigating — addInitScript stacks,
+// so the later call wins on the next document.
+export type StudioTheme = 'light' | 'dark' | 'system';
+const DEFAULT_E2E_THEME: StudioTheme = 'dark';
+const THEME_STORAGE_KEY = 'seeflow:theme';
+
+async function installThemeInitScript(page: Page, theme: StudioTheme): Promise<void> {
+  // String form — the studio's tsconfig omits the DOM lib (it's a Bun
+  // backend), so a function callback referencing `window`/`localStorage`
+  // would fail typecheck. The script runs in the browser context where
+  // those globals exist. JSON.stringify on the theme defends against the
+  // (unlikely) future of quotes in the value.
+  const script = `try { window.localStorage.setItem(${JSON.stringify(THEME_STORAGE_KEY)}, ${JSON.stringify(theme)}); } catch (e) {}`;
+  await page.addInitScript(script);
+}
+
+/**
+ * Override the dark default for a single test. Must be called BEFORE
+ * `page.goto(...)` — addInitScript only takes effect for documents loaded
+ * after it's registered. Last-write-wins because Playwright runs init
+ * scripts in registration order.
+ */
+export async function setStudioTheme(page: Page, theme: StudioTheme): Promise<void> {
+  await installThemeInitScript(page, theme);
+}
 
 const STUDIO_DIR = resolve(import.meta.dir, '../..');
 const FIXTURE_FLOW_PATH = join(STUDIO_DIR, 'integration/fixtures/kitchen-sink.flow.json');
@@ -107,6 +138,10 @@ export const test = base.extend<EmptyTestArgs, WorkerFixtures>({
     },
     { scope: 'worker' },
   ],
+  page: async ({ page }, use) => {
+    await installThemeInitScript(page, DEFAULT_E2E_THEME);
+    await use(page);
+  },
 });
 
 export { expect } from '@playwright/test';
