@@ -2684,8 +2684,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // in data. NodeResizer dispatches dimension changes that update these
       // during a gesture; we only persist (and hence sync them back into
       // data) on resize-stop.
-      if (merged.data.width !== undefined) node.width = merged.data.width;
-      if (merged.data.height !== undefined) node.height = merged.data.height;
+      //
+      // Skip when the node is in auto-size mode so the wrapper shrink-wraps
+      // to the rendered chrome — otherwise the wrapper stays pinned to stale
+      // defaults (e.g. component nodes' 320×240) while the inline-block body
+      // grows to its natural size, and the `.react-flow__node.selected::after`
+      // selection ring (anchored to the wrapper) no longer covers the visible
+      // card. The resize gesture flips `resizingRef` via `setResizing(true)`
+      // BEFORE the first per-tick onResize fires, so live drags still pin the
+      // wrapper to the dragged dims even while data.autoSize is still true.
+      const isAutoSize = (merged.data as { autoSize?: boolean }).autoSize === true;
+      if (!isAutoSize || resizingRef.current) {
+        if (merged.data.width !== undefined) node.width = merged.data.width;
+        if (merged.data.height !== undefined) node.height = merged.data.height;
+      }
       // US-025: only the selected node may originate a new connection. Setting
       // `connectable: false` on unselected nodes makes their Handles ignore
       // connection-start gestures (xyflow's per-node `connectable` overrides
