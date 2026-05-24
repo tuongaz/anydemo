@@ -62,6 +62,11 @@ layer(base);
    Light theme is the default; embedders opt into dark by adding `.dark` to
    any ancestor of the canvas wrapper. */
 .seeflow-canvas-root {
+  /* Tell the browser which palette to use for native UI (scrollbars, form
+     controls). Inherits to descendants so the OS-native overlay scrollbar
+     inside component-node bodies flips with the theme. */
+  color-scheme: light;
+
   --background: 0 0% 100%;
   --foreground: 240 10% 3.9%;
   --card: 0 0% 100%;
@@ -129,6 +134,8 @@ layer(base);
    the palette. Status colors, font, handle vars, and font-family are
    inherited from the light block above. */
 .dark .seeflow-canvas-root {
+  color-scheme: dark;
+
   --background: 240 10% 3.9%;
   --foreground: 0 0% 98%;
   --card: 240 5.9% 10.6%;

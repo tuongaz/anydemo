@@ -27,7 +27,7 @@ type ComponentImpl = ComponentType<Record<string, unknown> & { children?: ReactN
 
 function Card({ title, children }: { title?: ReactNode; children?: ReactNode }) {
   return (
-    <div className="sf:rounded-lg sf:bg-card sf:p-4 sf:text-card-foreground sf:shadow-sm">
+    <div className="sf:bg-card sf:p-4 sf:text-card-foreground sf:shadow-sm">
       {title !== undefined ? (
         <div className="sf:mb-3 sf:font-semibold sf:text-base sf:leading-tight">{title}</div>
       ) : null}
