@@ -14,6 +14,7 @@
     "test:it:bun": "bun test ./apps/studio/integration/*.it.ts",
     "test:it:e2e": "bun apps/studio/scripts/run-e2e.ts",
     "test:it:update-snapshots": "bun apps/studio/scripts/run-e2e.ts --update-snapshots",
+    "predev": "bun run --filter @seeflow/canvas build:js",
     "dev": "concurrently -n canvas-css,workspaces -c blue,green \"cd packages/canvas && bun run build:css:watch\" \"bun run --filter '*' dev\""
   },
   "dependencies": {
