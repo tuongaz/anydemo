@@ -84,6 +84,23 @@ function findElement(
   return null;
 }
 
+function findAllElements(
+  tree: unknown,
+  predicate: (el: ReactElementLike) => boolean,
+): ReactElementLike[] {
+  const out: ReactElementLike[] = [];
+  const walk = (node: unknown) => {
+    if (!isElement(node)) return;
+    if (predicate(node)) out.push(node);
+    const children = node.props.children;
+    if (children === undefined || children === null) return;
+    const arr = Array.isArray(children) ? children : [children];
+    for (const child of arr) walk(child);
+  };
+  walk(tree);
+  return out;
+}
+
 function callEmbedDialog(overrides: Partial<EmbedDialogProps> = {}, useStateOverrides?: unknown[]) {
   const props: EmbedDialogProps = {
     open: true,
@@ -110,7 +127,9 @@ describe('EmbedDialog (US-012)', () => {
 
   it('renders the textarea with the iframe snippet for the given projectId when open', () => {
     const projectId = 'demo-project';
-    const expected = buildEmbedSnippet(buildEmbedUrl(projectId));
+    // Default themeChoice is 'match'; under the test environment (no `document`
+    // global) the resolver falls back to 'light' (the package default).
+    const expected = buildEmbedSnippet(buildEmbedUrl(projectId, 'light'));
     const tree = callEmbedDialog({ open: true, projectId });
     const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
     expect(textarea).not.toBeNull();
@@ -122,7 +141,7 @@ describe('EmbedDialog (US-012)', () => {
 
   it('passes the project id through encodeURIComponent so spaces / specials are escaped', () => {
     const projectId = 'foo bar';
-    const expected = buildEmbedSnippet(buildEmbedUrl(projectId));
+    const expected = buildEmbedSnippet(buildEmbedUrl(projectId, 'light'));
     const tree = callEmbedDialog({ open: true, projectId });
     const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
     expect(textarea?.props.value).toBe(expected);
@@ -132,7 +151,7 @@ describe('EmbedDialog (US-012)', () => {
 
   it('calls navigator.clipboard.writeText with the full snippet when Copy is clicked', async () => {
     const projectId = 'demo-project';
-    const expectedSnippet = buildEmbedSnippet(buildEmbedUrl(projectId));
+    const expectedSnippet = buildEmbedSnippet(buildEmbedUrl(projectId, 'light'));
     const writeText = mock((_text: string) => Promise.resolve());
     const originalNavigator = globalThis.navigator;
     (globalThis as { navigator?: unknown }).navigator = { clipboard: { writeText } };
@@ -200,6 +219,143 @@ describe('EmbedDialog (US-012)', () => {
       const onClick = (copyBtn?.props as { onClick?: () => void | Promise<void> }).onClick;
       await expect(Promise.resolve(onClick?.())).resolves.toBeUndefined();
       expect(writeText).toHaveBeenCalledTimes(1);
+    } finally {
+      (globalThis as { navigator?: unknown }).navigator = originalNavigator;
+    }
+  });
+});
+
+describe('EmbedDialog theme toggle (US-009)', () => {
+  // copyStatus is the first useState slot, themeChoice is the second.
+  const withCopyIdle = (themeChoice?: unknown) => ['idle', themeChoice];
+
+  it('renders all three theme options as labelled buttons inside the themed fieldset', () => {
+    const tree = callEmbedDialog({ open: true });
+    const group = findElement(tree, testIdEquals('embed-dialog-theme-group'));
+    expect(group).not.toBeNull();
+    // The labelled wrapper is the <fieldset> + <legend> pair; the inner
+    // segmented-control div just holds the buttons.
+    const legend = findElement(
+      tree,
+      (el) => (el.props as { id?: string }).id === 'embed-dialog-theme-label',
+    );
+    expect(legend).not.toBeNull();
+    expect(legend?.props.children).toBe('Theme');
+
+    const buttons = findAllElements(tree, (el) =>
+      ((el.props as { 'data-testid'?: string })['data-testid'] ?? '').startsWith(
+        'embed-dialog-theme-',
+      ),
+    ).filter(
+      (el) =>
+        ((el.props as { 'data-testid'?: string })['data-testid'] ?? '') !==
+        'embed-dialog-theme-group',
+    );
+    expect(buttons.map((r) => (r.props as { 'data-testid'?: string })['data-testid'])).toEqual([
+      'embed-dialog-theme-match',
+      'embed-dialog-theme-light',
+      'embed-dialog-theme-dark',
+    ]);
+    expect(buttons.map((r) => r.props.children)).toEqual(['Match my theme', 'Light', 'Dark']);
+    expect(buttons.map((r) => (r.props as { 'aria-label'?: string })['aria-label'])).toEqual([
+      'Match my theme',
+      'Light',
+      'Dark',
+    ]);
+  });
+
+  it('marks "Match my theme" active by default and the other two inactive', () => {
+    const tree = callEmbedDialog({ open: true });
+    const match = findElement(tree, testIdEquals('embed-dialog-theme-match'));
+    const light = findElement(tree, testIdEquals('embed-dialog-theme-light'));
+    const dark = findElement(tree, testIdEquals('embed-dialog-theme-dark'));
+    expect((match?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
+    expect((light?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(false);
+    expect((dark?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(false);
+  });
+
+  it('default snippet (themeChoice = match) carries ?theme=light when no DOM is available', () => {
+    const tree = callEmbedDialog({ open: true, projectId: 'demo-project' });
+    const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
+    expect(textarea?.props.value).toContain('?theme=light');
+    expect(textarea?.props.value).not.toContain('?theme=dark');
+  });
+
+  it('snippet flips to ?theme=light when Light is selected', () => {
+    const tree = callEmbedDialog({ open: true }, withCopyIdle('light'));
+    const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
+    expect(textarea?.props.value).toContain('?theme=light');
+    const light = findElement(tree, testIdEquals('embed-dialog-theme-light'));
+    expect((light?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
+  });
+
+  it('snippet flips to ?theme=dark when Dark is selected', () => {
+    const tree = callEmbedDialog({ open: true }, withCopyIdle('dark'));
+    const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
+    expect(textarea?.props.value).toContain('?theme=dark');
+    const dark = findElement(tree, testIdEquals('embed-dialog-theme-dark'));
+    expect((dark?.props as { 'aria-pressed'?: boolean })['aria-pressed']).toBe(true);
+  });
+
+  it('"Match my theme" resolves to dark when document.documentElement.classList contains "dark"', () => {
+    const originalDoc = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      documentElement: {
+        classList: { contains: (token: string) => token === 'dark' },
+      },
+    };
+    try {
+      const tree = callEmbedDialog({ open: true }, withCopyIdle('match'));
+      const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
+      expect(textarea?.props.value).toContain('?theme=dark');
+      expect(textarea?.props.value).not.toContain('?theme=light');
+    } finally {
+      (globalThis as { document?: unknown }).document = originalDoc;
+    }
+  });
+
+  it('"Match my theme" resolves to light when documentElement.classList does NOT contain "dark"', () => {
+    const originalDoc = (globalThis as { document?: unknown }).document;
+    (globalThis as { document?: unknown }).document = {
+      documentElement: {
+        classList: { contains: (_token: string) => false },
+      },
+    };
+    try {
+      const tree = callEmbedDialog({ open: true }, withCopyIdle('match'));
+      const textarea = findElement(tree, testIdEquals('embed-dialog-snippet'));
+      expect(textarea?.props.value).toContain('?theme=light');
+      expect(textarea?.props.value).not.toContain('?theme=dark');
+    } finally {
+      (globalThis as { document?: unknown }).document = originalDoc;
+    }
+  });
+
+  it('clicking each radio calls setThemeChoice with the corresponding value (handler is wired)', () => {
+    const tree = callEmbedDialog({ open: true });
+    for (const value of ['match', 'light', 'dark'] as const) {
+      const radio = findElement(tree, testIdEquals(`embed-dialog-theme-${value}`));
+      expect(radio).not.toBeNull();
+      const onClick = (radio?.props as { onClick?: () => void }).onClick;
+      expect(typeof onClick).toBe('function');
+      // Just exercising the handler — the dispatcher shim swallows the
+      // setState, but the assertion here is that clicking does not throw and
+      // the handler is a function reference (i.e. wired to a setter).
+      expect(() => onClick?.()).not.toThrow();
+    }
+  });
+
+  it('Copy button copies the themed snippet currently shown in the textarea', async () => {
+    const writeText = mock((_text: string) => Promise.resolve());
+    const originalNavigator = globalThis.navigator;
+    (globalThis as { navigator?: unknown }).navigator = { clipboard: { writeText } };
+    try {
+      const tree = callEmbedDialog({ open: true, projectId: 'demo-project' }, withCopyIdle('dark'));
+      const expected = buildEmbedSnippet(buildEmbedUrl('demo-project', 'dark'));
+      const copyBtn = findElement(tree, testIdEquals('embed-dialog-copy'));
+      const onClick = (copyBtn?.props as { onClick?: () => void | Promise<void> }).onClick;
+      await onClick?.();
+      expect(writeText).toHaveBeenCalledWith(expected);
     } finally {
       (globalThis as { navigator?: unknown }).navigator = originalNavigator;
     }
