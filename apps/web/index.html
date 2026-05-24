@@ -9,18 +9,41 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <title>SeeFlow Studio</title>
     <script>
-      // FOUC guard: applies the stored/system theme to <html> before React boots.
+      // FOUC guard: applies the resolved theme to <html> before React boots.
+      // Priority: URL `?theme=` (viewer / embed iframe) > localStorage (studio)
+      // > 'system' (matchMedia). When the URL carries `?theme=` with an
+      // invalid value (e.g. `?theme=foo` or empty), falls through to 'light' —
+      // the new package default per US-010 — instead of probing localStorage,
+      // because an explicit-but-invalid param is an embed-side signal.
       // Keep storage key and media query in sync with apps/web/src/hooks/use-theme.ts.
       (function () {
         try {
-          var stored = null;
+          var urlTheme = null;
+          var hasUrlParam = false;
           try {
-            stored = localStorage.getItem('seeflow:theme');
+            var params = new URLSearchParams(window.location.search);
+            if (params.has('theme')) {
+              hasUrlParam = true;
+              var raw = params.get('theme');
+              if (raw === 'light' || raw === 'dark') urlTheme = raw;
+            }
           } catch (_) {}
-          var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
-          var resolved = theme;
-          if (theme === 'system') {
-            resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          var resolved = null;
+          if (urlTheme) {
+            resolved = urlTheme;
+          } else if (hasUrlParam) {
+            resolved = 'light';
+          } else {
+            var stored = null;
+            try {
+              stored = localStorage.getItem('seeflow:theme');
+            } catch (_) {}
+            var theme = stored === 'light' || stored === 'dark' || stored === 'system' ? stored : 'system';
+            if (theme === 'system') {
+              resolved = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+            } else {
+              resolved = theme;
+            }
           }
           var cls = document.documentElement.classList;
           if (resolved === 'dark') {
