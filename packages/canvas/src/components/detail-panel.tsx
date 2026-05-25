@@ -4,7 +4,9 @@ import {
   type ClipboardEvent as ReactClipboardEvent,
   type FormEvent as ReactFormEvent,
   type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   type PointerEvent as ReactPointerEvent,
+  isValidElement,
   useEffect,
   useRef,
   useState,
@@ -24,6 +26,7 @@ import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
 import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
+import { MermaidBlock } from './mermaid-block.tsx';
 
 // Local alias to keep the title-row JSX tidy. The trigger always renders as a
 // small popover anchor, regardless of whether the node has an icon set yet.
@@ -252,7 +255,14 @@ export function DetailPanel({
                 ariaLabel="Description"
                 testIdBase="detail-panel-description"
                 onSave={onDescriptionChange}
-                textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground"
+                // Description is the visual "subtitle" — rendered in the muted
+                // gray token so it sits clearly below the (white-ish) Detail
+                // block in dark mode and below the near-black Detail in light.
+                // The explicit `dark:` override pins a slightly more saturated
+                // gray than `--muted-foreground` so the contrast against
+                // Detail's `text-foreground` holds even under reduced-contrast
+                // settings.
+                textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground sf:dark:text-zinc-400"
               />
               <EditableField
                 nodeId={inspectableNode.id}
@@ -263,7 +273,7 @@ export function DetailPanel({
                 testIdBase="detail-panel-detail"
                 onSave={onDetailChange}
                 markdown={true}
-                textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground/90"
+                textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground"
               />
 
               {inspectableNode.type === 'html' && flowId ? (
@@ -738,6 +748,37 @@ export function StatusSection({
   );
 }
 
+/**
+ * Coerce a markdown code block's children into the raw mermaid source string.
+ * react-markdown passes children as `string | ReactNode[]` depending on how
+ * the source was tokenized; we tolerate both shapes and strip the trailing
+ * newline that fenced blocks always carry.
+ */
+export function readMermaidSource(children: ReactNode): string {
+  if (typeof children === 'string') return children.replace(/\n$/, '');
+  if (Array.isArray(children)) {
+    return children
+      .map((c) => (typeof c === 'string' ? c : ''))
+      .join('')
+      .replace(/\n$/, '');
+  }
+  return String(children ?? '').replace(/\n$/, '');
+}
+
+/**
+ * If `children` of a markdown `<pre>` node is a `<code class="language-mermaid">`
+ * element, return its inner source. Otherwise return `null` so the caller
+ * keeps the default `<pre>` behavior. Exported via the closure inside
+ * MarkdownContent so the `pre` handler stays declarative.
+ */
+export function extractMermaidSource(children: ReactNode): string | null {
+  if (!isValidElement(children)) return null;
+  const props = (children as { props?: { className?: unknown; children?: ReactNode } }).props;
+  if (!props || typeof props.className !== 'string') return null;
+  if (!props.className.includes('language-mermaid')) return null;
+  return readMermaidSource(props.children);
+}
+
 function MarkdownContent({ value }: { value: string }) {
   return (
     <ReactMarkdown
@@ -761,6 +802,14 @@ function MarkdownContent({ value }: { value: string }) {
         ),
         li: ({ children }) => <li className="mb-0.5">{children}</li>,
         code: ({ children, className }) => {
+          // ```mermaid blocks are handled by the `pre` override below — the
+          // code element is consumed there so the SVG can render outside a
+          // <pre> wrapper. Reach this branch with `language-mermaid` only
+          // when markdown produces an unwrapped inline-code variant, which
+          // we still want to render as a Mermaid diagram for parity.
+          if (typeof className === 'string' && className.includes('language-mermaid')) {
+            return <MermaidBlock code={readMermaidSource(children)} />;
+          }
           const isBlock = className?.includes('language-');
           return isBlock ? (
             <code className="sf:block sf:overflow-x-auto sf:rounded sf:bg-muted/60 sf:px-2 sf:py-1 sf:font-mono sf:text-xs">
@@ -772,7 +821,18 @@ function MarkdownContent({ value }: { value: string }) {
             </code>
           );
         },
-        pre: ({ children }) => <pre className="sf:mb-2 sf:last:mb-0">{children}</pre>,
+        pre: ({ children }) => {
+          // Upgrade `<pre><code class="language-mermaid">…</code></pre>` to a
+          // `<MermaidBlock />` so fenced mermaid in the Detail field renders
+          // as an SVG diagram. Returning the MermaidBlock directly (no `pre`
+          // wrapper) keeps the SVG out of a `<pre>` block where it would pick
+          // up the monospace-preformat box.
+          const mermaidSource = extractMermaidSource(children);
+          if (mermaidSource !== null) {
+            return <MermaidBlock code={mermaidSource} />;
+          }
+          return <pre className="sf:mb-2 sf:last:mb-0">{children}</pre>;
+        },
         blockquote: ({ children }) => (
           <blockquote className="sf:mb-2 sf:border-l-2 sf:border-muted-foreground/30 sf:pl-3 sf:italic sf:text-muted-foreground sf:last:mb-0">
             {children}

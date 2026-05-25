@@ -28,6 +28,7 @@
   "peerDependencies": {
     "@xyflow/react": "*",
     "lucide-react": "*",
+    "mermaid": "^11",
     "react": "*",
     "react-dom": "*",
     "react-markdown": "^10",
@@ -36,6 +37,7 @@
     "shiki": "^1.24.0"
   },
   "peerDependenciesMeta": {
+    "mermaid": { "optional": true },
     "recharts": { "optional": true },
     "shiki": { "optional": true }
   },
@@ -63,6 +65,7 @@
     "@types/react": "^18.3.12",
     "autoprefixer": "^10.4.20",
     "happy-dom": "^20.9.0",
+    "mermaid": "^11.4.1",
     "postcss": "^8.4.49",
     "recharts": "^2.13.0",
     "shiki": "^1.24.0",

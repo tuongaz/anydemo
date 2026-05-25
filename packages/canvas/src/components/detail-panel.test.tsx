@@ -30,6 +30,8 @@ const {
   TitleIconTrigger,
   StatusSection,
   formatRelativeTime,
+  readMermaidSource,
+  extractMermaidSource,
 } = await import('./detail-panel.tsx');
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
@@ -708,6 +710,85 @@ describe('HtmlNodeSection', () => {
     onClick();
     await new Promise((r) => setTimeout(r, 0));
     expect(revealCalls).toEqual(['nodes/node-XwygzfKPZ5/view.html']);
+  });
+});
+
+describe('DetailPanel description vs detail color tokens', () => {
+  // The description must read as a muted gray ("subtitle" tier), and the
+  // detail must read as the foreground tone — so under dark theme the two
+  // fields don't blur into each other visually. The textClassName props on
+  // each EditableField are the source of truth for both colors.
+  it('description EditableField textClassName uses text-muted-foreground', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeRectangleNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    const desc = findByTestId(tree, 'detail-panel-description');
+    expect(desc).not.toBeNull();
+    const className = String((desc?.props as { textClassName?: string }).textClassName ?? '');
+    expect(className).toContain('sf:text-muted-foreground');
+  });
+
+  it('detail EditableField textClassName uses the brighter text-foreground tone', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeRectangleNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    const detail = findByTestId(tree, 'detail-panel-detail');
+    expect(detail).not.toBeNull();
+    const className = String((detail?.props as { textClassName?: string }).textClassName ?? '');
+    expect(className).toContain('sf:text-foreground');
+    // Guard against accidental regression to the muted-foreground gray —
+    // that would make the field visually indistinguishable from description.
+    expect(className).not.toContain('sf:text-muted-foreground');
+  });
+});
+
+describe('Mermaid markdown helpers', () => {
+  it('readMermaidSource strips the trailing newline from a string child', () => {
+    expect(readMermaidSource('graph LR\nA --> B\n')).toBe('graph LR\nA --> B');
+  });
+
+  it('readMermaidSource flattens an array of string children', () => {
+    expect(readMermaidSource(['graph LR\n', 'A --> B\n'])).toBe('graph LR\nA --> B');
+  });
+
+  it('readMermaidSource coerces undefined / null to an empty string', () => {
+    expect(readMermaidSource(undefined as unknown as React.ReactNode)).toBe('');
+    expect(readMermaidSource(null as unknown as React.ReactNode)).toBe('');
+  });
+
+  it('extractMermaidSource returns null when children is not a code element', () => {
+    expect(extractMermaidSource('plain text')).toBeNull();
+    expect(extractMermaidSource(null as unknown as React.ReactNode)).toBeNull();
+  });
+
+  it('extractMermaidSource returns null when className is not language-mermaid', () => {
+    const code = React.createElement('code', { className: 'language-ts' }, 'const x = 1;\n');
+    expect(extractMermaidSource(code)).toBeNull();
+  });
+
+  it('extractMermaidSource returns the inner source when children is a mermaid code element', () => {
+    const code = React.createElement(
+      'code',
+      { className: 'language-mermaid' },
+      'graph TD\nA-->B\n',
+    );
+    expect(extractMermaidSource(code)).toBe('graph TD\nA-->B');
   });
 });
 

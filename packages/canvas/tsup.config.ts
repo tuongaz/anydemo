@@ -15,6 +15,7 @@ export default defineConfig({
     'remark-gfm',
     'recharts',
     'shiki',
+    'mermaid',
   ],
   outDir: 'dist',
 });
