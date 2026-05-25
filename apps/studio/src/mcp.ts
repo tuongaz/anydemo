@@ -201,7 +201,7 @@ const buildTools = (ops: Operations): McpTool[] => [
       'Use this to learn what a node, connector, action, component spec, or ' +
       'flow envelope looks like before authoring writes. Categories: `flow`, ' +
       '`node` (13 flat variants — rectangle/ellipse/sticky/text/database/server/' +
-      "user/queue/cloud/image/html/icon/component), `connector`, `action` " +
+      'user/queue/cloud/image/html/icon/component), `connector`, `action` ' +
       '(playAction/statusAction/resetAction/statusReport/componentAction), ' +
       "`componentSpec` (sidecar shape for type:'component' nodes), `style`.",
     inputSchema: {

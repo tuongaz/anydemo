@@ -110,13 +110,7 @@ describe('schema-catalog', () => {
       const payload = loadCategory('action');
       const keys = Object.keys(payload.schemas).sort();
       expect(keys).toEqual(
-        [
-          'playAction',
-          'resetAction',
-          'statusAction',
-          'statusReport',
-          'componentAction',
-        ].sort(),
+        ['playAction', 'resetAction', 'statusAction', 'statusReport', 'componentAction'].sort(),
       );
       expect(payload.notes.some((n) => /scriptPath/.test(n))).toBe(true);
       // componentAction discriminator note must surface so authors know set vs script.
