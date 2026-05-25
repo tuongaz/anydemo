@@ -5,83 +5,107 @@ category: storage
 
 # Google Cloud Storage
 
-> **General guidance only.** Check the shared `<host>/.seeflow/LEARN.md`
-> `## Tech stack adaptations` first — project-specific helpers,
-> fixtures, and conventions always win over the templates below.
-> Whatever you learn this run, append back into that section so the
-> next flow reuses it.
+> **Check first.** Project conventions always win over the templates below.
+> The snippets here are generic CLI fallbacks — reuse project wrappers,
+> `Makefile` targets, `scripts/` helpers, and `bin/` CLIs first.
+>
+> 1. `<host>/.seeflow/LEARN.md` `## Tech stack adaptations` — recorded
+>    helpers, fixtures, emulator wiring, conventions.
+> 2. `Grep`/`Glob` the repo for wrappers when LEARN.md is silent —
+>    uploader/repository symbols, test-harness helpers, `Makefile`/
+>    `scripts/` boot targets, compose service names.
+>
+> Sub-agents port the bash recipes below into the project's primary
+> language only when no CLI / wrapper covers the action.
+>
+> Append anything new you learn this run back into LEARN.md so the next
+> flow reuses it.
+
+## What it is
+
+Object store for blobs keyed by bucket + name. In a typical flow it holds
+uploads, exports, or report artefacts that other services produce and
+consume asynchronously.
+
+## How to run it
+
+Locally GCS is faked by `fake-gcs-server` (see its own ref).
+
+- Project script first: `make gcs-up` / `bun run gcs:up` / compose
+  service named `fake-gcs-server` or `gcs`. Grep before inventing one.
+- If compose already declares it: `docker compose up -d fake-gcs-server`.
+- Fall back to the canonical recipe.
+
+```bash
+docker run -d --name fake-gcs -p 4443:4443 \
+  fsouza/fake-gcs-server -scheme http -public-host localhost:4443
+export STORAGE_EMULATOR_HOST=http://localhost:4443
+echo "gcs ready on :4443"
+```
+
+## How to insert data
+
+- Reuse any project uploader/helper or `bin/` CLI before raw curl.
+- Honour the emulator endpoint in *this* shell (`STORAGE_EMULATOR_HOST`).
+- Pull payload shape from a real fixture if one ships.
+
+```bash
+# Option A — gsutil against the emulator
+gsutil -o "Credentials:gs_json_host=localhost" \
+       -o "Credentials:gs_json_port=4443" \
+  cp ./fixture.json gs://orders/$(date -u +%Y%m%dT%H%M%S).json
+
+# Option B — raw JSON API (no gcloud required)
+curl -fsS -X POST \
+  "http://localhost:4443/upload/storage/v1/b/orders/o?uploadType=media&name=hello.json" \
+  -H "Content-Type: application/json" --data-binary @./fixture.json
+
+# Option C — exec into the project's compose container
+docker compose exec app /app/bin/upload-order ./fixture.json
+```
+
+## How to verify run success
+
+Cheapest one-shot confirmation that the object landed.
+
+```bash
+gsutil -o "Credentials:gs_json_host=localhost" -o "Credentials:gs_json_port=4443" \
+  ls gs://orders/hello.json >/dev/null && echo ok
+# or, no gsutil:
+curl -fsS "http://localhost:4443/storage/v1/b/orders/o/hello.json" -o /dev/null && echo ok
+```
+
+## How to verify query data
+
+Status loop — list with a tight prefix, emit `StatusReport` JSON each tick.
+
+- Reuse project read helpers when present.
+- Tolerate empty buckets → `state:"warn"`, never throw.
+- Emit `state`, `summary`, `data`, `ts`.
+
+```bash
+while true; do
+  curl -fsS "http://localhost:4443/storage/v1/b/orders/o?prefix=" \
+    | jq -c '{state:"ok",
+              summary:"\(.items|length) objects",
+              data:[.items[].name],
+              ts:(now|floor)}' \
+    || echo '{"state":"warn","summary":"no bucket","data":[],"ts":'$(date +%s)'}'
+  sleep 2
+done
+```
 
 ## Node modelling
 
-- One node (`type:'rectangle'`) per bucket, not per object or prefix.
-- Duplicate the bucket node next to each consumer for readability
-  (same `type` + `data.icon` + `data.name`, unique `id`).
-- Long-lived storage — when probed, the status script reports
-  bucket inventory snapshots, not change events.
-
-## Play (trigger locally)
-
-- Reuse any project uploader/helper before instantiating a raw client.
-- Honour `STORAGE_EMULATOR_HOST` so the script works against
-  fake-gcs-server *and* real GCS without code changes.
-- Pull payload shape from a real fixture if one ships.
-
-```go
-package main
-
-import (
-	"context"
-	"strings"
-	"time"
-	"cloud.google.com/go/storage"
-)
-
-func main() {
-	ctx := context.Background()
-	c, _ := storage.NewClient(ctx)
-	defer c.Close()
-	key := time.Now().UTC().Format("20060102T150405") + ".json"
-	w := c.Bucket("orders").Object(key).NewWriter(ctx)
-	w.ContentType = "application/json"
-	_, _ = w.Write([]byte(`{"id":"o_1","total":42}`))
-	_ = w.Close()
-	println(strings.Join([]string{"uploaded", key}, " "))
-}
-```
-
-## Status (read locally)
-
-- List under a tight prefix; never full-bucket scan.
-- Emit `StatusReport` JSON per tick.
-- Tolerate `storage.ErrObjectNotExist` — emit `state: "warn"`.
-
-```go
-package main
-
-import (
-	"context"; "encoding/json"; "fmt"; "time"
-	"cloud.google.com/go/storage"
-	"google.golang.org/api/iterator"
-)
-
-func main() {
-	ctx := context.Background()
-	c, _ := storage.NewClient(ctx)
-	for {
-		it := c.Bucket("orders").Objects(ctx, &storage.Query{Prefix: ""})
-		keys := []string{}
-		for { o, err := it.Next(); if err == iterator.Done { break }; if err != nil { break }; keys = append(keys, o.Name) }
-		b, _ := json.Marshal(map[string]any{"state":"ok","summary":fmt.Sprintf("%d objects",len(keys)),"data":keys,"ts":time.Now().Unix()})
-		println(string(b))
-		time.Sleep(2 * time.Second)
-	}
-}
-```
+- One node (`type:'rectangle'`) per bucket, not per object or prefix. Set
+  `data.icon` to a Lucide name like `database` or `archive`.
+- Duplicate the bucket node next to each consumer for readability (same
+  `type` + `data.icon` + `data.name`, unique `id`).
 
 ## Gotchas
 
 - `STORAGE_EMULATOR_HOST` silently swaps real GCS for fake-gcs-server —
-  set it in the play *and* status env, or one side hits prod.
+  set it in the Play *and* Status env, or one side hits prod.
 - fake-gcs-server doesn't enforce IAM; code that "works locally" can
   401 against real GCS.
 - Bucket names are global; emulator allows duplicates, real GCS doesn't.
