@@ -214,7 +214,7 @@ describe('integration: MCP — read-only tools', () => {
     const index = okJson<{ categories: { name: string; description: string }[] }>(indexResult);
     expect(Array.isArray(index.categories)).toBe(true);
     const indexNames = index.categories.map((c) => c.name).sort();
-    expect(indexNames).toEqual(['action', 'connector', 'flow', 'node', 'style']);
+    expect(indexNames).toEqual(['action', 'componentSpec', 'connector', 'flow', 'node', 'style']);
 
     // With a known category → that category's JSON Schemas + notes.
     const nodeResult = await client.callTool('seeflow_schema', { name: 'node' });
@@ -222,11 +222,15 @@ describe('integration: MCP — read-only tools', () => {
       nodeResult,
     );
     expect(node.name).toBe('node');
-    // Flat 12-tag set: 9 geometric (rectangle/ellipse/sticky/text/database/
-    // server/user/queue/cloud) + image + html + icon. The schema-catalog
-    // returns one entry per FlowNodeSchema variant — visual kind is the type.
+    // Flat 13-tag set: 9 geometric (rectangle/ellipse/sticky/text/database/
+    // server/user/queue/cloud) + image + html + icon + component. The
+    // schema-catalog returns one entry per FlowNodeSchema variant — visual
+    // kind is the type. `component` is the json-render variant whose spec
+    // lives in <project>/nodes/<id>/spec.json (see schema category
+    // `componentSpec`).
     expect(Object.keys(node.schemas).sort()).toEqual([
       'cloud',
+      'component',
       'database',
       'ellipse',
       'html',

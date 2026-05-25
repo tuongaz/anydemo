@@ -20,6 +20,15 @@ import {
 
 const DEFAULT_DEBOUNCE_MS = 100;
 
+/**
+ * Polling backup interval. fs.watch on macOS occasionally drops events
+ * (notably right after a fresh watcher is registered), so a low-frequency
+ * stat poll over every watched handle guarantees external writes still
+ * trigger reparse+broadcast. Own-write echoes are still suppressed by
+ * the writtenHashes ring, so this doesn't double-fire on server writes.
+ */
+const DEFAULT_POLL_INTERVAL_MS = 500;
+
 /** Max recent self-write hashes retained per flow for own-echo suppression. */
 const WRITTEN_HASH_RING_SIZE = 4;
 
@@ -52,6 +61,12 @@ export interface WatcherDeps {
   events: EventBus;
   /** Override for tests. */
   debounceMs?: number;
+  /**
+   * Polling backup interval for missed fs.watch events. Defaults to 500ms.
+   * Pass `0` to disable (tests that rely on deterministic fs.watch-only
+   * behaviour).
+   */
+  pollIntervalMs?: number;
 }
 
 export interface FlowWatcher {
@@ -276,6 +291,7 @@ const closeFileWatchers = (handle: WatchHandle): void => {
 export function createWatcher(deps: WatcherDeps): FlowWatcher {
   const { registry, events } = deps;
   const debounceMs = deps.debounceMs ?? DEFAULT_DEBOUNCE_MS;
+  const pollIntervalMs = deps.pollIntervalMs ?? DEFAULT_POLL_INTERVAL_MS;
 
   const handles = new Map<string, WatchHandle>();
   const snapshots = new Map<string, FlowSnapshot>();
@@ -455,6 +471,49 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
     });
   };
 
+  /**
+   * Common path for "something on disk may have changed" — used by both
+   * fs.watch callbacks and the polling backup. Debounces, drops own-write
+   * echoes, then reparses + broadcasts. Idempotent under repeated calls
+   * within the debounce window.
+   */
+  const scheduleChange = (flowId: string): void => {
+    const handle = handles.get(flowId);
+    if (!handle) return;
+    if (handle.debounceTimer) clearTimeout(handle.debounceTimer);
+    handle.debounceTimer = setTimeout(() => {
+      handle.debounceTimer = null;
+      // Own-write dedupe: if the on-disk bytes match what the server just
+      // wrote (recent hash in the ring), this is our own echo — drop it.
+      // notifyWritten already broadcast and seeded the snapshot.
+      const combined = readCombinedFromDisk(handle.filePath);
+      if (combined !== null && isOwnWriteEcho(flowId, sha256Hex(combined))) return;
+      const snap = reparse(flowId);
+      if (snap) broadcastReload(flowId, snap);
+    }, debounceMs);
+  };
+
+  // Single shared interval that stat-polls every watched handle. Cheap (one
+  // statSync per watched flow per tick) and bounded — flows that registry
+  // doesn't know about aren't watched, so the loop scales with active
+  // projects, not historic ones. Backs up macOS fs.watch's occasional
+  // dropped events; the debounce + own-write dedupe in scheduleChange
+  // keeps it from double-firing alongside a fs.watch hit.
+  const pollTimer: ReturnType<typeof setInterval> | null =
+    pollIntervalMs > 0
+      ? setInterval(() => {
+          for (const [flowId, handle] of handles) {
+            const seen = lastSeenMtimes.get(flowId);
+            if (seen === undefined) continue;
+            const now = combinedMtimeMs(handle.filePath);
+            if (now > seen) scheduleChange(flowId);
+          }
+        }, pollIntervalMs)
+      : null;
+  // Don't keep the event loop alive on this timer alone — the studio process
+  // should exit cleanly when nothing else is pending.
+  pollTimer?.unref?.();
+
   const startWatch = (flowId: string) => {
     const existing = handles.get(flowId);
     if (existing) {
@@ -484,19 +543,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
         // React to flow.json, style.json, or rename-on-save events
         // (some platforms emit those with no filename).
         if (changed && changed !== base && changed !== 'style.json') return;
-        const handle = handles.get(flowId);
-        if (!handle) return;
-        if (handle.debounceTimer) clearTimeout(handle.debounceTimer);
-        handle.debounceTimer = setTimeout(() => {
-          handle.debounceTimer = null;
-          // Own-write dedupe: if the on-disk bytes match what the server just
-          // wrote (recent hash in the ring), this is our own echo — drop it.
-          // notifyWritten already broadcast and seeded the snapshot.
-          const combined = readCombinedFromDisk(filePath);
-          if (combined !== null && isOwnWriteEcho(flowId, sha256Hex(combined))) return;
-          const snap = reparse(flowId);
-          if (snap) broadcastReload(flowId, snap);
-        }, debounceMs);
+        scheduleChange(flowId);
       });
     } catch (err) {
       console.error(`[watcher] failed to watch ${dir} for flow ${flowId}:`, err);
@@ -551,6 +598,7 @@ export function createWatcher(deps: WatcherDeps): FlowWatcher {
       for (const entry of registry.list()) startWatch(entry.id);
     },
     closeAll() {
+      if (pollTimer) clearInterval(pollTimer);
       for (const [, h] of handles) {
         h.fsWatcher.close();
         if (h.debounceTimer) clearTimeout(h.debounceTimer);
