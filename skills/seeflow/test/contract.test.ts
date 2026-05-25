@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const SKILL_ROOT = resolve(__dirname, '..');
@@ -23,7 +23,15 @@ function readAllMarkdown(dir: string): { path: string; body: string }[] {
 describe('seeflow skill <-> CLI contract', () => {
   it('SKILL.md names every CLI subcommand the orchestrator depends on', () => {
     const skill = readFileSync(SKILL_MD, 'utf8');
-    for (const cmd of ['projects:create', 'flow:add-bulk', 'nodes:patch', 'flows:layout', 'e2e', 'ids', 'schema']) {
+    for (const cmd of [
+      'projects:create',
+      'flow:add-bulk',
+      'nodes:patch',
+      'flows:layout',
+      'e2e',
+      'ids',
+      'schema',
+    ]) {
       expect(skill).toContain(cmd);
     }
   });
