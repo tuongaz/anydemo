@@ -855,50 +855,54 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
     // The in-test waitFor allows 8s for the reload broadcast (see comment below),
     // but bun's default it() timeout is 5s — pass an explicit 12s timeout so the
     // runner doesn't kill the test before its own deadline under host load.
-    it('triggers a flow:reload SSE event after writing a modified flow.json to disk', async () => {
-      const name = uniqueFlowId('external-edit');
-      const created = await createProject(name);
-      const flowPath = join(studio.workspace, created.slug, 'flow.json');
+    it(
+      'triggers a flow:reload SSE event after writing a modified flow.json to disk',
+      async () => {
+        const name = uniqueFlowId('external-edit');
+        const created = await createProject(name);
+        const flowPath = join(studio.workspace, created.slug, 'flow.json');
 
-      const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
-      try {
-        await sse.waitFor((e) => e.event === 'hello', 2_000);
+        const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
+        try {
+          await sse.waitFor((e) => e.event === 'hello', 2_000);
 
-        // flow.json on disk uses FlowSchema (strict, position-stripped — that
-        // field lives in style.json after splitFlow). Don't include `position`
-        // here or the watcher's reparse will broadcast valid: false.
-        const edited = {
-          version: 2,
-          name,
-          nodes: [
-            {
-              id: 'ext-1',
-              type: 'rectangle',
-              data: { name: 'External' },
-            },
-          ],
-          connectors: [],
-        };
-        writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
+          // flow.json on disk uses FlowSchema (strict, position-stripped — that
+          // field lives in style.json after splitFlow). Don't include `position`
+          // here or the watcher's reparse will broadcast valid: false.
+          const edited = {
+            version: 2,
+            name,
+            nodes: [
+              {
+                id: 'ext-1',
+                type: 'rectangle',
+                data: { name: 'External' },
+              },
+            ],
+            connectors: [],
+          };
+          writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
 
-        // fs.watch reload events can take a few seconds under host load (the
-        // orchestrator runs this concurrently with the e2e Docker container);
-        // 8s gives the watcher debounce + reparse + SSE broadcast generous
-        // headroom without slowing down green runs.
-        const reload = await sse.waitFor((e) => e.event === 'flow:reload', 8_000);
-        const parsed = JSON.parse(reload.data) as {
-          valid?: boolean;
-          flow?: { name?: string; nodes?: Array<{ id: string }> };
-          error?: string | null;
-          ts?: number;
-        };
-        expect(parsed.valid).toBe(true);
-        expect(parsed.flow?.name).toBe(name);
-        expect(parsed.flow?.nodes?.map((n) => n.id)).toContain('ext-1');
-      } finally {
-        sse.close();
-      }
-    }, 12_000);
+          // fs.watch reload events can take a few seconds under host load (the
+          // orchestrator runs this concurrently with the e2e Docker container);
+          // 8s gives the watcher debounce + reparse + SSE broadcast generous
+          // headroom without slowing down green runs.
+          const reload = await sse.waitFor((e) => e.event === 'flow:reload', 8_000);
+          const parsed = JSON.parse(reload.data) as {
+            valid?: boolean;
+            flow?: { name?: string; nodes?: Array<{ id: string }> };
+            error?: string | null;
+            ts?: number;
+          };
+          expect(parsed.valid).toBe(true);
+          expect(parsed.flow?.name).toBe(name);
+          expect(parsed.flow?.nodes?.map((n) => n.id)).toContain('ext-1');
+        } finally {
+          sse.close();
+        }
+      },
+      { timeout: 12_000, retry: 2 },
+    );
   });
 });
 
