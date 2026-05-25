@@ -1,179 +1,217 @@
 {
   "project": "SeeFlow",
-  "branchName": "ralph/light-theme-support",
-  "description": "Light/Dark Theme Support — split canvas + studio CSS tokens, add useTheme hook with Cog menu toggle (Light/Dark/System), FOUC-prevention script, iframe embed ?theme= support, and Playwright coverage. Default becomes light; existing dark behavior preserved via .dark class on <html>.",
+  "branchName": "ralph/mcp-apps-canvas",
+  "description": "MCP Apps for SeeFlow — render the React Flow canvas inline inside MCP-Apps-capable hosts (Claude Desktop first), with full in-chat authoring and bidirectional model awareness. See docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Split canvas CSS tokens into light default + dark override",
-      "description": "As a canvas consumer, I want the package to ship a light-default palette with a .dark override so embedders can theme by adding .dark to any ancestor.",
+      "title": "Scaffold apps/mcp-app/ workspace with single-file Vite build",
+      "description": "As a developer, I need a new workspace that builds the MCP App iframe payload as one inlined HTML file. This is the empty shell — no canvas yet, just the build pipeline.",
       "acceptanceCriteria": [
-        "In packages/canvas/src/styles/index.css:62-104, move current dark token values into `.dark .seeflow-canvas-root { ... }`",
-        "Add new light token defaults on `.seeflow-canvas-root` per PRD spec (zinc/slate neutrals, emerald primary unchanged, --muted-foreground at 4.6:1 WCAG AA)",
-        "Add light variants for non-token vars at lines 84-90: --bg-canvas (#fafafa), --emerald-glow (rgba(16,185,129,0.18)), --shadow-card (rgba(15,23,42,0.08)), --shadow-window (softened), --shadow-glow-ok (emerald 0.30), --shadow-glow-pending (amber 0.30), --ring-selected (outer halo alpha trimmed)",
-        "Promote the hardcoded rgba(255,255,255,0.55) at line 477 to a new `--glow-dot-color` token: light = rgba(0,0,0,0.18), dark = current value",
-        "Leave status colors (--amber, --amber-hi, --danger) and keyframe rgbas (lines 145, 148, 200, 203) unchanged",
+        "Create apps/mcp-app/ with package.json (name: @seeflow/mcp-app, private: true, type: module)",
+        "Add tsconfig.json (extends root config, React JSX)",
+        "Add vite.config.ts using vite-plugin-singlefile to inline CSS/JS/assets",
+        "Add index.html and src/main.tsx that renders a placeholder <div>SeeFlow MCP App</div>",
+        "Add @seeflow/canvas, react, react-dom, @xyflow/react as dependencies (latest matching workspace versions)",
+        "`bun install` succeeds (workspace picked up by existing apps/* glob)",
+        "`bun run --filter @seeflow/mcp-app build` produces apps/mcp-app/dist/index.html as a single self-contained file (no separate assets/, css/, or chunks)",
         "Typecheck passes"
       ],
       "priority": 1,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-002",
-      "title": "Fix canvas image export to read computed background color",
-      "description": "As a canvas user, I want exported images to use the current theme's background instead of a hardcoded dark color.",
+      "title": "Add bridge.ts wrapping window.openai with coalescing + debounce",
+      "description": "As a developer, I need a typed bridge to window.openai that coalesces structural-edit messages and debounces context updates. No-ops cleanly when host is absent so the bundle works in plain browser tabs.",
       "acceptanceCriteria": [
-        "In packages/canvas/src/lib/export-image.ts:17, replace the hardcoded CANVAS_BACKGROUND_FALLBACK (#0a0a0c) with a runtime read of `--bg-canvas` computed style",
-        "Exported PNGs in light theme use the light background, dark theme uses dark background",
+        "apps/mcp-app/src/bridge.ts exports sendMessage(event) and updateModelContext(patch)",
+        "sendMessage coalesces calls within a 200ms window into one window.openai.sendMessage invocation with a merged payload",
+        "updateModelContext debounces 250ms and throttles to at most one call per second",
+        "When window.openai is undefined, both functions return silently (no throw, no console error)",
+        "Export a WidgetState type: { kind: 'navigate' | 'create'; flowSlug?: string; nodeId?: string; projectSlug?: string; backendUrl: string; backendToken: string; justCreated?: boolean }",
+        "Unit tests in apps/mcp-app/src/bridge.test.ts cover: coalescing window, debounce timing, throttle cap, no-op when window.openai missing",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 2,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-003",
-      "title": "Split apps/web CSS tokens into light default + dark override",
-      "description": "As a studio user, I want the web app to have matching light/dark token blocks so the toggle can flip the whole UI.",
+      "title": "Mount the canvas in App.tsx with createRestAdapter and widgetState branching",
+      "description": "As a user, I want the canvas to render inside the MCP App iframe with the right flow/node focused based on which tool was called. Branches on widgetState.kind for create vs navigate affordances.",
       "acceptanceCriteria": [
-        "In apps/web/src/index.css:93-132, keep light tokens at `:root` and move current values verbatim into `.dark { ... }`",
-        "Light defaults mirror the PRD palette (matches canvas package light tokens)",
-        "Typecheck passes"
+        "apps/mcp-app/src/App.tsx reads window.openai?.widgetState (fallback to a query-string-driven shim for browser testing)",
+        "Uses createRestAdapter from @seeflow/canvas with { baseUrl: widgetState.backendUrl, headers: { 'X-Seeflow-Token': widgetState.backendToken } }",
+        "When widgetState.kind === 'navigate': render canvas, if nodeId present open detail panel and select that node",
+        "When widgetState.kind === 'create' && justCreated: render canvas in edit mode with a subtle 'Just created' highlight that fades after 3s",
+        "main.tsx imports App and renders it",
+        "Imports @seeflow/canvas/style.css",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: open built dist/index.html with ?widgetState=<json> shim, confirm canvas renders against a running studio backend"
       ],
       "priority": 3,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-004",
-      "title": "Create useTheme hook with localStorage + matchMedia",
-      "description": "As a studio user, I want the app to remember my theme choice and respond to OS-level changes.",
+      "title": "Wire CanvasAdapter callbacks to bridge.sendMessage and updateModelContext",
+      "description": "As a user, when I edit the canvas, the model becomes aware via the right channel — structural edits trigger model turns; navigation telemetry flows silently.",
       "acceptanceCriteria": [
-        "New file apps/web/src/hooks/use-theme.ts",
-        "On mount reads localStorage['seeflow:theme'] (default 'system')",
-        "Resolves 'system' to 'light' | 'dark' via window.matchMedia('(prefers-color-scheme: dark)')",
-        "Subscribes to matchMedia changes so OS-level theme flips propagate while app is open",
-        "Imperatively toggles document.documentElement.classList between 'light' and 'dark'",
-        "Writes changes back to localStorage",
-        "Returns { theme, setTheme, resolvedTheme }",
-        "New apps/web/src/hooks/use-theme.test.ts covers: localStorage roundtrip, 'system' → matchMedia resolution, OS-preference change subscription, <html> class application",
+        "CanvasAdapter callbacks onAddNode, onDeleteNode, onAddConnector, onDeleteConnector, onRenameNode, onPlay, onStatusChange call bridge.sendMessage with { event, flowSlug, payload }",
+        "Selection change (single or multi), drag start/end, viewport pan/zoom, and detail-panel focus call bridge.updateModelContext with { selectedNodeId, hoveredNodeId, viewport }",
+        "Drag-in-progress fires updateModelContext at most once per 250ms (verified via test, not per-pixel)",
+        "Bursts of structural edits within 200ms are coalesced into one sendMessage (verified via test)",
         "Typecheck passes",
-        "Tests pass"
+        "Tests pass",
+        "Verify in browser using dev-browser skill: drag a node, confirm only one debounced updateModelContext fires; add a node, confirm one sendMessage fires"
       ],
       "priority": 4,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-005",
-      "title": "Add FOUC-prevention inline script to apps/web/index.html",
-      "description": "As a studio user, I want zero flash of wrong theme on first paint.",
+      "title": "Boot ephemeral Hono HTTP server alongside stdio in seeflow-mcp",
+      "description": "As a developer, I need seeflow-mcp to also expose the studio HTTP+SSE backend on a loopback ephemeral port so the iframe canvas can reach it. Lifecycle is bound to the stdio process.",
       "acceptanceCriteria": [
-        "Inline `<script>` added to apps/web/index.html `<head>` before React boots, per PRD spec (IIFE that reads localStorage['seeflow:theme'], resolves 'system' via matchMedia, adds 'light' or 'dark' class to document.documentElement)",
-        "No flash on hard reload — initial paint matches stored preference",
-        "Typecheck passes"
+        "apps/studio/src/mcp-shim.ts (or the seeflow-mcp entrypoint) calls Bun's serve({ port: 0, fetch: app.fetch }) alongside the existing stdio handler",
+        "studio.httpUrl is set to `http://127.0.0.1:${server.port}` before the MCP server starts handing out tool results",
+        "If port binding fails, surface a notifications/message error and continue stdio-only (do not crash)",
+        "process.on('SIGINT'), process.on('SIGTERM'), process.on('beforeExit'), and stdio transport onclose all call server.stop() to release the port",
+        "Integration test in apps/studio/integration/ boots seeflow-mcp, captures the port, kills the subprocess, asserts the port is free within 2 seconds",
+        "Typecheck passes",
+        "Tests pass"
       ],
       "priority": 5,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-006",
-      "title": "Add Cog menu theme toggle to web app header",
-      "description": "As a studio user, I want a visible theme toggle so I can switch between Light, Dark, and System.",
+      "title": "Add per-process token and CORS handling for Origin: null",
+      "description": "As a security-conscious developer, I need the ephemeral HTTP backend to reject drive-by requests from other localhost processes — only the MCP iframe (which receives the token via widgetState) should be allowed.",
       "acceptanceCriteria": [
-        "In apps/web/src/components/header.tsx, add a Cog button (lucide-react Settings icon) immediately right of <ProjectSwitcher>",
-        "Button opens a DropdownMenu re-exported from @seeflow/canvas",
-        "Menu contains one group titled 'Theme' with three radio items: Light, Dark, System",
-        "Selecting an item calls useTheme().setTheme(...) and the checkmark updates",
-        "Layout is list-based so future settings groups can append in one line",
+        "Generate a random per-process token at studio boot (crypto.randomUUID() or 32 bytes hex), stored in memory on the Studio instance",
+        "Expose studio.token field accessible to the MCP server factory",
+        "Extend existing Hono CORS middleware: allow Origin: null only when X-Seeflow-Token request header equals studio.token",
+        "Requests from null origin without the matching token receive 403",
+        "Existing same-origin (localhost:5173) and other localhost origins continue to work unchanged for the dev SPA",
+        "Token is never persisted to disk, never logged",
+        "Unit test in apps/studio/src/ verifies: null origin + correct token = allowed; null origin + missing/wrong token = denied; localhost:5173 = allowed without token",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 6,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-007",
-      "title": "Pin existing Playwright e2e baselines to dark theme",
-      "description": "As a CI maintainer, I want existing chromium-linux baselines to keep passing after the default flips to light.",
+      "title": "Add mcp-ui.ts with canvasMeta helper and register ui://seeflow/canvas resource",
+      "description": "As a developer, I need a single helper that builds the _meta payload for canvas-bearing tools, plus MCP server registration of the canvas HTML bundle as a readable resource.",
       "acceptanceCriteria": [
-        "Test setup in apps/studio/e2e/ writes localStorage['seeflow:theme'] = 'dark' before each existing test navigates",
-        "All existing *-chromium-linux.png baselines still pass without regeneration",
-        "Approach is reusable (helper or fixture) so new dark tests don't repeat the boilerplate",
-        "Typecheck passes",
-        "bun run test:it:e2e passes (Docker on non-Linux)"
+        "Create apps/studio/src/mcp-ui.ts exporting: CANVAS_RESOURCE_URI = 'ui://seeflow/canvas'; readCanvasHtml() that reads apps/mcp-app/dist/index.html via fs.readFileSync resolved through import.meta.resolve, cached after first read; canvasMeta(state) returning { 'openai/outputTemplate': CANVAS_RESOURCE_URI, 'openai/widgetState': state, 'openai/widgetAccessible': true }",
+        "MCP server's resources/list handler includes { uri: 'ui://seeflow/canvas', name: 'SeeFlow Canvas', mimeType: 'text/html+skybridge' }",
+        "MCP server's resources/read handler for ui://seeflow/canvas returns { contents: [{ uri, mimeType: 'text/html+skybridge', text: readCanvasHtml() }] }",
+        "If apps/mcp-app/dist/index.html is missing, readCanvasHtml throws a clear error message pointing to the build step",
+        "Typecheck passes"
       ],
       "priority": 7,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-008",
-      "title": "Add e2e spec for theme cycling and light baseline",
-      "description": "As a CI maintainer, I want at least one test covering the new Cog menu and capturing a light baseline.",
+      "title": "Patch the 5 canvas-bearing tool handlers to attach _meta",
+      "description": "As a model, when I call one of the 5 canvas-bearing tools, the host renders the canvas with the right initial focus. Other 18 tools stay JSON-only.",
       "acceptanceCriteria": [
-        "New e2e spec in apps/studio/e2e/ opens the Cog menu, cycles through Light / Dark / System",
-        "Asserts on document.documentElement.classList after each selection",
-        "Captures one new light-mode baseline of a representative canvas (one new *-chromium-linux.png)",
-        "Spec uses the same Docker-on-non-Linux workflow as existing tests",
-        "Typecheck passes",
-        "bun run test:it:e2e passes"
+        "In apps/studio/src/mcp.ts, plumb studio.httpUrl and studio.token through the createMcpServer factory to tool registration",
+        "seeflow_get_flow handler (around L316) returns _meta: canvasMeta({ kind: 'navigate', flowSlug, backendUrl: studio.httpUrl, backendToken: studio.token })",
+        "seeflow_get_flow_graph handler (around L334) returns the same shape",
+        "seeflow_get_node handler (around L361) additionally passes nodeId into widgetState",
+        "seeflow_register_flow handler (around L405) returns _meta: canvasMeta({ kind: 'create', flowSlug: result.slug, justCreated: true, backendUrl, backendToken })",
+        "seeflow_create_project handler (around L445) returns _meta: canvasMeta({ kind: 'create', projectSlug: result.slug, backendUrl, backendToken })",
+        "All other tool handlers untouched — verified by spot-check of L176, L185, L197, L238, L289, L429, L466, L494, L532, L561, L590, L620, L656",
+        "Typecheck passes"
       ],
       "priority": 8,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-009",
-      "title": "Add ?theme= query param to embed dialog URL builder",
-      "description": "As a canvas embedder using the iframe viewer, I want the embed URL to carry the theme so iframes match my host page.",
+      "title": "Add unit tests for canvasMeta and extend mcp-parity to enforce attachment rules",
+      "description": "As a developer, I need automated tests that prevent the easy mistake of forgetting _meta on a canvas-bearing tool or adding it to a mutation tool by accident.",
       "acceptanceCriteria": [
-        "In packages/canvas/src/components/embed-dialog.tsx, add a toggle with three options: 'Match my theme', 'Light', 'Dark'",
-        "URL builder appends `?theme=<value>` based on selection; 'Match my theme' uses the calling canvas's current resolved theme",
-        "Generated URL is shown in the dialog and copied correctly",
+        "New apps/studio/src/mcp-ui.test.ts covers canvasMeta() for each of the 5 tools: correct kind, justCreated flag only on creation tools, nodeId present only when supplied, backendUrl and backendToken always present",
+        "Extend apps/studio/src/mcp-parity.test.ts: assert every canvas-bearing tool (the 5) includes _meta['openai/outputTemplate'] === 'ui://seeflow/canvas'",
+        "Extend apps/studio/src/mcp-parity.test.ts: assert every non-canvas-bearing tool does NOT include _meta['openai/outputTemplate']",
+        "Existing parity assertions continue to pass",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 9,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-010",
-      "title": "Add ?theme= reader and FOUC script to viewer page",
-      "description": "As an iframe consumer, I want the viewer to honor ?theme= without flashing the wrong theme.",
+      "title": "Add MCP Apps end-to-end integration test against real seeflow-mcp subprocess",
+      "description": "As a developer, I need an integration test that drives the real seeflow-mcp binary via the in-repo MCP client harness and verifies the full resource+token+lifecycle contract.",
       "acceptanceCriteria": [
-        "Viewer entry HTML adds an inline FOUC-prevention script that reads URLSearchParams 'theme' and applies 'light' or 'dark' to document.documentElement before the viewer mounts",
-        "Missing/unknown ?theme= defaults to 'light' (matches new package default)",
-        "Existing embed URLs without the param render light without errors (backwards compatible)",
+        "New apps/studio/integration/mcp-apps.it.ts spawns the real seeflow-mcp binary via apps/studio/integration/support/mcp-client.ts",
+        "Asserts resources/list includes { uri: 'ui://seeflow/canvas', mimeType: 'text/html+skybridge' }",
+        "Asserts resources/read of ui://seeflow/canvas returns text/html+skybridge mimetype and non-empty HTML text",
+        "Asserts seeflow_register_flow returns _meta with kind === 'create' and a backendUrl that responds 200 on GET /api/flows when called with the X-Seeflow-Token header",
+        "Asserts the backendUrl responds 403 on a request from Origin: null without the X-Seeflow-Token header",
+        "Asserts the ephemeral port is released within 2 seconds of killing the subprocess",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 10,
-      "passes": true,
+      "passes": false,
       "notes": ""
     },
     {
       "id": "US-011",
-      "title": "Visually verify the new white theme looks perfect",
-      "description": "As the design owner, I want to confirm the light theme is production-quality before shipping.",
+      "title": "Add MCP App e2e Playwright test with mocked window.openai shim",
+      "description": "As a developer, I need a browser-level test that proves the iframe bundle honors the widgetState contract and emits the right bridge events on user interactions.",
       "acceptanceCriteria": [
-        "Start `bun run dev` and navigate to the studio in a real browser using the dev-browser skill",
-        "Open the Cog menu, switch to Light",
-        "Take a screenshot of the canvas page in light mode and save it to docs/plans/ (or attach to ralph progress.txt) for the reviewer",
-        "Visually inspect: no leftover dark backgrounds, no low-contrast text, no leftover hardcoded dark colors in shadows/glows/dots, no flash on reload, embed dialog matches canvas theme",
-        "Cycle Light → Dark → System and confirm transitions are clean in both directions",
-        "Take one additional screenshot of a flow with the component-node (the most visually rich node) in light mode",
-        "ONLY mark this story passing if the white theme looks visually perfect — if any element looks off, file a note in progress.txt describing what to fix and leave passes:false",
+        "New apps/studio/e2e/mcp-app.spec.ts loads the built apps/mcp-app/dist/index.html with a mocked window.openai injected before scripts run",
+        "Mock captures all sendMessage and updateModelContext calls into arrays for assertion",
+        "Mock provides widgetState pointing to a test studio backend started by the test fixture",
+        "Test: create-mode (kind:'create', justCreated:true) renders edit affordances and a 'Just created' highlight that fades within 3s",
+        "Test: navigate-mode with nodeId opens the detail panel for that node",
+        "Test: dragging a node fires exactly one debounced updateModelContext after 250ms idle (not one per pixel)",
+        "Test: adding a node fires one sendMessage with event 'node-added'",
+        "Visual baseline snapshots committed under chromium-linux per repo convention",
         "Typecheck passes",
-        "Verify in browser using dev-browser skill"
+        "Tests pass"
       ],
       "priority": 11,
-      "passes": true,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Document MCP Apps usage in README.md",
+      "description": "As a user evaluating SeeFlow, I want to see a 'MCP Apps' section in the README that explains how to install seeflow-mcp in Claude Desktop and what to expect.",
+      "acceptanceCriteria": [
+        "README.md gains an 'MCP Apps' section after the existing CLI/Studio sections",
+        "Section includes a Claude Desktop config snippet showing how to register seeflow-mcp",
+        "Section lists the 5 canvas-bearing tools and what each renders",
+        "Section briefly explains the model-notify split (sendMessage for structural edits; updateModelContext for navigation telemetry)",
+        "Section notes that non-Apps hosts continue to work unchanged (additive _meta)",
+        "Section links to docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md for the full design",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
       "notes": ""
     }
   ]
