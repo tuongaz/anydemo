@@ -170,4 +170,40 @@ describe('schema-catalog', () => {
       expect(schemaCategoryNames()).toEqual(listSchemaCategories().map((c) => c.name));
     });
   });
+
+  // Description discipline — every AI-facing field on a node variant's `data`
+  // object must carry a `.describe()` string in schema.ts. The smoking gun
+  // this was written to prevent: `stateSource` shipping without one, leaving
+  // the model unable to set it. Keep the opt-out set small.
+  describe('description discipline', () => {
+    // Mechanical / structurally-self-explanatory fields. Adding to this set
+    // is a deliberate decision — prefer adding a `.describe()` in schema.ts.
+    const DESCRIPTION_OPT_OUT = new Set<string>([]);
+
+    it('every data.* property on every node variant has a non-empty description', () => {
+      const node = loadCategory('node');
+      const offenders: string[] = [];
+      for (const [variant, raw] of Object.entries(node.schemas)) {
+        const schema = raw as { properties?: { data?: { properties?: Record<string, unknown> } } };
+        const dataProps = schema.properties?.data?.properties;
+        if (!dataProps) {
+          offenders.push(`${variant}: missing data.properties on emitted JSON schema`);
+          continue;
+        }
+        for (const [field, value] of Object.entries(dataProps)) {
+          if (DESCRIPTION_OPT_OUT.has(field)) continue;
+          const description = (value as { description?: string }).description;
+          if (typeof description !== 'string' || description.trim().length === 0) {
+            offenders.push(`${variant}.data.${field}`);
+          }
+        }
+      }
+      if (offenders.length > 0) {
+        const list = offenders.join('\n  - ');
+        throw new Error(
+          `Missing description on:\n  - ${list}\n\nAdd a \`.describe(...)\` call to the matching field in apps/studio/src/schema.ts, or — for genuinely mechanical fields — add it to DESCRIPTION_OPT_OUT in this test.`,
+        );
+      }
+    });
+  });
 });

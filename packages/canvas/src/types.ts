@@ -108,6 +108,34 @@ export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'componen
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
 
+// Exhaustive enumeration of every field on `GeometricNodeData`. The `satisfies
+// Record<keyof GeometricNodeData, true>` clause makes TypeScript fail compilation
+// when the type gains a field and this const doesn't — the apps/studio parity
+// test then catches drift between this set and the on-disk Zod schema.
+export const CANVAS_NODE_DATA_FIELDS = {
+  // semantic
+  name: true,
+  description: true,
+  detail: true,
+  icon: true,
+  // visual
+  width: true,
+  height: true,
+  borderColor: true,
+  backgroundColor: true,
+  borderSize: true,
+  borderStyle: true,
+  fontSize: true,
+  textColor: true,
+  cornerRadius: true,
+  shadow: true,
+  // capabilities
+  playAction: true,
+  statusAction: true,
+  stateSource: true,
+  handlerModule: true,
+} as const satisfies Record<keyof GeometricNodeData, true>;
+
 export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
   path: string;
   alt?: string;

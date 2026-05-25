@@ -58,12 +58,30 @@ const NodeVisualBaseShape = {
 // every visual works without a label. `icon` is decorative-by-default; the
 // `type:'icon'` variant overrides it to required.
 const NodeSemanticBaseShape = {
-  name: z.string().optional(),
-  description: z.string().optional(),
-  detail: z.string().optional(),
-  // Decorative header glyph. Lucide icon name (kebab-case) resolved by the
-  // canvas <Icon> primitive; falls back to a placeholder when unknown.
-  icon: z.string().optional(),
+  name: z
+    .string()
+    .optional()
+    .describe(
+      "Short human-readable label rendered in the node header. Omit on decorative nodes (sticky, type:'text') where the body content IS the label.",
+    ),
+  description: z
+    .string()
+    .optional()
+    .describe(
+      'One-sentence summary surfaced in the detail sidebar and tooltips. Set whenever a reader would benefit from more context than the name alone.',
+    ),
+  detail: z
+    .string()
+    .optional()
+    .describe(
+      'Long-form markdown shown in the detail sidebar. Supports headings, lists, code, and ```mermaid``` blocks (the canvas renders mermaid inline). Use for runbooks, schemas, sequence diagrams.',
+    ),
+  icon: z
+    .string()
+    .optional()
+    .describe(
+      "Decorative header glyph (Lucide icon name in kebab-case, e.g. 'database', 'cloud-upload'). Falls back to a placeholder when unknown. On type:'icon' nodes the icon IS the visual and is required.",
+    ),
 };
 
 // Relative-path safety refine (textual). Mirrors the same rule used for
@@ -147,12 +165,21 @@ export const StateSourceSchema = z
 // informational metadata that pairs with statusAction. `handlerModule` is
 // reserved for a future skills runtime and is schema-only at v1.
 const NodeCapabilitiesShape = {
-  playAction: PlayActionSchema.optional(),
-  statusAction: StatusActionSchema.optional(),
+  playAction: PlayActionSchema.optional().describe(
+    'One-shot script the user invokes by clicking the node (a "Play" affordance). Studio spawns `<interpreter> [...args] <scriptPath>` from the project root with the optional `input` JSON-serialized to stdin. Use for HTTP calls, CLI invocations, anything triggered on demand.',
+  ),
+  statusAction: StatusActionSchema.optional().describe(
+    "Long-running status probe. Same spawn shape as `playAction` but the script ticks continuously and writes one JSON `StatusReport` per line to stdout; the canvas renders the most recent state badge. Pair with `stateSource` so observers know whether it's poll- or push-based.",
+  ),
   stateSource: StateSourceSchema.optional().describe(
     'Set this on any node that has a `statusAction`. Choose `request` for poll-based sources, `event` for push-based sources. Omit on decorative nodes (sticky, label-only text) and on action nodes whose only behavior is `playAction`.',
   ),
-  handlerModule: z.string().optional(),
+  handlerModule: z
+    .string()
+    .optional()
+    .describe(
+      'Reserved for the v2 skills runtime. Schema-only at v1 — set by tooling; leave undefined when authoring flows by hand.',
+    ),
 };
 
 // 13 flat node types. The first 9 are geometric/illustrative and share
@@ -468,10 +495,19 @@ const FlowImageNodeData = z
   .object({
     ...NodeSemanticBaseShape,
     ...NodeCapabilitiesShape,
-    path: z.string().min(1).refine(isCleanRelativePath, {
-      message: 'path must be a relative path under the project root (no absolute / traversal)',
-    }),
-    alt: z.string().optional(),
+    path: z
+      .string()
+      .min(1)
+      .refine(isCleanRelativePath, {
+        message: 'path must be a relative path under the project root (no absolute / traversal)',
+      })
+      .describe(
+        "Project-root-relative path to the image file. MUST start with 'nodes/<id>/' so the delete_node cascade owns cleanup. Supported formats: PNG, JPEG, SVG, GIF, WebP.",
+      ),
+    alt: z
+      .string()
+      .optional()
+      .describe('Accessibility alt text. Set on every non-decorative image.'),
   })
   .strict();
 
@@ -479,7 +515,12 @@ const FlowHtmlNodeData = z
   .object({
     ...NodeSemanticBaseShape,
     ...NodeCapabilitiesShape,
-    html: z.string().optional(),
+    html: z
+      .string()
+      .optional()
+      .describe(
+        "Inline HTML rendered inside the node. Studio externalizes this to `<project>/nodes/<id>/view.html` on write and inlines it back on read, so authors always see the actual string. Sanitized before injection. Escape-hatch for content the geometric/icon/component visuals don't cover.",
+      ),
   })
   .strict();
 
@@ -487,8 +528,13 @@ const FlowIconNodeData = z
   .object({
     ...NodeSemanticBaseShape,
     ...NodeCapabilitiesShape,
-    icon: z.string().min(1),
-    alt: z.string().optional(),
+    icon: z
+      .string()
+      .min(1)
+      .describe(
+        "Required Lucide icon name (kebab-case, e.g. 'cloud-upload', 'database'). On type:'icon' nodes the icon IS the visual — overrides the optional decorative `icon` from the semantic base.",
+      ),
+    alt: z.string().optional().describe('Accessibility alt text for the icon glyph.'),
   })
   .strict();
 
@@ -500,7 +546,12 @@ const FlowComponentNodeData = z
   .object({
     ...NodeSemanticBaseShape,
     ...NodeCapabilitiesShape,
-    autoSize: z.boolean().optional(),
+    autoSize: z
+      .boolean()
+      .optional()
+      .describe(
+        'When true the renderer measures its content and React Flow sizes the wrapper around it. Default (undefined / false) uses the persisted width/height path.',
+      ),
   })
   .strict();
 

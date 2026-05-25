@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'bun:test';
+import { CANVAS_NODE_DATA_FIELDS } from '@seeflow/canvas/types';
 import {
+  FlowRectangleNodeSchema,
   FlowSchema,
   NodeTypeSchema,
   ResolvedFlowSchema,
@@ -2758,5 +2760,39 @@ describe('US-004: catalog superRefine on ResolvedFlowSchema', () => {
         i.path[7] === 'label',
     );
     expect(propIssue).toBeDefined();
+  });
+});
+
+// Visual fields the canvas accepts on GeometricNodeData but the on-disk Zod
+// schema deliberately strips into style.json. Kept here (not in canvas) so the
+// whitelist lives with the schema it's whitelisting against.
+const STRIPPED_VISUAL_FIELDS = new Set([
+  'width',
+  'height',
+  'borderColor',
+  'backgroundColor',
+  'borderSize',
+  'borderStyle',
+  'fontSize',
+  'textColor',
+  'cornerRadius',
+  'shadow',
+]);
+
+describe('canvas ↔ disk schema parity', () => {
+  it('every canvas GeometricNodeData field is either persisted to disk or in STRIPPED_VISUAL_FIELDS', () => {
+    const diskFields = new Set(Object.keys(FlowRectangleNodeSchema.shape.data.shape));
+    const offenders: string[] = [];
+    for (const field of Object.keys(CANVAS_NODE_DATA_FIELDS)) {
+      const persisted = diskFields.has(field);
+      const stripped = STRIPPED_VISUAL_FIELDS.has(field);
+      if (!persisted && !stripped) offenders.push(field);
+    }
+    if (offenders.length > 0) {
+      const list = offenders.map((f) => `'${f}'`).join(', ');
+      throw new Error(
+        `Canvas field(s) ${list} are neither in the disk schema (FlowGeometricNodeData) nor in STRIPPED_VISUAL_FIELDS. Add to apps/studio/src/schema.ts (NodeCapabilitiesShape / NodeSemanticBaseShape) to persist, or to STRIPPED_VISUAL_FIELDS in this test if it is a visual stripped into style.json.`,
+      );
+    }
   });
 });
