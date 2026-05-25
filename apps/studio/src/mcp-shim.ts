@@ -65,12 +65,21 @@ let embeddedUrl: string | undefined;
 
 if (!explicitStudioUrl) {
   try {
-    const app = createApp();
+    // Per-process token: generated once at shim boot, held in memory,
+    // never persisted, never logged. The MCP App iframe receives it via
+    // `_meta['openai/widgetState'].backendToken` (US-008) and replays it
+    // on every cross-origin request as `X-Seeflow-Token`. Anything else
+    // hitting the ephemeral port from `Origin: null` (other localhost
+    // software, drive-by tabs) gets 403'd by the CORS middleware.
+    const token = crypto.randomUUID();
+    const app = createApp({ token });
     embeddedServer = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch });
     embeddedUrl = `http://${embeddedServer.hostname}:${embeddedServer.port}`;
     // Log the bound URL to stderr so the integration test (and humans
     // debugging) can discover the port without interleaving with the
-    // JSON-RPC stdout stream.
+    // JSON-RPC stdout stream. Intentionally omits the token — it MUST
+    // stay in-memory only; printing it to stderr would leak it into any
+    // log scrape that captures the subprocess's stderr.
     process.stderr.write(`[seeflow-mcp] studio listening on ${embeddedUrl}\n`);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

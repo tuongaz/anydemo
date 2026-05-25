@@ -27,6 +27,13 @@ import type { FlowWatcher } from './watcher.ts';
 export interface CreateMcpServerOptions {
   registry: Registry;
   watcher?: FlowWatcher;
+  /** Per-process token forwarded to the MCP App iframe via
+   *  `_meta['openai/widgetState'].backendToken` so cross-origin requests
+   *  from the sandboxed (`Origin: null`) iframe can carry it as
+   *  `X-Seeflow-Token`. Same value as the one passed to
+   *  `createApp({ token })`. Wired by US-008 into canvas-bearing tool
+   *  handlers; non-canvas tools ignore it. */
+  token?: string;
 }
 
 // Tools are pushed into this in-memory list inside `createMcpServer`. Each
