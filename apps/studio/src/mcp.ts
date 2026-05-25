@@ -2,10 +2,13 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
   type CallToolResult,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type ZodTypeAny, z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import { CANVAS_RESOURCE_MIME, CANVAS_RESOURCE_URI, readCanvasHtml } from './mcp-ui.ts';
 import {
   ConnectorPatchBodySchema,
   CreateProjectBodySchema,
@@ -767,7 +770,10 @@ export function createMcpServer(options: CreateMcpServerOptions): Server {
   });
   const tools = buildTools(ops);
 
-  const server = new Server({ name: 'seeflow', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new Server(
+    { name: 'seeflow', version: '0.1.0' },
+    { capabilities: { tools: {}, resources: {} } },
+  );
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: tools.map(({ name, description, inputSchema }) => ({
@@ -786,6 +792,35 @@ export function createMcpServer(options: CreateMcpServerOptions): Server {
       };
     }
     return tool.handler(request.params.arguments);
+  });
+
+  // MCP Apps resource: a single readable HTML bundle the host iframes when a
+  // canvas-bearing tool returns `_meta['openai/outputTemplate'] = CANVAS_RESOURCE_URI`.
+  // Listed unconditionally — the bundle is part of the binary, even on hosts
+  // that don't speak MCP Apps (they just ignore the resource).
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    resources: [
+      {
+        uri: CANVAS_RESOURCE_URI,
+        name: 'SeeFlow Canvas',
+        mimeType: CANVAS_RESOURCE_MIME,
+      },
+    ],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => {
+    if (request.params.uri !== CANVAS_RESOURCE_URI) {
+      throw new Error(`Unknown resource: ${request.params.uri}`);
+    }
+    return {
+      contents: [
+        {
+          uri: CANVAS_RESOURCE_URI,
+          mimeType: CANVAS_RESOURCE_MIME,
+          text: readCanvasHtml(),
+        },
+      ],
+    };
   });
 
   return server;
