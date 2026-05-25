@@ -146,6 +146,7 @@ Full text in `references/core-rules.md`:
 - **Asking "what's your codebase?".** Launch the analyzers — that is their job. (Exception: `inputClass === "conversation" | "document"` — the brief comes from elsewhere.)
 - **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
+- **Ignoring the project's existing setup.** Inspect how the project boots local services and runs integration tests (Makefile / `scripts/` / compose / test harness / factory modules) and reuse those wrappers, helpers, and packages. Don't write a raw client when a project module already does the job — the system-analyzer surfaces these in `learnUpdates.dataEntryPaths`, `factories`, and `techAdaptations.<techId>.helpers[]`; Play/Status designers must consult them before inventing new code.
 - **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder — emit just `scripts/play.ts`.
 - **Writing `LEARN.md` inside a per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every flow** in the host repo — never inside `<flow-name>/`.
 
