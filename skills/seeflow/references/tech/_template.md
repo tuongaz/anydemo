@@ -77,11 +77,15 @@ Pull state back out — for the Status script and for ad-hoc checks.
 
 Direct guidance for `seeflow-node-planner`. Two bullets max:
 
-- One node per <thing> (bucket / topic / table / queue / workflow), not
-  per producer or consumer. Use `type:'rectangle'`; set `data.icon` to a
-  Lucide name that matches the resource.
+- One node per <thing> (bucket / topic / table / queue / workflow),
+  not per producer or consumer. Pick the SEMANTIC shape that matches
+  the resource: `type:'database'` for stores, `type:'queue'` for
+  queues / topics / event buses, `type:'cloud'` for object stores
+  and external SaaS, `type:'server'` for infrastructure boxes,
+  `type:'rectangle'` (+ Lucide `data.icon`) only when no illustrative
+  shape fits. Capability chrome renders on all of these.
 - Duplicate the node next to each consumer when it improves readability
-  (same `type` + `data.icon` + `data.name`, unique `id`).
+  (same `type` + `data.name`, unique `id`).
 
 ## Gotchas
 

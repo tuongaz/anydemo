@@ -224,11 +224,14 @@ see, with sketches of what the script should observe:
   continuous state to observe. A trigger rectangle for a webhook or a
   fixture drop already shows "I was clicked"; layering a status on
   top adds noise.
-- **Decorative shapes** — `sticky`, `text`, `icon`, `html`, `image`,
-  and any geometric shape (`ellipse`, `database`, `queue`, `cloud`,
-  `server`, `user`) used purely for visual annotation. The schema
-  accepts the field on every type, but the status pill is
-  rectangle-only chrome and adds noise without one.
+- **Decorative-only shapes** — `sticky`, `text`, `icon`, `ellipse`,
+  `html`, `image`. The schema accepts `statusAction` everywhere, but
+  these shapes draw NO chrome (no skirt, no inline pill) so the
+  badge is invisible. Illustrative shapes (`database`, `queue`,
+  `cloud`, `server`, `user`) DO render the status badge in the
+  skirt — pick those when the entity matches and you genuinely want
+  a live pill. Don't add a `statusAction` to an illustrative shape
+  that's only there for decoration.
 - **Nodes whose state would simply repeat the playAction return.**
   If a Play's `body` already says `"order ord_123 created"`, a
   status that polls the same DB and prints "1 order: ord_123" is
@@ -287,11 +290,11 @@ nodeDraft: {
   slug: "order-pipeline",
   nodes: [
     { id: "order-server",     type: "rectangle", data: { name: "POST /orders", icon: "server", playAction: { /* placeholder */ } } },
-    { id: "event-bus",        type: "rectangle", data: { name: "Event Bus", icon: "radio-tower" } },
+    { id: "event-bus",        type: "queue",     data: { name: "Event Bus" } },
     { id: "inventory-worker", type: "rectangle", data: { name: "Inventory Worker", icon: "cog" } },
     { id: "shipping-worker",  type: "rectangle", data: { name: "Shipping Worker", icon: "cog" } },
-    { id: "shipments-queue",  type: "rectangle", data: { name: "Shipments Queue", icon: "list-ordered" } },
-    { id: "order-store",      type: "rectangle", data: { name: "Order Store", icon: "database" } }
+    { id: "shipments-queue",  type: "queue",     data: { name: "Shipments Queue" } },
+    { id: "order-store",      type: "database",  data: { name: "Order Store" } }
   ],
   connectors: [ ... ]
 }

@@ -180,11 +180,23 @@ arrays).
 
 Rules for `newTriggerNodes`:
 
-- New nodes must be `type:'rectangle'` so the play button renders
-  (capability chrome is rectangle-only in v1). The matching
-  `playOverlays` entry carries the actual play action; the
-  `newTriggerNodes` node carries an initial `data.playAction`
-  placeholder so the graph marks it clickable.
+- Pick the SEMANTIC shape that matches the synthetic trigger.
+  Capability chrome (Play button + status badge) renders on
+  `rectangle` (inline header) AND on every illustrative shape
+  (`database`, `queue`, `cloud`, `server`, `user`) via a bottom
+  skirt — so the choice is about what the trigger MEANS, not about
+  whether the button can render:
+  - "publish fake event onto bus / topic / queue" → `type:'queue'`
+  - "drop fixture file into watched bucket / directory" → `type:'cloud'`
+  - "POST a synthetic webhook payload" → `type:'cloud'` (external
+    caller) or `type:'rectangle'` with `data.icon:'plug'`
+  - "fire scheduled tick" → `type:'rectangle'` with `data.icon:'clock'`
+  - "human approval / consent click-through" → `type:'user'` (only
+    when the demo subject IS the human action)
+  - generic synthetic trigger with no better match → `type:'rectangle'`
+  The `newTriggerNodes` node carries an initial `data.playAction`
+  placeholder so the graph marks it clickable; the matching
+  `playOverlays` entry carries the actual play action.
 - Set state source to `request` when the play directly causes the
   downstream state change; `event` when the play emits something others
   subscribe to. Consult the node schema in your launching prompt for
@@ -223,28 +235,45 @@ Apply these rules in order. The first rule that fits the node wins.
    - **User action** → Play on the "click checkout" node whose
      script POSTs the action body.
 
-3. **Long async wait → fast-forward Play.** When the demo has a leg
-   that legitimately takes minutes or hours (carrier callback,
-   third-party webhook, daily batch), add a Play that *simulates*
-   the completion event so the audience does not wait. Typically a
-   downstream rectangle like `"shipment-delivered"` gets a Play that
-   POSTs the delivery webhook payload directly into the handler.
+3. **Wait-required nodes MUST carry a Play.** Any node that sits
+   waiting on an asynchronous trigger — and would otherwise force the
+   audience to sit idle — gets a Play button so the audience can
+   advance the demo manually. This rule is MANDATORY, not advisory:
+   every node that matches one of these patterns either hosts its own
+   Play OR has a synthetic upstream trigger added via
+   `newTriggerNodes` (see Rule 4). Don't leave a wait point
+   click-less.
+
+   Patterns that REQUIRE a Play (place the Play on the node itself
+   unless the brief names a natural upstream source):
+
+   | Wait pattern | Play does what |
+   |---|---|
+   | Scheduled job / cron / interval timer | Calls the job-handler entry point directly, bypassing the scheduler. |
+   | File / object-storage watcher (S3, GCS, local FS) | Writes / uploads the fixture into the watched location. |
+   | Inbound webhook handler (Stripe `payment.succeeded`, carrier "delivered", Slack event) | POSTs a synthetic webhook payload at the handler URL. |
+   | Message-queue consumer (SQS, Kafka, Pub/Sub, RabbitMQ, in-process bus) | Publishes a fake message onto the queue/topic. |
+   | Polling worker (DB tail, queue drain, condition wait) | Inserts / enqueues the row the poller is waiting for. |
+   | Long async leg (third-party callback, daily batch, external workflow tick) | "Fast-forward" Play that simulates the completion event so the audience doesn't wait minutes / hours. |
+
+   Idempotency still applies (Rule 5). The synthetic input is invented;
+   the receiving service must be real (Rule 5 in §"Workflow" — never
+   mock).
 
 4. **No natural trigger? Create one — functional, not human.** Quiet
    observer graphs (e.g. a worker that only consumes from a queue with
    no obvious producer in the demo's scope) need a synthetic source.
-   Emit a `newTriggerNodes` entry as a `type:'rectangle'` with a
-   `data.playAction` placeholder (and a matching `playOverlays` entry
-   whose script does the actual work — drops a file, POSTs a webhook
-   body, fires a queue message). **Do NOT inject a `type:'user'` shape
-   as the synthetic source** — the play button only renders on
-   `rectangle` in v1, so a `user` node is unclickable, and a generic
-   "User" before a backend pipeline adds zero information. The only
-   time a `user` shape belongs in the graph is when the demo's subject
-   IS the human action (UX click-through, support-agent workflow). For
-   backend, system, data-pipeline, worker, cron, and webhook-driven
-   flows, the synthetic trigger is a `rectangle` carrying a `playAction`
-   (a fixture / webhook / tick) — never a `user`.
+   Emit a `newTriggerNodes` entry using the SEMANTIC shape that
+   matches the synthetic trigger (`queue` for a publisher, `cloud`
+   for a file drop / inbound webhook, `rectangle` for a tick or a
+   generic process — see §"`newTriggerNodes`" rules above) with a
+   `data.playAction` placeholder, plus a matching `playOverlays`
+   entry whose script does the actual work — drops a file, POSTs a
+   webhook body, fires a queue message. **Do NOT inject a
+   `type:'user'` shape as the synthetic source** — a generic "User"
+   before a backend pipeline adds zero information. The only time a
+   `user` shape belongs in the graph is when the demo's subject IS
+   the human action (UX click-through, support-agent workflow).
 
 5. **Idempotency is mandatory.** The validator calls every Play once
    and the user clicks again. Scripts that crash on second call, or
@@ -259,21 +288,32 @@ Apply these rules in order. The first rule that fits the node wins.
    multiple Plays at the same logical entry just to expose internal
    detail.
 
-7. **No Play on pure observers.** Pure-resource nodes (databases,
-   caches, queues, downstream workers) and decorative shapes (sticky,
-   text, icon) have no trigger semantics. They may carry a
-   `statusAction` (the status-designer's job) but they never get a
-   `playAction`. If you find yourself wanting to "Play" a database to
-   inspect state, that is a status action, not a play action — leave
-   it for the status-designer.
+7. **No Play on PURE observers — but wait-points are not observers.**
+   Distinguish the two:
+   - **Pure observers** (no Play): a `database` whose only role is
+     to hold state, a cache that mirrors upstream, a downstream
+     queue that's already being fed by an in-scope producer, a
+     decorative shape (`sticky`, `text`, `icon`). They may carry a
+     `statusAction` (the status-designer's job) but never a
+     `playAction`. If you want to "Play" a pure database to inspect
+     state, that's a status action — leave it for the
+     status-designer.
+   - **Wait-points** (Play REQUIRED — see Rule 3): a queue with no
+     in-scope producer, a file watcher, a webhook handler, a cron
+     job, a polling worker. These LOOK like observers (one inbound
+     edge, no outbound trigger surface) but the audience needs a
+     button to advance the demo. Don't classify them as "pure
+     observers" just because they sit on the receiving side of an
+     edge.
 
 ## Workflow
 
 1. **Read the brief and the draft.** Map every node in
    `nodeDraft.nodes` to a placement-rule classification. The trigger
-   node from the node-planner (the one `type:'rectangle'` whose
-   `data.playAction` was set as a placeholder) is your default Play
-   target.
+   node from the node-planner (whichever node carries a placeholder
+   `data.playAction` — `rectangle` for an HTTP endpoint, illustrative
+   shape for a synthetic publisher / file-drop / etc.) is your
+   default Play target.
 2. **Ground in code.** For each candidate Play, use `Grep`/`Read` to
    confirm the trigger surface (endpoint path + method, queue name,
    event topic, fixture directory). Avoid making the script fetch a
@@ -309,11 +349,20 @@ Apply these rules in order. The first rule that fits the node wins.
    cards, mutates production data, or whose target service the brief
    does not confirm is locally runnable. Mark `true` for everything
    else.
-7. **Inject triggers if needed.** Walk every connector chain. If a
+7. **Scan for wait-points (mandatory).** After step 6, re-walk every
+   node in `nodeDraft.nodes` and ask: does this node WAIT on an
+   asynchronous trigger (cron, file watcher, webhook, queue
+   consumer, polling worker, long async leg)? If yes, it MUST be
+   reachable by a Play — either it hosts its own (fast-forward
+   pattern from Rule 3) OR a synthetic upstream trigger from
+   `newTriggerNodes` covers it. A wait-point with no Play in its
+   inbound chain is a contract violation; fix it before emitting.
+8. **Inject triggers if needed.** Walk every connector chain. If a
    subgraph has no clickable entry (no node with a `data.playAction`),
-   emit a `newTriggerNodes` entry (`type:'rectangle'` with a
-   placeholder `data.playAction`) and a matching overlay.
-8. **Emit.** Final message is the JSON code block — nothing else.
+   emit a `newTriggerNodes` entry (using the matching semantic shape
+   per §"`newTriggerNodes`") with a placeholder `data.playAction`
+   and a matching overlay.
+9. **Emit.** Final message is the JSON code block — nothing else.
 
 ## Worked example
 
@@ -328,11 +377,11 @@ nodeDraft: {
   slug: "order-pipeline",
   nodes: [
     { id: "order-server",   type: "rectangle", data: { name: "POST /orders", icon: "server", playAction: { ... placeholder ... }, ... } },
-    { id: "event-bus",      type: "rectangle", data: { name: "Event Bus", icon: "radio-tower", ... } },
+    { id: "event-bus",      type: "queue",     data: { name: "Event Bus", ... } },
     { id: "inventory-worker", type: "rectangle", data: { name: "Inventory Worker", icon: "cog", ... } },
     { id: "shipping-worker",  type: "rectangle", data: { name: "Shipping Worker", icon: "cog", ... } },
-    { id: "shipments-queue",  type: "rectangle", data: { name: "Shipments Queue", icon: "list-ordered", ... } },
-    { id: "order-store",      type: "rectangle", data: { name: "Order Store", icon: "database", ... } }
+    { id: "shipments-queue",  type: "queue",     data: { name: "Shipments Queue", ... } },
+    { id: "order-store",      type: "database",  data: { name: "Order Store", ... } }
   ],
   connectors: [ ... ]
 }
@@ -444,5 +493,11 @@ This is wrong because:
 - `validationSafe: false` for anything that hits real third-party
   SaaS, real money, real notifications, or production data.
 - Cite the placement rule by number in `rationale`.
-- When in doubt: do NOT place a Play. The plan-review step lets the
-  user ask for more.
+- **Wait-points are non-optional (Rule 3).** Every node that waits
+  on an asynchronous trigger — cron, file watcher, webhook handler,
+  queue consumer, polling worker, long async leg — MUST be
+  reachable by a Play (either its own fast-forward Play or a
+  synthetic upstream trigger from `newTriggerNodes`). A wait-point
+  with no Play in its inbound chain is a contract violation.
+- When in doubt about a non-wait-point: do NOT place a Play. The
+  plan-review step lets the user ask for more.

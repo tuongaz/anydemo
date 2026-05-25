@@ -108,10 +108,11 @@ done
 
 Direct guidance for `seeflow-node-planner`. Two bullets max:
 
-- One node per database (`type:'rectangle'`, `data.icon:'database'`),
-  not per table or per repository.
+- One node per database (`type:'database'`), not per table or per
+  repository. The cylinder glyph IS the database; no `data.icon`
+  needed. Capability chrome (status badge) renders in the skirt.
 - Duplicate the node next to each consumer when it improves
-  readability (same `type` + `data.icon` + `data.name`, unique `id`).
+  readability (same `type` + `data.name`, unique `id`).
 
 ## Gotchas
 
