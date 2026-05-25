@@ -153,24 +153,35 @@ jobs:
         # them. Retries because the registry takes a moment to serve a new
         # version after publish. REF is taken from the prior job output or
         # the triggering tag, never from untrusted external input.
+        #
+        # Uses `npm install` into a tmp dir + invokes the bin directly: this
+        # is what `npm i -g @tuongaz/seeflow` (the original failing command)
+        # actually does, and it bypasses npx's bin-resolution quirks on
+        # GitHub-hosted Ubuntu runners.
         env:
           REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
         run: |
-          set -euo pipefail
+          set -uo pipefail
           tag="${REF#refs/tags/}"
           tag="${tag#v}"
+          tmp=$(mktemp -d)
+          trap 'rm -rf "$tmp"' EXIT
           for attempt in 1 2 3 4 5; do
-            echo "Smoke attempt ${attempt}: npx -y @tuongaz/seeflow@${tag} version"
-            if out=$(npx -y "@tuongaz/seeflow@${tag}" version 2>&1); then
-              echo "Got: $out"
-              if [ "$out" = "$tag" ]; then
-                echo "Smoke OK — installed version matches ${tag}"
-                exit 0
-              fi
-              echo "Version mismatch: expected ${tag}, got ${out}" >&2
-            else
-              echo "$out" >&2
+            echo "Smoke attempt ${attempt}: npm install @tuongaz/seeflow@${tag}"
+            install_out=$(cd "$tmp" && npm install --silent --no-fund --no-audit "@tuongaz/seeflow@${tag}" 2>&1)
+            install_status=$?
+            if [ $install_status -ne 0 ]; then
+              echo "$install_out" >&2
+              sleep $((attempt * 10))
+              continue
             fi
+            run_out=$("$tmp/node_modules/.bin/seeflow" version 2>&1 | tail -n1)
+            echo "seeflow version => $run_out"
+            if [ "$run_out" = "$tag" ]; then
+              echo "Smoke OK — installed version matches ${tag}"
+              exit 0
+            fi
+            echo "Version mismatch: expected ${tag}, got ${run_out}" >&2
             sleep $((attempt * 10))
           done
           echo "Smoke test failed after retries" >&2
