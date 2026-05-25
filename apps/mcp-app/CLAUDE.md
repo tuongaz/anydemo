@@ -38,3 +38,27 @@ and returned as the `ui://seeflow/canvas` resource.
 the host has no toolbar UI — pass `{ kind: 'select' }` + a `useState` setter
 to satisfy the typecheck. The Studio HTTP API has no slug → id shortcut: do
 `GET /api/flows` → find by slug → `GET /api/flows/:id` for the merged flow.
+
+## Bridging adapter mutations to the host
+
+- **Adapter wrapping:** `canvas-bridge.ts:wrapAdapter` decorates a base
+  `CanvasAdapter` so structural mutations (createNode, deleteNode,
+  createConnector, deleteConnector, updateNode-with-name, playAction) call
+  `bridge.sendMessage` on success. Visual-only `updateNode` patches (style,
+  font size) AND `updateNodePosition` stay silent — drag telemetry routes
+  through `updateModelContext` instead. Rejected adapter calls do NOT emit
+  events; the structural edit didn't happen, so the model shouldn't be told
+  it did.
+- **Canvas host wiring is required for the wrap to fire:** the canvas's edit
+  UI dispatches `onCreateShapeNode` / `onDeleteNode` / `onCreateConnector` /
+  `onNodeNameChange` / `onPlayNode` / `onNodePositionChange` callbacks, and
+  the host must route them into the wrapped adapter. Without that wiring,
+  user clicks/draws never reach the adapter and no `sendMessage` fires. The
+  MCP App keeps the wiring minimal (no undo, no optimistic overrides) — SSE
+  rehydration catches up to the source-of-truth state.
+- **Telemetry:** `canvas-bridge.ts:createTelemetry` returns stable
+  `onSelectionChange` / `onNodeDragStart` / `onNodeDragStop` /
+  `onViewportChange` callbacks that emit `updateModelContext` patches. The
+  bridge's 250ms debounce + 1s throttle absorbs per-frame bursts — no
+  additional throttling layer here. On drag-stop the snapshot carries
+  `dragging: false`, so the trailing-edge fire reflects the settled state.

@@ -12,9 +12,12 @@
  *  - kind === 'create'   → same load path, plus a subtle 'Just created'
  *    banner that fades after 3s when `justCreated` is true.
  *
- * Adapter callbacks (onAddNode, onDeleteNode, drag/selection telemetry,
- * etc.) get wired in US-004; this story only proves the canvas mounts and
- * reads the right initial state.
+ * Adapter callbacks (createNode, deleteNode, createConnector,
+ * deleteConnector, updateNode-with-name, playAction) are wrapped by
+ * `wrapAdapter` so each successful mutation fires `bridge.sendMessage` on the
+ * MCP-Apps host (200ms coalesced). Selection / drag / viewport telemetry
+ * routes through `bridge.updateModelContext` (250ms debounced, 1s throttled).
+ * Same bundle no-ops cleanly outside an MCP-Apps host.
  */
 
 import {
@@ -23,13 +26,17 @@ import {
   type Connector,
   type Flow,
   type FlowNode,
+  type GeometricNodeType,
   SeeflowCanvas,
   TooltipProvider,
+  buildNewShapeData,
   createRestAdapter,
 } from '@seeflow/canvas';
 import '@seeflow/canvas/style.css';
 import { useEffect, useMemo, useState } from 'react';
+import { sendMessage, updateModelContext } from './bridge';
 import type { WidgetState } from './bridge';
+import { createTelemetry, wrapAdapter } from './canvas-bridge';
 
 const HIGHLIGHT_FADE_MS = 3000;
 
@@ -46,6 +53,8 @@ const readWidgetState = (): WidgetState | null => {
     return null;
   }
 };
+
+const shortId = (): string => Math.random().toString(36).slice(2, 10);
 
 type LoadState =
   | { kind: 'loading' }
@@ -156,14 +165,28 @@ export function App() {
   const adapter = useMemo<CanvasAdapter | null>(() => {
     if (!widgetState) return null;
     if (load.kind !== 'ready') return null;
-    return createRestAdapter({
+    const base = createRestAdapter({
       baseUrl: widgetState.backendUrl,
       flowId: load.flowId,
       headers: widgetState.backendToken
         ? { 'X-Seeflow-Token': widgetState.backendToken }
         : undefined,
     });
+    // Wrap the adapter so structural edits fire bridge.sendMessage on the
+    // MCP-Apps host. Visual-only patches (updateNode without `name`,
+    // updateNodePosition) stay silent — drag telemetry routes through
+    // updateModelContext instead.
+    return wrapAdapter(
+      base,
+      { sendMessage, updateModelContext },
+      { flowSlug: widgetState.flowSlug },
+    );
   }, [widgetState, load]);
+
+  // Selection / drag / viewport handlers that emit updateModelContext via the
+  // bridge's debounce + throttle. Stable identity across renders so React
+  // Flow doesn't churn its callback refs every paint.
+  const telemetry = useMemo(() => createTelemetry({ sendMessage, updateModelContext }), []);
 
   if (!widgetState) {
     return (
@@ -184,6 +207,8 @@ export function App() {
     );
   }
 
+  const wrappedAdapter = adapter as CanvasAdapter;
+
   // Both 'navigate' and 'create' mount in edit mode so the model can interact
   // with the canvas (and so the built-in DetailPanel renders for node focus).
   return (
@@ -192,7 +217,7 @@ export function App() {
         {showJustCreated ? <JustCreatedBanner /> : null}
         <SeeflowCanvas
           mode="edit"
-          adapter={adapter as CanvasAdapter}
+          adapter={wrappedAdapter}
           projectId={load.flowId}
           nodes={load.nodes}
           connectors={load.connectors}
@@ -201,10 +226,47 @@ export function App() {
           onSelectionChange={(n, c) => {
             setSelectedNodeIds(n);
             setSelectedConnectorIds(c);
+            telemetry.onSelectionChange(n, c);
           }}
           canvasMode={canvasMode}
           onCanvasModeChange={setCanvasMode}
           autoFitView
+          // ---- Telemetry (silent updateModelContext) ----
+          onNodeDragStart={telemetry.onNodeDragStart}
+          onNodeDragStop={telemetry.onNodeDragStop}
+          onViewportChange={telemetry.onViewportChange}
+          // ---- Structural edits (wrapped adapter emits sendMessage) ----
+          onCreateShapeNode={(shape: GeometricNodeType, position, dims) => {
+            const id = `node-${shortId()}`;
+            void wrappedAdapter.createNode({
+              id,
+              type: shape,
+              position,
+              data: buildNewShapeData(shape, dims),
+            });
+          }}
+          onCreateConnector={(source, target, options) => {
+            void wrappedAdapter.createConnector({
+              source,
+              target,
+              targetPin: options?.targetPin,
+            });
+          }}
+          onDeleteNode={(nodeId) => {
+            void wrappedAdapter.deleteNode(nodeId);
+          }}
+          onNodePositionChange={(nodeId, position) => {
+            void wrappedAdapter.updateNodePosition(nodeId, position);
+          }}
+          onNodeNameChange={(nodeId, name) => {
+            void wrappedAdapter.updateNode(nodeId, { name });
+          }}
+          onNameChange={(nodeId, value) => {
+            void wrappedAdapter.updateNode(nodeId, { name: value });
+          }}
+          onPlayNode={(nodeId) => {
+            void wrappedAdapter.playAction?.(nodeId);
+          }}
         />
       </div>
     </TooltipProvider>

@@ -824,6 +824,30 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * when `showRestart` is true.
    */
   onRestartDemo?: () => Promise<unknown>;
+  /**
+   * Telemetry: fired once when any node drag begins. Pure passthrough — the
+   * canvas's internal `draggingRef` bookkeeping runs regardless. Wired by the
+   * MCP App so the host model receives a drag-in-progress signal via
+   * `updateModelContext`. Absent → no telemetry, no behavioral change.
+   */
+  onNodeDragStart?: () => void;
+  /**
+   * Telemetry: fired once when any node drag ends. Pure passthrough — the
+   * canvas's internal commit + flush logic runs regardless. Distinct from
+   * `onNodePositionChange` (which carries the new position and may not fire
+   * when the drag was a click without movement) — `onNodeDragStop` always
+   * fires on drag release. Wired by the MCP App for drag-end telemetry.
+   * Absent → no telemetry.
+   */
+  onNodeDragStop?: () => void;
+  /**
+   * Telemetry: fired on every React Flow `onMove` tick with the current
+   * viewport. Pure passthrough — the canvas's internal pan/zoom side effects
+   * (drop-popover dismiss, --rf-zoom CSS var) run regardless. Wired by the
+   * MCP App so the host model receives debounced viewport updates via
+   * `updateModelContext`. Absent → no telemetry.
+   */
+  onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
 }
 
 /**
@@ -1797,6 +1821,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     customIcons,
     onExportToCloud,
     onRestartDemo,
+    onNodeDragStart,
+    onNodeDragStop,
+    onViewportChange,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -4266,14 +4293,25 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               // React re-render every frame of pan/zoom.
               const wrapper = wrapperRef.current;
               if (wrapper) wrapper.style.setProperty('--rf-zoom', String(viewport.zoom));
+              onViewportChange?.(viewport);
             }}
             onEdgesChange={onEdgesChange}
             onNodeDragStart={() => {
               draggingRef.current = true;
+              onNodeDragStart?.();
             }}
-            onNodeDragStop={onNodeDragStopCb}
-            onSelectionDragStart={onSelectionDragStartCb}
-            onSelectionDragStop={onSelectionDragStopCb}
+            onNodeDragStop={(e, node, draggedNodes) => {
+              onNodeDragStopCb(e, node, draggedNodes);
+              onNodeDragStop?.();
+            }}
+            onSelectionDragStart={() => {
+              onSelectionDragStartCb();
+              onNodeDragStart?.();
+            }}
+            onSelectionDragStop={(e, nodes) => {
+              onSelectionDragStopCb(e, nodes);
+              onNodeDragStop?.();
+            }}
             // US-003: route React Flow's click-only events to the parent so the
             // detail panel can be driven by explicit clicks instead of selection
             // changes. xyflow's `onNodeClick`/`onEdgeClick` fire only for real

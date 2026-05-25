@@ -71,7 +71,7 @@
         "Verify in browser using dev-browser skill: drag a node, confirm only one debounced updateModelContext fires; add a node, confirm one sendMessage fires"
       ],
       "priority": 4,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
