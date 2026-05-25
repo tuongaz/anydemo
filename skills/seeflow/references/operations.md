@@ -22,10 +22,12 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | Phase | Subcommand | Purpose |
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
+| P0 | `schema {flow,node,connector,action,style}` | Fetch the live contract once; cache for the rest of the run. Phase 2/4 reuse the cache instead of re-fetching. The `component` variant's catalog enum feeds `$componentCatalog` for the planner |
 | P3 | `projects:create` | Scaffold + register a new project: writes the empty envelope at `<project>/flow.json` (project root) from the planner-supplied `name` (and `description`) and registers it in one shot — returns `{ id, slug }`. Required before the canvas can open at `$STUDIO_URL/d/<slug>` |
 | P3 | `register` | Fallback for the `alreadyExists` exit from `projects:create` (root-level `flow.json` already on disk) — registers it without overwriting |
 | P3 | `ids` | Mint canonical `node-<10>` / `conn-<10>` ids |
 | P3 | `flow:add-bulk` | Atomic seed of skeleton nodes + connectors in one transactional write (rollback covers both arrays) |
+| P3 | `nodes:patch` (detail-backfill) | Unconditional sweep after `flow:add-bulk` — fills `data.detail` for any non-decorative node whose planner output left it missing or empty |
 | P3 | `flows:layout` | Run ELK; rewrite style.json positions |
 | P5 | `nodes:patch` | Attach playAction / statusAction / stateSource per node — also accepts an optional `type` field for non-destructive retype (preserves the per-node folder under `nodes/<id>/`) |
 | P5 | `flow:add-bulk` | Inject synthetic trigger nodes + wire them, atomically |

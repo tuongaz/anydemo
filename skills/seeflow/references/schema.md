@@ -21,12 +21,15 @@ The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow
 
 **The CLI is the only source of truth for field shapes.** This file
 documents conventions, file layout, and when-to-use guidance — it does
-**not** document fields, types, or enum values. Run before authoring
-any flow.json write:
+**not** document fields, types, or enum values. The orchestrator fetches
+the contract **once at Phase 0** and caches it for the rest of the run
+(see `SKILL.md` §"Capability probe"):
 
     $SEEFLOW schema              # category index
     $SEEFLOW schema flow         # top-level envelope
-    $SEEFLOW schema node         # every node variant
+    $SEEFLOW schema node         # every node variant (also yields the
+                                 # component catalog via the `component`
+                                 # variant's `spec.elements[].type` enum)
     $SEEFLOW schema connector    # every connector variant
     $SEEFLOW schema action       # every action variant
     $SEEFLOW schema style        # style.json envelope (for reference)
@@ -34,12 +37,31 @@ any flow.json write:
 Each call returns the contract per variant plus a `notes` array carrying
 cross-field invariants the contract can't express. The same output is
 reachable over MCP (`seeflow_schema`) and REST (`GET /api/schema[/:name]`)
-— pick whichever transport you're already on.
+— pick whichever transport you're already on. The Phase 0 cache is
+forwarded to the node-planner (Phase 2) and the play/status designers
+(Phase 4) in their launching prompts; downstream agents never re-fetch.
 
 If a field name, type, required-list, or enum value is not in `$SEEFLOW
 schema`, it does not exist. Do not infer one from this file, from the
-agent prompts, or from older skill memory — run the command and read
-the answer.
+agent prompts, or from older skill memory — read the cached answer.
+
+## Skill-known node types
+
+The skill's docs reference these 13 `type` discriminator values. Phase 0
+diffs this list against `$SEEFLOW schema node`'s actual variants and
+silently logs an `env-capability-mismatch` (`severity: degraded`) entry
+if they disagree — the install is either ahead of the skill (extra
+types) or behind it (missing types).
+
+```
+rectangle  ellipse  sticky  text  database  server  user
+queue      cloud    icon    html  image     component
+```
+
+If you add a new node type to the skill docs, append it here so the
+Phase 0 diff stays accurate. Removing a type the CLI still exposes
+isn't an error — the diff just nudges the maintainer that the skill
+fell behind.
 
 ## Per-node file convention
 
@@ -184,15 +206,34 @@ Single Lucide glyph. The `data.icon` field is **required** here
 (unlike on geometric types, where it's optional decorative chrome).
 Decorative; carries no chrome in v1.
 
+### `component`
+
+Catalog-driven reactive UI element — the **first choice for
+information-display flows** (gap analyses, comparisons, status
+reports, checklists, architectural narratives). The node's `data.spec`
+references one or more entries from the canvas's component catalog
+(`@seeflow/canvas/catalog`); the studio validates each
+`spec.elements[].type` against `COMPONENT_NAMES` at write time and
+rejects unknown names with `badSchema`. The catalog is exposed via the
+`component` variant in `$SEEFLOW schema node` — the orchestrator
+forwards the legal names to the planner in Phase 2 alongside the
+contract.
+
+Prefer `component` over `html` whenever a catalog entry covers the
+content — components are typed, theme-aware, and participate in
+updates automatically. Reach for `html` only when the catalog
+genuinely can't render what the document needs.
+
 ### `html`
 
-Escape-hatch for content no curated node covers: legends, data tables,
-rich annotations, custom UI widgets. The studio externalises the
-`data.html` content to `<projectPath>/nodes/<id>/view.html` and stores
-a `file://` ref in `flow.json`; the renderer injects Tailwind Play CDN
-(utility classes work) and **sanitises before painting** (strips
-`<script>`, `<style>`, `<iframe>`, `on*=` attributes, `javascript:`
-URLs).
+Escape-hatch for content no curated node — and no `component` catalog
+entry — covers: bespoke legends, custom data tables, rich one-off
+annotations, layouts the catalog doesn't expose. The studio
+externalises the `data.html` content to `<projectPath>/nodes/<id>/view.html`
+and stores a `file://` ref in `flow.json`; the renderer injects
+Tailwind Play CDN (utility classes work) and **sanitises before
+painting** (strips `<script>`, `<style>`, `<iframe>`, `on*=`
+attributes, `javascript:` URLs).
 
 Presentation overrides (size, colors, borders, fonts) live in
 `style.json` — studio-owned. The renderer applies defaults when
@@ -202,9 +243,12 @@ To edit the markup outside Claude, open
 `<projectPath>/nodes/<id>/view.html` directly — saves trigger a
 live reload.
 
-**When NOT to use:** If a sticky-note / text label, an `icon` glyph, or
-a `rectangle` with a status pill covers the content, prefer those —
-they participate in theming and status updates automatically.
+**When NOT to use:**
+- If a `component` catalog entry covers the content, prefer that —
+  components are typed, theme-aware, and participate in updates.
+- If a sticky-note / text label, an `icon` glyph, or a `rectangle`
+  with a status pill covers the content, prefer those — they
+  participate in theming and status updates automatically.
 
 ### `image`
 
