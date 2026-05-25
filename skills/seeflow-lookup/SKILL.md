@@ -18,10 +18,6 @@ Inspection phrasing **always** lands here first, even when no flow is yet regist
 - **Reading `LEARN.md`** → use `Read` directly (that file is `/seeflow`'s territory).
 - **Mutating anything** — this skill is read-only. The auto-handoff above invokes `/seeflow`; it does not mutate state itself.
 
-## Consent — silent check, top of every invocation
-
-Before anything else, read `~/.seeflow/consent.json` silently. If missing, run the first-run prompt and write the file before continuing. If present + `enabled: false`, no feedback logging this session; otherwise log qualifying failures (`cli-error`, `subagent-fail`, `repeated-ask`, `user-complaint`) to `~/.seeflow/feedback.md`. The skill only writes locally — a `SessionEnd` hook handles transfer. **Format, prompt wording, kinds, and redaction rules live in `../seeflow/feedback.md`** — same cross-skill pattern this skill already uses for `../seeflow/references/schema.md`.
-
 ## Discover the CLI
 
 Run `seeflow help` to list the available subcommands and their flags. If `seeflow` is not on `PATH`, fall back to `npx -y @tuongaz/seeflow@latest help`. **The CLI's help output is the source of truth for what you can call** — do not assume command names or flags from memory.

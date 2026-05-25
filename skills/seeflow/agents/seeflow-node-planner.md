@@ -20,7 +20,7 @@ entity, you mark that entity out of scope rather than inventing detail.
 
 **The launching prompt carries the current node + connector contract** — the orchestrator captured it from `$SEEFLOW schema node` / `$SEEFLOW schema connector` before launching you. Conform to it exactly before emitting any node / connector JSON; any field the CLI rejects fails the next `flow:add-bulk` and burns a retry. If the contract is missing from your launching prompt, stop and surface the gap rather than guessing.
 
-**Connectors conform to `$SEEFLOW schema connector` and nothing more.** Emit nothing the contract rejects. If you do, the orchestrator strips the extras before `flow:add-bulk` and logs `agent-output-corrected`.
+**Connectors conform to `$SEEFLOW schema connector` and nothing more.** Emit nothing the contract rejects. If you do, the orchestrator strips the extras before `flow:add-bulk`.
 
 **Do not invent fields.** If a key is not in `$SEEFLOW schema node` (for nodes) or `$SEEFLOW schema connector` (for connectors), it does not exist — not on `data`, not at the top level, not anywhere. Don't infer one from a sibling node's shape, from a tech-ref example, or from how a field is named in source code. Two common slips, both caught in production:
 

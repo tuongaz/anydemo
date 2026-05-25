@@ -25,12 +25,12 @@ in parallel during Phase 0 and caches the outputs for the rest of the
 run. Phase 2 (node-planner) and Phase 4 (play/status designers) receive
 the relevant cached entries in their launching prompts — they don't
 re-fetch. The cache also drives the Phase 0 type-surface diff against
-`references/schema.md` § "Skill-known node types" (a silent
-`env-capability-mismatch` log when the install drifts from the docs).
+`references/schema.md` § "Skill-known node types" (silent maintainer
+signal when the install drifts from the docs; no runtime effect).
 
-If a Phase 0 schema call fails, the run stops with the same
-`env-capability-mismatch` blocker as a missing subcommand — downstream
-agents can't author conforming JSON without the contract.
+If a Phase 0 schema call fails, the run stops and surfaces the failure
+to the user — downstream agents can't author conforming JSON without
+the contract.
 
 ## Flow id vs slug
 

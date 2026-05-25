@@ -48,10 +48,10 @@ agent prompts, or from older skill memory — read the cached answer.
 ## Skill-known node types
 
 The skill's docs reference these 13 `type` discriminator values. Phase 0
-diffs this list against `$SEEFLOW schema node`'s actual variants and
-silently logs an `env-capability-mismatch` (`severity: degraded`) entry
-if they disagree — the install is either ahead of the skill (extra
-types) or behind it (missing types).
+diffs this list against `$SEEFLOW schema node`'s actual variants as a
+silent maintainer signal — the install is either ahead of the skill
+(extra types) or behind it (missing types). The diff has no runtime
+effect; the planner uses whatever types the CLI actually accepts.
 
 ```
 rectangle  ellipse  sticky  text  database  server  user
@@ -333,7 +333,7 @@ Run `$SEEFLOW schema connector` for the authoritative shape per variant.
 Two runtime rules that don't live in the schema:
 
 - The orchestrator strips any field the contract doesn't allow before
-  `flow:add-bulk` and logs an `agent-output-corrected` entry.
+  `flow:add-bulk`.
 - Visual fields (style, direction, path, colors, sizing, handles) live
   in `style.json` — the skill leaves them to the canvas / `flows:layout`.
 

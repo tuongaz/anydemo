@@ -25,7 +25,7 @@ A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **
 
 Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --name "..."`. Inside `--path`, every CLI / file reference is relative to that project root — never re-prefix with `.seeflow/`.
 
-`~/.seeflow/` (user-home) is a separate, unrelated directory that holds the studio's global registry / config / pid / consent / feedback files; leave its paths verbatim wherever they appear.
+`~/.seeflow/` (user-home) is a separate, unrelated directory that holds the studio's global registry / config / pid files; leave its paths verbatim wherever they appear.
 
 **Parallelism is the default — one message, N `Task` calls.** Phase 1's wrong/right block below is canonical; later parallel phases reference it. Narrate each phase boundary with a one-line status (e.g. `Phase 3: scaffolding skeleton flow…`) so silent waits don't feel broken.
 
