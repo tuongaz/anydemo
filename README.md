@@ -127,6 +127,46 @@ claude mcp add seeflow -- npx -y --package=@tuongaz/seeflow@latest seeflow-mcp
 
 The MCP server talks to `http://127.0.0.1:4321/mcp` by default. Override with `SEEFLOW_STUDIO_URL` if needed.
 
+## MCP Apps
+
+On hosts that support the [MCP Apps](https://github.com/modelcontextprotocol/mcp-apps) spec (Claude Desktop today), `seeflow-mcp` renders the live React Flow canvas inline in the chat — no second window, no `localhost:4321` tab. You author, navigate, and edit the flow from the same conversation that produced it.
+
+**Install in Claude Desktop** — add an entry to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "seeflow": {
+      "command": "npx",
+      "args": ["-y", "--package=@tuongaz/seeflow@latest", "seeflow-mcp"]
+    }
+  }
+}
+```
+
+When launched this way, `seeflow-mcp` boots an embedded studio on a loopback ephemeral port (the same Hono backend used by `seeflow start`) and serves the iframe canvas as the `ui://seeflow/canvas` resource. One process, one install, no separate studio to run.
+
+**The 5 canvas-bearing tools** open the canvas inline:
+
+| Tool                     | Renders                                                |
+| ------------------------ | ------------------------------------------------------ |
+| `seeflow_get_flow`       | The flow's canvas (read view).                         |
+| `seeflow_get_flow_graph` | Same canvas, with the topology focused.                |
+| `seeflow_get_node`       | The canvas with the requested node selected + opened.  |
+| `seeflow_register_flow`  | The newly-registered flow in edit mode + "Just created" highlight. |
+| `seeflow_create_project` | The new project's canvas in edit mode.                 |
+
+The remaining 18 tools stay JSON-only — their mutations propagate to any open canvas via the studio's SSE channel, no re-render needed.
+
+**Model-notify split.** Edits inside the canvas reach the model through two channels:
+
+- `sendMessage` — structural edits the model should react to (node added / deleted, connector added / deleted, node renamed, Play / Status pressed). Bursts within 200ms are coalesced.
+- `updateModelContext` — silent navigation telemetry (selection, hover, drag-in-progress, viewport pan/zoom). Debounced 250ms, throttled to at most 1/sec.
+
+**Non-Apps hosts are unaffected.** The `_meta` payload is additive: hosts that don't grok `openai/outputTemplate` ignore it and continue to receive the same JSON tool responses they've always received. The existing `claude mcp add seeflow …` flow above keeps working unchanged on Claude Code, Cursor, Windsurf, etc.
+
+See [`docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md`](./docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md) for the full design — architecture, bidirectional channels, CORS / per-process-token model, and lifecycle.
+
 ## Develop
 
 ```bash
