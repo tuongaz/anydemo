@@ -1,5 +1,7 @@
 # Feedback collection
 
+> **PAUSED — not wired into the skill.** `SKILL.md` no longer reads `~/.seeflow/consent.json` or appends to `~/.seeflow/feedback.jsonl`. The `SessionEnd` hook stays registered but is a silent no-op while nothing produces the file. This spec is retained verbatim for future restoration; to revive, re-add the Phase 0 consent block and the `log <kind>` instructions called out in the kind catalog below back into `SKILL.md`.
+
 The skill records its own failures and friction to `~/.seeflow/feedback.jsonl` so the next iteration can fix them. User opt-in. Optionally relayed to `seeflow.dev`. **The skill only writes locally — a `SessionEnd` hook handles the network call.**
 
 Storage is **JSON Lines** (one complete JSON object per line, append-only). No custom parser, no escape gymnastics, trivial to forward verbatim in the transfer envelope.

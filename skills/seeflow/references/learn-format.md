@@ -13,18 +13,31 @@ run should be able to skip a lot of grep work by reading it.
 
 ## Lifecycle
 
+There are exactly **two disk writes per `/seeflow` run**, both silent
+(no user-facing narration). Everything else is read-only or in-memory
+staging. Writing outside these two points is the failure mode this file
+exists to prevent — premature rows for flows that may never register,
+or duplicate entries when a run aborts mid-flight.
+
 - **Read** at the start of every `/seeflow` run (Phase 0 in `SKILL.md`).
 - **Pass** the contents into both `seeflow-code-analyzer` and
   `seeflow-system-analyzer` launching prompts as `learnContext` so they
   can avoid re-discovering known facts.
-- **Update** during Phase 1 → Phase 2, merging each agent's `learnUpdates`
-  into the file as soon as that agent returns. The system-analyzer is
-  the heavy contributor here — every fact it learns about boot, setup,
-  ports, env vars, fixtures, gotchas, and tech adaptations MUST be
-  persisted on this step.
-- **Update again** during Phase 6 polish if a play or status script
-  uncovered a new gotcha (port mismatch, hidden env var, fixture
-  factory, surprising auth).
+- **Stage** each agent's `learnUpdates` in memory during Phase 1 →
+  Phase 2 overlap as soon as that agent returns. The system-analyzer
+  is the heavy contributor — every fact it learns about boot, setup,
+  ports, env vars, fixtures, gotchas, and tech adaptations MUST land in
+  the staged buffer. **Do not write to disk yet.**
+- **Save #1 — Silent, Phase 3 step 5** (after `flows:layout`, before the
+  canvas review). First disk hit. Merge the staged `learnUpdates` into
+  the file AND upsert the "Flows already created" row by `slug` with
+  today's date + a one-line purpose. The studio has already registered
+  the flow by this point, so the row reflects a real entity.
+- **Save #2 — Silent, at the final-flow announcement** (Phase 6
+  `ok:true` exit, Phase 3 "Layout approved + static" exit, or the
+  document-branch static exit). Re-upsert the same row (idempotent by
+  slug) and append anything Phases 5–6 surfaced — a new gotcha, an
+  emulator quirk, a working seed command, a tech-adaptation override.
 
 The file always lives at `<host>/.seeflow/LEARN.md` — one shared
 file per host repo, **never** inside a per-flow folder
@@ -265,6 +278,6 @@ applies the merging rules above.
     should copy from instead of inventing.
   - `gotchas` *(string[])* — tech-specific quirks discovered this run.
   Omit a `techId` entirely if no adaptation was found — empty entries
-  are noise. **Phase 6 polish updates this section** whenever a play
-  or status script discovers a new project-specific fact about a
-  detected tech.
+  are noise. **Save #2 updates this section** whenever a play or status
+  script (in Phase 5 or 6) discovers a new project-specific fact about
+  a detected tech.
