@@ -112,7 +112,12 @@ Field-by-field:
   rationales mean the user reviews the canvas without knowing why
   each node is there.
 
-**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. **Conform to the schema in your launching prompt** — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary. **Emit zero visual fields** — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas. **Mark the trigger by setting `data.playAction` to a placeholder object** (the orchestrator fills in the required fields before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`). **Do not emit `statusAction`** — the Phase 4 status-designer attaches those.
+**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. Constraints on what you emit:
+
+- Conform to the schema in your launching prompt — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary.
+- Emit zero visual fields — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas.
+- Mark the trigger by setting `data.playAction` to a placeholder object. The orchestrator fills in any required fields before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`.
+- Do not emit `statusAction` — the Phase 4 status-designer attaches those.
 
 ### Picking node `type`
 

@@ -50,7 +50,7 @@ Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --n
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
 | `$repoPath` | `$PWD/.seeflow/<flow-name>` (the seeflow project root the skill creates and passes to `projects:create --path`). |
 | `$learnPath` | `$PWD/.seeflow/LEARN.md` — **shared across every flow** in the host repo. Lives next to the flow folders, never inside one. |
-| `$SEEFLOW_TMP` | `$projectPath/.tmp/` — project-local scratch directory. Create on demand (`mkdir -p`), write all intermediate files here, **never** under system `/tmp`. Already inside the project tree, so no extra write permission is needed. Cleaned up at end of the run (see "Scratch files & cleanup"). |
+| `$SEEFLOW_TMP` | `$projectPath/.tmp/` — project-local scratch directory. Full lifecycle in §"Scratch files & cleanup" below. |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
 ### Scratch files & cleanup
@@ -109,22 +109,13 @@ Full text in `references/core-rules.md`:
 
 ## Common mistakes
 
-- **Serial sub-agent dispatch** (N messages, one Task call each). One message, N Task calls — see Phase 1's wrong/right.
-- **One sub-agent fixing multiple failing scripts in Phase 6.** Each needs isolated context.
+- **Serial sub-agent dispatch.** One message, N Task calls — see Phase 1's wrong/right.
 - **Authoring `flow.json` directly.** Every mutation is a CLI call.
-- **Silently overwriting (or silently falling back from) an existing flow at the target path.** Phase 3 step 1's existing-flow gate is mandatory — open / rename / overwrite, the user decides. The old "fall back to `register`" behavior was data-loss-adjacent.
-- **Touching `style.json`.** The studio owns it via `flows:layout`.
-- **Passing `<slug>/scripts/…` as `scriptPath`.** New anchor is the node folder — emit just `scripts/play.ts`.
+- **Asking "what's your codebase?".** Launch the analyzers — that is their job. (Exception: `inputClass === "conversation" | "document"` — the brief comes from elsewhere.)
+- **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
-- **Asking "what's your codebase?".** Launch the analyzers — that is their job. Exception: `inputClass === "conversation"` or `"document"` from the Phase 0 input-source gate; in those cases the brief comes from the conversation / document, not the codebase.
-- **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"` (no runtime to validate against).
-- **Re-fetching `$SEEFLOW schema *` after Phase 0.** The cache is the source of truth for the run — read from it, don't re-shell.
-- **Defaulting to `rectangle` for a `document` flow.** The default is `component` (catalog-driven UI); `html` only when the catalog can't render it; `rectangle` only for runtime components the document explicitly describes.
-- **Leaving `data.detail` blank on a static flow.** Phase 3 step 4's detail-backfill runs unconditionally precisely so static flows don't ship with blank `nodes/<id>/detail.md`. If you find yourself disabling it "because the planner already provided detail", the backfill is a no-op for those nodes anyway — let it run.
-- **Writing `LEARN.md` inside a flow folder (`<host>/.seeflow/<flow-name>/LEARN.md`).** It is **shared across every flow** in the host repo — always read/write `$learnPath` = `$PWD/.seeflow/LEARN.md`, never anywhere else.
-- **Writing `LEARN.md` to disk outside the two named save points.** Save #1 (Phase 3 step 5, silent, right before the canvas review) and Save #2 (silent, at the final-flow announcement) are the only disk writes. Phase 1 must stage `learnUpdates` in memory only; never patch the file mid-run.
-- **Writing scratch files to `/tmp` (or `$TMPDIR`).** Use `$SEEFLOW_TMP` (`<projectPath>/.tmp/`) — project-local, no permission prompts, and cleaned up at end of run. Same rule applies to scripts the Phase 4 designers emit.
-- **Forgetting to clean `$SEEFLOW_TMP` after a successful run.** Leave it in place on failure (debugging trail); `rm -rf "$SEEFLOW_TMP"` after Phase 6 prints the final `Flow registered` line on success.
+- **Passing `<slug>/scripts/…` as `scriptPath`.** New anchor is the node folder — emit just `scripts/play.ts`.
+- **Writing `LEARN.md` inside a per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every flow** in the host repo — never inside `<flow-name>/`.
 
 ## Phase 0 — pre-flight (parallel)
 
@@ -155,7 +146,7 @@ In a single message, run the five schema calls in parallel and cache the outputs
 $SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema style
 ```
 
-Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. If any of the five calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
+Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so what you don't forward, they don't know; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the five calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
 
 **Extract the component catalog.** Pull the legal `spec.elements[].type` enum from `$schemaCache.node`'s `component` variant into `$componentCatalog`. Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
 
@@ -267,7 +258,7 @@ For `"code"`: start `seeflow-node-planner` as soon as the code-analyzer returns 
 When the system-analyzer returns:
 
 0. **Size-check the payload first.** Measure the JSON byte length. If > 16 KB (twice the agent's budget — see `agents/seeflow-system-analyzer.md` § "Output budget"), the analyzer drifted. Apply the per-field caps from that section before merging: truncate `gotchas[]` to 10, `fixtures[]`/`factories[]` to 8, prose fields to 400 chars, etc. Drop any inherited fact that already appears verbatim in `$learnPath` (the merger would keep it anyway). The trimmed payload is what feeds steps 1–3.
-1. **Stage** `learnUpdates` in memory — DO NOT write `$learnPath` to disk yet. The first disk hit is Save #1 in Phase 3 step 5, after the studio has registered the flow. Writing earlier risks leaving stale rows behind if the run aborts.
+1. **Stage** `learnUpdates` in memory — DO NOT write `$learnPath` to disk yet. The first disk hit is Save #1 in Phase 3 step 7, after the studio has registered the flow. Writing earlier risks leaving stale rows behind if the run aborts.
 2. Splice `runtimeProfile` + `$learnPath` facts (the existing on-disk content read at Phase 0, plus the staged updates) into the in-memory context brief used by Phase 4. **Forward the *trimmed* payload — never the raw analyzer output** — and only the fields each designer actually consumes (`runtimeProfile`, the matching `techAdaptations.<techId>` for techs in this flow, the relevant `dataEntryPaths`, top 5 `gotchas`).
 3. Stage `knownEndpoints` / `techStack` from the code-analyzer alongside the system-analyzer's updates — same staged buffer, same Save #1 destination.
 
@@ -275,9 +266,7 @@ When the system-analyzer returns:
 
 ## Phase 2 — plan nodes
 
-**Use the cached node + connector contract from Phase 0.** `$schemaCache.node` and `$schemaCache.connector` already carry the live contract — forward them verbatim in the launching prompt. (Re-running the schema calls here used to be the Phase 2 opener; it's now redundant and slows the phase down.) Skipping the forward lets the planner invent fields the CLI rejects on `flow:add-bulk`, burning a retry.
-
-Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, `$schemaCache.node`, `$schemaCache.connector`, and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
+Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, `$schemaCache.node`, `$schemaCache.connector` (forward verbatim — see Phase 0 §"Schema cache"), and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
 
 **Connectors conform to `$SEEFLOW schema connector` and nothing more.** If the planner emits any field the contract rejects, strip it before `flow:add-bulk`. Do not enumerate the legal fields here — re-run the schema command whenever in doubt.
 
@@ -299,7 +288,7 @@ If any assertion fails, **re-dispatch the planner once** with the specific gap e
 
 ## Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via five steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
+The skeleton flow lands via seven steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
 1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot.
 
@@ -322,7 +311,7 @@ The skeleton flow lands via five steps, in order. No `flow.json` authoring by ha
    If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed (filesystem race), loop back to the gate above and let the user decide — do not auto-fall-back. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
 
 2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for the planner's designated trigger node (the one whose `data.playAction` is set even as a placeholder), inject the minimum `playAction` payload the contract requires so the server accepts the batch. Use `$schemaCache.action` and `$schemaCache.node` (Phase 0) to look up the `PlayAction` shape's required keys — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it. **Skip this normalisation entirely for `inputClass === "document"` flows** — document flows usually carry no trigger, and the planner deliberately omits `playAction` per its input-class rules.
-2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
+3. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
    ```bash
    mapfile -t nodeIds < <($SEEFLOW ids node "${#nodes[@]}")
    mapfile -t connIds < <($SEEFLOW ids connector "${#connectors[@]}")
@@ -332,16 +321,13 @@ The skeleton flow lands via five steps, in order. No `flow.json` authoring by ha
    - `connectors[].id`, `connectors[].source`, `connectors[].target`
    - `rationales` keys (kept in memory for the review prompt)
    **`user-to-system-rectangle` retype rule.** If the planner shipped `type:'user'` for a node whose `data.name` is clearly a software system (`Web UI`, `Mobile App`, `Browser`, `SPA`, `Desktop Client`, `CLI`, `SDK`, anything ending in `Client`/`App`/`UI`/`Frontend`/`Service`), silently retype to `rectangle` with `data.icon` inferred from the name (`monitor` for web/UI/frontend, `smartphone` for mobile, `terminal` for CLI, `plug` for SDK/Client). Keep `type:'user'` only when `data.name` is a human role (`Customer`, `Support Agent`, `Reviewer`, `Approver`, `Operator`). The Phase 3 canvas review surfaces the result to the user — they see the correction.
-3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
-4. **Detail backfill — runs unconditionally** (every input class, every dynamic gate outcome; the static path used to ship with blank `nodes/<id>/detail.md` because Phase 4–5 were skipped). Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
+4. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
+5. **Detail backfill — runs unconditionally** (every input class, every dynamic gate outcome; the static path used to ship with blank `nodes/<id>/detail.md` because Phase 4–5 were skipped). Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
    - **Present** — already externalised by `flow:add-bulk` to `nodes/<id>/detail.md`. Nothing to do.
    - **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why`. Push via `nodes:patch <flowId> <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `nodes/<id>/detail.md` and stores a `file://` ref.
    Parallelise the patches across nodes — single message, N Bash calls. This is the static-flow safety net described in `seeflow-node-planner.md` § "Semantic requirements".
-5. `flows:layout` — run ELK and write `style.json`.
-6. **Silent LEARN.md write #1.** First disk hit for `$learnPath` in this run. Run quietly — do **not** narrate this to the user. Two merges in one write:
-   - **Staged `learnUpdates` from Phase 1 → 2 overlap** — runtime profile, dev setup, integration tests, fixtures, factories, seed commands, data-entry paths, gotchas, tech stack, tech adaptations, known endpoints. Merge per `references/learn-format.md` § "Merging rules" (union bullet lists; replace contradicted bullets with a date in parens). Create `$PWD/.seeflow/` if missing.
-   - **Upsert the "Flows already created" row** by `slug` — write today's ISO date and a one-line purpose. Idempotent: if a row with the same slug already exists from a prior run, overwrite the date/purpose in place.
-   Re-cap `$learnPath` to ~6 KB after the merge (push oldest gotchas into a collapsed `<details>` block). Skip whole sections that have no genuine update — empty additions are noise.
+6. `flows:layout` — run ELK and write `style.json`.
+7. **Silent LEARN.md write #1.** First disk hit for `$learnPath`. Merges staged `learnUpdates` from Phase 1 → 2 overlap AND upserts the "Flows already created" row by `slug`. Full merge contract, field list, and ~6 KB cap rule live in `references/learn-format.md` § "Lifecycle" + § "Merging rules". Run quietly — do **not** narrate to the user. Create `$PWD/.seeflow/` if missing.
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
@@ -368,9 +354,7 @@ URL="$STUDIO_URL/d/$slug"
 
 ## Phase 4 — design Play + Status (parallel)
 
-Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
-
-**Use the cached action + node contract from Phase 0.** `$schemaCache.action` and `$schemaCache.node` already carry the live contract — forward them verbatim in each designer's launching prompt. Designers have no shell, so what you don't forward, they don't know. (Re-running the schema calls here used to be the Phase 4 opener; the cache replaces it.) Skipping the forward lets the designer invent fields the CLI rejects on `nodes:patch`, burning a retry.
+Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`, and `$schemaCache.action` + `$schemaCache.node` forwarded verbatim (see Phase 0 §"Schema cache"). They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
 
 Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
@@ -411,17 +395,7 @@ If the run resolved to `inputClass === "document"` (Phase 0 input-source gate), 
 
 ### Silent LEARN.md write #2
 
-Second (and final) disk hit for `$learnPath`. Fires at the final-flow announcement on every path that reaches it:
-
-- Phase 6 `ok:true` exit (the dynamic-run success case).
-- Phase 3 "Layout approved + static" exit (covered inline at the dynamic gate above — same write contract).
-
-Run quietly — **do not narrate this to the user**. The user hears the final-flow line, nothing about LEARN.md.
-
-Two merges in one write:
-
-- **Re-upsert the "Flows already created" row** by `slug` (idempotent against Save #1; bumps the date if the run straddled midnight, otherwise a no-op).
-- **Append anything Phases 5–6 surfaced that the next run would want** — port mismatch, fixture path, missed env var, working seed command, useful data-entry path, a fix-up agent's discovery. Land tech-specific facts (a helper, a required attribute, an emulator quirk, a fixture path) in `## Tech stack adaptations` → `### <techId>`, not just `## Gotchas`. If Phase 6 surfaced a tech the code-analyzer missed entirely, also append the `techId` to `## Tech stack`. Skip whole sections that have no genuine update — empty additions are noise.
+Second (and final) disk hit for `$learnPath`. Fires at the final-flow announcement on every path that reaches it — Phase 6 `ok:true` and Phase 3 "Layout approved + static". Re-upserts the "Flows already created" row AND appends anything Phases 5–6 surfaced that the next run would want (a missed port, a working seed command, a tech-adaptation a fix-up agent discovered). Tech-specific facts land in `## Tech stack adaptations` → `### <techId>`, not `## Gotchas`. Full merge contract: `references/learn-format.md` § "Lifecycle". Run quietly — do **not** narrate to the user.
 
 This is what makes the next `/seeflow` run reuse the work.
 

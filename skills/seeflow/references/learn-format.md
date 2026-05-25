@@ -28,7 +28,7 @@ or duplicate entries when a run aborts mid-flight.
   is the heavy contributor — every fact it learns about boot, setup,
   ports, env vars, fixtures, gotchas, and tech adaptations MUST land in
   the staged buffer. **Do not write to disk yet.**
-- **Save #1 — Silent, Phase 3 step 5** (after `flows:layout`, before the
+- **Save #1 — Silent, Phase 3 step 7** (after `flows:layout`, before the
   canvas review). First disk hit. Merge the staged `learnUpdates` into
   the file AND upsert the "Flows already created" row by `slug` with
   today's date + a one-line purpose. The studio has already registered
