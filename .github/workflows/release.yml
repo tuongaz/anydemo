@@ -1,34 +1,112 @@
 name: Release
 
-# Single release pipeline: tests gate two parallel publish jobs (npm + Docker
-# Hub). Replaces the prior split between publish.yml and docker.yml so a
-# tagged release only runs the test suite once.
+# Single release pipeline: optionally bumps the version + tags (workflow_dispatch),
+# then runs tests and the two parallel publish jobs (npm + Docker Hub). On a tag
+# push the bump step is skipped — useful for re-running the publish jobs against
+# an already-tagged release.
 on:
   push:
     tags:
       - 'v*.*.*'
   workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump (patch, minor, or major)'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+        default: patch
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write # prepare-release commits the bump + pushes the tag
   id-token: write # required for npm provenance
 
 jobs:
+  prepare-release:
+    name: Bump version, commit, and tag
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.bump.outputs.tag }}
+      version: ${{ steps.bump.outputs.version }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install workspace dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Bump apps/studio/package.json
+        id: bump
+        env:
+          BUMP: ${{ inputs.bump }}
+        run: |
+          set -euo pipefail
+          PKG=apps/studio/package.json
+          OLD=$(node -p "require('./$PKG').version")
+          NEW=$(node -e "
+            const [a,b,c]=process.argv[1].split('.').map(Number);
+            const t=process.argv[2];
+            const v = t==='major' ? [a+1,0,0] : t==='minor' ? [a,b+1,0] : [a,b,c+1];
+            console.log(v.join('.'));
+          " "$OLD" "$BUMP")
+          echo "Bumping $OLD -> $NEW"
+          node -e "
+            const fs=require('fs');
+            const path='./apps/studio/package.json';
+            const p=JSON.parse(fs.readFileSync(path));
+            p.version=process.argv[1];
+            fs.writeFileSync(path, JSON.stringify(p,null,'\t')+'\n');
+          " "$NEW"
+          bun run format
+          echo "version=$NEW" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW" >> "$GITHUB_OUTPUT"
+
+      - name: Commit, tag, and push
+        env:
+          NEW: ${{ steps.bump.outputs.version }}
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add apps/studio/package.json
+          git commit -m "chore: bump version to $NEW"
+          git push origin "HEAD:$BRANCH"
+          git tag "v$NEW"
+          git push origin "v$NEW"
+
   tests:
+    needs: [prepare-release]
+    if: always() && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped')
     uses: ./.github/workflows/_tests.yml
+    with:
+      ref: ${{ needs.prepare-release.outputs.tag || github.ref }}
 
   publish-npm:
     name: Publish @tuongaz/seeflow to npm
     runs-on: ubuntu-latest
-    needs: tests
+    needs: [prepare-release, tests]
+    if: always() && needs.tests.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -45,17 +123,16 @@ jobs:
         run: bun install --frozen-lockfile
 
       - name: Verify tag matches package version
-        if: github.event_name == 'push'
         env:
-          GIT_REF: ${{ github.ref }}
+          REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
         run: |
-          tag="${GIT_REF#refs/tags/v}"
+          tag="${REF#refs/tags/}"
+          tag="${tag#v}"
           pkg=$(node -p "require('./apps/studio/package.json').version")
           echo "Tag version: $tag"
           echo "Package version: $pkg"
           if [ "$tag" != "$pkg" ]; then
             echo "ERROR: tag v$tag does not match apps/studio/package.json version $pkg" >&2
-            echo "Bump apps/studio/package.json to $tag, commit, then re-tag." >&2
             exit 1
           fi
 
@@ -70,32 +147,35 @@ jobs:
 
       - name: Summary
         env:
-          GIT_REF: ${{ github.ref }}
+          REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
         run: |
-          tag="${GIT_REF#refs/tags/v}"
+          tag="${REF#refs/tags/}"
+          tag="${tag#v}"
           echo "Published @tuongaz/seeflow@${tag} to https://www.npmjs.com/package/@tuongaz/seeflow" >> "$GITHUB_STEP_SUMMARY"
 
   publish-docker:
     name: Build and push tuongaz/seeflow to Docker Hub
     runs-on: ubuntu-latest
-    needs: tests
+    needs: [prepare-release, tests]
+    if: always() && needs.tests.result == 'success' && (needs.prepare-release.result == 'success' || needs.prepare-release.result == 'skipped')
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare-release.outputs.tag || github.ref }}
 
       - name: Verify tag matches package version
-        if: github.event_name == 'push'
         env:
-          GIT_REF: ${{ github.ref }}
+          REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
         run: |
-          tag="${GIT_REF#refs/tags/v}"
+          tag="${REF#refs/tags/}"
+          tag="${tag#v}"
           pkg=$(node -p "require('./apps/studio/package.json').version")
           echo "Tag version: $tag"
           echo "Package version: $pkg"
           if [ "$tag" != "$pkg" ]; then
             echo "ERROR: tag v$tag does not match apps/studio/package.json version $pkg" >&2
-            echo "Bump apps/studio/package.json to $tag, commit, then re-tag." >&2
             exit 1
           fi
 
@@ -117,8 +197,8 @@ jobs:
         with:
           images: tuongaz/seeflow
           tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{version}},value=${{ needs.prepare-release.outputs.tag || github.ref_name }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ needs.prepare-release.outputs.tag || github.ref_name }}
             type=raw,value=latest
 
       - name: Build and push multi-arch image

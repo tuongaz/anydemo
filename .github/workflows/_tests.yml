@@ -5,6 +5,12 @@ name: Tests (reusable)
 # canvas-change-driven viewer-deploy pipeline.
 on:
   workflow_call:
+    inputs:
+      ref:
+        description: 'Git ref to check out (branch, tag, or sha). Defaults to the caller workflow ref.'
+        type: string
+        required: false
+        default: ''
 
 jobs:
   tests:
@@ -15,6 +21,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
