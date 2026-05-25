@@ -39,7 +39,9 @@
     "test": "bun test",
     "build:web": "cd ../web && bun run build",
     "vendor:tailwind-runtime": "cp ./node_modules/@tailwindcss/browser/dist/index.global.js public/runtime/tailwind.js",
-    "prepublishOnly": "bun run vendor:tailwind-runtime && bun run build:web && cp ../../README.md ./README.md"
+    "prepublishOnly": "bun run vendor:tailwind-runtime && bun run build:web && cp ../../README.md ./README.md",
+    "prepack": "bun run scripts/prepack-publish.mjs",
+    "postpack": "bun run scripts/postpack-publish.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",

@@ -140,10 +140,41 @@ jobs:
         working-directory: apps/studio
         # `prepublishOnly` (in apps/studio/package.json) vendors the tailwind
         # runtime, builds the web bundle into dist/web, and stages the README,
-        # so we don't need explicit build/stage steps here.
+        # so we don't need explicit build/stage steps here. `prepack` /
+        # `postpack` (also in package.json) strip the `workspace:*` canvas
+        # dep + vendor the catalog so the tarball installs cleanly under npm.
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Smoke test installed package
+        # Confirms the published tarball actually resolves under npm — catches
+        # `workspace:*` regressions immediately instead of letting users hit
+        # them. Retries because the registry takes a moment to serve a new
+        # version after publish. REF is taken from the prior job output or
+        # the triggering tag, never from untrusted external input.
+        env:
+          REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${REF#refs/tags/}"
+          tag="${tag#v}"
+          for attempt in 1 2 3 4 5; do
+            echo "Smoke attempt ${attempt}: npx -y @tuongaz/seeflow@${tag} version"
+            if out=$(npx -y "@tuongaz/seeflow@${tag}" version 2>&1); then
+              echo "Got: $out"
+              if [ "$out" = "$tag" ]; then
+                echo "Smoke OK — installed version matches ${tag}"
+                exit 0
+              fi
+              echo "Version mismatch: expected ${tag}, got ${out}" >&2
+            else
+              echo "$out" >&2
+            fi
+            sleep $((attempt * 10))
+          done
+          echo "Smoke test failed after retries" >&2
+          exit 1
 
       - name: Summary
         env:
