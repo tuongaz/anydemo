@@ -1,0 +1,102 @@
+/* MCP App shell — fills the host iframe and frames the canvas. Canvas-
+ * internal Tailwind classes are scoped via the `sf:` prefix inside
+ * `.seeflow-canvas-root`, so we keep this file deliberately minimal. */
+
+html,
+body,
+#root {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  background: #fff;
+  color: #111827;
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+.mcp-app-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+
+.mcp-app-fallback {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  box-sizing: border-box;
+}
+
+.mcp-app-fallback-inner {
+  max-width: 480px;
+  text-align: center;
+}
+
+.mcp-app-fallback h1 {
+  margin: 0 0 8px;
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.mcp-app-fallback p {
+  margin: 0;
+  color: #6b7280;
+  line-height: 1.5;
+}
+
+.mcp-app-fallback code {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  background: #f3f4f6;
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+
+.mcp-app-just-created {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(16, 185, 129, 0.12);
+  color: #047857;
+  font-size: 12px;
+  font-weight: 500;
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  animation: mcp-just-created-fade 3000ms ease forwards;
+  pointer-events: none;
+}
+
+.mcp-app-just-created-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+}
+
+@keyframes mcp-just-created-fade {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -8px);
+  }
+  10% {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}

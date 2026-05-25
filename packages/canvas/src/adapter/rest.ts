@@ -27,18 +27,31 @@ export interface RestAdapterOptions {
   flowId: string;
   /** Optional fetch override — primarily for tests. Defaults to globalThis.fetch. */
   fetch?: typeof fetch;
+  /**
+   * Optional extra headers attached to every request the adapter issues. Used
+   * by cross-origin embedders (e.g. the MCP App iframe in Claude Desktop) to
+   * forward a per-process auth token via `X-Seeflow-Token`. Merged into both
+   * JSON requests (`content-type` set by the adapter) and the multipart
+   * upload (where the browser sets the boundary).
+   */
+  headers?: Record<string, string>;
 }
 
 const requestJson = async <T>(
   fetchImpl: typeof fetch,
   method: string,
   url: string,
+  extraHeaders: Record<string, string> | undefined,
   body?: unknown,
 ): Promise<T> => {
   const init: RequestInit = { method };
+  const headers: Record<string, string> = { ...(extraHeaders ?? {}) };
   if (body !== undefined) {
-    init.headers = { 'content-type': 'application/json' };
+    headers['content-type'] = 'application/json';
     init.body = JSON.stringify(body);
+  }
+  if (Object.keys(headers).length > 0) {
+    init.headers = headers;
   }
   const res = await fetchImpl(url, init);
   if (!res.ok) {
@@ -56,6 +69,7 @@ const requestJson = async <T>(
 export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter => {
   const { baseUrl, flowId } = options;
   const fetchImpl: typeof fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const headers = options.headers;
   const demoBase = `${baseUrl}/api/flows/${flowId}`;
 
   return {
@@ -64,13 +78,20 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'POST',
         `${demoBase}/nodes`,
+        headers,
         input,
       );
       return { id: data.id, node: data.node };
     },
 
     async updateNode(nodeId: string, patch: NodePatch): Promise<void> {
-      await requestJson<{ ok: true }>(fetchImpl, 'PATCH', `${demoBase}/nodes/${nodeId}`, patch);
+      await requestJson<{ ok: true }>(
+        fetchImpl,
+        'PATCH',
+        `${demoBase}/nodes/${nodeId}`,
+        headers,
+        patch,
+      );
     },
 
     async updateNodePosition(
@@ -81,16 +102,23 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'PATCH',
         `${demoBase}/nodes/${nodeId}/position`,
+        headers,
         position,
       );
     },
 
     async deleteNode(nodeId: string): Promise<void> {
-      await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${demoBase}/nodes/${nodeId}`);
+      await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${demoBase}/nodes/${nodeId}`, headers);
     },
 
     async reorderNode(nodeId: string, op: ReorderOp): Promise<void> {
-      await requestJson<{ ok: true }>(fetchImpl, 'PATCH', `${demoBase}/nodes/${nodeId}/order`, op);
+      await requestJson<{ ok: true }>(
+        fetchImpl,
+        'PATCH',
+        `${demoBase}/nodes/${nodeId}/order`,
+        headers,
+        op,
+      );
     },
 
     async createConnector(input: ConnectorCreateInput) {
@@ -98,6 +126,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'POST',
         `${demoBase}/connectors`,
+        headers,
         input,
       );
       return { id: data.id };
@@ -108,12 +137,18 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'PATCH',
         `${demoBase}/connectors/${connectorId}`,
+        headers,
         patch,
       );
     },
 
     async deleteConnector(connectorId: string): Promise<void> {
-      await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${demoBase}/connectors/${connectorId}`);
+      await requestJson<{ ok: true }>(
+        fetchImpl,
+        'DELETE',
+        `${demoBase}/connectors/${connectorId}`,
+        headers,
+      );
     },
 
     async uploadImage(nodeId: string, file: File, filename: string): Promise<UploadImageResult> {
@@ -126,7 +161,9 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       const url = `${baseUrl}/api/projects/${encodeURIComponent(
         flowId,
       )}/nodes/${encodeURIComponent(nodeId)}/files/upload`;
-      const res = await fetchImpl(url, { method: 'POST', body: form });
+      const init: RequestInit = { method: 'POST', body: form };
+      if (headers) init.headers = { ...headers };
+      const res = await fetchImpl(url, init);
       if (!res.ok) {
         let errorBody: { error?: string } | null = null;
         try {
@@ -144,6 +181,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'POST',
         `${demoBase}/play/${nodeId}`,
+        headers,
         {},
       );
     },
@@ -153,6 +191,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'POST',
         `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/open`,
+        headers,
         { path },
       );
     },
@@ -162,6 +201,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         fetchImpl,
         'POST',
         `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
+        headers,
         { path },
       );
     },
@@ -174,7 +214,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
         ok: true;
         nodes: LayoutResult['nodes'];
         connectors: LayoutResult['connectors'];
-      }>(fetchImpl, 'POST', `${baseUrl}/api/layout`, { nodes, edges });
+      }>(fetchImpl, 'POST', `${baseUrl}/api/layout`, headers, { nodes, edges });
       return { nodes: res.nodes, connectors: res.connectors };
     },
   };

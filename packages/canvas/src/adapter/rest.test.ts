@@ -218,6 +218,45 @@ describe('createRestAdapter (US-024)', () => {
     expect(calls[1]?.url).toBe('/api/projects/demo%20with%20space/files/reveal');
   });
 
+  it('attaches options.headers to every JSON request alongside content-type', async () => {
+    const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      flowId: 'demo-42',
+      fetch: impl,
+      headers: { 'X-Seeflow-Token': 'tok-abc' },
+    });
+
+    await adapter.updateNode('node-a', { name: 'x' });
+    await adapter.deleteNode('node-a');
+
+    expect(calls[0]?.headers?.['X-Seeflow-Token']).toBe('tok-abc');
+    expect(calls[0]?.headers?.['content-type']).toBe('application/json');
+    // DELETE has no body but should still carry the auth header.
+    expect(calls[1]?.headers?.['X-Seeflow-Token']).toBe('tok-abc');
+    expect(calls[1]?.headers?.['content-type']).toBeUndefined();
+  });
+
+  it('attaches options.headers to the multipart upload without setting content-type', async () => {
+    const { impl, calls } = stubFetch(() =>
+      stubResponse({ path: 'nodes/node-Abcdef1234/pic.png' }),
+    );
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      flowId: 'project-77',
+      fetch: impl,
+      headers: { 'X-Seeflow-Token': 'tok-xyz' },
+    });
+
+    const file = new File([new Uint8Array([1])], 'pic.png', { type: 'image/png' });
+    await adapter.uploadImage('node-Abcdef1234', file, 'pic.png');
+
+    expect(calls[0]?.headers?.['X-Seeflow-Token']).toBe('tok-xyz');
+    // FormData body must NOT have an explicit content-type header — the
+    // browser sets the multipart boundary itself.
+    expect(calls[0]?.headers?.['content-type']).toBeUndefined();
+  });
+
   it('prepends the configured baseUrl to every request URL', async () => {
     const { impl, calls } = stubFetch(() => stubResponse({ ok: true }));
     const adapter = createRestAdapter({

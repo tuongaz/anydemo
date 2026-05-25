@@ -54,7 +54,7 @@
         "Verify in browser using dev-browser skill: open built dist/index.html with ?widgetState=<json> shim, confirm canvas renders against a running studio backend"
       ],
       "priority": 3,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
