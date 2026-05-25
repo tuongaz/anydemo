@@ -98,6 +98,8 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       "type:'image' data.path must start with 'nodes/<id>/'.",
       "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
       "type:'component' nodes have no `spec` field on disk — the spec lives in <project>/nodes/<id>/spec.json (see `seeflow schema componentSpec`). The resolver inlines it into data.spec for runtime / SSE broadcasts.",
+      "stateSource SHOULD be set on every node that has a statusAction — kind:'request' for poll-based (REST, healthcheck, DB query), kind:'event' for push-based (SSE, webhook, queue, message bus).",
+      'stateSource may also be set without a statusAction on representational/architecture diagrams to signal data-flow intent (poll vs push) without wiring a runtime probe.',
     ],
   },
   connector: {

@@ -97,6 +97,25 @@ describe('schema-catalog', () => {
       expect(payload.notes.some((n) => /image.*path.*nodes/.test(n))).toBe(true);
       // component spec-sidecar note must surface so authors find spec.json.
       expect(payload.notes.some((n) => /component.*spec\.json/i.test(n))).toBe(true);
+      // stateSource guidance notes must surface so AI authors know when/how to set it.
+      expect(payload.notes.some((n) => /stateSource.*statusAction/.test(n))).toBe(true);
+      // Every node variant must carry a description on data.stateSource so the
+      // JSON Schema teaches the AI how to use the field at the call site.
+      for (const variantName of Object.keys(payload.schemas)) {
+        const schema = payload.schemas[variantName] as Record<string, unknown>;
+        const props = (schema.properties as Record<string, unknown>) ?? {};
+        const data = props.data as { properties?: Record<string, unknown> } | undefined;
+        const stateSource = data?.properties?.stateSource as
+          | { description?: string; anyOf?: Array<{ description?: string }> }
+          | undefined;
+        expect(stateSource).toBeDefined();
+        expect(stateSource?.description?.length ?? 0).toBeGreaterThan(0);
+        const anyOf = stateSource?.anyOf ?? [];
+        expect(anyOf.length).toBe(2);
+        for (const member of anyOf) {
+          expect(member.description?.length ?? 0).toBeGreaterThan(0);
+        }
+      }
     });
 
     it('connector → single shape', () => {

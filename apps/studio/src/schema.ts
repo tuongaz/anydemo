@@ -124,10 +124,22 @@ export const StatusReportSchema = z.object({
   ts: z.number().int().positive().optional(),
 });
 
-export const StateSourceSchema = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('request') }),
-  z.object({ kind: z.literal('event') }),
-]);
+export const StateSourceSchema = z
+  .discriminatedUnion('kind', [
+    z
+      .object({ kind: z.literal('request') })
+      .describe(
+        'Poll-based state: `statusAction` samples an endpoint on an interval (REST GET, healthcheck, DB query). Use for services you can probe.',
+      ),
+    z
+      .object({ kind: z.literal('event') })
+      .describe(
+        'Push-based state: `statusAction` subscribes to a stream (SSE, webhook, queue topic). Use for message buses, async pipelines, anything that announces state changes.',
+      ),
+  ])
+  .describe(
+    "Declares how this node's live state is sourced. Pair with `statusAction` so observers can tell at a glance whether the node's status is polled or pushed.",
+  );
 
 // Capabilities — any subset of these makes a node Playable / Stateful. All
 // optional, valid on every node type. A node is Playable iff `playAction` is
@@ -137,7 +149,9 @@ export const StateSourceSchema = z.discriminatedUnion('kind', [
 const NodeCapabilitiesShape = {
   playAction: PlayActionSchema.optional(),
   statusAction: StatusActionSchema.optional(),
-  stateSource: StateSourceSchema.optional(),
+  stateSource: StateSourceSchema.optional().describe(
+    'Set this on any node that has a `statusAction`. Choose `request` for poll-based sources, `event` for push-based sources. Omit on decorative nodes (sticky, label-only text) and on action nodes whose only behavior is `playAction`.',
+  ),
   handlerModule: z.string().optional(),
 };
 
