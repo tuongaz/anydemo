@@ -648,6 +648,11 @@ layer(base);
   opacity: 1;
   transition: opacity 120ms ease-out;
 }
+/* Glow spotlight is a dark-mode-only flourish. Wrapping the negation in
+   :where() keeps specificity at 0 so the .dark rules above still win cleanly. */
+:where(:not(.dark)) .seeflow-canvas-root .glow-overlay {
+  display: none;
+}
 
 /* React Flow MiniMap theming. Mirrors the <Controls> cluster so the bottom
    chrome reads as a single visual family in both light and dark themes. The
