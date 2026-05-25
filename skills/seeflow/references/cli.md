@@ -51,8 +51,8 @@ at `$STUDIO_URL/d/<slug>`), not as an addressable identifier from the CLI.
 - **Existing project (envelope already on disk)** — use
   `register --path <repoPath>` to attach the existing envelope.
   When `projects:create` exits with `alreadyExists` (code 4), the
-  orchestrator stops and asks the user (see SKILL.md §"Existing-flow
-  gate"); `register` is only invoked via the gate's "Open the existing
+  orchestrator stops and asks the user (see `phases/p3-scaffold.md`
+  §"Existing-flow gate"); `register` is only invoked via the gate's "Open the existing
   flow" branch — never as an automatic fallback. Auto-falling-back was
   data-loss-adjacent (silently re-attached a stale envelope under a
   new name) and is forbidden.

@@ -19,7 +19,7 @@ staging. Writing outside these two points is the failure mode this file
 exists to prevent — premature rows for flows that may never register,
 or duplicate entries when a run aborts mid-flight.
 
-- **Read** at the start of every `/seeflow` run (Phase 0 in `SKILL.md`).
+- **Read** at the start of every `/seeflow` run (`phases/p0-preflight.md`).
 - **Pass** the contents into both `seeflow-code-analyzer` and
   `seeflow-system-analyzer` launching prompts as `learnContext` so they
   can avoid re-discovering known facts.
@@ -102,8 +102,7 @@ seeds data. Examples:
 ## Data entry paths
 
 For each major resource the system owns, what is the recommended way to
-get data into it? (See SKILL.md "see the bigger picture before inserting
-data" rule.)
+get data into it? (See `core-rules.md` Rule 2.)
 
 | Resource | Preferred entry | Don't |
 |---|---|---|

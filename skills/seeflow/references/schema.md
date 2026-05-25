@@ -23,7 +23,7 @@ The merged ResolvedFlow over the API (`GET /api/flows/:id`) is the flow
 documents conventions, file layout, and when-to-use guidance — it does
 **not** document fields, types, or enum values. The orchestrator fetches
 the contract **once at Phase 0** and caches it for the rest of the run
-(see `SKILL.md` §"Capability probe"):
+(see `phases/p0-preflight.md` §"Capability probe"):
 
     $SEEFLOW schema              # category index
     $SEEFLOW schema flow         # top-level envelope

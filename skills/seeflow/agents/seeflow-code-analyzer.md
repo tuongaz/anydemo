@@ -121,8 +121,8 @@ Field-by-field:
 
 - **`inputClass`** *(string)* — one of `"code" | "conversation" | "document"`,
   verbatim. Set `"code"` when launched by the orchestrator (the only
-  class that triggers this agent — see `SKILL.md` §"Input-source
-  gate"). The other two values appear only on briefs the orchestrator
+  class that triggers this agent — see `../references/phases/p0-preflight.md`
+  §"Input-source gate"). The other two values appear only on briefs the orchestrator
   built inline without launching this agent; downstream agents branch
   on it (node-planner picks `component` over `rectangle` for
   `"document"` briefs).

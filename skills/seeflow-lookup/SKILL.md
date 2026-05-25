@@ -1,11 +1,11 @@
 ---
 name: seeflow-lookup
-description: Use BEFORE `/seeflow` whenever the user phrases the request as inspection rather than creation — "show me", "show the", "how does X work", "what does X do", "diagram our system", "explain the flow", "where does X live", "what handles Y", "what depends on Z", or names a flow by slug/title without an explicit "create / scaffold / generate / add" verb. Also use when onboarding to a repo that already has seeflow flows registered. Read-only — never mutates flows; auto-hands off to `/seeflow` only when no matching flow is registered.
+description: This skill should be used before `/seeflow` whenever the user phrases the request as inspection rather than creation — "show me", "show the", "how does X work", "what does X do", "diagram our system", "explain the flow", "where does X live", "what handles Y", "what depends on Z", or names a flow by slug/title without an explicit "create / scaffold / generate / add" verb. Also use when onboarding to a repo that already has seeflow flows registered. Read-only — never mutates flows; auto-hands off to `/seeflow` only when no matching flow is registered.
 ---
 
 # seeflow-lookup
 
-Look up registered SeeFlow flows and consult them as architectural ground truth. Read-only counterpart to `/seeflow` — that skill *creates and edits* flows; this one *queries* them when an agent is writing code or making decisions.
+Look up registered SeeFlow flows and consult them as architectural ground truth. Read-only counterpart to `/seeflow` — that skill *creates and edits* flows; this one *queries* them while writing code or making decisions.
 
 ## Routing gate — run before deciding
 
@@ -20,7 +20,7 @@ Inspection phrasing **always** lands here first, even when no flow is yet regist
 
 ## Discover the CLI
 
-Run `seeflow help` to list the available subcommands and their flags. If `seeflow` is not on `PATH`, fall back to `npx -y @tuongaz/seeflow@latest help`. **The CLI's help output is the source of truth for what you can call** — do not assume command names or flags from memory.
+Run `seeflow help` to list the available subcommands and their flags. If `seeflow` is not on `PATH`, fall back to `npx -y @tuongaz/seeflow@latest help`. **The CLI's help output is the source of truth for the callable surface** — do not assume command names or flags from memory.
 
 Cache the resolved binary (`seeflow` vs `npx -y @tuongaz/seeflow@latest`) for the rest of the conversation and reuse it for every subsequent call.
 
@@ -41,18 +41,18 @@ Before any deeper lookup, list the registered flows (use the catalog subcommand 
 
 For node / connector / action field shapes, run `seeflow schema` (then `seeflow schema node`, `seeflow schema connector`, `seeflow schema action` as needed). Don't infer field names, enum values, or required-lists from memory — re-fetch them. The schema covers what each variant looks like on disk and which values are legal.
 
-What the schema can't tell you — runtime behavior the CLI assumes you know:
+Runtime behavior the CLI assumes — not encoded in the schema:
 
 - **Decorative node types** — `sticky`, `text`, `icon`, `image`, `html` with empty content, and geometric shapes (`ellipse`, `database`, `queue`, `cloud`, `server`, `user`) carrying no capabilities — are visual only. **Skip them for architectural reasoning.** Treat any node as architectural when its `data.playAction` or `data.statusAction` is set, regardless of `type`.
 - **Semantics live on the nodes, not the connectors.** Read the source / target node's `data.name` (and `codePointers` from the brief) to understand what an edge means.
 - **`file://` content fields** (e.g. `detail`, `html`) are auto-externalised on write. Whether they come back inlined depends on the subcommand — check `seeflow help` for the variant that returns full content.
-- **Action `scriptPath` values** are relative under `nodes/<nodeId>/`. Read those files directly with `Read` if you need the script source.
+- **Action `scriptPath` values** are relative under `nodes/<nodeId>/`. Read those files directly with `Read` to inspect the script source.
 
 Deeper reference: `../seeflow/references/schema.md` in this plugin (conventions only — no field shapes).
 
 ## Usage pattern (cost ladder)
 
-Start with the cheapest lookup the CLI offers (a summary across flows), pick a flow, then ask for that flow's structure, and only fetch individual nodes when you need their content. Reserve any "full inline" variant for small flows or when you genuinely need every detail. Reading `play.ts` / `status.ts` directly is reserved for cases where the script source itself drives the decision.
+Start with the cheapest lookup the CLI offers (a summary across flows), pick a flow, then ask for that flow's structure, and only fetch individual nodes when their content is needed. Reserve any "full inline" variant for small flows or when every detail is genuinely required. Reading `play.ts` / `status.ts` directly is reserved for cases where the script source itself drives the decision.
 
 ## Common mistakes
 

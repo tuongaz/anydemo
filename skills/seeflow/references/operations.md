@@ -24,7 +24,7 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
 | P0 | `schema {flow,node,connector,action,style}` | Fetch the live contract once; cache for the rest of the run. Phase 2/4 reuse the cache instead of re-fetching. The `component` variant's catalog enum feeds `$componentCatalog` for the planner |
 | P3 | `projects:create` | Scaffold + register a new project: writes the empty envelope at `<project>/flow.json` (project root) from the planner-supplied `name` (and `description`) and registers it in one shot — returns `{ id, slug }`. Required before the canvas can open at `$STUDIO_URL/d/<slug>` |
-| P3 | `register` | Attach an existing envelope when the user picks "Open the existing flow" at the existing-flow gate (SKILL.md §"Existing-flow gate"). Never used as an automatic fallback from `projects:create alreadyExists` — the gate always asks the user first |
+| P3 | `register` | Attach an existing envelope when the user picks "Open the existing flow" at the existing-flow gate (`phases/p3-scaffold.md` §"Existing-flow gate"). Never used as an automatic fallback from `projects:create alreadyExists` — the gate always asks the user first |
 | P3 | `ids` | Mint canonical `node-<10>` / `conn-<10>` ids |
 | P3 | `flow:add-bulk` | Atomic seed of skeleton nodes + connectors in one transactional write (rollback covers both arrays) |
 | P3 | `nodes:patch` (detail-backfill) | Unconditional sweep after `flow:add-bulk` — fills `data.detail` for any non-decorative node whose planner output left it missing or empty |
@@ -52,4 +52,4 @@ Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
 
 ## General orchestration rule — parallelise sub-agents
 
-Whenever two or more tasks are independent, dispatch them as concurrent sub-agents in a single message. Serial execution is the exception, not the default. The canonical wrong/right block lives in `SKILL.md` Phase 1; later phases reference it.
+Whenever two or more tasks are independent, dispatch them as concurrent sub-agents in a single message. Serial execution is the exception, not the default. The canonical wrong/right block lives in `SKILL.md` §"Parallelism is the default"; later phases reference it.
