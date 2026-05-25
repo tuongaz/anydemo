@@ -134,71 +134,110 @@ patch body.
 
 The schema is **flat**: `type` is the visual shape (one of 12 tags),
 and `playAction` / `statusAction` / `stateSource` are top-level data
-fields valid on every type. There is no separate "play node" or "state
-node" tag — those are now `type:'rectangle'` with a `playAction` /
-`statusAction` capability on `data`.
+fields valid on every type. There is no separate "play node" or
+"state node" tag — capabilities live on `data` regardless of shape,
+and the canvas renders chrome on `rectangle` (inline header) plus the
+illustrative shapes (`database`, `server`, `user`, `queue`, `cloud`)
+via a bottom skirt.
 
 ### Capabilities — top-level data fields on every type
 
 | Capability | What it does | Renders chrome on |
 |---|---|---|
-| `data.playAction` | Adds a clickable Play button that runs the configured action. | `type:'rectangle'` only in v1 |
-| `data.statusAction` | Adds a status pill driven by a long-running probe script. | `type:'rectangle'` only in v1 |
+| `data.playAction` | Adds a clickable Play button that runs the configured action. | `rectangle` (inline header) + illustrative shapes (`database`, `server`, `user`, `queue`, `cloud`) via a bottom skirt |
+| `data.statusAction` | Adds a status pill driven by a long-running probe script. | Same surfaces as `playAction` |
 | `data.stateSource` | Informational metadata about where state comes from. Pair with `statusAction` when relevant — optional everywhere. | (no chrome) |
 
-**Renderer phasing — capability chrome is rectangle-only in v1.** Every
-type accepts capabilities at the schema + MCP layer (they round-trip
-through `seeflow_patch_node` and `seeflow_get_node` regardless of
-type), but the canvas only draws play buttons / status pills on
-`type:'rectangle'`. A `database` carrying a `playAction` is legal —
-the action just won't have a button. **If you want a button or status
-pill to appear, use `type:'rectangle'`.** The non-rectangle chrome
-design is a downstream exercise.
+**Capability chrome surfaces on the matching SEMANTIC shape — pick the
+shape, don't fall back to `rectangle`.** The renderer draws Play
+buttons / status badges in two places:
+
+- **`rectangle`** — chrome lives inside the header strip (Play button
+  next to the name, status pill on the right). Use for named
+  services, HTTP endpoints, workers — anything without a better
+  matching shape.
+- **Illustrative shapes** (`database`, `server`, `user`, `queue`,
+  `cloud`) — chrome lives in a bottom **skirt** below the SVG icon
+  (see `packages/canvas/src/nodes/geometric-node.tsx`'s
+  `showSkirt = isIllustrativeShape(shape) && (hasPlayCapability || hasStatusReport)`).
+  Use these whenever the visual matches the entity — a Postgres
+  database is `type:'database'`, NOT `type:'rectangle'` with
+  `data.icon:'database'`.
+
+Decorative shapes (`ellipse`, `sticky`, `text`, `icon`, `image`) draw
+NO capability chrome. Putting a `playAction` on them is legal at the
+schema layer but the user can't click it — don't.
+
+**Shape-selection rule:** the shape carries meaning. If a node IS a
+database, queue, file/object store, event bus, external SaaS, server,
+or human actor, use the matching illustrative shape; only fall back to
+`rectangle` when no illustrative shape fits (HTTP endpoints, workers,
+schedulers, services, generic processes).
 
 ### `rectangle`
 
 The named card with a header (name + optional icon), description, body,
-and capability chrome. **Use for every important node** — HTTP
-endpoints, services, workers, queues / DBs / topics that need a status
-pill, anything the audience triggers or watches. This is the workhorse
-type.
+and capability chrome. Use for important nodes that **don't have a
+matching illustrative shape** — HTTP endpoints, microservices, workers,
+schedulers, generic processes. When the entity IS a database / queue /
+external SaaS / server / human, prefer the matching illustrative shape
+below.
 
-**RULE — detail on important nodes:** Every `rectangle` that carries
-`playAction` or `statusAction` MUST include a `detail` field. The
-content renders as **markdown** — use it to explain what the node does,
-what it emits, why it matters, sample payloads, links to source files,
-or anything an audience member would ask. Decorative shapes (sticky,
-text, icon) are exempt.
+**RULE — detail on important nodes:** Every node that carries
+`playAction` or `statusAction` MUST include a `detail` field
+(regardless of shape — `rectangle` or illustrative). The content
+renders as **markdown** — use it to explain what the node does, what
+it emits, why it matters, sample payloads, links to source files, or
+anything an audience member would ask. Decorative shapes (sticky, text,
+icon) are exempt.
 
-**RULE — icon on important nodes:** Every `rectangle` that carries
+**RULE — icon on rectangle nodes:** Every `rectangle` that carries
 `playAction` or `statusAction` SHOULD include an icon — a kebab-case
-Lucide icon name (`server`, `database`, `radio-tower`, `cog`,
-`list-ordered`) that visually echoes the node's role. Renders left of
-the name. Decorative; not a status indicator. Run `$SEEFLOW schema
-node` for the field shape.
+Lucide icon name (`server`, `radio-tower`, `cog`, `clock`,
+`terminal`) that visually echoes the node's role. Renders left of the
+name. Decorative; not a status indicator. Illustrative shapes
+(`database`, `server`, `user`, `queue`, `cloud`) already carry the
+matching SVG glyph — set `data.icon` only when you want an additional
+Lucide accent. Run `$SEEFLOW schema node` for the field shape.
 
-### `ellipse`, `sticky`, `text`, `database`, `server`, `user`, `queue`, `cloud`
+### `database`, `server`, `user`, `queue`, `cloud` (illustrative shapes)
 
-The eight other geometric shapes. Same data schema as `rectangle`
-(every capability field accepted, every visual base field accepted) —
-the renderer just draws the matching shape. In v1 they draw **no
-capability chrome**, so a `statusAction` on a `database` is persisted
-but the status pill won't appear. Pick these when the visual shape
-carries the meaning and you don't need the button / pill — purely
-decorative resources, illustrative annotations, sticky-note callouts.
+The five illustrative shapes. Same data schema as `rectangle` — they
+ACCEPT every capability field, and the canvas now draws a Play
+button / status badge **skirt** under the SVG glyph when `playAction`
+or `statusAction` is set. Prefer them over `rectangle + data.icon`
+whenever the entity matches the shape's semantics:
 
-A few placement rules that don't live in the schema:
+| Entity | Shape | Why |
+|---|---|---|
+| Postgres / MySQL / Mongo / Spanner / DynamoDB | `database` | The cylinder IS the universal DB glyph. |
+| SQS / Kafka topic / Pub/Sub topic / RabbitMQ / SNS | `queue` | Stacked-channel glyph reads as a queue/topic instantly. |
+| GCS / S3 / Cloudflare R2 / external SaaS (Stripe, SendGrid, OpenAI) | `cloud` | Conveys "external storage / service we don't own". |
+| Service / VM / host the audience needs to see as a server | `server` | Rack glyph reads as infrastructure. |
+| Actual human (UX click-through, support agent, approver) | `user` | Person glyph; chrome works the same way. |
 
-- **`user` shape** belongs only when the human action is itself part of
-  the demo (UX click-through, support-agent workflow). Never as a
-  generic "start" for backend / pipeline / worker / cron / webhook
-  flows.
-- **`database`, `queue`, `cloud`, `server`** are decorative resource
-  shapes. If the audience needs to see live state, switch the node to
-  `rectangle` (so the status pill renders) and set `data.icon` to the
-  matching Lucide name (`database`, `list-ordered`, `cloud`, `server`).
-- **`sticky`, `text`** are inline labels and notes. They never carry
-  capabilities in practice.
+Placement rules that don't live in the schema:
+
+- **`user` shape** belongs only when the human action is itself part
+  of the demo (UX click-through, support-agent workflow, consent
+  capture). Never as a generic "start" for backend / pipeline /
+  worker / cron / webhook flows. Web UI / Mobile App / SDK consumers
+  are *software* — model them as `rectangle` with `data.icon:
+  "monitor"` / `"smartphone"` / `"plug"`, or omit them entirely.
+- **`database` carrying `statusAction`** — the status badge now
+  renders in the skirt. This used to require switching to `rectangle`
+  with `data.icon: "database"`; that workaround is obsolete.
+- **`queue` carrying `playAction`** — legitimate when the Play
+  simulates a producer pushing a message onto the queue (see Rule 3
+  in `seeflow-play-designer.md`'s Play-button placement rules).
+
+### `ellipse`, `sticky`, `text`
+
+Decorative geometric shapes with no capability chrome. `sticky` and
+`text` are inline labels / callouts. `ellipse` is a soft alternative
+shape for non-resource decoration. None of them carry capabilities in
+practice — putting `playAction` / `statusAction` on them is legal but
+invisible.
 
 ### `icon`
 
@@ -283,12 +322,13 @@ data fields.
   }
 }
 
-// 2. non-rectangle geometric — database visual, capability persisted but no chrome in v1
+// 2. illustrative shape carrying a statusAction — pill renders in the skirt under the cylinder glyph
 {
   "id": "node-Gh56ij78Kl",
   "type": "database",
   "data": {
     "name": "Order Store",
+    "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`.",
     "stateSource": { "kind": "event" },
     "statusAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/status.ts", "maxLifetimeMs": 600000 }
   }

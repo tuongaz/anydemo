@@ -97,10 +97,13 @@ done
 
 ## Node modelling
 
-- One node (`type:'rectangle'`) per bucket, not per object or prefix. Set
-  `data.icon` to a Lucide name like `database` or `archive`.
+- One node (`type:'cloud'`) per bucket, not per object or prefix. The
+  cloud glyph conveys "external object store"; capability chrome
+  renders in the skirt. (Use `type:'database'` instead if the project
+  treats GCS as its primary persistence layer rather than as a remote
+  bucket.)
 - Duplicate the bucket node next to each consumer for readability (same
-  `type` + `data.icon` + `data.name`, unique `id`).
+  `type` + `data.name`, unique `id`).
 
 ## Gotchas
 

@@ -93,10 +93,12 @@ done
 
 ## Node modelling
 
-- One `type:'rectangle'` per topic, not per partition or producer.
-  `data.icon` Lucide (e.g. `Radio`); partition count in `data.note`.
+- One `type:'queue'` per topic, not per partition or producer. The
+  `queue` shape's stacked-channel glyph reads as a Kafka topic;
+  capability chrome renders in the skirt. Surface partition count in
+  `data.detail` (the schema rejects `data.note`).
 - Duplicate the topic node next to each consumer group (same `type` +
-  `data.icon` + `data.name`, unique `id`).
+  `data.name`, unique `id`).
 
 ## Gotchas
 

@@ -125,18 +125,29 @@ The schema is **flat**: `type` is the visual shape, and `playAction` /
 `statusAction` / `stateSource` are top-level data fields valid on every
 type. There is no separate "play node" or "state node" tag.
 
-- **`rectangle`** — the named card with chrome (header, description,
-  capability buttons / pills). **Use for every important node** —
-  HTTP endpoints, services, workers, observable DBs / queues / topics,
-  anything the audience will trigger or watch. Capability chrome is
-  rectangle-only in v1: if you want a play button or status pill to
-  render, the node MUST be a `rectangle`.
-- **`database`, `queue`, `cloud`, `server`** — resource shapes. Use
-  ONLY when the audience does not need to see live state on the
-  resource (no status pill, no play button). If the audience needs
-  monitoring, switch to `rectangle` and set `data.icon` to the
-  matching Lucide name (`database`, `list-ordered`, `cloud`,
-  `server`).
+**Pick the SEMANTIC shape that matches the entity.** The canvas now
+draws Play buttons + status badges on illustrative shapes (`database`,
+`server`, `user`, `queue`, `cloud`) via a bottom skirt — so a
+`database` carrying a `statusAction` shows its pill. Do NOT fall back
+to `rectangle + data.icon: "database"` for an actual database.
+
+| Entity | Shape | Notes |
+|---|---|---|
+| Postgres / MySQL / Mongo / Spanner / DynamoDB / Redis store | `database` | Cylinder glyph; capability chrome supported via skirt. |
+| SQS / Kafka topic / Pub/Sub topic / RabbitMQ / NATS / SNS / in-process bus | `queue` | Stacked-channel glyph; capability chrome supported. |
+| GCS / S3 / R2 / external SaaS (Stripe, SendGrid, OpenAI, Slack) | `cloud` | Conveys "external service we don't own"; capability chrome supported. |
+| Server / VM / host the audience needs to see as infrastructure | `server` | Rack glyph; capability chrome supported. |
+| Actual human reviewer / approver / support agent | `user` | Person glyph; capability chrome supported. |
+| HTTP / gRPC endpoint, microservice, worker, scheduler, cron job, generic process | `rectangle` | No matching illustrative shape — `rectangle` is the workhorse for named services / endpoints / processes. Set `data.icon` to a Lucide name (`server`, `radio-tower`, `cog`, `clock`, `terminal`, `workflow`). |
+
+- **`rectangle`** — the named card with inline header chrome (Play
+  button + status pill). Use for nodes without a matching
+  illustrative shape — HTTP endpoints, microservices, workers,
+  schedulers, generic processes.
+- **Illustrative shapes** (`database`, `queue`, `cloud`, `server`,
+  `user`) — same capability schema as `rectangle`; the canvas renders
+  Play button + status badge in a bottom **skirt**. Prefer these
+  whenever the entity matches.
 - **`user`** — human-actor shape. Allowed ONLY when the human action is
   itself part of the demo (UX click-through, support-agent workflow,
   consent capture). Backend / system / data-pipeline / worker / cron /
@@ -181,28 +192,44 @@ type. There is no separate "play node" or "state node" tag.
 - **`icon`, `image`** — do NOT use at this phase. The Phase 4
   designers and the canvas author them when needed.
 
-**Trigger nodes are rectangles.** The audience clicks the play button;
-the button only renders on `type:'rectangle'`. So every node that
-should host a Play action — including the planner's designated initial
-trigger — is `type:'rectangle'` with `data.playAction` set.
+**Trigger nodes use the matching SEMANTIC shape, not always
+`rectangle`.** The Play button renders on `rectangle` (inline header)
+and on every illustrative shape (`database`, `queue`, `cloud`,
+`server`, `user`) via the skirt. So the planner's designated initial
+trigger picks the shape that matches the entity:
 
-**Observable nodes are rectangles too** when you want a status pill —
-the pill is rectangle-only in v1. A `database` carrying a
-`statusAction` is legal but the pill won't appear; for the audience to
-see live state, use `rectangle` + `data.icon: "database"`.
+- HTTP endpoint, worker, service, scheduler → `rectangle` with
+  `data.playAction` placeholder.
+- Synthetic file-drop / queue-publish / webhook-fire trigger → the
+  matching illustrative shape (`cloud` for an inbound webhook source,
+  `queue` for a message publisher, `database` for a seed-row Play)
+  with `data.playAction` placeholder. The play-designer fills in the
+  script body in Phase 4.
+
+**Observable resources keep their illustrative shape.** A Postgres
+table backing a service is `type:'database'` with `statusAction` —
+the status badge renders in the skirt under the cylinder. Do NOT
+rewrite it to `rectangle + data.icon: "database"` — that workaround
+predates the skirt.
 
 ### Picking node `type` by input class
 
 `contextBrief.inputClass` switches the default ladder:
 
-- **`code`** — runtime-system flow. Default to `rectangle` for every
-  important / observable node; pick `database` / `queue` / `cloud` /
-  `server` / `user` only when the audience does not need capability
-  chrome. `component` and `html` are off the table unless the user
-  explicitly asked for an information panel embedded in the diagram.
+- **`code`** — runtime-system flow. Use the SEMANTIC shape ladder
+  from §"Picking node `type`" above: `database` for stores, `queue`
+  for buses/topics/queues, `cloud` for external SaaS / object stores,
+  `server` for infrastructure boxes, `user` for actual humans,
+  `rectangle` for everything else (HTTP endpoints, microservices,
+  workers, schedulers). All of these accept capability chrome —
+  status pills and Play buttons render on the illustrative skirt
+  whenever the entity matches. `component` and `html` are off the
+  table unless the user explicitly asked for an information panel
+  embedded in the diagram.
 - **`conversation`** — same defaults as `code`. The brief came from
   the in-session discussion rather than a fresh code-analyzer run, but
-  the subject is still a running system; rectangle workhorse applies.
+  the subject is still a running system; the semantic-shape ladder
+  applies.
 - **`document`** — information-display flow. The canvas IS the
   document; nodes render structured content, not runtime topology.
   Default ladder:
@@ -409,11 +436,15 @@ exceptions, collapse it.
    collect every resource that belongs on the canvas using TWO passes:
 
    **Pass A — named resources:** scan `rootEntities` and `codePointers`
-   for anything that is a database, queue, event bus, cache, file store,
-   or external SaaS. Add each as a candidate `rectangle` node with a
-   matching `data.icon` (`database`, `list-ordered`, `radio-tower`,
-   `cloud`, `server`) and a `data.stateSource.kind` of `event` (or
-   `request` for sync-only resources).
+   for anything that is a database, queue, event bus, cache, file
+   store, or external SaaS. Add each as a candidate node using the
+   SEMANTIC shape that matches the resource — `type:'database'` for
+   stores and caches, `type:'queue'` for queues / topics / event
+   buses, `type:'cloud'` for object stores (S3/GCS) and external SaaS
+   (Stripe/SendGrid/OpenAI). Set `data.stateSource.kind` to `event`
+   (or `request` for sync-only resources). Illustrative shapes carry
+   their own glyph — set `data.icon` only when you want an extra
+   Lucide accent.
 
    **Pass B — inferred resources:** for each service node, ask "where
    does its state land?" If a service saves records → there is a store.
@@ -432,8 +463,12 @@ exceptions, collapse it.
    `data.playAction` placeholder — the entity the audience clicks first
    to start the flow. The play-designer may later inject more triggers
    via `newTriggerNodes`, but you produce exactly one initial trigger.
-   The trigger node MUST be `type:'rectangle'` (the play button only
-   renders on rectangles in v1).
+   The trigger node uses whatever shape matches the entity — Play
+   buttons render on `rectangle` (inline) and on every illustrative
+   shape (`database`, `queue`, `cloud`, `server`, `user`) via the
+   skirt. An HTTP endpoint is `rectangle`; a "publish fake event"
+   synthetic trigger is `queue`; a "drop fixture file" synthetic
+   trigger is `cloud`.
    - Pick the trigger based on `userIntent`: synchronous-API demos
      trigger on the endpoint; pipeline / event demos trigger on the
      fixture-producer or first publisher.
@@ -531,12 +566,12 @@ editTarget: null
   "name": "Order Pipeline",
   "slug": "order-pipeline",
   "nodes": [
-    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server",         "stateSource": { "kind": "request" }, "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
-    { "id": "event-bus",        "type": "rectangle", "data": { "name": "Event Bus",        "icon": "radio-tower",    "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
-    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
-    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",            "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
-    { "id": "shipments-queue",  "type": "rectangle", "data": { "name": "Shipments Queue",  "icon": "list-ordered",   "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
-    { "id": "order-store",      "type": "rectangle", "data": { "name": "Order Store",      "icon": "database",       "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
+    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server", "stateSource": { "kind": "request" }, "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
+    { "id": "event-bus",        "type": "queue",     "data": { "name": "Event Bus",        "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
+    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
+    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
+    { "id": "shipments-queue",  "type": "queue",     "data": { "name": "Shipments Queue",  "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
+    { "id": "order-store",      "type": "database",  "data": { "name": "Order Store",      "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
   ],
   "connectors": [
     { "id": "c-order-server-event-bus",          "source": "order-server",     "target": "event-bus",        "label": "order.created" },
@@ -595,17 +630,24 @@ connectors to the downstream entities.
   (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
   the contract rejects.
 - Type-picker default depends on `contextBrief.inputClass`:
-  - `code` / `conversation` — default to `rectangle` for important /
-    observable nodes; pick `database` / `queue` / `cloud` / `server` /
-    `user` only when the audience does not need capability chrome.
+  - `code` / `conversation` — pick the SEMANTIC shape that matches
+    the entity: `database` for stores, `queue` for buses / topics /
+    queues, `cloud` for external SaaS / object stores, `server` for
+    infrastructure boxes, `user` for actual humans, `rectangle` for
+    HTTP endpoints / microservices / workers / schedulers. All of
+    these accept capability chrome (Play button + status badge); the
+    canvas renders the skirt on illustrative shapes and the inline
+    header on `rectangle`.
   - `document` — default to `component` (catalog-driven UI) from
     `componentCatalog`; fall back to `html` when the catalog can't
     render the content; `rectangle` only for runtime components the
     document explicitly describes.
 - Exactly one node carries an initial `data.playAction` placeholder
-  (the trigger) for `code` / `conversation` flows, and it is
-  `type:'rectangle'`. `document` flows usually have NO trigger — omit
-  `playAction` entirely rather than forcing a placeholder.
+  (the trigger) for `code` / `conversation` flows, in whatever shape
+  matches the entity (`rectangle` for HTTP endpoints; illustrative
+  shape for synthetic file-drop / queue-publish / webhook triggers).
+  `document` flows usually have NO trigger — omit `playAction`
+  entirely rather than forcing a placeholder.
 - Every connector references node ids that exist in `nodes[]`.
 - Every database, queue, event bus, cache, file store, and external SaaS
   mentioned in the brief MUST have a node. Omitting a resource node is

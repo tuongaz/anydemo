@@ -91,10 +91,11 @@ done
 
 ## Node modelling
 
-- One node (`type:'rectangle'`) per topic, not per publisher or subscriber.
-  Use a Lucide `data.icon` that matches a queue/topic (e.g. `radio-tower`).
+- One node (`type:'queue'`) per topic, not per publisher or subscriber.
+  The `queue` shape's stacked-channel glyph reads as a topic; capability
+  chrome (Play / status badge) renders in the skirt.
 - Duplicate the topic node next to each subscriber for readability
-  (same `type` + `data.icon` + `data.name`, unique `id`).
+  (same `type` + `data.name`, unique `id`).
 
 ## Gotchas
 
