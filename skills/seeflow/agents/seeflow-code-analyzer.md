@@ -92,6 +92,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
 
 ```json
 {
+  "inputClass": "code",
   "userIntent": "Short paraphrase of what the user wants shown.",
   "audienceFraming": "Who the audience is and what they need to walk away knowing.",
   "scope": {
@@ -110,8 +111,21 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
 }
 ```
 
+When the orchestrator skips this agent (Phase 0's input-source gate
+decided `inputClass === "conversation"` or `inputClass === "document"`),
+it builds the same envelope inline from the conversation / document
+and sets `inputClass` accordingly — downstream agents see the same
+shape regardless of who produced it.
+
 Field-by-field:
 
+- **`inputClass`** *(string)* — one of `"code" | "conversation" | "document"`,
+  verbatim. Set `"code"` when launched by the orchestrator (the only
+  class that triggers this agent — see `SKILL.md` §"Input-source
+  gate"). The other two values appear only on briefs the orchestrator
+  built inline without launching this agent; downstream agents branch
+  on it (node-planner picks `component` over `rectangle` for
+  `"document"` briefs).
 - **`userIntent`** *(string, 1 sentence)* — commit to a concrete framing.
   No hedging.
 - **`audienceFraming`** *(string, 1–3 sentences)* — who this demo is for
@@ -177,6 +191,7 @@ learnContext:  null
 
 ```json
 {
+  "inputClass": "code",
   "userIntent": "Visualise the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
   "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see (a) the HTTP entry points, (b) the event bus + queue fan-out, and (c) the workers that drive state transitions. Audience should leave knowing where each side-effect happens.",
   "scope": {

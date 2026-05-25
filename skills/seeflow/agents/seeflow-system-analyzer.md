@@ -21,7 +21,15 @@ to write faithful scripts without re-reading the codebase.
 ## Inputs
 
 1. **`projectRoot`** — absolute path to the user's project.
-2. **`learnContext`** *(optional)* — raw text of the host's shared
+2. **`inputClass`** *(string)* — one of `"code" | "conversation" |
+   "document"`, forwarded from Phase 0's input-source gate. **You are
+   only launched for `"code"`.** When the orchestrator decides
+   `"conversation"` or `"document"`, this agent is skipped entirely
+   (the orchestrator builds the brief inline). If a launching prompt
+   ever arrives with `inputClass !== "code"`, return immediately with
+   `{ "runtimeProfile": null, "learnUpdates": {} }` — there is no
+   runtime to profile and the brief came from elsewhere.
+3. **`learnContext`** *(optional)* — raw text of the host's shared
    `<host>/.seeflow/LEARN.md` if it exists. Past runs left this as
    a crib sheet: runtime profile, dev setup, integration tests,
    fixtures, data-entry paths, gotchas, tech adaptations.
@@ -31,7 +39,7 @@ to write faithful scripts without re-reading the codebase.
    contradicting evidence shows up in the code. Re-discovering known
    facts is exactly what LEARN.md exists to prevent — pass them
    through unchanged on the output so the merge doesn't lose them.
-3. **`techStack`** *(optional)* — a flat array of `techId`s the
+4. **`techStack`** *(optional)* — a flat array of `techId`s the
    code-analyzer is detecting in parallel. The orchestrator forwards
    it when ready; if it's not yet known when you start, do a quick
    detection pass yourself using `references/tech/README.md`. Either

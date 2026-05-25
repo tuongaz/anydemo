@@ -35,10 +35,21 @@ The launching prompt will give you:
 
 1. **`contextBrief`** — the merged JSON object returned by
    `seeflow-code-analyzer` (always present) and, when ready,
-   `seeflow-system-analyzer`. Always includes `userIntent`,
+   `seeflow-system-analyzer`. Always includes `inputClass` (one of
+   `"code" | "conversation" | "document"`), `userIntent`,
    `audienceFraming`, `scope.{rootEntities,outOfScope}`, `codePointers[]`,
    `knownEndpoints[]`, `techStack`, `existingDemo`. May also include
-   `runtimeProfile` once the system-analyzer has returned.
+   `runtimeProfile` once the system-analyzer has returned. **Branch on
+   `inputClass` when picking node types** — see §"Picking node `type`
+   by input class" below.
+1a. **`componentCatalog`** — the legal names from the `component`
+    variant's `spec.elements[].type` enum (extracted by the
+    orchestrator from the Phase 0 `$SEEFLOW schema node` cache).
+    Required input when you emit any `type:'component'` node — the
+    studio rejects unknown names with `badSchema`. If the catalog is
+    absent from your launching prompt, do not emit `type:'component'`
+    — fall back to `html` for information-display content and surface
+    the gap in `rationales`.
 2. **(optional) `editTarget`** — when `contextBrief.existingDemo.diffTarget`
    is `true`, the orchestrator also passes the parsed contents of the
    existing `flow.json`. Use it to keep stable node ids/slugs for entities
@@ -147,8 +158,23 @@ type. There is no separate "play node" or "state node" tag.
   | Support agent triaging tickets in an internal tool | `type:'user'` is correct |
 - **`ellipse`, `sticky`, `text`** — decorative geometric shapes for
   callouts, labels, and notes. No capability chrome in v1.
-- **`icon`, `html`, `image`** — do NOT use at this phase. The
-  Phase 4 designers and the canvas author them when needed.
+- **`component`** — catalog-driven reactive UI element. **The default
+  for `inputClass === "document"` flows** (gap analyses, comparisons,
+  status reports, checklists, architectural narratives) when a
+  catalog entry covers the content. `data.spec.elements[].type` must
+  match a name from the `componentCatalog` input — the studio
+  rejects unknown names with `badSchema`. Run `$SEEFLOW schema node`
+  via the orchestrator's cache for the full `component` variant
+  shape; the catalog enum lives there too.
+- **`html`** — escape hatch for content that no `component` catalog
+  entry covers (one-off layouts, custom legends, prose that needs
+  Tailwind utility classes the catalog doesn't expose). Reach for
+  `html` only after confirming the catalog can't render the content.
+  `data.html` is raw markup; the studio sanitises (`<script>`,
+  `<style>`, `<iframe>`, `on*=`, `javascript:` URLs all stripped) and
+  externalises to `nodes/<id>/view.html`.
+- **`icon`, `image`** — do NOT use at this phase. The Phase 4
+  designers and the canvas author them when needed.
 
 **Trigger nodes are rectangles.** The audience clicks the play button;
 the button only renders on `type:'rectangle'`. So every node that
@@ -160,6 +186,37 @@ the pill is rectangle-only in v1. A `database` carrying a
 `statusAction` is legal but the pill won't appear; for the audience to
 see live state, use `rectangle` + `data.icon: "database"`.
 
+### Picking node `type` by input class
+
+`contextBrief.inputClass` switches the default ladder:
+
+- **`code`** — runtime-system flow. Default to `rectangle` for every
+  important / observable node; pick `database` / `queue` / `cloud` /
+  `server` / `user` only when the audience does not need capability
+  chrome. `component` and `html` are off the table unless the user
+  explicitly asked for an information panel embedded in the diagram.
+- **`conversation`** — same defaults as `code`. The brief came from
+  the in-session discussion rather than a fresh code-analyzer run, but
+  the subject is still a running system; rectangle workhorse applies.
+- **`document`** — information-display flow. The canvas IS the
+  document; nodes render structured content, not runtime topology.
+  Default ladder:
+  1. **`component`** first — pick the catalog entry that best
+     matches each section of the document (status card, comparison
+     table, checklist, gap row, KPI tile). The legal `spec.elements[].type`
+     values come from `componentCatalog` in the launching prompt.
+  2. **`html`** when the catalog genuinely can't render the content
+     (custom layout, prose that needs Tailwind utilities the catalog
+     doesn't expose). Justify the fall-back in `rationales`.
+  3. **`rectangle`** only when the document explicitly describes a
+     runtime component the audience would trigger or observe — most
+     `document` flows have zero rectangles.
+  Trigger placeholder: a `document` flow usually has no Play action.
+  If `userIntent` doesn't name a trigger, **omit `playAction`
+  entirely** rather than forcing a placeholder on an arbitrary node.
+  The Phase 3 dynamic gate defaults to static in this case and
+  Phase 4 is skipped.
+
 ### State source
 
 Set state source to `request` for nodes that produce state from
@@ -170,13 +227,25 @@ in `$SEEFLOW schema node`.
 
 ### Semantic requirements (not schema)
 
-- **`data.detail` is required on every `rectangle` that carries
-  `playAction` or `statusAction`** — 1–3 short markdown paragraphs from
-  the audience's perspective: what this node does, what it emits or
-  stores, why it matters, source file(s) when known. The studio
-  auto-externalises to `nodes/<id>/detail.md`; pass the raw markdown,
-  never a `file://…` link. Omission renders a blank card. Decorative
-  shapes (sticky, text, icon) are exempt.
+- **`data.detail` is required on every non-decorative node** — every
+  `rectangle`, `database`, `queue`, `cloud`, `server`, and `user`
+  shape ships with 1–3 short markdown paragraphs from the audience's
+  perspective: what this node does, what it emits or stores, why it
+  matters, source file(s) when known. The studio auto-externalises to
+  `nodes/<id>/detail.md`; pass the raw markdown, never a `file://…`
+  link. Omission renders a blank card on the canvas and a blank
+  sidebar when the user clicks the node. **The rule applies whether
+  or not the node carries `playAction` / `statusAction`** — static
+  flows (no Phase 4–5) used to ship with blank detail because the old
+  rule only required it on capability-bearing nodes; the orchestrator
+  now backfills missing detail in Phase 3 as a safety net, but the
+  planner is the right place to supply it.
+
+  Decorative shapes (`sticky`, `text`, `icon`, `ellipse`, `image`)
+  are exempt — they carry their content in other fields. `component`
+  and `html` nodes carry content in `data.spec` / `data.html`
+  respectively; emit `detail` on them only when the sidebar prose
+  adds something the rendered content doesn't.
 - **`data.description` ≤ 15 words** — tight verb phrase
   (`"Accepts cart, creates order"`); longer text overflows the card.
 - **`data.name`** uses the spelling the audience would recognise
@@ -520,11 +589,23 @@ connectors to the downstream entities.
 - Conform to the node + connector contracts in your launching prompt
   (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
   the contract rejects.
-- Exactly one node carries an initial `data.playAction` placeholder (the trigger), and it is `type:'rectangle'`. Every other node is shaped by its visual role — default to `rectangle` for important / observable nodes; pick `database` / `queue` / `cloud` / `server` / `user` only when the audience does not need capability chrome on it.
+- Type-picker default depends on `contextBrief.inputClass`:
+  - `code` / `conversation` — default to `rectangle` for important /
+    observable nodes; pick `database` / `queue` / `cloud` / `server` /
+    `user` only when the audience does not need capability chrome.
+  - `document` — default to `component` (catalog-driven UI) from
+    `componentCatalog`; fall back to `html` when the catalog can't
+    render the content; `rectangle` only for runtime components the
+    document explicitly describes.
+- Exactly one node carries an initial `data.playAction` placeholder
+  (the trigger) for `code` / `conversation` flows, and it is
+  `type:'rectangle'`. `document` flows usually have NO trigger — omit
+  `playAction` entirely rather than forcing a placeholder.
 - Every connector references node ids that exist in `nodes[]`.
 - Every database, queue, event bus, cache, file store, and external SaaS
   mentioned in the brief MUST have a node. Omitting a resource node is
-  always wrong.
+  always wrong. (`document` flows typically have no resources to model —
+  this constraint is mostly inert there.)
 - Cite an exception by number (`Exception 1/2/3/4`) in `rationales[nodeId]`
   whenever you emit multiple nodes for one underlying entity.
 - Mark the trigger node by setting `data.playAction` to a placeholder
@@ -534,6 +615,13 @@ connectors to the downstream entities.
   placeholder with the real action via `nodes:patch`. Don't emit
   `statusAction` — Phase 4 attaches those. Don't emit positions —
   `flows:layout` attaches them.
+- **`data.detail` on every non-decorative node** — every `rectangle`,
+  `database`, `queue`, `cloud`, `server`, `user`. Decorative shapes
+  (`sticky`, `text`, `icon`, `ellipse`, `image`) are exempt; `component`
+  and `html` carry content in `data.spec` / `data.html` and only
+  need `detail` when the sidebar adds something the rendered content
+  doesn't. The orchestrator's Phase 3 detail-backfill is a safety net,
+  not a license to skip.
 - **Emit zero presentation fields.** Borders, colors, sizes, fonts,
   positions, handles all live in `style.json`, written exclusively by
   `flows:layout` and the canvas. The renderer applies sensible defaults

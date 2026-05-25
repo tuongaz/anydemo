@@ -69,14 +69,22 @@ Any intermediate file the orchestrator or a generated Play/Status script needs (
 ## Pipeline
 
 ```
-P0    /health probe ‖ read $learnPath
-P1    code-analyzer ‖ system-analyzer
-P2    node-planner (kicks off when code-analyzer returns;
-                   system-analyzer continues in background)
+P0    /health probe ‖ read $learnPath ‖ schema cache (5×)
+      → schema-type diff (silent log)
+      → input-source gate ($inputClass: code | conversation | document)
+P1    branches on $inputClass:
+        code         → code-analyzer ‖ system-analyzer
+        conversation → orchestrator builds brief inline; system-analyzer
+                       runs only if runtime relevant
+        document     → both analyzers skipped; brief built inline
+P2    node-planner (kicks off when brief ready; receives cached
+                   schema + $componentCatalog + $inputClass)
 P3    projects:create (path + name → empty flow.json registered)
-      → flow:add-bulk (nodes + connectors, atomic) → flows:layout
+      → flow:add-bulk (nodes + connectors, atomic)
+      → detail-backfill (unconditional; missing data.detail → nodes:patch)
+      → flows:layout
       → USER REVIEW + dynamic gate (one combined ask)
-P4    play-designer ‖ status-designer
+P4    play-designer ‖ status-designer (cached schema forwarded)
 P5    write scripts to nodes/<nodeId>/scripts/
       → nodes:patch (per node, with playAction / statusAction)
       → optional newTriggerNodes via flow:add-bulk
@@ -103,8 +111,11 @@ Full text in `references/core-rules.md`:
 - **Touching `style.json`.** The studio owns it via `flows:layout`.
 - **Passing `<slug>/scripts/…` as `scriptPath`.** New anchor is the node folder — emit just `scripts/play.ts`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
-- **Asking "what's your codebase?".** Launch the analyzers — that is their job.
-- **Skipping or simulating Phase 6.** Mandatory; the retry budget handles flakiness.
+- **Asking "what's your codebase?".** Launch the analyzers — that is their job. Exception: `inputClass === "conversation"` or `"document"` from the Phase 0 input-source gate; in those cases the brief comes from the conversation / document, not the codebase.
+- **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"` (no runtime to validate against).
+- **Re-fetching `$SEEFLOW schema *` after Phase 0.** The cache is the source of truth for the run — read from it, don't re-shell.
+- **Defaulting to `rectangle` for a `document` flow.** The default is `component` (catalog-driven UI); `html` only when the catalog can't render it; `rectangle` only for runtime components the document explicitly describes.
+- **Leaving `data.detail` blank on a static flow.** Phase 3 step 4's detail-backfill runs unconditionally precisely so static flows don't ship with blank `nodes/<id>/detail.md`. If you find yourself disabling it "because the planner already provided detail", the backfill is a no-op for those nodes anyway — let it run.
 - **Bypassing the Phase 0 consent check.** Never default to `enabled: true`; always read `~/.seeflow/consent.json` first.
 - **Writing `LEARN.md` inside a flow folder (`<host>/.seeflow/<flow-name>/LEARN.md`).** It is **shared across every flow** in the host repo — always read/write `$learnPath` = `$PWD/.seeflow/LEARN.md`, never anywhere else.
 - **Touching `status` after the initial `pending` write.** The `SessionEnd` hook owns that field — see `feedback.md`.
@@ -135,6 +146,47 @@ Run `$SEEFLOW help` once and confirm every required subcommand is present: `proj
 
 If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), log `env-tool-missing` (`severity: blocker`, `phase: P0`, `summary: $SEEFLOW unresolved — neither local binary nor npx fallback available`) and stop.
 
+### Schema cache — fetch once, reuse everywhere
+
+In a single message, run the five schema calls in parallel and cache the outputs (`$schemaCache.flow`, `$schemaCache.node`, `$schemaCache.connector`, `$schemaCache.action`, `$schemaCache.style`):
+
+```
+$SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema style
+```
+
+Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. If any of the five calls fails, log `env-capability-mismatch` (`severity: blocker`, `phase: P0`, `details: schema <name> unavailable`, `summary: $SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
+
+**Extract the component catalog.** Pull the legal `spec.elements[].type` enum from `$schemaCache.node`'s `component` variant into `$componentCatalog`. Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
+
+### Schema-type surface diff — silent log
+
+Diff the skill-documented node-type list (codified in `references/schema.md` § "Skill-known node types" — 13 entries: `rectangle, ellipse, sticky, text, database, server, user, queue, cloud, icon, html, image, component`) against the actual discriminator values in `$schemaCache.node`:
+
+- `missing = expectedTypes - actualTypes` — install omits a type the skill still references.
+- `extra = actualTypes - expectedTypes` — install exposes a type the skill doesn't document.
+
+If either set is non-empty, append **one** `env-capability-mismatch` entry (`severity: degraded`, `phase: P0`, `details: schema missing <types>; schema extra <types>`, `summary: node-type surface drift between skill docs and installed CLI`). **Do not surface to the user** — this is a maintainer signal, not a runtime problem; the planner will still produce a flow using whatever types the CLI actually accepts. Apply the same diff to the action `kind` enum when convenient (`$schemaCache.action`); reuse the same entry rather than logging twice.
+
+### Input-source gate — pick the brief's origin
+
+Decide `$inputClass` before launching Phase 1. Three values:
+
+| Class | Trigger | Phase 1 behaviour |
+|---|---|---|
+| `code` | Project root has a source tree AND the user's ask is about a running system ("show how X works", "diagram our pipeline", "add a flow for Y"). Default. | Launch code-analyzer + system-analyzer as today. |
+| `conversation` | The current session already carries the brief's substance — ≥3 file references discussed, named entities, a tech stack mentioned — OR the user explicitly opts in ("use what we just discussed", "based on what we've been looking at"). | Skip the code-analyzer; the orchestrator builds the brief inline from the conversation. System-analyzer still runs when the flow touches a runtime; skip it too when the discussion already covered dev setup. |
+| `document` | User's prompt anchors on a document to visualise rather than a system to diagram — gap analysis, comparison, status report, RFC, architectural narrative, checklist, audit — OR the project root has no source tree and the user wants the canvas to render structured information. (Folds in the old "empty-project / design-only" branch.) | Skip both analyzers. The orchestrator builds the brief inline from the prompt + any pasted / referenced document text and sets `inputClass: "document"`. The planner defaults to `component` nodes from `$componentCatalog`, falling back to `html` for content the catalog can't render. |
+
+Heuristic ladder, applied in order:
+
+1. **Explicit user phrase** — pick the matching class without asking. ("Use what we just discussed" → `conversation`; "render this gap analysis" → `document`.)
+2. **No source tree** — default to `document`. The empty-project / design-only branch from the prior skill version is now the no-source-tree case of `document`.
+3. **Document-anchored prompt** — verbs like "render", "show this", "lay out", "visualise" + a noun like "report", "analysis", "comparison", "spec", "checklist" → `document`.
+4. **Rich conversation context** — heuristic counts: ≥3 distinct file paths quoted, named services / DBs / queues, an articulated `techStack` already in-thread → `conversation`.
+5. **Default** — `code`.
+
+When the heuristic is genuinely ambiguous (e.g. source tree present AND a document discussed), ask once via `AskUserQuestion` with three options (`code`, `conversation`, `document`) and a one-line description each. Debounce — log `repeated-ask` if this question fires twice in one session. Log `mode-fallback` (`severity: degraded`, `phase: P0`, `details: input-class-<class>`, `summary: input class resolved to <class>`) for any non-default class.
+
 ### Studio probe + LEARN.md (parallel)
 
 Then in a single message:
@@ -147,7 +199,11 @@ Then in a single message:
 
 ## Phase 1 — discover (parallel)
 
-**Launch both analyzers in parallel — single message, two `Task` calls.** Serial launch roughly doubles wall-clock for zero benefit.
+The phase branches on `$inputClass` (set in Phase 0's input-source gate). Each branch yields a `contextBrief` with `inputClass` populated so downstream agents know how to interpret it.
+
+### `inputClass === "code"` — launch both analyzers in parallel
+
+**Single message, two `Task` calls.** Serial launch roughly doubles wall-clock for zero benefit.
 
 **Wrong:**
 
@@ -165,40 +221,47 @@ message 1: Task(seeflow-code-analyzer, …)
 
 Every later parallel phase (Phase 4 designers, Phase 5 retries spanning both overlay families, Phase 6 per-script fix-up) follows this pattern.
 
-- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `learnContext`. Out: `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
-- `seeflow-system-analyzer` — in: `projectRoot`, `learnContext`. Out: `runtimeProfile` + a `learnUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `learnUpdates`.**
+- `seeflow-code-analyzer` — in: `userPrompt`, `projectRoot`, `existingDemo`, `learnContext`. Out: `inputClass: "code"`, `userIntent`, `audienceFraming`, `scope`, `codePointers`, `knownEndpoints`, `techStack`, `existingDemo`.
+- `seeflow-system-analyzer` — in: `projectRoot`, `inputClass: "code"`, `learnContext`. Out: `runtimeProfile` + a `learnUpdates` payload (`localDevSetup`, `integrationTests`, `fixtures`, `factories`, `seedCommands`, `dataEntryPaths`, `gotchas`, `techAdaptations`). **Every fact it learns about how to start / set up the local environment MUST land in `learnUpdates`.**
 
 Tools: `Read, Grep, Glob, LS, Bash` (read-only). Schemas: `agents/seeflow-code-analyzer.md`, `agents/seeflow-system-analyzer.md`, `references/learn-format.md`. Unparseable output: retry that single agent once, then log `agent-output-unparseable` (`severity: failure`, `agent: <slug>`, `summary: <agent> returned unparseable JSON after retry`), surface, and stop. The same `agent-output-unparseable` rule applies to every sub-agent in Phases 2 and 4.
 
-### Empty-project / design-only mode
+### `inputClass === "conversation"` — orchestrator builds brief inline
 
-If the project root has no source tree (no `package.json`, no Go module, no Python project, no language source files), the "When NOT to invoke" rule kicks in: **ask the user first.** If they say "design anyway" (mockups, demo skeletons, architectural sketches), skip both analyzers and build a synthetic brief by hand from the user's prompt:
+Skip the code-analyzer. Build the same envelope it would have produced from the in-session conversation: extract `userIntent`, `audienceFraming`, `scope.{rootEntities,outOfScope}`, `codePointers[]` (file paths discussed with one-line `why`), `knownEndpoints[]` (any HTTP / queue / event surfaces named), `techStack[]`, `existingDemo`. Set `inputClass: "conversation"` on the brief.
+
+System-analyzer still runs when the flow touches a runtime AND the conversation hasn't already covered dev setup. Skip it (no Task call) when the conversation already named the dev command, ports, fixtures — those facts come into the brief from `$learnPath` and the conversation directly. When skipped, set `runtimeProfile: null` on the brief.
+
+### `inputClass === "document"` — skip both analyzers
+
+Build the brief inline from the user's prompt + any document text in the conversation:
 
 ```json
 {
-  "userIntent":     "<extracted verbatim from the user's prompt>",
-  "audienceFraming":"design-only sketch — no running system to observe",
-  "scope":          { "rootEntities": [<inferred from prompt>], "outOfScope": [] },
+  "inputClass":     "document",
+  "userIntent":     "<paraphrase of what the document depicts>",
+  "audienceFraming":"information-display — the canvas IS the document",
+  "scope":          { "rootEntities": [<sections / topics from the document>], "outOfScope": [] },
   "codePointers":   [],
   "knownEndpoints": [],
-  "techStack":      [<user-stated, or empty>],
+  "techStack":      [],
   "existingDemo":   null,
   "runtimeProfile": null
 }
 ```
 
-Forward that brief to `seeflow-node-planner` (Phase 2) as-is — the planner already tolerates a sparse brief.
+The planner branches on `inputClass === "document"` and defaults to `component` nodes (catalog-driven UI cards) per its §"Picking node `type` by input class". The orchestrator forwards `$componentCatalog` (from the Phase 0 schema cache) so the planner can pick legal `spec.elements[].type` values.
 
-Log `mode-fallback` (`severity: degraded`, `phase: P1`, `details: design-only`, `summary: empty project — analyzers skipped, synthetic brief built from prompt`).
-
-Downstream consequences:
-- **Phase 3 dynamic gate:** default to **static** without re-asking. Without `runtimeProfile`, Phase 4 designers cannot pick a real interpreter or fixture; tell the user to populate code first if they later want dynamic.
+Downstream consequences (document branch):
+- **Phase 3 dynamic gate:** default to **static** without re-asking. Document flows have no runtime to react to.
 - **Phase 6 (e2e):** N/A — skip with a one-line note when summarising the run.
-- **`$learnPath`:** still write the flow row, but mark it `(design-only)` in the purpose column so the next run knows the canvas is not wired to a real system.
+- **`$learnPath`:** still write the flow row, but mark it `(document)` in the purpose column so the next run knows the canvas is not wired to a real system.
 
 ### Phase 1 → Phase 2 overlap
 
-Start `seeflow-node-planner` as soon as the code-analyzer returns — it only needs the code-analyzer's brief plus `techStack`. The system-analyzer continues in the background.
+Applies to `inputClass === "code"` (and to `"conversation"` when the system-analyzer was launched). For `"document"` and the no-system-analyzer `"conversation"` path, the brief is complete the moment the orchestrator builds it inline — go straight to Phase 2.
+
+For `"code"`: start `seeflow-node-planner` as soon as the code-analyzer returns — it only needs the code-analyzer's brief plus `techStack`. The system-analyzer continues in the background.
 
 When the system-analyzer returns:
 
@@ -211,9 +274,9 @@ When the system-analyzer returns:
 
 ## Phase 2 — plan nodes
 
-**Look up the current node + connector contract from the CLI first.** Before drafting anything, run `$SEEFLOW schema node` and `$SEEFLOW schema connector` (parallel; one message, two Bash calls) and capture both outputs. Pass them to the planner alongside the brief — the planner has no shell, so what you don't forward, it doesn't know. Skipping this step lets the planner invent fields the CLI rejects on `flow:add-bulk`, burning a retry.
+**Use the cached node + connector contract from Phase 0.** `$schemaCache.node` and `$schemaCache.connector` already carry the live contract — forward them verbatim in the launching prompt. (Re-running the schema calls here used to be the Phase 2 opener; it's now redundant and slows the phase down.) Skipping the forward lets the planner invent fields the CLI rejects on `flow:add-bulk`, burning a retry.
 
-Launch `seeflow-node-planner` with: the brief, the resolved tech-ref paths, the matching `techAdaptations`, and the two CLI outputs above. No tools — pure reasoning. The planner reads each ref's **Node modelling** section and treats `techAdaptations` as the project-specific override.
+Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, `$schemaCache.node`, `$schemaCache.connector`, and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
 
 **Connectors conform to `$SEEFLOW schema connector` and nothing more.** If the planner emits any field the contract rejects, strip it before `flow:add-bulk` and log `agent-output-corrected` with `details: connector-extras-stripped (×N)`. Do not enumerate the legal fields here — re-run the schema command whenever in doubt.
 
@@ -235,7 +298,7 @@ If any assertion fails, **re-dispatch the planner once** with the specific gap e
 
 ## Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via four steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
+The skeleton flow lands via five steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope for you. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
 1. **Scaffold + register inside the project via `projects:create`.** This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot.
 
@@ -259,7 +322,7 @@ The skeleton flow lands via four steps, in order. No `flow.json` authoring by ha
 
    If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed (filesystem race), loop back to the gate above and let the user decide — do not auto-fall-back. Do not hardcode the envelope shape from memory; if you need to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
 
-2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for the planner's designated trigger node (the one whose `data.playAction` is set even as a placeholder), inject the minimum `playAction` payload the contract requires so the server accepts the batch. Look up the exact required fields by running `$SEEFLOW schema action` and `$SEEFLOW schema node` (the `PlayAction` shape's required keys) — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it.
+2. **Normalize the planner output:** strip `rationales` (keep them in memory for the review prompt below), then for the planner's designated trigger node (the one whose `data.playAction` is set even as a placeholder), inject the minimum `playAction` payload the contract requires so the server accepts the batch. Use `$schemaCache.action` and `$schemaCache.node` (Phase 0) to look up the `PlayAction` shape's required keys — do not hardcode the shape from memory. Pick the interpreter from `runtimeProfile.primaryLanguage` (falling back to `bun`) and point `scriptPath` at `scripts/play.ts`. The Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`. The script file does not need to exist yet — Phase 5 writes it, Phase 6 runs it. **Skip this normalisation entirely for `inputClass === "document"` flows** — document flows usually carry no trigger, and the planner deliberately omits `playAction` per its input-class rules.
 2a. **Mint canonical ids.** Planner ids are descriptive (`checkout-api`, `c-order-server-event-bus`); the studio's id producers (canvas, server auto-assign, the upload endpoint regex) use `node-<10 base62>` / `conn-<10 base62>`. Rewrite at the boundary so flow.json matches. Use the CLI — it shares the exact alphabet and rejection-sampling logic with every other id producer in the studio:
    ```bash
    mapfile -t nodeIds < <($SEEFLOW ids node "${#nodes[@]}")
@@ -273,7 +336,11 @@ The skeleton flow lands via four steps, in order. No `flow.json` authoring by ha
 
    **`user-to-system-rectangle` retype rule.** If the planner shipped `type:'user'` for a node whose `data.name` is clearly a software system (`Web UI`, `Mobile App`, `Browser`, `SPA`, `Desktop Client`, `CLI`, `SDK`, anything ending in `Client`/`App`/`UI`/`Frontend`/`Service`), silently retype to `rectangle` with `data.icon` inferred from the name (`monitor` for web/UI/frontend, `smartphone` for mobile, `terminal` for CLI, `plug` for SDK/Client). Keep `type:'user'` only when `data.name` is a human role (`Customer`, `Support Agent`, `Reviewer`, `Approver`, `Operator`). Log one aggregate `agent-output-corrected` entry with `details: user-to-system-rectangle (×N)`. The Phase 3 canvas review surfaces the result to the user — they see the correction.
 3. `flow:add-bulk` — atomic seed of nodes + connectors in one transactional write. Forward the normalized + id-rewritten `nodes` and `connectors` arrays as `{ nodes, connectors }`. Connectors may reference nodes from the same call — the server validates the merged graph as a whole, so a dangling source/target or a malformed node rolls back **both** arrays together. No two-phase commit to reason about; no orphan nodes if connectors fail.
-4. `flows:layout` — run ELK and write `style.json`.
+4. **Detail backfill — runs unconditionally** (every input class, every dynamic gate outcome; the static path used to ship with blank `nodes/<id>/detail.md` because Phase 4–5 were skipped). Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
+   - **Present** — already externalised by `flow:add-bulk` to `nodes/<id>/detail.md`. Nothing to do.
+   - **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why`. Push via `nodes:patch <flowId> <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `nodes/<id>/detail.md` and stores a `file://` ref.
+   Parallelise the patches across nodes — single message, N Bash calls. Aggregate the count and log **one** `agent-output-corrected` entry (`severity: corrected`, `phase: P3`, `agent: seeflow-node-planner`, `details: detail-backfill (×N)`) when N > 0; nothing when every node already had detail. This is the static-flow safety net described in `seeflow-node-planner.md` § "Semantic requirements".
+5. `flows:layout` — run ELK and write `style.json`.
 
 Each call validates server-side. A `badSchema` exit means feed the issues back to the planner and retry — no separate validation step.
 
@@ -296,13 +363,13 @@ URL="$STUDIO_URL/d/$slug"
 - **Layout approved + static** → print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop. Still merge any pending `learnUpdates`.
 - **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in). Log `mode-fallback` (`severity: degraded`, `phase: P3`, `details: dynamic-to-static`, `summary: dynamic gate unclear; auto-downgraded to static`).
 
-(Design-only mode from Phase 1's empty-project branch defaults to static here without re-asking.)
+(`inputClass === "document"` defaults to static here without re-asking — document flows have no runtime to react to. Same applies to the no-source-tree case folded into the document branch.)
 
 ## Phase 4 — design Play + Status (parallel)
 
 Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (Phase 1 rule). Both receive: context brief, node draft, edit target, tech-ref paths, matching `techAdaptations`. They read each ref's **Play** / **Status** section and treat `techAdaptations` as the project override. Tools: `Read, Grep, Glob, LS`.
 
-**Look up the action + node contract from the CLI first.** Run `$SEEFLOW schema action` and `$SEEFLOW schema node` (parallel; one message, two Bash calls) and capture both outputs. Pass them to each designer alongside the brief — designers have no shell, so what you don't forward, they don't know. The same outputs serve both designers; reuse them. Skipping this step lets the designer invent fields the CLI rejects on `nodes:patch`, burning a retry.
+**Use the cached action + node contract from Phase 0.** `$schemaCache.action` and `$schemaCache.node` already carry the live contract — forward them verbatim in each designer's launching prompt. Designers have no shell, so what you don't forward, they don't know. (Re-running the schema calls here used to be the Phase 4 opener; the cache replaces it.) Skipping the forward lets the designer invent fields the CLI rejects on `nodes:patch`, burning a retry.
 
 Output shape (both): `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `agents/seeflow-play-designer.md`, `agents/seeflow-status-designer.md`.
 
@@ -339,7 +406,7 @@ Run the `e2e` subcommand for the flow. Pass `--skip-nodes` with the `nodeId`s of
 3. Each agent gets the script path (under `nodes/<nodeId>/scripts/`), the specific error payload, and a concrete fix hypothesis (`play.ts: ECONNREFUSED on :3001 — start the app first`).
 4. Edit in-place, re-run the `e2e` subcommand. **Max 2 retries**, then log `seeflow:e2e-fail` (`severity: failure`, `phase: P6`, `details: <N> failing scripts after fix-up`, `summary: e2e ok:false after retry budget exhausted`) and ask retry / stop.
 
-If the run is design-only (Phase 1 fallback), skip Phase 6 entirely and log `phase-skipped` (`severity: degraded`, `phase: P6`, `details: design-only`, `summary: e2e skipped — no runtime to validate against`).
+If the run resolved to `inputClass === "document"` (Phase 0 input-source gate), skip Phase 6 entirely and log `phase-skipped` (`severity: degraded`, `phase: P6`, `details: input-class-document`, `summary: e2e skipped — document flow has no runtime to validate against`). Same applies to the no-source-tree case folded into the document branch.
 
 ### Polish LEARN.md with anything learned
 
