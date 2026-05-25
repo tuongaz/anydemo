@@ -141,10 +141,10 @@ const NodeCapabilitiesShape = {
   handlerModule: z.string().optional(),
 };
 
-// 12 flat node types. The first 9 are geometric/illustrative and share
-// GeometricNodeData. `image`, `html`, `icon` carry per-type fields.
-// The renderer picks the SVG / chrome by `type`; the schema treats them
-// (apart from the per-type fields below) as identical.
+// 13 flat node types. The first 9 are geometric/illustrative and share
+// GeometricNodeData. `image`, `html`, `icon`, `component` carry per-type
+// fields. The renderer picks the SVG / chrome by `type`; the schema treats
+// them (apart from the per-type fields below) as identical.
 export const GEOMETRIC_NODE_TYPES = [
   'rectangle',
   'ellipse',

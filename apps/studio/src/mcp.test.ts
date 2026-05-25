@@ -168,6 +168,7 @@ describe('seeflow_schema', () => {
       'node',
       'connector',
       'action',
+      'componentSpec',
       'style',
     ]);
   });
@@ -184,6 +185,7 @@ describe('seeflow_schema', () => {
     expect(Object.keys(body.schemas).sort()).toEqual(
       [
         'cloud',
+        'component',
         'database',
         'ellipse',
         'html',

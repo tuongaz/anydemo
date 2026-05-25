@@ -407,6 +407,7 @@ describe('seeflow CLI new subcommands', () => {
         'node',
         'connector',
         'action',
+        'componentSpec',
         'style',
       ]);
     } finally {
@@ -426,11 +427,12 @@ describe('seeflow CLI new subcommands', () => {
         notes: string[];
       };
       expect(parsed.name).toBe('node');
-      // Flat-types refactor: schema-catalog returns 12 variants (9 geometric
-      // + image + html + icon) — pinned in alphabetical order.
+      // Flat-types refactor: schema-catalog returns 13 variants (9 geometric
+      // + image + html + icon + component) — pinned in alphabetical order.
       expect(Object.keys(parsed.schemas).sort()).toEqual(
         [
           'cloud',
+          'component',
           'database',
           'ellipse',
           'html',
@@ -459,7 +461,14 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.stderr).toContain('"code":"notFound"');
       expect(r.stderr).toContain('unknown schema category: bogus');
       const parsedErr = JSON.parse(r.stderr) as { available: string[] };
-      expect(parsedErr.available).toEqual(['flow', 'node', 'connector', 'action', 'style']);
+      expect(parsedErr.available).toEqual([
+        'flow',
+        'node',
+        'connector',
+        'action',
+        'componentSpec',
+        'style',
+      ]);
     } finally {
       studio.stop();
     }

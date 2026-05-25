@@ -196,10 +196,14 @@ const buildTools = (ops: Operations): McpTool[] => [
   {
     name: 'seeflow_schema',
     description:
-      'Get the SeeFlow flow.json schema. Call with no args for a category index; ' +
-      "call with `name` for one category's full JSON Schemas. Use this to learn " +
-      'what a node, connector, action, or flow envelope looks like before authoring ' +
-      'writes. Categories: `flow`, `node`, `connector`, `action`, `style`.',
+      'Get the SeeFlow flow.json / spec.json schemas. Call with no args for a ' +
+      "category index; call with `name` for one category's full JSON Schemas. " +
+      'Use this to learn what a node, connector, action, component spec, or ' +
+      'flow envelope looks like before authoring writes. Categories: `flow`, ' +
+      '`node` (13 flat variants — rectangle/ellipse/sticky/text/database/server/' +
+      "user/queue/cloud/image/html/icon/component), `connector`, `action` " +
+      '(playAction/statusAction/resetAction/statusReport/componentAction), ' +
+      "`componentSpec` (sidecar shape for type:'component' nodes), `style`.",
     inputSchema: {
       type: 'object',
       properties: {

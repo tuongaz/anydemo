@@ -674,6 +674,7 @@ describe('GET /api/schema', () => {
       'node',
       'connector',
       'action',
+      'componentSpec',
       'style',
     ]);
     for (const c of body.categories) {
@@ -683,7 +684,7 @@ describe('GET /api/schema', () => {
 
   it('returns full JSON Schemas + notes for each known category', async () => {
     const { app } = buildApp();
-    for (const name of ['flow', 'node', 'connector', 'action', 'style']) {
+    for (const name of ['flow', 'node', 'connector', 'action', 'componentSpec', 'style']) {
       const res = await app.request(`/api/schema/${name}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -705,7 +706,14 @@ describe('GET /api/schema', () => {
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string; available: string[] };
     expect(body.error).toContain('unknown schema category: bogus');
-    expect(body.available).toEqual(['flow', 'node', 'connector', 'action', 'style']);
+    expect(body.available).toEqual([
+      'flow',
+      'node',
+      'connector',
+      'action',
+      'componentSpec',
+      'style',
+    ]);
   });
 });
 

@@ -11,9 +11,16 @@ const loadCategory = (name: string) => {
 
 describe('schema-catalog', () => {
   describe('listSchemaCategories', () => {
-    it('returns the five canonical categories with descriptions', () => {
+    it('returns the six canonical categories with descriptions', () => {
       const cats = listSchemaCategories();
-      expect(cats.map((c) => c.name)).toEqual(['flow', 'node', 'connector', 'action', 'style']);
+      expect(cats.map((c) => c.name)).toEqual([
+        'flow',
+        'node',
+        'connector',
+        'action',
+        'componentSpec',
+        'style',
+      ]);
       for (const c of cats) {
         expect(c.description.length).toBeGreaterThan(0);
       }
@@ -55,14 +62,16 @@ describe('schema-catalog', () => {
       expect(payload.notes[0]).toMatch(/source.*target.*nodes\[\]\.id/);
     });
 
-    it('node → all 12 flat variants', () => {
+    it('node → all 13 flat variants', () => {
       const payload = loadCategory('node');
       const keys = Object.keys(payload.schemas).sort();
       // Flat-types refactor: schema-catalog returns one schema per
-      // FlowNodeSchema variant — 9 geometric tags + image + html + icon.
+      // FlowNodeSchema variant — 9 geometric tags + image + html + icon +
+      // component.
       expect(keys).toEqual(
         [
           'cloud',
+          'component',
           'database',
           'ellipse',
           'html',
@@ -86,6 +95,8 @@ describe('schema-catalog', () => {
       }
       // image path prefix note must surface.
       expect(payload.notes.some((n) => /image.*path.*nodes/.test(n))).toBe(true);
+      // component spec-sidecar note must surface so authors find spec.json.
+      expect(payload.notes.some((n) => /component.*spec\.json/i.test(n))).toBe(true);
     });
 
     it('connector → single shape', () => {
@@ -95,11 +106,34 @@ describe('schema-catalog', () => {
       expect(payload.notes).toEqual([]);
     });
 
-    it('action → playAction, statusAction, resetAction, statusReport', () => {
+    it('action → playAction, statusAction, resetAction, statusReport, componentAction', () => {
       const payload = loadCategory('action');
       const keys = Object.keys(payload.schemas).sort();
-      expect(keys).toEqual(['playAction', 'resetAction', 'statusAction', 'statusReport'].sort());
+      expect(keys).toEqual(
+        [
+          'playAction',
+          'resetAction',
+          'statusAction',
+          'statusReport',
+          'componentAction',
+        ].sort(),
+      );
       expect(payload.notes.some((n) => /scriptPath/.test(n))).toBe(true);
+      // componentAction discriminator note must surface so authors know set vs script.
+      expect(payload.notes.some((n) => /componentAction/.test(n))).toBe(true);
+    });
+
+    it('componentSpec → spec.json shape + element shape', () => {
+      const payload = loadCategory('componentSpec');
+      const keys = Object.keys(payload.schemas).sort();
+      expect(keys).toEqual(['componentSpec', 'componentSpecElement'].sort());
+      const spec = payload.schemas.componentSpec as Record<string, unknown>;
+      expect(spec.type).toBe('object');
+      const props = spec.properties as Record<string, unknown>;
+      expect(props.root).toBeDefined();
+      expect(props.elements).toBeDefined();
+      // sidecar invariant note must surface.
+      expect(payload.notes.some((n) => /spec\.json/.test(n))).toBe(true);
     });
 
     it('style → studio-owned envelope', () => {

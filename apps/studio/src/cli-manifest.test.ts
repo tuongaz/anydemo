@@ -60,16 +60,20 @@ describe('COMMAND_MANIFEST', () => {
     expect(stop?.outputKind).toBe('text');
   });
 
-  it('labels live SSE commands with outputKind: "stream"', () => {
-    const play = COMMAND_MANIFEST.find((e) => e.name === 'flows:play');
-    const e2e = COMMAND_MANIFEST.find((e) => e.name === 'e2e');
-    expect(play?.outputKind).toBe('stream');
-    expect(e2e?.outputKind).toBe('stream');
-  });
-
   it('labels the ids command with outputKind: "text"', () => {
     const ids = COMMAND_MANIFEST.find((e) => e.name === 'ids');
     expect(ids?.outputKind).toBe('text');
+  });
+
+  it('keeps live commands on the default JSON envelope (they return after the run finishes)', () => {
+    // flows:play and e2e POST and wait for a single JSON response; they do not
+    // stream SSE events to the CLI's stdout. The studio still broadcasts
+    // SSE events on /api/events for any out-of-band subscriber, but the CLI
+    // is request/response.
+    const play = COMMAND_MANIFEST.find((e) => e.name === 'flows:play');
+    const e2e = COMMAND_MANIFEST.find((e) => e.name === 'e2e');
+    expect(play?.outputKind ?? 'json').toBe('json');
+    expect(e2e?.outputKind ?? 'json').toBe('json');
   });
 
   it('locks the ids command shape: `<type> <count>`, no flags, both examples present', () => {
@@ -84,9 +88,9 @@ describe('COMMAND_MANIFEST', () => {
   });
 
   it('every other command defaults outputKind to "json" (or leaves it undefined)', () => {
-    const textOrStream = new Set(['start', 'stop', 'flows:play', 'e2e', 'ids']);
+    const nonJson = new Set(['start', 'stop', 'ids']);
     for (const entry of COMMAND_MANIFEST) {
-      if (textOrStream.has(entry.name)) continue;
+      if (nonJson.has(entry.name)) continue;
       expect(entry.outputKind ?? 'json').toBe('json');
     }
   });
@@ -153,24 +157,23 @@ describe('renderCommandHelp — text output', () => {
   });
 });
 
-describe('renderCommandHelp — stream output', () => {
-  it('documents SSE-style streaming for flows:play', () => {
+describe('renderCommandHelp — live JSON output', () => {
+  it('renders flows:play with the standard JSON envelope + requires-studio marker', () => {
     const out = renderCommandHelp('flows:play');
     expect(out).toContain('## Output');
-    expect(out).toContain('Streams progress events to stdout until the run completes.');
-    expect(out).toContain('Exit 0 on success, non-zero on failure.');
-    // per-command flavor text — Triggers the node…
-    expect(out).toContain('Triggers the node');
+    expect(out).toContain('On success (stdout, exit 0):');
+    expect(out).toContain('"ok": true');
+    expect(out).toContain('"runId"');
     expect(out).toContain('Requires studio running: yes');
   });
 
-  it('documents streaming for e2e', () => {
+  it('renders e2e with the standard JSON envelope + plays/statuses/skipped sections', () => {
     const out = renderCommandHelp('e2e');
     expect(out).toContain('## Output');
-    expect(out).toContain('Streams progress events to stdout until the run completes.');
-    expect(out).toContain('Exit 0 on success, non-zero on failure.');
-    // per-command flavor text — topological order
-    expect(out).toContain('topological order');
+    expect(out).toContain('"ok": true');
+    expect(out).toContain('"plays"');
+    expect(out).toContain('"statuses"');
+    expect(out).toContain('"skipped"');
     expect(out).toContain('Requires studio running: yes');
   });
 });

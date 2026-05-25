@@ -287,16 +287,21 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'flows:play',
-    synopsis: 'seeflow flows:play <flowId> <nodeId>',
-    description: 'Trigger a play action on one node. Requires a running studio.',
+    synopsis: 'seeflow flows:play <flowId> <nodeId> [--no-start]',
+    description:
+      "Trigger the node's playAction on the studio and wait for the spawn-level " +
+      'result. The studio also broadcasts node:running/done/error events on the ' +
+      "flow's SSE stream — subscribe separately if you want live progress. " +
+      'Requires a running studio.',
     category: 'live',
     args: [
       { name: 'flowId', required: true, description: 'Flow id or slug' },
       { name: 'nodeId', required: true, description: 'Node id in the flow' },
     ],
     flags: [{ name: 'no-start', description: 'Fail if the studio is not already running' }],
-    outputKind: 'stream',
-    outputs: {},
+    outputs: {
+      okExample: { runId: 'run-9b3', status: 200, body: { ok: true } },
+    },
     requiresStudio: true,
     examples: ['seeflow flows:play abc12345 api-checkout'],
   },
@@ -350,14 +355,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     },
     outputs: {
       okExample: { id: 'node-abc' },
-      errorKinds: [
-        'flowNotFound',
-        'fileNotFound',
-        'badJson',
-        'badSchema',
-        'idAlreadyExists',
-        'writeFailed',
-      ],
+      errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'writeFailed'],
     },
     requiresStudio: false,
     examples: ['seeflow nodes:add abc12345 --json \'{"type":"rectangle","data":{}}\''],
@@ -390,7 +388,14 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     flags: BODY_FLAGS,
     body: { schemaRef: 'NodePatchBody' },
     outputs: {
-      errorKinds: ['flowNotFound', 'fileNotFound', 'unknownNode', 'badSchema', 'writeFailed'],
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownNode',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
     },
     requiresStudio: false,
     examples: ['seeflow nodes:patch abc12345 api-checkout --json \'{"data":{"name":"renamed"}}\''],
@@ -409,7 +414,16 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'y', valuePlaceholder: '<n>', description: 'Y coordinate', required: true },
     ],
     body: { schemaRef: 'PositionBody' },
-    outputs: { errorKinds: ['flowNotFound', 'fileNotFound', 'unknownNode', 'writeFailed'] },
+    outputs: {
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownNode',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
+    },
     requiresStudio: false,
     examples: ['seeflow nodes:move abc12345 api-checkout --x 250 --y 320'],
   },
@@ -433,7 +447,16 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'index', valuePlaceholder: '<n>', description: 'Required when --op toIndex' },
     ],
     body: { schemaRef: 'ReorderBody' },
-    outputs: { errorKinds: ['flowNotFound', 'fileNotFound', 'unknownNode', 'writeFailed'] },
+    outputs: {
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownNode',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
+    },
     requiresStudio: false,
     examples: [
       'seeflow nodes:reorder abc12345 api-checkout --op forward',
@@ -452,7 +475,14 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     flags: [],
     outputs: {
       okExample: { ok: true, removedConnectors: 0 },
-      errorKinds: ['flowNotFound', 'unknownNode'],
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownNode',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
     },
     requiresStudio: false,
     examples: ['seeflow nodes:delete abc12345 api-checkout'],
@@ -461,21 +491,21 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   {
     name: 'connectors:add',
     synopsis: 'seeflow connectors:add <flowId> [--json | --file | --stdin]',
-    description: 'Add a connector. Body is the connector object (source/target required).',
+    description:
+      'Add a connector. Body is the connector object — `source` and `target` are ' +
+      'the connected node ids (strings). Auto-generates an id when absent.',
     category: 'connectors',
     args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
     flags: BODY_FLAGS,
     body: {
-      example: { source: { nodeId: 'a' }, target: { nodeId: 'b' } },
+      example: { source: 'a', target: 'b' },
     },
     outputs: {
       okExample: { id: 'conn-abc' },
-      errorKinds: ['flowNotFound', 'badSchema', 'idAlreadyExists', 'writeFailed'],
+      errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'writeFailed'],
     },
     requiresStudio: false,
-    examples: [
-      'seeflow connectors:add abc12345 --json \'{"source":{"nodeId":"a"},"target":{"nodeId":"b"}}\'',
-    ],
+    examples: ['seeflow connectors:add abc12345 --json \'{"source":"a","target":"b"}\''],
   },
   {
     name: 'connectors:patch',
@@ -488,7 +518,16 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
     flags: BODY_FLAGS,
     body: { schemaRef: 'ConnectorPatchBody' },
-    outputs: { errorKinds: ['flowNotFound', 'unknownConnector', 'badSchema', 'writeFailed'] },
+    outputs: {
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownConnector',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
+    },
     requiresStudio: false,
     examples: ['seeflow connectors:patch abc12345 conn-1 --json \'{"label":"new"}\''],
   },
@@ -502,7 +541,17 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       { name: 'connectorId', required: true, description: 'Connector id in the flow' },
     ],
     flags: [],
-    outputs: { okExample: { ok: true }, errorKinds: ['flowNotFound', 'unknownConnector'] },
+    outputs: {
+      okExample: { ok: true },
+      errorKinds: [
+        'flowNotFound',
+        'fileNotFound',
+        'unknownConnector',
+        'badJson',
+        'badSchema',
+        'writeFailed',
+      ],
+    },
     requiresStudio: false,
     examples: ['seeflow connectors:delete abc12345 conn-1'],
   },
@@ -563,18 +612,21 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     name: 'schema',
     synopsis: 'seeflow schema [<category>]',
     description:
-      'Introspect the SeeFlow flow.json / style.json schemas at runtime. Call ' +
-      'without arguments to list the five categories (flow, node, connector, ' +
-      'action, style); call with a category name to get its full JSON Schema(s) ' +
-      '(Draft-07) plus a `notes` array of cross-field invariants the schema ' +
-      "can't express. Use this before authoring any flow.json write — never " +
-      'memorise field shapes.',
+      'Introspect the SeeFlow flow.json / style.json / spec.json schemas at ' +
+      'runtime. Call without arguments to list the six categories (flow, node, ' +
+      'connector, action, componentSpec, style); call with a category name to ' +
+      'get its full JSON Schema(s) (Draft-07) plus a `notes` array of cross-' +
+      "field invariants the schema can't express. The `node` payload includes " +
+      "all 13 flat variants (including type:'component', whose `spec` field " +
+      'lives in a sidecar — drill into `componentSpec` for that shape). Use ' +
+      'this before authoring any flow.json / spec.json write — never memorise ' +
+      'field shapes.',
     category: 'meta',
     args: [
       {
         name: 'category',
         required: false,
-        description: 'One of: flow, node, connector, action, style',
+        description: 'One of: flow, node, connector, action, componentSpec, style',
       },
     ],
     flags: [],
@@ -583,13 +635,23 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       errorKinds: ['notFound'],
     },
     requiresStudio: false,
-    examples: ['seeflow schema', 'seeflow schema node', 'seeflow schema connector'],
+    examples: [
+      'seeflow schema',
+      'seeflow schema node',
+      'seeflow schema connector',
+      'seeflow schema componentSpec',
+    ],
   },
   // ---- live --------------------------------------------------------------
   {
     name: 'e2e',
-    synopsis: 'seeflow e2e <flowId> [--skip-nodes a,b]',
-    description: 'End-to-end validate a registered flow. Requires a running studio.',
+    synopsis: 'seeflow e2e <flowId> [--skip-nodes a,b] [--no-start]',
+    description:
+      'End-to-end validate a registered flow. Walks every node with a playAction ' +
+      "in flow.json order, POSTs each play, then drains the flow's SSE stream " +
+      'for node:done/error + node:status reports. Returns a single JSON report ' +
+      'when finished; exits non-zero if any play failed, any statusAction failed ' +
+      'to report, or the 120s ceiling was exceeded. Requires a running studio.',
     category: 'live',
     args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
     flags: [
@@ -600,10 +662,16 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       },
       { name: 'no-start', description: 'Fail if the studio is not already running' },
     ],
-    outputKind: 'stream',
-    outputs: {},
+    outputs: {
+      okExample: {
+        ok: true,
+        plays: [{ nodeId: 'api-checkout', outcome: 'ok', runId: 'run-9b3' }],
+        statuses: [],
+        skipped: [],
+      },
+    },
     requiresStudio: true,
-    examples: ['seeflow e2e abc12345'],
+    examples: ['seeflow e2e abc12345', 'seeflow e2e abc12345 --skip-nodes flaky-1,flaky-2'],
   },
   {
     name: 'emit',
