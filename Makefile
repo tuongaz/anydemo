@@ -9,6 +9,7 @@ DIR ?= .
 ITERATIONS ?= 10
 DOCKER_IMAGE ?= tuongaz/seeflow
 DOCKER_TAG ?= dev
+BUMP ?= patch
 
 CLI := bun run apps/studio/src/cli.ts
 
@@ -27,6 +28,7 @@ help: ## Show this target list
 	@echo "  ITERATIONS=<n>       iterations passed to 'make ralph' (default: 10)"
 	@echo "  DOCKER_IMAGE=<name>  image name for docker.* targets (default: tuongaz/seeflow)"
 	@echo "  DOCKER_TAG=<tag>     image tag for docker.* targets (default: dev)"
+	@echo "  BUMP=<level>         semver bump for 'make deploy' (patch, minor, major; default: patch)"
 	@echo ""
 	@echo "Examples:"
 	@echo "  make dev"
@@ -132,18 +134,8 @@ docker.push: ## Build and push multi-arch image to the registry
 
 deploy: gh.deploy ## Alias for gh.deploy
 
-gh.deploy: ## Bump patch version, commit+tag (triggers npm publish), then deploy viewer to S3
-	@PKG=apps/studio/package.json; \
-	OLD=$$(bun -e "console.log(require('./$$PKG').version)"); \
-	NEW=$$(echo "$$OLD" | awk -F. '{print $$1"."$$2"."$$3+1}'); \
-	echo "Bumping $$OLD -> $$NEW"; \
-	bun -e "const fs=require('fs');const p=JSON.parse(fs.readFileSync('./$$PKG'));p.version='$$NEW';fs.writeFileSync('./$$PKG',JSON.stringify(p,null,'\t')+'\n')"; \
-	bun run format; \
-	git add apps/studio/package.json; \
-	git commit -m "chore: bump version to $$NEW"; \
-	git push; \
-	git tag v$$NEW; \
-	git push origin v$$NEW; \
-	gh workflow run deploy.yml --repo tuongaz/seeflow-viewer; \
-	echo "Tag v$$NEW pushed — npm publish running at: https://github.com/tuongaz/seeflow/actions/workflows/publish.yml"; \
-	echo "Viewer deploy running at: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"
+gh.deploy: ## Trigger the Release workflow (BUMP=patch|minor|major, default patch) + viewer deploy
+	@gh workflow run release.yml --repo tuongaz/seeflow -f bump=$(BUMP)
+	@gh workflow run deploy.yml --repo tuongaz/seeflow-viewer
+	@echo "Release ($(BUMP)) running: https://github.com/tuongaz/seeflow/actions/workflows/release.yml"
+	@echo "Viewer deploy running: https://github.com/tuongaz/seeflow-viewer/actions/workflows/deploy.yml"
