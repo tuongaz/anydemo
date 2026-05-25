@@ -28,7 +28,7 @@ import {
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { type JSONRPCMessage, isJSONRPCRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { Server as BunHttpServer } from 'bun';
-import { createApp } from './server.ts';
+import { type CreateAppOptions, createApp } from './server.ts';
 
 // Bun's generic Server requires a websocket-data type argument at the type
 // level; we don't attach a websocket handler so `unknown` is the right slot.
@@ -72,9 +72,17 @@ if (!explicitStudioUrl) {
     // hitting the ephemeral port from `Origin: null` (other localhost
     // software, drive-by tabs) gets 403'd by the CORS middleware.
     const token = crypto.randomUUID();
-    const app = createApp({ token });
+    // Hold a mutable options reference so we can fill in `httpUrl` AFTER
+    // `Bun.serve` binds — the per-request `/mcp` handler captures
+    // `options` by closure, so the canvas-bearing tools (US-008) read
+    // the live URL when building their `_meta.backendUrl`. Without this
+    // back-fill the closure would observe `httpUrl: undefined` and skip
+    // `_meta` entirely.
+    const appOptions: CreateAppOptions = { token };
+    const app = createApp(appOptions);
     embeddedServer = Bun.serve({ port: 0, hostname: '127.0.0.1', fetch: app.fetch });
     embeddedUrl = `http://${embeddedServer.hostname}:${embeddedServer.port}`;
+    appOptions.httpUrl = embeddedUrl;
     // Log the bound URL to stderr so the integration test (and humans
     // debugging) can discover the port without interleaving with the
     // JSON-RPC stdout stream. Intentionally omits the token — it MUST

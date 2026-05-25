@@ -60,6 +60,14 @@ export interface CreateAppOptions {
    *  `widgetState.backendToken`. Undefined disables the null-origin path —
    *  null-origin requests are then always rejected. */
   token?: string;
+  /** Reachable loopback URL of this Hono server, e.g.
+   *  `http://127.0.0.1:54321`. Forwarded to canvas-bearing MCP tool
+   *  handlers (via `createMcpServer`) so they can attach it to the
+   *  iframe's widgetState as `backendUrl`. Read by closure inside
+   *  `app.all('/mcp', ...)` so callers can mutate the options after
+   *  `Bun.serve` binds — useful for the ephemeral-port boot in
+   *  `mcp-shim.ts` where the URL isn't known until the server is up. */
+  httpUrl?: string;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -167,6 +175,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       registry,
       watcher,
       token: options.token,
+      httpUrl: options.httpUrl,
     });
     await mcpServer.connect(transport);
     try {
