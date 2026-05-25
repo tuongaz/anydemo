@@ -8,7 +8,11 @@
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
+  ComponentActionSchema,
+  ComponentSpecElementSchema,
+  ComponentSpecSchema,
   FlowCloudNodeSchema,
+  FlowComponentNodeSchema,
   FlowConnectorSchema,
   FlowDatabaseNodeSchema,
   FlowEllipseNodeSchema,
@@ -50,7 +54,7 @@ const CATEGORIES: SchemaCategory[] = [
   {
     name: 'node',
     description:
-      'All 12 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, image, html, icon). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant.',
+      'All 13 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, image, html, icon, component). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant.',
   },
   {
     name: 'connector',
@@ -58,7 +62,13 @@ const CATEGORIES: SchemaCategory[] = [
   },
   {
     name: 'action',
-    description: 'playAction, statusAction, resetAction, statusReport.',
+    description:
+      'playAction, statusAction, resetAction, statusReport, plus componentAction (the set | script discriminated union dispatched on component-node action handles).',
+  },
+  {
+    name: 'componentSpec',
+    description:
+      "Sidecar shape written to <project>/nodes/<id>/spec.json for type:'component' nodes. Carries the json-render element tree, initial state, and named actions the renderer dispatches on user input.",
   },
   { name: 'style', description: 'style.json (studio-owned).' },
 ];
@@ -82,10 +92,12 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       image: toJsonSchema(FlowImageNodeSchema),
       html: toJsonSchema(FlowHtmlNodeSchema),
       icon: toJsonSchema(FlowIconNodeSchema),
+      component: toJsonSchema(FlowComponentNodeSchema),
     },
     notes: [
       "type:'image' data.path must start with 'nodes/<id>/'.",
       "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
+      "type:'component' nodes have no `spec` field on disk — the spec lives in <project>/nodes/<id>/spec.json (see `seeflow schema componentSpec`). The resolver inlines it into data.spec for runtime / SSE broadcasts.",
     ],
   },
   connector: {
@@ -100,9 +112,22 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       statusAction: toJsonSchema(StatusActionSchema),
       resetAction: toJsonSchema(ResetActionSchema),
       statusReport: toJsonSchema(StatusReportSchema),
+      componentAction: toJsonSchema(ComponentActionSchema),
     },
     notes: [
       "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
+      "componentAction is a `set | script` discriminated union: `set` mutates canvas state locally (path is a JSON Pointer starting with '/'), `script` shells out via POST /api/flows/:id/nodes/:nodeId/actions/:name with the same scriptPath rooting rules as playAction.",
+    ],
+  },
+  componentSpec: {
+    schemas: {
+      componentSpec: toJsonSchema(ComponentSpecSchema),
+      componentSpecElement: toJsonSchema(ComponentSpecElementSchema),
+    },
+    notes: [
+      "spec.json is the on-disk source of truth for type:'component' nodes; the resolver inlines it into data.spec at read time and splitFlow strips it back out before writing flow.json so the sidecar is never double-stored.",
+      'elements is keyed by element id; `root` names the entry element. Element ids referenced from children / actions must exist in elements.',
+      'state and actions are both keyed by user-chosen names. Action handles in the rendered UI reference these names; see `seeflow schema action` for the per-action shape.',
     ],
   },
   style: {

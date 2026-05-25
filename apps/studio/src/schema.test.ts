@@ -2338,7 +2338,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     }
   });
 
-  it('rejects an unknown type tag (only the 12 flat tags are valid)', () => {
+  it('rejects an unknown type tag (only the 13 flat tags are valid)', () => {
     const demo = {
       version: 2 as const,
       name: 'unknown-type',

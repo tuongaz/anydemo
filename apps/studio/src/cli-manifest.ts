@@ -612,18 +612,21 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     name: 'schema',
     synopsis: 'seeflow schema [<category>]',
     description:
-      'Introspect the SeeFlow flow.json / style.json schemas at runtime. Call ' +
-      'without arguments to list the five categories (flow, node, connector, ' +
-      'action, style); call with a category name to get its full JSON Schema(s) ' +
-      '(Draft-07) plus a `notes` array of cross-field invariants the schema ' +
-      "can't express. Use this before authoring any flow.json write — never " +
-      'memorise field shapes.',
+      'Introspect the SeeFlow flow.json / style.json / spec.json schemas at ' +
+      'runtime. Call without arguments to list the six categories (flow, node, ' +
+      'connector, action, componentSpec, style); call with a category name to ' +
+      'get its full JSON Schema(s) (Draft-07) plus a `notes` array of cross-' +
+      "field invariants the schema can't express. The `node` payload includes " +
+      "all 13 flat variants (including type:'component', whose `spec` field " +
+      'lives in a sidecar — drill into `componentSpec` for that shape). Use ' +
+      'this before authoring any flow.json / spec.json write — never memorise ' +
+      'field shapes.',
     category: 'meta',
     args: [
       {
         name: 'category',
         required: false,
-        description: 'One of: flow, node, connector, action, style',
+        description: 'One of: flow, node, connector, action, componentSpec, style',
       },
     ],
     flags: [],
@@ -632,7 +635,12 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       errorKinds: ['notFound'],
     },
     requiresStudio: false,
-    examples: ['seeflow schema', 'seeflow schema node', 'seeflow schema connector'],
+    examples: [
+      'seeflow schema',
+      'seeflow schema node',
+      'seeflow schema connector',
+      'seeflow schema componentSpec',
+    ],
   },
   // ---- live --------------------------------------------------------------
   {
