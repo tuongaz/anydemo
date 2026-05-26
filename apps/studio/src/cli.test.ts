@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -132,7 +132,7 @@ describe('seeflow CLI register integration', () => {
 });
 
 describe('seeflow CLI new subcommands', () => {
-  it('projects:create returns ok with slug', async () => {
+  it('projects:create writes seeflow.json + flows/main/flow.json and registers one entry', async () => {
     const studio = startTestStudio();
     const projectPath = join(mkdtempSync(join(tmpdir(), 'seeflow-cli-create-')), 'checkout-one');
     try {
@@ -144,6 +144,40 @@ describe('seeflow CLI new subcommands', () => {
       const parsed = JSON.parse(r.stdout) as { ok: boolean; slug: string };
       expect(parsed.ok).toBe(true);
       expect(parsed.slug).toBe('checkout-one/main');
+
+      // On disk: manifest at the project root + flow.json under flows/main/.
+      const manifestPath = join(projectPath, 'seeflow.json');
+      const flowPath = join(projectPath, 'flows', 'main', 'flow.json');
+      expect(existsSync(manifestPath)).toBe(true);
+      expect(existsSync(flowPath)).toBe(true);
+      expect(JSON.parse(readFileSync(manifestPath, 'utf-8'))).toEqual({
+        version: 1,
+        name: 'Checkout One',
+        defaultFlow: 'main',
+        flows: [{ id: 'main', name: 'Main' }],
+      });
+      expect(JSON.parse(readFileSync(flowPath, 'utf-8'))).toEqual({
+        version: 2,
+        name: 'Checkout One',
+        nodes: [],
+        connectors: [],
+      });
+
+      // Legacy single-flow layout must NOT be written.
+      expect(existsSync(join(projectPath, 'flow.json'))).toBe(false);
+
+      // Registry contains exactly one entry, addressed by projectSlug/main and
+      // marked as the default flow.
+      studio.registry.reload();
+      const entries = studio.registry.list();
+      expect(entries).toHaveLength(1);
+      const entry = entries[0];
+      if (!entry) throw new Error('registry entry missing');
+      expect(entry.projectSlug).toBe('checkout-one');
+      expect(entry.flowSlug).toBe('main');
+      expect(entry.isDefault).toBe(true);
+      expect(entry.flowPath).toBe('flows/main/flow.json');
+      expect(entry.repoPath).toBe(projectPath);
     } finally {
       studio.stop();
     }

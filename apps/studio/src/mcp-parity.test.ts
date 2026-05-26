@@ -173,7 +173,7 @@ const buildProjectFixture = (name: string): ProjectFixture => {
     app,
     registry,
     projectPath,
-    demoFile: join(projectPath, 'flow.json'),
+    demoFile: join(projectPath, 'flows', 'main', 'flow.json'),
   };
 };
 

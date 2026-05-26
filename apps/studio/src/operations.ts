@@ -22,6 +22,7 @@ import {
   removeNodeDir,
   writeNodeFile,
 } from './node-files.ts';
+import { scanProject } from './project-scanner.ts';
 import { type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
@@ -33,6 +34,7 @@ import {
   PlayActionSchema,
   type ResolvedFlow,
   ResolvedFlowSchema,
+  type SeeflowManifest,
   SourceHandleIdSchema,
   StateSourceSchema,
   StatusActionSchema,
@@ -41,11 +43,6 @@ import {
 } from './schema.ts';
 import { shortId } from './short-id.ts';
 import { type FlowSnapshot, type FlowWatcher, readMergedFlow } from './watcher.ts';
-
-// Both projects:create and flows:register write/read flow.json at the project
-// root. The studio never assumes a `.seeflow/` subdirectory — whatever path
-// the caller supplies is treated as the seeflow project root.
-const PROJECT_FLOW_RELATIVE_PATH = 'flow.json';
 
 export const RegisterBodySchema = z.object({
   name: z.string().min(1).optional(),
@@ -1172,24 +1169,36 @@ export async function createProjectImpl(
   const { registry, watcher } = deps;
   const { path: folderPath, name, description } = body;
 
-  const demoFullPath = join(folderPath, PROJECT_FLOW_RELATIVE_PATH);
+  // Manifest-driven layout (US-018): a project is the seeflow.json manifest
+  // plus one flow folder under flows/<id>/. The default flow id for a
+  // freshly-scaffolded project is always "main".
+  const manifestPath = join(folderPath, 'seeflow.json');
+  const legacyFlowPath = join(folderPath, 'flow.json');
+  const mainFlowPath = join(folderPath, 'flows', 'main', 'flow.json');
 
-  if (existsSync(demoFullPath)) {
+  if (existsSync(manifestPath) || existsSync(legacyFlowPath) || existsSync(mainFlowPath)) {
     return { kind: 'alreadyExists', path: folderPath };
   }
 
-  // Flow-only scaffold: empty nodes/connectors, no style.json needed.
-  const scaffold: Flow = {
-    version: 2,
+  const manifest: SeeflowManifest = {
+    version: 1,
     name,
     ...(description !== undefined ? { description } : {}),
+    defaultFlow: 'main',
+    flows: [{ id: 'main', name: 'Main' }],
+  };
+  const envelope: Flow = {
+    version: 2,
+    name,
     nodes: [],
     connectors: [],
   };
 
   try {
     mkdirSync(folderPath, { recursive: true });
-    writeFileSync(demoFullPath, `${JSON.stringify(scaffold, null, 2)}\n`);
+    mkdirSync(join(folderPath, 'flows', 'main'), { recursive: true });
+    writeFileAtomic(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+    writeFileAtomic(mainFlowPath, `${JSON.stringify(envelope, null, 2)}\n`);
     const tmpDir = join(folderPath, '.tmp');
     mkdirSync(tmpDir, { recursive: true });
     writeFileSync(join(tmpDir, '.gitignore'), '*\n!.gitignore\n');
@@ -1197,15 +1206,32 @@ export async function createProjectImpl(
     return { kind: 'scaffoldFailed', message: err instanceof Error ? err.message : String(err) };
   }
 
-  const lastModified = statSync(demoFullPath).mtimeMs;
+  // Run the scanner so projectSlug is derived consistently with manifest-driven
+  // projects registered via the CLI's `register` verb / the file-watcher.
+  const scan = scanProject(folderPath);
+  if (scan.kind !== 'ok') {
+    return {
+      kind: 'scaffoldFailed',
+      message: `scanner refused freshly-scaffolded project: ${scan.kind}`,
+    };
+  }
+  const mainScanned = scan.flows.find((f) => f.id === 'main');
+  if (!mainScanned) {
+    return {
+      kind: 'scaffoldFailed',
+      message: 'scanner did not return the "main" flow entry',
+    };
+  }
+
+  const lastModified = statSync(mainFlowPath).mtimeMs;
   const entry = registry.upsert({
-    name,
-    description,
+    name: mainScanned.name,
+    description: scan.manifest.description,
     repoPath: folderPath,
-    flowPath: PROJECT_FLOW_RELATIVE_PATH,
-    projectSlug: slugify(name),
-    flowSlug: 'main',
-    isDefault: true,
+    flowPath: mainScanned.flowPath,
+    projectSlug: scan.projectSlug,
+    flowSlug: mainScanned.id,
+    isDefault: mainScanned.isDefault,
     valid: true,
     lastModified,
   });

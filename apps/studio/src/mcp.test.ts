@@ -528,7 +528,7 @@ describe('seeflow_delete_flow', () => {
 });
 
 describe('seeflow_create_project', () => {
-  it('scaffolds a new project folder and writes flow.json', async () => {
+  it('scaffolds a new project (seeflow.json + flows/main/flow.json)', async () => {
     const projectPath = join(tmpEmptyFolder(), 'brand-new-flow');
     const { app, registry } = buildApp();
     const envelope = await callTool(app, 'seeflow_create_project', {
@@ -537,18 +537,25 @@ describe('seeflow_create_project', () => {
     });
     const body = expectOk(envelope) as { id: string; slug: string };
     expect(body.slug).toBe('brand-new-flow/main');
-    expect(existsSync(join(projectPath, 'flow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, 'seeflow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    expect(existsSync(join(projectPath, 'flow.json'))).toBe(false);
     expect(existsSync(join(projectPath, '.tmp'))).toBe(true);
     expect(readFileSync(join(projectPath, '.tmp', '.gitignore'), 'utf8')).toBe('*\n!.gitignore\n');
     expect(registry.list()).toHaveLength(1);
   });
 
-  it('errors when a project already exists at <path>/flow.json', async () => {
+  it('errors when a project already exists at <path>/seeflow.json', async () => {
     const projectPath = join(tmpEmptyFolder(), 'taken');
     mkdirSync(projectPath, { recursive: true });
     writeFileSync(
-      join(projectPath, 'flow.json'),
-      JSON.stringify({ version: 2, name: 'Taken', nodes: [], connectors: [] }),
+      join(projectPath, 'seeflow.json'),
+      JSON.stringify({
+        version: 1,
+        name: 'Taken',
+        defaultFlow: 'main',
+        flows: [{ id: 'main', name: 'Main' }],
+      }),
     );
 
     const { app, registry } = buildApp();

@@ -187,7 +187,7 @@ Commands (work without a running studio):
   stop                 Stop a background studio instance
   register             Register a demo repo, writing to ~/.seeflow/registry.json (alias of flows:register)
   flows:register       Register a demo repo
-  projects:create      Create a new project (--path <dir> --name <name> [--description <text>])
+  projects:create      Scaffold a new project (writes <path>/seeflow.json + <path>/flows/main/flow.json) — (--path <dir> --name <name> [--description <text>])
   flows:list           List registered flows
   flows:summary        List registered flows (id + name + description only)
   flows:get <id>       Get flow details
