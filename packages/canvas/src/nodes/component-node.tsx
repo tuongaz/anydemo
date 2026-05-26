@@ -20,8 +20,10 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** Threaded from the host so script-kind actions know which project to POST against. */
+  projectSlug?: string;
   /** Threaded from the host so script-kind actions know which flow to POST against. */
-  flowId?: string;
+  flowSlug?: string;
   /** Override for the action-dispatch base URL. Defaults to '/api' in ComponentRuntime. */
   apiBaseUrl?: string;
   // Mirror of HtmlNodeRuntimeData.onFitToContent: when wired (edit mode only),
@@ -98,7 +100,8 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       <ComponentRuntime
         spec={data.spec}
         nodeId={id}
-        flowId={data.flowId}
+        projectSlug={data.projectSlug}
+        flowSlug={data.flowSlug}
         apiBaseUrl={data.apiBaseUrl}
       />
     </div>
@@ -112,7 +115,8 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       <ComponentRuntime
         spec={data.spec}
         nodeId={id}
-        flowId={data.flowId}
+        projectSlug={data.projectSlug}
+        flowSlug={data.flowSlug}
         apiBaseUrl={data.apiBaseUrl}
       />
     </div>

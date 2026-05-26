@@ -359,6 +359,13 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   projectId?: string;
   /**
+   * Flow slug for the currently-mounted flow. Threaded into each type:'component'
+   * node's runtime `data.flowSlug` so script-kind actions can POST to
+   * `/api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`. Absent →
+   * the runtime no-ops script dispatches (set-kind actions still work).
+   */
+  flowSlug?: string;
+  /**
    * Optional override for the file-serving URL prefix used by file-backed
    * nodes (type:'image', type:'html'). Default `/api/projects` is correct for the
    * studio (same-origin). Embedders that serve files from a different host
@@ -371,11 +378,12 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   fileBaseUrl?: string;
   /**
    * Base URL the component-node runtime uses to POST script-kind actions:
-   * `${apiBaseUrl}/flows/:flowId/nodes/:nodeId/actions/:name`. Defaults to
-   * `/api` (correct for the studio, same-origin). Embedders that mount the
-   * studio under a different prefix or proxy through another host pass an
-   * absolute prefix here. Threaded into `data.apiBaseUrl` for every
-   * `type:'component'` node alongside `data.flowId = projectId`.
+   * `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
+   * Defaults to `/api` (correct for the studio, same-origin). Embedders that
+   * mount the studio under a different prefix or proxy through another host
+   * pass an absolute prefix here. Threaded into `data.apiBaseUrl` for every
+   * `type:'component'` node alongside `data.projectSlug = projectId` and
+   * `data.flowSlug = flowSlug`.
    */
   apiBaseUrl?: string;
   nodes: FlowNode[];
@@ -1751,6 +1759,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // parent supplies.
     adapter,
     projectId,
+    flowSlug,
     fileBaseUrl,
     apiBaseUrl = '/api',
     nodes,
@@ -2625,13 +2634,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
-          // US-014: component-node runtime POSTs script-kind actions to
-          // `${apiBaseUrl}/flows/:flowId/nodes/:nodeId/actions/:name`. Gated
-          // on type so non-component nodes don't carry stray fields they'd
-          // ignore. `flowId` mirrors the canvas's `projectId` prop (the
-          // studio's registry uses the two terms interchangeably; see
-          // adapter/types.ts).
-          flowId: merged.type === 'component' ? projectId : undefined,
+          // US-031: component-node runtime POSTs script-kind actions to
+          // `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
+          // Gated on type so non-component nodes don't carry stray fields they'd
+          // ignore. `projectSlug` mirrors the canvas's `projectId` prop (the
+          // file-route addressing uses project slug); `flowSlug` is the active
+          // flow's slug threaded from the host (apps/web/demo-view.tsx).
+          projectSlug: merged.type === 'component' ? projectId : undefined,
+          flowSlug: merged.type === 'component' ? flowSlug : undefined,
           apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined,
           // US-008: type:'image' placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
@@ -2756,6 +2766,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return [...fromServer, ...fromOverrides];
   }, [
     projectId,
+    flowSlug,
     fileBaseUrl,
     apiBaseUrl,
     nodes,

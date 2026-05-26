@@ -525,8 +525,8 @@
         "Typecheck passes"
       ],
       "priority": 31,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "First full run of bun run test:it:update-snapshots surfaced 6 real failures (not snapshot mismatches): (1) component-runtime.tsx posted script-actions to the deleted /api/flows/<id>/... route — re-anchored at /api/projects/<project>/flows/<flow>/... via new projectSlug + flowSlug props threaded through ComponentNode and SeeflowCanvas; (2) component-action-runner needed flow-folder-relative cwd post-multi-flow migration; (3) mcp-app.e2e.ts widget-state shim still passed the compound legacy slug — switched to projectSlug + flowSlug separately; (4) multi-flow.e2e.ts fixture wrote the project name into the flow's name field via legacy /api/flows/register — added a new POST /api/projects/register HTTP endpoint that wraps cli-ops.registerProject and switched the fixture to it; (5) manifest CRUD endpoints (POST/PATCH/DELETE /api/projects/:project/flows) didn't broadcast registry:reload SSE so the global demos cache lagged behind UI mutations — added explicit events?.broadcast after each mutation plus a useEffect retry + DemoView 'Loading' fallback for the brief race window; (6) registerProject return shape exposed via the new HTTP endpoint so e2e fixtures can seed manifest-driven projects. Existing chromium-linux baselines still match byte-for-byte after the fixes — no PNG regeneration was needed. bun run test:it:e2e exits 0 (one flaky retry on multi-flow's initial Main assertion; the suite reports flaky-but-passing). Ralph workflow commits per-story (no single Commit 6 — same per-story-commit precedent as US-012/US-022/US-028)."
     },
     {
       "id": "US-032",

@@ -3,6 +3,7 @@ import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
+import { registerProject } from './cli-ops.ts';
 import { runComponentAction } from './component-action-runner.ts';
 import {
   AssembleRequestSchema,
@@ -274,6 +275,9 @@ export function createApi(options: ApiOptions): Hono {
     }
 
     const result = await ops.registerFlow(parsed.data);
+    if (result.kind === 'ok') {
+      events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
+    }
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -284,6 +288,42 @@ export function createApi(options: ApiOptions): Hono {
       case 'badSchema':
         return c.json({ error: 'Flow file failed schema validation', issues: result.issues }, 400);
     }
+  });
+
+  // POST /api/projects/register — manifest-driven registration. Reads
+  // <repoPath>/seeflow.json + walks declared flows under flows/<id>/flow.json,
+  // upserting one FlowEntry per declared flow with the manifest's name +
+  // per-flow names (vs. /api/flows/register which is the legacy single-flow
+  // path that uses the same name for both project and flow).
+  api.post('/projects/register', async (c) => {
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Body must be valid JSON' }, 400);
+    }
+    const parsed = z.object({ repoPath: z.string().min(1) }).safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid register body', issues: parsed.error.issues }, 400);
+    }
+    const result = registerProject({ repoPath: parsed.data.repoPath, registry });
+    if (result.kind === 'ok') {
+      for (const entry of result.entries) watcher?.watch(entry.id);
+      events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
+      return c.json({
+        ok: true as const,
+        projectSlug: result.projectSlug,
+        entries: result.entries.map((e) => ({
+          id: e.id,
+          slug: e.slug,
+          projectSlug: e.projectSlug,
+          flowSlug: e.flowSlug,
+          name: e.name,
+          isDefault: e.isDefault,
+        })),
+      });
+    }
+    return c.json({ ok: false as const, error: result.kind }, 400);
   });
 
   // POST /api/flows/validate — dry-run validation. The skill's diagram
@@ -746,6 +786,7 @@ export function createApi(options: ApiOptions): Hono {
       valid: true,
     });
     watcher?.watch(entry.id);
+    events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
     return c.json(entry, 201);
   });
@@ -891,6 +932,7 @@ export function createApi(options: ApiOptions): Hono {
         valid: entry.valid,
       });
       watcher?.watch(newEntry.id);
+      events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
       return c.json(newEntry);
     }
@@ -928,6 +970,7 @@ export function createApi(options: ApiOptions): Hono {
       icon: finalIcon,
       valid: entry.valid,
     });
+    events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
     return c.json(updatedEntry);
   });
@@ -1311,6 +1354,7 @@ export function createApi(options: ApiOptions): Hono {
 
     watcher?.unwatch(entry.id);
     registry.remove(entry.id);
+    events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
     return c.json({ ok: true });
   });
@@ -1461,11 +1505,15 @@ export function createApi(options: ApiOptions): Hono {
     if (!action) return c.json({ error: `Unknown action: ${actionName}` }, 404);
 
     const payload = await c.req.json().catch(() => ({}));
+    // US-031: per-node sidecar scripts now anchor at
+    // `<repoPath>/<dirname(flowPath)>/nodes/<id>/` post-multi-flow migration —
+    // the runner still resolves scripts as `<cwd>/nodes/<nodeId>/<scriptPath>`,
+    // so feed the per-flow folder as `cwd`.
     const result = await runComponentAction({
       events,
       flowId: id,
       nodeId,
-      cwd: entry.repoPath,
+      cwd: join(entry.repoPath, dirname(entry.flowPath)),
       actionName,
       action,
       payload,

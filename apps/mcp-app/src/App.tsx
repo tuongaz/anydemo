@@ -202,6 +202,7 @@ export function App() {
           mode="edit"
           adapter={wrappedAdapter}
           projectId={projectSlug ?? ''}
+          flowSlug={flowSlug ?? ''}
           nodes={load.nodes}
           connectors={load.connectors}
           selectedNodeIds={selectedNodeIds}

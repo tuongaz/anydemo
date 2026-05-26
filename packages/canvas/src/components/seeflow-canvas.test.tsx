@@ -2156,13 +2156,18 @@ describe('SeeflowCanvas', () => {
       return (rf.props.nodes as Node[]).find((n) => n.id === id);
     }
 
-    it('injects data.flowId === projectId for component nodes', () => {
+    it('injects data.projectSlug === projectId and data.flowSlug === flowSlug for component nodes', () => {
       const tree = callSeeflowCanvas({
         projectId: 'demo-42',
+        flowSlug: 'main',
         nodes: [makeComponentNode('c1')],
       });
-      const data = findRfNode(tree, 'c1')?.data as { flowId?: string };
-      expect(data.flowId).toBe('demo-42');
+      const data = findRfNode(tree, 'c1')?.data as {
+        projectSlug?: string;
+        flowSlug?: string;
+      };
+      expect(data.projectSlug).toBe('demo-42');
+      expect(data.flowSlug).toBe('main');
     });
 
     it("defaults data.apiBaseUrl to '/api' when the prop is omitted", () => {
@@ -2184,17 +2189,20 @@ describe('SeeflowCanvas', () => {
       expect(data.apiBaseUrl).toBe('https://embedder.example/api');
     });
 
-    it('omits flowId + apiBaseUrl on non-component nodes (gated by type)', () => {
+    it('omits projectSlug + flowSlug + apiBaseUrl on non-component nodes (gated by type)', () => {
       const tree = callSeeflowCanvas({
         projectId: 'demo-42',
+        flowSlug: 'main',
         apiBaseUrl: '/custom',
         nodes: [makeShapeNode('a')],
       });
       const data = findRfNode(tree, 'a')?.data as {
-        flowId?: string;
+        projectSlug?: string;
+        flowSlug?: string;
         apiBaseUrl?: string;
       };
-      expect(data.flowId).toBeUndefined();
+      expect(data.projectSlug).toBeUndefined();
+      expect(data.flowSlug).toBeUndefined();
       expect(data.apiBaseUrl).toBeUndefined();
     });
   });

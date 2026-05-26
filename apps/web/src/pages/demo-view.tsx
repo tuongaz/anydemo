@@ -141,6 +141,9 @@ export interface DemoViewProps {
   statusByNode: NodeStatuses;
   onPlayNode: (nodeId: string) => void;
   onRestartDemo?: () => Promise<unknown>;
+  /** US-031: refresh the global demos list. Called after flow CRUD so the
+   *  navigation lands on a page that resolves through `demos.find(...)`. */
+  refreshFlows: () => Promise<void> | void;
 }
 
 export function DemoView({
@@ -155,6 +158,7 @@ export function DemoView({
   statusByNode,
   onPlayNode,
   onRestartDemo,
+  refreshFlows,
 }: DemoViewProps) {
   const summary = demos.find((d) => d.slug === slug);
   // US-024: per-project flow list powers the Figma-style switcher popover
@@ -2957,7 +2961,15 @@ export function DemoView({
     );
   }, [demo, deletedConnectorIds, deletedNodeIds]);
 
-  if (!summary) {
+  // US-031: when projectFlows is still resolving OR contains the active
+  // flow (e.g. just created via the switcher), show the loading state
+  // instead of "Unknown demo". The global demos cache is eventually-
+  // consistent with the per-project flows list; favor the per-project
+  // signal here so a freshly-created flow's brief race window doesn't
+  // surface as an error page.
+  const projectKnowsActiveFlow = projectFlows?.some((f) => f.flowSlug === flow) ?? false;
+  const projectStillLoading = projectFlows === null;
+  if (!summary && !projectKnowsActiveFlow && !projectStillLoading) {
     return (
       <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-background p-6 text-center">
         <p className="text-sm font-medium">Unknown demo: {slug}</p>
@@ -2968,7 +2980,7 @@ export function DemoView({
     );
   }
 
-  if (loading && !detail) {
+  if (!summary || (loading && !detail)) {
     return (
       <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
         Loading demo…
@@ -3033,7 +3045,8 @@ export function DemoView({
         open={flowCreateOpen}
         onOpenChange={setFlowCreateOpen}
         onCreate={createProjectFlow}
-        onCreated={(result) => {
+        onCreated={async (result) => {
+          await refreshFlows();
           navigate(flowPath(project, result.flowSlug));
         }}
       />
@@ -3044,7 +3057,8 @@ export function DemoView({
         }}
         flow={flowRenameTarget}
         onRename={renameProjectFlow}
-        onRenamed={(result, previousFlowSlug) => {
+        onRenamed={async (result, previousFlowSlug) => {
+          await refreshFlows();
           if (result.flowSlug !== previousFlowSlug) {
             navigate(flowPath(project, result.flowSlug));
           }
@@ -3058,7 +3072,8 @@ export function DemoView({
         flow={flowDeleteTarget}
         flows={projectFlows ?? []}
         onDelete={deleteProjectFlow}
-        onDeleted={(deletedFlowSlug, newDefault) => {
+        onDeleted={async (deletedFlowSlug, newDefault) => {
+          await refreshFlows();
           if (deletedFlowSlug !== flow) return;
           const fallback =
             newDefault ??
@@ -3082,6 +3097,9 @@ export function DemoView({
           // Post-US-008, file routes are addressed by project slug — so we
           // pass the URL slug here, not the registry entry id (`flowId`).
           projectId={project}
+          // US-031: flowSlug drives the component-runtime's script-action URL
+          // composition (`/api/projects/:project/flows/:flow/nodes/.../actions/...`).
+          flowSlug={flow}
           enableEmbed={false}
           onExportToCloud={flowId ? () => setExportDialogOpen(true) : undefined}
           onRestartDemo={onRestartDemo}

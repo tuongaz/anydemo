@@ -240,9 +240,10 @@ export async function registerManifestProject(
   };
   writeFileSync(join(repoPath, 'seeflow.json'), `${JSON.stringify(manifest, null, 2)}\n`);
 
-  // Each declared flow lands as an empty envelope on disk. The default
-  // flow gets registered through the legacy endpoint so the projectSlug
-  // synthesised by operations.registerFlowImpl matches slugify(opts.name).
+  // Each declared flow lands as an empty envelope on disk so the scanner
+  // (cli-ops.registerProject, invoked via /api/projects/register) can walk
+  // every flow folder and upsert one FlowEntry per declared flow with the
+  // manifest's project name + per-flow names.
   for (const flow of opts.flows) {
     const flowDir = join(repoPath, 'flows', flow.id);
     mkdirSync(flowDir, { recursive: true });
@@ -250,20 +251,37 @@ export async function registerManifestProject(
     writeFileSync(join(flowDir, 'flow.json'), `${JSON.stringify(envelope, null, 2)}\n`);
   }
 
-  const res = await fetch(`${studio.baseURL}/api/flows/register`, {
+  const res = await fetch(`${studio.baseURL}/api/projects/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({
-      name: opts.name,
-      repoPath,
-      flowPath: `flows/${opts.defaultFlow}/flow.json`,
-    }),
+    body: JSON.stringify({ repoPath }),
   });
   if (res.status !== 200) {
     const detail = await res.text();
     throw new Error(`Failed to register manifest project ${opts.name}: ${res.status} ${detail}`);
   }
-  const { id, slug: registeredSlug } = (await res.json()) as RegisterResponse;
-  const { projectSlug, flowSlug } = splitRegistrySlug(registeredSlug);
-  return { id, slug: registeredSlug, projectSlug, flowSlug, repoPath };
+  const payload = (await res.json()) as {
+    ok: boolean;
+    projectSlug: string;
+    entries: ReadonlyArray<{
+      id: string;
+      slug: string;
+      projectSlug: string;
+      flowSlug: string;
+      name: string;
+      isDefault: boolean;
+    }>;
+  };
+  const defaultEntry =
+    payload.entries.find((e) => e.flowSlug === opts.defaultFlow) ?? payload.entries[0];
+  if (!defaultEntry) {
+    throw new Error(`Manifest project registration returned no entries: ${opts.name}`);
+  }
+  return {
+    id: defaultEntry.id,
+    slug: defaultEntry.slug,
+    projectSlug: defaultEntry.projectSlug,
+    flowSlug: defaultEntry.flowSlug,
+    repoPath,
+  };
 }

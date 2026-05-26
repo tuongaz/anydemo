@@ -50,6 +50,19 @@ export function App() {
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
   const flowId = currentSummary?.id ?? null;
 
+  // US-031: when the URL points to a slug we don't yet have in the cached
+  // demos list (e.g. the user just created a flow via the switcher popover
+  // and the demos refresh hasn't echoed back yet), kick off a refresh so the
+  // "Unknown demo" page resolves without the user having to reload the tab.
+  // Demos is `null` while loading; only react once it's been resolved at
+  // least once and is missing the slug.
+  useEffect(() => {
+    if (!slug) return;
+    if (demos === null) return;
+    if (currentSummary) return;
+    refreshFlows();
+  }, [slug, demos, currentSummary, refreshFlows]);
+
   const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(project, flow);
   const { runs, apply: applyRun } = useNodeRuns(flowId);
   const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
@@ -229,6 +242,7 @@ export function App() {
               statusByNode={statusByNode}
               onPlayNode={onPlayNode}
               onRestartDemo={flowId ? onRestartDemo : undefined}
+              refreshFlows={refreshFlows}
             />
           ) : (
             <StudioHome demos={demos} />

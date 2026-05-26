@@ -156,19 +156,25 @@ describe('ComponentNode container', () => {
     expect(attr).toBe('component');
   });
 
-  it('mounts ComponentRuntime with the spec, nodeId, flowId and apiBaseUrl from data', () => {
-    const tree = callComponentNode({ flowId: 'demo-42', apiBaseUrl: '/custom' });
+  it('mounts ComponentRuntime with the spec, nodeId, projectSlug, flowSlug and apiBaseUrl from data', () => {
+    const tree = callComponentNode({
+      projectSlug: 'demo-42',
+      flowSlug: 'main',
+      apiBaseUrl: '/custom',
+    });
     const runtime = findRuntime(tree);
     expect(runtime).not.toBeNull();
     const props = runtime?.props as {
       spec?: ComponentSpec;
       nodeId?: string;
-      flowId?: string;
+      projectSlug?: string;
+      flowSlug?: string;
       apiBaseUrl?: string;
     };
     expect(props.spec).toBe(TRIVIAL_SPEC);
     expect(props.nodeId).toBe('c1');
-    expect(props.flowId).toBe('demo-42');
+    expect(props.projectSlug).toBe('demo-42');
+    expect(props.flowSlug).toBe('main');
     expect(props.apiBaseUrl).toBe('/custom');
   });
 });

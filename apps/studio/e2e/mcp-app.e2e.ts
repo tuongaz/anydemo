@@ -56,7 +56,8 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
   }) => {
     await installOpenAiShim(page, {
       kind: 'create',
-      flowSlug: mcpEnv.flow.slug,
+      projectSlug: mcpEnv.flow.projectSlug,
+      flowSlug: mcpEnv.flow.flowSlug,
       backendUrl: mcpEnv.studio.baseURL,
       backendToken: mcpEnv.token,
       justCreated: true,
@@ -90,7 +91,8 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
   }) => {
     await installOpenAiShim(page, {
       kind: 'navigate',
-      flowSlug: mcpEnv.flow.slug,
+      projectSlug: mcpEnv.flow.projectSlug,
+      flowSlug: mcpEnv.flow.flowSlug,
       nodeId: mcpEnv.primaryNodeId,
       backendUrl: mcpEnv.studio.baseURL,
       backendToken: mcpEnv.token,
@@ -121,7 +123,8 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
     // overlap the drag gesture, and the test isn't racing the banner unmount.
     await installOpenAiShim(page, {
       kind: 'navigate',
-      flowSlug: mcpEnv.flow.slug,
+      projectSlug: mcpEnv.flow.projectSlug,
+      flowSlug: mcpEnv.flow.flowSlug,
       backendUrl: mcpEnv.studio.baseURL,
       backendToken: mcpEnv.token,
     });
@@ -170,7 +173,8 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
   test('adding a node fires one sendMessage with event "node-added"', async ({ page, mcpEnv }) => {
     await installOpenAiShim(page, {
       kind: 'navigate',
-      flowSlug: mcpEnv.flow.slug,
+      projectSlug: mcpEnv.flow.projectSlug,
+      flowSlug: mcpEnv.flow.flowSlug,
       backendUrl: mcpEnv.studio.baseURL,
       backendToken: mcpEnv.token,
     });
@@ -248,7 +252,8 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
     expect(nodeAdded).toBeDefined();
     expect(nodeAdded).toMatchObject({
       event: 'node-added',
-      flowSlug: mcpEnv.flow.slug,
+      projectSlug: mcpEnv.flow.projectSlug,
+      flowSlug: mcpEnv.flow.flowSlug,
     });
     expect((nodeAdded?.payload as { type?: string } | undefined)?.type).toBe('rectangle');
   });

@@ -38,6 +38,8 @@ const MCP_APP_DIST = resolve(STUDIO_DIR, '../mcp-app/dist/index.html');
 export interface RegisteredFlow {
   id: string;
   slug: string;
+  projectSlug: string;
+  flowSlug: string;
   repoPath: string;
 }
 
@@ -130,7 +132,14 @@ async function registerDemoFlow(studio: StudioHandle): Promise<RegisteredFlow> {
     throw new Error(`Failed to register mcp-app demo: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as { id: string; slug: string };
-  return { id, slug: registeredSlug, repoPath };
+  // Legacy /api/flows/register always produces `${projectSlug}/${flowSlug}`
+  // (see operations.registerFlowImpl) where the studio synthesises
+  // projectSlug = slugify(name) and flowSlug = 'main'.
+  const sepIdx = registeredSlug.indexOf('/');
+  if (sepIdx < 0) throw new Error(`Registry slug missing '/': ${registeredSlug}`);
+  const projectSlug = registeredSlug.slice(0, sepIdx);
+  const flowSlug = registeredSlug.slice(sepIdx + 1);
+  return { id, slug: registeredSlug, projectSlug, flowSlug, repoPath };
 }
 
 type EmptyTestArgs = Record<never, never>;
@@ -214,7 +223,9 @@ export async function installOpenAiShim(
  * the literal arg each updateModelContext call received.
  */
 export interface OpenAiCallsSnapshot {
-  sendMessage: { events: { event: string; flowSlug?: string; payload?: unknown }[] }[];
+  sendMessage: {
+    events: { event: string; projectSlug?: string; flowSlug?: string; payload?: unknown }[];
+  }[];
   updateModelContext: Record<string, unknown>[];
 }
 

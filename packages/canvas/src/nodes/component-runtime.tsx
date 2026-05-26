@@ -70,15 +70,18 @@ export interface ComponentRuntimeProps {
   nodeId: string;
   /** Base URL for the script-action dispatch endpoint. Defaults to '/api'. */
   apiBaseUrl?: string;
-  /** Required for script-kind dispatch. Set actions work without it. */
-  flowId?: string;
+  /** Project slug. Required for script-kind dispatch under the multi-flow route. */
+  projectSlug?: string;
+  /** Flow slug. Required for script-kind dispatch under the multi-flow route. */
+  flowSlug?: string;
 }
 
 export function ComponentRuntime({
   spec,
   nodeId,
   apiBaseUrl = '/api',
-  flowId,
+  projectSlug,
+  flowSlug,
 }: ComponentRuntimeProps): ReactNode {
   const [state, dispatchState] = useReducer(reducer, spec.state ?? {});
   const actionNames = new Set(Object.keys(spec.actions ?? {}));
@@ -92,8 +95,8 @@ export function ComponentRuntime({
         dispatchState({ kind: 'set', path: action.path, value: resolved });
         return;
       }
-      if (!flowId) return;
-      const url = `${apiBaseUrl}/flows/${flowId}/nodes/${nodeId}/actions/${name}`;
+      if (!projectSlug || !flowSlug) return;
+      const url = `${apiBaseUrl}/projects/${encodeURIComponent(projectSlug)}/flows/${encodeURIComponent(flowSlug)}/nodes/${encodeURIComponent(nodeId)}/actions/${encodeURIComponent(name)}`;
       try {
         const res = await fetch(url, {
           method: 'POST',
@@ -117,7 +120,7 @@ export function ComponentRuntime({
         });
       }
     },
-    [spec.actions, flowId, apiBaseUrl, nodeId, state],
+    [spec.actions, projectSlug, flowSlug, apiBaseUrl, nodeId, state],
   );
 
   return renderElement(spec.root, spec, state, dispatch, actionNames);

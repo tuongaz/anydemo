@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 export interface UseDemosResult {
   demos: FlowSummary[] | null;
   error: string | null;
-  refresh: () => void;
+  refresh: () => Promise<void>;
 }
 
 export const useDemos = (): UseDemosResult => {
