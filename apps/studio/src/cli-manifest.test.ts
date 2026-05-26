@@ -16,6 +16,8 @@ describe('COMMAND_MANIFEST', () => {
         'flows:summary',
         'flows:get',
         'flows:graph',
+        'flows:create',
+        'flows:rename',
         'flows:delete',
         'flows:layout',
         'flow:add-bulk',

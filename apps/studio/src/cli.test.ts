@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { registerProject } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
 import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
@@ -614,6 +615,177 @@ describe('seeflow CLI new subcommands', () => {
       };
       expect(parsed.flowId).toBe(entry.id);
       expect(parsed.node.data.detail).toBe('# inlined body');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  // -- Manifest CRUD verbs (US-019) ----------------------------------------
+
+  /**
+   * Materialise a manifest-driven project at <tmp>/<slug>/ with the given flow
+   * ids, then call registerProject so the studio's registry knows about it.
+   * `flows[0]` becomes the defaultFlow.
+   */
+  const seedProject = (
+    studio: ReturnType<typeof startTestStudio>,
+    slug: string,
+    name: string,
+    flows: Array<{ id: string; name: string }>,
+  ) => {
+    const repoPath = join(mkdtempSync(join(tmpdir(), 'seeflow-cli-manifest-')), slug);
+    mkdirSync(repoPath, { recursive: true });
+    const manifest = {
+      version: 1 as const,
+      name,
+      defaultFlow: flows[0]?.id ?? 'main',
+      flows,
+    };
+    writeFileSync(join(repoPath, 'seeflow.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    for (const f of flows) {
+      const flowDir = join(repoPath, 'flows', f.id);
+      mkdirSync(flowDir, { recursive: true });
+      writeFileSync(
+        join(flowDir, 'flow.json'),
+        `${JSON.stringify({ version: 2, name: f.name, nodes: [], connectors: [] }, null, 2)}\n`,
+      );
+    }
+    const outcome = registerProject({ repoPath, registry: studio.registry });
+    if (outcome.kind !== 'ok')
+      throw new Error(`registerProject failed: ${JSON.stringify(outcome)}`);
+    return { repoPath, projectSlug: outcome.projectSlug, entries: outcome.entries };
+  };
+
+  it('flows:create writes the new flow on disk and registers it', async () => {
+    const studio = startTestStudio();
+    try {
+      const { repoPath, projectSlug } = seedProject(studio, 'demo-create', 'Demo Create', [
+        { id: 'main', name: 'Main' },
+      ]);
+
+      const r = await runCli(
+        [
+          'flows:create',
+          '--no-start',
+          '--project',
+          projectSlug,
+          '--flow',
+          'retry',
+          '--name',
+          'Retry',
+        ],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        projectSlug: string;
+        flowSlug: string;
+        flowPath: string;
+        isDefault: boolean;
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.projectSlug).toBe(projectSlug);
+      expect(parsed.flowSlug).toBe('retry');
+      expect(parsed.flowPath).toBe('flows/retry/flow.json');
+      expect(parsed.isDefault).toBe(false);
+
+      // On disk: new folder + flow.json envelope.
+      const newFlow = join(repoPath, 'flows', 'retry', 'flow.json');
+      expect(existsSync(newFlow)).toBe(true);
+      expect(JSON.parse(readFileSync(newFlow, 'utf-8'))).toEqual({
+        version: 2,
+        name: 'Retry',
+        nodes: [],
+        connectors: [],
+      });
+
+      // Manifest now has both flows.
+      const manifest = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf-8')) as {
+        flows: Array<{ id: string; name: string }>;
+      };
+      expect(manifest.flows.map((f) => f.id).sort()).toEqual(['main', 'retry']);
+
+      // Registry now has both entries (in-process — created via the HTTP
+      // endpoint that lives in the same process as the test studio).
+      const entries = studio.registry.list().filter((e) => e.projectSlug === projectSlug);
+      expect(entries).toHaveLength(2);
+      expect(entries.map((e) => e.flowSlug).sort()).toEqual(['main', 'retry']);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:rename updates the manifest name without touching the folder', async () => {
+    const studio = startTestStudio();
+    try {
+      const { repoPath, projectSlug } = seedProject(studio, 'demo-rename', 'Demo Rename', [
+        { id: 'main', name: 'Main' },
+      ]);
+
+      const r = await runCli(
+        [
+          'flows:rename',
+          '--no-start',
+          '--project',
+          projectSlug,
+          '--flow',
+          'main',
+          '--name',
+          'Primary',
+        ],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        flowSlug: string;
+        name: string;
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.flowSlug).toBe('main');
+      expect(parsed.name).toBe('Primary');
+
+      // Manifest reflects the new name; folder layout unchanged.
+      const manifest = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf-8')) as {
+        flows: Array<{ id: string; name: string }>;
+      };
+      expect(manifest.flows).toEqual([{ id: 'main', name: 'Primary' }]);
+      expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flows:delete removes the flow folder + manifest entry + registry entry', async () => {
+    const studio = startTestStudio();
+    try {
+      const { repoPath, projectSlug } = seedProject(studio, 'demo-delete', 'Demo Delete', [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ]);
+
+      const r = await runCli(
+        ['flows:delete', '--no-start', '--project', projectSlug, '--flow', 'retry'],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as { ok: boolean };
+      expect(parsed.ok).toBe(true);
+
+      // Folder removed.
+      expect(existsSync(join(repoPath, 'flows', 'retry'))).toBe(false);
+      // Manifest now lists only main.
+      const manifest = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf-8')) as {
+        flows: Array<{ id: string }>;
+        defaultFlow: string;
+      };
+      expect(manifest.flows.map((f) => f.id)).toEqual(['main']);
+      expect(manifest.defaultFlow).toBe('main');
+      // Registry has only the surviving entry.
+      const entries = studio.registry.list().filter((e) => e.projectSlug === projectSlug);
+      expect(entries).toHaveLength(1);
+      expect(entries[0]?.flowSlug).toBe('main');
     } finally {
       studio.stop();
     }

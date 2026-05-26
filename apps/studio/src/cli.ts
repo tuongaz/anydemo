@@ -132,6 +132,10 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runFlowsGet();
 } else if (sub === 'flows:graph') {
   await runFlowsGraph();
+} else if (sub === 'flows:create') {
+  await runFlowsCreate();
+} else if (sub === 'flows:rename') {
+  await runFlowsRename();
 } else if (sub === 'flows:delete') {
   await runFlowsDelete();
 } else if (sub === 'flows:layout') {
@@ -192,7 +196,9 @@ Commands (work without a running studio):
   flows:summary        List registered flows (id + name + description only)
   flows:get <id>       Get flow details
   flows:graph <id>     List nodes + connectors without inlined file content
-  flows:delete <id>    Unregister a flow
+  flows:create         Create a new flow within a project (--project <p> --flow <id> --name <n> [--icon <i>])
+  flows:rename         Rename a flow id/name/icon (--project <p> --flow <id> [--new-id <x>] [--name <n>] [--icon <i>])
+  flows:delete         Delete a flow (manifest-aware: --project <p> --flow <id> [--new-default <other>]) or unregister by id (<id>)
   flows:layout <id>    Apply ELK layout, writing style.json (--json/--file/--stdin optional)
   flow:add-bulk <id>   Add many nodes + connectors atomically (--json/--file/--stdin; body { nodes?, connectors? })
   nodes:add <id>       Add a node (--json/--file/--stdin)
@@ -671,10 +677,89 @@ async function runFlowsGraph() {
 }
 
 async function runFlowsDelete() {
+  // New manifest-aware shape: flows:delete --project <p> --flow <f> [--new-default <o>].
+  // Falls back to the legacy registry-only delete (flows:delete <flowId>) when
+  // neither --project nor --flow is supplied, so existing single-arg callers
+  // keep working until US-020 cuts every flow-scoped verb over to --project --flow.
+  if (flagValue('project') !== undefined || flagValue('flow') !== undefined) {
+    await runFlowsDeleteManifest();
+    return;
+  }
   const flowId = requireArg(1, '<flowId>');
   const ops = createCliOperations();
   const result = ops.deleteFlow(flowId);
   printOutcome(result);
+}
+
+async function runFlowsCreate() {
+  const project = flagValue('project');
+  if (!project) printError('Missing required flag: --project');
+  const flow = flagValue('flow');
+  if (!flow) printError('Missing required flag: --flow');
+  const name = flagValue('name');
+  if (!name) printError('Missing required flag: --name');
+  const icon = flagValue('icon');
+
+  const body: { id: string; name: string; icon?: string } = {
+    id: flow as string,
+    name: name as string,
+  };
+  if (icon !== undefined) body.icon = icon;
+
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await postJson(
+    `${url}/api/projects/${encodeURIComponent(project as string)}/flows`,
+    body,
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runFlowsRename() {
+  const project = flagValue('project');
+  if (!project) printError('Missing required flag: --project');
+  const flow = flagValue('flow');
+  if (!flow) printError('Missing required flag: --flow');
+  const newId = flagValue('new-id');
+  const name = flagValue('name');
+  const icon = flagValue('icon');
+  if (newId === undefined && name === undefined && icon === undefined) {
+    printError('flows:rename requires at least one of --new-id, --name, --icon');
+  }
+
+  const body: { id?: string; name?: string; icon?: string } = {};
+  if (newId !== undefined) body.id = newId;
+  if (name !== undefined) body.name = name;
+  if (icon !== undefined) body.icon = icon;
+
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(
+    `${url}/api/projects/${encodeURIComponent(project as string)}/flows/${encodeURIComponent(flow as string)}`,
+    {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    },
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
+}
+
+async function runFlowsDeleteManifest() {
+  const project = flagValue('project');
+  if (!project) printError('Missing required flag: --project');
+  const flow = flagValue('flow');
+  if (!flow) printError('Missing required flag: --flow');
+  const newDefault = flagValue('new-default');
+
+  const query = newDefault !== undefined ? `?newDefault=${encodeURIComponent(newDefault)}` : '';
+  const { url } = await studioUrlOrDie(hasFlag('no-start'));
+  const res = await fetch(
+    `${url}/api/projects/${encodeURIComponent(project as string)}/flows/${encodeURIComponent(flow as string)}${query}`,
+    { method: 'DELETE' },
+  );
+  const out = (await handleResponse(res)) as object;
+  printOk(out);
 }
 
 async function runFlowsLayout() {

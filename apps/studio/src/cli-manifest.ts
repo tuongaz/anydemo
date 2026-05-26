@@ -225,14 +225,126 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'flows:delete',
-    synopsis: 'seeflow flows:delete <flowId>',
-    description: 'Unregister a flow from the studio (the on-disk file is left untouched).',
+    synopsis: 'seeflow flows:delete (--project <p> --flow <f> [--new-default <other>]) | <flowId>',
+    description:
+      'Manifest-aware delete when --project + --flow are supplied: removes the ' +
+      '`flows/<flow>/` folder, updates `seeflow.json`, and drops the registry entry. ' +
+      'Refuses to delete the last flow in a project or the project default without ' +
+      '--new-default. Falls back to a registry-only unregister when called with a ' +
+      'bare positional <flowId> (the on-disk file is left untouched).',
     category: 'flows',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: [],
-    outputs: { okExample: { ok: true }, errorKinds: ['notFound'] },
+    args: [
+      {
+        name: 'flowId',
+        required: false,
+        description: 'Flow id or slug (legacy registry-only delete; ignored when --project is set)',
+      },
+    ],
+    flags: [
+      {
+        name: 'project',
+        valuePlaceholder: '<p>',
+        description: 'Project slug (manifest-aware delete)',
+      },
+      { name: 'flow', valuePlaceholder: '<f>', description: 'Flow id within the project' },
+      {
+        name: 'new-default',
+        valuePlaceholder: '<other>',
+        description: 'Required when deleting the project default — names the flow that takes over',
+      },
+    ],
+    outputs: {
+      okExample: { ok: true },
+      errorKinds: ['notFound'],
+    },
     requiresStudio: false,
-    examples: ['seeflow flows:delete abc12345'],
+    examples: [
+      'seeflow flows:delete --project order-pipeline --flow retry',
+      'seeflow flows:delete --project order-pipeline --flow main --new-default retry',
+      'seeflow flows:delete abc12345',
+    ],
+  },
+  {
+    name: 'flows:create',
+    synopsis: 'seeflow flows:create --project <p> --flow <id> --name <n> [--icon <i>]',
+    description:
+      'Create a new flow within an existing project. Writes ' +
+      '`<repoPath>/flows/<id>/flow.json` with an empty envelope and appends the ' +
+      'new entry to the project manifest atomically.',
+    category: 'flows',
+    args: [],
+    flags: [
+      {
+        name: 'project',
+        valuePlaceholder: '<p>',
+        description: 'Project slug',
+        required: true,
+      },
+      {
+        name: 'flow',
+        valuePlaceholder: '<id>',
+        description: 'New flow id (lowercase alphanumeric + dashes)',
+        required: true,
+      },
+      {
+        name: 'name',
+        valuePlaceholder: '<n>',
+        description: 'Human-readable flow name',
+        required: true,
+      },
+      {
+        name: 'icon',
+        valuePlaceholder: '<i>',
+        description: 'Optional icon name shown next to the flow in the switcher',
+      },
+    ],
+    outputs: {
+      okExample: { id: 'abc12345', slug: 'order-pipeline/retry', flowSlug: 'retry' },
+      errorKinds: ['notFound'],
+    },
+    requiresStudio: false,
+    examples: [
+      'seeflow flows:create --project order-pipeline --flow retry --name "Retry"',
+      'seeflow flows:create --project order-pipeline --flow retry --name "Retry" --icon refresh',
+    ],
+  },
+  {
+    name: 'flows:rename',
+    synopsis:
+      'seeflow flows:rename --project <p> --flow <id> [--new-id <x>] [--name <n>] [--icon <i>]',
+    description:
+      "Rename a flow's id, name, and/or icon. Changing --new-id moves the on-disk " +
+      '`flows/<id>/` folder atomically and rewrites the manifest (including ' +
+      '`defaultFlow` if it pointed at the renamed flow). Updating only --name / ' +
+      '--icon edits the manifest in place without touching the filesystem layout.',
+    category: 'flows',
+    args: [],
+    flags: [
+      {
+        name: 'project',
+        valuePlaceholder: '<p>',
+        description: 'Project slug',
+        required: true,
+      },
+      {
+        name: 'flow',
+        valuePlaceholder: '<id>',
+        description: 'Current flow id within the project',
+        required: true,
+      },
+      { name: 'new-id', valuePlaceholder: '<x>', description: 'New flow id (renames the folder)' },
+      { name: 'name', valuePlaceholder: '<n>', description: 'New human-readable name' },
+      { name: 'icon', valuePlaceholder: '<i>', description: 'New icon name' },
+    ],
+    outputs: {
+      okExample: { id: 'abc12345', slug: 'order-pipeline/retry-v2', flowSlug: 'retry-v2' },
+      errorKinds: ['notFound'],
+    },
+    requiresStudio: false,
+    examples: [
+      'seeflow flows:rename --project order-pipeline --flow retry --new-id retry-v2',
+      'seeflow flows:rename --project order-pipeline --flow main --name "Primary"',
+    ],
   },
   {
     name: 'flows:layout',
