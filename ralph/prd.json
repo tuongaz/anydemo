@@ -542,8 +542,8 @@
         "Typecheck passes (skills/ is docs but the repo's lint may still touch markdown)"
       ],
       "priority": 32,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "SKILL.md re-anchored at multi-flow layout per the AC: layout diagram + intro paragraph now reference seeflow.json and flows/<flowSlug>/; conventions table gains $projectSlug + $flowSlug rows; $repoPath becomes $PWD/.seeflow/<projectSlug>; $SEEFLOW_TMP moves to $repoPath/flows/$flowSlug/.tmp/; Pipeline P3 mentions both files in one shot; common mistakes adds the flows:create-vs-projects:create guardrail and re-anchors the scriptPath example; LEARN.md placement note unchanged (path stays $PWD/.seeflow/LEARN.md) but its sharing scope is updated to 'every project + flow'. Quality gates: typecheck, format, lint all clean. Reference files (US-033) and sub-agent prompts (US-034) still need the corresponding edits before the skill is fully consistent."
     },
     {
       "id": "US-033",
@@ -558,8 +558,8 @@
         "Typecheck passes"
       ],
       "priority": 33,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Audit + rewrite pass on every reference doc to align with multi-flow. cli.md: rewrote the addressing section + new-vs-existing-vs-add-flow section; documented `flows:create/rename/delete` and `projects:list`; canvas URL pinned to `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`. schema.md: file-layout diagram now shows `<repoPath>/seeflow.json + flows/<flowSlug>/{flow.json,style.json,nodes/<id>/...}`; per-node sidecar paths re-anchored everywhere (`file://` substitution, `image`, `html`, envelope reset action note); `style.json` write path now spells the new `--project --flow` flags; ResolvedFlow GET URL switched from `/api/flows/:id` to `/api/projects/:project/flows/:flow`. p3-scaffold.md: rewrote the entry step to describe both files written in one shot, replaced the legacy-fallback paragraph with an explicit `no legacy root flow.json` rule, switched `id`-capture to `projectSlug + flowSlug`, updated `flows:layout`/`nodes:patch` invocations to carry `--project --flow`, canvas-open URL switched to `/projects/<projectSlug>/flows/<flowSlug>`. p5-patch-overlays.md: scriptFile.path anchored at `<repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/<name>`; every `nodes:patch`/`flow:add-bulk`/`flows:layout` call spells `--project --flow`. p6-validation.md: e2e invocation example added with `--project --flow`; ok-true/ok-false copy updated to `/projects/<projectSlug>/flows/<flowSlug>` + script-path anchor at `<repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/`. p4-design-overlays.md: scriptFile.path is now flow-folder-relative; `nodes:patch` call shows `--project --flow`. learn-format.md: intro + lifecycle prose re-anchored ('shared across every project + flow'), Flows-already-created table now keys by `<projectSlug>/<flowSlug>` with a multi-flow example row, stray-LEARN-detection paragraph mentions both project and flow folders. operations.md: error-handling row updated to `project-not-found` / `flow-not-found` / `unknownNode`; CLI subcommand table rewritten with the manifest-driven entry points and `--project --flow` flag pairs on every flow-scoped verb. core-rules.md: example scripts re-anchored at `<repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/...`. Quality gates: typecheck (all 4 packages exit 0), format (363 files clean), lint (363 files clean)."
     },
     {
       "id": "US-034",

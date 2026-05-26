@@ -1,20 +1,22 @@
 # Phase 3 — scaffold, populate, layout, review
 
-The skeleton flow lands via seven steps, in order. No `flow.json` authoring by hand — `projects:create` writes the empty envelope. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
+The skeleton flow lands via seven steps, in order. No `seeflow.json` or `flow.json` authoring by hand — `projects:create` writes BOTH the manifest and the first flow envelope in one shot. Run `$SEEFLOW help <command>` for each subcommand's body shape and flags.
 
 ## 1. Scaffold + register inside the project via `projects:create`
 
-This is the entry point for a new project: the CLI writes the empty `flow.json` at `<repoPath>/flow.json` (project root) and registers it in one shot.
+This is the entry point for a new project: the CLI writes both `<repoPath>/seeflow.json` (manifest with a single `flows[]` entry `{ id: 'main', name: 'Main' }`) AND `<repoPath>/flows/main/flow.json` (empty envelope) in one shot, then registers every declared flow.
 
-### Existing-flow gate — check before the CLI write
+### Existing-project gate — check before the CLI write
 
-Test `test -f "$repoPath/flow.json"`. If the file exists (or `projects:create` later returns `alreadyExists` exit code 4 because the pre-check raced), STOP and ask via `AskUserQuestion` — **never silently overwrite, never silently fall back**:
+Test `test -f "$repoPath/seeflow.json"`. If the manifest exists (or `projects:create` later returns `alreadyExists` exit code 4 because the pre-check raced), STOP and ask via `AskUserQuestion` — **never silently overwrite, never silently fall back**:
 
-> A SeeFlow flow is already registered at this path. What do you want to do?
+> A SeeFlow project is already registered at this path. What do you want to do?
 >
-> 1. **Open the existing flow** *(Recommended)* — skip creation; run `$SEEFLOW register --path "$repoPath"` to re-attach the existing envelope, surface `$STUDIO_URL/d/<slug>`, then stop. If the user wanted to inspect rather than edit, hand off to `/seeflow-lookup`.
-> 2. **Create a new flow with a different name** — ask the user for a new flow name, recompute `$repoPath = $PWD/.seeflow/<new-slug>`, then retry this step (Phase 1/2 only rerun if the user's intent also changed).
-> 3. **Overwrite the existing flow** — destructive. Confirm once more, then `$SEEFLOW flows:delete --path "$repoPath"` (and `rm -rf "$repoPath"` for any sidecar leftovers), then retry this step.
+> 1. **Open the existing project** *(Recommended)* — skip creation; run `$SEEFLOW register --path "$repoPath"` to re-scan the manifest and re-attach every declared flow, surface `$STUDIO_URL/projects/<projectSlug>/flows/<defaultFlowSlug>`, then stop. If the user wanted to inspect rather than edit, hand off to `/seeflow-lookup`.
+> 2. **Create a new project with a different name** — ask the user for a new project name, recompute `$repoPath = $PWD/.seeflow/<new-slug>`, then retry this step (Phase 1/2 only rerun if the user's intent also changed).
+> 3. **Overwrite the existing project** — destructive. Confirm once more, then `rm -rf "$repoPath"` and retry this step.
+
+**No legacy fallback.** A bare `<repoPath>/flow.json` at the project root is *not* a valid SeeFlow project anymore — the scanner returns `legacy-root-flow` and refuses to register it. If you find one from an older skill run, surface that explicitly to the user and ask for permission to migrate it into the new `flows/main/` layout before continuing.
 
 Gate clear → forward the planner-supplied `name` (and `description` if the planner provided one):
 
@@ -22,9 +24,9 @@ Gate clear → forward the planner-supplied `name` (and `description` if the pla
 $SEEFLOW projects:create --path "$repoPath" --name "$plannerName" [--description "$plannerDescription"]
 ```
 
-The studio writes the envelope, adds a registry entry under `~/.seeflow/registry.json`, and returns `{ id, slug }` (slug is derived from `name`). **Capture `id` from the response and use it (not `slug`) for every follow-up CLI call below** — several commands document slug support in `help` but the server only resolves by id today. **Registration is a precondition for opening the canvas:** the `$STUDIO_URL/d/<slug>` route only works after this step succeeds — never surface the canvas URL before this step.
+The studio writes both files, adds the project's flow entries to `~/.seeflow/registry.json`, and returns `{ projectSlug, entries: [...] }` — one entry per declared flow (a fresh `projects:create` always declares exactly one flow with `flowSlug: 'main'`). **Capture `projectSlug` and `entries[0].flowSlug` from the response — they are the addressing inputs (`--project $projectSlug --flow main`) for every follow-up CLI call below.** **Registration is a precondition for opening the canvas:** the `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` route only works after this step succeeds — never surface the canvas URL before this step.
 
-If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed (filesystem race), loop back to the gate above and let the user decide — do not auto-fall-back. Do not hardcode the envelope shape from memory; to inspect what `projects:create` writes, run `$SEEFLOW schema flow`.
+If `projects:create` returns `alreadyExists` (code 4) after the pre-check passed (filesystem race), loop back to the gate above and let the user decide — do not auto-fall-back. Do not hardcode the envelope shape from memory; to inspect what `projects:create` writes, run `$SEEFLOW schema flow`. Subsequent flows in the same project use `flows:create --project $projectSlug --flow <flowSlug> --name <name>` — not `projects:create` again.
 
 ## 2. Normalize the planner output
 
@@ -56,13 +58,17 @@ Atomic seed of nodes + connectors in one transactional write. Forward the normal
 Every input class, every dynamic gate outcome; the static path used to ship with blank `nodes/<id>/detail.md` because Phase 4–5 were skipped. Walk the planner's `nodes[]` (post-id-rewrite). For each non-decorative node — `rectangle`, `database`, `queue`, `cloud`, `server`, `user` (skip `sticky`, `text`, `icon`, `ellipse`, `image`, `component`, `html`; those carry content in other fields) — check whether `data.detail` was set in the planner output:
 
 - **Present** — already externalised by `flow:add-bulk` to `nodes/<id>/detail.md`. Nothing to do.
-- **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why`. Push via `nodes:patch <flowId> <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `nodes/<id>/detail.md` and stores a `file://` ref.
+- **Missing or empty** — synthesise 1–3 short markdown paragraphs from `data.name` + `data.description` + the matching `rationales[id]` + any relevant `codePointers[].why`. Push via `nodes:patch --project "$projectSlug" --flow "$flowSlug" <nodeId> --json '{"data":{"detail":"<markdown>"}}'`. The studio writes `<repoPath>/flows/<flowSlug>/nodes/<id>/detail.md` and stores a `file://` ref.
 
 Parallelise the patches across nodes — single message, N Bash calls. This is the static-flow safety net described in `../../agents/seeflow-node-planner.md` § "Semantic requirements".
 
 ## 6. `flows:layout`
 
-Run ELK and write `style.json`.
+Run ELK and write `style.json`:
+
+```bash
+$SEEFLOW flows:layout --project "$projectSlug" --flow "$flowSlug"
+```
 
 ## 7. Silent LEARN.md write #1
 
@@ -77,7 +83,7 @@ Each call validates server-side. A `badSchema` exit means feed the issues back t
 Open the canvas, surface the planner's `rationales` per node — prefix each with `<data.name> (<canonical id>):` so the human sees a readable anchor despite the opaque id (`POST /orders (node-Ab12cd34Ef): Single HTTP service — internal routes are implementation detail.`) — and ask **one combined question** (layout review + dynamic gate in a single round-trip — two consecutive waits is interrogation):
 
 ```bash
-URL="$STUDIO_URL/d/$slug"
+URL="$STUDIO_URL/projects/$projectSlug/flows/$flowSlug"
 (open "$URL" 2>/dev/null || xdg-open "$URL" 2>/dev/null || start "$URL" 2>/dev/null) &
 ```
 
@@ -90,7 +96,7 @@ URL="$STUDIO_URL/d/$slug"
 
 - **Layout changes requested** → re-run node-planner with the feedback, repeat the combined ask. The dynamic answer (if given) is remembered but not acted on until the layout is approved.
 - **Layout approved + dynamic** → Phase 4. If the system-analyzer is still running, await it now; Phase 4 designers need its `runtimeProfile`, fixtures, data-entry paths, and tech adaptations.
-- **Layout approved + static** → **Silent LEARN.md write #2** (merge contract in `p6-validation.md` § "Silent LEARN.md write #2"), then print `Flow "<name>" registered as <slug> (static). Open: $STUDIO_URL/d/<slug>` and stop.
+- **Layout approved + static** → **Silent LEARN.md write #2** (merge contract in `p6-validation.md` § "Silent LEARN.md write #2"), then print `Flow "<name>" registered as <projectSlug>/<flowSlug> (static). Open: $STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` and stop.
 - **Dynamic answer unclear or absent** → default to static (dynamic writes executable scripts; opt-in).
 
 (`inputClass === "document"` defaults to static here without re-asking — document flows have no runtime to react to. Same applies to the no-source-tree case folded into the document branch.)

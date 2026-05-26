@@ -4,7 +4,7 @@ Launch `seeflow-play-designer` + `seeflow-status-designer` in parallel (`../../S
 
 ## Output shape
 
-Both designers emit `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch`. `scriptFile.path` is project-root-relative (`nodes/<nodeId>/scripts/<name>`); `playAction.scriptPath` inside `patch` is node-folder-relative (`scripts/play.ts`). Full contracts: `../../agents/seeflow-play-designer.md`, `../../agents/seeflow-status-designer.md`.
+Both designers emit `{ nodeId, patch, scriptFile: {path, body, chmod}, validationSafe?, rationale }` triples. `patch` is the exact body for `seeflow nodes:patch --project <projectSlug> --flow <flowSlug>`. `scriptFile.path` is flow-folder-relative (`flows/<flowSlug>/nodes/<nodeId>/scripts/<name>`, i.e. anchored at `<repoPath>`); `playAction.scriptPath` inside `patch` stays node-folder-relative (`scripts/play.ts`). Full contracts: `../../agents/seeflow-play-designer.md`, `../../agents/seeflow-status-designer.md`.
 
 ## Sample data priority
 

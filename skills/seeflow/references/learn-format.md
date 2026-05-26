@@ -1,11 +1,12 @@
 # `LEARN.md` — project memory for flow authoring
 
 `<host>/.seeflow/LEARN.md` is the persistent crib sheet the `seeflow`
-skill writes for itself. It is **shared across every flow in the host
-repo** — there is exactly one `LEARN.md` per host, living next to (not
-inside) the per-flow project directories. Every `/seeflow` invocation
-reads it before discovery and updates it at the end of discovery (and
-again whenever later phases surface a non-obvious fact).
+skill writes for itself. It is **shared across every project + flow in
+the host repo** — there is exactly one `LEARN.md` per host, living next
+to (not inside) the per-project directories (`<host>/.seeflow/<projectSlug>/`).
+Every `/seeflow` invocation reads it before discovery and updates it at
+the end of discovery (and again whenever later phases surface a
+non-obvious fact).
 
 The file is **for the skill**, not for the user — keep it terse, keep it
 factual, keep it scannable. Treat it like an internal handbook: a future
@@ -30,21 +31,24 @@ or duplicate entries when a run aborts mid-flight.
   the staged buffer. **Do not write to disk yet.**
 - **Save #1 — Silent, Phase 3 step 7** (after `flows:layout`, before the
   canvas review). First disk hit. Merge the staged `learnUpdates` into
-  the file AND upsert the "Flows already created" row by `slug` with
-  today's date + a one-line purpose. The studio has already registered
-  the flow by this point, so the row reflects a real entity.
+  the file AND upsert the "Flows already created" row by
+  `<projectSlug>/<flowSlug>` with today's date + a one-line purpose.
+  The studio has already registered the flow by this point, so the row
+  reflects a real entity.
 - **Save #2 — Silent, at the final-flow announcement** (Phase 6
   `ok:true` exit, Phase 3 "Layout approved + static" exit, or the
   document-branch static exit). Re-upsert the same row (idempotent by
-  slug) and append anything Phases 5–6 surfaced — a new gotcha, an
-  emulator quirk, a working seed command, a tech-adaptation override.
+  `<projectSlug>/<flowSlug>`) and append anything Phases 5–6 surfaced —
+  a new gotcha, an emulator quirk, a working seed command, a
+  tech-adaptation override.
 
 The file always lives at `<host>/.seeflow/LEARN.md` — one shared
-file per host repo, **never** inside a per-flow folder
-(`<host>/.seeflow/<slug>/LEARN.md` is wrong; if you find one there
-from an older run, move its contents into the shared file and delete
-the stray copy). Create the `<host>/.seeflow/` directory if missing.
-Never write outside that directory.
+file per host repo, **never** inside a per-project or per-flow folder
+(`<host>/.seeflow/<projectSlug>/LEARN.md` or
+`<host>/.seeflow/<projectSlug>/flows/<flowSlug>/LEARN.md` is wrong; if
+you find one there from an older run, move its contents into the shared
+file and delete the stray copy). Create the `<host>/.seeflow/` directory
+if missing. Never write outside that directory.
 
 ## File structure
 
@@ -163,10 +167,11 @@ genuinely project-specific — empty subsections are noise.
 
 ## Flows already created
 
-| Slug | Purpose | Last updated |
+| Project / Flow | Purpose | Last updated |
 |---|---|---|
-| `checkout-flow` | end-to-end /checkout demo | 2026-04-12 |
-| `order-pipeline` | event-driven order lifecycle | 2026-05-01 |
+| `checkout/main` | end-to-end /checkout demo | 2026-04-12 |
+| `order-pipeline/main` | event-driven order lifecycle | 2026-05-01 |
+| `order-pipeline/retry` | failed-order replay subflow | 2026-05-26 |
 ```
 
 ## Merging rules

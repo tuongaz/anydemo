@@ -54,8 +54,8 @@ Use `runtimeProfile.primaryLanguage` from Phase 1 as the interpreter for every s
 ### TypeScript example
 
 ```typescript
-// nodes/<nodeId>/scripts/play-checkout.ts
-import type { CartPayload } from "../../src/types";
+// <repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/play-checkout.ts
+import type { CartPayload } from "<host>/src/types";
 const input: CartPayload = JSON.parse(await Bun.stdin.text());
 const res = await fetch("http://localhost:3001/checkout", {
   method: "POST", headers: { "Content-Type": "application/json" },
@@ -67,7 +67,7 @@ console.log(await res.json());
 ### Go example
 
 ```go
-// nodes/<nodeId>/scripts/play-order.go
+// <repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/play-order.go
 package main
 import ("encoding/json"; "fmt"; "net/http"; "bytes"; "os")
 func main() {
