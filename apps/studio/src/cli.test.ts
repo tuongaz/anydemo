@@ -453,6 +453,54 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
+  it('schema <category> --jq extracts a single schema variant', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(
+        ['schema', 'node', '--jq', '.schemas.rectangle', '--no-start'],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        name: string;
+        result: { type: string; properties: Record<string, unknown> };
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.name).toBe('node');
+      expect(parsed.result.type).toBe('object');
+      expect(parsed.result.properties).toBeDefined();
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema <category> --jq with iteration returns an array of results', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', '--jq', '.schemas[]', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as { ok: boolean; name: string; result: unknown[] };
+      expect(parsed.ok).toBe(true);
+      // 13 flat variants iterated.
+      expect(Array.isArray(parsed.result)).toBe(true);
+      expect(parsed.result).toHaveLength(13);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema --jq on a bad filter exits 2 with badJq', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', '--jq', 'foo', '--no-start'], studio.env);
+      expect(r.code).toBe(2);
+      expect(r.stderr).toContain('"code":"badJq"');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
   it('schema with unknown category exits 3 with notFound + available list', async () => {
     const studio = startTestStudio();
     try {

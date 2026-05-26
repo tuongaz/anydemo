@@ -41,6 +41,8 @@ Before any deeper lookup, list the registered flows (use the catalog subcommand 
 
 For node / connector / action field shapes, run `seeflow schema` (then `seeflow schema node`, `seeflow schema connector`, `seeflow schema action` as needed). Don't infer field names, enum values, or required-lists from memory — re-fetch them. The schema covers what each variant looks like on disk and which values are legal.
 
+To pluck a slice out of a large schema payload, pass a jq path filter via `--jq`: e.g. `seeflow schema node --jq .schemas.rectangle`, `seeflow schema node --jq '.schemas.image.properties.data.properties.path'`, or `seeflow schema node --jq '.schemas[]'`. Supported subset: identity (`.`), field (`.foo.bar`), bracket (`.["k"]`, `.[3]`, negative indices), iteration (`.foo[]`), optional `?`, and pipe (`|`). The CLI returns the value under `result` (single output) or `result: [...]` (multiple). Bad filters exit with code 2 / `badJq`.
+
 Runtime behavior the CLI assumes — not encoded in the schema:
 
 - **Decorative node types** — `sticky`, `text`, `icon`, `image`, `html` with empty content, and geometric shapes (`ellipse`, `database`, `queue`, `cloud`, `server`, `user`) carrying no capabilities — are visual only. **Skip them for architectural reasoning.** Treat any node as architectural when its `data.playAction` or `data.statusAction` is set, regardless of `type`.

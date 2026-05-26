@@ -5,6 +5,7 @@ import { drainStdin, loadBody, printError, printOk, printOutcome } from './cli-h
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
+import { JqError, applyJq } from './jq-filter.ts';
 import type { LayoutOptions } from './layout.ts';
 import {
   ConnectorPatchBodySchema,
@@ -906,9 +907,14 @@ async function runValidate() {
 
 async function runSchema() {
   const category = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
+  const jqFilter = flagValue('jq');
   const { listSchemaCategories, getSchemaCategory } = await import('./schema-catalog.ts');
   if (!category) {
-    printOk({ categories: listSchemaCategories() });
+    const base = { categories: listSchemaCategories() };
+    if (jqFilter !== undefined) {
+      printOk({ result: applyJqOrDie(base, jqFilter) });
+    }
+    printOk(base);
   }
   const payload = getSchemaCategory(category as string);
   if (!payload) {
@@ -917,7 +923,30 @@ async function runSchema() {
     process.stderr.write(`${JSON.stringify({ error: message, code: 'notFound', available })}\n`);
     process.exit(3);
   }
-  printOk({ name: category, schemas: payload.schemas, notes: payload.notes });
+  const base = { name: category, schemas: payload.schemas, notes: payload.notes };
+  if (jqFilter !== undefined) {
+    printOk({ name: category, result: applyJqOrDie(base, jqFilter) });
+  }
+  printOk(base);
+}
+
+// Apply a --jq filter and unwrap a single-result stream into the value
+// itself; multi-output streams (from `[]` or `|`) come through as arrays
+// so downstream consumers can tell `.foo[]` (multiple) apart from `.foo`
+// (single value that happens to be an array). On parse / type errors exits
+// with code 2 (badJq).
+function applyJqOrDie(input: unknown, filterStr: string): unknown {
+  try {
+    const stream = applyJq(input, filterStr);
+    if (stream.length === 1) return stream[0];
+    return stream;
+  } catch (err) {
+    if (err instanceof JqError) {
+      process.stderr.write(`${JSON.stringify({ error: err.message, code: 'badJq' })}\n`);
+      process.exit(2);
+    }
+    throw err;
+  }
 }
 
 async function runE2e() {
