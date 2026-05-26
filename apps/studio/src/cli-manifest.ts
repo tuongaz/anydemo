@@ -610,7 +610,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'schema',
-    synopsis: 'seeflow schema [<category>]',
+    synopsis: 'seeflow schema [<category>] [--jq <filter>]',
     description:
       'Introspect the SeeFlow flow.json / style.json / spec.json schemas at ' +
       'runtime. Call without arguments to list the six categories (flow, node, ' +
@@ -620,7 +620,15 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       "all 13 flat variants (including type:'component', whose `spec` field " +
       'lives in a sidecar — drill into `componentSpec` for that shape). Use ' +
       'this before authoring any flow.json / spec.json write — never memorise ' +
-      'field shapes.',
+      'field shapes.\n\n' +
+      'Pass --jq <filter> to extract a slice of the response with a jq path ' +
+      'expression. Supported subset: identity (`.`), field access ' +
+      '(`.foo.bar`), bracket access (`.["foo"]`, `.[3]`, negative indices ' +
+      'allowed), iteration (`.foo[]`), optional `?` (e.g. `.foo?` to suppress ' +
+      'type errors), and pipe (`|`). Single-output filters return the value ' +
+      'under `{ result: <value> }`; multi-output filters (from `[]` or `|`) ' +
+      'return `{ result: [<v1>, <v2>, ...] }`. Bad filters exit with code 2 ' +
+      'and `code:"badJq"`.',
     category: 'meta',
     args: [
       {
@@ -629,10 +637,19 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
         description: 'One of: flow, node, connector, action, componentSpec, style',
       },
     ],
-    flags: [],
+    flags: [
+      {
+        name: 'jq',
+        valuePlaceholder: '<filter>',
+        description:
+          'Apply a jq path-subset filter to the response payload. Examples: ' +
+          '`.schemas.rectangle`, `.schemas.image.properties.data.properties.path`, ' +
+          '`.schemas[]`, `.notes[0]`.',
+      },
+    ],
     outputs: {
       okExample: { categories: [{ name: 'flow', description: 'Top-level flow.json envelope.' }] },
-      errorKinds: ['notFound'],
+      errorKinds: ['notFound', 'badJq'],
     },
     requiresStudio: false,
     examples: [
@@ -640,6 +657,9 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow schema node',
       'seeflow schema connector',
       'seeflow schema componentSpec',
+      'seeflow schema node --jq .schemas.rectangle',
+      'seeflow schema node --jq \'.schemas.image.properties.data.properties.path\'',
+      'seeflow schema node --jq \'.schemas[]\'',
     ],
   },
   // ---- live --------------------------------------------------------------

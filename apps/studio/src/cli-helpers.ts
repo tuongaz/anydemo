@@ -136,6 +136,7 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
 export const EXIT_CODE_BY_KIND: Record<string, number> = {
   badSchema: 2,
   badJson: 2,
+  badJq: 2,
   notFound: 3,
   flowNotFound: 3,
   fileNotFound: 3,
