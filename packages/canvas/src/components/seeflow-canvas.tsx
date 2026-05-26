@@ -4440,7 +4440,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             flags.showToolbar ||
             (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
               <Panel position="top-left">
-                <div className="sf:flex sf:flex-col sf:gap-2">
+                <div className="sf:flex sf:flex-col sf:items-start sf:gap-2">
                   {/* US-037: external content (e.g. the studio's FlowSwitcher)
                   stacks first so it sits above the toolbar / StyleStrip in the
                   same absolutely-positioned Panel column — no more overlap. */}
