@@ -391,7 +391,7 @@
         "Verify in browser using dev-browser skill: with the studio running and a multi-flow project loaded manually (e.g. order-pipeline with manually added flows/retry/flow.json + manifest), the popover renders the list with the correct active row"
       ],
       "priority": 23,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
