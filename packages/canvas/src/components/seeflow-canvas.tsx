@@ -1245,6 +1245,12 @@ const edgeTypes = { editableEdge: EditableEdge };
 // every render and force xyflow's edge merging to recompute.
 const DEFAULT_EDGE_OPTIONS = { zIndex: 0 };
 
+// Same identity-stability rationale as DEFAULT_EDGE_OPTIONS: an inline
+// `proOptions={{ hideAttribution: true }}` literal on <ReactFlow> would
+// re-allocate every parent render and feed unnecessary work into xyflow's
+// internal prop diffing on the pointer hot path.
+const PRO_OPTIONS = { hideAttribution: true };
+
 // US-010: walk up from `target` and return true when the closest
 // `.react-flow__node` ancestor's `data-id` is set AND not equal to `nodeId`.
 // In xyflow 12 each node renders as its own `.react-flow__node` wrapper at the
@@ -4029,6 +4035,52 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     [commitDraggedNodes, flushPendingFit],
   );
 
+  // Memoized xyflow handlers. Inline closures on <ReactFlow> would re-allocate
+  // on every parent render, adding GC pressure during pan/zoom (each pointer
+  // frame triggers a re-render via the viewport store). The bodies stay
+  // identical to the previous inline versions.
+  const handleMove = useCallback(
+    (_e: unknown, viewport: { x: number; y: number; zoom: number }) => {
+      // US-015: panning or zooming dismisses the drop-popover — its
+      // flow-space anchor would otherwise drift away from the viewport
+      // translation. Read from the ref to avoid re-binding on popover
+      // open/close (handleMove fires every frame of pan/zoom).
+      if (dropPopoverRef.current) setDropPopover(null);
+      // Mirror the viewport zoom to a CSS variable so the selection outline
+      // can scale its width/offset inversely (calc(1px / var(--rf-zoom))).
+      // Setting via inline style avoids a React re-render every frame.
+      const wrapper = wrapperRef.current;
+      if (wrapper) wrapper.style.setProperty('--rf-zoom', String(viewport.zoom));
+      onViewportChange?.(viewport);
+    },
+    [onViewportChange],
+  );
+  const handleNodeDragStart = useCallback(() => {
+    draggingRef.current = true;
+    onNodeDragStart?.();
+  }, [onNodeDragStart]);
+  const handleNodeDragStop = useCallback(
+    (e: unknown, node: Node, draggedNodes: Node[]) => {
+      onNodeDragStopCb(e, node, draggedNodes);
+      onNodeDragStop?.();
+    },
+    [onNodeDragStopCb, onNodeDragStop],
+  );
+  const handleSelectionDragStart = useCallback(() => {
+    onSelectionDragStartCb();
+    onNodeDragStart?.();
+  }, [onSelectionDragStartCb, onNodeDragStart]);
+  const handleSelectionDragStop = useCallback(
+    (e: unknown, draggedNodes: Node[]) => {
+      onSelectionDragStopCb(e, draggedNodes);
+      onNodeDragStop?.();
+    },
+    [onSelectionDragStopCb, onNodeDragStop],
+  );
+  const handleEdgeDoubleClick = useCallback((_e: ReactMouseEvent, edge: Edge) => {
+    editHandlesRef.current.get(edge.id)?.();
+  }, []);
+
   const handleNodeClickWithGroupGate = useCallback(
     (_e: ReactMouseEvent, node: Node) => {
       onNodeClick?.(node.id);
@@ -4133,7 +4185,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             onNodesChange={onNodesChange}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
-            proOptions={{ hideAttribution: true }}
+            proOptions={PRO_OPTIONS}
             fitView
             minZoom={mode === 'mini' ? 0.05 : 0.5}
             // US-027: nodes remain draggable in view mode so the canvas feels
@@ -4299,39 +4351,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               }
               onRfInit?.(instance);
             }}
-            onMove={(_e, viewport) => {
-              // US-015: panning or zooming the canvas dismisses the drop-popover —
-              // the anchor's flow-space coordinates would otherwise drift away
-              // from the viewport translation. Read from the ref to avoid
-              // re-binding on every popover open/close (onMove fires every frame
-              // while the user pans/zooms).
-              if (dropPopoverRef.current) setDropPopover(null);
-              // Mirror the viewport zoom to a CSS variable so the selection
-              // outline can scale its width/offset inversely (calc(1px /
-              // var(--rf-zoom))) — the outline keeps the same VISUAL thickness
-              // regardless of zoom level. Setting via inline style avoids a
-              // React re-render every frame of pan/zoom.
-              const wrapper = wrapperRef.current;
-              if (wrapper) wrapper.style.setProperty('--rf-zoom', String(viewport.zoom));
-              onViewportChange?.(viewport);
-            }}
+            onMove={handleMove}
             onEdgesChange={onEdgesChange}
-            onNodeDragStart={() => {
-              draggingRef.current = true;
-              onNodeDragStart?.();
-            }}
-            onNodeDragStop={(e, node, draggedNodes) => {
-              onNodeDragStopCb(e, node, draggedNodes);
-              onNodeDragStop?.();
-            }}
-            onSelectionDragStart={() => {
-              onSelectionDragStartCb();
-              onNodeDragStart?.();
-            }}
-            onSelectionDragStop={(e, nodes) => {
-              onSelectionDragStopCb(e, nodes);
-              onNodeDragStop?.();
-            }}
+            onNodeDragStart={handleNodeDragStart}
+            onNodeDragStop={handleNodeDragStop}
+            onSelectionDragStart={handleSelectionDragStart}
+            onSelectionDragStop={handleSelectionDragStop}
             // US-003: route React Flow's click-only events to the parent so the
             // detail panel can be driven by explicit clicks instead of selection
             // changes. xyflow's `onNodeClick`/`onEdgeClick` fire only for real
@@ -4344,9 +4369,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // label editor (not just the existing label-button onDoubleClick). The
             // per-edge `registerEditHandle` map gives us O(1) dispatch without
             // forcing edge identity to change when editing state flips.
-            onEdgeDoubleClick={(_e, edge) => {
-              editHandlesRef.current.get(edge.id)?.();
-            }}
+            onEdgeDoubleClick={handleEdgeDoubleClick}
             onPaneClick={handlePaneClickWithGroupExit}
             onNodeContextMenu={
               flags.enableContextMenu && contextEnabled
