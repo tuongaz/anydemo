@@ -379,39 +379,16 @@ Do NOT skip a resource node because:
 If a candidate decomposition does NOT match one of those four
 exceptions, collapse it.
 
-## Examples of the rule applied
+## Worked examples
 
-- **A Temporal workflow with 4 activities, none independently meaningful
-  to the audience.** → 1 node,
-  `rationales["temporal-workflow"]: "Single Temporal workflow — activities
-  are implementation detail"`. Even though there are 4 activities, the
-  audience cares about "did the workflow run?"; they don't need each
-  activity surfaced.
-- **A 4-stage pipeline (`validate → score → rank → publish`) inside one
-  Temporal workflow, each stage independently meaningful.** → 4 nodes,
-  connected by 3 connectors. Cite exception 1 in each rationale.
-- **A `order.created` event with 3 distinct consumers (notify-customer,
-  update-inventory, trigger-shipping).** → 4 nodes total: 1 publisher,
-  1 event bus, 3 consumers — and one event connector from publisher to
-  bus plus three event connectors from bus to each consumer. Cite
-  exception 2.
-- **A payments service exposing `charge`, `refund`, and `subscription`
-  with independent state machines.** → 3 `rectangle` nodes
-  (`payments-charge`, `payments-refund`, `payments-subscription`),
-  each a candidate trigger (one of them carries the initial
-  `playAction` placeholder) and each with its own status probe later.
-  Cite exception 4.
-  Contrast with a payments service whose `charge` and `refund` routes
-  both mutate the same ledger row — that stays one node.
-  - Variant: if the brief did not mention an explicit bus
-    abstraction, you may omit the bus and connect publisher directly
-    to each consumer with three event connectors. Use your judgement;
-    err toward 4 nodes when the codebase has a named bus.
-- **A microservice with 12 internal HTTP routes.** → 1 node, regardless
-  of how many routes there are. The play-designer picks ONE route to
-  hang the Play on; the other routes are not part of the demo.
-- **A Postgres database used by 3 different services.** → 1 node, with
-  3 connectors pointing into it. NOT 3 database nodes.
+Illustrative material — rule-application examples, a full input → output
+worked case, and a counter-example — lives in
+`references/planner/examples.md`. The orchestrator inlines that file's
+contents into the launching prompt on first calls and skips it on retries
+(where the planner already has the CLI's `issues[]` echoed back). When
+the inlined block is present, consult it for canonical shape before
+emitting; when absent (retry path), the abstraction rules below stand on
+their own.
 
 ## Workflow
 
@@ -528,150 +505,18 @@ If `contextBrief.existingDemo.diffTarget === true`:
 - The orchestrator computes the `+ / ~ / -` diff from your output
   against `editTarget`; you do not annotate the diff yourself.
 
-## Worked example
-
-**Input** (paraphrased from the launching prompt):
-
-```
-contextBrief:
-{
-  "userIntent": "Show the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
-  "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see the HTTP entry, the event bus + queue fan-out, and the workers that drive state transitions.",
-  "scope": {
-    "rootEntities": [
-      "order HTTP server",
-      "event bus",
-      "shipments queue",
-      "inventory-worker",
-      "shipping-worker",
-      "order store"
-    ],
-    "outOfScope": ["admin stats endpoint", "marketing site"]
-  },
-  "codePointers": [
-    { "path": "src/server.ts", "why": "POST /orders and POST /payments/charge handlers" },
-    { "path": "src/event-bus.ts", "why": "Defines order.created publish/subscribe surface" },
-    { "path": "src/queue.ts", "why": "Shipments queue producer/consumer" },
-    { "path": "src/workers.ts", "why": "inventory-worker and shipping-worker" },
-    { "path": "src/store.ts", "why": "Order state mutations" }
-  ],
-  "existingDemo": null
-}
-editTarget: null
-```
-
-**Expected final message** (single fenced JSON block, nothing else):
-
-```json
-{
-  "name": "Order Pipeline",
-  "slug": "order-pipeline",
-  "nodes": [
-    { "id": "order-server",     "type": "rectangle", "data": { "name": "POST /orders",     "icon": "server", "stateSource": { "kind": "request" }, "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }, "description": "Accepts a cart, creates an order, publishes order.created.", "detail": "## POST /orders\n\nHTTP entry point for the pipeline. Accepts a cart payload, writes a pending row to the order store, and publishes `order.created` on the bus.\n\nSource: `src/server.ts`." } },
-    { "id": "event-bus",        "type": "queue",     "data": { "name": "Event Bus",        "stateSource": { "kind": "event" },   "description": "Fans order.created to async consumers.",                    "detail": "## Event Bus\n\nIn-process pub/sub layer defined in `src/event-bus.ts`. Subscribers to `order.created`: inventory-worker, shipping-worker." } },
-    { "id": "inventory-worker", "type": "rectangle", "data": { "name": "Inventory Worker", "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Reserves stock when an order.created event arrives.",       "detail": "## Inventory Worker\n\nReserves stock when an `order.created` event arrives. On success enqueues the order on the shipments queue.\n\nSource: `src/workers.ts` (`inventoryWorker`)." } },
-    { "id": "shipping-worker",  "type": "rectangle", "data": { "name": "Shipping Worker",  "icon": "cog",    "stateSource": { "kind": "event" },   "description": "Drains the shipments queue, moves orders to shipped.",      "detail": "## Shipping Worker\n\nDrains the shipments queue and transitions the order row to `shipped` in the order store.\n\nSource: `src/workers.ts` (`shippingWorker`)." } },
-    { "id": "shipments-queue",  "type": "queue",     "data": { "name": "Shipments Queue",  "stateSource": { "kind": "event" },   "description": "Buffer between inventory confirmation and shipping handoff.","detail": "## Shipments Queue\n\nMessage queue (`src/queue.ts`) that buffers shipment handoffs between inventory confirmation and shipping. One channel; depth ≈ pending shipments." } },
-    { "id": "order-store",      "type": "database",  "data": { "name": "Order Store",      "stateSource": { "kind": "event" },   "description": "Authoritative order state: pending → paid → shipped.",      "detail": "## Order Store\n\nAuthoritative order state — rows transition `pending → paid → shipped`. Written by order-server, inventory-worker, and shipping-worker.\n\nSource: `src/store.ts`." } }
-  ],
-  "connectors": [
-    { "id": "c-order-server-event-bus",          "source": "order-server",     "target": "event-bus",        "label": "order.created" },
-    { "id": "c-event-bus-inventory-worker",      "source": "event-bus",        "target": "inventory-worker", "label": "order.created" },
-    { "id": "c-inventory-worker-shipments-queue","source": "inventory-worker", "target": "shipments-queue",  "label": "shipments" },
-    { "id": "c-shipments-queue-shipping-worker", "source": "shipments-queue",  "target": "shipping-worker",  "label": "shipments" },
-    { "id": "c-order-server-order-store",        "source": "order-server",     "target": "order-store" },
-    { "id": "c-inventory-worker-order-store",    "source": "inventory-worker", "target": "order-store" },
-    { "id": "c-shipping-worker-order-store",     "source": "shipping-worker",  "target": "order-store" }
-  ],
-  "rationales": {
-    "order-server":     "Single HTTP service. Internal routes (orders, payments) are implementation detail.",
-    "event-bus":        "Named bus abstraction in the codebase — one channel, not many.",
-    "inventory-worker": "Exception 2: fan-out consumer whose work is its own business concept.",
-    "shipping-worker":  "Exception 2: fan-out consumer whose work is its own business concept.",
-    "shipments-queue":  "Single message queue — one channel.",
-    "order-store":      "Single database dependency, regardless of how many tables it holds."
-  }
-}
-```
-
-## Counter-example (do not do this)
-
-```json
-{
-  "name": "Order Pipeline",
-  "slug": "order-pipeline",
-  "nodes": [
-    { "id": "validate-cart", "type": "rectangle", "data": { "name": "validate cart", "stateSource": { "kind": "event" } } },
-    { "id": "compute-tax",   "type": "rectangle", "data": { "name": "compute tax",   "stateSource": { "kind": "event" } } },
-    { "id": "charge-card",   "type": "rectangle", "data": { "name": "charge card",   "stateSource": { "kind": "event" } } },
-    { "id": "publish-event", "type": "rectangle", "data": { "name": "publish event", "stateSource": { "kind": "event" } } }
-  ],
-  "connectors": [],
-  "rationales": { "validate-cart": "step 1", "compute-tax": "step 2", "charge-card": "step 3", "publish-event": "step 4" }
-}
-```
-
-This is wrong because (a) the four "steps" are internal routes / handlers
-of a single service — they fail the abstraction rule (one node per
-microservice), and "step 1/2/3/4" does NOT match any exception; (b) no
-node carries an initial `data.playAction` placeholder, so the audience
-has nothing to click; (c) there are zero connectors, so the
-orchestrator cannot render the flow direction. Collapse to a single
-`order-server` `type:'rectangle'` with `data.playAction` set, and wire
-connectors to the downstream entities.
-
 ## Constraints recap
 
-- No tools. Reason from the brief.
-- Final message is ONE fenced JSON block, nothing else.
-- **Envelope is non-negotiable:** `name`, `slug`, `nodes`, `connectors`,
-  `rationales` — all five keys, every run. `{ nodes, connectors }` alone
-  is a contract violation.
-- Conform to the node + connector contracts in your launching prompt
-  (`$SEEFLOW schema node`, `$SEEFLOW schema connector`). Emit nothing
-  the contract rejects.
-- Type-picker default depends on `contextBrief.inputClass`:
-  - `code` / `conversation` — pick the SEMANTIC shape that matches
-    the entity: `database` for stores, `queue` for buses / topics /
-    queues, `cloud` for external SaaS / object stores, `server` for
-    infrastructure boxes, `user` for actual humans, `rectangle` for
-    HTTP endpoints / microservices / workers / schedulers. All of
-    these accept capability chrome (Play button + status badge); the
-    canvas renders the skirt on illustrative shapes and the inline
-    header on `rectangle`.
-  - `document` — default to `component` (catalog-driven UI) from
-    `componentCatalog`; fall back to `html` when the catalog can't
-    render the content; `rectangle` only for runtime components the
-    document explicitly describes.
-- Exactly one node carries an initial `data.playAction` placeholder
-  (the trigger) for `code` / `conversation` flows, in whatever shape
-  matches the entity (`rectangle` for HTTP endpoints; illustrative
-  shape for synthetic file-drop / queue-publish / webhook triggers).
-  `document` flows usually have NO trigger — omit `playAction`
-  entirely rather than forcing a placeholder.
-- Every connector references node ids that exist in `nodes[]`.
-- Every database, queue, event bus, cache, file store, and external SaaS
-  mentioned in the brief MUST have a node. Omitting a resource node is
-  always wrong. (`document` flows typically have no resources to model —
-  this constraint is mostly inert there.)
-- Cite an exception by number (`Exception 1/2/3/4`) in `rationales[nodeId]`
-  whenever you emit multiple nodes for one underlying entity.
-- Mark the trigger node by setting `data.playAction` to a placeholder
-  object (`{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }`
-  is enough); the orchestrator fills any remaining required fields
-  before `flow:add-bulk`, and the Phase 4 play-designer overwrites the
-  placeholder with the real action via `nodes:patch`. Don't emit
-  `statusAction` — Phase 4 attaches those. Don't emit positions —
-  `flows:layout` attaches them.
-- **`data.detail` on every non-decorative node** — every `rectangle`,
-  `database`, `queue`, `cloud`, `server`, `user`. Decorative shapes
-  (`sticky`, `text`, `icon`, `ellipse`, `image`) are exempt; `component`
-  and `html` carry content in `data.spec` / `data.html` and only
-  need `detail` when the sidebar adds something the rendered content
-  doesn't. The orchestrator's Phase 3 detail-backfill is a safety net,
-  not a license to skip.
-- **Emit zero presentation fields.** Borders, colors, sizes, fonts,
-  positions, handles all live in `style.json`, written exclusively by
-  `flows:layout` and the canvas. The renderer applies sensible defaults
-  when style.json has no entry.
-- When in doubt: collapse, don't split.
+A compact cheat-sheet — full rules live in the sections above.
+
+- **Tools:** none. Reason from the brief.
+- **Output:** ONE fenced JSON block, nothing else. Envelope MUST include `name`, `slug`, `nodes`, `connectors`, `rationales` — all five keys, every run.
+- **Conform** to `$SEEFLOW schema node` / `connector` from the launching prompt — anything outside is rejected at `flow:add-bulk`.
+- **Type ladder by `inputClass`** (§"Picking node `type` by input class"): `code` / `conversation` → semantic shape (`database` / `queue` / `cloud` / `server` / `user` / `rectangle`); `document` → `component` from `componentCatalog`, `html` fallback.
+- **Exactly one trigger** for `code` / `conversation` — set `data.playAction` to `{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }`. `document` flows usually have none — omit rather than fabricate.
+- **Resources are mandatory** (§"Resource nodes are mandatory") — every DB, queue, bus, cache, file store, SaaS the brief mentions gets a node. Document flows are the only exception.
+- **`data.detail`** on every non-decorative node (§"Semantic requirements"). Phase 3 backfill is a safety net, not a license to skip.
+- **No `statusAction`, no positions, no presentation fields.** Phase 4 and `flows:layout` own those.
+- **Cite Exception 1/2/3/4** in `rationales[nodeId]` whenever a single underlying entity becomes multiple nodes.
+- **Edit case** (§"Edit case") — reuse existing canonical ids; retype in place rather than delete + add.
+- **When in doubt: collapse, don't split.**

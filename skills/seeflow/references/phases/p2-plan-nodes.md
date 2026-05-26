@@ -2,6 +2,8 @@
 
 Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, `$schemaCache.node`, `$schemaCache.connector` (forward verbatim — see `p0-preflight.md` §"Schema cache"), and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
 
+**Inline the planner examples** (`references/planner/examples.md`) into the launching prompt on **first calls only** — the planner is a no-tools agent and cannot read the file itself. On the retry path (envelope-validation failure or `flow:add-bulk badSchema`), skip the inline — feed the CLI's `issues[]` back instead so the planner focuses on the specific gap rather than re-reading calibration material it already had.
+
 **Connectors conform to `$SEEFLOW schema connector` and nothing more.** If the planner emits any field the contract rejects, strip it before `flow:add-bulk`. Do not enumerate the legal fields here — re-run the schema command whenever in doubt.
 
 ## Abstraction rules

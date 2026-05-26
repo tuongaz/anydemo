@@ -12,8 +12,9 @@ Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flow
 - Editing nodes on an existing flow → use the canvas, or hit the CLI directly (`nodes:patch`).
 - Deleting a flow → `flows:delete`.
 - Re-laying out an existing flow without semantic changes → `flows:layout`.
-- Empty project (nothing to analyze) → ask the user first.
 - Debugging a single broken Play/Status script → edit in-place, re-run Phase 6.
+
+(A project with no source tree is **not** an exclusion — it routes to the `document` branch at the Phase 0 input-source gate without asking.)
 
 ## Project layout convention
 
@@ -156,6 +157,18 @@ Full text in `references/core-rules.md`:
 - **Calling `flows:create` instead of `projects:create` for a brand-new project.** `flows:create --project <p> --flow <f>` adds a flow to an *existing* project's manifest; a brand-new project always starts with `projects:create`, which writes both `seeflow.json` and the first `flows/main/flow.json` in one shot.
 - **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder under `flows/<flowSlug>/nodes/<id>/` — emit just `scripts/play.ts`.
 - **Writing `LEARN.md` inside a per-project or per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every project + flow** in the host repo — never inside `<projectSlug>/` or `<projectSlug>/flows/<flowSlug>/`.
+
+## Red flags — stop and reconsider
+
+If you catch yourself thinking any of the following, you are rationalising — stop and re-read the relevant rule.
+
+- "I'll mock this one service so the script runs." → Rule 1 in `references/core-rules.md`. Stop and ask the user.
+- "I'll write the empty envelope by hand — it's only two lines." → use `projects:create`. The CLI writes the manifest and the first flow envelope atomically; hand-authoring desyncs the two.
+- "`projects:create` returned `alreadyExists` — I'll quietly run `register` and continue." → no. Surface the existing-project gate in `phases/p3-scaffold.md` § 1; auto-fallback is data-loss-adjacent.
+- "Serial sub-agent dispatch is fine — parallelism is just an optimisation." → it is the contract (see §"Parallelism is the default"). One message, N `Task` calls.
+- "Direct INSERT into the DB is faster than going through the API." → Rule 2. The natural data-entry path is what the flow exists to show.
+- "Phase 6 e2e looks fine from the scripts — I'll skip the run." → mandatory for `inputClass === "code"`. Only `"document"` flows legitimately skip it.
+- "I'll narrate the LEARN.md write so the user knows it happened." → both writes are silent by contract; narration is noise.
 
 ## Operations
 

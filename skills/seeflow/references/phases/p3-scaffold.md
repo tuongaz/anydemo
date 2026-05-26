@@ -72,7 +72,7 @@ $SEEFLOW flows:layout --project "$projectSlug" --flow "$flowSlug"
 
 ## 7. Silent LEARN.md write #1
 
-First disk hit for `$learnPath`. Merges staged `learnUpdates` from Phase 1 → 2 overlap AND upserts the "Flows already created" row by `slug`. Full merge contract, field list, and ~6 KB cap rule live in `../learn-format.md` § "Lifecycle" + § "Merging rules". Run quietly — do **not** narrate to the user. Create `$PWD/.seeflow/` if missing.
+First disk hit for `$learnPath`. Merges staged `learnUpdates` from Phase 1 → 2 overlap AND upserts the "Flows already created" row by `<projectSlug>/<flowSlug>`. Full merge contract, field list, and ~6 KB cap rule live in `../learn-format.md` § "Lifecycle" + § "Merging rules". Run quietly — do **not** narrate to the user. Create `$PWD/.seeflow/` if missing.
 
 ---
 
