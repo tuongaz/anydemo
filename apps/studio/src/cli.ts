@@ -15,7 +15,7 @@ import {
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
-import { type Registry, createRegistry } from './registry.ts';
+import { type Registry, createRegistry, slugify } from './registry.ts';
 import {
   DEFAULT_CONFIG,
   clearPid,
@@ -379,7 +379,18 @@ async function seedExample(registry: Registry, exampleName: string) {
   const parsed = FlowSchema.safeParse(demo);
   if (!parsed.success) return;
 
-  registry.upsert({ name: parsed.data.name, repoPath: destDir, flowPath });
+  // Pre-US-003 transitional state: examples are still legacy single-flow
+  // layouts. registerProject (US-004) and the manifest migration (US-005)
+  // replace these synthesised values with what the scanner reads from
+  // seeflow.json. Until then we stamp the default single-flow shape.
+  registry.upsert({
+    name: parsed.data.name,
+    repoPath: destDir,
+    flowPath,
+    projectSlug: slugify(parsed.data.name),
+    flowSlug: 'main',
+    isDefault: true,
+  });
   console.log(`Seeded example: ${parsed.data.name} → ${destDir}`);
 }
 

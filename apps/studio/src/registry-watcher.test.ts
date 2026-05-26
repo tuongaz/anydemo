@@ -74,6 +74,9 @@ describe('createRegistryWatcher', () => {
       name: 'b',
       repoPath: '/tmp/b',
       flowPath: 'flow.json',
+      projectSlug: 'b',
+      flowSlug: 'main',
+      isDefault: true,
     });
 
     await wait(300);

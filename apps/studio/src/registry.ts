@@ -7,11 +7,17 @@ import { shortId } from './short-id.ts';
 
 export interface FlowEntry {
   id: string;
+  /** Derived as `${projectSlug}/${flowSlug}` — kept on the entry for
+   *  resolve() / getBySlug() compatibility. */
   slug: string;
   name: string;
   description?: string;
   repoPath: string;
   flowPath: string;
+  projectSlug: string;
+  flowSlug: string;
+  isDefault: boolean;
+  icon?: string;
   lastModified: number;
   valid: boolean;
 }
@@ -21,6 +27,10 @@ export interface RegisterInput {
   description?: string;
   repoPath: string;
   flowPath: string;
+  projectSlug: string;
+  flowSlug: string;
+  isDefault: boolean;
+  icon?: string;
   valid?: boolean;
   lastModified?: number;
 }
@@ -116,6 +126,25 @@ export function createRegistry(options: { path?: string } = {}): Registry {
           if (entry.description !== undefined && typeof entry.description !== 'string') {
             entry.description = undefined;
           }
+          // Migration shim for legacy entries written before US-002. Derive
+          // projectSlug / flowSlug / isDefault so single-flow repos keep
+          // working until they are re-scanned through registerProject(). The
+          // scanner overwrites these on the next session anyway.
+          if (typeof entry.projectSlug !== 'string') {
+            entry.projectSlug = slugify(entry.name);
+          }
+          if (typeof entry.flowSlug !== 'string') {
+            entry.flowSlug = 'main';
+          }
+          if (typeof entry.isDefault !== 'boolean') {
+            entry.isDefault = true;
+          }
+          if (entry.icon !== undefined && typeof entry.icon !== 'string') {
+            entry.icon = undefined;
+          }
+          // Always re-derive slug from project + flow so the stored slug
+          // and the on-disk fields cannot drift apart.
+          entry.slug = `${entry.projectSlug}/${entry.flowSlug}`;
           entries.set(entry.id, entry);
         }
       }
@@ -163,14 +192,6 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     return undefined;
   };
 
-  const uniqueSlug = (base: string): string => {
-    const taken = new Set([...entries.values()].map((e) => e.slug));
-    if (!taken.has(base)) return base;
-    let n = 2;
-    while (taken.has(`${base}-${n}`)) n++;
-    return `${base}-${n}`;
-  };
-
   return {
     path,
     list: () => {
@@ -202,16 +223,23 @@ export function createRegistry(options: { path?: string } = {}): Registry {
     upsert(input) {
       const lastModified = input.lastModified ?? Date.now();
       const valid = input.valid ?? true;
+      const slug = `${input.projectSlug}/${input.flowSlug}`;
       const existing = findByRepoPathAndFlowPath(input.repoPath, input.flowPath);
       if (existing) {
         // input.description reflects the current flow.json on every call —
         // when an author removes the description, we drop it from the entry
-        // too (JSON.stringify skips undefined values on persist).
+        // too (JSON.stringify skips undefined values on persist). Same shape
+        // applies to icon.
         const updated: FlowEntry = {
           ...existing,
+          slug,
           name: input.name,
           description: input.description,
           flowPath: input.flowPath,
+          projectSlug: input.projectSlug,
+          flowSlug: input.flowSlug,
+          isDefault: input.isDefault,
+          icon: input.icon,
           lastModified,
           valid,
         };
@@ -220,7 +248,6 @@ export function createRegistry(options: { path?: string } = {}): Registry {
         return updated;
       }
       const id = shortId();
-      const slug = uniqueSlug(slugify(input.name));
       const entry: FlowEntry = {
         id,
         slug,
@@ -228,6 +255,10 @@ export function createRegistry(options: { path?: string } = {}): Registry {
         description: input.description,
         repoPath: input.repoPath,
         flowPath: input.flowPath,
+        projectSlug: input.projectSlug,
+        flowSlug: input.flowSlug,
+        isDefault: input.isDefault,
+        icon: input.icon,
         lastModified,
         valid,
       };

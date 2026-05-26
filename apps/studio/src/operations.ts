@@ -22,7 +22,7 @@ import {
   removeNodeDir,
   writeNodeFile,
 } from './node-files.ts';
-import type { Registry } from './registry.ts';
+import { type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
   ComponentSpecSchema,
@@ -1132,11 +1132,15 @@ export async function registerFlowImpl(
   if (!merged.flow) return { kind: 'badJson', detail: merged.error ?? 'unknown error' };
 
   const lastModified = statSync(fullPath).mtimeMs;
+  const flowName = body.name ?? merged.flow.name;
   const entry = registry.upsert({
-    name: body.name ?? merged.flow.name,
+    name: flowName,
     description: merged.flow.description,
     repoPath,
     flowPath,
+    projectSlug: slugify(flowName),
+    flowSlug: 'main',
+    isDefault: true,
     valid: true,
     lastModified,
   });
@@ -1199,6 +1203,9 @@ export async function createProjectImpl(
     description,
     repoPath: folderPath,
     flowPath: PROJECT_FLOW_RELATIVE_PATH,
+    projectSlug: slugify(name),
+    flowSlug: 'main',
+    isDefault: true,
     valid: true,
     lastModified,
   });

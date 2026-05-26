@@ -118,7 +118,10 @@ describe('seeflow CLI register integration', () => {
       expect(studio.registry.list()).toHaveLength(2);
       const entries = studio.registry.list();
       const slugs = entries.map((e) => e.slug).sort();
-      expect(slugs).toEqual(['checkout', 'refund']);
+      // Post-US-002: slug is `${projectSlug}/${flowSlug}`. registerFlowImpl
+      // stamps the legacy single-flow shape (projectSlug = slugify(name),
+      // flowSlug = 'main') until US-004 wires the scanner.
+      expect(slugs).toEqual(['checkout/main', 'refund/main']);
       const ids = entries.map((e) => e.id);
       expect(new Set(ids).size).toBe(2);
       expect(entries.every((e) => e.repoPath === repoDir)).toBe(true);
@@ -140,7 +143,7 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; slug: string };
       expect(parsed.ok).toBe(true);
-      expect(parsed.slug).toBe('checkout-one');
+      expect(parsed.slug).toBe('checkout-one/main');
     } finally {
       studio.stop();
     }
@@ -155,6 +158,9 @@ describe('seeflow CLI new subcommands', () => {
         name: 'Listed',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'listed',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       const r = await runCli(['flows:list', '--no-start'], studio.env);
@@ -164,7 +170,7 @@ describe('seeflow CLI new subcommands', () => {
         flows: Array<{ slug: string }>;
       };
       expect(parsed.ok).toBe(true);
-      expect(parsed.flows.some((f) => f.slug === 'listed')).toBe(true);
+      expect(parsed.flows.some((f) => f.slug === 'listed/main')).toBe(true);
     } finally {
       studio.stop();
     }
@@ -179,6 +185,9 @@ describe('seeflow CLI new subcommands', () => {
         name: 'GD',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       const get = await runCli(['flows:get', entry.id, '--no-start'], studio.env);
@@ -217,6 +226,9 @@ describe('seeflow CLI new subcommands', () => {
         name: 'Empty',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       // Connector references node from the same batch — proves transactional shape.
@@ -267,6 +279,9 @@ describe('seeflow CLI new subcommands', () => {
         name: 'Dup',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       const payload = JSON.stringify({
@@ -335,6 +350,9 @@ describe('seeflow CLI new subcommands', () => {
         description: 'doc body',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       const r = await runCli(['flows:summary', '--no-start'], studio.env);
@@ -375,6 +393,9 @@ describe('seeflow CLI new subcommands', () => {
         description: 'demo',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       const r = await runCli(['flows:graph', entry.id, '--no-start'], studio.env);
@@ -531,6 +552,9 @@ describe('seeflow CLI new subcommands', () => {
         name: 'NodeGet',
         repoPath: repoDir,
         flowPath: 'flow.json',
+        projectSlug: 'p',
+        flowSlug: 'main',
+        isDefault: true,
       });
 
       // Add a shape node via the add endpoint so detail.md is externalized.
@@ -568,6 +592,9 @@ describe('seeflow emit', () => {
       name: 'Emit Test',
       repoPath: repoDir,
       flowPath: '.seeflow/flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
   };
 

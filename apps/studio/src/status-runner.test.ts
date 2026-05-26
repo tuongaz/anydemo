@@ -137,10 +137,13 @@ function makeProject(opts: { hasStatus: boolean; nodeId?: string; statusScriptNa
     nodeId,
     entry: {
       id: 'demoA',
-      slug: 'demo-a',
+      slug: 'demo-a/main',
       name: 'Test demo',
       repoPath: cwd,
       flowPath: 'flow.json',
+      projectSlug: 'demo-a',
+      flowSlug: 'main',
+      isDefault: true,
       lastModified: Date.now(),
       valid: true,
     } satisfies FlowEntry,
@@ -292,7 +295,12 @@ describe('createStatusRunner', () => {
   it('isolates demos: restart on demo A does not touch demo B', async () => {
     const { entry: entryA } = makeProject({ hasStatus: true, nodeId: 'a-node' });
     const projB = makeProject({ hasStatus: true, nodeId: 'b-node' });
-    const entryB: FlowEntry = { ...projB.entry, id: 'demoB', slug: 'demo-b' };
+    const entryB: FlowEntry = {
+      ...projB.entry,
+      id: 'demoB',
+      slug: 'demo-b/main',
+      projectSlug: 'demo-b',
+    };
 
     const bus = createEventBus();
     captureEvents(bus, 'demoA');
@@ -352,10 +360,13 @@ describe('createStatusRunner', () => {
     writeFileSync(join(cwd, 'flow.json'), JSON.stringify(demo));
     const entry: FlowEntry = {
       id: 'demoA',
-      slug: 'demo-a',
+      slug: 'demo-a/main',
       name: 'Lifetime test',
       repoPath: cwd,
       flowPath: 'flow.json',
+      projectSlug: 'demo-a',
+      flowSlug: 'main',
+      isDefault: true,
       lastModified: Date.now(),
       valid: true,
     };

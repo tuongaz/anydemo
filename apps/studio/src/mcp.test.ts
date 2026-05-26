@@ -309,7 +309,7 @@ describe('seeflow_list_flows', () => {
     const envelope = await callTool(app, 'seeflow_list_flows');
     const list = expectOk(envelope) as Array<{ slug: string; valid: boolean; name: string }>;
     expect(list).toHaveLength(1);
-    expect(list[0]?.slug).toBe('checkout-flow');
+    expect(list[0]?.slug).toBe('checkout-flow/main');
     expect(list[0]?.valid).toBe(true);
   });
 });
@@ -476,7 +476,7 @@ describe('seeflow_register_flow', () => {
       id: string;
       slug: string;
     };
-    expect(body.slug).toBe('checkout-flow');
+    expect(body.slug).toBe('checkout-flow/main');
     expect(registry.list()).toHaveLength(1);
   });
 
@@ -536,7 +536,7 @@ describe('seeflow_create_project', () => {
       name: 'Brand New Flow',
     });
     const body = expectOk(envelope) as { id: string; slug: string };
-    expect(body.slug).toBe('brand-new-flow');
+    expect(body.slug).toBe('brand-new-flow/main');
     expect(existsSync(join(projectPath, 'flow.json'))).toBe(true);
     expect(existsSync(join(projectPath, '.tmp'))).toBe(true);
     expect(readFileSync(join(projectPath, '.tmp', '.gitignore'), 'utf8')).toBe('*\n!.gitignore\n');

@@ -82,6 +82,9 @@ describe('GET /api/projects/:id/files/:path', () => {
       name: 'Files Test',
       repoPath: repoDir,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const app = createApp({
       mode: 'prod',
@@ -155,6 +158,9 @@ const buildShelloutFixture = (opts?: {
     name: 'Shellout Test',
     repoPath: repoDir,
     flowPath: 'flow.json',
+    projectSlug: 'p',
+    flowSlug: 'main',
+    isDefault: true,
   });
 
   const calls: Array<{ cmd: string; args: string[] }> = [];
@@ -379,6 +385,9 @@ describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
       name: 'Node Upload Test',
       repoPath: repoDir,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const app = createApp({
       mode: 'prod',

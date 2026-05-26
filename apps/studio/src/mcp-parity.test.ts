@@ -118,6 +118,9 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
     name: demoName,
     repoPath,
     flowPath: 'flow.json',
+    projectSlug: 'p',
+    flowSlug: 'main',
+    isDefault: true,
     valid: true,
     lastModified: Date.now(),
   });
@@ -570,6 +573,9 @@ const buildMetaFixture = () => {
     name: 'Meta Rule Flow',
     repoPath,
     flowPath: 'flow.json',
+    projectSlug: 'p',
+    flowSlug: 'main',
+    isDefault: true,
     valid: true,
     lastModified: Date.now(),
   });
@@ -779,6 +785,9 @@ describe('canvas _meta attachment rules', () => {
       name: 'Meta Patch Conn Flow',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
       valid: true,
       lastModified: Date.now(),
     });
@@ -843,6 +852,9 @@ describe('canvas _meta attachment rules', () => {
       name: 'Degrade Flow',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
       valid: true,
       lastModified: Date.now(),
     });

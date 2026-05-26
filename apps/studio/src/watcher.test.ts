@@ -44,6 +44,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -64,6 +67,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -99,6 +105,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -122,6 +131,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -141,6 +153,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -199,6 +214,9 @@ describe('createWatcher', () => {
       name: 'Watch Files',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -227,6 +245,9 @@ describe('createWatcher', () => {
       name: 'Watch Files',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -257,6 +278,9 @@ describe('createWatcher', () => {
       name: 'Watch Files',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -322,6 +346,9 @@ describe('createWatcher', () => {
       name: 'Watch Files',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -365,6 +392,9 @@ describe('createWatcher', () => {
       name: 'Nested Flow',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -397,6 +427,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -436,6 +469,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -472,6 +508,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });
@@ -533,6 +572,9 @@ describe('createWatcher', () => {
       name: 'Component Flow',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -556,6 +598,9 @@ describe('createWatcher', () => {
       name: 'Component Flow',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 10 });
@@ -574,6 +619,9 @@ describe('createWatcher', () => {
       name: 'Watch Me',
       repoPath,
       flowPath: 'flow.json',
+      projectSlug: 'p',
+      flowSlug: 'main',
+      isDefault: true,
     });
     const events = createEventBus();
     const watcher = createWatcher({ registry: reg, events, debounceMs: 20 });

@@ -77,7 +77,7 @@ describe('POST /api/flows/register', () => {
       id: string;
       slug: string;
     };
-    expect(json.slug).toBe('checkout-flow');
+    expect(json.slug).toBe('checkout-flow/main');
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0]?.id).toBe(json.id);
   });
@@ -798,7 +798,7 @@ describe('GET /api/flows', () => {
       valid: boolean;
     }>;
     expect(list).toHaveLength(1);
-    expect(list[0]?.slug).toBe('checkout-flow');
+    expect(list[0]?.slug).toBe('checkout-flow/main');
     expect(list[0]?.name).toBe('Checkout Flow');
     expect(list[0]?.valid).toBe(true);
   });
@@ -848,7 +848,7 @@ describe('GET /api/flows', () => {
       valid: boolean;
     }>;
     expect(list).toHaveLength(2);
-    expect(list.map((e) => e.slug).sort()).toEqual(['checkout-flow', 'other-flow']);
+    expect(list.map((e) => e.slug).sort()).toEqual(['checkout-flow/main', 'other-flow/main']);
     expect(list.every((e) => e.valid)).toBe(true);
   });
 });
@@ -3524,7 +3524,13 @@ describe('DELETE /api/flows/:id', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    const res = await app.request(`/api/flows/${reg.slug}`, { method: 'DELETE' });
+    // Post-US-002 the slug encodes project + flow with a '/'. The legacy
+    // /api/flows/:id route still uses a single path segment, so addressing
+    // by slug needs URL encoding here. US-007 retires this route in favour
+    // of the nested /api/projects/:project/flows/:flow shape.
+    const res = await app.request(`/api/flows/${encodeURIComponent(reg.slug)}`, {
+      method: 'DELETE',
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(registry.list()).toHaveLength(0);
@@ -3557,7 +3563,7 @@ describe('POST /api/projects', () => {
     expect(res.status).toBe(200);
     const body = (await res.json()) as { id: string; slug: string };
     expect(body.id).toBeTruthy();
-    expect(body.slug).toBe('fresh-project');
+    expect(body.slug).toBe('fresh-project/main');
     expect(registry.list()).toHaveLength(1);
     expect(registry.list()[0]?.repoPath).toBe(projectPath);
     expect(registry.list()[0]?.flowPath).toBe('flow.json');
