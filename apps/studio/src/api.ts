@@ -609,8 +609,10 @@ export function createApi(options: ApiOptions): Hono {
     const projects: Array<{
       projectSlug: string;
       name: string;
+      description?: string;
       defaultFlow: string;
       flowCount: number;
+      repoPath: string;
     }> = [];
     for (const [projectSlug, entries] of grouped) {
       const head = entries[0];
@@ -620,8 +622,10 @@ export function createApi(options: ApiOptions): Hono {
       projects.push({
         projectSlug,
         name: manifest?.name ?? projectSlug,
+        description: manifest?.description,
         defaultFlow: manifest?.defaultFlow ?? defaultEntry.flowSlug,
         flowCount: entries.length,
+        repoPath: head.repoPath,
       });
     }
     return c.json({ projects });

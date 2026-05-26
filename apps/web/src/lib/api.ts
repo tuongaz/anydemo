@@ -77,6 +77,28 @@ export interface ProjectFlowSummary {
   isDefault: boolean;
 }
 
+/**
+ * US-036: project-tier listing returned by `GET /api/projects`. One row per
+ * project (deduped from registry.list() by `projectSlug` server-side) powers
+ * the top-right project switcher so a multi-flow project appears once, not
+ * once per flow.
+ */
+export interface ProjectSummary {
+  projectSlug: string;
+  name: string;
+  description?: string;
+  defaultFlow: string;
+  flowCount: number;
+  repoPath?: string;
+}
+
+export const fetchProjects = async (): Promise<ProjectSummary[]> => {
+  const res = await fetch('/api/projects');
+  if (!res.ok) throw new Error(`GET /api/projects failed: ${res.status}`);
+  const body = (await res.json()) as { projects: ProjectSummary[] };
+  return body.projects;
+};
+
 export const fetchProjectFlows = async (project: string): Promise<ProjectFlowSummary[]> => {
   const url = `/api/projects/${encodeURIComponent(project)}/flows`;
   const res = await fetch(url);

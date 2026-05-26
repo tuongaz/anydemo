@@ -1,6 +1,6 @@
 import { ProjectSwitcher } from '@/components/project-switcher';
 import { type Theme, useTheme } from '@/hooks/use-theme';
-import type { CreateProjectResult, FlowSummary } from '@/lib/api';
+import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
 import { navigate } from '@/lib/router';
 import {
   Button,
@@ -14,10 +14,10 @@ import {
 import { Settings, Workflow } from 'lucide-react';
 
 export interface HeaderProps {
-  demos: FlowSummary[];
-  currentSlug?: string;
+  projects: ProjectSummary[];
+  currentProjectSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
-  onProjectUnregistered?: (id: string) => void;
+  onUnregisterProject?: (projectSlug: string) => Promise<void>;
 }
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -27,10 +27,10 @@ const THEME_OPTIONS: { value: Theme; label: string }[] = [
 ];
 
 export function Header({
-  demos,
-  currentSlug,
+  projects,
+  currentProjectSlug,
   onProjectCreated,
-  onProjectUnregistered,
+  onUnregisterProject,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
 
@@ -49,10 +49,10 @@ export function Header({
       </button>
       <div className="flex items-center gap-3">
         <ProjectSwitcher
-          demos={demos}
-          currentSlug={currentSlug}
+          projects={projects}
+          currentProjectSlug={currentProjectSlug}
           onProjectCreated={onProjectCreated}
-          onProjectUnregistered={onProjectUnregistered}
+          onUnregisterProject={onUnregisterProject}
         />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

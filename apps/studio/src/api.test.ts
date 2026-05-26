@@ -927,8 +927,10 @@ describe('GET /api/projects', () => {
       projects: Array<{
         projectSlug: string;
         name: string;
+        description?: string;
         defaultFlow: string;
         flowCount: number;
+        repoPath?: string;
       }>;
     };
 
@@ -939,12 +941,14 @@ describe('GET /api/projects', () => {
       name: 'Order Pipeline',
       defaultFlow: 'main',
       flowCount: 2,
+      repoPath: repoA,
     });
     expect(byProjectSlug['component-showcase']).toEqual({
       projectSlug: 'component-showcase',
       name: 'Component Showcase',
       defaultFlow: 'main',
       flowCount: 1,
+      repoPath: repoB,
     });
   });
 

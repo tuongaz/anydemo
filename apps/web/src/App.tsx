@@ -5,6 +5,7 @@ import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
 import { useProjectFlows } from '@/hooks/use-project-flows';
+import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
 import { type CreateProjectResult, type FlowDetail, playFlowNode, restartFlow } from '@/lib/api';
@@ -26,6 +27,11 @@ import { useCallback, useEffect } from 'react';
 export function App() {
   const pathname = usePathname();
   const { demos, refresh: refreshFlows } = useDemos();
+  // US-036: the top-right ProjectSwitcher is sourced from `GET /api/projects`
+  // so a multi-flow project surfaces once, not once per flow. The legacy
+  // `demos` list (FlowSummary[]) still backs the canvas page resolution, the
+  // `/` landing picker, and SSE-driven detail caches.
+  const { projects, refresh: refreshProjects, unregisterProject } = useProjects();
   // US-010: canvas page now lives at `/projects/:project/flows/:flow`. The
   // legacy `/d/<slug>` shape is gone — older bookmarks land on StudioHome and
   // the auto-pick effect rewrites them to the new URL if a demo resolves.
@@ -42,9 +48,14 @@ export function App() {
   const { flows: standaloneFlows } = useProjectFlows(projectOnlySlug);
 
   // External writes (CLI register / unregister) reach us via the global
-  // registry SSE channel. The flow list refetches; node-level state stays
-  // bound to the open demo and is untouched.
-  useRegistryEvents({ onRegistryReload: refreshFlows });
+  // registry SSE channel. Both flow and project lists refetch; node-level
+  // state stays bound to the open demo and is untouched.
+  useRegistryEvents({
+    onRegistryReload: () => {
+      refreshFlows();
+      refreshProjects();
+    },
+  });
 
   const slug = match ? `${match.project}/${match.flow}` : null;
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
@@ -151,16 +162,22 @@ export function App() {
     (result: CreateProjectResult) => {
       writeLastProjectId(result.id);
       refreshFlows();
+      refreshProjects();
     },
-    [refreshFlows],
+    [refreshFlows, refreshProjects],
   );
 
-  const onProjectUnregistered = useCallback(
-    async (id: string) => {
+  // US-036: cascade-unregister every flow under a project. The hook handles
+  // the per-flow DELETE loop + the projects refresh; here we refetch the
+  // legacy demos list too and navigate away when the open flow lived under
+  // the removed project.
+  const onUnregisterProject = useCallback(
+    async (projectSlug: string) => {
+      await unregisterProject(projectSlug);
       await refreshFlows();
-      if (flowId === id) navigate('/');
+      if (project === projectSlug) navigate('/');
     },
-    [refreshFlows, flowId],
+    [unregisterProject, refreshFlows, project],
   );
 
   // On '/', skip the picker when there's nothing to pick: jump straight in if
@@ -223,10 +240,10 @@ export function App() {
     <TooltipProvider delayDuration={150}>
       <div className="flex h-full w-full flex-col bg-background text-foreground">
         <Header
-          demos={demos}
-          currentSlug={slug ?? undefined}
+          projects={projects ?? []}
+          currentProjectSlug={project ?? undefined}
           onProjectCreated={onProjectCreated}
-          onProjectUnregistered={onProjectUnregistered}
+          onUnregisterProject={onUnregisterProject}
         />
         <main className="min-h-0 flex-1">
           {project && flow && slug ? (

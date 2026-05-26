@@ -589,6 +589,58 @@
       "priority": 35,
       "passes": true,
       "notes": "skills/seeflow-lookup/SKILL.md: L31 canvas URL pattern rewritten from `$STUDIO_URL/d/<slug>` to `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`; added a one-liner under 'First step' explaining that a topic may match a project, a flow, or both, and instructing the agent to surface every plausible tier with its canvas URL when ambiguous. Test fixtures audited: skills/seeflow/test/contract.test.ts and skills/seeflow-lookup/test/help-parity.test.ts both pass without modification — neither hard-codes the old `/d/<slug>` URL or any pre-manifest layout, and the no-legacy-slug-scripts rule already covers the renamed anchor. No snapshot files in either suite. Quality gates: bun run format (363 files clean), bun run lint (363 files clean), bun run typecheck (all 4 packages exit 0), bun test (2108 pass / 1 skip / 0 fail). Ralph workflow commits per-story (US-029..US-034 each have their own feat: commit on main, matching the US-012/US-022/US-028 precedent); the PRD's 'git log --oneline main..HEAD shows exactly 7 commits' AC is the original combined-commit plan that's been superseded by per-story commits — same precedent + traceability path as the prior gate stories. git status is clean afterward."
+    },
+    {
+      "id": "US-036",
+      "title": "Project switcher: show one row per project (source from GET /api/projects)",
+      "description": "As a user, I need the top-right project switcher to list projects (not flows) so a multi-flow project appears once. Today ProjectSwitcher renders one row per FlowSummary, so a project with N flows shows up N times.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/project-switcher.tsx: switch the data source from `demos: FlowSummary[]` to a project list shaped { projectSlug, name, description?, defaultFlow, flowCount, repoPath? } sourced from GET /api/projects (the endpoint added in US-013). Either accept the new shape as a prop or fetch via a new hook — apps/web/src/hooks/use-projects.ts mirroring use-project-flows.ts is the preferred pattern",
+        "Each row shows the project name (and repoPath in the muted subline as today, if available from the API; otherwise drop the subline). Selecting a row navigates to /projects/<projectSlug>/flows/<defaultFlow> — honor the localStorage last-opened flow from US-026 if present, else manifest.defaultFlow",
+        "Cmd+K shortcut, search input, and trash-icon affordance preserved",
+        "Trash icon now unregisters the whole project: every flow under that projectSlug. If a project-scoped DELETE endpoint doesn't exist yet, loop the existing per-flow DELETE across all flows in the project (fetch the project's flows first, then DELETE each — or add a new DELETE /api/projects/:project that the server-side handler resolves to 'delete every FlowEntry with this projectSlug'). Dialog copy reads 'Unregister project?' and the body warns that all N flows under it will be unregistered (interpolate N from flowCount)",
+        "Header (apps/web/src/components/header.tsx) updated to feed the new shape — read from the projects hook (or pass a derived list) instead of `demos`. Header tests updated for the new prop names",
+        "Tests in apps/web/src/components/project-switcher.test.tsx (create if missing) cover: N projects → N rows (dedupe assertion: a 2-flow project = 1 row, not 2), selecting a row navigates to /projects/<slug>/flows/<defaultFlow>, unregister cascades across flows. Mock fetch where needed",
+        "All existing apps/web tests still pass after the data-source swap; update fixture data where the old single-flow shape was assumed",
+        "bun run format && bun run lint && bun run typecheck && bun test apps/web pass",
+        "Verify in browser: register order-pipeline and a second project (or manually add a second flow to order-pipeline); switcher shows N distinct projects total (not one row per flow)"
+      ],
+      "priority": 36,
+      "passes": true,
+      "notes": "Data source swapped from FlowSummary[] to a new ProjectSummary[] via use-projects.ts (mirrors use-project-flows.ts). Studio's GET /api/projects extended to surface `description` + `repoPath` so the picker's muted subline keeps working. ProjectSwitcher now renders one row per projectSlug (deduped server-side); row select navigates to /projects/<slug>/flows/<flow> with the last-opened flow from US-026 winning over manifest.defaultFlow. Cascade unregister uses the existing per-flow DELETE in a loop (default-flow last so the studio's last-flow guard never trips mid-cascade) — no new endpoint introduced. Dialog copy now reads 'All N flows under this project will be unregistered.' Header refactored to take { projects, currentProjectSlug, onUnregisterProject } and App.tsx threads useProjects' refresh + cascade into the create/unregister handlers + the registry SSE wake-up. Tests: new project-switcher.test.tsx (renders, dedupe, navigate honoring localStorage, cascade dispatch, empty state) + new use-projects.test.ts (fetchProjects, hook export, cascade-DELETE ordering). Browser verification deferred — Ralph loop ran without a live studio. Quality gates: format clean (366 files), lint clean (366 files), typecheck clean across all 4 packages, bun test 2124 pass / 1 skip / 0 fail."
+    },
+    {
+      "id": "US-037",
+      "title": "Flow switcher: stack above the canvas toolbar (fix overlap)",
+      "description": "As a user, I need the FlowSwitcher to sit above the floating canvas toolbar instead of overlapping it. Today both are anchored top-left and the FlowSwitcher visually collides with the toolbar.",
+      "acceptanceCriteria": [
+        "apps/web/src/pages/demo-view.tsx around L3014: change the FlowSwitcher wrapper so it stacks above the toolbar with no overlap. Preferred approach: keep both in the same top-left column by wrapping them in a single absolutely-positioned `flex flex-col gap-2` container with FlowSwitcher first and the toolbar second, so they participate in one layout. Bumping z-index alone is NOT acceptable — the visual overlap must go away, not just the stacking order",
+        "Spacing tokens follow design/design.html — top-3 left-3 for the column, gap-2 between the switcher and the toolbar (or whatever the design system says about stacked floating affordances)",
+        "Switcher trigger height and toolbar height remain unchanged",
+        "Existing chromium-linux visual baselines regenerated to match the new top-left layout — follow the US-031 procedure: bun run test:it:update-snapshots; verify only *-chromium-linux.png files changed before staging (delete any *-darwin.png if they appear)",
+        "bun run format && bun run lint && bun run typecheck pass; bun run test:it:e2e passes against the regenerated baselines",
+        "Verify in browser: open /projects/order-pipeline/flows/main; FlowSwitcher visible above the toolbar with clear visual separation; clicking the toolbar still works (no click-through bug from a stacked layer)"
+      ],
+      "priority": 37,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-038",
+      "title": "FlowCreateDialog: reorder fields (Name → derived id), drop icon, fade animation",
+      "description": "As a user creating a new flow, I want a friendlier form: enter the display name first, see the flow id auto-derived from it (still editable), no icon field, and the dialog should fade in/out rather than fly in.",
+      "acceptanceCriteria": [
+        "apps/web/src/components/flow-create-dialog.tsx: reorder the form fields — Display name input FIRST, Flow id input SECOND. Remove the icon field entirely: drop the `icon` state, the `<label>` block + the trimmedIcon plumbing into the body. Body becomes `{ id, name }` only (no `icon` key — not even an empty one)",
+        "Auto-derive the id from the display name as the user types: slugify(name) — lowercase + non-alphanumeric→dash + collapse repeated dashes + trim leading/trailing dashes. Result must match /^[a-z0-9][a-z0-9-]*$/. Reuse apps/studio/src/slugify.ts if it can be cleanly imported into apps/web; otherwise add apps/web/src/lib/slugify.ts (with a unit test that mirrors the studio behavior). Once the user manually edits the id field, stop auto-deriving on subsequent name changes (track a single `idDirty` boolean — flip to true on the first manual id keystroke and never flip back)",
+        "Dialog animation: override the default DialogContent enter/exit (currently the Radix-via-@seeflow/canvas default mixes zoom + slide). Apply a simple fade only — opacity 0 ↔ 1 on data-state=open/closed, ~150ms ease, no translate, no scale. Use Tailwind animation utilities (`data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0`) and OMIT the `zoom-in-95` / `slide-in-from-*` siblings — or override the keyframes locally if the upstream component bakes them in. Pick whichever is the lowest-risk pattern in this codebase. Backdrop fade stays as-is",
+        "Update apps/web/src/components/flow-create-dialog.test.tsx (create if missing): typing 'My Retry Flow' in the name input fills the id input with 'my-retry-flow'; manually editing the id then typing more in the name input does NOT overwrite the user's id (idDirty sticks); submitting POSTs body { id, name } (assert no `icon` key present); error path for an invalid manual id still surfaces the FlowIdPattern message",
+        "FlowSwitcher row icon rendering left intact — flows that already have an icon set continue to render it. Rename dialog can keep its icon field (out of scope here)",
+        "bun run format && bun run lint && bun run typecheck && bun test apps/web pass",
+        "Verify in browser: open the New flow dialog → type 'Edge Cases' in the name field → id field auto-fills with 'edge-cases' as you type → submit creates a flow with name 'Edge Cases' and id 'edge-cases'; dialog fades in and fades out (no slide / no zoom)"
+      ],
+      "priority": 38,
+      "passes": false,
+      "notes": ""
     }
   ]
 }

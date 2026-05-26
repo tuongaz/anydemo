@@ -1,7 +1,7 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import type { CreateProjectResult, FlowSummary } from '@/lib/api';
-import { deleteFlow } from '@/lib/api';
-import { flowPathFromSlug, navigate } from '@/lib/router';
+import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
+import { readLastFlow } from '@/lib/last-flow';
+import { flowPath, navigate } from '@/lib/router';
 import {
   Button,
   Command,
@@ -26,21 +26,26 @@ import { ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 export interface ProjectSwitcherProps {
-  demos: FlowSummary[];
-  currentSlug?: string;
+  projects: ProjectSummary[];
+  currentProjectSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
-  onProjectUnregistered?: (id: string) => void;
+  /**
+   * US-036: cascade-delete every flow under the project. The switcher kicks
+   * off the call; App.tsx is responsible for refreshing the demos cache and
+   * navigating away if the open flow lived under the removed project.
+   */
+  onUnregisterProject?: (projectSlug: string) => Promise<void>;
 }
 
 export function ProjectSwitcher({
-  demos,
-  currentSlug,
+  projects,
+  currentProjectSlug,
   onProjectCreated,
-  onProjectUnregistered,
+  onUnregisterProject,
 }: ProjectSwitcherProps) {
   const [open, setOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
-  const [unregisterTarget, setUnregisterTarget] = useState<FlowSummary | null>(null);
+  const [unregisterTarget, setUnregisterTarget] = useState<ProjectSummary | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [unregisterError, setUnregisterError] = useState<string | null>(null);
 
@@ -55,15 +60,22 @@ export function ProjectSwitcher({
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  const current = demos.find((d) => d.slug === currentSlug);
+  const current = projects.find((p) => p.projectSlug === currentProjectSlug);
+
+  const navigateToProject = (project: ProjectSummary): void => {
+    // US-036: honor the per-project last-opened flow from US-026; fall back to
+    // the manifest's defaultFlow when no preference has been recorded yet.
+    const lastFlow = readLastFlow(project.projectSlug);
+    const targetFlow = lastFlow ?? project.defaultFlow;
+    navigate(flowPath(project.projectSlug, targetFlow));
+  };
 
   const handleCreated = (result: CreateProjectResult) => {
     onProjectCreated?.(result);
-    navigate(flowPathFromSlug(result.slug));
   };
 
-  const openUnregisterDialog = (demo: FlowSummary) => {
-    setUnregisterTarget(demo);
+  const openUnregisterDialog = (project: ProjectSummary) => {
+    setUnregisterTarget(project);
     setUnregisterError(null);
   };
 
@@ -78,25 +90,16 @@ export function ProjectSwitcher({
     setUnregistering(true);
     setUnregisterError(null);
     try {
-      // US-010: split the registry slug `${projectSlug}/${flowSlug}` into the
-      // two path segments the manifest-aware DELETE expects. Multi-flow
-      // unregister (i.e. dropping every flow of a project at once) is not yet
-      // wired — US-014/US-017 land per-project endpoints; for now this drops
-      // the single flow the row points at.
-      const slug = unregisterTarget.slug;
-      const slash = slug.indexOf('/');
-      const projectSlug = slash >= 0 ? slug.slice(0, slash) : slug;
-      const flowSlug = slash >= 0 ? slug.slice(slash + 1) : '';
-      await deleteFlow(projectSlug, flowSlug);
-      const id = unregisterTarget.id;
+      await onUnregisterProject?.(unregisterTarget.projectSlug);
       setUnregisterTarget(null);
-      onProjectUnregistered?.(id);
     } catch (err) {
       setUnregisterError(err instanceof Error ? err.message : String(err));
     } finally {
       setUnregistering(false);
     }
   };
+
+  const flowCount = unregisterTarget?.flowCount ?? 0;
 
   return (
     <>
@@ -106,12 +109,14 @@ export function ProjectSwitcher({
             type="button"
             variant="outline"
             size="sm"
-            aria-label="Switch demo"
+            aria-label="Switch project"
             aria-expanded={open}
             className="gap-2"
             data-testid="project-switcher-trigger"
           >
-            <span className="max-w-[180px] truncate text-sm">{current?.name ?? 'Select demo'}</span>
+            <span className="max-w-[180px] truncate text-sm">
+              {current?.name ?? 'Select project'}
+            </span>
             <CommandShortcut>⌘K</CommandShortcut>
             <ChevronsUpDown className="h-3.5 w-3.5 opacity-60" />
           </Button>
@@ -123,35 +128,39 @@ export function ProjectSwitcher({
           data-testid="project-switcher-popover"
         >
           <Command>
-            <CommandInput placeholder="Search demos..." />
+            <CommandInput placeholder="Search projects..." />
             <CommandList>
-              <CommandEmpty>No demos.</CommandEmpty>
-              {demos.length > 0 ? (
-                <CommandGroup heading="Demos">
-                  {demos.map((demo) => (
+              <CommandEmpty>No projects.</CommandEmpty>
+              {projects.length > 0 ? (
+                <CommandGroup heading="Projects">
+                  {projects.map((project) => (
                     <CommandItem
-                      key={demo.id}
-                      value={`${demo.name} ${demo.slug}`}
+                      key={project.projectSlug}
+                      value={`${project.name} ${project.projectSlug}`}
                       onSelect={() => {
                         setOpen(false);
-                        navigate(flowPathFromSlug(demo.slug));
+                        navigateToProject(project);
                       }}
+                      data-testid={`project-switcher-row-${project.projectSlug}`}
                       className="group flex items-center justify-between gap-2"
                     >
                       <div className="flex min-w-0 flex-col items-start gap-0.5">
-                        <span className="font-medium">{demo.name}</span>
-                        <span className="w-full truncate text-xs text-muted-foreground">
-                          {demo.repoPath}
-                        </span>
+                        <span className="font-medium">{project.name}</span>
+                        {project.repoPath ? (
+                          <span className="w-full truncate text-xs text-muted-foreground">
+                            {project.repoPath}
+                          </span>
+                        ) : null}
                       </div>
                       <button
                         type="button"
-                        aria-label={`Unregister ${demo.name}`}
+                        aria-label={`Unregister ${project.name}`}
+                        data-testid={`project-switcher-unregister-${project.projectSlug}`}
                         className="shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:text-destructive group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring"
                         onClick={(e) => {
                           e.stopPropagation();
                           setOpen(false);
-                          openUnregisterDialog(demo);
+                          openUnregisterDialog(project);
                         }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
@@ -160,7 +169,7 @@ export function ProjectSwitcher({
                   ))}
                 </CommandGroup>
               ) : null}
-              {demos.length > 0 ? <CommandSeparator /> : null}
+              {projects.length > 0 ? <CommandSeparator /> : null}
               <CommandGroup>
                 <CommandItem
                   value="+ create new project"
@@ -196,8 +205,18 @@ export function ProjectSwitcher({
           <DialogHeader>
             <DialogTitle>Unregister project?</DialogTitle>
             <DialogDescription>
-              This removes <strong>{unregisterTarget?.name}</strong> from SeeFlow. Your files at{' '}
-              <code className="text-xs">{unregisterTarget?.repoPath}</code> will not be deleted.
+              This removes <strong>{unregisterTarget?.name}</strong> from SeeFlow.{' '}
+              <strong>
+                All {flowCount} {flowCount === 1 ? 'flow' : 'flows'}
+              </strong>{' '}
+              under this project will be unregistered.
+              {unregisterTarget?.repoPath ? (
+                <>
+                  {' '}
+                  Your files at <code className="text-xs">{unregisterTarget.repoPath}</code> will
+                  not be deleted.
+                </>
+              ) : null}
             </DialogDescription>
           </DialogHeader>
           {unregisterError ? (
