@@ -65,7 +65,7 @@ describe('GET /runtime/:file (US-012 vendored Tailwind Play CDN)', () => {
   });
 });
 
-describe('GET /api/projects/:id/files/:path', () => {
+describe('GET /api/projects/:project/files/:path', () => {
   const buildFixture = () => {
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-files-repo-'));
     mkdirSync(join(repoDir, 'assets'), { recursive: true });
@@ -78,7 +78,7 @@ describe('GET /api/projects/:id/files/:path', () => {
     const registry = createRegistry({
       path: join(mkdtempSync(join(tmpdir(), 'seeflow-files-reg-')), 'registry.json'),
     });
-    const entry = registry.upsert({
+    registry.upsert({
       name: 'Files Test',
       repoPath: repoDir,
       flowPath: 'flow.json',
@@ -92,41 +92,41 @@ describe('GET /api/projects/:id/files/:path', () => {
       registry,
       disableWatcher: true,
     });
-    return { app, projectId: entry.id, repoDir };
+    return { app, projectSlug: 'p', repoDir };
   };
 
   it('streams the file with a content-type for a happy path', async () => {
-    const { app, projectId } = buildFixture();
-    const res = await app.request(`/api/projects/${projectId}/files/assets/hello.txt`);
+    const { app, projectSlug } = buildFixture();
+    const res = await app.request(`/api/projects/${projectSlug}/files/assets/hello.txt`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type') ?? '').toContain('text/plain');
     expect(await res.text()).toBe('hi there');
   });
 
   it('returns 404 for a missing file', async () => {
-    const { app, projectId } = buildFixture();
-    const res = await app.request(`/api/projects/${projectId}/files/assets/nope.txt`);
+    const { app, projectSlug } = buildFixture();
+    const res = await app.request(`/api/projects/${projectSlug}/files/assets/nope.txt`);
     expect(res.status).toBe(404);
     expect((await res.json()) as { error: string }).toHaveProperty('error');
   });
 
   it('returns 400 when the path contains `..` traversal', async () => {
-    const { app, projectId } = buildFixture();
-    const res = await app.request(`/api/projects/${projectId}/files/..%2Fsecret.txt`);
+    const { app, projectSlug } = buildFixture();
+    const res = await app.request(`/api/projects/${projectSlug}/files/..%2Fsecret.txt`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/traversal/i);
   });
 
   it('returns 400 when the path is absolute', async () => {
-    const { app, projectId } = buildFixture();
-    const res = await app.request(`/api/projects/${projectId}/files/%2Fetc%2Fpasswd`);
+    const { app, projectSlug } = buildFixture();
+    const res = await app.request(`/api/projects/${projectSlug}/files/%2Fetc%2Fpasswd`);
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toMatch(/absolute/i);
   });
 
-  it('returns 404 for an unknown projectId', async () => {
+  it('returns 404 for an unknown projectSlug', async () => {
     const { app } = buildFixture();
     const res = await app.request('/api/projects/does-not-exist/files/assets/hello.txt');
     expect(res.status).toBe(404);
@@ -135,7 +135,7 @@ describe('GET /api/projects/:id/files/:path', () => {
 
 interface ShelloutFixture {
   app: ReturnType<typeof createApp>;
-  projectId: string;
+  projectSlug: string;
   repoDir: string;
   calls: Array<{ cmd: string; args: string[] }>;
   blockHtmlAbs: string;
@@ -154,7 +154,7 @@ const buildShelloutFixture = (opts?: {
   const registry = createRegistry({
     path: join(mkdtempSync(join(tmpdir(), 'seeflow-shellout-reg-')), 'registry.json'),
   });
-  const entry = registry.upsert({
+  registry.upsert({
     name: 'Shellout Test',
     repoPath: repoDir,
     flowPath: 'flow.json',
@@ -181,7 +181,7 @@ const buildShelloutFixture = (opts?: {
   // Match the realpath the resolver will produce (macOS /var → /private/var).
   return {
     app,
-    projectId: entry.id,
+    projectSlug: 'p',
     repoDir,
     calls,
     blockHtmlAbs: realpathSync(join(repoDir, 'blocks', 'card.html')),
@@ -219,12 +219,12 @@ const withEditor = async (value: string | undefined, run: () => Promise<void>) =
   }
 };
 
-describe('POST /api/projects/:id/files/open', () => {
+describe('POST /api/projects/:project/files/open', () => {
   it('spawns $EDITOR with the absolute path on the happy path', () =>
     withEditor('vim', async () => {
       const fix = buildShelloutFixture();
       const res = await fix.app.fetch(
-        jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: 'blocks/card.html' }),
+        jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: 'blocks/card.html' }),
       );
       expect(res.status).toBe(200);
       const body = (await res.json()) as { ok: boolean; absPath: string };
@@ -237,7 +237,7 @@ describe('POST /api/projects/:id/files/open', () => {
     withEditor(undefined, async () => {
       const fix = buildShelloutFixture();
       const res = await fix.app.fetch(
-        jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: 'blocks/card.html' }),
+        jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: 'blocks/card.html' }),
       );
       expect(res.status).toBe(200);
       const body = (await res.json()) as { ok: boolean; absPath: string; error: string };
@@ -251,7 +251,7 @@ describe('POST /api/projects/:id/files/open', () => {
     withEditor('no-such-editor', async () => {
       const fix = buildShelloutFixture({ spawnResult: { ok: false, error: 'spawn ENOENT' } });
       const res = await fix.app.fetch(
-        jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: 'blocks/card.html' }),
+        jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: 'blocks/card.html' }),
       );
       expect(res.status).toBe(200);
       const body = (await res.json()) as { ok: boolean; absPath: string; error: string };
@@ -263,7 +263,7 @@ describe('POST /api/projects/:id/files/open', () => {
   it('rejects `..` traversal with 400', async () => {
     const fix = buildShelloutFixture();
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: '../secret.txt' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: '../secret.txt' }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
@@ -274,7 +274,7 @@ describe('POST /api/projects/:id/files/open', () => {
   it('rejects absolute paths with 400', async () => {
     const fix = buildShelloutFixture();
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: '/etc/passwd' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: '/etc/passwd' }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
@@ -285,7 +285,7 @@ describe('POST /api/projects/:id/files/open', () => {
   it('soft-fails with 404 JSON (no 500) for a missing file', async () => {
     const fix = buildShelloutFixture();
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/open`, { path: 'blocks/nope.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/open`, { path: 'blocks/nope.html' }),
     );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string; absPath: string };
@@ -303,11 +303,11 @@ describe('POST /api/projects/:id/files/open', () => {
   });
 });
 
-describe('POST /api/projects/:id/files/reveal', () => {
+describe('POST /api/projects/:project/files/reveal', () => {
   it('uses `open -R <abs>` on darwin', async () => {
     const fix = buildShelloutFixture({ platform: 'darwin' });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: 'blocks/card.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: 'blocks/card.html' }),
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; absPath: string };
@@ -319,7 +319,7 @@ describe('POST /api/projects/:id/files/reveal', () => {
   it('uses `explorer /select,<abs>` on win32', async () => {
     const fix = buildShelloutFixture({ platform: 'win32' });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: 'blocks/card.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: 'blocks/card.html' }),
     );
     expect(res.status).toBe(200);
     expect(fix.calls).toEqual([{ cmd: 'explorer', args: [`/select,${fix.blockHtmlAbs}`] }]);
@@ -328,7 +328,7 @@ describe('POST /api/projects/:id/files/reveal', () => {
   it('uses `xdg-open <dir>` on linux', async () => {
     const fix = buildShelloutFixture({ platform: 'linux' });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: 'blocks/card.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: 'blocks/card.html' }),
     );
     expect(res.status).toBe(200);
     expect(fix.calls).toEqual([{ cmd: 'xdg-open', args: [dirname(fix.blockHtmlAbs)] }]);
@@ -337,7 +337,7 @@ describe('POST /api/projects/:id/files/reveal', () => {
   it('rejects `..` traversal with 400', async () => {
     const fix = buildShelloutFixture({ platform: 'darwin' });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: '../secret.txt' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: '../secret.txt' }),
     );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
@@ -348,7 +348,7 @@ describe('POST /api/projects/:id/files/reveal', () => {
   it('soft-fails with 404 JSON for a missing file', async () => {
     const fix = buildShelloutFixture({ platform: 'darwin' });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: 'blocks/nope.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: 'blocks/nope.html' }),
     );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string; absPath: string };
@@ -363,7 +363,7 @@ describe('POST /api/projects/:id/files/reveal', () => {
       spawnResult: { ok: false, error: 'spawn ENOENT' },
     });
     const res = await fix.app.fetch(
-      jsonPost(`/api/projects/${fix.projectId}/files/reveal`, { path: 'blocks/card.html' }),
+      jsonPost(`/api/projects/${fix.projectSlug}/files/reveal`, { path: 'blocks/card.html' }),
     );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; absPath: string; error: string };
@@ -373,18 +373,26 @@ describe('POST /api/projects/:id/files/reveal', () => {
   });
 });
 
-describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
-  const buildUploadFixture = () => {
+describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', () => {
+  // The default fixture uses the manifest layout — flow.json lives under
+  // `flows/main/`, so the upload handler must resolve the on-disk node folder
+  // at `<repoPath>/flows/main/nodes/<id>/`. A second fixture covers the
+  // legacy layout (flow.json at the project root) so the same handler
+  // collapses to `<repoPath>/nodes/<id>/`.
+  const buildUploadFixture = (opts?: { flowPath?: string }) => {
+    const flowPath = opts?.flowPath ?? 'flows/main/flow.json';
+    const flowDir = flowPath.includes('/') ? flowPath.slice(0, flowPath.lastIndexOf('/')) : '';
     const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-node-upload-repo-'));
-    writeFileSync(join(repoDir, 'flow.json'), '{"version":2}');
+    if (flowDir.length > 0) mkdirSync(join(repoDir, flowDir), { recursive: true });
+    writeFileSync(join(repoDir, flowPath), '{"version":2}');
 
     const registry = createRegistry({
       path: join(mkdtempSync(join(tmpdir(), 'seeflow-node-upload-reg-')), 'registry.json'),
     });
-    const entry = registry.upsert({
+    registry.upsert({
       name: 'Node Upload Test',
       repoPath: repoDir,
-      flowPath: 'flow.json',
+      flowPath,
       projectSlug: 'p',
       flowSlug: 'main',
       isDefault: true,
@@ -395,7 +403,7 @@ describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
       registry,
       disableWatcher: true,
     });
-    return { app, projectId: entry.id, repoDir };
+    return { app, projectSlug: 'p', flowSlug: 'main', flowDir, repoDir };
   };
 
   const PNG_BYTES = Uint8Array.from([
@@ -411,91 +419,103 @@ describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
   const formPost = (path: string, form: FormData): Request =>
     new Request(`http://test${path}`, { method: 'POST', body: form });
 
-  it('writes the file to nodes/<nodeId>/ and returns the path', async () => {
-    const { app, projectId, repoDir } = buildUploadFixture();
+  const uploadUrl = (projectSlug: string, flowSlug: string, nodeId: string) =>
+    `/api/projects/${projectSlug}/flows/${flowSlug}/nodes/${nodeId}/files/upload`;
+
+  it('writes the file under <flowDir>/nodes/<nodeId>/ and returns the flow-relative path', async () => {
+    const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
     const form = new FormData();
     form.set('file', new File([PNG_BYTES], 'logo.png', { type: 'image/png' }));
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { path: string };
+    // Response path is always flow-relative (flow folder is the file:// root).
     expect(body.path).toBe(`nodes/${NODE_ID}/logo.png`);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'logo.png'))).toBe(true);
+    // On-disk anchor is under the flow folder.
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'logo.png'))).toBe(true);
+    // And NOT under the project root for the manifest layout.
+    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'logo.png'))).toBe(false);
+  });
+
+  it('collapses to <repoPath>/nodes/<nodeId>/ when flow.json lives at the project root', async () => {
+    const { app, projectSlug, flowSlug, repoDir } = buildUploadFixture({ flowPath: 'flow.json' });
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'legacy.png', { type: 'image/png' }));
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
+    expect(res.status).toBe(200);
+    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'legacy.png'))).toBe(true);
   });
 
   it('rejects an invalid nodeId shape', async () => {
-    const { app, projectId } = buildUploadFixture();
+    const { app, projectSlug, flowSlug } = buildUploadFixture();
     const form = new FormData();
     form.set('file', new File([PNG_BYTES], 'x.png', { type: 'image/png' }));
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/bogus/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, 'bogus'), form));
     expect(res.status).toBe(400);
   });
 
   it('rejects disallowed extensions', async () => {
-    const { app, projectId } = buildUploadFixture();
+    const { app, projectSlug, flowSlug } = buildUploadFixture();
     const form = new FormData();
     form.set(
       'file',
       new File([new TextEncoder().encode('x')], 'evil.sh', { type: 'text/x-shellscript' }),
     );
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(400);
   });
 
   it('dedupes within the node folder with -2/-3 suffix', async () => {
-    const { app, projectId, repoDir } = buildUploadFixture();
+    const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
     const upload = async () => {
       const form = new FormData();
       form.set('file', new File([PNG_BYTES], 'a.png', { type: 'image/png' }));
-      const res = await app.fetch(
-        formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-      );
+      const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
       return (await res.json()) as { path: string };
     };
     expect((await upload()).path).toBe(`nodes/${NODE_ID}/a.png`);
     expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-2.png`);
     expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-3.png`);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'a.png'))).toBe(true);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'a-2.png'))).toBe(true);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'a-3.png'))).toBe(true);
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a.png'))).toBe(true);
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a-2.png'))).toBe(true);
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a-3.png'))).toBe(true);
   });
 
-  it('returns 404 for an unknown projectId', async () => {
-    const { app } = buildUploadFixture();
+  it('returns 404 with project-not-found for an unknown project slug', async () => {
+    const { app, flowSlug } = buildUploadFixture();
     const form = new FormData();
     form.set('file', new File([PNG_BYTES], 'pic.png', { type: 'image/png' }));
-    const res = await app.fetch(
-      formPost(`/api/projects/does-not-exist/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl('does-not-exist', flowSlug, NODE_ID), form));
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('returns 404 with flow-not-found for an unknown flow slug under a known project', async () => {
+    const { app, projectSlug } = buildUploadFixture();
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'pic.png', { type: 'image/png' }));
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, 'does-not-exist', NODE_ID), form));
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'flow-not-found' });
   });
 
   it('uses the `filename` field when present', async () => {
-    const { app, projectId, repoDir } = buildUploadFixture();
+    const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
     const form = new FormData();
     form.set('file', new File([PNG_BYTES], 'blob', { type: 'image/png' }));
     form.set('filename', 'My Image.PNG');
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
     expect(((await res.json()) as { path: string }).path).toBe(`nodes/${NODE_ID}/my-image.png`);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'my-image.png'))).toBe(true);
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'my-image.png'))).toBe(true);
   });
 
   it('rejects files larger than 5 MB with 413', async () => {
-    const { app, projectId } = buildUploadFixture();
+    const { app, projectSlug, flowSlug } = buildUploadFixture();
     const big = new Uint8Array(5 * 1024 * 1024 + 1);
     const form = new FormData();
     form.set('file', new File([big], 'big.png', { type: 'image/png' }));
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(413);
     const body = (await res.json()) as { error: string; maxBytes: number };
     expect(body.error).toMatch(/too large/i);
@@ -503,26 +523,22 @@ describe('POST /api/projects/:id/nodes/:nodeId/files/upload', () => {
   });
 
   it('returns 400 when the file field is missing', async () => {
-    const { app, projectId } = buildUploadFixture();
+    const { app, projectSlug, flowSlug } = buildUploadFixture();
     const form = new FormData();
     form.set('filename', 'whatever.png');
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(400);
     expect(((await res.json()) as { error: string }).error).toMatch(/file/i);
   });
 
   it('accepts SVG uploads', async () => {
-    const { app, projectId, repoDir } = buildUploadFixture();
+    const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
     const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>';
     const form = new FormData();
     form.set('file', new File([svg], 'icon.svg', { type: 'image/svg+xml' }));
-    const res = await app.fetch(
-      formPost(`/api/projects/${projectId}/nodes/${NODE_ID}/files/upload`, form),
-    );
+    const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
     expect(((await res.json()) as { path: string }).path).toBe(`nodes/${NODE_ID}/icon.svg`);
-    expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'icon.svg'))).toBe(true);
+    expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'icon.svg'))).toBe(true);
   });
 });

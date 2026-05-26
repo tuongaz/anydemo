@@ -18,8 +18,18 @@ describe('node-files path helpers', () => {
   it('builds node-relative file:// ref (just the filename)', () => {
     expect(nodeFileRef('node-abc', 'view.html')).toBe('file://view.html');
   });
-  it('builds absolute path under the project root', () => {
-    expect(nodeFileAbsPath('/repo', 'node-abc', 'detail.md')).toBe(
+  it('builds absolute path under the flow folder when flowDir is set', () => {
+    expect(nodeFileAbsPath('/repo', 'flows/main', 'node-abc', 'detail.md')).toBe(
+      '/repo/flows/main/nodes/node-abc/detail.md',
+    );
+  });
+  it('collapses to the project root when flowDir is empty', () => {
+    expect(nodeFileAbsPath('/repo', '', 'node-abc', 'detail.md')).toBe(
+      '/repo/nodes/node-abc/detail.md',
+    );
+  });
+  it('collapses to the project root when flowDir is "."', () => {
+    expect(nodeFileAbsPath('/repo', '.', 'node-abc', 'detail.md')).toBe(
       '/repo/nodes/node-abc/detail.md',
     );
   });
@@ -45,34 +55,44 @@ describe('writeNodeFile / removeNodeDir', () => {
   });
 
   it('writes content atomically, creating parent dirs', () => {
-    const abs = nodeFileAbsPath(root, 'node-x', 'detail.md');
+    const abs = nodeFileAbsPath(root, '', 'node-x', 'detail.md');
     writeNodeFile(abs, 'hello');
     expect(readFileSync(abs, 'utf8')).toBe('hello');
   });
 
   it('writes empty string when content is empty', () => {
-    const abs = nodeFileAbsPath(root, 'node-x', 'detail.md');
+    const abs = nodeFileAbsPath(root, '', 'node-x', 'detail.md');
     writeNodeFile(abs, '');
     expect(readFileSync(abs, 'utf8')).toBe('');
   });
 
   it('removeNodeDir deletes the node folder and contents', () => {
-    const abs = nodeFileAbsPath(root, 'node-x', 'detail.md');
+    const abs = nodeFileAbsPath(root, '', 'node-x', 'detail.md');
     writeNodeFile(abs, 'x');
-    removeNodeDir(root, 'node-x');
+    removeNodeDir(root, '', 'node-x');
     expect(existsSync(abs)).toBe(false);
     expect(existsSync(join(root, 'nodes', 'node-x'))).toBe(false);
   });
 
   it('removeNodeDir is idempotent on missing folder', () => {
-    expect(() => removeNodeDir(root, 'node-missing')).not.toThrow();
+    expect(() => removeNodeDir(root, '', 'node-missing')).not.toThrow();
   });
 
   it('removeNodeDir leaves sibling node folders intact', () => {
-    writeNodeFile(nodeFileAbsPath(root, 'node-a', 'detail.md'), 'a');
-    writeNodeFile(nodeFileAbsPath(root, 'node-b', 'detail.md'), 'b');
-    removeNodeDir(root, 'node-a');
-    expect(existsSync(nodeFileAbsPath(root, 'node-a', 'detail.md'))).toBe(false);
-    expect(readFileSync(nodeFileAbsPath(root, 'node-b', 'detail.md'), 'utf8')).toBe('b');
+    writeNodeFile(nodeFileAbsPath(root, '', 'node-a', 'detail.md'), 'a');
+    writeNodeFile(nodeFileAbsPath(root, '', 'node-b', 'detail.md'), 'b');
+    removeNodeDir(root, '', 'node-a');
+    expect(existsSync(nodeFileAbsPath(root, '', 'node-a', 'detail.md'))).toBe(false);
+    expect(readFileSync(nodeFileAbsPath(root, '', 'node-b', 'detail.md'), 'utf8')).toBe('b');
+  });
+
+  it('removeNodeDir anchored under flowDir leaves cousin flow nodes intact', () => {
+    writeNodeFile(nodeFileAbsPath(root, 'flows/main', 'node-a', 'detail.md'), 'a');
+    writeNodeFile(nodeFileAbsPath(root, 'flows/retry', 'node-a', 'detail.md'), 'b');
+    removeNodeDir(root, 'flows/main', 'node-a');
+    expect(existsSync(nodeFileAbsPath(root, 'flows/main', 'node-a', 'detail.md'))).toBe(false);
+    expect(readFileSync(nodeFileAbsPath(root, 'flows/retry', 'node-a', 'detail.md'), 'utf8')).toBe(
+      'b',
+    );
   });
 });

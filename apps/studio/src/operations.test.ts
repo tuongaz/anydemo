@@ -224,7 +224,7 @@ describe('addNodeImpl + detail externalization', () => {
     if (res.kind !== 'ok') return;
     const nodeId = res.data.id;
 
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(existsSync(detailAbs)).toBe(true);
     expect(readFileSync(detailAbs, 'utf8')).toBe('hello world');
 
@@ -243,7 +243,7 @@ describe('addNodeImpl + detail externalization', () => {
     if (res.kind !== 'ok') return;
     const nodeId = res.data.id;
 
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(existsSync(detailAbs)).toBe(true);
     expect(readFileSync(detailAbs, 'utf8')).toBe('');
 
@@ -279,7 +279,7 @@ describe('patchNodeImpl + detail externalization', () => {
     const patch = await patchNodeImpl(deps, flowId, nodeId, { detail: 'new content' });
     expect(patch.kind).toBe('ok');
 
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(readFileSync(detailAbs, 'utf8')).toBe('new content');
 
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
@@ -299,7 +299,7 @@ describe('patchNodeImpl + detail externalization', () => {
     const patch = await patchNodeImpl(deps, flowId, nodeId, { detail: '' });
     expect(patch.kind).toBe('ok');
 
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(readFileSync(detailAbs, 'utf8')).toBe('');
 
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
@@ -349,7 +349,7 @@ describe('deleteNodeImpl + per-node folder cascade', () => {
     });
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(existsSync(detailAbs)).toBe(true);
 
     const del = await deleteNodeImpl(deps, flowId, nodeId);
@@ -402,7 +402,7 @@ describe('patchNodeImpl + component spec sidecar (US-007)', () => {
     const patch = await patchNodeImpl(deps, flowId, 'c1', { spec: newSpec });
     expect(patch.kind).toBe('ok');
 
-    const specAbs = nodeFileAbsPath(repoPath, 'c1', 'spec.json');
+    const specAbs = nodeFileAbsPath(repoPath, '', 'c1', 'spec.json');
     const onDisk = readFileSync(specAbs, 'utf8');
     expect(JSON.parse(onDisk)).toEqual(newSpec);
     expect(onDisk.endsWith('\n')).toBe(true);
@@ -424,7 +424,7 @@ describe('patchNodeImpl + component spec sidecar (US-007)', () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     writeComponentFixture(flowAbs, repoPath, initialSpec);
 
-    const specAbs = nodeFileAbsPath(repoPath, 'c1', 'spec.json');
+    const specAbs = nodeFileAbsPath(repoPath, '', 'c1', 'spec.json');
     expect(existsSync(specAbs)).toBe(true);
 
     const del = await deleteNodeImpl(deps, flowId, 'c1');
@@ -458,10 +458,12 @@ describe('addFlowBulkImpl', () => {
     expect(res.data.connectors[0]?.id).toBe('a-to-b');
 
     // Externalization landed for the per-node files.
-    expect(readFileSync(nodeFileAbsPath(repoPath, 'a', 'detail.md'), 'utf8')).toBe('aye');
+    expect(readFileSync(nodeFileAbsPath(repoPath, '', 'a', 'detail.md'), 'utf8')).toBe('aye');
     const cId = res.data.nodes[2]?.id;
     if (!cId) throw new Error('missing id');
-    expect(readFileSync(nodeFileAbsPath(repoPath, cId, 'view.html'), 'utf8')).toBe('<div>hi</div>');
+    expect(readFileSync(nodeFileAbsPath(repoPath, '', cId, 'view.html'), 'utf8')).toBe(
+      '<div>hi</div>',
+    );
 
     const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
     expect(flow.nodes).toHaveLength(3);
@@ -1219,7 +1221,7 @@ describe('patchNodeImpl type retype (end-to-end through ResolvedFlowSchema)', ()
     if (add.kind !== 'ok') throw new Error('add failed');
     const nodeId = add.data.id;
 
-    const detailAbs = nodeFileAbsPath(repoPath, nodeId, 'detail.md');
+    const detailAbs = nodeFileAbsPath(repoPath, '', nodeId, 'detail.md');
     expect(existsSync(detailAbs)).toBe(true);
     expect(readFileSync(detailAbs, 'utf8')).toBe('docs survive retype');
 

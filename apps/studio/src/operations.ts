@@ -1246,12 +1246,13 @@ export async function addNodeImpl(
     const data: Record<string, unknown> = dataIsRecord
       ? { ...(newNode.data as Record<string, unknown>) }
       : {};
+    const flowDir = dirname(entry.flowPath);
     for (const { field, fileName } of externalizedFieldsForNodeType(newNode.type)) {
       const incoming = data[field];
       const content = typeof incoming === 'string' ? incoming : '';
       data[field] = nodeFileRef(newId, fileName);
       externalized.push({
-        absPath: nodeFileAbsPath(entry.repoPath, newId, fileName),
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, fileName),
         content,
       });
     }
@@ -1310,6 +1311,7 @@ export async function addFlowBulkImpl(
     externalized: Array<{ absPath: string; content: string }>;
   }> = [];
   const nodeIdsInBatch = new Set<string>();
+  const flowDir = dirname(entry.flowPath);
   for (const item of body.nodes ?? []) {
     const newNode = { ...item };
     if (typeof newNode.id !== 'string' || newNode.id.length === 0) {
@@ -1334,7 +1336,7 @@ export async function addFlowBulkImpl(
       const content = typeof incoming === 'string' ? incoming : '';
       data[field] = nodeFileRef(newId, fileName);
       externalized.push({
-        absPath: nodeFileAbsPath(entry.repoPath, newId, fileName),
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, fileName),
         content,
       });
     }
@@ -1419,11 +1421,11 @@ export async function addFlowBulkImpl(
   // Non-ok branch: the post-mutation ResolvedFlowSchema parse (or a later
   // writeFailed) ran AFTER the mutator already wrote per-node folders. The
   // collide-with-existing check ran first inside the mutator, so any folder
-  // at `nodes/<p.id>/` was created by this call — safe to cascade. The
-  // idAlreadyExists branch returns before any writeNodeFile, so the rmdir is
-  // a no-op there.
+  // at `<flowDir>/nodes/<p.id>/` was created by this call — safe to cascade.
+  // The idAlreadyExists branch returns before any writeNodeFile, so the rmdir
+  // is a no-op there.
   for (const p of preparedNodes) {
-    removeNodeDir(entry.repoPath, p.id);
+    removeNodeDir(entry.repoPath, flowDir, p.id);
   }
   return result;
 }
@@ -1432,8 +1434,8 @@ export async function addFlowBulkImpl(
 // atomic write. Final ResolvedFlowSchema parse stays in place so a pre-existing
 // schema violation surfaces honestly instead of being silently papered over.
 // After the flow.json write, `removeNodeDir` cascades the node's whole
-// `<project>/nodes/<id>/` folder — covering detail.md, view.html, and any
-// type:'image' upload that lived there.
+// `<repoPath>/<flowDir>/nodes/<id>/` folder — covering detail.md, view.html,
+// and any type:'image' upload that lived there.
 export async function deleteNodeImpl(
   deps: OperationsDeps,
   flowId: string,
@@ -1462,7 +1464,7 @@ export async function deleteNodeImpl(
 
   if (result.kind === 'ok') {
     try {
-      removeNodeDir(entry.repoPath, nodeId);
+      removeNodeDir(entry.repoPath, dirname(entry.flowPath), nodeId);
     } catch (err) {
       // Best-effort: flow.json is already written and the orphan folder is
       // recoverable manually. ids are random so a future add_node won't collide.
@@ -1524,6 +1526,7 @@ export async function patchNodeImpl(
   const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
   if (!existsSync(fullPath)) return { kind: 'fileNotFound', path: fullPath };
 
+  const flowDir = dirname(entry.flowPath);
   return mutateMergedFlowAndBroadcast<
     { kind: 'unknownNode' } | { kind: 'writeFailed'; message: string }
   >(deps, flowId, fullPath, (flow) => {
@@ -1539,7 +1542,7 @@ export async function patchNodeImpl(
       const incoming = (updates as Record<string, unknown>)[field];
       if (incoming === undefined) continue;
       externalizedWrites.push({
-        absPath: nodeFileAbsPath(entry.repoPath, nodeId, fileName),
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, nodeId, fileName),
         ref: nodeFileRef(nodeId, fileName),
         field,
         content: typeof incoming === 'string' ? incoming : '',
@@ -1566,12 +1569,12 @@ export async function patchNodeImpl(
       node.data = data;
     }
     // Component spec sidecar — write the pretty-printed JSON to
-    // `<project>/nodes/<id>/spec.json` so the on-disk source of truth stays
-    // in sync. mergeNodeUpdates already put data.spec on the merged tree for
-    // the post-mutation ResolvedFlowSchema parse; splitFlow strips it from
-    // flow.json so we don't double-store the spec.
+    // `<repoPath>/<flowDir>/nodes/<id>/spec.json` so the on-disk source of
+    // truth stays in sync. mergeNodeUpdates already put data.spec on the
+    // merged tree for the post-mutation ResolvedFlowSchema parse; splitFlow
+    // strips it from flow.json so we don't double-store the spec.
     if (node.type === 'component' && updates.spec !== undefined) {
-      const specAbs = nodeFileAbsPath(entry.repoPath, nodeId, 'spec.json');
+      const specAbs = nodeFileAbsPath(entry.repoPath, flowDir, nodeId, 'spec.json');
       try {
         writeNodeFile(specAbs, `${JSON.stringify(updates.spec, null, 2)}\n`);
       } catch (err) {

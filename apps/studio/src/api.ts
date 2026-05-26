@@ -92,12 +92,16 @@ type ResolvedProjectFile =
 // (defense against symlink escapes). Returns the realpath of an existing file
 // on success, or `fileMissing` with the would-be absolute path so callers can
 // soft-fail with that path included for clipboard fallback.
+//
+// Project addressing is by `projectSlug` (post-US-008): the first registry
+// entry whose `projectSlug` matches supplies `repoPath` since every entry in
+// a project shares the same on-disk root.
 function resolveProjectFile(
   registry: Registry,
-  projectId: string,
+  projectSlug: string,
   relPath: string,
 ): ResolvedProjectFile {
-  const entry = registry.getById(projectId);
+  const entry = registry.list().find((e) => e.projectSlug === projectSlug);
   if (!entry) return { kind: 'unknownProject' };
 
   const guard = validateRelativePath(relPath);
@@ -553,11 +557,13 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  // GET /api/projects/:id/files/<path> — stream a project-scoped file from
-  // <repoPath>/<path>. Path safety is layered: textual rejection (absolute /
-  // traversal), then realpath check that the resolved file stays inside the
-  // project root (defends against symlink escapes).
-  api.get('/projects/:id/files/:path{.+}', async (c) => {
+  // GET /api/projects/:project/files/<path> — stream a project-scoped file
+  // from <repoPath>/<path>. Path safety is layered: textual rejection
+  // (absolute / traversal), then realpath check that the resolved file stays
+  // inside the project root (defends against symlink escapes). The route is
+  // shared across every flow within the project — assets that live at the
+  // project root or under a sibling flow folder are addressable here.
+  api.get('/projects/:project/files/:path{.+}', async (c) => {
     const rawPath = c.req.param('path');
     let relPath: string;
     try {
@@ -566,7 +572,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'invalid path encoding' }, 400);
     }
 
-    const resolved = resolveProjectFile(registry, c.req.param('id'), relPath);
+    const resolved = resolveProjectFile(registry, c.req.param('project'), relPath);
     switch (resolved.kind) {
       case 'unknownProject':
         return c.json({ error: 'unknown project' }, 404);
@@ -589,12 +595,12 @@ export function createApi(options: ApiOptions): Hono {
     });
   });
 
-  // POST /api/projects/:id/files/open — shell out to `$EDITOR <abs>` so the
-  // user can edit a project-scoped file (type:'html' block, image asset) in
-  // their IDE. The endpoint always returns the resolved absolute path in
+  // POST /api/projects/:project/files/open — shell out to `$EDITOR <abs>` so
+  // the user can edit a project-scoped file (type:'html' block, image asset)
+  // in their IDE. The endpoint always returns the resolved absolute path in
   // the response body so the frontend can copy-to-clipboard when $EDITOR
   // isn't set or the spawn fails. Path safety mirrors the GET route.
-  api.post('/projects/:id/files/open', async (c) => {
+  api.post('/projects/:project/files/open', async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -606,7 +612,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid open body', issues: parsed.error.issues }, 400);
     }
 
-    const resolved = resolveProjectFile(registry, c.req.param('id'), parsed.data.path);
+    const resolved = resolveProjectFile(registry, c.req.param('project'), parsed.data.path);
     switch (resolved.kind) {
       case 'unknownProject':
         return c.json({ error: 'unknown project' }, 404);
@@ -628,12 +634,12 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true, absPath: resolved.absPath });
   });
 
-  // POST /api/projects/:id/files/reveal — open the OS file manager with the
-  // target file selected. Platform commands: `open -R <abs>` (macOS),
+  // POST /api/projects/:project/files/reveal — open the OS file manager with
+  // the target file selected. Platform commands: `open -R <abs>` (macOS),
   // `explorer /select,<abs>` (Windows), `xdg-open <dir>` (Linux — selects the
   // containing directory; xdg has no portable "select-this-file" verb). Same
   // fallback shape as /open: response always includes `absPath` for clipboard.
-  api.post('/projects/:id/files/reveal', async (c) => {
+  api.post('/projects/:project/files/reveal', async (c) => {
     let body: unknown;
     try {
       body = await c.req.json();
@@ -645,7 +651,7 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'Invalid reveal body', issues: parsed.error.issues }, 400);
     }
 
-    const resolved = resolveProjectFile(registry, c.req.param('id'), parsed.data.path);
+    const resolved = resolveProjectFile(registry, c.req.param('project'), parsed.data.path);
     switch (resolved.kind) {
       case 'unknownProject':
         return c.json({ error: 'unknown project' }, 404);
@@ -679,17 +685,21 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true, absPath: resolved.absPath });
   });
 
-  // POST /api/projects/:id/nodes/:nodeId/files/upload — accept a multipart
-  // image upload and persist it under `<project>/nodes/<nodeId>/`. Multipart
-  // shape: `file` (Blob) and optional `filename` (the original OS name).
-  // Allowlist + 5 MB cap guard against arbitrary uploads; the destination
-  // folder is scoped to the node, so delete_node's removeNodeDir cascade
-  // cleans up the asset along with the node row.
-  api.post('/projects/:id/nodes/:nodeId/files/upload', async (c) => {
-    const projectId = c.req.param('id');
+  // POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload —
+  // accept a multipart image upload and persist it under
+  // `<repoPath>/<dirname(entry.flowPath)>/nodes/<nodeId>/`. For manifest-
+  // driven projects this resolves to `flows/<flow>/nodes/<nodeId>/`; for
+  // legacy single-flow registrations (flow.json at the project root) it
+  // collapses to `nodes/<nodeId>/`. Multipart shape: `file` (Blob) and
+  // optional `filename` (the original OS name). Allowlist + 5 MB cap guard
+  // against arbitrary uploads; the destination folder is scoped to the node,
+  // so delete_node's removeNodeDir cascade cleans up the asset along with
+  // the node row.
+  api.post('/projects/:project/flows/:flow/nodes/:nodeId/files/upload', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const entry = resolved.entry;
     const nodeId = c.req.param('nodeId');
-    const entry = registry.getById(projectId);
-    if (!entry) return c.json({ error: 'unknown project' }, 404);
 
     // node id shape: `node-<10 base62 chars>` (matches shortId() output).
     if (!/^node-[A-Za-z0-9]{10}$/.test(nodeId)) {
@@ -719,7 +729,8 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: 'invalid filename or extension' }, 400);
     }
 
-    const nodeDir = join(entry.repoPath, 'nodes', nodeId);
+    const flowDir = dirname(entry.flowPath);
+    const nodeDir = join(entry.repoPath, flowDir, 'nodes', nodeId);
     try {
       mkdirSync(nodeDir, { recursive: true });
     } catch (err) {
