@@ -1,4 +1,5 @@
 import type { CreateFlowBody, MutateFlowResult } from '@/lib/api';
+import { slugify } from '@/lib/slugify';
 import {
   Button,
   Dialog,
@@ -15,6 +16,22 @@ import { useEffect, useState } from 'react';
  * Exported so tests + the rename dialog can share the same constraint.
  */
 export const FLOW_ID_PATTERN = /^[a-z0-9][a-z0-9-]*$/;
+
+// US-038: override the upstream DialogContent's bundled zoom + slide animations
+// (baked into @seeflow/canvas DialogContent via cn() so the className can't
+// simply be overridden — twMerge doesn't know tw-animate-css conflict groups).
+// Setting the CSS variables that drive the enter/exit keyframes (see canvas
+// dist/style.css `@keyframes enter|exit`) to the static centered transform
+// neutralizes scale + slide while still letting `fade-in-0` / `fade-out-0`
+// animate opacity. Result: opacity 0 ↔ 1 with the dialog held centered.
+const FADE_ONLY_STYLE = {
+  '--tw-enter-translate-x': '-50%',
+  '--tw-enter-translate-y': '-50%',
+  '--tw-exit-translate-x': '-50%',
+  '--tw-exit-translate-y': '-50%',
+  '--tw-enter-scale': '1',
+  '--tw-exit-scale': '1',
+} as React.CSSProperties;
 
 export interface FlowCreateDialogProps {
   open: boolean;
@@ -38,25 +55,36 @@ export function FlowCreateDialog({
   onCreate,
   onCreated,
 }: FlowCreateDialogProps) {
-  const [id, setId] = useState('');
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('');
+  const [id, setId] = useState('');
+  const [idDirty, setIdDirty] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open) {
-      setId('');
       setName('');
-      setIcon('');
+      setId('');
+      setIdDirty(false);
       setError(null);
       setSubmitting(false);
     }
   }, [open]);
 
+  const handleNameChange = (next: string) => {
+    setName(next);
+    if (!idDirty) {
+      setId(slugify(next));
+    }
+  };
+
+  const handleIdChange = (next: string) => {
+    setId(next);
+    if (!idDirty) setIdDirty(true);
+  };
+
   const trimmedId = id.trim();
   const trimmedName = name.trim();
-  const trimmedIcon = icon.trim();
   const idValid = trimmedId.length > 0 && FLOW_ID_PATTERN.test(trimmedId);
   const canSubmit = idValid && trimmedName.length > 0 && !submitting;
 
@@ -71,11 +99,7 @@ export function FlowCreateDialog({
     setSubmitting(true);
     setError(null);
     try {
-      const body: CreateFlowBody = {
-        id: trimmedId,
-        name: trimmedName,
-        ...(trimmedIcon.length > 0 ? { icon: trimmedIcon } : {}),
-      };
+      const body: CreateFlowBody = { id: trimmedId, name: trimmedName };
       const result = await onCreate(body);
       onCreated?.(result);
       onOpenChange(false);
@@ -89,11 +113,12 @@ export function FlowCreateDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className="sm:max-w-md"
+        style={FADE_ONLY_STYLE}
         data-testid="flow-create-dialog"
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           const input = document.querySelector<HTMLInputElement>(
-            '[data-testid="flow-create-id-input"]',
+            '[data-testid="flow-create-name-input"]',
           );
           input?.focus();
         }}
@@ -106,23 +131,6 @@ export function FlowCreateDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Flow id</span>
-            <input
-              type="text"
-              required
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="retry"
-              value={id}
-              onChange={(e) => setId(e.target.value)}
-              data-testid="flow-create-id-input"
-              className="rounded-md border bg-background px-3 py-2 font-mono text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-            <span className="text-xs text-muted-foreground">
-              Lowercase letters, digits, and dashes. Must start with a letter or digit.
-            </span>
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">Display name</span>
             <input
               type="text"
@@ -130,25 +138,28 @@ export function FlowCreateDialog({
               autoComplete="off"
               spellCheck={false}
               value={name}
-              onChange={(e) => setName(e.target.value)}
+              onChange={(e) => handleNameChange(e.target.value)}
               data-testid="flow-create-name-input"
               className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">
-              Icon <span className="text-muted-foreground">(optional)</span>
-            </span>
+            <span className="font-medium">Flow id</span>
             <input
               type="text"
+              required
               autoComplete="off"
               spellCheck={false}
-              placeholder="↩"
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              data-testid="flow-create-icon-input"
-              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              placeholder="my-retry-flow"
+              value={id}
+              onChange={(e) => handleIdChange(e.target.value)}
+              data-testid="flow-create-id-input"
+              className="rounded-md border bg-background px-3 py-2 font-mono text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
+            <span className="text-xs text-muted-foreground">
+              Auto-filled from the display name. Lowercase letters, digits, and dashes; must start
+              with a letter or digit.
+            </span>
           </label>
           {error ? (
             <div
