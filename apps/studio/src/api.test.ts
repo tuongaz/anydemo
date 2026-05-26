@@ -1060,6 +1060,59 @@ describe('GET /api/projects/:project', () => {
   });
 });
 
+describe('GET /api/projects/:project/flows', () => {
+  it('returns the narrow flow-switcher shape for every flow in the project', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'retry',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry', icon: 'refresh-ccw' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline/flows');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      flows: Array<{
+        id: string;
+        flowSlug: string;
+        name: string;
+        icon?: string;
+        isDefault: boolean;
+      }>;
+    };
+    expect(body.flows).toHaveLength(2);
+    const retry = body.flows.find((f) => f.flowSlug === 'retry');
+    expect(retry).toBeDefined();
+    expect(retry?.name).toBe('Retry');
+    expect(retry?.icon).toBe('refresh-ccw');
+    expect(retry?.isDefault).toBe(true);
+    expect(typeof retry?.id).toBe('string');
+    expect(retry?.id.length).toBeGreaterThan(0);
+    const main = body.flows.find((f) => f.flowSlug === 'main');
+    expect(main?.isDefault).toBe(false);
+    expect(main?.icon).toBeUndefined();
+    // The narrow shape excludes repoPath/flowPath/slug — confirm by checking
+    // no entry exposes them, so a future widening doesn't silently leak.
+    for (const flow of body.flows) {
+      expect((flow as unknown as { repoPath?: string }).repoPath).toBeUndefined();
+      expect((flow as unknown as { flowPath?: string }).flowPath).toBeUndefined();
+      expect((flow as unknown as { slug?: string }).slug).toBeUndefined();
+    }
+  });
+
+  it('returns 404 with project-not-found for an unknown project slug', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/projects/does-not-exist/flows');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+});
+
 describe('GET /api/projects/:project/flows/:flow', () => {
   it('returns the validated demo + filePath when watcher is disabled (sync read fallback)', async () => {
     const { app } = buildApp();

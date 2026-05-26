@@ -580,6 +580,29 @@ export function createApi(options: ApiOptions): Hono {
     });
   });
 
+  // GET /api/projects/:project/flows — per-project flow listing. Powers the
+  // canvas page's Figma-style flow switcher popover (US-024). Returns the
+  // narrow shape the picker needs — id, flowSlug, name, icon, isDefault —
+  // rather than the full FlowEntry; clients that need repoPath/flowPath go
+  // through `GET /api/projects/:project` instead. 404s with `project-not-found`
+  // when no registry entry shares the slug (same shape US-007 + the
+  // GET /api/projects/:project route above use for resolution failures).
+  api.get('/projects/:project/flows', (c) => {
+    const projectSlug = c.req.param('project');
+    const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
+    if (entries.length === 0) {
+      return c.json({ ok: false as const, error: 'project-not-found' as const }, 404);
+    }
+    const flows = entries.map((e) => ({
+      id: e.id,
+      flowSlug: e.flowSlug,
+      name: e.name,
+      icon: e.icon,
+      isDefault: e.isDefault,
+    }));
+    return c.json({ flows });
+  });
+
   api.get('/projects/:project/flows/:flow', async (c) => {
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
