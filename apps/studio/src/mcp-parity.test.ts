@@ -96,6 +96,8 @@ interface DemoFixture {
   registry: ReturnType<typeof createRegistry>;
   demoFile: string;
   flowId: string;
+  projectSlug: string;
+  flowSlug: string;
 }
 
 // Build a fresh studio app with a freshly-registered demo on disk. Each call
@@ -125,8 +127,22 @@ const buildDemoFixture = (initialDemo: unknown): DemoFixture => {
     lastModified: Date.now(),
   });
 
-  return { app, registry, demoFile, flowId: entry.id };
+  return {
+    app,
+    registry,
+    demoFile,
+    flowId: entry.id,
+    projectSlug: entry.projectSlug,
+    flowSlug: entry.flowSlug,
+  };
 };
+
+// REST URL prefix for the demo fixture — collapses the projectSlug + flowSlug
+// pair into `/api/projects/<p>/flows/<f>` so scenario URLs stay short. Both
+// values come from the registry entry, so any future widening of the slug
+// alphabet flows through here automatically.
+const flowApi = (fix: DemoFixture, suffix = ''): string =>
+  `/api/projects/${encodeURIComponent(fix.projectSlug)}/flows/${encodeURIComponent(fix.flowSlug)}${suffix}`;
 
 interface ProjectFixture {
   app: ReturnType<typeof createApp>;
@@ -236,7 +252,7 @@ const SCENARIOS: ParityScenario[] = [
       };
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'POST', `/api/flows/${fix.flowId}/nodes`, newNode),
+        runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/nodes'), newNode),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_node', { flowId: fix.flowId, node: newNode }),
       };
@@ -249,7 +265,7 @@ const SCENARIOS: ParityScenario[] = [
       const body = { name: 'Renamed', borderColor: 'blue' as const, width: 200 };
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'PATCH', `/api/flows/${fix.flowId}/nodes/a`, body),
+        runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_node', {
             flowId: fix.flowId,
@@ -267,7 +283,7 @@ const SCENARIOS: ParityScenario[] = [
       const fix = buildDemoFixture(VALID_DEMO_THREE_NODES);
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'DELETE', `/api/flows/${fix.flowId}/nodes/b`),
+        runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/nodes/b')),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_delete_node', { flowId: fix.flowId, nodeId: 'b' }),
       };
@@ -280,7 +296,7 @@ const SCENARIOS: ParityScenario[] = [
       return {
         demoFile: fix.demoFile,
         runRest: () =>
-          restJson(fix.app, 'PATCH', `/api/flows/${fix.flowId}/nodes/a/position`, {
+          restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a/position'), {
             x: 321,
             y: 654,
           }),
@@ -301,7 +317,7 @@ const SCENARIOS: ParityScenario[] = [
       return {
         demoFile: fix.demoFile,
         runRest: () =>
-          restJson(fix.app, 'PATCH', `/api/flows/${fix.flowId}/nodes/a/order`, {
+          restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a/order'), {
             op: 'toIndex',
             index: 2,
           }),
@@ -323,7 +339,7 @@ const SCENARIOS: ParityScenario[] = [
       const conn = { id: 'parity-conn', source: 'a', target: 'b' };
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'POST', `/api/flows/${fix.flowId}/connectors`, conn),
+        runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/connectors'), conn),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_connector', {
             flowId: fix.flowId,
@@ -339,8 +355,7 @@ const SCENARIOS: ParityScenario[] = [
       const body = { label: 'renamed', style: 'dashed' as const, color: 'green' as const };
       return {
         demoFile: fix.demoFile,
-        runRest: () =>
-          restJson(fix.app, 'PATCH', `/api/flows/${fix.flowId}/connectors/a-to-b`, body),
+        runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/connectors/a-to-b'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_connector', {
             flowId: fix.flowId,
@@ -356,7 +371,7 @@ const SCENARIOS: ParityScenario[] = [
       const fix = buildDemoFixture(VALID_DEMO_WITH_CONN);
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'DELETE', `/api/flows/${fix.flowId}/connectors/a-to-b`),
+        runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/connectors/a-to-b')),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_delete_connector', {
             flowId: fix.flowId,
@@ -390,7 +405,7 @@ const SCENARIOS: ParityScenario[] = [
       };
       return {
         demoFile: fix.demoFile,
-        runRest: () => restJson(fix.app, 'POST', `/api/flows/${fix.flowId}/bulk`, body),
+        runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/bulk'), body),
         runMcp: () => callMcpTool(fix.app, 'seeflow_add_bulk', { flowId: fix.flowId, ...body }),
       };
     },

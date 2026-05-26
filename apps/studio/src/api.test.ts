@@ -61,6 +61,14 @@ const post = (app: ReturnType<typeof buildApp>['app'], path: string, body: unkno
     body: JSON.stringify(body),
   });
 
+// Compose `/api/projects/:project/flows/:flow` from a registry slug
+// (`${projectSlug}/${flowSlug}`). Accepts an optional suffix (with leading
+// slash) so callers can write `flowApi(slug, '/nodes/foo')`.
+const flowApi = (slug: string, suffix = ''): string => {
+  const [project, flow] = slug.split('/');
+  return `/api/projects/${encodeURIComponent(project ?? '')}/flows/${encodeURIComponent(flow ?? '')}${suffix}`;
+};
+
 describe('POST /api/flows/register', () => {
   it('registers a valid demo and returns id + slug + skipped sdk for request-only demo', async () => {
     const { app, registry } = buildApp();
@@ -174,7 +182,7 @@ describe('POST /api/flows/register', () => {
         repoPath,
         flowPath: 'checkout/flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
     expect(updatedA.id).toBe(a.id);
     expect(registry.list()).toHaveLength(2);
     expect(registry.getById(b.id)?.flowPath).toBe('refund/flow.json');
@@ -496,7 +504,7 @@ describe('POST /api/layout', () => {
   });
 });
 
-describe('POST /api/flows/:id/layout', () => {
+describe('POST /api/projects/:project/flows/:flow/layout', () => {
   const layoutFlow = {
     version: 2,
     name: 'Layout By Id',
@@ -539,17 +547,17 @@ describe('POST /api/flows/:id/layout', () => {
     const repoPath = tmpRepoWithDemo(demo);
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
-    return { id: reg.id, repoPath, stylePath: join(repoPath, 'style.json') };
+    ).json()) as { id: string; slug: string };
+    return { id: reg.id, slug: reg.slug, repoPath, stylePath: join(repoPath, 'style.json') };
   };
 
   it('writes style.json and returns { ok: true } for a registered flow', async () => {
     const { app, bus } = buildLayoutApp();
-    const { id, stylePath } = await registerLayoutFlow(app);
+    const { id, slug, stylePath } = await registerLayoutFlow(app);
     const captured: string[] = [];
     bus.subscribe(id, (e) => captured.push(e.type));
 
-    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    const res = await app.request(flowApi(slug, '/layout'), { method: 'POST' });
     expect(res.status).toBe(200);
     const json = (await res.json()) as { ok: boolean; nodes?: unknown; connectors?: unknown };
     expect(json).toEqual({ ok: true });
@@ -568,9 +576,9 @@ describe('POST /api/flows/:id/layout', () => {
 
   it('honours { options: { direction: "DOWN" } } in the body', async () => {
     const { app } = buildLayoutApp();
-    const { id, stylePath } = await registerLayoutFlow(app);
+    const { slug, stylePath } = await registerLayoutFlow(app);
 
-    const res = await post(app, `/api/flows/${id}/layout`, { options: { direction: 'DOWN' } });
+    const res = await post(app, flowApi(slug, '/layout'), { options: { direction: 'DOWN' } });
     expect(res.status).toBe(200);
 
     const style = JSON.parse(readFileSync(stylePath, 'utf8')) as {
@@ -582,9 +590,9 @@ describe('POST /api/flows/:id/layout', () => {
 
   it('treats a malformed body as 400 without writing style.json', async () => {
     const { app } = buildLayoutApp();
-    const { id, stylePath } = await registerLayoutFlow(app);
+    const { slug, stylePath } = await registerLayoutFlow(app);
 
-    const res = await app.request(`/api/flows/${id}/layout`, {
+    const res = await app.request(flowApi(slug, '/layout'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: 'not-json',
@@ -595,20 +603,32 @@ describe('POST /api/flows/:id/layout', () => {
     expect(existsSync(stylePath)).toBe(false);
   });
 
-  it('returns 404 for an unknown flow id', async () => {
+  it('returns 404 with project-not-found for an unknown project', async () => {
     const { app } = buildLayoutApp();
-    const res = await app.request('/api/flows/nope/layout', { method: 'POST' });
+    const res = await app.request('/api/projects/nope/flows/main/layout', { method: 'POST' });
     expect(res.status).toBe(404);
-    const json = (await res.json()) as { error: string };
-    expect(json.error).toBe('unknown demo');
+    const json = (await res.json()) as { ok: boolean; error: string };
+    expect(json).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('returns 404 with flow-not-found when project exists but flow does not', async () => {
+    const { app } = buildLayoutApp();
+    const { slug } = await registerLayoutFlow(app);
+    const [projectSlug] = slug.split('/');
+    const res = await app.request(`/api/projects/${projectSlug}/flows/nope/layout`, {
+      method: 'POST',
+    });
+    expect(res.status).toBe(404);
+    const json = (await res.json()) as { ok: boolean; error: string };
+    expect(json).toEqual({ ok: false, error: 'flow-not-found' });
   });
 
   it('returns 404 when flow.json was removed after register', async () => {
     const { app } = buildLayoutApp();
-    const { id, repoPath } = await registerLayoutFlow(app);
+    const { slug, repoPath } = await registerLayoutFlow(app);
     unlinkSync(join(repoPath, 'flow.json'));
 
-    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    const res = await app.request(flowApi(slug, '/layout'), { method: 'POST' });
     expect(res.status).toBe(404);
     const json = (await res.json()) as { error: string };
     expect(json.error).toMatch(/Flow file not found/);
@@ -616,12 +636,12 @@ describe('POST /api/flows/:id/layout', () => {
 
   it('returns 400 when flow.json on disk is not valid JSON', async () => {
     const { app } = buildLayoutApp();
-    const { id, repoPath } = await registerLayoutFlow(app);
+    const { slug, repoPath } = await registerLayoutFlow(app);
     // Corrupt the file after register so it loads at register-time but fails
     // on the layout call.
     writeFileSync(join(repoPath, 'flow.json'), '{ not json');
 
-    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    const res = await app.request(flowApi(slug, '/layout'), { method: 'POST' });
     expect(res.status).toBe(400);
     const json = (await res.json()) as { error: string };
     expect(json.error).toBe('Flow file is not valid JSON');
@@ -629,14 +649,14 @@ describe('POST /api/flows/:id/layout', () => {
 
   it('returns 200 { ok: false, issues } when flow.json fails schema', async () => {
     const { app } = buildLayoutApp();
-    const { id, repoPath, stylePath } = await registerLayoutFlow(app);
+    const { slug, repoPath, stylePath } = await registerLayoutFlow(app);
     // Drop required field to force a schema failure.
     writeFileSync(
       join(repoPath, 'flow.json'),
       JSON.stringify({ version: 1, nodes: [], connectors: [] }),
     );
 
-    const res = await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    const res = await app.request(flowApi(slug, '/layout'), { method: 'POST' });
     expect(res.status).toBe(200);
     const json = (await res.json()) as {
       ok: boolean;
@@ -651,9 +671,9 @@ describe('POST /api/flows/:id/layout', () => {
 
   it('leaves no .tmp straggler after a successful write', async () => {
     const { app } = buildLayoutApp();
-    const { id, repoPath } = await registerLayoutFlow(app);
+    const { slug, repoPath } = await registerLayoutFlow(app);
 
-    await app.request(`/api/flows/${id}/layout`, { method: 'POST' });
+    await app.request(flowApi(slug, '/layout'), { method: 'POST' });
     const entries = readdirSync(repoPath);
     expect(entries.some((name) => name.startsWith('style.json.tmp'))).toBe(false);
   });
@@ -853,7 +873,7 @@ describe('GET /api/flows', () => {
   });
 });
 
-describe('GET /api/flows/:id', () => {
+describe('GET /api/projects/:project/flows/:flow', () => {
   it('returns the validated demo + filePath when watcher is disabled (sync read fallback)', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
@@ -862,9 +882,9 @@ describe('GET /api/flows/:id', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await app.request(`/api/flows/${reg.id}`);
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       id: string;
@@ -881,10 +901,11 @@ describe('GET /api/flows/:id', () => {
     expect(body.error).toBeNull();
   });
 
-  it('returns 404 for unknown demo ids', async () => {
+  it('returns 404 with project-not-found for an unknown project', async () => {
     const { app } = buildApp();
-    const res = await app.request('/api/flows/does-not-exist');
+    const res = await app.request('/api/projects/does-not-exist/flows/main');
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
   });
 
   it('reports valid:false + error when on-disk JSON is malformed', async () => {
@@ -895,11 +916,11 @@ describe('GET /api/flows/:id', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     writeFileSync(join(repoPath, 'flow.json'), '{ broken');
 
-    const res = await app.request(`/api/flows/${reg.id}`);
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as { valid: boolean; error: string | null };
     expect(body.valid).toBe(false);
@@ -907,7 +928,7 @@ describe('GET /api/flows/:id', () => {
   });
 });
 
-describe('POST /api/flows/:id/play/:nodeId', () => {
+describe('POST /api/projects/:project/flows/:flow/play/:nodeId', () => {
   // Fake ProcessSpawner: returns a SpawnHandle whose stdout/stderr come from
   // configurable strings, exited resolves on next microtask with `exitCode`
   // (default 0), and `kill()` is a recorded no-op. Captures every spawn call.
@@ -1034,9 +1055,13 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
+      {},
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { runId: string; status?: number; body?: unknown };
     expect(typeof body.runId).toBe('string');
@@ -1061,12 +1086,16 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
 
-    const playRes = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
+    const playRes = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
+      {},
+    );
     expect(playRes.status).toBe(200);
 
     const types = captured.map((e) => e.type);
@@ -1085,9 +1114,13 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
+      {},
+    );
     expect(res.status).toBe(200);
 
     expect(runnerCalls.restart).toEqual([reg.id]);
@@ -1101,10 +1134,10 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
-    await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`, {});
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`, {});
 
     expect(runnerCalls.restart).toEqual([reg.id, reg.id]);
   });
@@ -1134,9 +1167,13 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/play/api-checkout`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/api-checkout`,
+      {},
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('scriptPath escapes project root');
@@ -1144,8 +1181,9 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildPlayApp();
-    const res = await post(app, '/api/flows/nope/play/x', {});
+    const res = await post(app, '/api/projects/nope/flows/main/play/x', {});
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
   });
 
   it('returns 404 for unknown nodeId', async () => {
@@ -1156,8 +1194,12 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await post(app, `/api/flows/${reg.id}/play/missing`, {});
+    ).json()) as { id: string; slug: string };
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/missing`,
+      {},
+    );
     expect(res.status).toBe(404);
   });
 
@@ -1182,14 +1224,18 @@ describe('POST /api/flows/:id/play/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/play/shape-only`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/play/shape-only`,
+      {},
+    );
     expect(res.status).toBe(400);
   });
 });
 
-describe('POST /api/flows/:id/reset', () => {
+describe('POST /api/projects/:project/flows/:flow/reset', () => {
   // US-008: /reset now spawns a script (replacing the legacy HTTP resetAction)
   // and orchestrates stopAllPlays + statusRunner.stop BEFORE the spawn, plus
   // statusRunner.restart fire-and-forget after the flow:reload broadcast. The
@@ -1283,12 +1329,12 @@ describe('POST /api/flows/:id/reset', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type }));
 
-    const res = await post(app, `/api/flows/${reg.id}/reset`, {});
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/reset`, {});
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; calledResetAction: boolean };
     expect(body.ok).toBe(true);
@@ -1323,9 +1369,9 @@ describe('POST /api/flows/:id/reset', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/reset`, {});
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/reset`, {});
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; calledResetAction: boolean };
     expect(body.ok).toBe(true);
@@ -1361,12 +1407,12 @@ describe('POST /api/flows/:id/reset', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type }));
 
-    await post(app, `/api/flows/${reg.id}/reset`, {});
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/reset`, {});
 
     expect(captured.map((e) => e.type)).toEqual(['demo:reset', 'flow:reload']);
   });
@@ -1390,12 +1436,12 @@ describe('POST /api/flows/:id/reset', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type }));
 
-    const res = await post(app, `/api/flows/${reg.id}/reset`, {});
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/reset`, {});
     expect(res.status).toBe(502);
     const body = (await res.json()) as { error: string; calledResetAction: boolean };
     expect(body.calledResetAction).toBe(true);
@@ -1408,7 +1454,7 @@ describe('POST /api/flows/:id/reset', () => {
 
   it('returns 404 for an unknown flowId', async () => {
     const { app } = buildResetApp();
-    const res = await post(app, '/api/flows/does-not-exist/reset', {});
+    const res = await post(app, '/api/projects/does-not-exist/flows/main/reset', {});
     expect(res.status).toBe(404);
   });
 });
@@ -1435,7 +1481,7 @@ describe('POST /api/emit', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
@@ -1461,7 +1507,7 @@ describe('POST /api/emit', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string; payload: unknown }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type, payload: e.payload }));
@@ -1497,7 +1543,7 @@ describe('POST /api/emit', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const captured: Array<{ type: string }> = [];
     bus.subscribe(reg.id, (e) => captured.push({ type: e.type }));
@@ -1531,7 +1577,7 @@ describe('POST /api/emit', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const res = await post(app, '/api/emit', {
       flowId: reg.id,
@@ -1608,7 +1654,7 @@ describe('GET /api/registry/events', () => {
   });
 });
 
-describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
+describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/position', () => {
   const patch = (app: ReturnType<typeof buildApp>['app'], path: string, body: unknown) =>
     app.request(path, {
       method: 'PATCH',
@@ -1624,14 +1670,18 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const styleFile = join(repoPath, 'style.json');
 
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
-      x: 250,
-      y: 320,
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/position`,
+      {
+        x: 250,
+        y: 320,
+      },
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; position: { x: number; y: number } };
     expect(body.ok).toBe(true);
@@ -1651,10 +1701,14 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, { x: 1, y: 2 });
+    await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/position`,
+      { x: 1, y: 2 },
+    );
 
     const text = readFileSync(demoFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
@@ -1664,7 +1718,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await patch(app, '/api/flows/nope/nodes/x/position', { x: 0, y: 0 });
+    const res = await patch(app, '/api/projects/nope/flows/main/nodes/x/position', { x: 0, y: 0 });
     expect(res.status).toBe(404);
   });
 
@@ -1676,8 +1730,12 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/missing/position`, { x: 0, y: 0 });
+    ).json()) as { id: string; slug: string };
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/missing/position`,
+      { x: 0, y: 0 },
+    );
     expect(res.status).toBe(404);
   });
 
@@ -1689,11 +1747,15 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, {
-      x: 'oops',
-      y: 0,
-    });
+    ).json()) as { id: string; slug: string };
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/position`,
+      {
+        x: 'oops',
+        y: 0,
+      },
+    );
     expect(res.status).toBe(400);
   });
 
@@ -1705,9 +1767,13 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await patch(app, `/api/flows/${reg.id}/nodes/api-checkout/position`, { x: 99, y: 99 });
+    await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/position`,
+      { x: 99, y: 99 },
+    );
 
     const files = readdirSync(repoPath).sort();
     // Only flow.json + style.json should remain — temp files must be renamed/cleaned up.
@@ -1715,7 +1781,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/position', () => {
   });
 });
 
-describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
+describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId/order', () => {
   const VALID_DEMO_THREE_NODES = {
     version: 2,
     name: 'Three Nodes',
@@ -1759,62 +1825,62 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
     const demoFile = join(repoPath, 'flow.json');
-    return { app, demoFile, flowId: reg.id };
+    return { app, demoFile, slug: reg.slug };
   };
 
   it("op:'forward' swaps with the next neighbour", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, { op: 'forward' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'forward' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['b', 'a', 'c']);
   });
 
   it("op:'forward' on the topmost node is a no-op", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/c/order`, { op: 'forward' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'forward' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
   });
 
   it("op:'backward' swaps with the previous neighbour", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/c/order`, { op: 'backward' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'backward' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['a', 'c', 'b']);
   });
 
   it("op:'backward' on the bottommost node is a no-op", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, { op: 'backward' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'backward' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
   });
 
   it("op:'toFront' moves to the end of the array", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, { op: 'toFront' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'toFront' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['b', 'c', 'a']);
   });
 
   it("op:'toBack' moves to the start of the array", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/c/order`, { op: 'toBack' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/c/order'), { op: 'toBack' });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['c', 'a', 'b']);
   });
 
   it("op:'toIndex' pins to an absolute index (used by undo)", async () => {
-    const { app, demoFile, flowId } = await setup();
+    const { app, demoFile, slug } = await setup();
     // Move 'a' (idx 0) to idx 2 — same as toFront on a 3-node array.
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, { op: 'toIndex', index: 2 });
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'toIndex', index: 2 });
     expect(res.status).toBe(200);
     expect(ids(demoFile)).toEqual(['b', 'c', 'a']);
 
     // Then pin it back to idx 0 — exact inverse.
-    const res2 = await patch(app, `/api/flows/${flowId}/nodes/a/order`, {
+    const res2 = await patch(app, flowApi(slug, '/nodes/a/order'), {
       op: 'toIndex',
       index: 0,
     });
@@ -1823,8 +1889,8 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
   });
 
   it("op:'toIndex' clamps out-of-range indices", async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, {
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), {
       op: 'toIndex',
       index: 99,
     });
@@ -1834,26 +1900,26 @@ describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
   });
 
   it('returns 400 for an unknown op', async () => {
-    const { app, demoFile, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/a/order`, { op: 'noSuchOp' });
+    const { app, demoFile, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/a/order'), { op: 'noSuchOp' });
     expect(res.status).toBe(400);
     expect(ids(demoFile)).toEqual(['a', 'b', 'c']);
   });
 
   it('returns 404 for unknown nodeId', async () => {
-    const { app, flowId } = await setup();
-    const res = await patch(app, `/api/flows/${flowId}/nodes/missing/order`, { op: 'forward' });
+    const { app, slug } = await setup();
+    const res = await patch(app, flowApi(slug, '/nodes/missing/order'), { op: 'forward' });
     expect(res.status).toBe(404);
   });
 
-  it('returns 404 for unknown flowId', async () => {
+  it('returns 404 for unknown project', async () => {
     const { app } = buildApp();
-    const res = await patch(app, '/api/flows/nope/nodes/a/order', { op: 'forward' });
+    const res = await patch(app, '/api/projects/nope/flows/main/nodes/a/order', { op: 'forward' });
     expect(res.status).toBe(404);
   });
 });
 
-describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
+describe('PATCH /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   const patch = (app: ReturnType<typeof buildApp>['app'], path: string, body: unknown) =>
     app.request(path, {
       method: 'PATCH',
@@ -1869,18 +1935,22 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const styleFile = join(repoPath, 'style.json');
 
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      name: 'POST /checkout (renamed)',
-      borderColor: 'blue',
-      backgroundColor: 'amber',
-      width: 240,
-      height: 120,
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        name: 'POST /checkout (renamed)',
+        borderColor: 'blue',
+        backgroundColor: 'amber',
+        width: 240,
+        height: 120,
+      },
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
@@ -1911,12 +1981,16 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const styleFile = join(repoPath, 'style.json');
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      position: { x: 42, y: 84 },
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        position: { x: 42, y: 84 },
+      },
+    );
     expect(res.status).toBe(200);
 
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
@@ -1933,15 +2007,19 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
     // borderColor token outside the enum — the body schema itself should reject this.
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      borderColor: 'neon-pink',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        borderColor: 'neon-pink',
+      },
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toBeTruthy();
@@ -1958,7 +2036,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
@@ -1968,7 +2046,11 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     // retypes a rectangle to `image` without supplying the required `path`
     // field — the merge succeeds, then the post-merge ResolvedFlowSchema
     // reparse surfaces it as badSchema (400).
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { type: 'image' });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      { type: 'image' },
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toContain('schema');
@@ -1984,17 +2066,21 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      somethingMadeUp: true,
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        somethingMadeUp: true,
+      },
+    );
     expect(res.status).toBe(400);
   });
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await patch(app, '/api/flows/nope/nodes/x', { name: 'x' });
+    const res = await patch(app, '/api/projects/nope/flows/main/nodes/x', { name: 'x' });
     expect(res.status).toBe(404);
   });
 
@@ -2006,8 +2092,12 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/missing`, { name: 'x' });
+    ).json()) as { id: string; slug: string };
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/missing`,
+      { name: 'x' },
+    );
     expect(res.status).toBe(404);
   });
 
@@ -2019,10 +2109,12 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, { name: 'Renamed' });
+    await patch(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`, {
+      name: 'Renamed',
+    });
 
     const text = readFileSync(demoFile, 'utf8');
     expect(text.endsWith('\n')).toBe(true);
@@ -2042,13 +2134,17 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      description: 'short body',
-      detail: 'multi-line\nnotes about the node',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        description: 'short body',
+        detail: 'multi-line\nnotes about the node',
+      },
+    );
     expect(res.status).toBe(200);
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
@@ -2070,18 +2166,22 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     // First set both fields, then clear them with empty strings.
-    await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
+    await patch(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`, {
       description: 'tmp',
       detail: 'tmp notes',
     });
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      description: '',
-      detail: '',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        description: '',
+        detail: '',
+      },
+    );
     expect(res.status).toBe(200);
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
@@ -2106,21 +2206,29 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const setRes = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      icon: 'database',
-    });
+    const setRes = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        icon: 'database',
+      },
+    );
     expect(setRes.status).toBe(200);
     let onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
     };
     expect(onDisk.nodes.find((n) => n.id === 'api-checkout')?.data.icon).toBe('database');
 
-    const clearRes = await patch(app, `/api/flows/${reg.id}/nodes/api-checkout`, {
-      icon: null,
-    });
+    const clearRes = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout`,
+      {
+        icon: null,
+      },
+    );
     expect(clearRes.status).toBe(200);
     onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
       nodes: Array<{ id: string; data: Record<string, unknown> }>;
@@ -2138,16 +2246,20 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await post(app, `/api/flows/${reg.id}/nodes`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'html-patch',
       type: 'html',
       data: { html: 'initial' },
     });
-    const res = await patch(app, `/api/flows/${reg.id}/nodes/html-patch`, {
-      html: '<p>via PATCH</p>',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/html-patch`,
+      {
+        html: '<p>via PATCH</p>',
+      },
+    );
     expect(res.status).toBe(200);
 
     const onDisk = JSON.parse(readFileSync(join(repoPath, 'flow.json'), 'utf8')) as {
@@ -2160,7 +2272,7 @@ describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
   });
 });
 
-describe('POST /api/flows/:id/nodes', () => {
+describe('POST /api/projects/:project/flows/:flow/nodes', () => {
   it('appends a new node and auto-generates an id when absent', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
@@ -2169,11 +2281,11 @@ describe('POST /api/flows/:id/nodes', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       type: 'rectangle',
       data: { name: 'Note A' },
     });
@@ -2198,9 +2310,9 @@ describe('POST /api/flows/:id/nodes', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'sticky-note-1',
       type: 'sticky',
       data: {},
@@ -2218,7 +2330,7 @@ describe('POST /api/flows/:id/nodes', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
@@ -2226,7 +2338,7 @@ describe('POST /api/flows/:id/nodes', () => {
     // type 'image' requires a `path` field anchored under `nodes/<id>/`;
     // omitting it surfaces as a post-merge ResolvedFlowSchema reparse
     // failure (badSchema → 400) per US-009's per-type required-field gate.
-    const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       type: 'image',
       data: {},
     });
@@ -2239,7 +2351,7 @@ describe('POST /api/flows/:id/nodes', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await post(app, '/api/flows/nope/nodes', {
+    const res = await post(app, '/api/projects/nope/flows/main/nodes', {
       type: 'rectangle',
       data: {},
     });
@@ -2254,10 +2366,10 @@ describe('POST /api/flows/:id/nodes', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'with-detail',
       type: 'rectangle',
       data: { detail: 'hello world' },
@@ -2282,10 +2394,10 @@ describe('POST /api/flows/:id/nodes', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    await post(app, `/api/flows/${reg.id}/nodes`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'no-detail',
       type: 'rectangle',
       data: {},
@@ -2310,9 +2422,9 @@ describe('POST /api/flows/:id/nodes', () => {
           repoPath,
           flowPath: 'flow.json',
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
 
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+      const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
         id: 'hero-block',
         type: 'html',
         data: {},
@@ -2335,9 +2447,9 @@ describe('POST /api/flows/:id/nodes', () => {
           repoPath,
           flowPath: 'flow.json',
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
 
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+      const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
         id: 'with-content',
         type: 'html',
         data: { html: '<p>inline</p>' },
@@ -2362,9 +2474,9 @@ describe('POST /api/flows/:id/nodes', () => {
           repoPath,
           flowPath: 'flow.json',
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
 
-      const res = await post(app, `/api/flows/${reg.id}/nodes`, {
+      const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
         id: 'pricing',
         type: 'html',
         data: { name: 'Pricing card', icon: 'tag' },
@@ -2382,7 +2494,7 @@ describe('POST /api/flows/:id/nodes', () => {
   });
 });
 
-describe('POST /api/flows/:id/bulk', () => {
+describe('POST /api/projects/:project/flows/:flow/bulk', () => {
   it('creates every node + connector atomically in one call and returns ids in order', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
@@ -2391,9 +2503,9 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
         { id: 'b1', type: 'rectangle', data: { name: 'B1' } },
         { id: 'b2', type: 'ellipse', data: { name: 'B2', detail: 'hi' } },
@@ -2436,9 +2548,9 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [{ id: 'only', type: 'rectangle', data: { name: 'only' } }],
     });
     expect(res.status).toBe(200);
@@ -2455,12 +2567,12 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
         { id: 'good-a', type: 'rectangle', data: { name: 'A' } },
         { id: 'good-b', type: 'ellipse', data: { name: 'B' } },
@@ -2482,12 +2594,12 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
         { id: 'ok-1', type: 'rectangle', data: { name: 'A' } },
         // type:'image' requires a `path` field anchored under `nodes/<id>/`;
@@ -2512,9 +2624,9 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [
         { id: 'dupe', type: 'rectangle', data: { name: 'A' } },
         { id: 'dupe', type: 'ellipse', data: { name: 'B' } },
@@ -2534,9 +2646,9 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [{ id: 'a', type: 'rectangle', data: { name: 'A' } }],
       connectors: [
         { id: 'c-dupe', source: 'a', target: 'a' },
@@ -2556,15 +2668,15 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await post(app, `/api/flows/${reg.id}/nodes`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'taken',
       type: 'rectangle',
       data: { name: 'seed' },
     });
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       nodes: [{ id: 'taken', type: 'ellipse', data: { name: 'X' } }],
     });
     expect(res.status).toBe(400);
@@ -2580,9 +2692,9 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {});
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {});
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Invalid bulk body');
@@ -2596,9 +2708,12 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, { nodes: [], connectors: [] });
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
+      nodes: [],
+      connectors: [],
+    });
     expect(res.status).toBe(400);
   });
 
@@ -2610,26 +2725,28 @@ describe('POST /api/flows/:id/bulk', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const oversized = Array.from({ length: 101 }, (_, i) => ({
       type: 'rectangle',
       data: { name: `n${i}` },
     }));
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, { nodes: oversized });
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
+      nodes: oversized,
+    });
     expect(res.status).toBe(400);
   });
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await post(app, '/api/flows/nope/bulk', {
+    const res = await post(app, '/api/projects/nope/flows/main/bulk', {
       nodes: [{ type: 'rectangle', data: { name: 'A' } }],
     });
     expect(res.status).toBe(404);
   });
 });
 
-describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
+describe('DELETE /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   const VALID_DEMO_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
@@ -2667,11 +2784,13 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
 
-    const res = await app.request(`/api/flows/${reg.id}/nodes/a`, { method: 'DELETE' });
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/a`, {
+      method: 'DELETE',
+    });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
@@ -2711,10 +2830,12 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const res = await app.request(`/api/flows/${reg.id}/nodes/a`, { method: 'DELETE' });
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/a`, {
+      method: 'DELETE',
+    });
     expect(res.status).toBe(200);
 
     const onDisk = JSON.parse(readFileSync(demoFile, 'utf8')) as {
@@ -2728,7 +2849,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await app.request('/api/flows/nope/nodes/x', { method: 'DELETE' });
+    const res = await app.request('/api/projects/nope/flows/main/nodes/x', { method: 'DELETE' });
     expect(res.status).toBe(404);
   });
 
@@ -2740,8 +2861,11 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await app.request(`/api/flows/${reg.id}/nodes/missing`, { method: 'DELETE' });
+    ).json()) as { id: string; slug: string };
+    const res = await app.request(
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/missing`,
+      { method: 'DELETE' },
+    );
     expect(res.status).toBe(404);
   });
 
@@ -2753,9 +2877,9 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await post(app, `/api/flows/${reg.id}/nodes`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'gone',
       type: 'rectangle',
       data: { detail: 'temp' },
@@ -2763,7 +2887,9 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     const folder = join(repoPath, 'nodes', 'gone');
     expect(existsSync(folder)).toBe(true);
 
-    const res = await app.request(`/api/flows/${reg.id}/nodes/gone`, { method: 'DELETE' });
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/gone`, {
+      method: 'DELETE',
+    });
     expect(res.status).toBe(200);
     expect(existsSync(folder)).toBe(false);
   });
@@ -2777,21 +2903,24 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
           repoPath,
           flowPath: 'flow.json',
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
 
       const created = (await (
-        await post(app, `/api/flows/${reg.id}/nodes`, {
+        await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
           id: 'cascade-html',
           type: 'html',
           data: { html: '<p>x</p>' },
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
       const viewFile = join(repoPath, 'nodes', created.id, 'view.html');
       expect(existsSync(viewFile)).toBe(true);
 
-      const res = await app.request(`/api/flows/${reg.id}/nodes/${created.id}`, {
-        method: 'DELETE',
-      });
+      const res = await app.request(
+        `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/${created.id}`,
+        {
+          method: 'DELETE',
+        },
+      );
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
       expect(existsSync(viewFile)).toBe(false);
@@ -2811,28 +2940,31 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
           repoPath,
           flowPath: 'flow.json',
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
 
       const first = (await (
-        await post(app, `/api/flows/${reg.id}/nodes`, {
+        await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
           id: 'first-html',
           type: 'html',
           data: { html: '<p>1</p>' },
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
       const second = (await (
-        await post(app, `/api/flows/${reg.id}/nodes`, {
+        await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
           id: 'second-html',
           type: 'html',
           data: { html: '<p>2</p>' },
         })
-      ).json()) as { id: string };
+      ).json()) as { id: string; slug: string };
       const firstFile = join(repoPath, 'nodes', first.id, 'view.html');
       const secondFile = join(repoPath, 'nodes', second.id, 'view.html');
       expect(existsSync(firstFile)).toBe(true);
       expect(existsSync(secondFile)).toBe(true);
 
-      const res = await app.request(`/api/flows/${reg.id}/nodes/${first.id}`, { method: 'DELETE' });
+      const res = await app.request(
+        `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/${first.id}`,
+        { method: 'DELETE' },
+      );
       expect(res.status).toBe(200);
       expect(existsSync(firstFile)).toBe(false);
       expect(existsSync(secondFile)).toBe(true);
@@ -2840,7 +2972,7 @@ describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
   });
 });
 
-describe('PATCH /api/flows/:id/connectors/:connId', () => {
+describe('PATCH /api/projects/:project/flows/:flow/connectors/:connId', () => {
   const VALID_DEMO_WITH_CONN = {
     version: 2,
     name: 'Two Nodes',
@@ -2882,16 +3014,20 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const styleFile = join(repoPath, 'style.json');
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      label: 'renamed',
-      style: 'dashed',
-      color: 'blue',
-      direction: 'both',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        label: 'renamed',
+        style: 'dashed',
+        color: 'blue',
+        direction: 'both',
+      },
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
@@ -2917,11 +3053,15 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      somethingMadeUp: true,
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        somethingMadeUp: true,
+      },
+    );
     expect(res.status).toBe(400);
   });
 
@@ -2936,13 +3076,17 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const styleFile = join(repoPath, 'style.json');
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourceHandle: 'r',
-      targetHandle: 't',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourceHandle: 'r',
+        targetHandle: 't',
+      },
+    );
     expect(res.status).toBe(200);
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       connectors: Record<string, { sourceHandle?: string; targetHandle?: string }>;
@@ -2960,14 +3104,18 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourceHandle: 'top-bogus',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourceHandle: 'top-bogus',
+      },
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string; issues?: unknown };
     expect(body.error).toBeTruthy();
@@ -2987,13 +3135,17 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     // 't' is a valid handle id but only as a target — sending it as a
     // sourceHandle leaves a stranded endpoint, so the schema rejects it.
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourceHandle: 't',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourceHandle: 't',
+      },
+    );
     expect(res.status).toBe(400);
   });
 
@@ -3005,17 +3157,21 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      targetHandle: 'r',
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        targetHandle: 'r',
+      },
+    );
     expect(res.status).toBe(400);
   });
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await patch(app, '/api/flows/nope/connectors/x', { label: 'x' });
+    const res = await patch(app, '/api/projects/nope/flows/main/connectors/x', { label: 'x' });
     expect(res.status).toBe(404);
   });
 
@@ -3027,8 +3183,12 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/missing`, { label: 'x' });
+    ).json()) as { id: string; slug: string };
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/missing`,
+      { label: 'x' },
+    );
     expect(res.status).toBe(404);
   });
 
@@ -3043,13 +3203,17 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
     const styleFile = join(repoPath, 'style.json');
 
-    const setRes = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourcePin: { side: 'right', t: 0.25 },
-      targetPin: { side: 'left', t: 0.75 },
-    });
+    const setRes = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourcePin: { side: 'right', t: 0.25 },
+        targetPin: { side: 'left', t: 0.75 },
+      },
+    );
     expect(setRes.status).toBe(200);
     let style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       connectors: Record<string, Record<string, unknown>>;
@@ -3059,9 +3223,13 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
     expect(entry?.targetPin).toEqual({ side: 'left', t: 0.75 });
 
     // Clear only the source pin; target pin must survive.
-    const clearRes = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourcePin: null,
-    });
+    const clearRes = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourcePin: null,
+      },
+    );
     expect(clearRes.status).toBe(200);
     style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
       connectors: Record<string, Record<string, unknown>>;
@@ -3079,16 +3247,20 @@ describe('PATCH /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await patch(app, `/api/flows/${reg.id}/connectors/a-to-b`, {
-      sourcePin: { side: 'top', t: 1.5 },
-    });
+    const res = await patch(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      {
+        sourcePin: { side: 'top', t: 1.5 },
+      },
+    );
     expect(res.status).toBe(400);
   });
 });
 
-describe('POST /api/flows/:id/connectors', () => {
+describe('POST /api/projects/:project/flows/:flow/connectors', () => {
   const VALID_DEMO_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
@@ -3123,10 +3295,13 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, { source: 'a', target: 'b' });
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
+      source: 'a',
+      target: 'b',
+    });
     expect(res.status).toBe(200);
     const body = (await res.json()) as { ok: boolean; id: string };
     expect(body.ok).toBe(true);
@@ -3150,9 +3325,9 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       id: 'my-conn',
       source: 'a',
       target: 'b',
@@ -3171,12 +3346,12 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'ghost',
       target: 'b',
     });
@@ -3195,12 +3370,12 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
     const before = readFileSync(demoFile, 'utf8');
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'a',
       target: 'b',
       sourceHandle: 'top-bogus',
@@ -3211,7 +3386,10 @@ describe('POST /api/flows/:id/connectors', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await post(app, '/api/flows/nope/connectors', { source: 'a', target: 'b' });
+    const res = await post(app, '/api/projects/nope/flows/main/connectors', {
+      source: 'a',
+      target: 'b',
+    });
     expect(res.status).toBe(404);
   });
 
@@ -3245,9 +3423,9 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'svc',
       target: 'icon-1',
     });
@@ -3286,9 +3464,9 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'icon-1',
       target: 'svc',
     });
@@ -3325,9 +3503,9 @@ describe('POST /api/flows/:id/connectors', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/connectors`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       source: 'icon-a',
       target: 'icon-b',
     });
@@ -3340,7 +3518,7 @@ describe('POST /api/flows/:id/connectors', () => {
   });
 });
 
-describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', () => {
+describe('POST /api/projects/:project/flows/:flow/bulk (connectors-only + existing-graph cases)', () => {
   const VALID_DEMO_TWO_NODES = {
     version: 2,
     name: 'Two Nodes',
@@ -3375,9 +3553,9 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       connectors: [
         { source: 'a', target: 'b', eventName: 'evt.one' },
         { id: 'pinned', source: 'b', target: 'a' },
@@ -3409,15 +3587,15 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    await post(app, `/api/flows/${reg.id}/connectors`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors`, {
       id: 'c-taken',
       source: 'a',
       target: 'b',
     });
 
-    const res = await post(app, `/api/flows/${reg.id}/bulk`, {
+    const res = await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/bulk`, {
       connectors: [{ id: 'c-taken', source: 'b', target: 'a' }],
     });
     expect(res.status).toBe(400);
@@ -3426,7 +3604,7 @@ describe('POST /api/flows/:id/bulk (connectors-only + existing-graph cases)', ()
   });
 });
 
-describe('DELETE /api/flows/:id/connectors/:connId', () => {
+describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
   const VALID_DEMO_WITH_TWO_CONNS = {
     version: 2,
     name: 'Two Nodes',
@@ -3464,10 +3642,13 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     const demoFile = join(repoPath, 'flow.json');
-    const res = await app.request(`/api/flows/${reg.id}/connectors/a-to-b`, { method: 'DELETE' });
+    const res = await app.request(
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/a-to-b`,
+      { method: 'DELETE' },
+    );
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
 
@@ -3479,7 +3660,9 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
 
   it('returns 404 for unknown flowId', async () => {
     const { app } = buildApp();
-    const res = await app.request('/api/flows/nope/connectors/x', { method: 'DELETE' });
+    const res = await app.request('/api/projects/nope/flows/main/connectors/x', {
+      method: 'DELETE',
+    });
     expect(res.status).toBe(404);
   });
 
@@ -3491,30 +3674,17 @@ describe('DELETE /api/flows/:id/connectors/:connId', () => {
         repoPath,
         flowPath: 'flow.json',
       })
-    ).json()) as { id: string };
-    const res = await app.request(`/api/flows/${reg.id}/connectors/missing`, { method: 'DELETE' });
+    ).json()) as { id: string; slug: string };
+    const res = await app.request(
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/connectors/missing`,
+      { method: 'DELETE' },
+    );
     expect(res.status).toBe(404);
   });
 });
 
-describe('DELETE /api/flows/:id', () => {
+describe('DELETE /api/projects/:project/flows/:flow', () => {
   it('removes the entry and returns ok', async () => {
-    const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string };
-
-    const res = await app.request(`/api/flows/${reg.id}`, { method: 'DELETE' });
-    expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true });
-    expect(registry.list()).toHaveLength(0);
-  });
-
-  it('removes the entry when requested by slug', async () => {
     const { app, registry } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
@@ -3524,22 +3694,31 @@ describe('DELETE /api/flows/:id', () => {
       })
     ).json()) as { id: string; slug: string };
 
-    // Post-US-002 the slug encodes project + flow with a '/'. The legacy
-    // /api/flows/:id route still uses a single path segment, so addressing
-    // by slug needs URL encoding here. US-007 retires this route in favour
-    // of the nested /api/projects/:project/flows/:flow shape.
-    const res = await app.request(`/api/flows/${encodeURIComponent(reg.slug)}`, {
-      method: 'DELETE',
-    });
+    const res = await app.request(flowApi(reg.slug), { method: 'DELETE' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
     expect(registry.list()).toHaveLength(0);
   });
 
-  it('returns 404 for unknown ids', async () => {
+  it('returns 404 with project-not-found for an unknown project', async () => {
     const { app } = buildApp();
-    const res = await app.request('/api/flows/does-not-exist', { method: 'DELETE' });
+    const res = await app.request('/api/projects/does-not-exist/flows/main', { method: 'DELETE' });
     expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('returns 404 with flow-not-found when project exists but flow does not', async () => {
+    const { app } = buildApp();
+    const repoPath = tmpRepoWithDemo();
+    const reg = (await (
+      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
+    ).json()) as { id: string; slug: string };
+    const [projectSlug] = reg.slug.split('/');
+    const res = await app.request(`/api/projects/${projectSlug}/flows/missing`, {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'flow-not-found' });
   });
 });
 
@@ -3734,7 +3913,7 @@ describe('GET /api/flows/summary', () => {
   });
 });
 
-describe('GET /api/flows/:id/graph', () => {
+describe('GET /api/projects/:project/flows/:flow/graph', () => {
   it('returns nodes and connectors with detail/html stripped, description preserved', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo({
@@ -3756,9 +3935,9 @@ describe('GET /api/flows/:id/graph', () => {
     });
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await app.request(`/api/flows/${reg.id}/graph`);
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/graph`);
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       id: string;
@@ -3788,27 +3967,27 @@ describe('GET /api/flows/:id/graph', () => {
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
     unlinkSync(join(repoPath, 'flow.json'));
 
-    const res = await app.request(`/api/flows/${reg.id}/graph`);
+    const res = await app.request(`/api/projects/${reg.slug.replace('/', '/flows/')}/graph`);
     expect(res.status).toBe(404);
   });
 });
 
-describe('GET /api/flows/:id/nodes/:nodeId', () => {
+describe('GET /api/projects/:project/flows/:flow/nodes/:nodeId', () => {
   it('returns a single node with detail content inlined', async () => {
     const { app } = buildApp();
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
     // Add a node via the existing add endpoint so detail.md is externalized
     // through the canonical write path. Pin the id so we can fetch the same
     // node by id below (the seed VALID_DEMO already carries an `api-checkout`
     // rectangle — finding "the rectangle" by type would return the seed).
-    await post(app, `/api/flows/${reg.id}/nodes`, {
+    await post(app, `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes`, {
       id: 'with-detail',
       type: 'rectangle',
       data: { name: 'A', detail: '# inlined body' },
@@ -3816,7 +3995,9 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
 
     const shapeId = 'with-detail';
 
-    const res = await app.request(`/api/flows/${reg.id}/nodes/${shapeId}`);
+    const res = await app.request(
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/${shapeId}`,
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as {
       id: string;
@@ -3830,7 +4011,7 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
 
   it('returns 404 for unknown flow id', async () => {
     const { app } = buildApp();
-    const res = await app.request('/api/flows/missing/nodes/whatever');
+    const res = await app.request('/api/projects/missing/flows/main/nodes/whatever');
     expect(res.status).toBe(404);
   });
 
@@ -3839,9 +4020,11 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await app.request(`/api/flows/${reg.id}/nodes/not-a-node`);
+    const res = await app.request(
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/not-a-node`,
+    );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Unknown nodeId');
@@ -3853,7 +4036,7 @@ describe('GET /api/flows/:id/nodes/:nodeId', () => {
 // runner spawns the script via the injected ProcessSpawner (shared in-memory
 // fake from the /play suite) so we can drive the success + failure branches
 // without spinning up real child processes.
-describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
+describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name (T-007)', () => {
   type SpawnOpts = {
     cmd: string[];
     cwd: string;
@@ -3961,9 +4144,13 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
 
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/refresh`, { force: true });
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/refresh`,
+      { force: true },
+    );
     expect(res.status).toBe(200);
     const body = (await res.json()) as { queueDepth: number };
     expect(body).toEqual({ queueDepth: 3 });
@@ -3990,9 +4177,13 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
     );
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/missing`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/missing`,
+      {},
+    );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Unknown action');
@@ -4004,9 +4195,13 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
     const repoPath = tmpRepoWithDemo();
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/api-checkout/actions/refresh`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/api-checkout/actions/refresh`,
+      {},
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('not a component node');
@@ -4019,9 +4214,13 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
     });
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
+    ).json()) as { id: string; slug: string };
 
-    const res = await post(app, `/api/flows/${reg.id}/nodes/c1/actions/toggle`, {});
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/c1/actions/toggle`,
+      {},
+    );
     expect(res.status).toBe(400);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe('Only script actions are dispatched over HTTP');
@@ -4029,7 +4228,7 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
 
   it('returns 404 for an unknown flow id', async () => {
     const { app } = buildActionApp();
-    const res = await post(app, '/api/flows/nope/nodes/c1/actions/refresh', {});
+    const res = await post(app, '/api/projects/nope/flows/main/nodes/c1/actions/refresh', {});
     expect(res.status).toBe(404);
   });
 
@@ -4043,8 +4242,12 @@ describe('POST /api/flows/:id/nodes/:nodeId/actions/:name (T-007)', () => {
     );
     const reg = (await (
       await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string };
-    const res = await post(app, `/api/flows/${reg.id}/nodes/ghost/actions/refresh`, {});
+    ).json()) as { id: string; slug: string };
+    const res = await post(
+      app,
+      `/api/projects/${reg.slug.replace('/', '/flows/')}/nodes/ghost/actions/refresh`,
+      {},
+    );
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toContain('Unknown nodeId');

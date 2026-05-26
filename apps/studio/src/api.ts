@@ -38,6 +38,7 @@ import {
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
 import type { Registry } from './registry.ts';
+import { resolveProjectFlow } from './route-resolve.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
 import type { ComponentAction } from './schema.ts';
 import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
@@ -498,8 +499,10 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(result.data);
   });
 
-  api.get('/flows/:id', async (c) => {
-    const result = await ops.getFlow(c.req.param('id'));
+  api.get('/projects/:project/flows/:flow', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const result = await ops.getFlow(resolved.entry.id);
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -511,9 +514,11 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   // Flow skeleton without per-node file content (detail.md / view.html).
-  // Pairs with GET /flows/:id/nodes/:nodeId for full per-node detail.
-  api.get('/flows/:id/graph', async (c) => {
-    const result = await ops.getFlowGraph(c.req.param('id'));
+  // Pairs with GET /projects/:project/flows/:flow/nodes/:nodeId for full per-node detail.
+  api.get('/projects/:project/flows/:flow/graph', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const result = await ops.getFlowGraph(resolved.entry.id);
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -528,8 +533,10 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  api.get('/flows/:id/nodes/:nodeId', async (c) => {
-    const result = await ops.getNode(c.req.param('id'), c.req.param('nodeId'));
+  api.get('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const result = await ops.getNode(resolved.entry.id, c.req.param('nodeId'));
     switch (result.kind) {
       case 'ok':
         return c.json(result.data);
@@ -738,8 +745,10 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ path: `nodes/${nodeId}/${finalName}` });
   });
 
-  api.delete('/flows/:id', (c) => {
-    const result = ops.deleteFlow(c.req.param('id'));
+  api.delete('/projects/:project/flows/:flow', (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const result = ops.deleteFlow(resolved.entry.id);
     switch (result.kind) {
       case 'ok':
         return c.json({ ok: true });
@@ -748,15 +757,18 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  // POST /api/flows/:id/layout — registered-flow ELK layout. Reads flow.json
-  // from disk via the registry entry, computes layout, writes style.json
-  // atomically next to flow.json, and broadcasts flow:reload so any open
-  // canvas refreshes. Body is empty or `{ options? }`. Response on success is
-  // just `{ ok: true }` — the layout is already on disk. On schema failure
-  // returns `{ ok: false, issues }` mirroring /api/validate; on missing flow
-  // file / unknown id / bad JSON / write failure returns HTTP 4xx/5xx.
-  api.post('/flows/:id/layout', async (c) => {
-    const id = c.req.param('id');
+  // POST /api/projects/:project/flows/:flow/layout — registered-flow ELK
+  // layout. Reads flow.json from disk via the registry entry, computes
+  // layout, writes style.json atomically next to flow.json, and broadcasts
+  // flow:reload so any open canvas refreshes. Body is empty or `{ options? }`.
+  // Response on success is just `{ ok: true }` — the layout is already on
+  // disk. On schema failure returns `{ ok: false, issues }` mirroring
+  // /api/validate; on missing flow file / bad JSON / write failure returns
+  // HTTP 4xx/5xx.
+  api.post('/projects/:project/flows/:flow/layout', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
 
     // Empty body is valid — the skill always uses defaults. Only parse if the
     // caller actually sent something.
@@ -794,11 +806,12 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
-  api.post('/flows/:id/play/:nodeId', async (c) => {
-    const id = c.req.param('id');
+  api.post('/projects/:project/flows/:flow/play/:nodeId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const entry = resolved.entry;
+    const id = entry.id;
     const nodeId = c.req.param('nodeId');
-    const entry = registry.getById(id);
-    if (!entry) return c.json({ error: 'unknown demo' }, 404);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     // Always re-read from disk so the user's most recent edit (validated or
@@ -852,20 +865,22 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(result);
   });
 
-  // POST /api/flows/:id/nodes/:nodeId/actions/:name — dispatch a component
-  // node's named action over HTTP. Only `script`-kind actions cross this seam;
-  // `set`-kind actions mutate canvas state locally and never round-trip
-  // through the API (the runner rejects them with statusHint 400).
-  // Payload is the JSON request body (defaults to {} on parse failure) and is
-  // piped to the script's stdin by `runComponentAction`. Response is the
-  // script's parsed JSON stdout on success.
-  api.post('/flows/:id/nodes/:nodeId/actions/:name', async (c) => {
-    const id = c.req.param('id');
+  // POST /api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name —
+  // dispatch a component node's named action over HTTP. Only `script`-kind
+  // actions cross this seam; `set`-kind actions mutate canvas state locally
+  // and never round-trip through the API (the runner rejects them with
+  // statusHint 400). Payload is the JSON request body (defaults to {} on
+  // parse failure) and is piped to the script's stdin by
+  // `runComponentAction`. Response is the script's parsed JSON stdout on
+  // success.
+  api.post('/projects/:project/flows/:flow/nodes/:nodeId/actions/:name', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const entry = resolved.entry;
+    const id = entry.id;
     const nodeId = c.req.param('nodeId');
     const actionName = c.req.param('name');
 
-    const entry = registry.getById(id);
-    if (!entry) return c.json({ error: 'unknown demo' }, 404);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -904,7 +919,8 @@ export function createApi(options: ApiOptions): Hono {
     return c.json(result.body);
   });
 
-  // POST /api/flows/:id/reset — the "Restart demo" workflow (US-008). Order:
+  // POST /api/projects/:project/flows/:flow/reset — the "Restart demo"
+  // workflow (US-008). Order:
   //   1. Stop every live play-script + every long-running status-script for
   //      this demo in parallel — both must complete before any reset script
   //      spawns so the script sees no stragglers.
@@ -914,10 +930,11 @@ export function createApi(options: ApiOptions): Hono {
   //   4. Fire-and-forget `statusRunner.restart` so the next status batch is
   //      spawning by the time the response lands. Individual spawn failures
   //      surface via console.warn but never fail the /reset call.
-  api.post('/flows/:id/reset', async (c) => {
-    const id = c.req.param('id');
-    const entry = registry.getById(id);
-    if (!entry) return c.json({ error: 'unknown demo' }, 404);
+  api.post('/projects/:project/flows/:flow/reset', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const entry = resolved.entry;
+    const id = entry.id;
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
@@ -981,8 +998,10 @@ export function createApi(options: ApiOptions): Hono {
   // PATCH a single node's position back into the on-disk flow.json. Atomic
   // write via tempfile + rename keeps editor diffs clean and avoids
   // corruption mid-write.
-  api.patch('/flows/:id/nodes/:nodeId/position', async (c) => {
-    const id = c.req.param('id');
+  api.patch('/projects/:project/flows/:flow/nodes/:nodeId/position', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const nodeId = c.req.param('nodeId');
 
     let body: unknown;
@@ -1022,8 +1041,10 @@ export function createApi(options: ApiOptions): Hono {
   // toBack (remove + push/unshift), and toIndex (pin to an absolute index)
   // which the undo path uses to faithfully revert forward/backward gestures
   // even if the array changed between the original op and the undo.
-  api.patch('/flows/:id/nodes/:nodeId/order', async (c) => {
-    const id = c.req.param('id');
+  api.patch('/projects/:project/flows/:flow/nodes/:nodeId/order', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const nodeId = c.req.param('nodeId');
 
     let body: unknown;
@@ -1063,8 +1084,10 @@ export function createApi(options: ApiOptions): Hono {
   // doesn't yet recognize survive round-trips) and the WHOLE resulting demo
   // is re-validated through ResolvedFlowSchema before commit, preventing partial
   // writes from breaking invariants like the connector→node superRefine.
-  api.patch('/flows/:id/nodes/:nodeId', async (c) => {
-    const id = c.req.param('id');
+  api.patch('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const nodeId = c.req.param('nodeId');
 
     let body: unknown;
@@ -1100,8 +1123,10 @@ export function createApi(options: ApiOptions): Hono {
   // POST a new node into the demo. Body is the node payload (id auto-generated
   // server-side if absent). Atomicity + final-ResolvedFlowSchema validation match the
   // PATCH path above, so a malformed node never produces a half-written file.
-  api.post('/flows/:id/nodes', async (c) => {
-    const id = c.req.param('id');
+  api.post('/projects/:project/flows/:flow/nodes', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
 
     let body: unknown;
     try {
@@ -1137,8 +1162,10 @@ export function createApi(options: ApiOptions): Hono {
   // nodes added in the same call; the parse sees the merged graph as a whole.
   // Intended for skill/LLM seeding where multiple singular calls would burn
   // tokens and round-trip latency.
-  api.post('/flows/:id/bulk', async (c) => {
-    const id = c.req.param('id');
+  api.post('/projects/:project/flows/:flow/bulk', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
 
     let body: unknown;
     try {
@@ -1186,8 +1213,10 @@ export function createApi(options: ApiOptions): Hono {
   // is still run after the mutation — connector cascade closure means it
   // should always pass, but the check makes the failure mode honest if the
   // file had a pre-existing schema violation we'd otherwise paper over.
-  api.delete('/flows/:id/nodes/:nodeId', async (c) => {
-    const id = c.req.param('id');
+  api.delete('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const nodeId = c.req.param('nodeId');
 
     const result = await ops.deleteNode(id, nodeId);
@@ -1216,8 +1245,10 @@ export function createApi(options: ApiOptions): Hono {
   // union catches missing-required-fields (e.g. kind='event' without
   // eventName) and the superRefine still gates source/target referential
   // integrity.
-  api.patch('/flows/:id/connectors/:connId', async (c) => {
-    const id = c.req.param('id');
+  api.patch('/projects/:project/flows/:flow/connectors/:connId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const connId = c.req.param('connId');
 
     let body: unknown;
@@ -1254,8 +1285,10 @@ export function createApi(options: ApiOptions): Hono {
   // server-side if absent and `kind` defaults to 'default' (the no-semantics
   // user-drawn variant). Source/target referential integrity is enforced by
   // ResolvedFlowSchema's superRefine on the post-mutation parse.
-  api.post('/flows/:id/connectors', async (c) => {
-    const id = c.req.param('id');
+  api.post('/projects/:project/flows/:flow/connectors', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
 
     let body: unknown;
     try {
@@ -1286,8 +1319,10 @@ export function createApi(options: ApiOptions): Hono {
 
   // DELETE a connector. Just removes the entry from demo.connectors — node
   // deletion is what cascades, not connector deletion.
-  api.delete('/flows/:id/connectors/:connId', async (c) => {
-    const id = c.req.param('id');
+  api.delete('/projects/:project/flows/:flow/connectors/:connId', async (c) => {
+    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
+    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
+    const id = resolved.entry.id;
     const connId = c.req.param('connId');
 
     const result = await ops.deleteConnector(id, connId);

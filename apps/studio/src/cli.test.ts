@@ -558,14 +558,17 @@ describe('seeflow CLI new subcommands', () => {
       });
 
       // Add a shape node via the add endpoint so detail.md is externalized.
-      const addRes = await fetch(`${studio.url}/api/flows/${entry.id}/nodes`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          type: 'rectangle',
-          data: { name: 'A', detail: '# inlined body' },
-        }),
-      });
+      const addRes = await fetch(
+        `${studio.url}/api/projects/${encodeURIComponent(entry.projectSlug)}/flows/${encodeURIComponent(entry.flowSlug)}/nodes`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            type: 'rectangle',
+            data: { name: 'A', detail: '# inlined body' },
+          }),
+        },
+      );
       const added = (await addRes.json()) as { id: string };
 
       const r = await runCli(['nodes:get', entry.id, added.id, '--no-start'], studio.env);
