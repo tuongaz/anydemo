@@ -1,20 +1,20 @@
 {
   "project": "SeeFlow",
-  "branchName": "ralph/mcp-apps-canvas",
-  "description": "MCP Apps for SeeFlow — render the React Flow canvas inline inside MCP-Apps-capable hosts (Claude Desktop first), with full in-chat authoring and bidirectional model awareness. See docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md.",
+  "branchName": "main",
+  "description": "Multi-flow projects: let a single SeeFlow project host multiple flows, switchable from a Figma-style popover in the canvas. New seeflow.json manifest + flows/<id>/flow.json layout. All HTTP routes move under /api/projects/:project/flows/:flow/. CLI and MCP take --project + --flow explicitly. Adapter rebinds on flow switch. Source docs: docs/plans/2026-05-26-multi-flow-projects-design.md and docs/plans/2026-05-26-multi-flow-projects.md.",
   "userStories": [
     {
       "id": "US-001",
-      "title": "Scaffold apps/mcp-app/ workspace with single-file Vite build",
-      "description": "As a developer, I need a new workspace that builds the MCP App iframe payload as one inlined HTML file. This is the empty shell — no canvas yet, just the build pipeline.",
+      "title": "Add SeeflowManifestSchema to schema.ts",
+      "description": "As a developer, I need a Zod schema for seeflow.json so the scanner and CLI can validate manifests.",
       "acceptanceCriteria": [
-        "Create apps/mcp-app/ with package.json (name: @seeflow/mcp-app, private: true, type: module)",
-        "Add tsconfig.json (extends root config, React JSX)",
-        "Add vite.config.ts using vite-plugin-singlefile to inline CSS/JS/assets",
-        "Add index.html and src/main.tsx that renders a placeholder <div>SeeFlow MCP App</div>",
-        "Add @seeflow/canvas, react, react-dom, @xyflow/react as dependencies (latest matching workspace versions)",
-        "`bun install` succeeds (workspace picked up by existing apps/* glob)",
-        "`bun run --filter @seeflow/mcp-app build` produces apps/mcp-app/dist/index.html as a single self-contained file (no separate assets/, css/, or chunks)",
+        "Export SeeflowManifestSchema from apps/studio/src/schema.ts with version (literal 1), name (min 1), description (optional), defaultFlow (string), flows (array min 1 of {id, name, icon?})",
+        "Export FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/ and apply to flows[].id",
+        "Reject duplicate flow ids via .refine()",
+        "Reject defaultFlow that does not match any entry in flows[] via .refine()",
+        "Export SeeflowManifest type via z.infer",
+        "Add tests in apps/studio/src/schema.test.ts covering: valid minimal, valid multi-flow with icon, invalid id pattern, empty flows[], duplicate ids, missing defaultFlow target",
+        "bun test apps/studio/src/schema.test.ts passes",
         "Typecheck passes"
       ],
       "priority": 1,
@@ -23,17 +23,16 @@
     },
     {
       "id": "US-002",
-      "title": "Add bridge.ts wrapping window.openai with coalescing + debounce",
-      "description": "As a developer, I need a typed bridge to window.openai that coalesces structural-edit messages and debounces context updates. No-ops cleanly when host is absent so the bundle works in plain browser tabs.",
+      "title": "Extend FlowEntry shape in registry.ts with projectSlug / flowSlug / isDefault / icon",
+      "description": "As a developer, I need the registry to track project + flow as separate fields so route resolution can address them independently.",
       "acceptanceCriteria": [
-        "apps/mcp-app/src/bridge.ts exports sendMessage(event) and updateModelContext(patch)",
-        "sendMessage coalesces calls within a 200ms window into one window.openai.sendMessage invocation with a merged payload",
-        "updateModelContext debounces 250ms and throttles to at most one call per second",
-        "When window.openai is undefined, both functions return silently (no throw, no console error)",
-        "Export a WidgetState type: { kind: 'navigate' | 'create'; flowSlug?: string; nodeId?: string; projectSlug?: string; backendUrl: string; backendToken: string; justCreated?: boolean }",
-        "Unit tests in apps/mcp-app/src/bridge.test.ts cover: coalescing window, debounce timing, throttle cap, no-op when window.openai missing",
-        "Typecheck passes",
-        "Tests pass"
+        "FlowEntry interface in apps/studio/src/registry.ts gains required fields: projectSlug, flowSlug, isDefault. Optional: icon",
+        "RegisterInput in same file gains projectSlug, flowSlug, isDefault (required) and icon (optional)",
+        "upsert() carries the new fields through both create and update paths; persist() writes them to disk",
+        "Legacy slug field becomes derived: `${projectSlug}/${flowSlug}` for resolve() compatibility",
+        "Add tests in apps/studio/src/registry.test.ts asserting the new fields round-trip via upsert + list + getById",
+        "All existing registry tests still pass",
+        "Typecheck passes"
       ],
       "priority": 2,
       "passes": false,
@@ -41,17 +40,18 @@
     },
     {
       "id": "US-003",
-      "title": "Mount the canvas in App.tsx with createRestAdapter and widgetState branching",
-      "description": "As a user, I want the canvas to render inside the MCP App iframe with the right flow/node focused based on which tool was called. Branches on widgetState.kind for create vs navigate affordances.",
+      "title": "Create project-scanner.ts module that reads seeflow.json",
+      "description": "As a developer, I need a scanner that converts a project directory into ScannedFlow entries the registry can consume.",
       "acceptanceCriteria": [
-        "apps/mcp-app/src/App.tsx reads window.openai?.widgetState (fallback to a query-string-driven shim for browser testing)",
-        "Uses createRestAdapter from @seeflow/canvas with { baseUrl: widgetState.backendUrl, headers: { 'X-Seeflow-Token': widgetState.backendToken } }",
-        "When widgetState.kind === 'navigate': render canvas, if nodeId present open detail panel and select that node",
-        "When widgetState.kind === 'create' && justCreated: render canvas in edit mode with a subtle 'Just created' highlight that fades after 3s",
-        "main.tsx imports App and renders it",
-        "Imports @seeflow/canvas/style.css",
-        "Typecheck passes",
-        "Verify in browser using dev-browser skill: open built dist/index.html with ?widgetState=<json> shim, confirm canvas renders against a running studio backend"
+        "Create apps/studio/src/project-scanner.ts exporting scanProject(repoPath) → ScanResult discriminated union",
+        "Return { kind: 'ok', projectSlug, manifest, flows[] } on success — projectSlug derived from manifest.name via slugify (fallback to basename(repoPath))",
+        "Return error variants: 'manifest-missing', 'manifest-invalid' (with message), 'legacy-root-flow' (when flow.json exists at project root), 'flow-json-missing' (when a declared flow folder is missing flow.json)",
+        "Mark the entry whose id === manifest.defaultFlow with isDefault: true",
+        "flowPath in each scanned flow is relative: flows/<id>/flow.json",
+        "If apps/studio/src/slugify.ts does not exist, extract slugify from registry.ts into a new file with lowercase + non-alphanumeric→dash + trim dashes; add slugify.test.ts",
+        "Add tests in apps/studio/src/project-scanner.test.ts covering: one-flow ok, two-flow ok, missing manifest, manifest-invalid (e.g. bad id pattern), legacy-root-flow, flow-json-missing",
+        "bun test apps/studio/src/project-scanner.test.ts apps/studio/src/slugify.test.ts passes",
+        "Typecheck passes"
       ],
       "priority": 3,
       "passes": false,
@@ -59,16 +59,15 @@
     },
     {
       "id": "US-004",
-      "title": "Wire CanvasAdapter callbacks to bridge.sendMessage and updateModelContext",
-      "description": "As a user, when I edit the canvas, the model becomes aware via the right channel — structural edits trigger model turns; navigation telemetry flows silently.",
+      "title": "Wire scanner into cli-ops registration as registerProject",
+      "description": "As a developer, I need cli-ops to use the new scanner so registering a project produces one FlowEntry per flow declared in seeflow.json.",
       "acceptanceCriteria": [
-        "CanvasAdapter callbacks onAddNode, onDeleteNode, onAddConnector, onDeleteConnector, onRenameNode, onPlay, onStatusChange call bridge.sendMessage with { event, flowSlug, payload }",
-        "Selection change (single or multi), drag start/end, viewport pan/zoom, and detail-panel focus call bridge.updateModelContext with { selectedNodeId, hoveredNodeId, viewport }",
-        "Drag-in-progress fires updateModelContext at most once per 250ms (verified via test, not per-pixel)",
-        "Bursts of structural edits within 200ms are coalesced into one sendMessage (verified via test)",
-        "Typecheck passes",
-        "Tests pass",
-        "Verify in browser using dev-browser skill: drag a node, confirm only one debounced updateModelContext fires; add a node, confirm one sendMessage fires"
+        "Add registerProject(opts) function in apps/studio/src/cli-ops.ts that calls scanProject(repoPath), surfaces ScanError clearly, and calls registry.upsert() once per ScannedFlow",
+        "Replace the existing single-flow registerFlow path internally (keep the export as a thin alias that calls registerProject and returns the first entry IF any caller still depends on it during this story)",
+        "Update server.ts seedExample call sites if they use registerFlow directly — they should call registerProject and tolerate the multi-entry response",
+        "Add or update tests in apps/studio/src/cli-ops.test.ts asserting registerProject(repoPath) registers N FlowEntries for an N-flow manifest with correct projectSlug + flowSlug",
+        "bun test apps/studio/src/cli-ops.test.ts apps/studio/src/registry.test.ts passes",
+        "Typecheck passes"
       ],
       "priority": 4,
       "passes": false,
@@ -76,16 +75,17 @@
     },
     {
       "id": "US-005",
-      "title": "Boot ephemeral Hono HTTP server alongside stdio in seeflow-mcp",
-      "description": "As a developer, I need seeflow-mcp to also expose the studio HTTP+SSE backend on a loopback ephemeral port so the iframe canvas can reach it. Lifecycle is bound to the stdio process.",
+      "title": "Migrate example projects + e2e fixture to seeflow.json + flows/<id>/ layout",
+      "description": "As a developer, I need the four in-repo project fixtures to use the new layout so the scanner can register them.",
       "acceptanceCriteria": [
-        "apps/studio/src/mcp-shim.ts (or the seeflow-mcp entrypoint) calls Bun's serve({ port: 0, fetch: app.fetch }) alongside the existing stdio handler",
-        "studio.httpUrl is set to `http://127.0.0.1:${server.port}` before the MCP server starts handing out tool results",
-        "If port binding fails, surface a notifications/message error and continue stdio-only (do not crash)",
-        "process.on('SIGINT'), process.on('SIGTERM'), process.on('beforeExit'), and stdio transport onclose all call server.stop() to release the port",
-        "Integration test in apps/studio/integration/ boots seeflow-mcp, captures the port, kills the subprocess, asserts the port is free within 2 seconds",
-        "Typecheck passes",
-        "Tests pass"
+        "Migrate apps/studio/examples/order-pipeline: git mv flow.json flows/main/flow.json, git mv nodes/ flows/main/nodes/ (if present), git mv scripts/ flows/main/scripts/ (if present); create seeflow.json with {version:1, name: <same as old flow.json#/name>, defaultFlow:'main', flows:[{id:'main', name:'Main'}]}",
+        "Migrate apps/studio/examples/component-showcase same way",
+        "Migrate apps/studio/examples/ecommerce-platform same way",
+        "Migrate apps/studio/e2e/fixtures/component-demo same way",
+        "Inline check: bun -e \"const {scanProject}=require('./apps/studio/src/project-scanner.ts'); ['apps/studio/examples/order-pipeline','apps/studio/examples/component-showcase','apps/studio/examples/ecommerce-platform','apps/studio/e2e/fixtures/component-demo'].forEach(p => { const r = scanProject(p); if (r.kind !== 'ok') throw new Error(p+': '+JSON.stringify(r)); })\" exits 0",
+        "bun run format && bun run lint && bun run typecheck pass",
+        "bun test passes (Playwright suite gated out: bun test --exclude apps/studio/e2e)",
+        "Commit message: feat(scanner): seeflow.json manifest + flows/<id>/ layout"
       ],
       "priority": 5,
       "passes": false,
@@ -93,18 +93,13 @@
     },
     {
       "id": "US-006",
-      "title": "Add per-process token and CORS handling for Origin: null",
-      "description": "As a security-conscious developer, I need the ephemeral HTTP backend to reject drive-by requests from other localhost processes — only the MCP iframe (which receives the token via widgetState) should be allowed.",
+      "title": "Add route-resolve.ts helper for project+flow → FlowEntry",
+      "description": "As a developer, I need a shared helper that resolves :project + :flow URL params to a FlowEntry with structured 404 codes.",
       "acceptanceCriteria": [
-        "Generate a random per-process token at studio boot (crypto.randomUUID() or 32 bytes hex), stored in memory on the Studio instance",
-        "Expose studio.token field accessible to the MCP server factory",
-        "Extend existing Hono CORS middleware: allow Origin: null only when X-Seeflow-Token request header equals studio.token",
-        "Requests from null origin without the matching token receive 403",
-        "Existing same-origin (localhost:5173) and other localhost origins continue to work unchanged for the dev SPA",
-        "Token is never persisted to disk, never logged",
-        "Unit test in apps/studio/src/ verifies: null origin + correct token = allowed; null origin + missing/wrong token = denied; localhost:5173 = allowed without token",
-        "Typecheck passes",
-        "Tests pass"
+        "Create apps/studio/src/route-resolve.ts exporting resolveProjectFlow(registry, projectSlug, flowSlug) → { kind:'ok', entry } | { kind:'error', code:'project-not-found' | 'flow-not-found' }",
+        "Add tests in apps/studio/src/route-resolve.test.ts covering: success, project-not-found, flow-not-found",
+        "bun test apps/studio/src/route-resolve.test.ts passes",
+        "Typecheck passes"
       ],
       "priority": 6,
       "passes": false,
@@ -112,13 +107,15 @@
     },
     {
       "id": "US-007",
-      "title": "Add mcp-ui.ts with canvasMeta helper and register ui://seeflow/canvas resource",
-      "description": "As a developer, I need a single helper that builds the _meta payload for canvas-bearing tools, plus MCP server registration of the canvas HTML bundle as a readable resource.",
+      "title": "Rewrite flow-scoped HTTP routes under /api/projects/:project/flows/:flow",
+      "description": "As a developer, I need every flow-scoped HTTP handler in api.ts moved to the new nested path so the studio addresses (project, flow) explicitly.",
       "acceptanceCriteria": [
-        "Create apps/studio/src/mcp-ui.ts exporting: CANVAS_RESOURCE_URI = 'ui://seeflow/canvas'; readCanvasHtml() that reads apps/mcp-app/dist/index.html via fs.readFileSync resolved through import.meta.resolve, cached after first read; canvasMeta(state) returning { 'openai/outputTemplate': CANVAS_RESOURCE_URI, 'openai/widgetState': state, 'openai/widgetAccessible': true }",
-        "MCP server's resources/list handler includes { uri: 'ui://seeflow/canvas', name: 'SeeFlow Canvas', mimeType: 'text/html+skybridge' }",
-        "MCP server's resources/read handler for ui://seeflow/canvas returns { contents: [{ uri, mimeType: 'text/html+skybridge', text: readCanvasHtml() }] }",
-        "If apps/mcp-app/dist/index.html is missing, readCanvasHtml throws a clear error message pointing to the build step",
+        "Migrate these handlers from /flows/:id/... to /projects/:project/flows/:flow/...: GET /flows/:id, GET /flows/:id/graph, GET /flows/:id/nodes/:nodeId, DELETE /flows/:id, POST /flows/:id/layout, POST /flows/:id/play/:nodeId, POST /flows/:id/nodes/:nodeId/actions/:name, POST /flows/:id/reset, PATCH /flows/:id/nodes/:nodeId/position, PATCH /flows/:id/nodes/:nodeId/order, PATCH /flows/:id/nodes/:nodeId, POST /flows/:id/nodes, POST /flows/:id/bulk, DELETE /flows/:id/nodes/:nodeId, PATCH /flows/:id/connectors/:connId, POST /flows/:id/connectors, DELETE /flows/:id/connectors/:connId",
+        "Each handler uses resolveProjectFlow() and returns 404 with { ok:false, error:'project-not-found'|'flow-not-found' } when resolution fails",
+        "Old /api/flows/:id/... routes deleted — no aliases, no redirects (pre-launch)",
+        "GET /flows (list) stays unchanged for now — US-013 will move it",
+        "Update every affected test in apps/studio/src/api.test.ts to hit the new nested URLs and pass both projectSlug + flowSlug through test fixtures",
+        "bun test apps/studio/src/api.test.ts passes",
         "Typecheck passes"
       ],
       "priority": 7,
@@ -127,16 +124,17 @@
     },
     {
       "id": "US-008",
-      "title": "Patch the 5 canvas-bearing tool handlers to attach _meta",
-      "description": "As a model, when I call one of the 5 canvas-bearing tools, the host renders the canvas with the right initial focus. Other 18 tools stay JSON-only.",
+      "title": "Re-anchor asset and upload routes under flows/<flow>/nodes/<nodeId>/",
+      "description": "As a developer, I need the file routes split into project-scoped (shared) and flow-scoped (per-flow) paths so per-flow uploads land in the correct folder.",
       "acceptanceCriteria": [
-        "In apps/studio/src/mcp.ts, plumb studio.httpUrl and studio.token through the createMcpServer factory to tool registration",
-        "seeflow_get_flow handler (around L316) returns _meta: canvasMeta({ kind: 'navigate', flowSlug, backendUrl: studio.httpUrl, backendToken: studio.token })",
-        "seeflow_get_flow_graph handler (around L334) returns the same shape",
-        "seeflow_get_node handler (around L361) additionally passes nodeId into widgetState",
-        "seeflow_register_flow handler (around L405) returns _meta: canvasMeta({ kind: 'create', flowSlug: result.slug, justCreated: true, backendUrl, backendToken })",
-        "seeflow_create_project handler (around L445) returns _meta: canvasMeta({ kind: 'create', projectSlug: result.slug, backendUrl, backendToken })",
-        "All other tool handlers untouched — verified by spot-check of L176, L185, L197, L238, L289, L429, L466, L494, L532, L561, L590, L620, L656",
+        "Rehouse GET /projects/:id/files/:path{.+} → GET /projects/:project/files/:path{.+} (project-scoped, shared across flows)",
+        "Rehouse POST /projects/:id/files/open → POST /projects/:project/files/open",
+        "Rehouse POST /projects/:id/files/reveal → POST /projects/:project/files/reveal",
+        "Rehouse POST /projects/:id/nodes/:nodeId/files/upload → POST /projects/:project/flows/:flow/nodes/:nodeId/files/upload",
+        "Upload handler resolves on-disk target via <repoPath>/<dirname(entry.flowPath)>/nodes/<nodeId>/<filename> (i.e. flows/<flow>/nodes/<nodeId>/<filename>)",
+        "Cascade-delete in the node-delete handler anchors cleanup under <repoPath>/<dirname(entry.flowPath)>/nodes/<nodeId>/ as well",
+        "Update apps/studio/src/api.test.ts and apps/studio/src/node-files.test.ts for the new paths and the on-disk resolution",
+        "bun test apps/studio/src/api.test.ts apps/studio/src/node-files.test.ts passes",
         "Typecheck passes"
       ],
       "priority": 8,
@@ -145,15 +143,16 @@
     },
     {
       "id": "US-009",
-      "title": "Add unit tests for canvasMeta and extend mcp-parity to enforce attachment rules",
-      "description": "As a developer, I need automated tests that prevent the easy mistake of forgetting _meta on a canvas-bearing tool or adding it to a mutation tool by accident.",
+      "title": "Update REST adapter to take { project, flow } instead of { flowId }",
+      "description": "As a developer, I need the canvas adapter URL composition to match the new nested API so every adapter call hits the right endpoint.",
       "acceptanceCriteria": [
-        "New apps/studio/src/mcp-ui.test.ts covers canvasMeta() for each of the 5 tools: correct kind, justCreated flag only on creation tools, nodeId present only when supplied, backendUrl and backendToken always present",
-        "Extend apps/studio/src/mcp-parity.test.ts: assert every canvas-bearing tool (the 5) includes _meta['openai/outputTemplate'] === 'ui://seeflow/canvas'",
-        "Extend apps/studio/src/mcp-parity.test.ts: assert every non-canvas-bearing tool does NOT include _meta['openai/outputTemplate']",
-        "Existing parity assertions continue to pass",
-        "Typecheck passes",
-        "Tests pass"
+        "RestAdapterOptions in packages/canvas/src/adapter/rest.ts gains required project: string and flow: string; remove flowId",
+        "All URL composition inside the adapter uses ${baseUrl}/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}/... for flow-scoped calls",
+        "Asset URLs use ${baseUrl}/api/projects/${encodeURIComponent(project)}/files/... (project-scoped)",
+        "Upload URL uses ${baseUrl}/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}/nodes/${encodeURIComponent(nodeId)}/files/upload",
+        "Update packages/canvas/src/adapter/rest.test.ts to construct adapter with { baseUrl, project, flow } and assert the new URLs",
+        "bun test packages/canvas/src/adapter/rest.test.ts passes",
+        "Typecheck passes"
       ],
       "priority": 9,
       "passes": false,
@@ -161,17 +160,16 @@
     },
     {
       "id": "US-010",
-      "title": "Add MCP Apps end-to-end integration test against real seeflow-mcp subprocess",
-      "description": "As a developer, I need an integration test that drives the real seeflow-mcp binary via the in-repo MCP client harness and verifies the full resource+token+lifecycle contract.",
+      "title": "Update apps/web to construct adapter with { project, flow } and route /projects/<p>/flows/<f>",
+      "description": "As a developer, I need the studio web app to thread project + flow through routing and adapter construction so the canvas binds to the right flow.",
       "acceptanceCriteria": [
-        "New apps/studio/integration/mcp-apps.it.ts spawns the real seeflow-mcp binary via apps/studio/integration/support/mcp-client.ts",
-        "Asserts resources/list includes { uri: 'ui://seeflow/canvas', mimeType: 'text/html+skybridge' }",
-        "Asserts resources/read of ui://seeflow/canvas returns text/html+skybridge mimetype and non-empty HTML text",
-        "Asserts seeflow_register_flow returns _meta with kind === 'create' and a backendUrl that responds 200 on GET /api/flows when called with the X-Seeflow-Token header",
-        "Asserts the backendUrl responds 403 on a request from Origin: null without the X-Seeflow-Token header",
-        "Asserts the ephemeral port is released within 2 seconds of killing the subprocess",
+        "React Router route in apps/web/src/App.tsx maps /projects/:project/flows/:flow to the canvas page (replace any /d/:slug or /flow/:flowId route)",
+        "apps/web/src/pages/demo-view.tsx extracts both useParams().project and useParams().flow and passes them to createRestAdapter({ baseUrl, project, flow }) via useMemo([project, flow])",
+        "Every URL builder under apps/web/src/lib/api.ts and apps/web/src/hooks/* that hit /api/flows/... uses the new /api/projects/:project/flows/:flow/... shape",
+        "Existing apps/web tests updated to the new URLs and route shape",
+        "bun test apps/web passes",
         "Typecheck passes",
-        "Tests pass"
+        "Verify in browser using dev-browser skill: open http://localhost:5173/projects/order-pipeline/flows/main with the studio running; canvas renders with nodes; navigating manually to a non-existent flow surfaces an error"
       ],
       "priority": 10,
       "passes": false,
@@ -179,19 +177,18 @@
     },
     {
       "id": "US-011",
-      "title": "Add MCP App e2e Playwright test with mocked window.openai shim",
-      "description": "As a developer, I need a browser-level test that proves the iframe bundle honors the widgetState contract and emits the right bridge events on user interactions.",
+      "title": "Update apps/mcp-app (MCP App bundle) to use { project, flow } and required projectSlug widget state",
+      "description": "As a developer, I need the MCP App bundle that mounts inside Claude Desktop to use the new nested API and adapter so the canvas works inside the MCP host iframe.",
       "acceptanceCriteria": [
-        "New apps/studio/e2e/mcp-app.spec.ts loads the built apps/mcp-app/dist/index.html with a mocked window.openai injected before scripts run",
-        "Mock captures all sendMessage and updateModelContext calls into arrays for assertion",
-        "Mock provides widgetState pointing to a test studio backend started by the test fixture",
-        "Test: create-mode (kind:'create', justCreated:true) renders edit affordances and a 'Just created' highlight that fades within 3s",
-        "Test: navigate-mode with nodeId opens the detail panel for that node",
-        "Test: dragging a node fires exactly one debounced updateModelContext after 250ms idle (not one per pixel)",
-        "Test: adding a node fires one sendMessage with event 'node-added'",
-        "Visual baseline snapshots committed under chromium-linux per repo convention",
-        "Typecheck passes",
-        "Tests pass"
+        "apps/mcp-app/src/bridge.ts: WidgetState navigate variant requires { kind:'navigate', projectSlug: string, flowSlug: string, nodeId?: string }",
+        "apps/studio/src/mcp-ui.ts: CanvasWidgetState mirror updated identically (the two types are kept in sync — there is an explicit comment to that effect)",
+        "apps/mcp-app/src/App.tsx: flow resolution collapses from index + match + fetch-by-id into a single GET ${backendUrl}/api/projects/${encodeURIComponent(projectSlug)}/flows/${encodeURIComponent(flowSlug)}",
+        "apps/mcp-app/src/App.tsx: createRestAdapter call uses { baseUrl: backendUrl, project: widgetState.projectSlug, flow: widgetState.flowSlug }",
+        "apps/mcp-app/CLAUDE.md: 'Mounting the canvas' paragraph rewritten — the API now takes slugs directly via GET /api/projects/:project/flows/:flow",
+        "apps/mcp-app/src/bridge.test.ts + canvas-bridge.test.ts updated for required projectSlug",
+        "Rebuild bundle: bun run --filter @seeflow/mcp-app build produces apps/mcp-app/dist/index.html",
+        "bun test apps/mcp-app passes",
+        "Typecheck passes"
       ],
       "priority": 11,
       "passes": false,
@@ -199,36 +196,398 @@
     },
     {
       "id": "US-012",
-      "title": "Document MCP Apps usage in README.md",
-      "description": "As a user evaluating SeeFlow, I want to see a 'MCP Apps' section in the README that explains how to install seeflow-mcp in Claude Desktop and what to expect.",
+      "title": "Commit Commit 2: API rewrite + adapter (incl. MCP App bundle)",
+      "description": "As a developer, I need a clean atomic commit marking the API hierarchy migration before adding new CRUD endpoints.",
       "acceptanceCriteria": [
-        "README.md gains an 'MCP Apps' section after the existing CLI/Studio sections",
-        "Section includes a Claude Desktop config snippet showing how to register seeflow-mcp",
-        "Section lists the 5 canvas-bearing tools and what each renders",
-        "Section briefly explains the model-notify split (sendMessage for structural edits; updateModelContext for navigation telemetry)",
-        "Section notes that non-Apps hosts continue to work unchanged (additive _meta)",
-        "Section links to docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md for the full design",
-        "Typecheck passes"
+        "bun run format && bun run lint && bun run typecheck && bun test all pass",
+        "Commit ALL changes from US-006 through US-011 with message: feat(api): move flow-scoped routes under /api/projects/:project/flows/:flow",
+        "Commit body references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "git status is clean afterward"
       ],
       "priority": 12,
       "passes": false,
       "notes": ""
     },
     {
-      "id": "US-012",
-      "title": "Document MCP Apps usage in README.md",
-      "description": "As a user evaluating SeeFlow, I want to see a 'MCP Apps' section in the README that explains how to install seeflow-mcp in Claude Desktop and what to expect.",
+      "id": "US-013",
+      "title": "Add GET /api/projects (listing) and GET /api/projects/:project (metadata)",
+      "description": "As a developer, I need project-level listing endpoints so the UI can build a project picker and load project metadata.",
       "acceptanceCriteria": [
-        "README.md gains an 'MCP Apps' section after the existing CLI/Studio sections",
-        "Section includes a Claude Desktop config snippet showing how to register seeflow-mcp",
-        "Section lists the 5 canvas-bearing tools and what each renders",
-        "Section briefly explains the model-notify split (sendMessage for structural edits; updateModelContext for navigation telemetry)",
-        "Section notes that non-Apps hosts continue to work unchanged (additive _meta)",
-        "Section links to docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md for the full design",
+        "Add GET /api/projects → { projects: [{ projectSlug, name, defaultFlow, flowCount }, ...] } sourced from registry.list() grouped by projectSlug",
+        "Add GET /api/projects/:project → reads <repoPath>/seeflow.json + filters registry entries for that project; returns { projectSlug, name, description?, defaultFlow, flows: [...flow-entry-shape] }",
+        "404 when project not found",
+        "Add tests in apps/studio/src/api.test.ts covering both endpoints (success + 404)",
+        "bun test apps/studio/src/api.test.ts passes",
         "Typecheck passes"
       ],
-      "priority": 12,
-      "passes": true,
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Add GET /api/projects/:project/flows (flow listing scoped to one project)",
+      "description": "As a developer, I need the page-switcher popover's data source — a per-project flow list endpoint.",
+      "acceptanceCriteria": [
+        "Add GET /api/projects/:project/flows → { flows: [{ id, flowSlug, name, icon?, isDefault }, ...] } via registry.list().filter(e => e.projectSlug === project)",
+        "404 when project not found",
+        "Add tests in apps/studio/src/api.test.ts covering success + 404",
+        "bun test apps/studio/src/api.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Add POST /api/projects/:project/flows (create flow within project)",
+      "description": "As a developer, I need an HTTP endpoint to atomically create a new flow folder + flow.json + manifest append.",
+      "acceptanceCriteria": [
+        "POST /api/projects/:project/flows accepting body { id, name, icon? }; 404 when project not found",
+        "Validate id against FlowIdPattern; reject duplicates (409 with { error:'duplicate-flow-id' })",
+        "Atomically: write flows/<id>/flow.json (empty envelope { version, name, nodes:[], connectors:[] }) via atomic-write.ts THEN append entry to seeflow.json THEN registry.upsert() the new FlowEntry",
+        "Roll back the folder creation if manifest write fails",
+        "Returns 201 with the new FlowEntry",
+        "Tests in apps/studio/src/api.test.ts: happy path, duplicate id rejection, invalid id pattern rejection, project-not-found",
+        "bun test apps/studio/src/api.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Add PATCH /api/projects/:project/flows/:flow (rename flow id and/or name and/or icon)",
+      "description": "As a developer, I need an endpoint that atomically renames the flow folder + edits the manifest when id changes, or updates name/icon only without folder mutation.",
+      "acceptanceCriteria": [
+        "PATCH /api/projects/:project/flows/:flow accepting body { id?, name?, icon? }",
+        "If id changes: validate new id (FlowIdPattern, non-collision with existing flow ids in same project), fs.renameSync(oldFolder, newFolder), then write the manifest atomically; on manifest-write failure, roll back the folder rename",
+        "If only name/icon change: edit manifest only, do not touch the filesystem layout",
+        "Update the corresponding registry entry's flowSlug + flowPath + name + icon",
+        "Tests in apps/studio/src/api.test.ts: id rename success, name-only rename success, duplicate-id rejection, project-not-found, flow-not-found",
+        "bun test apps/studio/src/api.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Add DELETE /api/projects/:project/flows/:flow (delete flow with guards)",
+      "description": "As a developer, I need an endpoint that removes the flow folder + manifest entry, refusing to leave the project empty or without a default flow.",
+      "acceptanceCriteria": [
+        "DELETE /api/projects/:project/flows/:flow",
+        "Refuse (409 { error:'last-flow' }) when target is the only flow in the project",
+        "Refuse (409 { error:'default-flow-no-replacement' }) when target is the defaultFlow and no ?newDefault query param is provided",
+        "Accept ?newDefault=<other-flow-id> to atomically set the new default after deletion",
+        "Atomically: rm -rf flows/<flow>/ then edit manifest then remove registry entry; roll back the folder removal if manifest write fails (re-create the folder skeleton? — instead, snapshot the folder contents first and restore on failure)",
+        "Tests in apps/studio/src/api.test.ts: happy path, last-flow rejection, default-flow rejection, default with newDefault success",
+        "bun test apps/studio/src/api.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Update projects:create CLI to write seeflow.json + flows/main/flow.json",
+      "description": "As a developer, I need projects:create to scaffold the new layout so brand-new projects start with a manifest and one flow named 'main'.",
+      "acceptanceCriteria": [
+        "projects:create handler in apps/studio/src/cli.ts writes <path>/seeflow.json with { version:1, name, defaultFlow:'main', flows:[{ id:'main', name:'Main' }] } and <path>/flows/main/flow.json with the empty envelope",
+        "After writing, call registerProject(repoPath) — registry must contain exactly one entry afterward",
+        "Update apps/studio/src/cli.test.ts: projects:create writes both files, registry contains one entry with flowSlug:'main' and isDefault:true",
+        "Update help text in apps/studio/src/cli.ts to reflect the manifest behavior",
+        "bun test apps/studio/src/cli.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Add flows:create / flows:rename / flows:delete CLI verbs",
+      "description": "As a developer, I need CLI counterparts to the new manifest CRUD endpoints so power users can manage flows without the UI.",
+      "acceptanceCriteria": [
+        "flows:create --project <p> --flow <id> --name <n> [--icon <i>] POSTs to /api/projects/:project/flows",
+        "flows:rename --project <p> --flow <id> [--new-id <x>] [--name <n>] [--icon <i>] PATCHes to /api/projects/:project/flows/:flow",
+        "flows:delete --project <p> --flow <id> [--new-default <other>] DELETEs to /api/projects/:project/flows/:flow (with ?newDefault query when provided)",
+        "Each verb adds a case in the cli.ts dispatch switch, prints the CLI's structured JSON response unchanged, and exits non-zero on error",
+        "Update apps/studio/src/cli.ts help text section to list the new verbs",
+        "Tests in apps/studio/src/cli.test.ts cover each verb's happy path against a live test studio (mirror existing CLI test patterns)",
+        "bun test apps/studio/src/cli.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Add --project --flow flags to every flow-scoped CLI verb",
+      "description": "As a developer, I need every existing flow-scoped CLI verb to take --project + --flow explicitly so the addressing matches the new API.",
+      "acceptanceCriteria": [
+        "Add parseProjectFlow(argv) helper in apps/studio/src/cli-helpers.ts that extracts --project and --flow, throwing a clear error when either is missing; unit-test it",
+        "Update every handler under flows:*, nodes:*, connectors:*, flow:add-bulk, flows:layout, flows:play, e2e to use parseProjectFlow and target the new nested URL",
+        "Update apps/studio/src/cli.ts help block: replace every <id> synopsis with --project <p> --flow <f>",
+        "Update apps/studio/src/cli.test.ts: every existing CLI verb test now passes --project + --flow",
+        "bun test apps/studio/src/cli.test.ts apps/studio/src/cli-helpers.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Update MCP server (mcp.ts + mcp-shim.ts) tools to take { project, flow } and emit projectSlug in widget state",
+      "description": "As a developer, I need the MCP tool surface and the widget-state emission to match the new addressing so MCP clients and the MCP App iframe work end-to-end.",
+      "acceptanceCriteria": [
+        "Every flow-scoped tool input schema in apps/studio/src/mcp.ts replaces flowId: z.string().min(1) with project: z.string().min(1), flow: z.string().min(1) — both fields required, each with its own description string",
+        "JSON Schema mirrors in mcp.ts (FlowIdRequiredSchema and inline schemas at lines ~120–138, 141, 151, 163, 194, 204, 213, 218) updated identically",
+        "Rename requireFlowId helper to requireProjectFlow returning { project, flow } | { error }",
+        "Every tool handler passes (project, flow) through to the underlying ops function (which already takes project+flow after US-007/US-008 + US-004)",
+        "canvasMetaFor call sites in mcp.ts (lines ~373, ~396, ~440-441, ~473) now populate { kind:'navigate', projectSlug: entry.projectSlug, flowSlug: entry.flowSlug, nodeId? } using the resolved FlowEntry",
+        "apps/studio/src/mcp-shim.ts tool input shapes match the new project+flow surface",
+        "apps/studio/src/mcp-shim.test.ts + mcp-parity.test.ts + mcp-ui.test.ts updated; mcp-parity asserts CLI vs MCP surface alignment",
+        "bun test apps/studio/src/mcp.test.ts apps/studio/src/mcp-shim.test.ts apps/studio/src/mcp-parity.test.ts apps/studio/src/mcp-ui.test.ts passes",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Commit Commit 3: Manifest CRUD + CLI + MCP server",
+      "description": "As a developer, I need a clean atomic commit covering the new mutation surfaces before building the UI.",
+      "acceptanceCriteria": [
+        "bun run format && bun run lint && bun run typecheck && bun test all pass",
+        "Commit ALL changes from US-013 through US-021 with message: feat(cli,api,mcp): explicit --project --flow addressing",
+        "Commit body references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "git status is clean afterward"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Create flow-switcher.tsx popover component skeleton (read-only, with active state)",
+      "description": "As a user, I want a Figma-style popover that lists the flows in the active project so I can see which one is open.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/flow-switcher.tsx — pattern mirrors the existing apps/web/src/components/project-switcher.tsx (popover trigger + popover content + list rows)",
+        "Props: { project: string, activeFlow: string, flows: Array<{ flowSlug, name, icon?, isDefault }>, onSelect, onCreate, onRename, onDelete } — actions wired in later stories",
+        "Active row has aria-current='true' and a visible active state per design/design.html tokens",
+        "data-testid attributes: flow-switcher-trigger, flow-switcher-popover, flow-switcher-create, flow-switcher-rename, flow-switcher-delete",
+        "Footer renders '+ New flow' button (handler stubbed)",
+        "Add tests in apps/web/src/components/flow-switcher.test.tsx for: renders one row per flow, active row marked, footer button present",
+        "bun test apps/web/src/components/flow-switcher.test.tsx passes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: with the studio running and a multi-flow project loaded manually (e.g. order-pipeline with manually added flows/retry/flow.json + manifest), the popover renders the list with the correct active row"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Wire flow switcher to GET /api/projects/:project/flows + render in canvas page",
+      "description": "As a user, I want the popover to show the real flows from the studio so I can switch between them via URL change.",
+      "acceptanceCriteria": [
+        "Add fetchProjectFlows(project) to apps/web/src/lib/api.ts that calls GET /api/projects/:project/flows",
+        "Create apps/web/src/hooks/use-project-flows.ts with the fetch hook matching the patterns used by other hooks in apps/web/src/hooks/",
+        "Mount the FlowSwitcher in apps/web/src/pages/demo-view.tsx anchored top-left near the project title (consult design/design.html for spacing tokens)",
+        "Selecting a row navigates to /projects/<project>/flows/<flow> — no other side effects (canvas remount handled by US-026)",
+        "Add tests covering the hook contract with a mocked fetch",
+        "bun test apps/web passes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: switcher shows live flows from the studio; clicking a row updates the URL and reloads the canvas"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Wire + New flow / rename / delete actions in the flow switcher",
+      "description": "As a user, I want to create, rename, and delete flows from the popover without leaving the canvas.",
+      "acceptanceCriteria": [
+        "Create apps/web/src/components/flow-create-dialog.tsx (mirror apps/web/src/components/create-project-dialog.tsx) with fields { id, name, icon? } and FlowIdPattern client-side validation",
+        "Wire the popover's + New flow / per-row rename / per-row delete handlers in apps/web/src/hooks/use-project-flows.ts to POST / PATCH / DELETE the manifest CRUD endpoints",
+        "After each mutation invalidate the local flow-list cache; on rename navigate to the new URL; on delete navigate to defaultFlow",
+        "When deleting the default flow, the dialog asks which flow becomes the new default and passes ?newDefault on the DELETE",
+        "Tests cover each mutation hook with mocked fetch and assert correct request shape",
+        "bun test apps/web passes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: create a flow named 'retry', rename it to 'retry-v2', delete it; URL + popover update at each step"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Persist last-opened flow per project + canvas remount on flow switch",
+      "description": "As a user, I want the studio to remember the last flow I had open in each project so reopening a project lands me where I left off, and the canvas state must not leak across switches.",
+      "acceptanceCriteria": [
+        "On flow load, write seeflow:last-flow:<project> → <flowSlug> to localStorage",
+        "When navigating to /projects/<project> with no flow in the URL, redirect to localStorage value if present else manifest.defaultFlow",
+        "Add key={`${project}/${flow}`} to the React Flow root element in apps/web/src/pages/demo-view.tsx so internal state resets on every project+flow change",
+        "Add a test asserting the redirect order: URL → localStorage → defaultFlow",
+        "bun test apps/web passes",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill: switch flows, refresh the page; same flow reopens. Then navigate to /projects/<p> with no flow; lands on last-opened (or default on first visit)"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Add Playwright e2e spec covering flow switcher CRUD",
+      "description": "As a developer, I need an e2e spec that exercises the full switcher lifecycle so regressions surface in CI.",
+      "acceptanceCriteria": [
+        "Create apps/studio/e2e/multi-flow.spec.ts that boots the studio (reuse existing fixtures), navigates to /projects/component-demo/flows/main, opens the switcher, creates a 'retry' flow, asserts URL becomes /projects/component-demo/flows/retry, renames it to 'retry-v2', deletes it, asserts the popover and URL update",
+        "Update any other e2e specs whose URLs changed (search for /d/ or /flow/ in apps/studio/e2e/)",
+        "bun run test:it:e2e passes (Docker Desktop must be running on macOS — CI runs Linux natively)",
+        "Do not regenerate visual snapshots here — that lands in US-031",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Commit Commit 4: Page-switcher UI",
+      "description": "As a developer, I need a clean atomic commit covering the switcher + URL routing before working on export.",
+      "acceptanceCriteria": [
+        "bun run format && bun run lint && bun run typecheck && bun test all pass",
+        "Commit ALL changes from US-023 through US-027 with message: feat(web): figma-style flow switcher with full CRUD",
+        "Commit body references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "git status is clean afterward"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Add VITE_SEEFLOW_PROJECT_EXPORT feature flag + build-project-bundle.ts",
+      "description": "As a developer, I need a flag-gated bundle builder for whole-project export so the new export path is ready when the seeflow-viewer cloud PR lands.",
+      "acceptanceCriteria": [
+        "Add VITE_SEEFLOW_PROJECT_EXPORT?: string to apps/web/vite-env.d.ts",
+        "Create apps/web/src/lib/feature-flags.ts exporting IS_PROJECT_EXPORT_ENABLED = import.meta.env.VITE_SEEFLOW_PROJECT_EXPORT === '1'",
+        "Create apps/web/src/lib/build-project-bundle.ts exporting buildProjectBundle({ project, flows }) → Promise<Uint8Array> that uses fflate.zipSync to produce: seeflow.json + flows/<id>/flow.json + flows/<id>/files/<path>",
+        "Bundle builder fetches GET /api/projects/:project for manifest, then per flow GET /api/projects/:project/flows/:flow/graph and walks image nodes for data.path; image bytes streamed via GET /api/projects/:project/files/<path>",
+        "Add tests in apps/web/src/lib/build-project-bundle.test.ts asserting the zip layout and the keys",
+        "bun test apps/web/src/lib passes",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Update export hook + dialog (behind feature flag) for whole-project export",
+      "description": "As a user with the feature flag enabled, I want a single Export click that ships my whole project to seeflow.dev with a multi-flow viewer.",
+      "acceptanceCriteria": [
+        "When IS_PROJECT_EXPORT_ENABLED: dialog title becomes 'Export project to seeflow.dev'; hook builds project bundle (US-029) and POSTs to https://seeflow.dev/api/projects (env-overridable via VITE_SEEFLOW_CLOUD_API_BASE for tests); result URL is seeflow.dev/project/<uuid>",
+        "When flag is off: existing single-flow export keeps working unchanged",
+        "Update apps/web/src/hooks/use-export-to-cloud.ts and apps/web/src/components/export-dialog.tsx; preserve the old code path behind the flag check",
+        "Tests cover both branches (flag on + flag off)",
+        "bun test apps/web passes",
+        "Typecheck passes",
+        "Commit Commit 5 with message: feat(web): multi-flow project export (behind VITE_SEEFLOW_PROJECT_EXPORT). Body notes that the seeflow-viewer sibling PR must land before the flag can flip on, and references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "Verify in browser using dev-browser skill: with VITE_SEEFLOW_PROJECT_EXPORT unset, old single-flow export still works; with it set to 1 in a local override, the dialog title changes to 'Export project to seeflow.dev' (no need to actually hit the live cloud)"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Rebuild MCP App bundle + regenerate Playwright visual baselines",
+      "description": "As a developer, I need fresh chromium-linux snapshots covering the new switcher popover, the export dialog copy, the new URL routing, and the MCP App scenario.",
+      "acceptanceCriteria": [
+        "Ensure Docker Desktop is running (macOS — CI runs Linux natively)",
+        "bun run --filter @seeflow/mcp-app build (fresh apps/mcp-app/dist/index.html so the MCP App e2e snapshot is generated against the new bundle)",
+        "bun run test:it:update-snapshots regenerates apps/studio/e2e/__snapshots__/*-chromium-linux.png AND apps/studio/e2e/mcp-app.e2e.ts-snapshots/*-chromium-linux.png",
+        "Verify git status: only *-chromium-linux.png files changed; if any *-darwin.png or other host-suffix files appear, delete them before staging",
+        "bun run test:it:e2e passes against the new baselines",
+        "Commit Commit 6 with message: test(e2e): regenerate visual baselines for multi-flow UI. Body references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Update skills/seeflow/SKILL.md for multi-flow layout",
+      "description": "As a future /seeflow user, I need the orchestrator skill's prose to describe the new manifest-driven layout so it scaffolds projects correctly.",
+      "acceptanceCriteria": [
+        "Replace the 'Project layout convention' section (currently around L20–34) with the new tree: <host>/.seeflow/<project>/seeflow.json + flows/<flow-id>/flow.json + flows/<flow-id>/nodes/<id>/",
+        "Conventions table gains $projectSlug and $flowSlug rows (default 'main' for skill-created projects)",
+        "$SEEFLOW_TMP moves under the flow folder: $repoPath/flows/$flowSlug/.tmp/",
+        "Pipeline P3 description notes that projects:create now writes seeflow.json + flows/main/flow.json in one shot",
+        "'Common mistakes' adds: 'Calling flows:create instead of projects:create for a brand-new project' and re-anchors the 'Passing <slug>/scripts/…' example at flows/<flowSlug>/nodes/<id>/",
+        "LEARN.md placement note unchanged — still $PWD/.seeflow/LEARN.md, shared across projects + flows",
+        "Typecheck passes (skills/ is docs but the repo's lint may still touch markdown)"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Update skills/seeflow/references/* for new CLI shape and paths",
+      "description": "As a future /seeflow user, I need the reference docs to show the correct CLI flags and file paths.",
+      "acceptanceCriteria": [
+        "skills/seeflow/references/cli.md: every example command gains --project $projectSlug --flow $flowSlug; add the new verbs flows:create / flows:rename / flows:delete / projects:list",
+        "skills/seeflow/references/schema.md: per-node sidecar paths re-anchored at <repoPath>/flows/<flowSlug>/nodes/<id>/",
+        "skills/seeflow/references/phases/p3-scaffold.md: projects:create writes manifest + first flow; subsequent calls take --project --flow; new no-fallback rule for legacy root flow.json",
+        "skills/seeflow/references/phases/p5-patch-overlays.md and p6-validation.md: every CLI invocation example gains --project --flow",
+        "skills/seeflow/references/learn-format.md and operations.md: audit pass to fix any stray path strings",
+        "Typecheck passes"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-034",
+      "title": "Update skills/seeflow/agents/seeflow-*.md sub-agent prompts",
+      "description": "As a future /seeflow run, I need every sub-agent prompt to use the new path anchor and CLI flags.",
+      "acceptanceCriteria": [
+        "skills/seeflow/agents/seeflow-code-analyzer.md, seeflow-system-analyzer.md (if present), seeflow-node-planner.md, seeflow-play-designer.md, seeflow-status-designer.md: re-anchor any constructed file path at flows/<flowSlug>/nodes/<id>/; update any example CLI invocations to include --project --flow",
+        "Typecheck passes"
+      ],
+      "priority": 34,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-035",
+      "title": "Update skills/seeflow-lookup/SKILL.md + skill test fixtures + commit Commit 7",
+      "description": "As a future /seeflow-lookup user, I need the lookup skill's canvas-URL hint and matching logic to reflect the new URL shape and per-project flow tier — and the skill update commit lands.",
+      "acceptanceCriteria": [
+        "skills/seeflow-lookup/SKILL.md: canvas URL pattern at L31 updated from $STUDIO_URL/d/<slug> to $STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>",
+        "Add a one-liner under 'First step' noting that a topic might match a project, a flow, or both — surface both tiers when ambiguous",
+        "Audit skills/seeflow/test/ and skills/seeflow-lookup/test/ fixtures — update anything hard-coding the old layout; regenerate snapshots if any exist",
+        "Commit Commit 7 with message: skill(seeflow): align with multi-flow projects layout. Body references docs/plans/2026-05-26-multi-flow-projects-design.md",
+        "bun run format && bun run lint && bun run typecheck && bun test all pass",
+        "git log --oneline main..HEAD shows exactly 7 commits ending with this one",
+        "git status is clean afterward"
+      ],
+      "priority": 35,
+      "passes": false,
       "notes": ""
     }
   ]
