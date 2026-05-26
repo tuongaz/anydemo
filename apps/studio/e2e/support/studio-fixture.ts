@@ -43,7 +43,29 @@ const FIXTURE_NOOP_PATH = join(STUDIO_DIR, 'integration/fixtures/scripts/noop.ts
 export interface RegisteredFlow {
   id: string;
   slug: string;
+  projectSlug: string;
+  flowSlug: string;
   repoPath: string;
+}
+
+// Split the legacy registry slug `${projectSlug}/${flowSlug}` into its two
+// segments so e2e tests can build the new `/projects/:project/flows/:flow`
+// URL from a single helper result. Throws when the slug is malformed —
+// the studio's registerFlow path always produces a `<project>/<flow>`
+// shape (operations.ts synthesises both fields), so a slug without `/` is
+// a contract violation worth surfacing loudly.
+export function splitRegistrySlug(slug: string): { projectSlug: string; flowSlug: string } {
+  const idx = slug.indexOf('/');
+  if (idx < 0) throw new Error(`Registry slug missing '/': ${slug}`);
+  return { projectSlug: slug.slice(0, idx), flowSlug: slug.slice(idx + 1) };
+}
+
+// US-027: build the new canvas-page URL `/projects/<project>/flows/<flow>`.
+// Mirrors apps/web/src/lib/router.ts:flowPath — duplicated here so the e2e
+// support module stays standalone (the web package isn't a dependency of
+// the studio package's e2e suite).
+export function projectFlowPath(projectSlug: string, flowSlug: string): string {
+  return `/projects/${encodeURIComponent(projectSlug)}/flows/${encodeURIComponent(flowSlug)}`;
 }
 
 export interface KitchenSinkStudio {
@@ -105,10 +127,11 @@ async function bootKitchenSinkStudio(): Promise<KitchenSinkStudio> {
     throw new Error(`Failed to register kitchen-sink fixture: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as RegisterResponse;
+  const { projectSlug, flowSlug } = splitRegistrySlug(registeredSlug);
 
   return {
     studio,
-    flow: { id, slug: registeredSlug, repoPath },
+    flow: { id, slug: registeredSlug, projectSlug, flowSlug, repoPath },
   };
 }
 
@@ -178,5 +201,69 @@ export async function registerFlow(
     throw new Error(`Failed to register flow ${slug}: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as RegisterResponse;
-  return { id, slug: registeredSlug, repoPath };
+  const { projectSlug, flowSlug } = splitRegistrySlug(registeredSlug);
+  return { id, slug: registeredSlug, projectSlug, flowSlug, repoPath };
+}
+
+// US-027: register a manifest-driven project with N flows. Writes
+// `seeflow.json` + `flows/<id>/flow.json` for each flow under a fresh
+// project dir, then POSTs to `/api/flows/register` once with the default
+// flow's manifest path so the registry picks up the projectSlug from the
+// manifest's name. Subsequent flows already exist on disk and in the
+// manifest; the manifest-CRUD endpoints (POST/PATCH/DELETE
+// /api/projects/:project/flows) drive any additional mutations during
+// the test. Only the default flow comes back as a `RegisteredFlow` because
+// the legacy /api/flows/register endpoint is single-flow — that's enough
+// for the e2e suite, which uses the multi-flow-CRUD paths to mutate the
+// rest.
+export async function registerManifestProject(
+  studio: StudioHandle,
+  opts: {
+    projectDirName: string;
+    name: string;
+    defaultFlow: string;
+    flows: ReadonlyArray<{ id: string; name: string; icon?: string }>;
+  },
+): Promise<RegisteredFlow> {
+  const repoPath = join(studio.home, opts.projectDirName);
+  mkdirSync(repoPath, { recursive: true });
+
+  const manifest = {
+    version: 1 as const,
+    name: opts.name,
+    defaultFlow: opts.defaultFlow,
+    flows: opts.flows.map((f) => ({
+      id: f.id,
+      name: f.name,
+      ...(f.icon ? { icon: f.icon } : {}),
+    })),
+  };
+  writeFileSync(join(repoPath, 'seeflow.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+
+  // Each declared flow lands as an empty envelope on disk. The default
+  // flow gets registered through the legacy endpoint so the projectSlug
+  // synthesised by operations.registerFlowImpl matches slugify(opts.name).
+  for (const flow of opts.flows) {
+    const flowDir = join(repoPath, 'flows', flow.id);
+    mkdirSync(flowDir, { recursive: true });
+    const envelope = { version: 2 as const, name: flow.name, nodes: [], connectors: [] };
+    writeFileSync(join(flowDir, 'flow.json'), `${JSON.stringify(envelope, null, 2)}\n`);
+  }
+
+  const res = await fetch(`${studio.baseURL}/api/flows/register`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      name: opts.name,
+      repoPath,
+      flowPath: `flows/${opts.defaultFlow}/flow.json`,
+    }),
+  });
+  if (res.status !== 200) {
+    const detail = await res.text();
+    throw new Error(`Failed to register manifest project ${opts.name}: ${res.status} ${detail}`);
+  }
+  const { id, slug: registeredSlug } = (await res.json()) as RegisterResponse;
+  const { projectSlug, flowSlug } = splitRegistrySlug(registeredSlug);
+  return { id, slug: registeredSlug, projectSlug, flowSlug, repoPath };
 }

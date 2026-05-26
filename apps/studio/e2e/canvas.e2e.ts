@@ -1,4 +1,4 @@
-import { expect, registerFlow, test } from './support/studio-fixture.ts';
+import { expect, projectFlowPath, registerFlow, test } from './support/studio-fixture.ts';
 
 // The six flat node types present in the kitchen-sink fixture
 // (apps/studio/integration/fixtures/kitchen-sink.flow.json). One node per
@@ -23,9 +23,12 @@ const DISABLE_MOTION_CSS = `
 
 test.describe('canvas — kitchen-sink fixture', () => {
   test.beforeEach(async ({ page, studio }) => {
-    // SPA routes to /d/<slug>; the PRD's `?flow=<slug>` URL is from an older
-    // routing draft. See apps/web/src/App.tsx:matchDemoSlug.
-    await page.goto(`${studio.studio.baseURL}/d/${studio.flow.slug}`);
+    // US-010: SPA canvas page lives at `/projects/:project/flows/:flow`.
+    // The legacy `/d/<slug>` route was removed; older bookmarks land on
+    // StudioHome. See apps/web/src/App.tsx and src/lib/router.ts.
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(studio.flow.projectSlug, studio.flow.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     // Give React Flow's auto-fit + layout settle pass one paint cycle so node
@@ -142,7 +145,9 @@ test.describe('canvas — flat node types (US-009)', () => {
     const registered = await registerFlow(studio.studio, 'render-matrix', resolvedFlow, {
       name: 'Render Matrix',
     });
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -179,7 +184,9 @@ test.describe('canvas — flat node types (US-009)', () => {
     const registered = await registerFlow(studio.studio, 'capability-skirt', resolvedFlow, {
       name: 'Capability Skirt',
     });
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -220,7 +227,9 @@ test.describe('canvas — flat node types (US-009)', () => {
     const registered = await registerFlow(studio.studio, 'db-with-play', resolvedFlow, {
       name: 'DB With Play',
     });
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -240,7 +249,9 @@ test.describe('canvas — flat node types (US-009)', () => {
     const registered = await registerFlow(studio.studio, 'draw-mode', resolvedFlow, {
       name: 'Draw Mode',
     });
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');

@@ -1,4 +1,4 @@
-import { expect, setStudioTheme, test } from './support/studio-fixture.ts';
+import { expect, projectFlowPath, setStudioTheme, test } from './support/studio-fixture.ts';
 
 // US-008: end-to-end coverage for the Cog → Theme menu (added in US-006)
 // and the new light visual baseline. The shared studio fixture's default
@@ -26,7 +26,9 @@ test.describe('canvas — theme toggle (US-008)', () => {
     await setStudioTheme(page, 'light');
     await page.emulateMedia({ colorScheme: 'light' });
 
-    await page.goto(`${studio.studio.baseURL}/d/${studio.flow.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(studio.flow.projectSlug, studio.flow.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -68,7 +70,9 @@ test.describe('canvas — theme toggle (US-008)', () => {
     await setStudioTheme(page, 'light');
     await page.emulateMedia({ colorScheme: 'light' });
 
-    await page.goto(`${studio.studio.baseURL}/d/${studio.flow.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(studio.flow.projectSlug, studio.flow.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');

@@ -1,7 +1,7 @@
 import { cpSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Locator } from '@playwright/test';
-import { type RegisteredFlow, expect, test } from './support/studio-fixture.ts';
+import { type RegisteredFlow, expect, projectFlowPath, test } from './support/studio-fixture.ts';
 
 // AutoSizeObserver in packages/canvas/src/nodes/component-node.tsx debounces
 // the ResizeObserver by 150ms before calling useUpdateNodeInternals. Without
@@ -57,13 +57,17 @@ async function seedComponentDemo(
   // runner realpath-roots scriptPath under nodes/c1/.
   cpSync(FIXTURE_DIR, repoPath, { recursive: true });
 
+  // US-005 migrated the on-disk fixture to the manifest layout — the flow
+  // and per-node files now live under `flows/main/`. The legacy register
+  // endpoint still works for single-flow registration; the projectSlug
+  // synthesised by ops.registerFlowImpl pulls from slugify(name).
   const res = await fetch(`${studio.baseURL}/api/flows/register`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({
       name: opts.name ?? 'Component Demo',
       repoPath,
-      flowPath: 'flow.json',
+      flowPath: 'flows/main/flow.json',
     }),
   });
   if (res.status !== 200) {
@@ -71,14 +75,20 @@ async function seedComponentDemo(
     throw new Error(`Failed to register component-demo fixture: ${res.status} ${detail}`);
   }
   const { id, slug: registeredSlug } = (await res.json()) as { id: string; slug: string };
-  return { id, slug: registeredSlug, repoPath };
+  const idx = registeredSlug.indexOf('/');
+  if (idx < 0) throw new Error(`Registry slug missing '/': ${registeredSlug}`);
+  const projectSlug = registeredSlug.slice(0, idx);
+  const flowSlug = registeredSlug.slice(idx + 1);
+  return { id, slug: registeredSlug, projectSlug, flowSlug, repoPath };
 }
 
 test.describe('canvas — component node (US-015)', () => {
   test('Reset button mutates state via set action', async ({ page, studio }) => {
     const registered = await seedComponentDemo(studio.studio, { slug: 'component-demo-reset' });
 
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -110,7 +120,9 @@ test.describe('canvas — component node (US-015)', () => {
   }) => {
     const registered = await seedComponentDemo(studio.studio, { slug: 'component-demo-fetch' });
 
-    await page.goto(`${studio.studio.baseURL}/d/${registered.slug}`);
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     await page.waitForLoadState('networkidle');
@@ -126,10 +138,12 @@ test.describe('canvas — component node (US-015)', () => {
     // impl invokes onClick with no payload, so the runtime POSTs `{}`. The
     // script falls back to from=0 and writes `{"/count": 1}` to stdout,
     // which the runtime merges into state via dispatchState({kind:'merge'}).
+    //
+    // US-007 moved the action endpoint under the nested route — the adapter
+    // composes the URL as `/api/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
+    const actionUrlSuffix = `${projectFlowPath(registered.projectSlug, registered.flowSlug)}/nodes/c1/actions/inc`;
     const responsePromise = page.waitForResponse(
-      (res) =>
-        res.url().endsWith(`/api/flows/${registered.id}/nodes/c1/actions/inc`) &&
-        res.status() === 200,
+      (res) => res.url().endsWith(actionUrlSuffix) && res.status() === 200,
     );
     await body.getByRole('button', { name: 'Fetch' }).click();
     await responsePromise;
