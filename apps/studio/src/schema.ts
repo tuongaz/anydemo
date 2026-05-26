@@ -748,3 +748,57 @@ export const StyleSchema = z
 export type Style = z.infer<typeof StyleSchema>;
 export type NodeStyle = z.infer<typeof NodeStyleSchema>;
 export type ConnectorStyleEntry = z.infer<typeof ConnectorStyleEntrySchema>;
+
+// =============================================================================
+// Seeflow manifest — top-level descriptor for a multi-flow project.
+// Lives at <project>/seeflow.json. Declares the flows the project hosts and
+// which one to open by default. The scanner (project-scanner.ts) turns this
+// plus the flows/<id>/flow.json files into ScannedFlow entries the registry
+// can consume.
+// =============================================================================
+
+// Flow ids are URL-safe and folder-safe: lowercase alphanumerics + dashes,
+// must start with an alphanumeric character. Same pattern enforced by the
+// manifest CRUD endpoints (POST/PATCH /api/projects/:project/flows[/:flow]).
+export const FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/;
+
+const SeeflowManifestFlowEntrySchema = z.object({
+  id: z.string().regex(FlowIdPattern, {
+    message: 'flow id must match /^[a-z0-9][a-z0-9-]*$/',
+  }),
+  name: z.string().min(1),
+  icon: z.string().min(1).optional(),
+});
+
+export const SeeflowManifestSchema = z
+  .object({
+    version: z.literal(1),
+    name: z.string().min(1),
+    description: z.string().optional(),
+    defaultFlow: z.string().min(1),
+    flows: z.array(SeeflowManifestFlowEntrySchema).min(1),
+  })
+  .strict()
+  .superRefine((manifest, ctx) => {
+    const seen = new Set<string>();
+    manifest.flows.forEach((flow, idx) => {
+      if (seen.has(flow.id)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ['flows', idx, 'id'],
+          message: `duplicate flow id "${flow.id}"`,
+        });
+      }
+      seen.add(flow.id);
+    });
+    if (!manifest.flows.some((flow) => flow.id === manifest.defaultFlow)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['defaultFlow'],
+        message: `defaultFlow "${manifest.defaultFlow}" does not match any entry in flows[]`,
+      });
+    }
+  });
+
+export type SeeflowManifest = z.infer<typeof SeeflowManifestSchema>;
+export type SeeflowManifestFlowEntry = z.infer<typeof SeeflowManifestFlowEntrySchema>;

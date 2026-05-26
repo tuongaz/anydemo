@@ -102,9 +102,7 @@ function parseFilter(src: string): Filter {
         // Chained field: ".foo.bar" — consume the dot and read ident.
         i++;
         if (i >= len || !isIdentStart(input[i] as string)) {
-          throw new JqError(
-            `Expected identifier after '.' at position ${i} in filter '${src}'`,
-          );
+          throw new JqError(`Expected identifier after '.' at position ${i} in filter '${src}'`);
         }
         const start = i;
         while (i < len && isIdent(input[i] as string)) i++;
@@ -141,9 +139,7 @@ function parseFilter(src: string): Filter {
           const optional = parseOptional();
           steps.push({ kind: 'index', index, optional });
         } else {
-          throw new JqError(
-            `Expected index, string, or ']' at position ${i} in filter '${src}'`,
-          );
+          throw new JqError(`Expected index, string, or ']' at position ${i} in filter '${src}'`);
         }
       } else {
         break;
@@ -158,9 +154,7 @@ function parseFilter(src: string): Filter {
   skipSpace();
   while (i < len) {
     if (input[i] !== '|') {
-      throw new JqError(
-        `Unexpected character '${input[i]}' at position ${i} in filter '${src}'`,
-      );
+      throw new JqError(`Unexpected character '${input[i]}' at position ${i} in filter '${src}'`);
     }
     i++;
     skipSpace();

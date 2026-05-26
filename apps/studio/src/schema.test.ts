@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'bun:test';
 import { CANVAS_NODE_DATA_FIELDS } from '@seeflow/canvas/types';
 import {
+  FlowIdPattern,
   FlowRectangleNodeSchema,
   FlowSchema,
   NodeTypeSchema,
   ResolvedFlowSchema,
+  SeeflowManifestSchema,
   StatusReportSchema,
   StyleSchema,
 } from './schema.ts';
@@ -2778,6 +2780,131 @@ const STRIPPED_VISUAL_FIELDS = new Set([
   'cornerRadius',
   'shadow',
 ]);
+
+describe('SeeflowManifestSchema', () => {
+  it('parses a valid minimal manifest (single flow)', () => {
+    const data = {
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    if (!result.success) {
+      throw new Error(
+        `expected valid manifest to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`,
+      );
+    }
+    expect(result.data.version).toBe(1);
+    expect(result.data.name).toBe('Order Pipeline');
+    expect(result.data.defaultFlow).toBe('main');
+    expect(result.data.flows).toHaveLength(1);
+    expect(result.data.flows[0]?.id).toBe('main');
+  });
+
+  it('parses a valid multi-flow manifest with description and icons', () => {
+    const data = {
+      version: 1,
+      name: 'Component Showcase',
+      description: 'Demonstrates every node type and visual',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main', icon: 'workflow' },
+        { id: 'retry', name: 'Retry path', icon: 'rotate-ccw' },
+      ],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    if (!result.success) {
+      throw new Error(
+        `expected valid multi-flow manifest to parse, got: ${JSON.stringify(result.error.issues, null, 2)}`,
+      );
+    }
+    expect(result.data.description).toBe('Demonstrates every node type and visual');
+    expect(result.data.flows).toHaveLength(2);
+    expect(result.data.flows[1]?.icon).toBe('rotate-ccw');
+  });
+
+  it('rejects a flow id that does not match FlowIdPattern', () => {
+    const data = {
+      version: 1,
+      name: 'Bad Ids',
+      defaultFlow: 'Main',
+      flows: [{ id: 'Main', name: 'Main' }],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const idIssue = result.error.issues.find(
+      (issue) =>
+        issue.path.length === 3 &&
+        issue.path[0] === 'flows' &&
+        issue.path[1] === 0 &&
+        issue.path[2] === 'id',
+    );
+    expect(idIssue).toBeDefined();
+  });
+
+  it('rejects an empty flows[] array', () => {
+    const data = {
+      version: 1,
+      name: 'Empty',
+      defaultFlow: 'main',
+      flows: [],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const flowsIssue = result.error.issues.find(
+      (issue) => issue.path.length === 1 && issue.path[0] === 'flows',
+    );
+    expect(flowsIssue).toBeDefined();
+  });
+
+  it('rejects duplicate flow ids', () => {
+    const data = {
+      version: 1,
+      name: 'Dupes',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'main', name: 'Main again' },
+      ],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const dupIssue = result.error.issues.find((issue) => issue.message.includes('duplicate'));
+    expect(dupIssue).toBeDefined();
+  });
+
+  it('rejects defaultFlow that does not match any entry in flows[]', () => {
+    const data = {
+      version: 1,
+      name: 'Missing default',
+      defaultFlow: 'ghost',
+      flows: [{ id: 'main', name: 'Main' }],
+    };
+    const result = SeeflowManifestSchema.safeParse(data);
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const defaultIssue = result.error.issues.find(
+      (issue) => issue.path.length === 1 && issue.path[0] === 'defaultFlow',
+    );
+    expect(defaultIssue).toBeDefined();
+    expect(defaultIssue?.message).toContain('ghost');
+  });
+
+  it('FlowIdPattern accepts lowercase alphanumerics + dashes starting with alnum', () => {
+    expect(FlowIdPattern.test('main')).toBe(true);
+    expect(FlowIdPattern.test('retry-v2')).toBe(true);
+    expect(FlowIdPattern.test('flow-1')).toBe(true);
+    expect(FlowIdPattern.test('1main')).toBe(true);
+    expect(FlowIdPattern.test('Main')).toBe(false);
+    expect(FlowIdPattern.test('-main')).toBe(false);
+    expect(FlowIdPattern.test('main_v2')).toBe(false);
+    expect(FlowIdPattern.test('')).toBe(false);
+  });
+});
 
 describe('canvas ↔ disk schema parity', () => {
   it('every canvas GeometricNodeData field is either persisted to disk or in STRIPPED_VISUAL_FIELDS', () => {

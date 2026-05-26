@@ -658,8 +658,8 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow schema connector',
       'seeflow schema componentSpec',
       'seeflow schema node --jq .schemas.rectangle',
-      'seeflow schema node --jq \'.schemas.image.properties.data.properties.path\'',
-      'seeflow schema node --jq \'.schemas[]\'',
+      "seeflow schema node --jq '.schemas.image.properties.data.properties.path'",
+      "seeflow schema node --jq '.schemas[]'",
     ],
   },
   // ---- live --------------------------------------------------------------
