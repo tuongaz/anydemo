@@ -18,18 +18,42 @@
 
 export type WidgetStateKind = 'navigate' | 'create';
 
-export type WidgetState = {
-  kind: WidgetStateKind;
-  flowSlug?: string;
-  nodeId?: string;
-  projectSlug?: string;
-  backendUrl: string;
-  backendToken: string;
-  justCreated?: boolean;
-};
+/**
+ * Discriminated union driving the iframe's initial focus.
+ *
+ * Kept in lockstep with `CanvasWidgetState` in `apps/studio/src/mcp-ui.ts` —
+ * the studio constructs the same shape on the way out via `canvasMeta()`.
+ *
+ *  - `navigate` — the model just inspected a flow/node. Both `projectSlug`
+ *    and `flowSlug` are required so the iframe can address the flow via the
+ *    nested `/api/projects/:project/flows/:flow` route without a second
+ *    index+lookup round-trip.
+ *  - `create` — the model just scaffolded a project or registered a flow.
+ *    Either or both slugs may be present (project-only when no flow exists
+ *    yet); the `justCreated` pill animates briefly on mount when true.
+ */
+export type WidgetState =
+  | {
+      kind: 'navigate';
+      projectSlug: string;
+      flowSlug: string;
+      nodeId?: string;
+      backendUrl: string;
+      backendToken: string;
+    }
+  | {
+      kind: 'create';
+      projectSlug?: string;
+      flowSlug?: string;
+      nodeId?: string;
+      backendUrl: string;
+      backendToken: string;
+      justCreated?: boolean;
+    };
 
 export type SendMessageEvent = {
   event: string;
+  projectSlug?: string;
   flowSlug?: string;
   payload?: Record<string, unknown>;
 };

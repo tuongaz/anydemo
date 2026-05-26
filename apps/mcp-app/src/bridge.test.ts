@@ -67,11 +67,26 @@ describe('createBridge — sendMessage coalescing', () => {
       getHost: () => host,
     });
 
-    bridge.sendMessage({ event: 'node-added', flowSlug: 'demo', payload: { id: 'a' } });
+    bridge.sendMessage({
+      event: 'node-added',
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+      payload: { id: 'a' },
+    });
     timers.advance(50);
-    bridge.sendMessage({ event: 'node-added', flowSlug: 'demo', payload: { id: 'b' } });
+    bridge.sendMessage({
+      event: 'node-added',
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+      payload: { id: 'b' },
+    });
     timers.advance(50);
-    bridge.sendMessage({ event: 'connector-added', flowSlug: 'demo', payload: { id: 'c' } });
+    bridge.sendMessage({
+      event: 'connector-added',
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+      payload: { id: 'c' },
+    });
 
     // Still inside the 200ms window — nothing flushed yet.
     expect(recorded.sendMessage).toHaveLength(0);
@@ -80,9 +95,24 @@ describe('createBridge — sendMessage coalescing', () => {
     expect(recorded.sendMessage).toHaveLength(1);
     expect(recorded.sendMessage[0]).toEqual({
       events: [
-        { event: 'node-added', flowSlug: 'demo', payload: { id: 'a' } },
-        { event: 'node-added', flowSlug: 'demo', payload: { id: 'b' } },
-        { event: 'connector-added', flowSlug: 'demo', payload: { id: 'c' } },
+        {
+          event: 'node-added',
+          projectSlug: 'demo-project',
+          flowSlug: 'demo',
+          payload: { id: 'a' },
+        },
+        {
+          event: 'node-added',
+          projectSlug: 'demo-project',
+          flowSlug: 'demo',
+          payload: { id: 'b' },
+        },
+        {
+          event: 'connector-added',
+          projectSlug: 'demo-project',
+          flowSlug: 'demo',
+          payload: { id: 'c' },
+        },
       ],
     });
   });

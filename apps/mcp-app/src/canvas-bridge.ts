@@ -31,6 +31,8 @@ import type {
 import type { Bridge } from './bridge';
 
 export interface CanvasBridgeContext {
+  /** Slug of the project owning the rendered flow. Attached to every sendMessage payload. */
+  projectSlug?: string;
   /** Slug of the flow currently rendered. Attached to every sendMessage payload. */
   flowSlug?: string;
 }
@@ -55,7 +57,12 @@ export const wrapAdapter = (
   ctx: CanvasBridgeContext,
 ): CanvasAdapter => {
   const emit = (event: string, payload: Record<string, unknown>): void => {
-    bridge.sendMessage({ event, flowSlug: ctx.flowSlug, payload });
+    bridge.sendMessage({
+      event,
+      projectSlug: ctx.projectSlug,
+      flowSlug: ctx.flowSlug,
+      payload,
+    });
   };
 
   return {

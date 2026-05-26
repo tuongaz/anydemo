@@ -59,17 +59,7 @@ const shortId = (): string => Math.random().toString(36).slice(2, 10);
 type LoadState =
   | { kind: 'loading' }
   | { kind: 'empty' }
-  | {
-      kind: 'ready';
-      flowId: string;
-      // US-009 transitional: hold the registry slug `${projectSlug}/${flowSlug}`
-      // alongside the entry id so the canvas adapter can be constructed with
-      // `{ project, flow }`. US-011 replaces this with widgetState.projectSlug /
-      // widgetState.flowSlug threaded directly from the host.
-      flowSlugFull: string;
-      nodes: FlowNode[];
-      connectors: Connector[];
-    }
+  | { kind: 'ready'; nodes: FlowNode[]; connectors: Connector[] }
   | { kind: 'error'; message: string };
 
 interface ResolvedFlowResponse {
@@ -80,11 +70,6 @@ interface ResolvedFlowResponse {
   flow: Flow | null;
   valid: boolean;
   error: string | null;
-}
-
-interface FlowsIndexEntry {
-  id: string;
-  slug: string;
 }
 
 const fetchJson = async <T,>(url: string, headers: Record<string, string>): Promise<T> => {
@@ -117,44 +102,38 @@ export function App() {
     return () => window.clearTimeout(t);
   }, [showJustCreated]);
 
+  // For navigate the host guarantees both slugs; for create the model may
+  // have scaffolded a project but no flow yet (projectSlug only) — that path
+  // renders the empty seam below. Anything else with no flowSlug also falls
+  // back to empty.
+  const projectSlug = widgetState?.projectSlug;
+  const flowSlug = widgetState?.flowSlug;
+
   useEffect(() => {
     if (!widgetState) return;
-    let cancelled = false;
-    const { backendUrl, backendToken, flowSlug, projectSlug } = widgetState;
-    const slug = flowSlug ?? projectSlug ?? null;
-    if (!slug) {
-      // create_project without a flow yet — render an empty canvas seam.
-      // The model would call register_flow next to populate it; we don't
-      // attempt to render the canvas without a flowId because the adapter
-      // contract requires one.
+    if (!projectSlug || !flowSlug) {
       setLoad({ kind: 'empty' });
       return;
     }
+    let cancelled = false;
+    const { backendUrl, backendToken } = widgetState;
     const headers: Record<string, string> = backendToken ? { 'X-Seeflow-Token': backendToken } : {};
     (async () => {
       try {
-        const flows = await fetchJson<FlowsIndexEntry[]>(`${backendUrl}/api/flows`, headers);
-        const match = flows.find((f) => f.slug === slug);
-        if (!match) {
-          if (!cancelled) setLoad({ kind: 'error', message: `Flow not found for slug: ${slug}` });
-          return;
-        }
         const detail = await fetchJson<ResolvedFlowResponse>(
-          `${backendUrl}/api/flows/${match.id}`,
+          `${backendUrl}/api/projects/${encodeURIComponent(projectSlug)}/flows/${encodeURIComponent(flowSlug)}`,
           headers,
         );
         if (cancelled) return;
         if (!detail.valid || !detail.flow) {
           setLoad({
             kind: 'error',
-            message: detail.error ?? `Flow ${slug} failed to load`,
+            message: detail.error ?? `Flow ${projectSlug}/${flowSlug} failed to load`,
           });
           return;
         }
         setLoad({
           kind: 'ready',
-          flowId: match.id,
-          flowSlugFull: match.slug,
           nodes: (detail.flow.nodes ?? []) as FlowNode[],
           connectors: (detail.flow.connectors ?? []) as Connector[],
         });
@@ -166,14 +145,11 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [widgetState]);
+  }, [widgetState, projectSlug, flowSlug]);
 
   const adapter = useMemo<CanvasAdapter | null>(() => {
     if (!widgetState) return null;
     if (load.kind !== 'ready') return null;
-    // US-009 transitional: split the registry slug into project + flow until
-    // US-011 threads widgetState.projectSlug / widgetState.flowSlug directly.
-    const [projectSlug, flowSlug] = load.flowSlugFull.split('/');
     if (!projectSlug || !flowSlug) return null;
     const base = createRestAdapter({
       baseUrl: widgetState.backendUrl,
@@ -187,12 +163,8 @@ export function App() {
     // MCP-Apps host. Visual-only patches (updateNode without `name`,
     // updateNodePosition) stay silent — drag telemetry routes through
     // updateModelContext instead.
-    return wrapAdapter(
-      base,
-      { sendMessage, updateModelContext },
-      { flowSlug: widgetState.flowSlug },
-    );
-  }, [widgetState, load]);
+    return wrapAdapter(base, { sendMessage, updateModelContext }, { projectSlug, flowSlug });
+  }, [widgetState, load, projectSlug, flowSlug]);
 
   // Selection / drag / viewport handlers that emit updateModelContext via the
   // bridge's debounce + throttle. Stable identity across renders so React
@@ -229,7 +201,7 @@ export function App() {
         <SeeflowCanvas
           mode="edit"
           adapter={wrappedAdapter}
-          projectId={load.flowId}
+          projectId={projectSlug ?? ''}
           nodes={load.nodes}
           connectors={load.connectors}
           selectedNodeIds={selectedNodeIds}

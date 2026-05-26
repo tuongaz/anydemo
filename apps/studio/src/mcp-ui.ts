@@ -35,23 +35,38 @@ export const CANVAS_RESOURCE_MIME = 'text/html+skybridge';
 
 /**
  * Widget state delivered to the iframe via `_meta['openai/widgetState']`.
- * Mirrors `WidgetState` in `apps/mcp-app/src/bridge.ts` — kept duplicated
- * (rather than imported across the workspace boundary) so the studio doesn't
- * pick up `react`/`react-dom` as a transitive dependency.
  *
- * `kind: 'navigate'` — the model just inspected a flow/node, render it.
- * `kind: 'create'`   — the model just created a flow/project, drop the
- *                      iframe into edit mode with a "Just created" hint.
+ * Mirrors `WidgetState` in `apps/mcp-app/src/bridge.ts` — kept in sync but
+ * duplicated (rather than imported across the workspace boundary) so the
+ * studio doesn't pick up `react`/`react-dom` as a transitive dependency.
+ * When you change one, change the other in the same commit.
+ *
+ *  - `kind: 'navigate'` — the model just inspected a flow/node, render it.
+ *    `projectSlug` + `flowSlug` are both required so the iframe addresses
+ *    the flow via `/api/projects/:project/flows/:flow` without an extra
+ *    lookup round-trip.
+ *  - `kind: 'create'`   — the model just scaffolded a project or registered
+ *    a flow. Either or both slugs may be present (project-only when there's
+ *    no flow yet); `justCreated: true` enables the brief mount-time pill.
  */
-export interface CanvasWidgetState {
-  kind: 'navigate' | 'create';
-  flowSlug?: string;
-  nodeId?: string;
-  projectSlug?: string;
-  backendUrl: string;
-  backendToken: string;
-  justCreated?: boolean;
-}
+export type CanvasWidgetState =
+  | {
+      kind: 'navigate';
+      projectSlug: string;
+      flowSlug: string;
+      nodeId?: string;
+      backendUrl: string;
+      backendToken: string;
+    }
+  | {
+      kind: 'create';
+      projectSlug?: string;
+      flowSlug?: string;
+      nodeId?: string;
+      backendUrl: string;
+      backendToken: string;
+      justCreated?: boolean;
+    };
 
 /** Lazy-resolved absolute path to the built iframe HTML. Resolved through
  *  `import.meta.resolve` so the path is stable whether the studio runs from

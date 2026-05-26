@@ -61,13 +61,18 @@ interface ToolContext {
   httpUrl?: string;
 }
 
+// Distributive Omit so the discriminated union arms stay distinct after
+// stripping the host-only `backendUrl` / `backendToken` keys.
+type DistOmit<T, K extends keyof never> = T extends unknown ? Omit<T, K> : never;
+type CanvasWidgetStateInput = DistOmit<CanvasWidgetState, 'backendUrl' | 'backendToken'>;
+
 /** Build the `_meta` block for a canvas-bearing tool result, when both
  *  `httpUrl` and `token` are configured. Returns `undefined` if either
  *  is missing (e.g. proxy mode in `mcp-shim.ts`, or tests that bypass
  *  the shim) so non-Apps callers still get a plain JSON-only result. */
 const canvasMetaFor = (
   ctx: ToolContext,
-  state: Omit<CanvasWidgetState, 'backendUrl' | 'backendToken'>,
+  state: CanvasWidgetStateInput,
 ): Record<string, unknown> | undefined => {
   if (!ctx.httpUrl || !ctx.token) return undefined;
   return canvasMeta({ ...state, backendUrl: ctx.httpUrl, backendToken: ctx.token });
@@ -370,7 +375,14 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       const result = await ops.getFlow(v.flowId);
       switch (result.kind) {
         case 'ok': {
-          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug: result.data.slug });
+          const entry = ctx.registry.resolve(v.flowId);
+          const meta = entry
+            ? canvasMetaFor(ctx, {
+                kind: 'navigate',
+                projectSlug: entry.projectSlug,
+                flowSlug: entry.flowSlug,
+              })
+            : undefined;
           return okResult(result.data, meta);
         }
         case 'notFound':
@@ -393,7 +405,14 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       const result = await ops.getFlowGraph(v.flowId);
       switch (result.kind) {
         case 'ok': {
-          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug: result.data.slug });
+          const entry = ctx.registry.resolve(v.flowId);
+          const meta = entry
+            ? canvasMetaFor(ctx, {
+                kind: 'navigate',
+                projectSlug: entry.projectSlug,
+                flowSlug: entry.flowSlug,
+              })
+            : undefined;
           return okResult(result.data, meta);
         }
         case 'notFound':
@@ -437,8 +456,15 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       const result = await ops.getNode(flowId, nodeId);
       switch (result.kind) {
         case 'ok': {
-          const flowSlug = ctx.registry.resolve(flowId)?.slug;
-          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug, nodeId });
+          const entry = ctx.registry.resolve(flowId);
+          const meta = entry
+            ? canvasMetaFor(ctx, {
+                kind: 'navigate',
+                projectSlug: entry.projectSlug,
+                flowSlug: entry.flowSlug,
+                nodeId,
+              })
+            : undefined;
           return okResult(result.data, meta);
         }
         case 'notFound':
@@ -468,11 +494,15 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       const result = await ops.registerFlow(parsed.data);
       switch (result.kind) {
         case 'ok': {
-          const meta = canvasMetaFor(ctx, {
-            kind: 'create',
-            flowSlug: result.data.slug,
-            justCreated: true,
-          });
+          const entry = ctx.registry.resolve(result.data.id);
+          const meta = entry
+            ? canvasMetaFor(ctx, {
+                kind: 'create',
+                projectSlug: entry.projectSlug,
+                flowSlug: entry.flowSlug,
+                justCreated: true,
+              })
+            : undefined;
           return okResult(result.data, meta);
         }
         case 'fileNotFound':

@@ -594,7 +594,15 @@ const buildMetaFixture = () => {
     valid: true,
     lastModified: Date.now(),
   });
-  return { app, registry, repoPath, flowId: entry.id, flowSlug: entry.slug };
+  return {
+    app,
+    registry,
+    repoPath,
+    flowId: entry.id,
+    flowSlug: entry.flowSlug,
+    projectSlug: entry.projectSlug,
+    registrySlug: entry.slug,
+  };
 };
 
 const listAllToolNames = async (app: ReturnType<typeof createApp>): Promise<string[]> => {
@@ -618,9 +626,17 @@ const widgetFromResult = (result: NonNullable<FullEnvelope['result']>): CanvasWi
   return meta['openai/widgetState'] as CanvasWidgetState;
 };
 
+type CanvasWidgetExpected = {
+  kind?: CanvasWidgetState['kind'];
+  projectSlug?: string;
+  flowSlug?: string;
+  nodeId?: string;
+  justCreated?: boolean;
+};
+
 const expectCanvasMeta = (
   result: NonNullable<FullEnvelope['result']>,
-  expected: Partial<CanvasWidgetState>,
+  expected: CanvasWidgetExpected,
 ): void => {
   expect(result.isError).toBeFalsy();
   const meta = result._meta;
@@ -628,48 +644,66 @@ const expectCanvasMeta = (
   if (!meta) throw new Error('missing _meta');
   expect(meta['openai/outputTemplate']).toBe(CANVAS_RESOURCE_URI);
   expect(meta['openai/widgetAccessible']).toBe(true);
-  const widget = meta['openai/widgetState'] as CanvasWidgetState;
+  const widget = meta['openai/widgetState'] as CanvasWidgetState & { justCreated?: boolean };
   expect(widget.backendUrl).toBe(META_TEST_HTTP_URL);
   expect(widget.backendToken).toBe(META_TEST_TOKEN);
   for (const [key, value] of Object.entries(expected)) {
-    expect(widget[key as keyof CanvasWidgetState]).toEqual(value);
+    expect((widget as Record<string, unknown>)[key]).toEqual(value);
   }
 };
 
 describe('canvas _meta attachment rules', () => {
-  it('seeflow_get_flow attaches _meta with kind=navigate + flowSlug', async () => {
+  it('seeflow_get_flow attaches _meta with kind=navigate + projectSlug + flowSlug', async () => {
     const fix = buildMetaFixture();
     const result = await callMcpToolFull(fix.app, 'seeflow_get_flow', { flowId: fix.flowId });
-    expectCanvasMeta(result, { kind: 'navigate', flowSlug: fix.flowSlug });
+    expectCanvasMeta(result, {
+      kind: 'navigate',
+      projectSlug: fix.projectSlug,
+      flowSlug: fix.flowSlug,
+    });
     const widget = widgetFromResult(result);
     expect(widget.nodeId).toBeUndefined();
-    expect(widget.justCreated).toBeUndefined();
-    expect(widget.projectSlug).toBeUndefined();
+    if (widget.kind === 'create') {
+      expect(widget.justCreated).toBeUndefined();
+    }
   });
 
-  it('seeflow_get_flow_graph attaches _meta with kind=navigate + flowSlug', async () => {
+  it('seeflow_get_flow_graph attaches _meta with kind=navigate + projectSlug + flowSlug', async () => {
     const fix = buildMetaFixture();
     const result = await callMcpToolFull(fix.app, 'seeflow_get_flow_graph', {
       flowId: fix.flowId,
     });
-    expectCanvasMeta(result, { kind: 'navigate', flowSlug: fix.flowSlug });
+    expectCanvasMeta(result, {
+      kind: 'navigate',
+      projectSlug: fix.projectSlug,
+      flowSlug: fix.flowSlug,
+    });
     const widget = widgetFromResult(result);
     expect(widget.nodeId).toBeUndefined();
-    expect(widget.justCreated).toBeUndefined();
-    expect(widget.projectSlug).toBeUndefined();
+    if (widget.kind === 'create') {
+      expect(widget.justCreated).toBeUndefined();
+    }
   });
 
-  it('seeflow_get_node attaches _meta with kind=navigate + flowSlug + nodeId', async () => {
+  it('seeflow_get_node attaches _meta with kind=navigate + projectSlug + flowSlug + nodeId', async () => {
     const fix = buildMetaFixture();
     const result = await callMcpToolFull(fix.app, 'seeflow_get_node', {
       flowId: fix.flowId,
       nodeId: 'a',
     });
-    expectCanvasMeta(result, { kind: 'navigate', flowSlug: fix.flowSlug, nodeId: 'a' });
-    expect(widgetFromResult(result).justCreated).toBeUndefined();
+    expectCanvasMeta(result, {
+      kind: 'navigate',
+      projectSlug: fix.projectSlug,
+      flowSlug: fix.flowSlug,
+      nodeId: 'a',
+    });
+    const widget = widgetFromResult(result);
+    if (widget.kind === 'create') {
+      expect(widget.justCreated).toBeUndefined();
+    }
   });
 
-  it('seeflow_register_flow attaches _meta with kind=create + flowSlug + justCreated=true', async () => {
+  it('seeflow_register_flow attaches _meta with kind=create + projectSlug + flowSlug + justCreated=true', async () => {
     const fix = buildMetaFixture();
     // Use a fresh repo dir so the slug ends up known and the flow isn't
     // already registered (avoiding the upsert idempotent slug branch).
@@ -682,11 +716,15 @@ describe('canvas _meta attachment rules', () => {
       repoPath,
       flowPath: 'flow.json',
     });
-    expectCanvasMeta(result, { kind: 'create', justCreated: true });
+    expectCanvasMeta(result, { kind: 'create' });
     const widget = widgetFromResult(result);
+    expect(typeof widget.projectSlug).toBe('string');
+    expect((widget.projectSlug ?? '').length).toBeGreaterThan(0);
     expect(typeof widget.flowSlug).toBe('string');
     expect((widget.flowSlug ?? '').length).toBeGreaterThan(0);
-    expect(widget.projectSlug).toBeUndefined();
+    if (widget.kind === 'create') {
+      expect(widget.justCreated).toBe(true);
+    }
     expect(widget.nodeId).toBeUndefined();
   });
 
@@ -701,7 +739,9 @@ describe('canvas _meta attachment rules', () => {
     const widget = widgetFromResult(result);
     expect(typeof widget.projectSlug).toBe('string');
     expect((widget.projectSlug ?? '').length).toBeGreaterThan(0);
-    expect(widget.justCreated).toBeUndefined();
+    if (widget.kind === 'create') {
+      expect(widget.justCreated).toBeUndefined();
+    }
     expect(widget.flowSlug).toBeUndefined();
     expect(widget.nodeId).toBeUndefined();
   });

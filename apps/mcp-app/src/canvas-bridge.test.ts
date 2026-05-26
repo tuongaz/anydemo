@@ -93,7 +93,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
     const base = makeBaseAdapter({
       createNode: async (input) => ({ id: 'server-id-1', node: { id: 'server-id-1', ...input } }),
     });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
 
     await adapter.createNode({
       type: 'rectangle',
@@ -107,6 +107,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       events: [
         {
           event: 'node-added',
+          projectSlug: 'demo-project',
           flowSlug: 'demo',
           payload: { nodeId: 'server-id-1', type: 'rectangle', position: { x: 10, y: 20 } },
         },
@@ -123,14 +124,24 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       now: timers.getNow,
       getHost: () => host,
     });
-    const adapter = wrapAdapter(makeBaseAdapter(), bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(makeBaseAdapter(), bridge, {
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+    });
 
     await adapter.deleteNode('node-7');
     timers.advance(COALESCE_WINDOW_MS);
 
     expect(recorded.sendMessage).toHaveLength(1);
     expect(recorded.sendMessage[0]).toEqual({
-      events: [{ event: 'node-deleted', flowSlug: 'demo', payload: { nodeId: 'node-7' } }],
+      events: [
+        {
+          event: 'node-deleted',
+          projectSlug: 'demo-project',
+          flowSlug: 'demo',
+          payload: { nodeId: 'node-7' },
+        },
+      ],
     });
   });
 
@@ -146,7 +157,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
     const base = makeBaseAdapter({
       createConnector: async () => ({ id: 'conn-42' }),
     });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
 
     await adapter.createConnector({ source: 'a', target: 'b' });
     timers.advance(COALESCE_WINDOW_MS);
@@ -156,6 +167,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       events: [
         {
           event: 'connector-added',
+          projectSlug: 'demo-project',
           flowSlug: 'demo',
           payload: { connectorId: 'conn-42', source: 'a', target: 'b' },
         },
@@ -172,7 +184,10 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       now: timers.getNow,
       getHost: () => host,
     });
-    const adapter = wrapAdapter(makeBaseAdapter(), bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(makeBaseAdapter(), bridge, {
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+    });
 
     await adapter.deleteConnector('conn-9');
     timers.advance(COALESCE_WINDOW_MS);
@@ -180,7 +195,12 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
     expect(recorded.sendMessage).toHaveLength(1);
     expect(recorded.sendMessage[0]).toEqual({
       events: [
-        { event: 'connector-deleted', flowSlug: 'demo', payload: { connectorId: 'conn-9' } },
+        {
+          event: 'connector-deleted',
+          projectSlug: 'demo-project',
+          flowSlug: 'demo',
+          payload: { connectorId: 'conn-9' },
+        },
       ],
     });
   });
@@ -194,7 +214,10 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       now: timers.getNow,
       getHost: () => host,
     });
-    const adapter = wrapAdapter(makeBaseAdapter(), bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(makeBaseAdapter(), bridge, {
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+    });
 
     await adapter.updateNode('node-3', { name: 'New label' });
     timers.advance(COALESCE_WINDOW_MS);
@@ -204,6 +227,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       events: [
         {
           event: 'node-renamed',
+          projectSlug: 'demo-project',
           flowSlug: 'demo',
           payload: { nodeId: 'node-3', name: 'New label' },
         },
@@ -220,7 +244,10 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       now: timers.getNow,
       getHost: () => host,
     });
-    const adapter = wrapAdapter(makeBaseAdapter(), bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(makeBaseAdapter(), bridge, {
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+    });
 
     await adapter.updateNode('node-3', { borderColor: 'blue', fontSize: 14 });
     timers.advance(COALESCE_WINDOW_MS);
@@ -237,7 +264,10 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       now: timers.getNow,
       getHost: () => host,
     });
-    const adapter = wrapAdapter(makeBaseAdapter(), bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(makeBaseAdapter(), bridge, {
+      projectSlug: 'demo-project',
+      flowSlug: 'demo',
+    });
 
     await adapter.updateNodePosition('node-3', { x: 100, y: 200 });
     timers.advance(COALESCE_WINDOW_MS);
@@ -257,7 +287,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
     const base = makeBaseAdapter({
       playAction: async () => ({ runId: 'run-1', status: 200 }),
     });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
 
     await adapter.playAction?.('node-3');
     timers.advance(COALESCE_WINDOW_MS);
@@ -267,6 +297,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       events: [
         {
           event: 'node-played',
+          projectSlug: 'demo-project',
           flowSlug: 'demo',
           payload: { nodeId: 'node-3', runId: 'run-1', status: 200, error: undefined },
         },
@@ -284,7 +315,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
       getHost: () => host,
     });
     const base = makeBaseAdapter({ playAction: undefined });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
     expect(adapter.playAction).toBeUndefined();
   });
 
@@ -302,7 +333,7 @@ describe('wrapAdapter — structural edits emit sendMessage', () => {
         throw new Error('server said no');
       },
     });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
 
     await expect(adapter.deleteNode('node-7')).rejects.toThrow('server said no');
     timers.advance(COALESCE_WINDOW_MS);
@@ -329,7 +360,7 @@ describe('wrapAdapter — burst coalescing through the bridge', () => {
       },
       createConnector: async () => ({ id: 'conn-1' }),
     });
-    const adapter = wrapAdapter(base, bridge, { flowSlug: 'demo' });
+    const adapter = wrapAdapter(base, bridge, { projectSlug: 'demo-project', flowSlug: 'demo' });
 
     await adapter.createNode({
       type: 'rectangle',

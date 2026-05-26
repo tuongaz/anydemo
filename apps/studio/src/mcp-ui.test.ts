@@ -16,6 +16,7 @@ describe('canvasMeta()', () => {
   it('returns exactly the three host-introspected keys', () => {
     const meta = canvasMeta({
       kind: 'navigate',
+      projectSlug: 'hello-project',
       flowSlug: 'hello',
       backendUrl: BACKEND_URL,
       backendToken: BACKEND_TOKEN,
@@ -33,45 +34,49 @@ describe('canvasMeta()', () => {
   // below mirror the call sites in mcp.ts (US-008) — keep them in lockstep
   // with that file's `canvasMetaFor(ctx, { ... })` calls.
   describe('seeflow_get_flow shape', () => {
-    it('kind=navigate with flowSlug, no nodeId/justCreated/projectSlug', () => {
+    it('kind=navigate with projectSlug + flowSlug, no nodeId/justCreated', () => {
       const meta = canvasMeta({
         kind: 'navigate',
+        projectSlug: 'shop',
         flowSlug: 'checkout',
         backendUrl: BACKEND_URL,
         backendToken: BACKEND_TOKEN,
       });
       const widget = widgetFromMeta(meta);
       expect(widget.kind).toBe('navigate');
+      expect(widget.projectSlug).toBe('shop');
       expect(widget.flowSlug).toBe('checkout');
       expect(widget.nodeId).toBeUndefined();
-      expect(widget.justCreated).toBeUndefined();
-      expect(widget.projectSlug).toBeUndefined();
+      if (widget.kind === 'create') {
+        expect(widget.justCreated).toBeUndefined();
+      }
       expect(widget.backendUrl).toBe(BACKEND_URL);
       expect(widget.backendToken).toBe(BACKEND_TOKEN);
     });
   });
 
   describe('seeflow_get_flow_graph shape', () => {
-    it('kind=navigate with flowSlug, no nodeId/justCreated/projectSlug', () => {
+    it('kind=navigate with projectSlug + flowSlug, no nodeId/justCreated', () => {
       const meta = canvasMeta({
         kind: 'navigate',
+        projectSlug: 'graph-project',
         flowSlug: 'graph-flow',
         backendUrl: BACKEND_URL,
         backendToken: BACKEND_TOKEN,
       });
       const widget = widgetFromMeta(meta);
       expect(widget.kind).toBe('navigate');
+      expect(widget.projectSlug).toBe('graph-project');
       expect(widget.flowSlug).toBe('graph-flow');
       expect(widget.nodeId).toBeUndefined();
-      expect(widget.justCreated).toBeUndefined();
-      expect(widget.projectSlug).toBeUndefined();
     });
   });
 
   describe('seeflow_get_node shape', () => {
-    it('kind=navigate with flowSlug AND nodeId, no justCreated', () => {
+    it('kind=navigate with projectSlug + flowSlug + nodeId, no justCreated', () => {
       const meta = canvasMeta({
         kind: 'navigate',
+        projectSlug: 'shop',
         flowSlug: 'checkout',
         nodeId: 'api-checkout',
         backendUrl: BACKEND_URL,
@@ -79,10 +84,9 @@ describe('canvasMeta()', () => {
       });
       const widget = widgetFromMeta(meta);
       expect(widget.kind).toBe('navigate');
+      expect(widget.projectSlug).toBe('shop');
       expect(widget.flowSlug).toBe('checkout');
       expect(widget.nodeId).toBe('api-checkout');
-      expect(widget.justCreated).toBeUndefined();
-      expect(widget.projectSlug).toBeUndefined();
     });
 
     it('omits nodeId when undefined (e.g. slug-only navigation)', () => {
@@ -90,6 +94,7 @@ describe('canvasMeta()', () => {
       // must not invent it. Pin the contract here.
       const meta = canvasMeta({
         kind: 'navigate',
+        projectSlug: 'shop',
         flowSlug: 'checkout',
         backendUrl: BACKEND_URL,
         backendToken: BACKEND_TOKEN,
@@ -99,9 +104,10 @@ describe('canvasMeta()', () => {
   });
 
   describe('seeflow_register_flow shape', () => {
-    it('kind=create with flowSlug AND justCreated=true', () => {
+    it('kind=create with projectSlug + flowSlug AND justCreated=true', () => {
       const meta = canvasMeta({
         kind: 'create',
+        projectSlug: 'fresh-project',
         flowSlug: 'fresh-flow',
         justCreated: true,
         backendUrl: BACKEND_URL,
@@ -109,10 +115,12 @@ describe('canvasMeta()', () => {
       });
       const widget = widgetFromMeta(meta);
       expect(widget.kind).toBe('create');
+      expect(widget.projectSlug).toBe('fresh-project');
       expect(widget.flowSlug).toBe('fresh-flow');
-      expect(widget.justCreated).toBe(true);
+      if (widget.kind === 'create') {
+        expect(widget.justCreated).toBe(true);
+      }
       expect(widget.nodeId).toBeUndefined();
-      expect(widget.projectSlug).toBeUndefined();
     });
   });
 
@@ -130,7 +138,9 @@ describe('canvasMeta()', () => {
       const widget = widgetFromMeta(meta);
       expect(widget.kind).toBe('create');
       expect(widget.projectSlug).toBe('my-project');
-      expect(widget.justCreated).toBeUndefined();
+      if (widget.kind === 'create') {
+        expect(widget.justCreated).toBeUndefined();
+      }
       expect(widget.flowSlug).toBeUndefined();
       expect(widget.nodeId).toBeUndefined();
     });
@@ -138,9 +148,16 @@ describe('canvasMeta()', () => {
 
   it('justCreated only appears on creation shapes (register_flow), never on navigate shapes', () => {
     const navigateShapes: CanvasWidgetState[] = [
-      { kind: 'navigate', flowSlug: 's1', backendUrl: BACKEND_URL, backendToken: BACKEND_TOKEN },
       {
         kind: 'navigate',
+        projectSlug: 'p1',
+        flowSlug: 's1',
+        backendUrl: BACKEND_URL,
+        backendToken: BACKEND_TOKEN,
+      },
+      {
+        kind: 'navigate',
+        projectSlug: 'p2',
         flowSlug: 's2',
         nodeId: 'n1',
         backendUrl: BACKEND_URL,
@@ -148,29 +165,40 @@ describe('canvasMeta()', () => {
       },
     ];
     for (const state of navigateShapes) {
-      expect(widgetFromMeta(canvasMeta(state)).justCreated).toBeUndefined();
+      const widget = widgetFromMeta(canvasMeta(state));
+      if (widget.kind === 'create') {
+        expect(widget.justCreated).toBeUndefined();
+      }
     }
     // Only register_flow opts into the pill — create_project does NOT.
     const registerMeta = canvasMeta({
       kind: 'create',
+      projectSlug: 'reg-project',
       flowSlug: 'reg',
       justCreated: true,
       backendUrl: BACKEND_URL,
       backendToken: BACKEND_TOKEN,
     });
-    expect(widgetFromMeta(registerMeta).justCreated).toBe(true);
+    const registerWidget = widgetFromMeta(registerMeta);
+    if (registerWidget.kind === 'create') {
+      expect(registerWidget.justCreated).toBe(true);
+    }
     const projectMeta = canvasMeta({
       kind: 'create',
       projectSlug: 'proj',
       backendUrl: BACKEND_URL,
       backendToken: BACKEND_TOKEN,
     });
-    expect(widgetFromMeta(projectMeta).justCreated).toBeUndefined();
+    const projectWidget = widgetFromMeta(projectMeta);
+    if (projectWidget.kind === 'create') {
+      expect(projectWidget.justCreated).toBeUndefined();
+    }
   });
 
   it('nodeId only appears when supplied (get_node)', () => {
     const withNode = canvasMeta({
       kind: 'navigate',
+      projectSlug: 'p',
       flowSlug: 's',
       nodeId: 'n',
       backendUrl: BACKEND_URL,
@@ -178,6 +206,7 @@ describe('canvasMeta()', () => {
     });
     const withoutNode = canvasMeta({
       kind: 'navigate',
+      projectSlug: 'p',
       flowSlug: 's',
       backendUrl: BACKEND_URL,
       backendToken: BACKEND_TOKEN,
@@ -188,10 +217,23 @@ describe('canvasMeta()', () => {
 
   it('backendUrl and backendToken are always present across the 5 shapes', () => {
     const shapes: CanvasWidgetState[] = [
-      { kind: 'navigate', flowSlug: 'a', backendUrl: BACKEND_URL, backendToken: BACKEND_TOKEN },
-      { kind: 'navigate', flowSlug: 'b', backendUrl: BACKEND_URL, backendToken: BACKEND_TOKEN },
       {
         kind: 'navigate',
+        projectSlug: 'pa',
+        flowSlug: 'a',
+        backendUrl: BACKEND_URL,
+        backendToken: BACKEND_TOKEN,
+      },
+      {
+        kind: 'navigate',
+        projectSlug: 'pb',
+        flowSlug: 'b',
+        backendUrl: BACKEND_URL,
+        backendToken: BACKEND_TOKEN,
+      },
+      {
+        kind: 'navigate',
+        projectSlug: 'pc',
         flowSlug: 'c',
         nodeId: 'n',
         backendUrl: BACKEND_URL,
@@ -199,6 +241,7 @@ describe('canvasMeta()', () => {
       },
       {
         kind: 'create',
+        projectSlug: 'pd',
         flowSlug: 'd',
         justCreated: true,
         backendUrl: BACKEND_URL,

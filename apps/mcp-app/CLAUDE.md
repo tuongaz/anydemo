@@ -36,8 +36,11 @@ and returned as the `ui://seeflow/canvas` resource.
 
 `<SeeflowCanvas>` requires both `canvasMode` + `onCanvasModeChange` even when
 the host has no toolbar UI — pass `{ kind: 'select' }` + a `useState` setter
-to satisfy the typecheck. The Studio HTTP API has no slug → id shortcut: do
-`GET /api/flows` → find by slug → `GET /api/flows/:id` for the merged flow.
+to satisfy the typecheck. The Studio HTTP API takes the project + flow slugs
+directly: do a single `GET /api/projects/:project/flows/:flow` to fetch the
+merged flow envelope. The widget state's `navigate` variant guarantees both
+slugs are present, so there's no index + lookup round-trip. The
+`createRestAdapter` call mirrors that: `{ baseUrl, project: widgetState.projectSlug, flow: widgetState.flowSlug }`.
 
 ## Bridging adapter mutations to the host
 
