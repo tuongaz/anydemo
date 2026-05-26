@@ -64,6 +64,35 @@ export const fetchFlows = async (): Promise<FlowSummary[]> => {
   return (await res.json()) as FlowSummary[];
 };
 
+/**
+ * US-024: per-project flow listing returned by `GET /api/projects/:project/flows`.
+ * Matches the on-the-wire response shape and the `FlowSwitcherEntry` type used
+ * by the FlowSwitcher popover (apps/web/src/components/flow-switcher.tsx).
+ */
+export interface ProjectFlowSummary {
+  id: string;
+  flowSlug: string;
+  name: string;
+  icon?: string;
+  isDefault: boolean;
+}
+
+export const fetchProjectFlows = async (project: string): Promise<ProjectFlowSummary[]> => {
+  const url = `/api/projects/${encodeURIComponent(project)}/flows`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    let errorBody: { error?: string } | null = null;
+    try {
+      errorBody = (await res.json()) as { error?: string };
+    } catch {
+      // ignore
+    }
+    throw new Error(errorBody?.error ?? `GET ${url} → ${res.status}`);
+  }
+  const body = (await res.json()) as { flows: ProjectFlowSummary[] };
+  return body.flows;
+};
+
 // US-010: each flow-scoped builder accepts the (project, flow) slug pair and
 // composes the new nested API URL. The studio resolves the pair to a
 // `FlowEntry` server-side via `resolveProjectFlow` (US-006).

@@ -1,10 +1,12 @@
 import { CommandPalette } from '@/components/command-palette';
 import { ExportDialog } from '@/components/export-dialog';
+import { FlowSwitcher } from '@/components/flow-switcher';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
+import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useUndoStack } from '@/hooks/use-undo-stack';
 import type {
   Connector,
@@ -16,6 +18,7 @@ import type {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
+import { flowPath, navigate } from '@/lib/router';
 import { shortId } from '@/lib/short-id';
 import {
   type CanvasMode,
@@ -151,6 +154,10 @@ export function DemoView({
   onRestartDemo,
 }: DemoViewProps) {
   const summary = demos.find((d) => d.slug === slug);
+  // US-024: per-project flow list powers the Figma-style switcher popover
+  // anchored top-left on the canvas page. Refetches when `project` changes;
+  // null preserves the popover's idle state during the URL → props handoff.
+  const { flows: projectFlows } = useProjectFlows(project);
   // US-019: multi-select. Selection is now an array; the inspector still
   // single-shots (1 node OR 1 connector — see derivations below) so its UX
   // doesn't change for the existing single-select paths. The style strip and
@@ -2966,6 +2973,21 @@ export function DemoView({
           <span className="font-mono">{detail.error}</span>
         </div>
       ) : null}
+
+      {/* US-024: flow switcher anchored top-left near the project title.
+          design/design.html — spacing follows the canvas-floating-toolbar
+          pattern (top-3 left-3 inset for floating affordances). */}
+      <div className="absolute top-3 left-3 z-20">
+        <FlowSwitcher
+          project={project}
+          activeFlow={flow}
+          flows={projectFlows ?? []}
+          onSelect={(nextFlow) => {
+            if (nextFlow === flow) return;
+            navigate(flowPath(project, nextFlow));
+          }}
+        />
+      </div>
 
       {demo && adapter ? (
         <SeeflowCanvas
