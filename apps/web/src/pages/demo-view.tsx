@@ -3069,6 +3069,11 @@ export function DemoView({
 
       {demo && adapter ? (
         <SeeflowCanvas
+          // US-026: keying on `${project}/${flow}` forces SeeflowCanvas (and
+          // the React Flow root it owns) to remount whenever the user switches
+          // flows, so internal selection / viewport / drag state never leaks
+          // across flows.
+          key={`${project}/${flow}`}
           ref={canvasRef}
           mode="edit"
           adapter={adapter}

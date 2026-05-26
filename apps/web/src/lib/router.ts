@@ -53,3 +53,17 @@ export const flowPathFromSlug = (slug: string): string => {
   if (idx < 0) return flowPath(slug, '');
   return flowPath(slug.slice(0, idx), slug.slice(idx + 1));
 };
+
+/**
+ * US-026: parse `/projects/:project` (no `/flows/:flow` segment) for the
+ * project-only landing page. App.tsx redirects this case to the user's
+ * last-opened flow (or the project default) via pickInitialFlow.
+ */
+export const matchProjectAlone = (pathname: string): { project: string } | null => {
+  const parts = pathname.split('/').filter(Boolean);
+  if (parts.length !== 2) return null;
+  if (parts[0] !== 'projects') return null;
+  const project = decodeURIComponent(parts[1] ?? '');
+  if (!project) return null;
+  return { project };
+};

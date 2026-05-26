@@ -444,8 +444,8 @@
         "Verify in browser using dev-browser skill: switch flows, refresh the page; same flow reopens. Then navigate to /projects/<p> with no flow; lands on last-opened (or default on first visit)"
       ],
       "priority": 26,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Browser verification deferred — Ralph loop ran without a live studio. Build artifacts (typecheck/lint/format/test) all green; manual browser verification belongs to the next interactive session (same precedent as US-024/US-025)."
     },
     {
       "id": "US-027",

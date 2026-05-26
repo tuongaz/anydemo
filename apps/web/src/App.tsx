@@ -4,11 +4,20 @@ import { useDemos } from '@/hooks/use-demos';
 import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
+import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
 import { type CreateProjectResult, type FlowDetail, playFlowNode, restartFlow } from '@/lib/api';
+import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
-import { flowPathFromSlug, matchProjectFlow, navigate, usePathname } from '@/lib/router';
+import {
+  flowPath,
+  flowPathFromSlug,
+  matchProjectAlone,
+  matchProjectFlow,
+  navigate,
+  usePathname,
+} from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
 import { TooltipProvider } from '@seeflow/canvas';
@@ -23,6 +32,14 @@ export function App() {
   const match = matchProjectFlow(pathname);
   const project = match?.project ?? null;
   const flow = match?.flow ?? null;
+
+  // US-026: when the URL is `/projects/:project` with no flow segment we
+  // redirect to the user's last-opened flow (per-project localStorage) or
+  // the project's default. `useProjectFlows(projectOnly)` parks in idle when
+  // no redirect is needed.
+  const projectOnly = matchProjectAlone(pathname);
+  const projectOnlySlug = projectOnly?.project ?? null;
+  const { flows: standaloneFlows } = useProjectFlows(projectOnlySlug);
 
   // External writes (CLI register / unregister) reach us via the global
   // registry SSE channel. The flow list refetches; node-level state stays
@@ -147,6 +164,22 @@ export function App() {
   useEffect(() => {
     if (currentSummary) writeLastProjectId(currentSummary.id);
   }, [currentSummary]);
+
+  // US-026: persist last-opened flow per project, keyed by project slug so
+  // each project remembers its own last-visited flow independently.
+  useEffect(() => {
+    if (project && flow) writeLastFlow(project, flow);
+  }, [project, flow]);
+
+  // US-026: redirect `/projects/<project>` (no flow) to localStorage's
+  // last-opened flow if it still resolves, else the project default, else the
+  // first flow in the list. Fires once `standaloneFlows` is non-null (fetch
+  // resolved). Empty list → no navigation (stays on StudioHome).
+  useEffect(() => {
+    if (!projectOnlySlug || !standaloneFlows) return;
+    const picked = pickInitialFlow(standaloneFlows, readLastFlow(projectOnlySlug));
+    if (picked) navigate(flowPath(projectOnlySlug, picked));
+  }, [projectOnlySlug, standaloneFlows]);
 
   const onPlayNode = useCallback(
     (nodeId: string) => {
