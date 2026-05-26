@@ -12,6 +12,7 @@ import {
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { registerProject } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
 import { createRegistry } from './registry.ts';
 import { createApp } from './server.ts';
@@ -45,6 +46,32 @@ const tmpRegistry = () => {
 const tmpRepoWithDemo = (demo: unknown = VALID_DEMO) => {
   const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-api-repo-'));
   writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(demo));
+  return repoDir;
+};
+
+interface ManifestInit {
+  version: 1;
+  name: string;
+  description?: string;
+  defaultFlow: string;
+  flows: Array<{ id: string; name: string; icon?: string }>;
+}
+
+// Scaffold a manifest-driven project on disk: seeflow.json at the root plus
+// one flows/<id>/flow.json per declared flow. Used by the project listing
+// tests (and any future multi-flow API tests) that need to exercise the
+// scanner-backed registration path.
+const tmpManifestRepo = (manifest: ManifestInit): string => {
+  const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-api-manifest-'));
+  writeFileSync(join(repoDir, 'seeflow.json'), JSON.stringify(manifest));
+  for (const flow of manifest.flows) {
+    const flowDir = join(repoDir, 'flows', flow.id);
+    mkdirSync(flowDir, { recursive: true });
+    writeFileSync(
+      join(flowDir, 'flow.json'),
+      JSON.stringify({ version: 1, name: flow.name, nodes: [], connectors: [] }),
+    );
+  }
   return repoDir;
 };
 
@@ -870,6 +897,166 @@ describe('GET /api/flows', () => {
     expect(list).toHaveLength(2);
     expect(list.map((e) => e.slug).sort()).toEqual(['checkout-flow/main', 'other-flow/main']);
     expect(list.every((e) => e.valid)).toBe(true);
+  });
+});
+
+describe('GET /api/projects', () => {
+  it('groups registry entries by projectSlug and emits one row per project', async () => {
+    const { app, registry } = buildApp();
+    const repoA = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    const repoB = tmpManifestRepo({
+      version: 1,
+      name: 'Component Showcase',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath: repoA, registry });
+    registerProject({ repoPath: repoB, registry });
+
+    const res = await app.request('/api/projects');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      projects: Array<{
+        projectSlug: string;
+        name: string;
+        defaultFlow: string;
+        flowCount: number;
+      }>;
+    };
+
+    const byProjectSlug = Object.fromEntries(body.projects.map((p) => [p.projectSlug, p]));
+    expect(body.projects).toHaveLength(2);
+    expect(byProjectSlug['order-pipeline']).toEqual({
+      projectSlug: 'order-pipeline',
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flowCount: 2,
+    });
+    expect(byProjectSlug['component-showcase']).toEqual({
+      projectSlug: 'component-showcase',
+      name: 'Component Showcase',
+      defaultFlow: 'main',
+      flowCount: 1,
+    });
+  });
+
+  it('returns an empty list when the registry is empty', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/projects');
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ projects: [] });
+  });
+
+  it('falls back to derived name + defaultFlow when seeflow.json is missing', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+    rmSync(join(repoPath, 'seeflow.json'));
+
+    const res = await app.request('/api/projects');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      projects: Array<{ projectSlug: string; name: string; defaultFlow: string }>;
+    };
+    expect(body.projects).toHaveLength(1);
+    expect(body.projects[0]?.projectSlug).toBe('order-pipeline');
+    expect(body.projects[0]?.name).toBe('order-pipeline');
+    expect(body.projects[0]?.defaultFlow).toBe('main');
+  });
+});
+
+describe('GET /api/projects/:project', () => {
+  it('returns project metadata + the full set of registered flows for that project', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      description: 'Checkout funnel',
+      defaultFlow: 'retry',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry', icon: 'refresh-ccw' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      projectSlug: string;
+      name: string;
+      description?: string;
+      defaultFlow: string;
+      flows: Array<{
+        flowSlug: string;
+        name: string;
+        icon?: string;
+        isDefault: boolean;
+        slug: string;
+        projectSlug: string;
+      }>;
+    };
+    expect(body.projectSlug).toBe('order-pipeline');
+    expect(body.name).toBe('Order Pipeline');
+    expect(body.description).toBe('Checkout funnel');
+    expect(body.defaultFlow).toBe('retry');
+    expect(body.flows).toHaveLength(2);
+
+    const retry = body.flows.find((f) => f.flowSlug === 'retry');
+    expect(retry?.isDefault).toBe(true);
+    expect(retry?.icon).toBe('refresh-ccw');
+    expect(retry?.projectSlug).toBe('order-pipeline');
+    expect(retry?.slug).toBe('order-pipeline/retry');
+  });
+
+  it('returns 404 with project-not-found for an unknown project slug', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/projects/does-not-exist');
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('omits description and falls back to derived name + defaultFlow when manifest is missing', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+    rmSync(join(repoPath, 'seeflow.json'));
+
+    const res = await app.request('/api/projects/order-pipeline');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      projectSlug: string;
+      name: string;
+      description?: string;
+      defaultFlow: string;
+      flows: Array<{ flowSlug: string }>;
+    };
+    expect(body.projectSlug).toBe('order-pipeline');
+    expect(body.name).toBe('order-pipeline');
+    expect(body.description).toBeUndefined();
+    expect(body.defaultFlow).toBe('main');
+    expect(body.flows).toHaveLength(1);
   });
 });
 

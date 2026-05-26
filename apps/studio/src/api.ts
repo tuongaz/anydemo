@@ -37,11 +37,11 @@ import {
   runReset as defaultRunReset,
   stopAllPlays as defaultStopAllPlays,
 } from './proxy.ts';
-import type { Registry } from './registry.ts';
+import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
-import type { ComponentAction } from './schema.ts';
-import { FlowSchema, ResolvedFlowSchema } from './schema.ts';
+import type { ComponentAction, SeeflowManifest } from './schema.ts';
+import { FlowSchema, ResolvedFlowSchema, SeeflowManifestSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -129,6 +129,22 @@ function resolveProjectFile(
   }
 
   return { kind: 'ok', absPath: realTarget, projectRoot: realRoot };
+}
+
+// Read + validate `<repoPath>/seeflow.json` for the project listing routes.
+// Returns `null` for missing or malformed manifests so callers can fall back
+// to derived defaults (projectSlug + isDefault entry) instead of failing the
+// whole listing on one bad project.
+function readProjectManifest(repoPath: string): SeeflowManifest | null {
+  const manifestPath = join(repoPath, 'seeflow.json');
+  if (!existsSync(manifestPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const parsed = SeeflowManifestSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
 }
 
 // Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the
@@ -501,6 +517,67 @@ export function createApi(options: ApiOptions): Hono {
   api.get('/flows/summary', (c) => {
     const result = ops.listFlowsSummary();
     return c.json(result.data);
+  });
+
+  // GET /api/projects — projects landing index. Groups registry.list() by
+  // projectSlug and reads each project's `seeflow.json` for the human-readable
+  // name + defaultFlow. When the manifest is missing or malformed, falls back
+  // to the projectSlug for name and the flowSlug of the registry's
+  // `isDefault: true` entry for defaultFlow — so a partially-broken project
+  // still surfaces in the picker.
+  api.get('/projects', (c) => {
+    const grouped = new Map<string, FlowEntry[]>();
+    for (const entry of registry.list()) {
+      const existing = grouped.get(entry.projectSlug);
+      if (existing) {
+        existing.push(entry);
+      } else {
+        grouped.set(entry.projectSlug, [entry]);
+      }
+    }
+    const projects: Array<{
+      projectSlug: string;
+      name: string;
+      defaultFlow: string;
+      flowCount: number;
+    }> = [];
+    for (const [projectSlug, entries] of grouped) {
+      const head = entries[0];
+      if (!head) continue;
+      const manifest = readProjectManifest(head.repoPath);
+      const defaultEntry = entries.find((e) => e.isDefault) ?? head;
+      projects.push({
+        projectSlug,
+        name: manifest?.name ?? projectSlug,
+        defaultFlow: manifest?.defaultFlow ?? defaultEntry.flowSlug,
+        flowCount: entries.length,
+      });
+    }
+    return c.json({ projects });
+  });
+
+  // GET /api/projects/:project — per-project metadata + flow entries. 404s
+  // with `project-not-found` when no registry entry shares the slug — same
+  // shape the flow-scoped routes (US-007) use for resolution failures, so
+  // clients have a single error pattern across the projects/* tree. The
+  // manifest read is best-effort (missing/malformed → null) so the route
+  // never depends on disk state for the slug check itself.
+  api.get('/projects/:project', (c) => {
+    const projectSlug = c.req.param('project');
+    const flows = registry.list().filter((e) => e.projectSlug === projectSlug);
+    const head = flows[0];
+    if (!head) {
+      return c.json({ ok: false as const, error: 'project-not-found' as const }, 404);
+    }
+    const manifest = readProjectManifest(head.repoPath);
+    const defaultEntry = flows.find((e) => e.isDefault) ?? head;
+    return c.json({
+      projectSlug,
+      name: manifest?.name ?? projectSlug,
+      description: manifest?.description,
+      defaultFlow: manifest?.defaultFlow ?? defaultEntry.flowSlug,
+      flows,
+    });
   });
 
   api.get('/projects/:project/flows/:flow', async (c) => {
