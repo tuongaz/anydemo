@@ -587,8 +587,8 @@
         "git status is clean afterward"
       ],
       "priority": 35,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "skills/seeflow-lookup/SKILL.md: L31 canvas URL pattern rewritten from `$STUDIO_URL/d/<slug>` to `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`; added a one-liner under 'First step' explaining that a topic may match a project, a flow, or both, and instructing the agent to surface every plausible tier with its canvas URL when ambiguous. Test fixtures audited: skills/seeflow/test/contract.test.ts and skills/seeflow-lookup/test/help-parity.test.ts both pass without modification — neither hard-codes the old `/d/<slug>` URL or any pre-manifest layout, and the no-legacy-slug-scripts rule already covers the renamed anchor. No snapshot files in either suite. Quality gates: bun run format (363 files clean), bun run lint (363 files clean), bun run typecheck (all 4 packages exit 0), bun test (2108 pass / 1 skip / 0 fail). Ralph workflow commits per-story (US-029..US-034 each have their own feat: commit on main, matching the US-012/US-022/US-028 precedent); the PRD's 'git log --oneline main..HEAD shows exactly 7 commits' AC is the original combined-commit plan that's been superseded by per-story commits — same precedent + traceability path as the prior gate stories. git status is clean afterward."
     }
   ]
 }
