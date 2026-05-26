@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -41,7 +41,7 @@ import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
-import { FlowSchema, ResolvedFlowSchema, SeeflowManifestSchema } from './schema.ts';
+import { FlowIdPattern, FlowSchema, ResolvedFlowSchema, SeeflowManifestSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -54,6 +54,18 @@ const EmitBodySchema = z.object({
   status: z.enum(['running', 'done', 'error']),
   runId: z.string().optional(),
   payload: z.unknown().optional(),
+});
+
+// Body for POST /api/projects/:project/flows (US-015). The flow id reuses
+// FlowIdPattern from schema.ts — same constraint the seeflow.json manifest
+// enforces, so a manifest round-trip after this route runs cannot fail
+// validation on the new entry's id.
+const CreateFlowBodySchema = z.object({
+  id: z.string().regex(FlowIdPattern, {
+    message: 'flow id must match /^[a-z0-9][a-z0-9-]*$/',
+  }),
+  name: z.string().min(1),
+  icon: z.string().min(1).optional(),
 });
 
 type RelativePathCheck = { kind: 'ok' } | { kind: 'invalid'; reason: string };
@@ -601,6 +613,122 @@ export function createApi(options: ApiOptions): Hono {
       isDefault: e.isDefault,
     }));
     return c.json({ flows });
+  });
+
+  // POST /api/projects/:project/flows — create a new flow within an existing
+  // project (US-015). Atomically: write `flows/<id>/flow.json` with an empty
+  // envelope → append the new entry to `seeflow.json` → `registry.upsert()`.
+  // If the manifest write fails after the flow folder is on disk, the folder
+  // is removed so the project state stays consistent with the manifest. New
+  // flows are never the project default — the caller has to use PATCH
+  // /projects/:project/flows/:flow (US-016) to flip defaultFlow.
+  api.post('/projects/:project/flows', async (c) => {
+    const projectSlug = c.req.param('project');
+    const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
+    const head = entries[0];
+    if (!head) {
+      return c.json({ ok: false as const, error: 'project-not-found' as const }, 404);
+    }
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Body must be valid JSON' }, 400);
+    }
+    const parsed = CreateFlowBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid create flow body', issues: parsed.error.issues }, 400);
+    }
+    const { id, name, icon } = parsed.data;
+
+    // Duplicate check: any registered flow in the project or any pre-existing
+    // folder under `flows/<id>/` (covers manual edits that never made it to
+    // the registry) collides. Manifest entry duplication is structurally
+    // impossible if the registry is the source of truth, but the disk check
+    // catches drift.
+    if (entries.some((e) => e.flowSlug === id)) {
+      return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+    }
+
+    const repoPath = head.repoPath;
+    const manifestPath = join(repoPath, 'seeflow.json');
+    const manifest = readProjectManifest(repoPath);
+    if (!manifest) {
+      return c.json(
+        {
+          ok: false as const,
+          error: 'manifest-missing-or-invalid' as const,
+          path: manifestPath,
+        },
+        500,
+      );
+    }
+    if (manifest.flows.some((f) => f.id === id)) {
+      return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+    }
+
+    const flowDir = join(repoPath, 'flows', id);
+    if (existsSync(flowDir)) {
+      return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+    }
+
+    // 1. Create the flow folder + flow.json. Atomic write guarantees no
+    //    half-written file lands; mkdir is recursive in case `flows/` itself
+    //    is missing on a partially-scaffolded project.
+    try {
+      mkdirSync(flowDir, { recursive: true });
+      const envelope = { version: 2 as const, name, nodes: [], connectors: [] };
+      writeFileAtomic(join(flowDir, 'flow.json'), `${JSON.stringify(envelope, null, 2)}\n`);
+    } catch (err) {
+      try {
+        rmSync(flowDir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup
+      }
+      return c.json(
+        { ok: false as const, error: 'scaffold-failed' as const, detail: String(err) },
+        500,
+      );
+    }
+
+    // 2. Append the new entry to the manifest. Roll the folder back if the
+    //    write fails so the project never has an orphan `flows/<id>/`.
+    const manifestEntry: { id: string; name: string; icon?: string } = { id, name };
+    if (icon !== undefined) manifestEntry.icon = icon;
+    const updatedManifest = {
+      ...manifest,
+      flows: [...manifest.flows, manifestEntry],
+    };
+    try {
+      writeFileAtomic(manifestPath, `${JSON.stringify(updatedManifest, null, 2)}\n`);
+    } catch (err) {
+      try {
+        rmSync(flowDir, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup
+      }
+      return c.json(
+        { ok: false as const, error: 'manifest-write-failed' as const, detail: String(err) },
+        500,
+      );
+    }
+
+    // 3. Register the new entry. `flowPath` is project-relative — matches the
+    //    scanner output for manifest-driven projects.
+    const entry = registry.upsert({
+      name,
+      repoPath,
+      flowPath: `flows/${id}/flow.json`,
+      projectSlug,
+      flowSlug: id,
+      isDefault: false,
+      icon,
+      valid: true,
+    });
+    watcher?.watch(entry.id);
+
+    return c.json(entry, 201);
   });
 
   api.get('/projects/:project/flows/:flow', async (c) => {

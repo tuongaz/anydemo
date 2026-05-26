@@ -1113,6 +1113,116 @@ describe('GET /api/projects/:project/flows', () => {
   });
 });
 
+describe('POST /api/projects/:project/flows', () => {
+  it('creates a new flow folder + manifest entry + registry entry and returns 201', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await post(app, '/api/projects/order-pipeline/flows', {
+      id: 'retry',
+      name: 'Retry',
+      icon: 'refresh-ccw',
+    });
+    expect(res.status).toBe(201);
+    const entry = (await res.json()) as {
+      id: string;
+      slug: string;
+      name: string;
+      projectSlug: string;
+      flowSlug: string;
+      isDefault: boolean;
+      icon?: string;
+      flowPath: string;
+      repoPath: string;
+    };
+    expect(entry.projectSlug).toBe('order-pipeline');
+    expect(entry.flowSlug).toBe('retry');
+    expect(entry.slug).toBe('order-pipeline/retry');
+    expect(entry.name).toBe('Retry');
+    expect(entry.icon).toBe('refresh-ccw');
+    expect(entry.isDefault).toBe(false);
+    expect(entry.flowPath).toBe('flows/retry/flow.json');
+    expect(entry.repoPath).toBe(repoPath);
+
+    // Disk side effects: empty envelope + manifest append.
+    const flowJsonPath = join(repoPath, 'flows', 'retry', 'flow.json');
+    expect(existsSync(flowJsonPath)).toBe(true);
+    const flowJson = JSON.parse(readFileSync(flowJsonPath, 'utf8'));
+    expect(flowJson).toEqual({ version: 2, name: 'Retry', nodes: [], connectors: [] });
+
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.flows).toEqual([
+      { id: 'main', name: 'Main' },
+      { id: 'retry', name: 'Retry', icon: 'refresh-ccw' },
+    ]);
+
+    // Registry side effect: the new entry shows up under the project.
+    const fromRegistry = registry.getById(entry.id);
+    expect(fromRegistry).toBeDefined();
+    expect(fromRegistry?.flowSlug).toBe('retry');
+    expect(fromRegistry?.isDefault).toBe(false);
+  });
+
+  it('rejects duplicate flow ids with 409 duplicate-flow-id', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await post(app, '/api/projects/order-pipeline/flows', {
+      id: 'main',
+      name: 'Main again',
+    });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: 'duplicate-flow-id' });
+    // The manifest must not have been touched.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.flows).toHaveLength(1);
+  });
+
+  it('rejects invalid flow ids that fail FlowIdPattern with 400', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await post(app, '/api/projects/order-pipeline/flows', {
+      id: '-bad-start',
+      name: 'Should be rejected',
+    });
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string; issues?: unknown[] };
+    expect(body.error).toBe('Invalid create flow body');
+    expect(Array.isArray(body.issues)).toBe(true);
+    // No partial flow folder should have been created.
+    expect(existsSync(join(repoPath, 'flows', '-bad-start'))).toBe(false);
+  });
+
+  it('returns 404 project-not-found for an unknown project slug', async () => {
+    const { app } = buildApp();
+    const res = await post(app, '/api/projects/does-not-exist/flows', {
+      id: 'retry',
+      name: 'Retry',
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+});
+
 describe('GET /api/projects/:project/flows/:flow', () => {
   it('returns the validated demo + filePath when watcher is disabled (sync read fallback)', async () => {
     const { app } = buildApp();
