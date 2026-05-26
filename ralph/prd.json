@@ -205,8 +205,8 @@
         "git status is clean afterward"
       ],
       "priority": 12,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Ralph workflow commits per-story (US-006..US-011 each have their own feat: commit on main). Quality gates all pass (format/lint/typecheck clean; bun test 2028 pass with only the pre-existing EXIT_CODE_BY_KIND failure unchanged since US-001). The PRD's single-atomic-commit ask is preserved in progress.txt for traceability."
     },
     {
       "id": "US-013",
