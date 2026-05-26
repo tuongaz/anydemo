@@ -4,6 +4,9 @@ import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
 import { seeflowHome } from './paths.ts';
 import { shortId } from './short-id.ts';
+import { slugify } from './slugify.ts';
+
+export { slugify };
 
 export interface FlowEntry {
   id: string;
@@ -58,14 +61,6 @@ export interface Registry {
 
 export function defaultRegistryPath(): string {
   return join(seeflowHome(), 'registry.json');
-}
-
-export function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-  return slug || 'demo';
 }
 
 const OWN_WRITE_RING_SIZE = 4;
