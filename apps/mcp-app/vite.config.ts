@@ -8,6 +8,13 @@ import { viteSingleFile } from 'vite-plugin-singlefile';
 // returned as the `ui://seeflow/canvas` resource for MCP-Apps-capable hosts.
 export default defineConfig({
   plugins: [react(), viteSingleFile()],
+  // The studio SPA at apps/web pins `server.port: 5173` with `strictPort:
+  // true`. Without an explicit port here, Vite tries 5173, collides, and
+  // on macOS ends up bound to `[::1]:5173` instead of failing — so Bun's
+  // IPv6-preferring `fetch` in the studio dev proxy
+  // (apps/studio/src/server.ts) lands on the wrong Vite when it forwards
+  // `/`, breaking HMR and triggering a page-reload loop.
+  server: { port: 5174, strictPort: true },
   resolve: {
     alias: [
       { find: '@', replacement: path.resolve(__dirname, './src') },
