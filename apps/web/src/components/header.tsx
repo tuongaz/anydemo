@@ -35,7 +35,7 @@ export function Header({
   const { theme, setTheme } = useTheme();
 
   return (
-    <header className="relative flex h-14 shrink-0 items-center justify-between bg-background/85 px-5 backdrop-blur-md shadow-[0_1px_3px_-1px_rgba(15,23,42,0.06),0_2px_8px_-4px_rgba(15,23,42,0.05)] dark:border-b dark:border-border/60 dark:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.6)]">
+    <header className="relative flex h-14 shrink-0 items-center justify-between bg-background/85 px-5 backdrop-blur-md shadow-[0_1px_3px_-1px_rgba(15,23,42,0.06),0_2px_8px_-4px_rgba(15,23,42,0.05)] dark:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.6)]">
       <button
         type="button"
         onClick={() => navigate('/')}
