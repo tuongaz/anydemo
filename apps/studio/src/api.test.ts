@@ -1223,6 +1223,160 @@ describe('POST /api/projects/:project/flows', () => {
   });
 });
 
+describe('PATCH /api/projects/:project/flows/:flow', () => {
+  const patch = (app: ReturnType<typeof buildApp>['app'], path: string, body: unknown) =>
+    app.request(path, {
+      method: 'PATCH',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+
+  it('renames the flow id: moves the folder, updates manifest + defaultFlow, rebinds registry', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+    const beforeEntry = registry.list().find((e) => e.flowSlug === 'main');
+    expect(beforeEntry).toBeDefined();
+
+    const res = await patch(app, '/api/projects/order-pipeline/flows/main', { id: 'primary' });
+    expect(res.status).toBe(200);
+    const entry = (await res.json()) as {
+      id: string;
+      slug: string;
+      name: string;
+      projectSlug: string;
+      flowSlug: string;
+      isDefault: boolean;
+      icon?: string;
+      flowPath: string;
+      repoPath: string;
+    };
+    expect(entry.flowSlug).toBe('primary');
+    expect(entry.slug).toBe('order-pipeline/primary');
+    expect(entry.name).toBe('Main');
+    expect(entry.isDefault).toBe(true);
+    expect(entry.flowPath).toBe('flows/primary/flow.json');
+    expect(entry.repoPath).toBe(repoPath);
+
+    // Folder moved.
+    expect(existsSync(join(repoPath, 'flows', 'main'))).toBe(false);
+    expect(existsSync(join(repoPath, 'flows', 'primary', 'flow.json'))).toBe(true);
+
+    // Manifest updated, including defaultFlow.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('primary');
+    expect(manifestRaw.flows).toEqual([{ id: 'primary', name: 'Main' }]);
+
+    // Registry: old entry id is gone, new entry is fetchable by id.
+    if (beforeEntry) {
+      expect(registry.getById(beforeEntry.id)).toBeUndefined();
+    }
+    const fromRegistry = registry.getById(entry.id);
+    expect(fromRegistry).toBeDefined();
+    expect(fromRegistry?.flowSlug).toBe('primary');
+    expect(fromRegistry?.flowPath).toBe('flows/primary/flow.json');
+  });
+
+  it('updates name and icon only without touching the filesystem layout', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main', icon: 'home' }],
+    });
+    registerProject({ repoPath, registry });
+    const beforeEntry = registry.list().find((e) => e.flowSlug === 'main');
+    expect(beforeEntry).toBeDefined();
+
+    const res = await patch(app, '/api/projects/order-pipeline/flows/main', {
+      name: 'Renamed Main',
+      icon: 'star',
+    });
+    expect(res.status).toBe(200);
+    const entry = (await res.json()) as {
+      id: string;
+      name: string;
+      flowSlug: string;
+      icon?: string;
+      flowPath: string;
+    };
+    // Same flowSlug, same flowPath, same registry id (no rebinding).
+    expect(entry.flowSlug).toBe('main');
+    expect(entry.flowPath).toBe('flows/main/flow.json');
+    if (beforeEntry) expect(entry.id).toBe(beforeEntry.id);
+    expect(entry.name).toBe('Renamed Main');
+    expect(entry.icon).toBe('star');
+
+    // Folder untouched.
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+
+    // Manifest reflects name + icon; defaultFlow unchanged.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('main');
+    expect(manifestRaw.flows).toEqual([{ id: 'main', name: 'Renamed Main', icon: 'star' }]);
+  });
+
+  it('rejects an id rename that collides with another flow with 409 duplicate-flow-id', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await patch(app, '/api/projects/order-pipeline/flows/main', { id: 'retry' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: 'duplicate-flow-id' });
+
+    // Manifest unchanged.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.flows).toEqual([
+      { id: 'main', name: 'Main' },
+      { id: 'retry', name: 'Retry' },
+    ]);
+    // Both folders still on disk.
+    expect(existsSync(join(repoPath, 'flows', 'main'))).toBe(true);
+    expect(existsSync(join(repoPath, 'flows', 'retry'))).toBe(true);
+  });
+
+  it('returns 404 project-not-found for an unknown project slug', async () => {
+    const { app } = buildApp();
+    const res = await patch(app, '/api/projects/does-not-exist/flows/main', {
+      name: 'Whatever',
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('returns 404 flow-not-found for an unknown flow slug', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await patch(app, '/api/projects/order-pipeline/flows/ghost', {
+      name: 'Whatever',
+    });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'flow-not-found' });
+  });
+});
+
 describe('GET /api/projects/:project/flows/:flow', () => {
   it('returns the validated demo + filePath when watcher is disabled (sync read fallback)', async () => {
     const { app } = buildApp();

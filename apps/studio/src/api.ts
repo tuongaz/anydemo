@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, realpathSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
 import { streamSSE } from 'hono/streaming';
@@ -67,6 +67,25 @@ const CreateFlowBodySchema = z.object({
   name: z.string().min(1),
   icon: z.string().min(1).optional(),
 });
+
+// Body for PATCH /api/projects/:project/flows/:flow (US-016). All three
+// fields are optional; the .refine() rejects an empty body so callers can't
+// no-op the route. The same FlowIdPattern that guards POST guards id renames
+// here, so a renamed flow's id stays manifest-compatible.
+const PatchFlowBodySchema = z
+  .object({
+    id: z
+      .string()
+      .regex(FlowIdPattern, {
+        message: 'flow id must match /^[a-z0-9][a-z0-9-]*$/',
+      })
+      .optional(),
+    name: z.string().min(1).optional(),
+    icon: z.string().min(1).optional(),
+  })
+  .refine((b) => b.id !== undefined || b.name !== undefined || b.icon !== undefined, {
+    message: 'body must include at least one of id, name, icon',
+  });
 
 type RelativePathCheck = { kind: 'ok' } | { kind: 'invalid'; reason: string };
 
@@ -729,6 +748,188 @@ export function createApi(options: ApiOptions): Hono {
     watcher?.watch(entry.id);
 
     return c.json(entry, 201);
+  });
+
+  // PATCH /api/projects/:project/flows/:flow — rename a flow id and/or update
+  // its name / icon (US-016). Two modes:
+  //   1. id change → rename `flows/<oldId>/` to `flows/<newId>/`, rewrite the
+  //      manifest entry (and `defaultFlow` if it pointed at the renamed flow),
+  //      then re-bind the registry entry + watcher under the new flowPath. On
+  //      manifest-write failure, the folder rename is rolled back.
+  //   2. name/icon only → manifest-only edit; the filesystem layout and the
+  //      registry entry id are untouched, only `name` / `icon` are refreshed.
+  // The handler is single-flight in the no-collision sense: it serialises
+  // through the registry + filesystem so two concurrent id renames against
+  // the same project cannot interleave to produce a duplicate folder.
+  api.patch('/projects/:project/flows/:flow', async (c) => {
+    const projectSlug = c.req.param('project');
+    const flowSlug = c.req.param('flow');
+    const resolved = resolveProjectFlow(registry, projectSlug, flowSlug);
+    if (resolved.kind === 'error') {
+      return c.json({ ok: false as const, error: resolved.code }, 404);
+    }
+    const entry = resolved.entry;
+
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Body must be valid JSON' }, 400);
+    }
+    const parsed = PatchFlowBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid patch flow body', issues: parsed.error.issues }, 400);
+    }
+    const { id: requestedId, name: requestedName, icon: requestedIcon } = parsed.data;
+
+    const repoPath = entry.repoPath;
+    const manifestPath = join(repoPath, 'seeflow.json');
+    const manifest = readProjectManifest(repoPath);
+    if (!manifest) {
+      return c.json(
+        {
+          ok: false as const,
+          error: 'manifest-missing-or-invalid' as const,
+          path: manifestPath,
+        },
+        500,
+      );
+    }
+
+    const manifestEntryIdx = manifest.flows.findIndex((f) => f.id === entry.flowSlug);
+    if (manifestEntryIdx === -1) {
+      // Registry and manifest are out of sync — the entry knows itself by
+      // flowSlug but the manifest disagrees. Bail rather than rebuild the
+      // manifest unilaterally; a future `seeflow reconcile` verb could repair.
+      return c.json({ ok: false as const, error: 'manifest-entry-missing' as const }, 500);
+    }
+    const existingManifestEntry = manifest.flows[manifestEntryIdx];
+    if (!existingManifestEntry) {
+      return c.json({ ok: false as const, error: 'manifest-entry-missing' as const }, 500);
+    }
+
+    const idChanging = requestedId !== undefined && requestedId !== entry.flowSlug;
+
+    // Branch 1: id rename. The folder move is the only side-effect we have to
+    // undo on manifest-write failure, so it goes BEFORE the manifest write.
+    if (idChanging) {
+      const newId = requestedId;
+      if (newId === undefined) {
+        // Narrowing for TS — `idChanging` already implies non-undefined.
+        return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+      }
+
+      // Collision checks: manifest, registry, on-disk folder. Each catches a
+      // different drift; cheapest first.
+      if (manifest.flows.some((f) => f.id === newId)) {
+        return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+      }
+      const projectEntries = registry.list().filter((e) => e.projectSlug === projectSlug);
+      if (projectEntries.some((e) => e.flowSlug === newId)) {
+        return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+      }
+      const oldFolder = join(repoPath, 'flows', entry.flowSlug);
+      const newFolder = join(repoPath, 'flows', newId);
+      if (existsSync(newFolder)) {
+        return c.json({ ok: false as const, error: 'duplicate-flow-id' as const }, 409);
+      }
+
+      // 1. Move the folder.
+      try {
+        renameSync(oldFolder, newFolder);
+      } catch (err) {
+        return c.json(
+          { ok: false as const, error: 'folder-rename-failed' as const, detail: String(err) },
+          500,
+        );
+      }
+
+      // 2. Build + atomically write the updated manifest.
+      const finalName = requestedName ?? existingManifestEntry.name;
+      const finalIcon = requestedIcon !== undefined ? requestedIcon : existingManifestEntry.icon;
+      const updatedFlowEntry: { id: string; name: string; icon?: string } = {
+        id: newId,
+        name: finalName,
+      };
+      if (finalIcon !== undefined) updatedFlowEntry.icon = finalIcon;
+      const updatedManifest: SeeflowManifest = {
+        ...manifest,
+        defaultFlow: manifest.defaultFlow === entry.flowSlug ? newId : manifest.defaultFlow,
+        flows: manifest.flows.map((f, i) => (i === manifestEntryIdx ? updatedFlowEntry : f)),
+      };
+
+      try {
+        writeFileAtomic(manifestPath, `${JSON.stringify(updatedManifest, null, 2)}\n`);
+      } catch (err) {
+        try {
+          renameSync(newFolder, oldFolder);
+        } catch {
+          // best-effort rollback
+        }
+        return c.json(
+          { ok: false as const, error: 'manifest-write-failed' as const, detail: String(err) },
+          500,
+        );
+      }
+
+      // 3. Rebind the registry entry under the new flowPath. The shortId
+      //    changes — registry slugs are addressed via projectSlug/flowSlug, so
+      //    clients re-resolve via the new URL. Watcher is unwatch-then-watch
+      //    because the flowPath that the watcher reads is sourced from the
+      //    new registry entry.
+      watcher?.unwatch(entry.id);
+      registry.remove(entry.id);
+      const newEntry = registry.upsert({
+        name: finalName,
+        description: entry.description,
+        repoPath,
+        flowPath: `flows/${newId}/flow.json`,
+        projectSlug,
+        flowSlug: newId,
+        isDefault: entry.isDefault,
+        icon: finalIcon,
+        valid: entry.valid,
+      });
+      watcher?.watch(newEntry.id);
+
+      return c.json(newEntry);
+    }
+
+    // Branch 2: name / icon only. Filesystem layout untouched.
+    const finalName = requestedName ?? existingManifestEntry.name;
+    const finalIcon = requestedIcon !== undefined ? requestedIcon : existingManifestEntry.icon;
+    const updatedFlowEntry: { id: string; name: string; icon?: string } = {
+      id: existingManifestEntry.id,
+      name: finalName,
+    };
+    if (finalIcon !== undefined) updatedFlowEntry.icon = finalIcon;
+    const updatedManifest: SeeflowManifest = {
+      ...manifest,
+      flows: manifest.flows.map((f, i) => (i === manifestEntryIdx ? updatedFlowEntry : f)),
+    };
+
+    try {
+      writeFileAtomic(manifestPath, `${JSON.stringify(updatedManifest, null, 2)}\n`);
+    } catch (err) {
+      return c.json(
+        { ok: false as const, error: 'manifest-write-failed' as const, detail: String(err) },
+        500,
+      );
+    }
+
+    const updatedEntry = registry.upsert({
+      name: finalName,
+      description: entry.description,
+      repoPath,
+      flowPath: entry.flowPath,
+      projectSlug,
+      flowSlug: entry.flowSlug,
+      isDefault: entry.isDefault,
+      icon: finalIcon,
+      valid: entry.valid,
+    });
+
+    return c.json(updatedEntry);
   });
 
   api.get('/projects/:project/flows/:flow', async (c) => {
