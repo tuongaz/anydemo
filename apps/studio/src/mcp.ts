@@ -2,10 +2,19 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import {
   CallToolRequestSchema,
   type CallToolResult,
+  ListResourcesRequestSchema,
   ListToolsRequestSchema,
+  ReadResourceRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import { type ZodTypeAny, z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
+import {
+  CANVAS_RESOURCE_MIME,
+  CANVAS_RESOURCE_URI,
+  type CanvasWidgetState,
+  canvasMeta,
+  readCanvasHtml,
+} from './mcp-ui.ts';
 import {
   ConnectorPatchBodySchema,
   CreateProjectBodySchema,
@@ -27,7 +36,42 @@ import type { FlowWatcher } from './watcher.ts';
 export interface CreateMcpServerOptions {
   registry: Registry;
   watcher?: FlowWatcher;
+  /** Per-process token forwarded to the MCP App iframe via
+   *  `_meta['openai/widgetState'].backendToken` so cross-origin requests
+   *  from the sandboxed (`Origin: null`) iframe can carry it as
+   *  `X-Seeflow-Token`. Same value as the one passed to
+   *  `createApp({ token })`. Wired into canvas-bearing tool handlers; non-
+   *  canvas tools ignore it. */
+  token?: string;
+  /** Reachable loopback URL of the studio HTTP backend (e.g.
+   *  `http://127.0.0.1:54321`). The MCP App iframe uses it as the REST
+   *  base URL to load flow data. When unset, canvas-bearing tools omit
+   *  `_meta` entirely so non-Apps hosts still work (the iframe can't
+   *  reach a backend without both `httpUrl` and `token`). */
+  httpUrl?: string;
 }
+
+/** Subset of `CreateMcpServerOptions` that the canvas-bearing tool
+ *  handlers need at call time. Built once in `createMcpServer` and
+ *  passed into `buildTools` so the closures inside each handler can
+ *  attach `_meta` without re-reading the outer options. */
+interface ToolContext {
+  registry: Registry;
+  token?: string;
+  httpUrl?: string;
+}
+
+/** Build the `_meta` block for a canvas-bearing tool result, when both
+ *  `httpUrl` and `token` are configured. Returns `undefined` if either
+ *  is missing (e.g. proxy mode in `mcp-shim.ts`, or tests that bypass
+ *  the shim) so non-Apps callers still get a plain JSON-only result. */
+const canvasMetaFor = (
+  ctx: ToolContext,
+  state: Omit<CanvasWidgetState, 'backendUrl' | 'backendToken'>,
+): Record<string, unknown> | undefined => {
+  if (!ctx.httpUrl || !ctx.token) return undefined;
+  return canvasMeta({ ...state, backendUrl: ctx.httpUrl, backendToken: ctx.token });
+};
 
 // Tools are pushed into this in-memory list inside `createMcpServer`. Each
 // tool has a tiny one-sentence description, a JSON Schema for its input
@@ -56,9 +100,13 @@ const inputSchemaFromZod = (schema: ZodTypeAny): Record<string, unknown> => {
   return rest.type === 'object' ? rest : { type: 'object', ...rest };
 };
 
-const okResult = (value: unknown): CallToolResult => ({
-  content: [{ type: 'text', text: JSON.stringify(value) }],
-});
+const okResult = (value: unknown, meta?: Record<string, unknown>): CallToolResult => {
+  const result: CallToolResult = {
+    content: [{ type: 'text', text: JSON.stringify(value) }],
+  };
+  if (meta) result._meta = meta;
+  return result;
+};
 
 // Error payloads (e.g. 'unknown demo', 'Failed to write demo file') still say
 // "demo" so the strings match the REST handlers in api.ts byte-for-byte.
@@ -171,7 +219,7 @@ const DeleteConnectorInputSchema = z.object({
   connectorId: z.string().min(1),
 });
 
-const buildTools = (ops: Operations): McpTool[] => [
+const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   {
     name: 'seeflow_list_flows',
     description: 'List every flow registered with the studio.',
@@ -321,8 +369,10 @@ const buildTools = (ops: Operations): McpTool[] => [
       if ('error' in v) return errorResult(v.error);
       const result = await ops.getFlow(v.flowId);
       switch (result.kind) {
-        case 'ok':
-          return okResult(result.data);
+        case 'ok': {
+          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug: result.data.slug });
+          return okResult(result.data, meta);
+        }
         case 'notFound':
           return errorResult('not found');
         case 'fileNotFound':
@@ -342,8 +392,10 @@ const buildTools = (ops: Operations): McpTool[] => [
       if ('error' in v) return errorResult(v.error);
       const result = await ops.getFlowGraph(v.flowId);
       switch (result.kind) {
-        case 'ok':
-          return okResult(result.data);
+        case 'ok': {
+          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug: result.data.slug });
+          return okResult(result.data, meta);
+        }
         case 'notFound':
           return errorResult('not found');
         case 'fileNotFound':
@@ -384,8 +436,11 @@ const buildTools = (ops: Operations): McpTool[] => [
       }
       const result = await ops.getNode(flowId, nodeId);
       switch (result.kind) {
-        case 'ok':
-          return okResult(result.data);
+        case 'ok': {
+          const flowSlug = ctx.registry.resolve(flowId)?.slug;
+          const meta = canvasMetaFor(ctx, { kind: 'navigate', flowSlug, nodeId });
+          return okResult(result.data, meta);
+        }
         case 'notFound':
           return errorResult('not found');
         case 'fileNotFound':
@@ -412,8 +467,14 @@ const buildTools = (ops: Operations): McpTool[] => [
       }
       const result = await ops.registerFlow(parsed.data);
       switch (result.kind) {
-        case 'ok':
-          return okResult(result.data);
+        case 'ok': {
+          const meta = canvasMetaFor(ctx, {
+            kind: 'create',
+            flowSlug: result.data.slug,
+            justCreated: true,
+          });
+          return okResult(result.data, meta);
+        }
         case 'fileNotFound':
           return errorResult(`Flow file not found: ${result.path}`);
         case 'badJson':
@@ -453,8 +514,13 @@ const buildTools = (ops: Operations): McpTool[] => [
       }
       const result = await ops.createProject(parsed.data);
       switch (result.kind) {
-        case 'ok':
-          return okResult(result.data);
+        case 'ok': {
+          const meta = canvasMetaFor(ctx, {
+            kind: 'create',
+            projectSlug: result.data.slug,
+          });
+          return okResult(result.data, meta);
+        }
         case 'alreadyExists':
           return errorResult(`Project already exists at ${result.path}`);
         case 'scaffoldFailed':
@@ -758,9 +824,16 @@ export function createMcpServer(options: CreateMcpServerOptions): Server {
     registry: options.registry,
     watcher: options.watcher,
   });
-  const tools = buildTools(ops);
+  const tools = buildTools(ops, {
+    registry: options.registry,
+    token: options.token,
+    httpUrl: options.httpUrl,
+  });
 
-  const server = new Server({ name: 'seeflow', version: '0.1.0' }, { capabilities: { tools: {} } });
+  const server = new Server(
+    { name: 'seeflow', version: '0.1.0' },
+    { capabilities: { tools: {}, resources: {} } },
+  );
 
   server.setRequestHandler(ListToolsRequestSchema, () => ({
     tools: tools.map(({ name, description, inputSchema }) => ({
@@ -779,6 +852,35 @@ export function createMcpServer(options: CreateMcpServerOptions): Server {
       };
     }
     return tool.handler(request.params.arguments);
+  });
+
+  // MCP Apps resource: a single readable HTML bundle the host iframes when a
+  // canvas-bearing tool returns `_meta['openai/outputTemplate'] = CANVAS_RESOURCE_URI`.
+  // Listed unconditionally — the bundle is part of the binary, even on hosts
+  // that don't speak MCP Apps (they just ignore the resource).
+  server.setRequestHandler(ListResourcesRequestSchema, () => ({
+    resources: [
+      {
+        uri: CANVAS_RESOURCE_URI,
+        name: 'SeeFlow Canvas',
+        mimeType: CANVAS_RESOURCE_MIME,
+      },
+    ],
+  }));
+
+  server.setRequestHandler(ReadResourceRequestSchema, (request) => {
+    if (request.params.uri !== CANVAS_RESOURCE_URI) {
+      throw new Error(`Unknown resource: ${request.params.uri}`);
+    }
+    return {
+      contents: [
+        {
+          uri: CANVAS_RESOURCE_URI,
+          mimeType: CANVAS_RESOURCE_MIME,
+          text: readCanvasHtml(),
+        },
+      ],
+    };
   });
 
   return server;

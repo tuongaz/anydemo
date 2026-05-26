@@ -213,6 +213,23 @@
       "priority": 12,
       "passes": false,
       "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Document MCP Apps usage in README.md",
+      "description": "As a user evaluating SeeFlow, I want to see a 'MCP Apps' section in the README that explains how to install seeflow-mcp in Claude Desktop and what to expect.",
+      "acceptanceCriteria": [
+        "README.md gains an 'MCP Apps' section after the existing CLI/Studio sections",
+        "Section includes a Claude Desktop config snippet showing how to register seeflow-mcp",
+        "Section lists the 5 canvas-bearing tools and what each renders",
+        "Section briefly explains the model-notify split (sendMessage for structural edits; updateModelContext for navigation telemetry)",
+        "Section notes that non-Apps hosts continue to work unchanged (additive _meta)",
+        "Section links to docs/plans/2026-05-25-mcp-apps-for-seeflow-design.md for the full design",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": true,
+      "notes": ""
     }
   ]
 }

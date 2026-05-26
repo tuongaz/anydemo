@@ -4,6 +4,7 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { type ProxyFacade, createApi } from './api.ts';
+import { createCorsMiddleware } from './cors.ts';
 import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
 import { createMcpServer } from './mcp.ts';
@@ -54,6 +55,19 @@ export interface CreateAppOptions {
   /** Inject a ProxyFacade — tests use this to short-circuit runPlay /
    *  runReset / stopAllPlays and assert call order. */
   proxy?: ProxyFacade;
+  /** Per-process token gating `Origin: null` requests (sandboxed MCP App
+   *  iframe). Generated at studio boot; delivered to the iframe via
+   *  `widgetState.backendToken`. Undefined disables the null-origin path —
+   *  null-origin requests are then always rejected. */
+  token?: string;
+  /** Reachable loopback URL of this Hono server, e.g.
+   *  `http://127.0.0.1:54321`. Forwarded to canvas-bearing MCP tool
+   *  handlers (via `createMcpServer`) so they can attach it to the
+   *  iframe's widgetState as `backendUrl`. Read by closure inside
+   *  `app.all('/mcp', ...)` so callers can mutate the options after
+   *  `Bun.serve` binds — useful for the ephemeral-port boot in
+   *  `mcp-shim.ts` where the URL isn't known until the server is up. */
+  httpUrl?: string;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -91,6 +105,11 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   }
 
   const app = new Hono();
+
+  // CORS + token gate runs first so every downstream route inherits the
+  // null-origin rule. No-ops on requests without an Origin header (CLI
+  // calls, integration tests, top-level navigation).
+  app.use('*', createCorsMiddleware(options.token));
 
   app.get('/health', (c) => c.json({ ok: true }));
 
@@ -155,6 +174,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     const mcpServer = createMcpServer({
       registry,
       watcher,
+      token: options.token,
+      httpUrl: options.httpUrl,
     });
     await mcpServer.connect(transport);
     try {
