@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "name": "Component Demo",
+  "defaultFlow": "main",
+  "flows": [{ "id": "main", "name": "Main" }]
+}

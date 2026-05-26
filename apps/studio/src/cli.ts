@@ -3,7 +3,7 @@ import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from
 import { dirname, isAbsolute, join, resolve } from 'node:path';
 import { drainStdin, loadBody, printError, printOk, printOutcome } from './cli-helpers.ts';
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
-import { createCliOperations } from './cli-ops.ts';
+import { createCliOperations, registerProject } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
 import { JqError, applyJq } from './jq-filter.ts';
 import type { LayoutOptions } from './layout.ts';
@@ -15,7 +15,7 @@ import {
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
-import { type Registry, createRegistry, slugify } from './registry.ts';
+import { type Registry, createRegistry } from './registry.ts';
 import {
   DEFAULT_CONFIG,
   clearPid,
@@ -356,7 +356,6 @@ async function seedExamples(registry: Registry) {
 
 async function seedExample(registry: Registry, exampleName: string) {
   const destDir = join(seeflowHome(), exampleName);
-  const flowPath = PROJECT_FLOW_FILENAME;
 
   // Always sync from source so that schema changes and example updates are
   // reflected on every startup, even when the dest directory already exists.
@@ -364,34 +363,14 @@ async function seedExample(registry: Registry, exampleName: string) {
   if (!existsSync(srcDir)) return;
   cpSync(srcDir, destDir, { recursive: true });
 
-  if (registry.getByRepoPathAndFlowPath(destDir, flowPath)) return;
-
-  const flowFile = join(destDir, flowPath);
-  if (!existsSync(flowFile)) return;
-
-  let demo: unknown;
-  try {
-    demo = await Bun.file(flowFile).json();
-  } catch {
+  const outcome = registerProject({ repoPath: destDir, registry });
+  if (outcome.kind !== 'ok') {
+    console.warn(`Skipped example ${exampleName}: ${JSON.stringify(outcome)}`);
     return;
   }
-
-  const parsed = FlowSchema.safeParse(demo);
-  if (!parsed.success) return;
-
-  // Pre-US-003 transitional state: examples are still legacy single-flow
-  // layouts. registerProject (US-004) and the manifest migration (US-005)
-  // replace these synthesised values with what the scanner reads from
-  // seeflow.json. Until then we stamp the default single-flow shape.
-  registry.upsert({
-    name: parsed.data.name,
-    repoPath: destDir,
-    flowPath,
-    projectSlug: slugify(parsed.data.name),
-    flowSlug: 'main',
-    isDefault: true,
-  });
-  console.log(`Seeded example: ${parsed.data.name} → ${destDir}`);
+  for (const entry of outcome.entries) {
+    console.log(`Seeded example: ${entry.name} → ${destDir} (${entry.slug})`);
+  }
 }
 
 async function spawnDaemon(port: number, host: string) {

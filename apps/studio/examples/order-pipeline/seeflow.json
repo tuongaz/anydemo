@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "name": "Order Pipeline",
+  "defaultFlow": "main",
+  "flows": [{ "id": "main", "name": "Main" }]
+}

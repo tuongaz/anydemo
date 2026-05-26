@@ -1,0 +1,6 @@
+{
+  "version": 1,
+  "name": "E-Commerce Platform",
+  "defaultFlow": "main",
+  "flows": [{ "id": "main", "name": "Main" }]
+}

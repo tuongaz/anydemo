@@ -88,7 +88,7 @@
         "Commit message: feat(scanner): seeflow.json manifest + flows/<id>/ layout"
       ],
       "priority": 5,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
