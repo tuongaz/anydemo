@@ -254,7 +254,11 @@ const SCENARIOS: ParityScenario[] = [
         demoFile: fix.demoFile,
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/nodes'), newNode),
         runMcp: () =>
-          callMcpTool(fix.app, 'seeflow_add_node', { flowId: fix.flowId, node: newNode }),
+          callMcpTool(fix.app, 'seeflow_add_node', {
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
+            node: newNode,
+          }),
       };
     },
   },
@@ -268,7 +272,8 @@ const SCENARIOS: ParityScenario[] = [
         runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/nodes/a'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_node', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             nodeId: 'a',
             ...body,
           }),
@@ -285,7 +290,11 @@ const SCENARIOS: ParityScenario[] = [
         demoFile: fix.demoFile,
         runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/nodes/b')),
         runMcp: () =>
-          callMcpTool(fix.app, 'seeflow_delete_node', { flowId: fix.flowId, nodeId: 'b' }),
+          callMcpTool(fix.app, 'seeflow_delete_node', {
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
+            nodeId: 'b',
+          }),
       };
     },
   },
@@ -302,7 +311,8 @@ const SCENARIOS: ParityScenario[] = [
           }),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_move_node', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             nodeId: 'a',
             x: 321,
             y: 654,
@@ -323,7 +333,8 @@ const SCENARIOS: ParityScenario[] = [
           }),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_reorder_node', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             nodeId: 'a',
             op: 'toIndex',
             index: 2,
@@ -342,7 +353,8 @@ const SCENARIOS: ParityScenario[] = [
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/connectors'), conn),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_add_connector', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             connector: conn,
           }),
       };
@@ -358,7 +370,8 @@ const SCENARIOS: ParityScenario[] = [
         runRest: () => restJson(fix.app, 'PATCH', flowApi(fix, '/connectors/a-to-b'), body),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_patch_connector', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             connectorId: 'a-to-b',
             ...body,
           }),
@@ -374,7 +387,8 @@ const SCENARIOS: ParityScenario[] = [
         runRest: () => restJson(fix.app, 'DELETE', flowApi(fix, '/connectors/a-to-b')),
         runMcp: () =>
           callMcpTool(fix.app, 'seeflow_delete_connector', {
-            flowId: fix.flowId,
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
             connectorId: 'a-to-b',
           }),
       };
@@ -406,7 +420,12 @@ const SCENARIOS: ParityScenario[] = [
       return {
         demoFile: fix.demoFile,
         runRest: () => restJson(fix.app, 'POST', flowApi(fix, '/bulk'), body),
-        runMcp: () => callMcpTool(fix.app, 'seeflow_add_bulk', { flowId: fix.flowId, ...body }),
+        runMcp: () =>
+          callMcpTool(fix.app, 'seeflow_add_bulk', {
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
+            ...body,
+          }),
       };
     },
   },
@@ -655,7 +674,10 @@ const expectCanvasMeta = (
 describe('canvas _meta attachment rules', () => {
   it('seeflow_get_flow attaches _meta with kind=navigate + projectSlug + flowSlug', async () => {
     const fix = buildMetaFixture();
-    const result = await callMcpToolFull(fix.app, 'seeflow_get_flow', { flowId: fix.flowId });
+    const result = await callMcpToolFull(fix.app, 'seeflow_get_flow', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+    });
     expectCanvasMeta(result, {
       kind: 'navigate',
       projectSlug: fix.projectSlug,
@@ -671,7 +693,8 @@ describe('canvas _meta attachment rules', () => {
   it('seeflow_get_flow_graph attaches _meta with kind=navigate + projectSlug + flowSlug', async () => {
     const fix = buildMetaFixture();
     const result = await callMcpToolFull(fix.app, 'seeflow_get_flow_graph', {
-      flowId: fix.flowId,
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
     });
     expectCanvasMeta(result, {
       kind: 'navigate',
@@ -688,7 +711,8 @@ describe('canvas _meta attachment rules', () => {
   it('seeflow_get_node attaches _meta with kind=navigate + projectSlug + flowSlug + nodeId', async () => {
     const fix = buildMetaFixture();
     const result = await callMcpToolFull(fix.app, 'seeflow_get_node', {
-      flowId: fix.flowId,
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
       nodeId: 'a',
     });
     expectCanvasMeta(result, {
@@ -752,15 +776,20 @@ describe('canvas _meta attachment rules', () => {
     // future additions to CANVAS_TOOLS must wire _meta or this fails fast.
     const fix = buildMetaFixture();
     const node = await callMcpToolFull(fix.app, 'seeflow_get_node', {
-      flowId: fix.flowId,
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
       nodeId: 'a',
     });
     expect(node._meta?.['openai/outputTemplate']).toBe(CANVAS_RESOURCE_URI);
     const graph = await callMcpToolFull(fix.app, 'seeflow_get_flow_graph', {
-      flowId: fix.flowId,
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
     });
     expect(graph._meta?.['openai/outputTemplate']).toBe(CANVAS_RESOURCE_URI);
-    const flow = await callMcpToolFull(fix.app, 'seeflow_get_flow', { flowId: fix.flowId });
+    const flow = await callMcpToolFull(fix.app, 'seeflow_get_flow', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+    });
     expect(flow._meta?.['openai/outputTemplate']).toBe(CANVAS_RESOURCE_URI);
   });
 
@@ -781,32 +810,45 @@ describe('canvas _meta attachment rules', () => {
       { name: 'seeflow_schema', args: {} },
       { name: 'seeflow_ids', args: { type: 'node', count: 1 } },
       { name: 'validate_seeflow', args: { flow: VALID_DEMO_TWO_NODES } },
-      { name: 'seeflow_add_node', args: { flowId: fix.flowId, node: newNode } },
+      {
+        name: 'seeflow_add_node',
+        args: { project: fix.projectSlug, flow: fix.flowSlug, node: newNode },
+      },
       {
         name: 'seeflow_add_bulk',
         args: {
-          flowId: fix.flowId,
+          project: fix.projectSlug,
+          flow: fix.flowSlug,
           nodes: [{ id: 'meta-bulk-c', type: 'rectangle', data: { name: 'C' } }],
         },
       },
-      { name: 'seeflow_move_node', args: { flowId: fix.flowId, nodeId: 'a', x: 10, y: 20 } },
+      {
+        name: 'seeflow_move_node',
+        args: { project: fix.projectSlug, flow: fix.flowSlug, nodeId: 'a', x: 10, y: 20 },
+      },
       {
         name: 'seeflow_patch_node',
-        args: { flowId: fix.flowId, nodeId: 'a', name: 'Renamed' },
+        args: { project: fix.projectSlug, flow: fix.flowSlug, nodeId: 'a', name: 'Renamed' },
       },
       {
         name: 'seeflow_reorder_node',
-        args: { flowId: fix.flowId, nodeId: 'a', op: 'toFront' },
+        args: { project: fix.projectSlug, flow: fix.flowSlug, nodeId: 'a', op: 'toFront' },
       },
-      { name: 'seeflow_add_connector', args: { flowId: fix.flowId, connector: newConn } },
+      {
+        name: 'seeflow_add_connector',
+        args: { project: fix.projectSlug, flow: fix.flowSlug, connector: newConn },
+      },
       // delete_node intentionally LAST among node ops so prior patches still see node 'a'.
       {
         name: 'seeflow_delete_connector',
-        args: { flowId: fix.flowId, connectorId: 'meta-new-conn' },
+        args: { project: fix.projectSlug, flow: fix.flowSlug, connectorId: 'meta-new-conn' },
       },
-      { name: 'seeflow_delete_node', args: { flowId: fix.flowId, nodeId: 'a' } },
+      {
+        name: 'seeflow_delete_node',
+        args: { project: fix.projectSlug, flow: fix.flowSlug, nodeId: 'a' },
+      },
       // delete_flow LAST so other ops keep seeing the seeded flow.
-      { name: 'seeflow_delete_flow', args: { flowId: fix.flowId } },
+      { name: 'seeflow_delete_flow', args: { project: fix.projectSlug, flow: fix.flowSlug } },
     ];
 
     for (const c of cases) {
@@ -847,7 +889,8 @@ describe('canvas _meta attachment rules', () => {
       lastModified: Date.now(),
     });
     const result = await callMcpToolFull(app, 'seeflow_patch_connector', {
-      flowId: entry.id,
+      project: entry.projectSlug,
+      flow: entry.flowSlug,
       connectorId: 'a-to-b',
       label: 'renamed',
     });
@@ -913,7 +956,10 @@ describe('canvas _meta attachment rules', () => {
       valid: true,
       lastModified: Date.now(),
     });
-    const result = await callMcpToolFull(app, 'seeflow_get_flow', { flowId: entry.id });
+    const result = await callMcpToolFull(app, 'seeflow_get_flow', {
+      project: entry.projectSlug,
+      flow: entry.flowSlug,
+    });
     expect(result.isError).toBeFalsy();
     expect(result._meta).toBeUndefined();
   });

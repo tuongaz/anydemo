@@ -122,55 +122,84 @@ const errorResult = (text: string): CallToolResult => ({
   content: [{ type: 'text', text }],
 });
 
-// Most MCP tools take a single flowId argument. Defined inline as plain
-// JSON Schema (rather than a one-off Zod schema) because there's no REST
-// counterpart to share with.
-const FLOW_ID_INPUT_SCHEMA = {
+// Most flow-scoped MCP tools take { project, flow } to address a registered
+// flow. Defined inline as plain JSON Schema (rather than a one-off Zod
+// schema) because there's no REST counterpart to share with.
+const PROJECT_FLOW_PROPERTIES = {
+  project: {
+    type: 'string',
+    minLength: 1,
+    description: 'Project slug (e.g. `order-pipeline`) addressing a registered project.',
+  },
+  flow: {
+    type: 'string',
+    minLength: 1,
+    description: 'Flow slug within that project (e.g. `main` or `retry`).',
+  },
+} as const;
+
+const FLOW_PROJECT_INPUT_SCHEMA = {
   type: 'object',
-  properties: { flowId: { type: 'string', minLength: 1 } },
-  required: ['flowId'],
+  properties: { ...PROJECT_FLOW_PROPERTIES },
+  required: ['project', 'flow'],
   additionalProperties: false,
 } as const;
 
-const requireFlowId = (args: unknown): { flowId: string } | { error: string } => {
+const requireProjectFlow = (
+  args: unknown,
+): { project: string; flow: string } | { error: string } => {
   if (!args || typeof args !== 'object' || Array.isArray(args)) {
-    return { error: 'Invalid arguments: expected an object with flowId' };
+    return { error: 'Invalid arguments: expected an object with project + flow' };
   }
-  const { flowId } = args as { flowId?: unknown };
-  if (typeof flowId !== 'string' || flowId.length === 0) {
-    return { error: 'Invalid arguments: flowId must be a non-empty string' };
+  const { project, flow } = args as { project?: unknown; flow?: unknown };
+  if (typeof project !== 'string' || project.length === 0) {
+    return { error: 'Invalid arguments: project must be a non-empty string' };
   }
-  return { flowId };
+  if (typeof flow !== 'string' || flow.length === 0) {
+    return { error: 'Invalid arguments: flow must be a non-empty string' };
+  }
+  return { project, flow };
 };
 
-// {flowId, nodeId} body shape shared by move + reorder + delete inputs.
-const FlowNodeIdBaseSchema = z.object({
-  flowId: z.string().min(1),
+// Project + flow slug pair used by every flow-scoped tool input as a Zod
+// envelope. Each field carries its own description so the JSON Schema
+// `tools/list` surfaces is self-documenting.
+const ProjectFlowSchema = z.object({
+  project: z
+    .string()
+    .min(1)
+    .describe('Project slug (e.g. `order-pipeline`) addressing a registered project.'),
+  flow: z.string().min(1).describe('Flow slug within that project (e.g. `main` or `retry`).'),
+});
+
+// {project, flow, nodeId} body shape shared by move + reorder + delete inputs.
+const FlowNodeIdBaseSchema = ProjectFlowSchema.extend({
   nodeId: z.string().min(1),
 });
 
-// add_node input: { flowId, node: <node payload> }. The inner `node` object is
-// loose here (additionalProperties=true via passthrough) because ResolvedFlowSchema
-// runs the full validation server-side after the new node is merged in.
-const AddNodeInputSchema = z.object({
-  flowId: z.string().min(1),
+// add_node input: { project, flow, node: <node payload> }. The inner `node`
+// object is loose here (additionalProperties=true via passthrough) because
+// ResolvedFlowSchema runs the full validation server-side after the new
+// node is merged in.
+const AddNodeInputSchema = ProjectFlowSchema.extend({
   node: z.record(z.unknown()),
 });
 
-// add_bulk input: { flowId, nodes?: [...], connectors?: [...] }. Same loose
-// per-item shape as add_node / add_connector — ResolvedFlowSchema runs once
-// over the whole merged graph server-side after the batch lands. The
+// add_bulk input: { project, flow, nodes?: [...], connectors?: [...] }. Same
+// loose per-item shape as add_node / add_connector — ResolvedFlowSchema runs
+// once over the whole merged graph server-side after the batch lands. The
 // 100-per-kind cap and "at least one non-empty" invariant come from
 // FlowBulkBodyShape + flowBulkNonEmpty (the unrefined object + reusable
 // predicate exported by operations.ts) so the JSON Schema the agent
 // introspects stays a clean object — not an intersection.
 const AddBulkInputSchema = FlowBulkBodyShape.extend({
-  flowId: z.string().min(1),
+  project: ProjectFlowSchema.shape.project,
+  flow: ProjectFlowSchema.shape.flow,
 }).refine(flowBulkNonEmpty, { message: FLOW_BULK_NON_EMPTY_MESSAGE });
 
 const DeleteNodeInputSchema = FlowNodeIdBaseSchema;
 
-// move_node input: { flowId, nodeId } extended with PositionBodySchema's
+// move_node input: { project, flow, nodeId } extended with PositionBodySchema's
 // { x, y } fields so agents see one flat schema.
 const MoveNodeInputSchema = FlowNodeIdBaseSchema.extend({
   x: PositionBodySchema.shape.x,
@@ -178,8 +207,9 @@ const MoveNodeInputSchema = FlowNodeIdBaseSchema.extend({
 });
 
 // reorder_node input: each branch of the existing ReorderBodySchema
-// discriminated union extended with flowId/nodeId. Keeps the discriminator
-// on `op` so the emitted JSON Schema is an oneOf the agent can introspect.
+// discriminated union extended with project/flow/nodeId. Keeps the
+// discriminator on `op` so the emitted JSON Schema is an oneOf the agent
+// can introspect.
 const ReorderNodeInputSchema = z.discriminatedUnion('op', [
   FlowNodeIdBaseSchema.extend({ op: z.literal('forward') }),
   FlowNodeIdBaseSchema.extend({ op: z.literal('backward') }),
@@ -191,36 +221,36 @@ const ReorderNodeInputSchema = z.discriminatedUnion('op', [
   }),
 ]);
 
-// patch_node input: { flowId, nodeId } merged with NodePatchBodySchema's
+// patch_node input: { project, flow, nodeId } merged with NodePatchBodySchema's
 // optional fields. .extend() on the strict body schema preserves strict
 // mode, so unknown top-level keys still trip the Zod parse before any disk
 // IO — matching the REST handler's "Invalid node patch body" 400 path.
 const PatchNodeInputSchema = NodePatchBodySchema.extend({
-  flowId: z.string().min(1),
+  project: ProjectFlowSchema.shape.project,
+  flow: ProjectFlowSchema.shape.flow,
   nodeId: z.string().min(1),
 });
 
-// add_connector input: { flowId, connector: <connector payload> }. The inner
-// `connector` object is loose (additionalProperties=true via z.record) because
-// ResolvedFlowSchema runs the full validation server-side after the new connector is
-// merged in (post-mutation parse catches dangling source/target refs and
-// kind-discriminator violations).
-const AddConnectorInputSchema = z.object({
-  flowId: z.string().min(1),
+// add_connector input: { project, flow, connector: <connector payload> }.
+// The inner `connector` object is loose (additionalProperties=true via
+// z.record) because ResolvedFlowSchema runs the full validation server-side
+// after the new connector is merged in (post-mutation parse catches dangling
+// source/target refs and kind-discriminator violations).
+const AddConnectorInputSchema = ProjectFlowSchema.extend({
   connector: z.record(z.unknown()),
 });
 
-// patch_connector input: { flowId, connectorId } merged with the strict
-// ConnectorPatchBodySchema. .extend() preserves strict mode so unknown
-// top-level keys trip the Zod parse before any IO — matching the REST
-// handler's "Invalid connector patch body" 400 path.
+// patch_connector input: { project, flow, connectorId } merged with the
+// strict ConnectorPatchBodySchema. .extend() preserves strict mode so
+// unknown top-level keys trip the Zod parse before any IO — matching the
+// REST handler's "Invalid connector patch body" 400 path.
 const PatchConnectorInputSchema = ConnectorPatchBodySchema.extend({
-  flowId: z.string().min(1),
+  project: ProjectFlowSchema.shape.project,
+  flow: ProjectFlowSchema.shape.flow,
   connectorId: z.string().min(1),
 });
 
-const DeleteConnectorInputSchema = z.object({
-  flowId: z.string().min(1),
+const DeleteConnectorInputSchema = ProjectFlowSchema.extend({
   connectorId: z.string().min(1),
 });
 
@@ -367,15 +397,16 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   },
   {
     name: 'seeflow_get_flow',
-    description: 'Get the full flow definition and on-disk state for a flowId.',
-    inputSchema: FLOW_ID_INPUT_SCHEMA,
+    description: 'Get the full flow definition and on-disk state for a (project, flow) pair.',
+    inputSchema: FLOW_PROJECT_INPUT_SCHEMA,
     handler: async (args) => {
-      const v = requireFlowId(args);
+      const v = requireProjectFlow(args);
       if ('error' in v) return errorResult(v.error);
-      const result = await ops.getFlow(v.flowId);
+      const flowSlug = `${v.project}/${v.flow}`;
+      const result = await ops.getFlow(flowSlug);
       switch (result.kind) {
         case 'ok': {
-          const entry = ctx.registry.resolve(v.flowId);
+          const entry = ctx.registry.resolve(flowSlug);
           const meta = entry
             ? canvasMetaFor(ctx, {
                 kind: 'navigate',
@@ -398,14 +429,15 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       "Get a flow's nodes + connectors without inlining per-node file-backed " +
       'content (`detail`, `html`). Cheap topology read — pair with seeflow_get_node ' +
       "when you need a specific node's long-form body.",
-    inputSchema: FLOW_ID_INPUT_SCHEMA,
+    inputSchema: FLOW_PROJECT_INPUT_SCHEMA,
     handler: async (args) => {
-      const v = requireFlowId(args);
+      const v = requireProjectFlow(args);
       if ('error' in v) return errorResult(v.error);
-      const result = await ops.getFlowGraph(v.flowId);
+      const flowSlug = `${v.project}/${v.flow}`;
+      const result = await ops.getFlowGraph(flowSlug);
       switch (result.kind) {
         case 'ok': {
-          const entry = ctx.registry.resolve(v.flowId);
+          const entry = ctx.registry.resolve(flowSlug);
           const meta = entry
             ? canvasMetaFor(ctx, {
                 kind: 'navigate',
@@ -436,27 +468,24 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
     inputSchema: {
       type: 'object',
       properties: {
-        flowId: { type: 'string', minLength: 1 },
+        ...PROJECT_FLOW_PROPERTIES,
         nodeId: { type: 'string', minLength: 1 },
       },
-      required: ['flowId', 'nodeId'],
+      required: ['project', 'flow', 'nodeId'],
       additionalProperties: false,
     },
     handler: async (args) => {
-      if (!args || typeof args !== 'object' || Array.isArray(args)) {
-        return errorResult('Invalid arguments: expected an object with flowId + nodeId');
-      }
-      const { flowId, nodeId } = args as { flowId?: unknown; nodeId?: unknown };
-      if (typeof flowId !== 'string' || flowId.length === 0) {
-        return errorResult('Invalid arguments: flowId must be a non-empty string');
-      }
+      const v = requireProjectFlow(args);
+      if ('error' in v) return errorResult(v.error);
+      const { nodeId } = (args as { nodeId?: unknown }) ?? {};
       if (typeof nodeId !== 'string' || nodeId.length === 0) {
         return errorResult('Invalid arguments: nodeId must be a non-empty string');
       }
-      const result = await ops.getNode(flowId, nodeId);
+      const flowSlug = `${v.project}/${v.flow}`;
+      const result = await ops.getNode(flowSlug, nodeId);
       switch (result.kind) {
         case 'ok': {
-          const entry = ctx.registry.resolve(flowId);
+          const entry = ctx.registry.resolve(flowSlug);
           const meta = entry
             ? canvasMetaFor(ctx, {
                 kind: 'navigate',
@@ -519,11 +548,11 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   {
     name: 'seeflow_delete_flow',
     description: 'Unregister a flow from the studio (the on-disk file is left untouched).',
-    inputSchema: FLOW_ID_INPUT_SCHEMA,
+    inputSchema: FLOW_PROJECT_INPUT_SCHEMA,
     handler: async (args) => {
-      const v = requireFlowId(args);
+      const v = requireProjectFlow(args);
       if ('error' in v) return errorResult(v.error);
-      const result = ops.deleteFlow(v.flowId);
+      const result = ops.deleteFlow(`${v.project}/${v.flow}`);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -568,8 +597,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid add_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, node } = parsed.data;
-      const result = await ops.addNode(flowId, node);
+      const { project, flow, node } = parsed.data;
+      const result = await ops.addNode(`${project}/${flow}`, node);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id, node: result.data.node });
@@ -596,8 +625,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid add_bulk arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, nodes, connectors } = parsed.data;
-      const result = await ops.addBulk(flowId, { nodes, connectors });
+      const { project, flow, nodes, connectors } = parsed.data;
+      const result = await ops.addBulk(`${project}/${flow}`, { nodes, connectors });
       switch (result.kind) {
         case 'ok':
           return okResult({
@@ -633,8 +662,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid delete_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, nodeId } = parsed.data;
-      const result = await ops.deleteNode(flowId, nodeId);
+      const { project, flow, nodeId } = parsed.data;
+      const result = await ops.deleteNode(`${project}/${flow}`, nodeId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -662,8 +691,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid move_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, nodeId, x, y } = parsed.data;
-      const result = await ops.moveNode(flowId, nodeId, { x, y });
+      const { project, flow, nodeId, x, y } = parsed.data;
+      const result = await ops.moveNode(`${project}/${flow}`, nodeId, { x, y });
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, position: result.data.position });
@@ -692,8 +721,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       if (!parsed.success) {
         return errorResult(`Invalid patch_node arguments: ${JSON.stringify(parsed.error.issues)}`);
       }
-      const { flowId, nodeId, ...updates } = parsed.data;
-      const result = await ops.patchNode(flowId, nodeId, updates);
+      const { project, flow, nodeId, ...updates } = parsed.data;
+      const result = await ops.patchNode(`${project}/${flow}`, nodeId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -724,12 +753,12 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           `Invalid reorder_node arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { flowId, nodeId, ...body } = parsed.data;
+      const { project, flow, nodeId, ...body } = parsed.data;
       // Delegate the op-specific shape to the existing ReorderBodySchema so
       // reorderNodeImpl receives the same discriminated union the REST route
       // does — keeps a single source of truth for op semantics.
       const reorderBody = ReorderBodySchema.parse(body);
-      const result = await ops.reorderNode(flowId, nodeId, reorderBody);
+      const result = await ops.reorderNode(`${project}/${flow}`, nodeId, reorderBody);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -760,8 +789,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           `Invalid add_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { flowId, connector } = parsed.data;
-      const result = await ops.addConnector(flowId, connector);
+      const { project, flow, connector } = parsed.data;
+      const result = await ops.addConnector(`${project}/${flow}`, connector);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true, id: result.data.id });
@@ -790,8 +819,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           `Invalid patch_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { flowId, connectorId, ...updates } = parsed.data;
-      const result = await ops.patchConnector(flowId, connectorId, updates);
+      const { project, flow, connectorId, ...updates } = parsed.data;
+      const result = await ops.patchConnector(`${project}/${flow}`, connectorId, updates);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
@@ -821,8 +850,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           `Invalid delete_connector arguments: ${JSON.stringify(parsed.error.issues)}`,
         );
       }
-      const { flowId, connectorId } = parsed.data;
-      const result = await ops.deleteConnector(flowId, connectorId);
+      const { project, flow, connectorId } = parsed.data;
+      const result = await ops.deleteConnector(`${project}/${flow}`, connectorId);
       switch (result.kind) {
         case 'ok':
           return okResult({ ok: true });
