@@ -380,12 +380,26 @@ export function DemoView({
   }, [demoNodes, nodeOrderOverride]);
 
   const flowId = detail?.id ?? null;
-  // US-025: persistence adapter built from the demo's id. Bound to one demo for
-  // its lifetime; rebuilt on demo switch. Every REST mutation in this file (and
-  // the prop threaded to <SeeflowCanvas>) now routes through this adapter.
+  // US-009 transitional: the canvas adapter now takes { project, flow }; until
+  // US-010 wires `useParams().project` + `useParams().flow` from React Router,
+  // split the legacy `${projectSlug}/${flowSlug}` registry slug so the adapter
+  // keeps composing the new `/api/projects/:project/flows/:flow/...` URLs.
+  const detailSlug = detail?.slug ?? null;
+  const adapterSlugs = useMemo(() => {
+    if (!detailSlug) return null;
+    const [project, flow] = detailSlug.split('/');
+    if (!project || !flow) return null;
+    return { project, flow };
+  }, [detailSlug]);
+  // US-025: persistence adapter built from the demo's slug. Bound to one demo
+  // for its lifetime; rebuilt on demo switch. Every REST mutation in this file
+  // (and the prop threaded to <SeeflowCanvas>) now routes through this adapter.
   const adapter = useMemo(
-    () => (flowId ? createRestAdapter({ baseUrl: '', flowId }) : null),
-    [flowId],
+    () =>
+      adapterSlugs
+        ? createRestAdapter({ baseUrl: '', project: adapterSlugs.project, flow: adapterSlugs.flow })
+        : null,
+    [adapterSlugs],
   );
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { setOverride: setNodeOverride, dropOverride: dropNodeOverride } = nodePending;

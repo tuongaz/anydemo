@@ -1,9 +1,11 @@
 // REST implementation of CanvasAdapter. Mirrors the canonical studio endpoints
 // so embedders that don't override `fetch` get the same wire-level behavior as
-// the in-app studio (POST/PATCH/DELETE on /api/flows/:flowId/{nodes,connectors}
-// + POST /api/projects/:flowId/nodes/:nodeId/files/upload). The error shape
-// (JSON body with optional `error` field, falling back to a `METHOD URL →
-// status` string) lets embedder rollback paths use a single catch handler.
+// the in-app studio. Flow-scoped calls hit
+// `/api/projects/:project/flows/:flow/{nodes,connectors,...}`; project-scoped
+// file calls hit `/api/projects/:project/files/...`; per-node uploads land at
+// `/api/projects/:project/flows/:flow/nodes/:nodeId/files/upload`. The error
+// shape (JSON body with optional `error` field, falling back to a `METHOD URL
+// → status` string) lets embedder rollback paths use a single catch handler.
 
 import type {
   CanvasAdapter,
@@ -23,8 +25,10 @@ import type {
 export interface RestAdapterOptions {
   /** URL prefix (e.g. '' in-studio, 'https://example.com' for cross-origin). */
   baseUrl: string;
-  /** flowId (== projectId in the studio registry). Bound for the adapter's lifetime. */
-  flowId: string;
+  /** Project slug. Bound for the adapter's lifetime. */
+  project: string;
+  /** Flow slug within the project. Bound for the adapter's lifetime. */
+  flow: string;
   /** Optional fetch override — primarily for tests. Defaults to globalThis.fetch. */
   fetch?: typeof fetch;
   /**
@@ -67,17 +71,18 @@ const requestJson = async <T>(
 };
 
 export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter => {
-  const { baseUrl, flowId } = options;
+  const { baseUrl, project, flow } = options;
   const fetchImpl: typeof fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
   const headers = options.headers;
-  const demoBase = `${baseUrl}/api/flows/${flowId}`;
+  const projectBase = `${baseUrl}/api/projects/${encodeURIComponent(project)}`;
+  const flowBase = `${projectBase}/flows/${encodeURIComponent(flow)}`;
 
   return {
     async createNode(input: NodeCreateInput) {
       const data = await requestJson<{ ok: true; id: string; node: Record<string, unknown> }>(
         fetchImpl,
         'POST',
-        `${demoBase}/nodes`,
+        `${flowBase}/nodes`,
         headers,
         input,
       );
@@ -88,7 +93,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<{ ok: true }>(
         fetchImpl,
         'PATCH',
-        `${demoBase}/nodes/${nodeId}`,
+        `${flowBase}/nodes/${nodeId}`,
         headers,
         patch,
       );
@@ -101,21 +106,21 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       return await requestJson<UpdateNodePositionResult>(
         fetchImpl,
         'PATCH',
-        `${demoBase}/nodes/${nodeId}/position`,
+        `${flowBase}/nodes/${nodeId}/position`,
         headers,
         position,
       );
     },
 
     async deleteNode(nodeId: string): Promise<void> {
-      await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${demoBase}/nodes/${nodeId}`, headers);
+      await requestJson<{ ok: true }>(fetchImpl, 'DELETE', `${flowBase}/nodes/${nodeId}`, headers);
     },
 
     async reorderNode(nodeId: string, op: ReorderOp): Promise<void> {
       await requestJson<{ ok: true }>(
         fetchImpl,
         'PATCH',
-        `${demoBase}/nodes/${nodeId}/order`,
+        `${flowBase}/nodes/${nodeId}/order`,
         headers,
         op,
       );
@@ -125,7 +130,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       const data = await requestJson<{ ok: true; id: string }>(
         fetchImpl,
         'POST',
-        `${demoBase}/connectors`,
+        `${flowBase}/connectors`,
         headers,
         input,
       );
@@ -136,7 +141,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<{ ok: true }>(
         fetchImpl,
         'PATCH',
-        `${demoBase}/connectors/${connectorId}`,
+        `${flowBase}/connectors/${connectorId}`,
         headers,
         patch,
       );
@@ -146,7 +151,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       await requestJson<{ ok: true }>(
         fetchImpl,
         'DELETE',
-        `${demoBase}/connectors/${connectorId}`,
+        `${flowBase}/connectors/${connectorId}`,
         headers,
       );
     },
@@ -158,9 +163,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       // Browser sets the multipart boundary automatically — never pass an
       // explicit `content-type` header. Scoped to the node so the per-node
       // folder convention (and delete_node cascade) covers the upload too.
-      const url = `${baseUrl}/api/projects/${encodeURIComponent(
-        flowId,
-      )}/nodes/${encodeURIComponent(nodeId)}/files/upload`;
+      const url = `${flowBase}/nodes/${encodeURIComponent(nodeId)}/files/upload`;
       const init: RequestInit = { method: 'POST', body: form };
       if (headers) init.headers = { ...headers };
       const res = await fetchImpl(url, init);
@@ -180,30 +183,20 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       return await requestJson<PlayActionResult>(
         fetchImpl,
         'POST',
-        `${demoBase}/play/${nodeId}`,
+        `${flowBase}/play/${nodeId}`,
         headers,
         {},
       );
     },
 
     async openFile(path: string): Promise<void> {
-      await requestJson<unknown>(
-        fetchImpl,
-        'POST',
-        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/open`,
-        headers,
-        { path },
-      );
+      await requestJson<unknown>(fetchImpl, 'POST', `${projectBase}/files/open`, headers, { path });
     },
 
     async revealFile(path: string): Promise<void> {
-      await requestJson<unknown>(
-        fetchImpl,
-        'POST',
-        `${baseUrl}/api/projects/${encodeURIComponent(flowId)}/files/reveal`,
-        headers,
-        { path },
-      );
+      await requestJson<unknown>(fetchImpl, 'POST', `${projectBase}/files/reveal`, headers, {
+        path,
+      });
     },
 
     async computeLayout(

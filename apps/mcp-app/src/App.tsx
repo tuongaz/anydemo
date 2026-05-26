@@ -62,6 +62,11 @@ type LoadState =
   | {
       kind: 'ready';
       flowId: string;
+      // US-009 transitional: hold the registry slug `${projectSlug}/${flowSlug}`
+      // alongside the entry id so the canvas adapter can be constructed with
+      // `{ project, flow }`. US-011 replaces this with widgetState.projectSlug /
+      // widgetState.flowSlug threaded directly from the host.
+      flowSlugFull: string;
       nodes: FlowNode[];
       connectors: Connector[];
     }
@@ -149,6 +154,7 @@ export function App() {
         setLoad({
           kind: 'ready',
           flowId: match.id,
+          flowSlugFull: match.slug,
           nodes: (detail.flow.nodes ?? []) as FlowNode[],
           connectors: (detail.flow.connectors ?? []) as Connector[],
         });
@@ -165,9 +171,14 @@ export function App() {
   const adapter = useMemo<CanvasAdapter | null>(() => {
     if (!widgetState) return null;
     if (load.kind !== 'ready') return null;
+    // US-009 transitional: split the registry slug into project + flow until
+    // US-011 threads widgetState.projectSlug / widgetState.flowSlug directly.
+    const [projectSlug, flowSlug] = load.flowSlugFull.split('/');
+    if (!projectSlug || !flowSlug) return null;
     const base = createRestAdapter({
       baseUrl: widgetState.backendUrl,
-      flowId: load.flowId,
+      project: projectSlug,
+      flow: flowSlug,
       headers: widgetState.backendToken
         ? { 'X-Seeflow-Token': widgetState.backendToken }
         : undefined,
