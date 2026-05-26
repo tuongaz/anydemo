@@ -1185,16 +1185,134 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ path: `nodes/${nodeId}/${finalName}` });
   });
 
+  // DELETE /api/projects/:project/flows/:flow — manifest-aware delete (US-017).
+  // Guards:
+  //   - last-flow: refuse when the target is the only flow in the project.
+  //   - default-flow-no-replacement: refuse when target is manifest.defaultFlow
+  //     and no `?newDefault=<other-flow-id>` query arg is supplied.
+  //   - invalid-new-default: the supplied newDefault must exist in the
+  //     manifest and must not be the flow being deleted.
+  // On success: rename the flow folder to a sibling `.deleted-*` snapshot
+  // (atomic on POSIX), write the updated manifest atomically, then rm the
+  // snapshot and drop the registry entry. On manifest-write failure the
+  // snapshot is renamed back so the externally-observable state is preserved.
   api.delete('/projects/:project/flows/:flow', (c) => {
-    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
-    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
-    const result = ops.deleteFlow(resolved.entry.id);
-    switch (result.kind) {
-      case 'ok':
-        return c.json({ ok: true });
-      case 'notFound':
-        return c.json({ ok: false, error: 'not found' }, 404);
+    const projectSlug = c.req.param('project');
+    const flowSlug = c.req.param('flow');
+    const newDefault = c.req.query('newDefault');
+
+    const resolved = resolveProjectFlow(registry, projectSlug, flowSlug);
+    if (resolved.kind === 'error') {
+      return c.json({ ok: false as const, error: resolved.code }, 404);
     }
+    const entry = resolved.entry;
+
+    const projectEntries = registry.list().filter((e) => e.projectSlug === projectSlug);
+    if (projectEntries.length <= 1) {
+      return c.json({ ok: false as const, error: 'last-flow' as const }, 409);
+    }
+
+    const repoPath = entry.repoPath;
+    const manifestPath = join(repoPath, 'seeflow.json');
+    const manifest = readProjectManifest(repoPath);
+    if (!manifest) {
+      return c.json(
+        {
+          ok: false as const,
+          error: 'manifest-missing-or-invalid' as const,
+          path: manifestPath,
+        },
+        500,
+      );
+    }
+
+    const targetIsDefault = manifest.defaultFlow === entry.flowSlug;
+    if (targetIsDefault && (newDefault === undefined || newDefault.length === 0)) {
+      return c.json({ ok: false as const, error: 'default-flow-no-replacement' as const }, 409);
+    }
+    if (targetIsDefault && newDefault !== undefined) {
+      if (newDefault === entry.flowSlug) {
+        return c.json({ ok: false as const, error: 'invalid-new-default' as const }, 400);
+      }
+      if (!manifest.flows.some((f) => f.id === newDefault)) {
+        return c.json({ ok: false as const, error: 'invalid-new-default' as const }, 400);
+      }
+    }
+
+    const flowDir = join(repoPath, 'flows', entry.flowSlug);
+    const tmpHolder = join(repoPath, 'flows', `.deleted-${entry.flowSlug}-${Date.now()}`);
+
+    // Snapshot the folder by renaming it to a sibling tmp location. Same
+    // filesystem → POSIX guarantees the rename is atomic. If the folder is
+    // missing on disk (manual `rm -rf` between registration and delete), skip
+    // the snapshot — the manifest+registry mutation still proceeds.
+    let movedToTmp = false;
+    if (existsSync(flowDir)) {
+      try {
+        renameSync(flowDir, tmpHolder);
+        movedToTmp = true;
+      } catch (err) {
+        return c.json(
+          { ok: false as const, error: 'folder-rename-failed' as const, detail: String(err) },
+          500,
+        );
+      }
+    }
+
+    const updatedManifest: SeeflowManifest = {
+      ...manifest,
+      defaultFlow: targetIsDefault ? (newDefault as string) : manifest.defaultFlow,
+      flows: manifest.flows.filter((f) => f.id !== entry.flowSlug),
+    };
+
+    try {
+      writeFileAtomic(manifestPath, `${JSON.stringify(updatedManifest, null, 2)}\n`);
+    } catch (err) {
+      if (movedToTmp) {
+        try {
+          renameSync(tmpHolder, flowDir);
+        } catch {
+          // best-effort restore — caller surfaces the original write error
+        }
+      }
+      return c.json(
+        { ok: false as const, error: 'manifest-write-failed' as const, detail: String(err) },
+        500,
+      );
+    }
+
+    // Manifest committed — drop the snapshot.
+    if (movedToTmp) {
+      try {
+        rmSync(tmpHolder, { recursive: true, force: true });
+      } catch {
+        // best-effort cleanup — manifest is the source of truth now
+      }
+    }
+
+    // Promote the new default in the registry (the upsert finds the existing
+    // entry by repoPath + flowPath and updates in place, preserving its id).
+    if (targetIsDefault && newDefault !== undefined) {
+      const promoted = projectEntries.find((e) => e.flowSlug === newDefault);
+      if (promoted) {
+        registry.upsert({
+          name: promoted.name,
+          description: promoted.description,
+          repoPath: promoted.repoPath,
+          flowPath: promoted.flowPath,
+          projectSlug: promoted.projectSlug,
+          flowSlug: promoted.flowSlug,
+          isDefault: true,
+          icon: promoted.icon,
+          valid: promoted.valid,
+        });
+      }
+    }
+
+    watcher?.unwatch(entry.id);
+    registry.remove(entry.id);
+
+    return c.json({ ok: true });
   });
 
   // POST /api/projects/:project/flows/:flow/layout — registered-flow ELK

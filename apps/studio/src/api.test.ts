@@ -4188,20 +4188,157 @@ describe('DELETE /api/projects/:project/flows/:flow/connectors/:connId', () => {
 });
 
 describe('DELETE /api/projects/:project/flows/:flow', () => {
-  it('removes the entry and returns ok', async () => {
+  it('removes a non-default flow: deletes folder, edits manifest, drops registry entry', async () => {
     const { app, registry } = buildApp();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', {
-        repoPath,
-        flowPath: 'flow.json',
-      })
-    ).json()) as { id: string; slug: string };
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+    const retryEntry = registry.list().find((e) => e.flowSlug === 'retry');
+    expect(retryEntry).toBeDefined();
 
-    const res = await app.request(flowApi(reg.slug), { method: 'DELETE' });
+    const res = await app.request('/api/projects/order-pipeline/flows/retry', { method: 'DELETE' });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true });
-    expect(registry.list()).toHaveLength(0);
+
+    // Folder removed.
+    expect(existsSync(join(repoPath, 'flows', 'retry'))).toBe(false);
+    // Main folder still on disk.
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+
+    // Manifest no longer lists retry; defaultFlow unchanged.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('main');
+    expect(manifestRaw.flows).toEqual([{ id: 'main', name: 'Main' }]);
+
+    // Registry: retry entry gone; main remains.
+    if (retryEntry) expect(registry.getById(retryEntry.id)).toBeUndefined();
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(1);
+
+    // No leftover snapshot folders under flows/.
+    expect(existsSync(join(repoPath, 'flows', 'retry'))).toBe(false);
+  });
+
+  it('refuses with 409 last-flow when deleting the only flow in a project', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline/flows/main', { method: 'DELETE' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: 'last-flow' });
+
+    // Folder + manifest + registry untouched.
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.flows).toEqual([{ id: 'main', name: 'Main' }]);
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(1);
+  });
+
+  it('refuses with 409 default-flow-no-replacement when deleting the default without ?newDefault', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline/flows/main', { method: 'DELETE' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toEqual({ ok: false, error: 'default-flow-no-replacement' });
+
+    // Folder + manifest + both registry entries untouched.
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    expect(existsSync(join(repoPath, 'flows', 'retry', 'flow.json'))).toBe(true);
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('main');
+    expect(manifestRaw.flows).toEqual([
+      { id: 'main', name: 'Main' },
+      { id: 'retry', name: 'Retry' },
+    ]);
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(2);
+  });
+
+  it('deletes the default flow with ?newDefault: promotes replacement in manifest + registry', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+    const mainEntry = registry.list().find((e) => e.flowSlug === 'main');
+    const retryEntryBefore = registry.list().find((e) => e.flowSlug === 'retry');
+    expect(mainEntry).toBeDefined();
+    expect(retryEntryBefore?.isDefault).toBe(false);
+
+    const res = await app.request('/api/projects/order-pipeline/flows/main?newDefault=retry', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    // Folder gone; sibling flow intact.
+    expect(existsSync(join(repoPath, 'flows', 'main'))).toBe(false);
+    expect(existsSync(join(repoPath, 'flows', 'retry', 'flow.json'))).toBe(true);
+
+    // Manifest: main gone, defaultFlow flipped to retry.
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('retry');
+    expect(manifestRaw.flows).toEqual([{ id: 'retry', name: 'Retry' }]);
+
+    // Registry: main entry gone; retry now marked default (same id preserved).
+    if (mainEntry) expect(registry.getById(mainEntry.id)).toBeUndefined();
+    const retryAfter = registry.list().find((e) => e.flowSlug === 'retry');
+    expect(retryAfter).toBeDefined();
+    expect(retryAfter?.isDefault).toBe(true);
+    if (retryEntryBefore && retryAfter) expect(retryAfter.id).toBe(retryEntryBefore.id);
+  });
+
+  it('rejects ?newDefault that does not exist in the manifest with 400 invalid-new-default', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline/flows/main?newDefault=ghost', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(400);
+    expect(await res.json()).toEqual({ ok: false, error: 'invalid-new-default' });
+
+    // Nothing changed.
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    const manifestRaw = JSON.parse(readFileSync(join(repoPath, 'seeflow.json'), 'utf8'));
+    expect(manifestRaw.defaultFlow).toBe('main');
+    expect(manifestRaw.flows).toHaveLength(2);
   });
 
   it('returns 404 with project-not-found for an unknown project', async () => {
@@ -4212,13 +4349,19 @@ describe('DELETE /api/projects/:project/flows/:flow', () => {
   });
 
   it('returns 404 with flow-not-found when project exists but flow does not', async () => {
-    const { app } = buildApp();
-    const repoPath = tmpRepoWithDemo();
-    const reg = (await (
-      await post(app, '/api/flows/register', { repoPath, flowPath: 'flow.json' })
-    ).json()) as { id: string; slug: string };
-    const [projectSlug] = reg.slug.split('/');
-    const res = await app.request(`/api/projects/${projectSlug}/flows/missing`, {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline/flows/missing', {
       method: 'DELETE',
     });
     expect(res.status).toBe(404);
