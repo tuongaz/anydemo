@@ -28,7 +28,9 @@ Cache the resolved binary (`seeflow` vs `npx -y @tuongaz/seeflow@latest`) for th
 
 Before any deeper lookup, list the registered flows (use the catalog subcommand surfaced by `seeflow help`) and match the user's topic against it. Match generously: exact slug, fuzzy name, or topic keyword (e.g. "the cart" matches a flow named `shopping-cart`).
 
-- **Match found** → **surface the canvas URL first** (`$STUDIO_URL/d/<slug>`) so the user can open it, then continue with the cost ladder below for whatever deeper question they asked. Never re-scaffold an existing flow — `/seeflow` is the wrong tool here even if the existing flow looks stale; editing belongs on the canvas or `nodes:patch`.
+A topic may match a **project** (the manifest), a **flow** within a project, or both — when ambiguous, surface every plausible tier (project + each candidate flow) with its canvas URL and let the user pick.
+
+- **Match found** → **surface the canvas URL first** (`$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`) so the user can open it, then continue with the cost ladder below for whatever deeper question they asked. Never re-scaffold an existing flow — `/seeflow` is the wrong tool here even if the existing flow looks stale; editing belongs on the canvas or `nodes:patch`.
 - **No match** → **auto-switch to the `seeflow` skill to scaffold one.** Print a one-line handoff (`No flow registered for "<topic>" — invoking /seeflow to scaffold it.`), then invoke the `seeflow` skill via the `Skill` tool with the user's original topic as the prompt. Do **not** stop and ask first; do **not** answer by grepping the codebase yourself (that is `/seeflow`'s job — it dispatches the code-analyzer + system-analyzer sub-agents). Hand off and let `/seeflow` take over the rest of the turn.
 - **Ambiguous match** (multiple plausible flows) → list them with their canvas URLs and ask the user which one.
 
