@@ -124,8 +124,16 @@ export interface CreateProjectResult {
   slug: string;
 }
 
-export const deleteFlow = async (project: string, flow: string): Promise<{ ok: true }> => {
-  const url = flowApiBase(project, flow);
+export const deleteFlow = async (
+  project: string,
+  flow: string,
+  opts?: { newDefault?: string },
+): Promise<{ ok: true }> => {
+  const base = flowApiBase(project, flow);
+  const url =
+    opts?.newDefault !== undefined
+      ? `${base}?newDefault=${encodeURIComponent(opts.newDefault)}`
+      : base;
   const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) {
     let errorBody: { error?: string } | null = null;
@@ -137,6 +145,85 @@ export const deleteFlow = async (project: string, flow: string): Promise<{ ok: t
     throw new Error(errorBody?.error ?? `DELETE ${url} → ${res.status}`);
   }
   return (await res.json()) as { ok: true };
+};
+
+/**
+ * US-025: POST /api/projects/:project/flows — create a new flow within an
+ * existing project. The body matches the schema enforced by the studio
+ * (CreateFlowBodySchema in apps/studio/src/api.ts) so the client-side
+ * validation in the create dialog must mirror FlowIdPattern.
+ */
+export interface CreateFlowBody {
+  id: string;
+  name: string;
+  icon?: string;
+}
+
+/**
+ * US-025: PATCH /api/projects/:project/flows/:flow — at least one of the
+ * three fields must be set; the dialog enforces that before invoking.
+ */
+export interface PatchFlowBody {
+  id?: string;
+  name?: string;
+  icon?: string;
+}
+
+/**
+ * US-025: returned by POST and PATCH — matches the FlowEntry registry shape
+ * the studio echoes (registry.upsert result). Only the fields the switcher
+ * needs are typed here; everything else is best-effort optional.
+ */
+export interface MutateFlowResult {
+  id: string;
+  projectSlug: string;
+  flowSlug: string;
+  name: string;
+  icon?: string;
+  isDefault: boolean;
+}
+
+const throwApiError = async (res: Response, fallback: string): Promise<never> => {
+  let errorBody: { error?: string } | null = null;
+  try {
+    errorBody = (await res.json()) as { error?: string };
+  } catch {
+    // ignore
+  }
+  throw new Error(errorBody?.error ?? fallback);
+};
+
+export const createFlow = async (
+  project: string,
+  body: CreateFlowBody,
+): Promise<MutateFlowResult> => {
+  const url = `/api/projects/${encodeURIComponent(project)}/flows`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    await throwApiError(res, `POST ${url} → ${res.status}`);
+  }
+  return (await res.json()) as MutateFlowResult;
+};
+
+export const updateFlow = async (
+  project: string,
+  flow: string,
+  body: PatchFlowBody,
+): Promise<MutateFlowResult> => {
+  const url = flowApiBase(project, flow);
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    await throwApiError(res, `PATCH ${url} → ${res.status}`);
+  }
+  return (await res.json()) as MutateFlowResult;
 };
 
 export const createProject = async (body: CreateProjectBody): Promise<CreateProjectResult> => {

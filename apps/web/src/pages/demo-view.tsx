@@ -1,5 +1,8 @@
 import { CommandPalette } from '@/components/command-palette';
 import { ExportDialog } from '@/components/export-dialog';
+import { FlowCreateDialog } from '@/components/flow-create-dialog';
+import { FlowDeleteDialog } from '@/components/flow-delete-dialog';
+import { FlowRenameDialog } from '@/components/flow-rename-dialog';
 import { FlowSwitcher } from '@/components/flow-switcher';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
@@ -157,7 +160,12 @@ export function DemoView({
   // US-024: per-project flow list powers the Figma-style switcher popover
   // anchored top-left on the canvas page. Refetches when `project` changes;
   // null preserves the popover's idle state during the URL → props handoff.
-  const { flows: projectFlows } = useProjectFlows(project);
+  const {
+    flows: projectFlows,
+    createFlow: createProjectFlow,
+    renameFlow: renameProjectFlow,
+    deleteFlow: deleteProjectFlow,
+  } = useProjectFlows(project);
   // US-019: multi-select. Selection is now an array; the inspector still
   // single-shots (1 node OR 1 connector — see derivations below) so its UX
   // doesn't change for the existing single-select paths. The style strip and
@@ -399,6 +407,20 @@ export function DemoView({
   // threaded to <SeeflowCanvas>) now routes through this adapter.
   const adapter = useMemo(() => createRestAdapter({ baseUrl: '', project, flow }), [project, flow]);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  // US-025: flow switcher mutation dialogs. Open state lives in this page so
+  // the popover (which closes on action) can hand off without keeping itself
+  // mounted; the dialog stays mounted until its own onOpenChange flips it.
+  const [flowCreateOpen, setFlowCreateOpen] = useState(false);
+  const [flowRenameTarget, setFlowRenameTarget] = useState<{
+    flowSlug: string;
+    name: string;
+    icon?: string;
+  } | null>(null);
+  const [flowDeleteTarget, setFlowDeleteTarget] = useState<{
+    flowSlug: string;
+    name: string;
+    isDefault: boolean;
+  } | null>(null);
   const { setOverride: setNodeOverride, dropOverride: dropNodeOverride } = nodePending;
   // Read live displayed position for a node (override merged) so a multi-node
   // drag's snapshot reflects the in-flight visual state, not the stale server
@@ -2986,8 +3008,64 @@ export function DemoView({
             if (nextFlow === flow) return;
             navigate(flowPath(project, nextFlow));
           }}
+          onCreate={() => setFlowCreateOpen(true)}
+          onRename={(flowSlug) => {
+            const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
+            if (!target) return;
+            setFlowRenameTarget({
+              flowSlug: target.flowSlug,
+              name: target.name,
+              icon: target.icon,
+            });
+          }}
+          onDelete={(flowSlug) => {
+            const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
+            if (!target) return;
+            setFlowDeleteTarget({
+              flowSlug: target.flowSlug,
+              name: target.name,
+              isDefault: target.isDefault,
+            });
+          }}
         />
       </div>
+      <FlowCreateDialog
+        open={flowCreateOpen}
+        onOpenChange={setFlowCreateOpen}
+        onCreate={createProjectFlow}
+        onCreated={(result) => {
+          navigate(flowPath(project, result.flowSlug));
+        }}
+      />
+      <FlowRenameDialog
+        open={flowRenameTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setFlowRenameTarget(null);
+        }}
+        flow={flowRenameTarget}
+        onRename={renameProjectFlow}
+        onRenamed={(result, previousFlowSlug) => {
+          if (result.flowSlug !== previousFlowSlug) {
+            navigate(flowPath(project, result.flowSlug));
+          }
+        }}
+      />
+      <FlowDeleteDialog
+        open={flowDeleteTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setFlowDeleteTarget(null);
+        }}
+        flow={flowDeleteTarget}
+        flows={projectFlows ?? []}
+        onDelete={deleteProjectFlow}
+        onDeleted={(deletedFlowSlug, newDefault) => {
+          if (deletedFlowSlug !== flow) return;
+          const fallback =
+            newDefault ??
+            projectFlows?.find((f) => f.isDefault && f.flowSlug !== deletedFlowSlug)?.flowSlug;
+          if (fallback) navigate(flowPath(project, fallback));
+        }}
+      />
 
       {demo && adapter ? (
         <SeeflowCanvas

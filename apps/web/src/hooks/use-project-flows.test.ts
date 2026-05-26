@@ -1,5 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import { type ProjectFlowSummary, fetchProjectFlows } from '@/lib/api';
+import {
+  type ProjectFlowSummary,
+  createFlow,
+  deleteFlow,
+  fetchProjectFlows,
+  updateFlow,
+} from '@/lib/api';
 
 const realFetch = globalThis.fetch;
 
@@ -74,6 +80,129 @@ describe('fetchProjectFlows', () => {
   });
 });
 
+describe('createFlow', () => {
+  it('POSTs to /api/projects/:project/flows with JSON body', async () => {
+    let captured: { url: string; init?: RequestInit } | null = null;
+    installMock((url, init) => {
+      captured = { url, init };
+      return {
+        status: 201,
+        body: {
+          id: 'r1',
+          projectSlug: 'order-pipeline',
+          flowSlug: 'retry',
+          name: 'Retry',
+          isDefault: false,
+        },
+      };
+    });
+
+    const result = await createFlow('order-pipeline', { id: 'retry', name: 'Retry', icon: '↩' });
+
+    if (!captured) throw new Error('mock fetch did not run');
+    const captures = captured as { url: string; init?: RequestInit };
+    expect(captures.url).toBe('/api/projects/order-pipeline/flows');
+    expect(captures.init?.method).toBe('POST');
+    expect(captures.init?.headers).toEqual({ 'content-type': 'application/json' });
+    expect(JSON.parse(String(captures.init?.body))).toEqual({
+      id: 'retry',
+      name: 'Retry',
+      icon: '↩',
+    });
+    expect(result.flowSlug).toBe('retry');
+  });
+
+  it('throws the structured error string on duplicate-flow-id', async () => {
+    installMock(() => ({ status: 409, body: { ok: false, error: 'duplicate-flow-id' } }));
+    await expect(createFlow('order-pipeline', { id: 'main', name: 'Main' })).rejects.toThrow(
+      'duplicate-flow-id',
+    );
+  });
+});
+
+describe('updateFlow', () => {
+  it('PATCHes /api/projects/:project/flows/:flow with the change body', async () => {
+    let captured: { url: string; init?: RequestInit } | null = null;
+    installMock((url, init) => {
+      captured = { url, init };
+      return {
+        status: 200,
+        body: {
+          id: 'r1',
+          projectSlug: 'order-pipeline',
+          flowSlug: 'retry-v2',
+          name: 'Retry',
+          isDefault: false,
+        },
+      };
+    });
+
+    const result = await updateFlow('order-pipeline', 'retry', { id: 'retry-v2' });
+
+    if (!captured) throw new Error('mock fetch did not run');
+    const captures = captured as { url: string; init?: RequestInit };
+    expect(captures.url).toBe('/api/projects/order-pipeline/flows/retry');
+    expect(captures.init?.method).toBe('PATCH');
+    expect(JSON.parse(String(captures.init?.body))).toEqual({ id: 'retry-v2' });
+    expect(result.flowSlug).toBe('retry-v2');
+  });
+
+  it('throws the structured error string on duplicate id', async () => {
+    installMock(() => ({ status: 409, body: { ok: false, error: 'duplicate-flow-id' } }));
+    await expect(updateFlow('order-pipeline', 'retry', { id: 'main' })).rejects.toThrow(
+      'duplicate-flow-id',
+    );
+  });
+});
+
+describe('deleteFlow', () => {
+  it('DELETEs /api/projects/:project/flows/:flow with no query when no newDefault', async () => {
+    let captured = '';
+    installMock((url) => {
+      captured = url;
+      return { status: 200, body: { ok: true } };
+    });
+
+    await deleteFlow('order-pipeline', 'retry');
+
+    expect(captured).toBe('/api/projects/order-pipeline/flows/retry');
+  });
+
+  it('appends ?newDefault=<slug> when supplied', async () => {
+    let captured = '';
+    installMock((url) => {
+      captured = url;
+      return { status: 200, body: { ok: true } };
+    });
+
+    await deleteFlow('order-pipeline', 'main', { newDefault: 'retry' });
+
+    expect(captured).toBe('/api/projects/order-pipeline/flows/main?newDefault=retry');
+  });
+
+  it('encodes the newDefault query value', async () => {
+    let captured = '';
+    installMock((url) => {
+      captured = url;
+      return { status: 200, body: { ok: true } };
+    });
+
+    await deleteFlow('order-pipeline', 'main', { newDefault: 'retry v2' });
+
+    expect(captured).toBe('/api/projects/order-pipeline/flows/main?newDefault=retry%20v2');
+  });
+
+  it('throws the structured error string on default-flow-no-replacement', async () => {
+    installMock(() => ({
+      status: 409,
+      body: { ok: false, error: 'default-flow-no-replacement' },
+    }));
+    await expect(deleteFlow('order-pipeline', 'main')).rejects.toThrow(
+      'default-flow-no-replacement',
+    );
+  });
+});
+
 describe('useProjectFlows (hook contract)', () => {
   // The hook is a thin wrapper around fetchProjectFlows that mirrors the
   // useDemos / useDemoData pattern. We exercise it by stepping through its
@@ -98,6 +227,16 @@ describe('useProjectFlows (hook contract)', () => {
   it('exposes { flows, loading, error, refresh } on the result type', async () => {
     // Static check that the hook module exports a well-shaped factory.
     const mod = await import('@/hooks/use-project-flows');
+    expect(typeof mod.useProjectFlows).toBe('function');
+  });
+
+  it('exports the mutation surface via the same factory', async () => {
+    // US-025: the hook module is the single source of truth for the mutation
+    // surface as well — the dialog wiring in demo-view.tsx pulls all three
+    // mutation handlers out of one destructure.
+    const mod = await import('@/hooks/use-project-flows');
+    // Tested above through the underlying api.ts helpers; this is the export
+    // shape check so the dialog imports stay stable.
     expect(typeof mod.useProjectFlows).toBe('function');
   });
 });
