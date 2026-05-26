@@ -11,7 +11,7 @@ import { createMcpServer } from './mcp.ts';
 import { seeflowHome } from './paths.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
-import { type Registry, createRegistry } from './registry.ts';
+import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
@@ -85,7 +85,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const mode = options.mode ?? inferMode();
   const viteDevUrl = options.viteDevUrl ?? DEFAULT_VITE_DEV_URL;
   const staticRoot = options.staticRoot ?? DEFAULT_STATIC_ROOT;
-  const registry = options.registry ?? createRegistry();
+  const registry =
+    options.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = options.events ?? createEventBus();
   const watcher = options.disableWatcher
     ? undefined
@@ -232,7 +233,7 @@ export function serve(options: ServeOptions = {}) {
 }
 
 if (import.meta.main) {
-  const registry = createRegistry();
+  const registry = createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = createEventBus();
   const statusRunner = createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const server = serve({ registry, events, statusRunner });

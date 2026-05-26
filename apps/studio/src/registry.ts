@@ -63,10 +63,39 @@ export function defaultRegistryPath(): string {
   return join(seeflowHome(), 'registry.json');
 }
 
+/**
+ * Production load-time predicate: only accept entries whose project still
+ * exposes a `seeflow.json` manifest at `repoPath` and whose `flowPath` matches
+ * the manifest layout (`flows/<id>/flow.json`). Anything else is a stale or
+ * pre-manifest registration and is dropped silently.
+ *
+ * Wire this into `createRegistry({ isLoadableEntry })` from every production
+ * call site (CLI, server). Tests construct registries without the predicate
+ * so they can use fake `/tmp/...` repo paths without scaffolding files.
+ */
+export const manifestOnlyEntryFilter = (entry: FlowEntry): boolean => {
+  if (!existsSync(join(entry.repoPath, 'seeflow.json'))) return false;
+  if (entry.flowPath === 'flow.json') return false;
+  return true;
+};
+
 const OWN_WRITE_RING_SIZE = 4;
 
-export function createRegistry(options: { path?: string } = {}): Registry {
+export interface CreateRegistryOptions {
+  path?: string;
+  /**
+   * Optional predicate run on every persisted entry at load time. Entries that
+   * return `false` are silently dropped from the in-memory map (and rewritten
+   * out of registry.json on the next persist). Production uses this to ignore
+   * any entry whose project no longer has a `seeflow.json` manifest — legacy
+   * support has been dropped, manifest layout is the only accepted layout.
+   */
+  isLoadableEntry?: (entry: FlowEntry) => boolean;
+}
+
+export function createRegistry(options: CreateRegistryOptions = {}): Registry {
   const path = options.path ?? defaultRegistryPath();
+  const isLoadableEntry = options.isLoadableEntry;
   const entries = new Map<string, FlowEntry>();
   const writtenHashes: string[] = [];
   const listeners = new Set<() => void>();
@@ -140,6 +169,12 @@ export function createRegistry(options: { path?: string } = {}): Registry {
           // Always re-derive slug from project + flow so the stored slug
           // and the on-disk fields cannot drift apart.
           entry.slug = `${entry.projectSlug}/${entry.flowSlug}`;
+          if (isLoadableEntry && !isLoadableEntry(entry)) {
+            console.warn(
+              `[registry] dropping entry ${entry.id} (${entry.slug}) — not loadable under the manifest-only contract`,
+            );
+            continue;
+          }
           entries.set(entry.id, entry);
         }
       }

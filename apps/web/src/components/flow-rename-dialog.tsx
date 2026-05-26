@@ -1,4 +1,3 @@
-import { FLOW_ID_PATTERN } from '@/components/flow-create-dialog';
 import type { MutateFlowResult, PatchFlowBody } from '@/lib/api';
 import {
   Button,
@@ -38,17 +37,13 @@ export function FlowRenameDialog({
   onRename,
   onRenamed,
 }: FlowRenameDialogProps) {
-  const [id, setId] = useState('');
   const [name, setName] = useState('');
-  const [icon, setIcon] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     if (open && flow) {
-      setId(flow.flowSlug);
       setName(flow.name);
-      setIcon(flow.icon ?? '');
       setError(null);
       setSubmitting(false);
     }
@@ -61,32 +56,17 @@ export function FlowRenameDialog({
     return <Dialog open={false} onOpenChange={onOpenChange} />;
   }
 
-  const trimmedId = id.trim();
   const trimmedName = name.trim();
-  const trimmedIcon = icon.trim();
-  const idChanging = trimmedId !== flow.flowSlug;
   const nameChanging = trimmedName !== flow.name;
-  const iconChanging = trimmedIcon !== (flow.icon ?? '');
-  const idValid = trimmedId.length > 0 && FLOW_ID_PATTERN.test(trimmedId);
-  const hasChange = idChanging || nameChanging || iconChanging;
-  const canSubmit = idValid && trimmedName.length > 0 && hasChange && !submitting;
+  const canSubmit = trimmedName.length > 0 && nameChanging && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) {
-      if (idChanging && !idValid) {
-        setError('Flow id must match /^[a-z0-9][a-z0-9-]*$/');
-      }
-      return;
-    }
+    if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
     try {
-      const body: PatchFlowBody = {
-        ...(idChanging ? { id: trimmedId } : {}),
-        ...(nameChanging ? { name: trimmedName } : {}),
-        ...(iconChanging ? { icon: trimmedIcon || undefined } : {}),
-      };
+      const body: PatchFlowBody = { name: trimmedName };
       const result = await onRename(flow.flowSlug, body);
       onRenamed?.(result, flow.flowSlug);
       onOpenChange(false);
@@ -113,8 +93,7 @@ export function FlowRenameDialog({
         <DialogHeader>
           <DialogTitle>Rename flow</DialogTitle>
           <DialogDescription>
-            Renaming the id renames the flow folder on disk. The display name and icon are
-            metadata-only.
+            Update the display name. The flow id is fixed once created.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
@@ -122,17 +101,14 @@ export function FlowRenameDialog({
             <span className="font-medium">Flow id</span>
             <input
               type="text"
-              required
+              readOnly
+              disabled
               autoComplete="off"
               spellCheck={false}
-              value={id}
-              onChange={(e) => setId(e.target.value)}
+              value={flow.flowSlug}
               data-testid="flow-rename-id-input"
-              className="rounded-md border bg-background px-3 py-2 font-mono text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              className="cursor-not-allowed rounded-md border bg-muted px-3 py-2 font-mono text-sm text-muted-foreground"
             />
-            <span className="text-xs text-muted-foreground">
-              Renaming the id moves flows/{flow.flowSlug}/ on disk.
-            </span>
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">Display name</span>
@@ -144,20 +120,6 @@ export function FlowRenameDialog({
               value={name}
               onChange={(e) => setName(e.target.value)}
               data-testid="flow-rename-name-input"
-              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-          </label>
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">
-              Icon <span className="text-muted-foreground">(optional)</span>
-            </span>
-            <input
-              type="text"
-              autoComplete="off"
-              spellCheck={false}
-              value={icon}
-              onChange={(e) => setIcon(e.target.value)}
-              data-testid="flow-rename-icon-input"
               className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
           </label>

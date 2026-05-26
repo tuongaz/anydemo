@@ -22,7 +22,7 @@ import {
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
-import { type Registry, createRegistry } from './registry.ts';
+import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import {
   DEFAULT_CONFIG,
   clearPid,
@@ -379,7 +379,7 @@ async function runStart() {
   // persist the chosen address so other subcommands can find us
   writeConfig({ port, host: config.host });
 
-  const registry = createRegistry();
+  const registry = createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = createEventBus();
   const statusRunner = createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const server = serve({ port, hostname: config.host, registry, events, statusRunner });

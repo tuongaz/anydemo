@@ -113,58 +113,6 @@ const seedProject = (
   return { repoPath, projectSlug: outcome.projectSlug, entries: outcome.entries };
 };
 
-describe('seeflow CLI register integration', () => {
-  it('two registers from the same repo with different flowPath produce two distinct studio entries', async () => {
-    const studio = startTestStudio();
-    try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-repo-'));
-      mkdirSync(join(repoDir, 'checkout'), { recursive: true });
-      mkdirSync(join(repoDir, 'refund'), { recursive: true });
-      writeFileSync(
-        join(repoDir, 'checkout', 'flow.json'),
-        JSON.stringify({ ...VALID_DEMO, name: 'Checkout' }),
-      );
-      writeFileSync(
-        join(repoDir, 'refund', 'flow.json'),
-        JSON.stringify({ ...VALID_DEMO, name: 'Refund' }),
-      );
-
-      const baseEnv = studio.env;
-
-      const first = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', 'checkout/flow.json'],
-        baseEnv,
-      );
-      expect(first.code).toBe(0);
-      expect(first.stdout).toContain('Registered "Checkout"');
-
-      const second = await runCli(
-        ['register', '--no-start', '--path', repoDir, '--flow', 'refund/flow.json'],
-        baseEnv,
-      );
-      expect(second.code).toBe(0);
-      expect(second.stdout).toContain('Registered "Refund"');
-
-      // CLI runs in a separate process and writes the shared registry.json on
-      // disk. The studio's in-memory registry needs a manual reload to see
-      // the new state since the test harness disables the watcher.
-      studio.registry.reload();
-      expect(studio.registry.list()).toHaveLength(2);
-      const entries = studio.registry.list();
-      const slugs = entries.map((e) => e.slug).sort();
-      // Post-US-002: slug is `${projectSlug}/${flowSlug}`. registerFlowImpl
-      // stamps the legacy single-flow shape (projectSlug = slugify(name),
-      // flowSlug = 'main') until US-004 wires the scanner.
-      expect(slugs).toEqual(['checkout/main', 'refund/main']);
-      const ids = entries.map((e) => e.id);
-      expect(new Set(ids).size).toBe(2);
-      expect(entries.every((e) => e.repoPath === repoDir)).toBe(true);
-    } finally {
-      studio.stop();
-    }
-  }, 20_000);
-});
-
 describe('seeflow CLI new subcommands', () => {
   it('projects:create writes seeflow.json + flows/main/flow.json and registers one entry', async () => {
     const studio = startTestStudio();
@@ -220,16 +168,9 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:list returns the registered flows', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-list-'));
-      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
-      studio.registry.upsert({
-        name: 'Listed',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'listed',
-        flowSlug: 'main',
-        isDefault: true,
-      });
+      const { projectSlug } = seedProject(studio, 'listed', 'Listed', [
+        { id: 'main', name: 'Main' },
+      ]);
 
       const r = await runCli(['flows:list', '--no-start'], studio.env);
       expect(r.code).toBe(0);
@@ -238,7 +179,7 @@ describe('seeflow CLI new subcommands', () => {
         flows: Array<{ slug: string }>;
       };
       expect(parsed.ok).toBe(true);
-      expect(parsed.flows.some((f) => f.slug === 'listed/main')).toBe(true);
+      expect(parsed.flows.some((f) => f.slug === `${projectSlug}/main`)).toBe(true);
     } finally {
       studio.stop();
     }
@@ -296,17 +237,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flow:add-bulk adds nodes + connectors atomically via --json', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-bulk-'));
-      const emptyDemo = { version: 2, name: 'Empty', nodes: [], connectors: [] };
-      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(emptyDemo));
-      const entry = studio.registry.upsert({
-        name: 'Empty',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
-      });
+      const { projectSlug } = seedProject(studio, 'bulk', 'Bulk', [{ id: 'main', name: 'Main' }]);
 
       // Connector references node from the same batch — proves transactional shape.
       const payload = JSON.stringify({
@@ -329,9 +260,9 @@ describe('seeflow CLI new subcommands', () => {
           'flow:add-bulk',
           '--no-start',
           '--project',
-          entry.projectSlug,
+          projectSlug,
           '--flow',
-          entry.flowSlug,
+          'main',
           '--json',
           payload,
         ],
@@ -356,19 +287,7 @@ describe('seeflow CLI new subcommands', () => {
   it('flow:add-bulk reports duplicate node id with collection=nodes', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-dup-'));
-      writeFileSync(
-        join(repoDir, 'flow.json'),
-        JSON.stringify({ version: 2, name: 'Dup', nodes: [], connectors: [] }),
-      );
-      const entry = studio.registry.upsert({
-        name: 'Dup',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
-      });
+      const { projectSlug } = seedProject(studio, 'dup', 'Dup', [{ id: 'main', name: 'Main' }]);
 
       const payload = JSON.stringify({
         nodes: [
@@ -389,9 +308,9 @@ describe('seeflow CLI new subcommands', () => {
           'flow:add-bulk',
           '--no-start',
           '--project',
-          entry.projectSlug,
+          projectSlug,
           '--flow',
-          entry.flowSlug,
+          'main',
           '--json',
           payload,
         ],
@@ -435,19 +354,22 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:summary returns id, name, description per flow', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-summary-'));
-      writeFileSync(
-        join(repoDir, 'flow.json'),
-        JSON.stringify({ ...VALID_DEMO, name: 'Documented', description: 'doc body' }),
-      );
+      const entries = seedProject(studio, 'documented', 'Documented', [
+        { id: 'main', name: 'Documented' },
+      ]).entries;
+      // listFlowsSummary falls back to the registry's stored description
+      // when the watcher is disabled. Stamp it via upsert so the description
+      // we want the test to verify reaches the CLI output.
+      const entry = entries[0];
+      if (!entry) throw new Error('seed produced no entries');
       studio.registry.upsert({
-        name: 'Documented',
+        name: entry.name,
         description: 'doc body',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
+        repoPath: entry.repoPath,
+        flowPath: entry.flowPath,
+        projectSlug: entry.projectSlug,
+        flowSlug: entry.flowSlug,
+        isDefault: entry.isDefault,
       });
 
       const r = await runCli(['flows:summary', '--no-start'], studio.env);
@@ -467,9 +389,11 @@ describe('seeflow CLI new subcommands', () => {
   it('flows:graph returns nodes/connectors and strips detail/html', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-graph-'));
+      const { repoPath, projectSlug } = seedProject(studio, 'graph', 'Graph', [
+        { id: 'main', name: 'Main' },
+      ]);
       writeFileSync(
-        join(repoDir, 'flow.json'),
+        join(repoPath, 'flows', 'main', 'flow.json'),
         JSON.stringify({
           ...VALID_DEMO,
           description: 'demo',
@@ -483,18 +407,9 @@ describe('seeflow CLI new subcommands', () => {
           ],
         }),
       );
-      const entry = studio.registry.upsert({
-        name: 'Graph',
-        description: 'demo',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
-      });
 
       const r = await runCli(
-        ['flows:graph', '--no-start', '--project', entry.projectSlug, '--flow', entry.flowSlug],
+        ['flows:graph', '--no-start', '--project', projectSlug, '--flow', 'main'],
         studio.env,
       );
       expect(r.code).toBe(0);
@@ -644,20 +559,13 @@ describe('seeflow CLI new subcommands', () => {
   it('nodes:get returns the node with detail content inlined', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-nodeget-'));
-      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
-      const entry = studio.registry.upsert({
-        name: 'NodeGet',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
-      });
+      const { projectSlug } = seedProject(studio, 'nodeget', 'NodeGet', [
+        { id: 'main', name: 'Main' },
+      ]);
 
       // Add a shape node via the add endpoint so detail.md is externalized.
       const addRes = await fetch(
-        `${studio.url}/api/projects/${encodeURIComponent(entry.projectSlug)}/flows/${encodeURIComponent(entry.flowSlug)}/nodes`,
+        `${studio.url}/api/projects/${encodeURIComponent(projectSlug)}/flows/main/nodes`,
         {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -670,15 +578,7 @@ describe('seeflow CLI new subcommands', () => {
       const added = (await addRes.json()) as { id: string };
 
       const r = await runCli(
-        [
-          'nodes:get',
-          '--no-start',
-          '--project',
-          entry.projectSlug,
-          '--flow',
-          entry.flowSlug,
-          added.id,
-        ],
+        ['nodes:get', '--no-start', '--project', projectSlug, '--flow', 'main', added.id],
         studio.env,
       );
       expect(r.code).toBe(0);
@@ -688,7 +588,7 @@ describe('seeflow CLI new subcommands', () => {
         node: { data: { detail?: string } };
       };
       // ops.getNode echoes the slug it was called with (US-020 cutover).
-      expect(parsed.flowId).toBe(`${entry.projectSlug}/${entry.flowSlug}`);
+      expect(parsed.flowId).toBe(`${projectSlug}/main`);
       expect(parsed.node.data.detail).toBe('# inlined body');
     } finally {
       studio.stop();

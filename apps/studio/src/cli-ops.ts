@@ -1,6 +1,11 @@
 import { type Operations, createOperations } from './operations.ts';
 import { type ScanError, scanProject } from './project-scanner.ts';
-import { type FlowEntry, type Registry, createRegistry } from './registry.ts';
+import {
+  type FlowEntry,
+  type Registry,
+  createRegistry,
+  manifestOnlyEntryFilter,
+} from './registry.ts';
 
 /**
  * Build a single Operations handle for in-process CLI use.
@@ -15,7 +20,9 @@ import { type FlowEntry, type Registry, createRegistry } from './registry.ts';
  * is undefined in the CLI.
  */
 export function createCliOperations(): Operations {
-  return createOperations({ registry: createRegistry() });
+  return createOperations({
+    registry: createRegistry({ isLoadableEntry: manifestOnlyEntryFilter }),
+  });
 }
 
 export interface RegisterProjectOpts {
@@ -44,7 +51,8 @@ export type RegisterProjectOutcome =
  * from US-004 onward.
  */
 export function registerProject(opts: RegisterProjectOpts): RegisterProjectOutcome {
-  const registry = opts.registry ?? createRegistry();
+  const registry =
+    opts.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const scan = scanProject(opts.repoPath);
   if (scan.kind !== 'ok') return scan;
 
