@@ -8,32 +8,32 @@ import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
 import { type CreateProjectResult, type FlowDetail, playFlowNode, restartFlow } from '@/lib/api';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
-import { navigate, usePathname } from '@/lib/router';
+import { flowPathFromSlug, matchProjectFlow, navigate, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
 import { TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect } from 'react';
 
-const matchDemoSlug = (pathname: string): string | null => {
-  if (!pathname.startsWith('/d/')) return null;
-  const slug = pathname.slice('/d/'.length);
-  return slug.length > 0 ? decodeURIComponent(slug) : null;
-};
-
 export function App() {
   const pathname = usePathname();
   const { demos, refresh: refreshFlows } = useDemos();
-  const slug = matchDemoSlug(pathname);
+  // US-010: canvas page now lives at `/projects/:project/flows/:flow`. The
+  // legacy `/d/<slug>` shape is gone — older bookmarks land on StudioHome and
+  // the auto-pick effect rewrites them to the new URL if a demo resolves.
+  const match = matchProjectFlow(pathname);
+  const project = match?.project ?? null;
+  const flow = match?.flow ?? null;
 
   // External writes (CLI register / unregister) reach us via the global
   // registry SSE channel. The flow list refetches; node-level state stays
   // bound to the open demo and is untouched.
   useRegistryEvents({ onRegistryReload: refreshFlows });
 
+  const slug = match ? `${match.project}/${match.flow}` : null;
   const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
   const flowId = currentSummary?.id ?? null;
 
-  const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(flowId);
+  const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(project, flow);
   const { runs, apply: applyRun } = useNodeRuns(flowId);
   const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
   const {
@@ -109,13 +109,13 @@ export function App() {
   useStudioEvents(flowId, { onHello, onFlowReload, onEvent });
 
   const onRestartDemo = useCallback(async (): Promise<void> => {
-    if (!flowId) return;
+    if (!project || !flow) return;
     try {
-      await restartFlow(flowId);
+      await restartFlow(project, flow);
     } catch (err) {
       console.error('Failed to restart demo:', err);
     }
-  }, [flowId]);
+  }, [project, flow]);
 
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
@@ -140,7 +140,7 @@ export function App() {
     if (pathname !== '/') return;
     if (demos === null) return;
     const target = pickInitialDemo(demos, readLastProjectId());
-    if (target) navigate(`/d/${target.slug}`);
+    if (target) navigate(flowPathFromSlug(target.slug));
   }, [pathname, demos]);
 
   // US-001: persist whichever project is currently open so we can reopen it next visit.
@@ -150,10 +150,10 @@ export function App() {
 
   const onPlayNode = useCallback(
     (nodeId: string) => {
-      if (!flowId) return;
+      if (!project || !flow) return;
       // Fire and forget — the SSE node:* events drive the UI; the synchronous
       // response is currently surfaced through the same SSE stream.
-      playFlowNode(flowId, nodeId).catch((err) => {
+      playFlowNode(project, flow, nodeId).catch((err) => {
         applyRun({
           type: 'node:error',
           nodeId,
@@ -162,7 +162,7 @@ export function App() {
         });
       });
     },
-    [flowId, applyRun],
+    [project, flow, applyRun],
   );
 
   if (demos === null) {
@@ -183,8 +183,10 @@ export function App() {
           onProjectUnregistered={onProjectUnregistered}
         />
         <main className="min-h-0 flex-1">
-          {slug ? (
+          {project && flow && slug ? (
             <DemoView
+              project={project}
+              flow={flow}
               slug={slug}
               demos={demos}
               detail={detail}

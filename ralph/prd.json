@@ -172,7 +172,7 @@
         "Verify in browser using dev-browser skill: open http://localhost:5173/projects/order-pipeline/flows/main with the studio running; canvas renders with nodes; navigating manually to a non-existent flow surfaces an error"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {

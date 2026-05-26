@@ -6,14 +6,22 @@ export type Visibility = 'public' | 'link';
 
 const CLOUD_API_BASE = 'https://seeflow.dev/api';
 
+/**
+ * US-010: take both `project` (slug, drives `/api/projects/:project/...` and
+ * file fetches) and `flow` (slug, drives the per-flow detail fetch) explicitly
+ * — pre-US-010 callers passed a single `projectId` that was the registry
+ * entry id, which couldn't address the project-scoped file route after US-008
+ * moved files under `:project` (project slug).
+ */
 export async function exportToCloud(
-  projectId: string,
+  project: string,
+  flow: string,
   email: string,
   name: string,
   visibility: Visibility,
   previewDataUrl?: string,
 ): Promise<{ shareUrl: string }> {
-  const detail = await fetchFlowDetail(projectId);
+  const detail = await fetchFlowDetail(project, flow);
   if (!detail.flow) {
     throw new Error('Flow has no data');
   }
@@ -45,7 +53,7 @@ export async function exportToCloud(
   }
 
   for (const path of filePaths) {
-    const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files/${path}`);
+    const res = await fetch(`/api/projects/${encodeURIComponent(project)}/files/${path}`);
     if (res.ok) {
       zipEntries[`files/${path}`] = new Uint8Array(await res.arrayBuffer());
     }
@@ -75,7 +83,8 @@ export async function exportToCloud(
 }
 
 export function useExportToCloud(
-  projectId: string,
+  project: string,
+  flow: string,
 ): (
   email: string,
   name: string,
@@ -84,7 +93,7 @@ export function useExportToCloud(
 ) => Promise<{ shareUrl: string }> {
   return useCallback(
     (email: string, name: string, visibility: Visibility, previewDataUrl?: string) =>
-      exportToCloud(projectId, email, name, visibility, previewDataUrl),
-    [projectId],
+      exportToCloud(project, flow, email, name, visibility, previewDataUrl),
+    [project, flow],
   );
 }

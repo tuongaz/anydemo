@@ -70,7 +70,7 @@ describe('exportToCloud', () => {
       }
       requests.push({ url, method, headers });
 
-      if (url.includes('/api/flows/')) {
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/')) {
         return { status: 200, body: makeDetail() };
       }
       if (url.includes('seeflow.dev')) {
@@ -79,11 +79,11 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
 
-    const result = await exportToCloud('proj-1', 'test@example.com', 'My Flow', 'public');
+    const result = await exportToCloud('proj-1', 'main', 'test@example.com', 'My Flow', 'public');
 
     expect(result.shareUrl).toBe('https://seeflow.dev/flow/uuid-123');
     expect(requests).toHaveLength(2);
-    expect(requests[0]?.url).toBe('/api/flows/proj-1');
+    expect(requests[0]?.url).toBe('/api/projects/proj-1/flows/main');
     expect(requests[1]?.url).toContain('seeflow.dev/api/flows');
     expect(requests[1]?.url).toContain('email=test%40example.com');
     expect(requests[1]?.method).toBe('POST');
@@ -94,7 +94,8 @@ describe('exportToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -103,7 +104,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'My Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'My Flow', 'public');
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -129,7 +130,7 @@ describe('exportToCloud', () => {
 
     installMock((url, init) => {
       requests.push(url);
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(demo) };
+      if (url === '/api/projects/proj-1/flows/main') return { status: 200, body: makeDetail(demo) };
       if (url.includes('/api/projects/') && url.includes('/files/')) {
         return { status: 200, body: null, binary: pngBytes };
       }
@@ -141,7 +142,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Img Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'Img Flow', 'public');
 
     expect(requests).toHaveLength(3);
     expect(requests[1]).toContain('/api/projects/proj-1/files/assets/img.png');
@@ -171,7 +172,7 @@ describe('exportToCloud', () => {
 
     installMock((url, init) => {
       requests.push(url);
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(demo) };
+      if (url === '/api/projects/proj-1/flows/main') return { status: 200, body: makeDetail(demo) };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -180,7 +181,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Html Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'Html Flow', 'public');
 
     // No file bundling needed for type:'html' — content rides inside flow.json.
     expect(requests.some((u) => u.includes('/files/'))).toBe(false);
@@ -215,7 +216,7 @@ describe('exportToCloud', () => {
     const fileRequests: string[] = [];
 
     installMock((url) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(demo) };
+      if (url === '/api/projects/proj-1/flows/main') return { status: 200, body: makeDetail(demo) };
       if (url.includes('/api/projects/')) {
         fileRequests.push(url);
         return { status: 200, body: null, binary: new Uint8Array([0]) };
@@ -225,7 +226,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Dup Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'Dup Flow', 'public');
     expect(fileRequests).toHaveLength(1);
   });
 
@@ -246,7 +247,7 @@ describe('exportToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(demo) };
+      if (url === '/api/projects/proj-1/flows/main') return { status: 200, body: makeDetail(demo) };
       if (url.includes('/api/projects/')) return { status: 404, body: { error: 'not found' } };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
@@ -256,7 +257,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Missing Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'Missing Flow', 'public');
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -266,24 +267,25 @@ describe('exportToCloud', () => {
 
   it('throws when demo is null', async () => {
     installMock((url) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail(null) };
+      if (url === '/api/projects/proj-1/flows/main') return { status: 200, body: makeDetail(null) };
       throw new Error(`Unexpected: ${url}`);
     });
 
     await expect(
-      exportToCloud('proj-1', 'test@example.com', 'Null Flow', 'public'),
+      exportToCloud('proj-1', 'main', 'test@example.com', 'Null Flow', 'public'),
     ).rejects.toThrow('Flow has no data');
   });
 
   it('throws when cloud API returns non-ok status', async () => {
     installMock((url) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) return { status: 413, body: { error: 'too large' } };
       throw new Error(`Unexpected: ${url}`);
     });
 
     await expect(
-      exportToCloud('proj-1', 'test@example.com', 'Too Large', 'public'),
+      exportToCloud('proj-1', 'main', 'test@example.com', 'Too Large', 'public'),
     ).rejects.toThrow('Export failed with status 413');
   });
 
@@ -294,7 +296,8 @@ describe('exportToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -303,7 +306,14 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Preview Flow', 'public', previewDataUrl);
+    await exportToCloud(
+      'proj-1',
+      'main',
+      'test@example.com',
+      'Preview Flow',
+      'public',
+      previewDataUrl,
+    );
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -315,7 +325,8 @@ describe('exportToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -324,7 +335,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'No Preview', 'public');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'No Preview', 'public');
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -333,13 +344,14 @@ describe('exportToCloud', () => {
 
   it('throws when cloud API response is missing url field', async () => {
     installMock((url) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) return { status: 201, body: { ok: true } };
       throw new Error(`Unexpected: ${url}`);
     });
 
     await expect(
-      exportToCloud('proj-1', 'test@example.com', 'Missing URL', 'public'),
+      exportToCloud('proj-1', 'main', 'test@example.com', 'Missing URL', 'public'),
     ).rejects.toThrow('missing url');
   });
 
@@ -347,7 +359,8 @@ describe('exportToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -356,7 +369,7 @@ describe('exportToCloud', () => {
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'test@example.com', 'Private Flow', 'link');
+    await exportToCloud('proj-1', 'main', 'test@example.com', 'Private Flow', 'link');
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));
@@ -369,13 +382,14 @@ describe('exportToCloud', () => {
 
     installMock((url) => {
       capturedUrls.push(url);
-      if (url.includes('/api/flows/')) return { status: 200, body: makeDetail() };
+      if (url.startsWith('/api/projects/') && url.includes('/flows/') && !url.includes('/files/'))
+        return { status: 200, body: makeDetail() };
       if (url.includes('seeflow.dev'))
         return { status: 201, body: { url: 'https://seeflow.dev/flow/abc' } };
       throw new Error(`Unexpected: ${url}`);
     });
 
-    await exportToCloud('proj-1', 'user@example.com', 'My Awesome Flow', 'public');
+    await exportToCloud('proj-1', 'main', 'user@example.com', 'My Awesome Flow', 'public');
 
     const cloudUrl = capturedUrls.find((u) => u.includes('seeflow.dev'));
     expect(cloudUrl).toBeDefined();

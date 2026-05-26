@@ -64,9 +64,16 @@ export const fetchFlows = async (): Promise<FlowSummary[]> => {
   return (await res.json()) as FlowSummary[];
 };
 
-export const fetchFlowDetail = async (id: string): Promise<FlowDetail> => {
-  const res = await fetch(`/api/flows/${id}`);
-  if (!res.ok) throw new Error(`GET /api/flows/${id} failed: ${res.status}`);
+// US-010: each flow-scoped builder accepts the (project, flow) slug pair and
+// composes the new nested API URL. The studio resolves the pair to a
+// `FlowEntry` server-side via `resolveProjectFlow` (US-006).
+const flowApiBase = (project: string, flow: string): string =>
+  `/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}`;
+
+export const fetchFlowDetail = async (project: string, flow: string): Promise<FlowDetail> => {
+  const url = flowApiBase(project, flow);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
   return (await res.json()) as FlowDetail;
 };
 
@@ -88,8 +95,9 @@ export interface CreateProjectResult {
   slug: string;
 }
 
-export const deleteFlow = async (id: string): Promise<{ ok: true }> => {
-  const res = await fetch(`/api/flows/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const deleteFlow = async (project: string, flow: string): Promise<{ ok: true }> => {
+  const url = flowApiBase(project, flow);
+  const res = await fetch(url, { method: 'DELETE' });
   if (!res.ok) {
     let errorBody: { error?: string } | null = null;
     try {
@@ -97,7 +105,7 @@ export const deleteFlow = async (id: string): Promise<{ ok: true }> => {
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `DELETE /api/flows/${id} → ${res.status}`);
+    throw new Error(errorBody?.error ?? `DELETE ${url} → ${res.status}`);
   }
   return (await res.json()) as { ok: true };
 };
@@ -125,8 +133,9 @@ export interface RestartFlowResult {
   calledResetAction: boolean;
 }
 
-export const restartFlow = async (flowId: string): Promise<RestartFlowResult> => {
-  const res = await fetch(`/api/flows/${flowId}/reset`, {
+export const restartFlow = async (project: string, flow: string): Promise<RestartFlowResult> => {
+  const url = `${flowApiBase(project, flow)}/reset`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
@@ -138,7 +147,7 @@ export const restartFlow = async (flowId: string): Promise<RestartFlowResult> =>
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `POST /api/flows/${flowId}/reset → ${res.status}`);
+    throw new Error(errorBody?.error ?? `POST ${url} → ${res.status}`);
   }
   return (await res.json()) as RestartFlowResult;
 };
@@ -215,8 +224,13 @@ export const revealProjectFile = async (
   path: string,
 ): Promise<FileActionResult> => requestFileAction(projectId, 'reveal', path);
 
-export const playFlowNode = async (flowId: string, nodeId: string): Promise<PlayResult> => {
-  const res = await fetch(`/api/flows/${flowId}/play/${nodeId}`, {
+export const playFlowNode = async (
+  project: string,
+  flow: string,
+  nodeId: string,
+): Promise<PlayResult> => {
+  const url = `${flowApiBase(project, flow)}/play/${encodeURIComponent(nodeId)}`;
+  const res = await fetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',
@@ -228,7 +242,7 @@ export const playFlowNode = async (flowId: string, nodeId: string): Promise<Play
     } catch {
       // ignore
     }
-    throw new Error(errorBody?.error ?? `POST /api/flows/${flowId}/play/${nodeId} → ${res.status}`);
+    throw new Error(errorBody?.error ?? `POST ${url} → ${res.status}`);
   }
   return (await res.json()) as PlayResult;
 };

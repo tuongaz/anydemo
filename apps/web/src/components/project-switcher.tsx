@@ -1,7 +1,7 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
 import type { CreateProjectResult, FlowSummary } from '@/lib/api';
 import { deleteFlow } from '@/lib/api';
-import { navigate } from '@/lib/router';
+import { flowPathFromSlug, navigate } from '@/lib/router';
 import {
   Button,
   Command,
@@ -59,7 +59,7 @@ export function ProjectSwitcher({
 
   const handleCreated = (result: CreateProjectResult) => {
     onProjectCreated?.(result);
-    navigate(`/d/${result.slug}`);
+    navigate(flowPathFromSlug(result.slug));
   };
 
   const openUnregisterDialog = (demo: FlowSummary) => {
@@ -78,7 +78,16 @@ export function ProjectSwitcher({
     setUnregistering(true);
     setUnregisterError(null);
     try {
-      await deleteFlow(unregisterTarget.id);
+      // US-010: split the registry slug `${projectSlug}/${flowSlug}` into the
+      // two path segments the manifest-aware DELETE expects. Multi-flow
+      // unregister (i.e. dropping every flow of a project at once) is not yet
+      // wired — US-014/US-017 land per-project endpoints; for now this drops
+      // the single flow the row points at.
+      const slug = unregisterTarget.slug;
+      const slash = slug.indexOf('/');
+      const projectSlug = slash >= 0 ? slug.slice(0, slash) : slug;
+      const flowSlug = slash >= 0 ? slug.slice(slash + 1) : '';
+      await deleteFlow(projectSlug, flowSlug);
       const id = unregisterTarget.id;
       setUnregisterTarget(null);
       onProjectUnregistered?.(id);
@@ -125,7 +134,7 @@ export function ProjectSwitcher({
                       value={`${demo.name} ${demo.slug}`}
                       onSelect={() => {
                         setOpen(false);
-                        navigate(`/d/${demo.slug}`);
+                        navigate(flowPathFromSlug(demo.slug));
                       }}
                       className="group flex items-center justify-between gap-2"
                     >

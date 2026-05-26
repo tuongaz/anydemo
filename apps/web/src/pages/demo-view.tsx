@@ -116,6 +116,10 @@ export const applyReorderOpToIds = (
 };
 
 export interface DemoViewProps {
+  /** US-010: project slug parsed from `/projects/:project/flows/:flow`. */
+  project: string;
+  /** US-010: flow slug parsed from `/projects/:project/flows/:flow`. */
+  flow: string;
   slug: string;
   demos: FlowSummary[];
   detail: FlowDetail | null;
@@ -134,6 +138,8 @@ export interface DemoViewProps {
 }
 
 export function DemoView({
+  project,
+  flow,
   slug,
   demos,
   detail,
@@ -380,27 +386,11 @@ export function DemoView({
   }, [demoNodes, nodeOrderOverride]);
 
   const flowId = detail?.id ?? null;
-  // US-009 transitional: the canvas adapter now takes { project, flow }; until
-  // US-010 wires `useParams().project` + `useParams().flow` from React Router,
-  // split the legacy `${projectSlug}/${flowSlug}` registry slug so the adapter
-  // keeps composing the new `/api/projects/:project/flows/:flow/...` URLs.
-  const detailSlug = detail?.slug ?? null;
-  const adapterSlugs = useMemo(() => {
-    if (!detailSlug) return null;
-    const [project, flow] = detailSlug.split('/');
-    if (!project || !flow) return null;
-    return { project, flow };
-  }, [detailSlug]);
-  // US-025: persistence adapter built from the demo's slug. Bound to one demo
-  // for its lifetime; rebuilt on demo switch. Every REST mutation in this file
-  // (and the prop threaded to <SeeflowCanvas>) now routes through this adapter.
-  const adapter = useMemo(
-    () =>
-      adapterSlugs
-        ? createRestAdapter({ baseUrl: '', project: adapterSlugs.project, flow: adapterSlugs.flow })
-        : null,
-    [adapterSlugs],
-  );
+  // US-010: persistence adapter is built directly from the URL slugs threaded
+  // through DemoViewProps. Bound to one (project, flow) for its lifetime;
+  // rebuilt on flow switch. Every REST mutation in this file (and the prop
+  // threaded to <SeeflowCanvas>) now routes through this adapter.
+  const adapter = useMemo(() => createRestAdapter({ baseUrl: '', project, flow }), [project, flow]);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const { setOverride: setNodeOverride, dropOverride: dropNodeOverride } = nodePending;
   // Read live displayed position for a node (override merged) so a multi-node
@@ -2982,7 +2972,11 @@ export function DemoView({
           ref={canvasRef}
           mode="edit"
           adapter={adapter}
-          projectId={flowId ?? undefined}
+          // US-010: SeeflowCanvas.projectId drives the project-scoped file URL
+          // composition (see fileUrl in @seeflow/canvas) and the embed snippet.
+          // Post-US-008, file routes are addressed by project slug — so we
+          // pass the URL slug here, not the registry entry id (`flowId`).
+          projectId={project}
           enableEmbed={false}
           onExportToCloud={flowId ? () => setExportDialogOpen(true) : undefined}
           onRestartDemo={onRestartDemo}
@@ -3096,7 +3090,8 @@ export function DemoView({
         <ExportDialog
           open={exportDialogOpen}
           onOpenChange={setExportDialogOpen}
-          projectId={flowId}
+          project={project}
+          flow={flow}
           flowName={detail?.name ?? summary.name}
           onCapturePreview={() => canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)}
         />

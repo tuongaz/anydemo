@@ -15,15 +15,16 @@ export interface UseDemoDataResult {
   applyDetail: (next: FlowDetail) => void;
 }
 
-export const useDemoData = (id: string | null): UseDemoDataResult => {
+export const useDemoData = (project: string | null, flow: string | null): UseDemoDataResult => {
+  const enabled = project !== null && flow !== null;
   const [detail, setDetail] = useState<FlowDetail | null>(null);
-  const [loading, setLoading] = useState<boolean>(id !== null);
+  const [loading, setLoading] = useState<boolean>(enabled);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {
-    if (!id) return;
+    if (!project || !flow) return;
     setLoading(true);
-    fetchFlowDetail(id)
+    fetchFlowDetail(project, flow)
       .then((data) => {
         setDetail(data);
         setError(null);
@@ -33,7 +34,7 @@ export const useDemoData = (id: string | null): UseDemoDataResult => {
         setError(String(err));
       })
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [project, flow]);
 
   const applyDetail = useCallback((next: FlowDetail) => {
     setDetail(next);
@@ -41,13 +42,13 @@ export const useDemoData = (id: string | null): UseDemoDataResult => {
   }, []);
 
   useEffect(() => {
-    if (!id) {
+    if (!project || !flow) {
       setDetail(null);
       setLoading(false);
       return;
     }
     refresh();
-  }, [id, refresh]);
+  }, [project, flow, refresh]);
 
   return { detail, loading, error, refresh, applyDetail };
 };

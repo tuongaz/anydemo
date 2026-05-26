@@ -24,7 +24,11 @@ type State =
 export interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  projectId: string;
+  /** US-010: project slug — drives the project-scoped file fetches inside the
+   * bundle. */
+  project: string;
+  /** US-010: flow slug — drives the per-flow detail fetch. */
+  flow: string;
   flowName?: string;
   onCapturePreview?: () => Promise<string | undefined>;
 }
@@ -32,7 +36,8 @@ export interface ExportDialogProps {
 export function ExportDialog({
   open,
   onOpenChange,
-  projectId,
+  project,
+  flow,
   flowName,
   onCapturePreview,
 }: ExportDialogProps) {
@@ -41,7 +46,7 @@ export function ExportDialog({
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [copied, setCopied] = useState(false);
-  const exportToCloud = useExportToCloud(projectId);
+  const exportToCloud = useExportToCloud(project, flow);
 
   useEffect(() => {
     if (open) {
