@@ -41,6 +41,7 @@ describe('integration: CLI in-process mutations → studio watcher broadcasts', 
   it('CLI nodes:add triggers flow:reload via the studio watcher', async () => {
     const name = uniqueFlowId('inproc-flow-reload');
     const project = await createProject(name);
+    const [projectSlug, flowSlug] = project.slug.split('/');
 
     const sse = await connectSse(studio.baseURL, `/api/events?flowId=${project.id}`);
     try {
@@ -49,8 +50,11 @@ describe('integration: CLI in-process mutations → studio watcher broadcasts', 
       const r = await runCli(
         [
           'nodes:add',
-          project.id,
           '--no-start',
+          '--project',
+          projectSlug as string,
+          '--flow',
+          flowSlug as string,
           '--json',
           JSON.stringify({
             id: 'observed',

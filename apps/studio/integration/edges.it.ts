@@ -44,13 +44,27 @@ async function createProject(
   return (await res.json()) as CreateProjectResponse;
 }
 
+// Per-flow files moved under `<projectSlug>/flows/<flowSlug>/` with the
+// manifest layout (US-018). `slug` is `projectSlug/flowSlug` — slot a
+// `/flows/` between the two halves to land at the new path.
+function flowDirAbs(workspace: string, slug: string): string {
+  const [projectSlug, flowSlug] = slug.split('/');
+  return join(workspace, projectSlug as string, 'flows', flowSlug as string);
+}
+
+// Per-flow HTTP routes moved under `/api/projects/:project/flows/:flow/...`
+// (US-007). Same substitution trick on the slug.
+function flowApi(slug: string): string {
+  return `/api/projects/${slug.replace('/', '/flows/')}`;
+}
+
 function readFlowJson(workspace: string, slug: string): OnDiskFlow {
-  const path = join(workspace, slug, 'flow.json');
+  const path = join(flowDirAbs(workspace, slug), 'flow.json');
   return JSON.parse(readFileSync(path, 'utf8')) as OnDiskFlow;
 }
 
 function readStyleJson(workspace: string, slug: string): OnDiskStyle {
-  const path = join(workspace, slug, 'style.json');
+  const path = join(flowDirAbs(workspace, slug), 'style.json');
   if (!existsSync(path)) return {};
   return JSON.parse(readFileSync(path, 'utf8')) as OnDiskStyle;
 }
@@ -94,7 +108,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
       // Fire the bulk write WITHOUT awaiting — we want SIGTERM to potentially
       // land mid-flight. Swallow any fetch error (the connection may abort
       // when the server dies).
-      inflight = fetch(`${studio.baseURL}/api/flows/${project.id}/bulk`, {
+      inflight = fetch(`${studio.baseURL}${flowApi(project.slug)}/bulk`, {
         method: 'POST',
         headers,
         body: JSON.stringify(bulkBody),
@@ -176,7 +190,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
         nodes: [{ id: 'edge-1', type: 'rectangle', data: { name: 'Edge' } }],
         connectors: [],
       };
-      const flowPath = join(studio.workspace, project.slug, 'flow.json');
+      const flowPath = join(flowDirAbs(studio.workspace, project.slug), 'flow.json');
       writeFileSync(flowPath, `${JSON.stringify(edited, null, 2)}\n`);
 
       // PRD: arrives within 1s. Watcher debounce is 100ms so this is plenty.
@@ -202,7 +216,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
 
       // Seed a single rectangle node — easiest valid target for /position.
       const nodeId = 'pp-1';
-      const seedRes = await fetch(`${studio.baseURL}/api/flows/${project.id}/bulk`, {
+      const seedRes = await fetch(`${studio.baseURL}${flowApi(project.slug)}/bulk`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -217,7 +231,7 @@ describe('integration: edges — cross-boundary failure modes', () => {
       const inputs = Array.from({ length: 10 }, (_, i) => ({ x: i * 11, y: i * 23 }));
       const responses = await Promise.all(
         inputs.map((pos) =>
-          fetch(`${studio.baseURL}/api/flows/${project.id}/nodes/${nodeId}/position`, {
+          fetch(`${studio.baseURL}${flowApi(project.slug)}/nodes/${nodeId}/position`, {
             method: 'PATCH',
             headers,
             body: JSON.stringify(pos),

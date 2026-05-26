@@ -84,13 +84,27 @@ async function createProject(name: string): Promise<CreateProjectResponse> {
   return (await res.json()) as CreateProjectResponse;
 }
 
+// Per-flow HTTP routes moved under /api/projects/:project/flows/:flow/...
+// (US-007). `created.slug` is `${projectSlug}/${flowSlug}`; substituting the
+// inner `/` for `/flows/` produces the new path with no parsing.
+function flowApi(slug: string): string {
+  return `/api/projects/${slug.replace('/', '/flows/')}`;
+}
+
+// On-disk flow + style files moved to `<projectSlug>/flows/<flowSlug>/` with
+// the manifest layout (US-018).
+function flowDir(slug: string): string {
+  const [projectSlug, flowSlug] = slug.split('/');
+  return join(studio.workspace, projectSlug as string, 'flows', flowSlug as string);
+}
+
 async function readFlowJson(slug: string): Promise<OnDiskFlow> {
-  const path = join(studio.workspace, slug, 'flow.json');
+  const path = join(flowDir(slug), 'flow.json');
   return JSON.parse(await Bun.file(path).text()) as OnDiskFlow;
 }
 
 async function readStyleJson(slug: string): Promise<OnDiskStyle> {
-  const path = join(studio.workspace, slug, 'style.json');
+  const path = join(flowDir(slug), 'style.json');
   if (!existsSync(path)) return {};
   return JSON.parse(await Bun.file(path).text()) as OnDiskStyle;
 }
@@ -111,8 +125,8 @@ async function patchJson(path: string, body: unknown): Promise<Response> {
   });
 }
 
-async function seedRectangleNodes(flowId: string, ids: string[]): Promise<void> {
-  const res = await postJson(`/api/flows/${flowId}/bulk`, {
+async function seedRectangleNodes(slug: string, ids: string[]): Promise<void> {
+  const res = await postJson(`${flowApi(slug)}/bulk`, {
     nodes: ids.map((id) => ({ id, type: 'rectangle', data: {} })),
   });
   expect(res.status).toBe(200);
@@ -134,18 +148,17 @@ describe('integration: REST — flow lifecycle', () => {
       expect(created.id).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(created.slug).toBeTruthy();
 
-      const flowPath = join(studio.workspace, created.slug, 'flow.json');
-      expect(existsSync(flowPath)).toBe(true);
-      const parsed = JSON.parse(await Bun.file(flowPath).text()) as {
-        version: number;
-        name: string;
-        nodes: unknown[];
-        connectors: unknown[];
-      };
-      expect(parsed.version).toBe(2);
-      expect(parsed.name).toBe(name);
-      expect(parsed.nodes).toEqual([]);
-      expect(parsed.connectors).toEqual([]);
+      // Manifest-driven layout (US-018): scaffolder writes
+      // `<projectSlug>/seeflow.json` + `<projectSlug>/flows/<flowSlug>/flow.json`,
+      // never a bare `flow.json` at the project root. The flow.json's `name`
+      // field gets the user-supplied project name (createProjectImpl); the
+      // manifest's flow ENTRY name is "Main" — surfaced via the registry as
+      // entry.name but invisible from the flow.json on disk.
+      const onDisk = await readFlowJson(created.slug);
+      expect(onDisk.version).toBe(2);
+      expect(onDisk.name).toBe(name);
+      expect(onDisk.nodes).toEqual([]);
+      expect(onDisk.connectors).toEqual([]);
     });
   });
 
@@ -161,7 +174,12 @@ describe('integration: REST — flow lifecycle', () => {
       const entry = list.find((f) => f.id === created.id);
       expect(entry).toBeDefined();
       expect(entry?.slug).toBe(created.slug);
-      expect(entry?.name).toBe(name);
+      // GET /api/flows returns entry.name (manifest's flow entry name) — not
+      // the flow.json `name`. createProjectImpl seeds the manifest with
+      // `flows: [{ id: 'main', name: 'Main' }]`, so every newly-scaffolded
+      // flow surfaces here as "Main".
+      void name;
+      expect(entry?.name).toBe('Main');
       expect(entry?.valid).toBe(true);
     });
   });
@@ -171,17 +189,26 @@ describe('integration: REST — flow lifecycle', () => {
       const name = uniqueFlowId('get-flow');
       const created = await createProject(name);
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}`);
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as FlowGetResponse;
       expect(body.id).toBe(created.id);
       expect(body.slug).toBe(created.slug);
-      expect(body.name).toBe(name);
+      // Two name fields with different sources:
+      //   • body.name is `entry.name` (the manifest's flow entry name) → "Main"
+      //   • body.flow.name is the flow.json `name` field → the project name
+      //     (createProjectImpl seeds flow.json with the user-supplied name).
+      expect(body.name).toBe('Main');
       expect(body.valid).toBe(true);
       expect(body.error).toBeNull();
       expect(body.flow).not.toBeNull();
       expect(body.flow?.name).toBe(name);
-      expect(body.filePath).toContain(`${created.slug}`);
+      // filePath is `<repoPath>/flows/<flowSlug>/flow.json`. The slug
+      // `projectSlug/flowSlug` does NOT appear verbatim — the `/flows/`
+      // segment lives between them on disk. Check the two halves separately.
+      const [projectSlug, flowSlug] = created.slug.split('/');
+      expect(body.filePath).toContain(projectSlug as string);
+      expect(body.filePath).toContain(`flows/${flowSlug}/flow.json`);
       expect(body.filePath.endsWith('flow.json')).toBe(true);
     });
   });
@@ -189,22 +216,21 @@ describe('integration: REST — flow lifecycle', () => {
   describe('GET /api/flows/summary', () => {
     it('returns id, name, and description for each registered flow', async () => {
       const name = uniqueFlowId('summary-flow');
-      const created = await createProject(name);
-
-      // Patch flow.json on disk to add a description.
-      const flowPath = join(studio.workspace, created.slug, 'flow.json');
-      const raw = JSON.parse(await Bun.file(flowPath).text());
-      raw.description = 'integration summary';
-      writeFileSync(flowPath, `${JSON.stringify(raw, null, 2)}\n`);
-      // Re-register so the watcher snapshot picks up the description.
-      await fetch(`${studio.baseURL}/api/flows/register`, {
+      // Manifest-driven: scaffolder writes the description into seeflow.json,
+      // which scanProject lifts onto every FlowEntry. listFlowsSummary
+      // surfaces `e.description` so the value shows up in the response with
+      // no separate re-register step.
+      const res0 = await fetch(`${studio.baseURL}/api/projects`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          repoPath: join(studio.workspace, created.slug),
-          flowPath: 'flow.json',
+          path: join(studio.workspace, slugify(name)),
+          name,
+          description: 'integration summary',
         }),
       });
+      expect(res0.status).toBe(200);
+      const created = (await res0.json()) as CreateProjectResponse;
 
       const res = await fetch(`${studio.baseURL}/api/flows/summary`);
       expect(res.status).toBe(200);
@@ -215,6 +241,9 @@ describe('integration: REST — flow lifecycle', () => {
       }>;
       const entry = list.find((e) => e.id === created.id);
       expect(entry).toBeDefined();
+      // listFlowsSummary returns `liveFlow?.name ?? entry.name` — for a
+      // successfully-parsed flow.json the live name (= the user-supplied
+      // project name) wins over the manifest entry's "Main".
       expect(entry?.name).toBe(name);
       expect(entry?.description).toBe('integration summary');
     });
@@ -227,13 +256,13 @@ describe('integration: REST — flow lifecycle', () => {
 
       // Add a rectangle node with detail through the standard write path so
       // detail.md is externalized; the graph endpoint should still hide it.
-      await postJson(`/api/flows/${created.id}/nodes`, {
+      await postJson(`${flowApi(created.slug)}/nodes`, {
         id: 'shape-1',
         type: 'rectangle',
         data: { name: 'note', detail: '# secret body' },
       });
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/graph`);
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}/graph`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         id: string;
@@ -251,13 +280,13 @@ describe('integration: REST — flow lifecycle', () => {
       const name = uniqueFlowId('node-get-flow');
       const created = await createProject(name);
 
-      await postJson(`/api/flows/${created.id}/nodes`, {
+      await postJson(`${flowApi(created.slug)}/nodes`, {
         id: 'shape-1',
         type: 'rectangle',
         data: { name: 'note', detail: '# inlined body' },
       });
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/shape-1`);
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}/nodes/shape-1`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
         id: string;
@@ -272,7 +301,7 @@ describe('integration: REST — flow lifecycle', () => {
     it('returns 404 for an unknown nodeId', async () => {
       const name = uniqueFlowId('node-get-404');
       const created = await createProject(name);
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/not-a-node`);
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}/nodes/not-a-node`);
       expect(res.status).toBe(404);
     });
   });
@@ -333,30 +362,41 @@ describe('integration: REST — flow lifecycle', () => {
     // deleteFlowImpl only removes the registry entry (and unwatches) — the
     // flow.json on disk is intentionally preserved. The PRD's "removes from
     // disk" wording is loose; this test asserts the actual behavior.
-    it('removes the flow from the registry (file on disk is untouched)', async () => {
+    it('removes a non-default flow from the registry', async () => {
+      // Default-flow delete now requires --new-default (US-017): the route
+      // refuses to delete the last flow in a project, and refuses to delete
+      // the default flow without a replacement id. Add a non-default flow
+      // then delete it so the test exercises the happy path without
+      // touching the manifest's defaultFlow.
       const name = uniqueFlowId('delete-flow');
       const created = await createProject(name);
-      const flowPath = join(studio.workspace, created.slug, 'flow.json');
-      expect(existsSync(flowPath)).toBe(true);
+      const [projectSlug] = created.slug.split('/');
+      const addRes = await fetch(`${studio.baseURL}/api/projects/${projectSlug}/flows`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ id: 'extra', name: 'Extra' }),
+      });
+      expect(addRes.status).toBe(201);
+      const extraSlug = `${projectSlug}/extra`;
 
       // Sanity: registered.
       const before = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
-      expect(before.find((f) => f.id === created.id)).toBeDefined();
+      expect(before.find((f) => f.slug === extraSlug)).toBeDefined();
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}`, {
+      const res = await fetch(`${studio.baseURL}${flowApi(extraSlug)}`, {
         method: 'DELETE',
       });
       expect(res.status).toBe(200);
-      expect(await res.json()).toEqual({ ok: true });
+      expect(await res.json()).toMatchObject({ ok: true });
 
       // Registry: gone.
       const after = (await (await fetch(`${studio.baseURL}/api/flows`)).json()) as FlowListItem[];
-      expect(after.find((f) => f.id === created.id)).toBeUndefined();
-      const get = await fetch(`${studio.baseURL}/api/flows/${created.id}`);
+      expect(after.find((f) => f.slug === extraSlug)).toBeUndefined();
+      const get = await fetch(`${studio.baseURL}${flowApi(extraSlug)}`);
       expect(get.status).toBe(404);
 
-      // Disk: flow.json is intentionally preserved.
-      expect(existsSync(flowPath)).toBe(true);
+      // The default flow remains.
+      expect(after.find((f) => f.slug === created.slug)).toBeDefined();
     });
   });
 
@@ -409,7 +449,7 @@ describe('integration: REST — nodes', () => {
   describe('POST /api/flows/:id/nodes', () => {
     it('adds a single node and persists to flow.json', async () => {
       const created = await createProject(uniqueFlowId('node-add'));
-      const res = await postJson(`/api/flows/${created.id}/nodes`, {
+      const res = await postJson(`${flowApi(created.slug)}/nodes`, {
         type: 'rectangle',
         data: { name: 'Note' },
       });
@@ -433,7 +473,7 @@ describe('integration: REST — nodes', () => {
   describe('POST /api/flows/:id/bulk', () => {
     it('adds many nodes + connectors atomically in one transactional write', async () => {
       const created = await createProject(uniqueFlowId('flow-bulk'));
-      const res = await postJson(`/api/flows/${created.id}/bulk`, {
+      const res = await postJson(`${flowApi(created.slug)}/bulk`, {
         nodes: [
           { id: 'b1', type: 'rectangle', data: { name: 'B1' } },
           { id: 'b2', type: 'ellipse', data: { name: 'B2' } },
@@ -461,14 +501,14 @@ describe('integration: REST — nodes', () => {
   describe('PATCH /api/flows/:id/nodes/:nodeId', () => {
     it('partial-merges into node.data and re-validates the whole flow', async () => {
       const created = await createProject(uniqueFlowId('node-patch'));
-      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
         id: 'p1',
         type: 'rectangle',
         data: { name: 'Original' },
       });
       expect(addRes.status).toBe(200);
 
-      const res = await patchJson(`/api/flows/${created.id}/nodes/p1`, { name: 'Updated' });
+      const res = await patchJson(`${flowApi(created.slug)}/nodes/p1`, { name: 'Updated' });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
 
@@ -487,13 +527,13 @@ describe('integration: REST — nodes', () => {
     // position so the canvas can confirm the write without re-fetching.
     it('persists x/y to style.json and echoes the new position', async () => {
       const created = await createProject(uniqueFlowId('node-position'));
-      await postJson(`/api/flows/${created.id}/nodes`, {
+      await postJson(`${flowApi(created.slug)}/nodes`, {
         id: 'pos1',
         type: 'rectangle',
         data: {},
       });
 
-      const res = await patchJson(`/api/flows/${created.id}/nodes/pos1/position`, {
+      const res = await patchJson(`${flowApi(created.slug)}/nodes/pos1/position`, {
         x: 123,
         y: 456,
       });
@@ -510,9 +550,9 @@ describe('integration: REST — nodes', () => {
   describe('PATCH /api/flows/:id/nodes/:nodeId/order', () => {
     it('moves a node within flow.nodes[] (toFront)', async () => {
       const created = await createProject(uniqueFlowId('node-order'));
-      await seedRectangleNodes(created.id, ['a', 'b', 'c']);
+      await seedRectangleNodes(created.slug, ['a', 'b', 'c']);
 
-      const res = await patchJson(`/api/flows/${created.id}/nodes/a/order`, { op: 'toFront' });
+      const res = await patchJson(`${flowApi(created.slug)}/nodes/a/order`, { op: 'toFront' });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ ok: true });
 
@@ -524,8 +564,8 @@ describe('integration: REST — nodes', () => {
   describe('DELETE /api/flows/:id/nodes/:nodeId', () => {
     it('removes the node and cascades adjacent connectors in one write', async () => {
       const created = await createProject(uniqueFlowId('node-delete'));
-      await seedRectangleNodes(created.id, ['a', 'b']);
-      const connRes = await postJson(`/api/flows/${created.id}/bulk`, {
+      await seedRectangleNodes(created.slug, ['a', 'b']);
+      const connRes = await postJson(`${flowApi(created.slug)}/bulk`, {
         connectors: [
           { id: 'a-b', source: 'a', target: 'b' },
           { id: 'b-a', source: 'b', target: 'a' },
@@ -533,7 +573,7 @@ describe('integration: REST — nodes', () => {
       });
       expect(connRes.status).toBe(200);
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/a`, {
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}/nodes/a`, {
         method: 'DELETE',
       });
       expect(res.status).toBe(200);
@@ -551,9 +591,9 @@ describe('integration: REST — connectors', () => {
   describe('POST /api/flows/:id/connectors', () => {
     it('adds a single connector and persists to flow.json', async () => {
       const created = await createProject(uniqueFlowId('conn-add'));
-      await seedRectangleNodes(created.id, ['a', 'b']);
+      await seedRectangleNodes(created.slug, ['a', 'b']);
 
-      const res = await postJson(`/api/flows/${created.id}/connectors`, {
+      const res = await postJson(`${flowApi(created.slug)}/connectors`, {
         id: 'c1',
         source: 'a',
         target: 'b',
@@ -576,14 +616,14 @@ describe('integration: REST — connectors', () => {
   describe('PATCH /api/flows/:id/connectors/:connId', () => {
     it('partial-merges into the connector', async () => {
       const created = await createProject(uniqueFlowId('conn-patch'));
-      await seedRectangleNodes(created.id, ['a', 'b']);
-      await postJson(`/api/flows/${created.id}/connectors`, {
+      await seedRectangleNodes(created.slug, ['a', 'b']);
+      await postJson(`${flowApi(created.slug)}/connectors`, {
         id: 'c1',
         source: 'a',
         target: 'b',
       });
 
-      const res = await patchJson(`/api/flows/${created.id}/connectors/c1`, {
+      const res = await patchJson(`${flowApi(created.slug)}/connectors/c1`, {
         label: 'flow-step',
       });
       expect(res.status).toBe(200);
@@ -599,14 +639,14 @@ describe('integration: REST — connectors', () => {
   describe('DELETE /api/flows/:id/connectors/:connId', () => {
     it('removes the connector from flow.json (nodes are untouched)', async () => {
       const created = await createProject(uniqueFlowId('conn-delete'));
-      await seedRectangleNodes(created.id, ['a', 'b']);
-      await postJson(`/api/flows/${created.id}/connectors`, {
+      await seedRectangleNodes(created.slug, ['a', 'b']);
+      await postJson(`${flowApi(created.slug)}/connectors`, {
         id: 'c1',
         source: 'a',
         target: 'b',
       });
 
-      const res = await fetch(`${studio.baseURL}/api/flows/${created.id}/connectors/c1`, {
+      const res = await fetch(`${studio.baseURL}${flowApi(created.slug)}/connectors/c1`, {
         method: 'DELETE',
       });
       expect(res.status).toBe(200);
@@ -628,14 +668,14 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
   it("database (non-rectangle geometric): create → patch description → on-disk type stays 'database'", async () => {
     const created = await createProject(uniqueFlowId('rest-rt-database'));
 
-    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+    const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
       id: 'db1',
       type: 'database',
       data: { name: 'Orders DB' },
     });
     expect(addRes.status).toBe(200);
 
-    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/db1`, {
+    const patchRes = await patchJson(`${flowApi(created.slug)}/nodes/db1`, {
       description: 'Primary store',
     });
     expect(patchRes.status).toBe(200);
@@ -650,7 +690,7 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
   it('image: create with nodes/<id>/-relative path → patch alt → required `path` survives', async () => {
     const created = await createProject(uniqueFlowId('rest-rt-image'));
 
-    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+    const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
       id: 'img1',
       type: 'image',
       // image's required `path` must start with `nodes/<id>/` per the
@@ -659,7 +699,7 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
     });
     expect(addRes.status).toBe(200);
 
-    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/img1`, {
+    const patchRes = await patchJson(`${flowApi(created.slug)}/nodes/img1`, {
       alt: 'updated cover',
     });
     expect(patchRes.status).toBe(200);
@@ -674,21 +714,21 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
   it('html: create with inline html → patch html content → externalizes to view.html', async () => {
     const created = await createProject(uniqueFlowId('rest-rt-html'));
 
-    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+    const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
       id: 'h1',
       type: 'html',
       data: { name: 'Markup', html: '<p>first</p>' },
     });
     expect(addRes.status).toBe(200);
 
-    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/h1`, {
+    const patchRes = await patchJson(`${flowApi(created.slug)}/nodes/h1`, {
       html: '<p>second</p>',
     });
     expect(patchRes.status).toBe(200);
 
     // patchNodeImpl externalizes html to nodes/<id>/view.html; the
     // single-node GET inlines it back into data.html on read.
-    const getRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/h1`);
+    const getRes = await fetch(`${studio.baseURL}${flowApi(created.slug)}/nodes/h1`);
     expect(getRes.status).toBe(200);
     const body = (await getRes.json()) as {
       node: { type: string; data: { html?: string } };
@@ -700,14 +740,14 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
   it('icon: create with required `icon` glyph → patch alt → required `icon` survives', async () => {
     const created = await createProject(uniqueFlowId('rest-rt-icon'));
 
-    const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+    const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
       id: 'i1',
       type: 'icon',
       data: { icon: 'box', name: 'Box' },
     });
     expect(addRes.status).toBe(200);
 
-    const patchRes = await patchJson(`/api/flows/${created.id}/nodes/i1`, {
+    const patchRes = await patchJson(`${flowApi(created.slug)}/nodes/i1`, {
       alt: 'a labelled box',
     });
     expect(patchRes.status).toBe(200);
@@ -733,7 +773,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
     it('spawns the node script, returns runId, and broadcasts node:done over SSE', async () => {
       const created = await createProject(uniqueFlowId('play-node'));
       const nodeId = 'play-it-1';
-      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
         id: nodeId,
         type: 'rectangle',
         data: {
@@ -748,7 +788,12 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       });
       expect(addRes.status).toBe(200);
 
-      const scriptDir = join(studio.workspace, created.slug, 'nodes', nodeId, 'scripts');
+      // `proxy.resolveScript` anchors at `<entry.repoPath>/nodes/<nodeId>/`
+      // — independent of flow layout. The repoPath is the project root, so
+      // `created.slug.split('/')[0]` (projectSlug) is what joins after the
+      // workspace dir.
+      const [projectSlug] = created.slug.split('/');
+      const scriptDir = join(studio.workspace, projectSlug as string, 'nodes', nodeId, 'scripts');
       mkdirSync(scriptDir, { recursive: true });
       writeFileSync(
         join(scriptDir, 'play.ts'),
@@ -759,7 +804,7 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       try {
         await sse.waitFor((e) => e.event === 'hello', 2_000);
 
-        const playRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/play/${nodeId}`, {
+        const playRes = await fetch(`${studio.baseURL}${flowApi(created.slug)}/play/${nodeId}`, {
           method: 'POST',
         });
         expect(playRes.status).toBe(200);
@@ -860,7 +905,9 @@ describe('integration: REST — runtime (play / emit / SSE)', () => {
       async () => {
         const name = uniqueFlowId('external-edit');
         const created = await createProject(name);
-        const flowPath = join(studio.workspace, created.slug, 'flow.json');
+        // Manifest-driven layout: flow.json lives under
+        // `<projectSlug>/flows/<flowSlug>/flow.json`.
+        const flowPath = join(flowDir(created.slug), 'flow.json');
 
         const sse = await connectSse(studio.baseURL, `/api/events?flowId=${created.id}`);
         try {
@@ -1016,14 +1063,14 @@ describe('integration: REST — round-trip every one of the 12 type tags', () =>
       // with `nodes/<id>/`).
       const nodeId = 'n1';
 
-      const addRes = await postJson(`/api/flows/${created.id}/nodes`, {
+      const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
         id: nodeId,
         type: c.type,
         data: c.createData,
       });
       expect(addRes.status).toBe(200);
 
-      const patchRes = await patchJson(`/api/flows/${created.id}/nodes/${nodeId}`, c.patchBody);
+      const patchRes = await patchJson(`${flowApi(created.slug)}/nodes/${nodeId}`, c.patchBody);
       expect(patchRes.status).toBe(200);
 
       const onDisk = await readFlowJson(created.slug);
@@ -1031,7 +1078,7 @@ describe('integration: REST — round-trip every one of the 12 type tags', () =>
       expect(node?.type).toBe(c.type);
       c.assertPatched((node?.data ?? {}) as Record<string, unknown>);
 
-      const delRes = await fetch(`${studio.baseURL}/api/flows/${created.id}/nodes/${nodeId}`, {
+      const delRes = await fetch(`${studio.baseURL}${flowApi(created.slug)}/nodes/${nodeId}`, {
         method: 'DELETE',
       });
       expect(delRes.status).toBe(200);

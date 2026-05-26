@@ -179,13 +179,24 @@ describe('MCP Apps integration (US-010)', () => {
       expect((text as string).length).toBeGreaterThan(1024);
     });
 
-    it('attaches canvas _meta to seeflow_register_flow with a reachable backendUrl', async () => {
-      const result = await client.callTool('seeflow_register_flow', {
-        name: 'integration-flow',
-        repoPath,
-        flowPath: 'flow.json',
+    it('attaches canvas _meta to seeflow_create_project with a reachable backendUrl', async () => {
+      // Manifest-only registry (post-US-018) rejects pre-manifest entries on
+      // reload, so the legacy `seeflow_register_flow` path no longer survives
+      // a round-trip through `/api/flows`. seeflow_create_project is the
+      // manifest-driven equivalent: it scaffolds <path>/seeflow.json +
+      // <path>/flows/main/flow.json and returns the same canvas _meta shape.
+      const projectPath = join(workspaceRoot, 'integration-flow');
+      const result = await client.callTool('seeflow_create_project', {
+        path: projectPath,
+        name: 'Integration Flow',
       });
       expect(result.isError).toBeFalsy();
+
+      const data = (() => {
+        const content = (result.content as Array<{ type: string; text: string }> | undefined)?.[0];
+        return JSON.parse(content?.text ?? '{}') as { id: string; slug: string };
+      })();
+      expect(typeof data.slug).toBe('string');
 
       const meta = result._meta as Record<string, unknown> | undefined;
       expect(meta).toBeDefined();
@@ -195,8 +206,11 @@ describe('MCP Apps integration (US-010)', () => {
       const widgetState = meta?.['openai/widgetState'] as Record<string, unknown> | undefined;
       expect(widgetState).toBeDefined();
       expect(widgetState?.kind).toBe('create');
-      expect(typeof widgetState?.flowSlug).toBe('string');
-      expect(widgetState?.justCreated).toBe(true);
+      // create-project widget state carries `projectSlug` (the manifest's
+      // project slug) — `flowSlug` is optional and not emitted for fresh
+      // scaffolds. The downstream listing check uses the tool result's
+      // `slug` instead so we still verify the flow registered.
+      expect(typeof widgetState?.projectSlug).toBe('string');
       expect(widgetState?.backendUrl).toBe(backendUrl);
       expect(typeof widgetState?.backendToken).toBe('string');
       backendToken = widgetState?.backendToken as string;
@@ -214,7 +228,7 @@ describe('MCP Apps integration (US-010)', () => {
       expect(okRes.status).toBe(200);
       const flows = (await okRes.json()) as Array<{ slug: string }>;
       expect(Array.isArray(flows)).toBe(true);
-      expect(flows.some((f) => f.slug === widgetState?.flowSlug)).toBe(true);
+      expect(flows.some((f) => f.slug === data.slug)).toBe(true);
     });
 
     it('rejects Origin: null requests to /api/flows without the X-Seeflow-Token header', async () => {
