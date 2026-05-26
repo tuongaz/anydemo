@@ -5,7 +5,7 @@ description: This skill should be used when the user explicitly asks to "create 
 
 # seeflow
 
-Turn a natural-language prompt into a registered SeeFlow flow at `<projectPath>/flow.json`, with node-attached content (scripts, detail.md, view.html) under `<projectPath>/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `flow.json` by hand (`projects:create` writes the envelope).
+Turn a natural-language prompt into a registered SeeFlow flow at `$repoPath/flows/<flowSlug>/flow.json` (skill-created projects default to `flowSlug: 'main'`), with node-attached content (scripts, detail.md, view.html) under `$repoPath/flows/<flowSlug>/nodes/<id>/`. Orchestrate five sub-agents and the `seeflow` CLI; never read the codebase directly, never author `seeflow.json` or `flow.json` by hand (`projects:create` writes both the manifest and the first flow envelope).
 
 ## When NOT to invoke
 
@@ -17,21 +17,25 @@ Turn a natural-language prompt into a registered SeeFlow flow at `<projectPath>/
 
 ## Project layout convention
 
-A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **only** place this skill introduces a `.seeflow` folder — the studio itself is path-agnostic). `LEARN.md` is shared across every flow in the host and lives at `<host>/.seeflow/LEARN.md`; each flow lives in its own subdirectory beside it:
+A host repo opts into seeflow by creating a `<host>/.seeflow/` directory (the **only** place this skill introduces a `.seeflow` folder — the studio itself is path-agnostic). `LEARN.md` is shared across every project and flow in the host and lives at `<host>/.seeflow/LEARN.md`; each project lives in its own subdirectory beside it, with one folder per flow nested inside under `flows/`:
 
 ```
-<host>/                          ← the user's repo
-  .seeflow/                      ← container, created by this skill
-    LEARN.md                     ← shared crib for this skill (project-wide, used by every flow)
-    <flow-name>/                 ← seeflow project root — passed to projects:create --path
-      flow.json                  ← envelope + nodes/connectors
-      style.json                 ← layout/visuals (managed by `flows:layout`)
-      nodes/<id>/                ← per-node sidecar files (detail.md, view.html, scripts/)
-      .tmp/                      ← per-flow scratch ($SEEFLOW_TMP)
-      state/                     ← per-flow runtime script state
+<host>/                                  ← the user's repo
+  .seeflow/                              ← container, created by this skill
+    LEARN.md                             ← shared crib for this skill (host-wide, used by every project + flow)
+    <projectSlug>/                       ← seeflow project root — passed to projects:create --path
+      seeflow.json                       ← manifest (project metadata + flow registry)
+      flows/<flowSlug>/                  ← per-flow folder (one per flows[] entry)
+        flow.json                        ← envelope + nodes/connectors
+        style.json                       ← layout/visuals (managed by `flows:layout`)
+        nodes/<id>/                      ← per-node sidecar files (detail.md, view.html, scripts/)
+        .tmp/                            ← per-flow scratch ($SEEFLOW_TMP)
+        state/                           ← per-flow runtime script state
 ```
 
-Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --name "..."`. Inside `--path`, every CLI / file reference is relative to that project root — never re-prefix with `.seeflow/`.
+Skill-created projects default to a single flow with `flowSlug: 'main'`; subsequent flows in the same project are added via `flows:create --project <projectSlug> --flow <flowSlug>`.
+
+Always call `seeflow projects:create --path "$repoPath" --name "..."` — the CLI writes both `seeflow.json` and `flows/main/flow.json` in one shot. Inside `--path`, every CLI / file reference is relative to that project root — never re-prefix with `.seeflow/`.
 
 `~/.seeflow/` (user-home) is a separate, unrelated directory that holds the studio's global registry / config / pid files; leave its paths verbatim wherever they appear.
 
@@ -39,30 +43,32 @@ Always call `seeflow projects:create --path "$repoPath/.seeflow/<flow-name>" --n
 
 - User's prompt; project root (`$PWD`); `~/.seeflow/config.json` (optional studio host:port).
 - Existing `<project>/flow.json` (skip the creation path if already present — fall back to `register --flow flow.json`).
-- `$learnPath` (`$PWD/.seeflow/LEARN.md`) — persistent crib sheet **shared across every flow in this host repo**, written by prior `/seeflow` runs. **Read before Phase 1.** Format: `references/learn-format.md`.
+- `$learnPath` (`$PWD/.seeflow/LEARN.md`) — persistent crib sheet **shared across every project + flow in this host repo**, written by prior `/seeflow` runs. **Read before Phase 1.** Format: `references/learn-format.md`.
 
 ## Conventions
 
 | Variable | Resolution |
 |---|---|
 | `$STUDIO_URL` | `SEEFLOW_STUDIO_URL` → `~/.seeflow/config.json` port → `http://localhost:4321`. |
-| `$repoPath` | `$PWD/.seeflow/<flow-name>` (the seeflow project root the skill creates and passes to `projects:create --path`). |
-| `$learnPath` | `$PWD/.seeflow/LEARN.md` — **shared across every flow** in the host repo. Lives next to the flow folders, never inside one. |
-| `$SEEFLOW_TMP` | `$projectPath/.tmp/` — project-local scratch directory. Full lifecycle in §"Scratch files & cleanup" below. |
+| `$projectSlug` | slug of the project name passed to `projects:create --name` (e.g. `--name "Order Pipeline"` → `order-pipeline`). Skill-created projects always have at least one flow registered under this slug. |
+| `$flowSlug` | the flow id within the project. Defaults to `'main'` for skill-created projects; subsequent `flows:create` calls take arbitrary lowercase-kebab ids matching `^[a-z0-9][a-z0-9-]*$`. |
+| `$repoPath` | `$PWD/.seeflow/<projectSlug>` (the seeflow project root the skill creates and passes to `projects:create --path`). |
+| `$learnPath` | `$PWD/.seeflow/LEARN.md` — **shared across every project + flow** in the host repo. Lives next to the project folders, never inside one. |
+| `$SEEFLOW_TMP` | `$repoPath/flows/$flowSlug/.tmp/` — per-flow scratch directory. Full lifecycle in §"Scratch files & cleanup" below. |
 | `seeflow` | Locally installed `seeflow` binary if `command -v seeflow >/dev/null 2>&1`; otherwise `npx -y @tuongaz/seeflow@latest`. Resolve once at session start (e.g. `SEEFLOW="$(command -v seeflow >/dev/null 2>&1 && echo seeflow || echo 'npx -y @tuongaz/seeflow@latest')"`). Every CLI invocation below is shorthand for that. |
 
 **Every flow mutation goes through the CLI.** The studio validates every write server-side — there is no separate validation step. Don't memorise CLI syntax — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
 ### Scratch files & cleanup
 
-Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The project-local path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `.tmp/` explicitly if not).
+Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The per-flow path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `flows/*/.tmp/` explicitly if not).
 
 **Lifecycle:**
 
 1. **Create on first use** — `mkdir -p "$SEEFLOW_TMP"` inside any script or wrapper that writes there. Idempotent, costs nothing.
-2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
+2. **Generated scripts (Phase 5)** — Play / Status bodies that need scratch space should reference `"$SEEFLOW_TMP"` (or hardcode `flows/$flowSlug/.tmp/...` relative to `$repoPath` when running outside a wrapper that exports it).
 3. **Cleanup at end of run** — after Phase 6 prints the final `Flow "..." registered ...` line, the orchestrator removes `$SEEFLOW_TMP` (`rm -rf "$SEEFLOW_TMP"`). On a failed/aborted run, leave it in place — the contents are the debugging trail.
-4. **Never check in** — if `.tmp/` is not yet gitignored, add it before committing.
+4. **Never check in** — if `flows/*/.tmp/` is not yet gitignored, add it before committing.
 
 ## Parallelism is the default
 
@@ -98,7 +104,7 @@ P1    branches on $inputClass:
       learnUpdates STAGED in memory only — no disk write yet
 P2    node-planner (kicks off when brief ready; receives cached
                    schema + $componentCatalog + $inputClass)
-P3    projects:create (path + name → empty flow.json registered)
+P3    projects:create (path + name → seeflow.json + flows/main/flow.json registered in one shot)
       → flow:add-bulk (nodes + connectors, atomic)
       → detail-backfill (unconditional; missing data.detail → nodes:patch)
       → flows:layout
@@ -147,8 +153,9 @@ Full text in `references/core-rules.md`:
 - **Skipping or simulating Phase 6.** Mandatory for `inputClass === "code"`; legitimately skipped for `"document"`.
 - **Mocking services or fake fixtures.** Use real triggers; copy fixtures from integration tests.
 - **Ignoring the project's existing setup.** Inspect how the project boots local services and runs integration tests (Makefile / `scripts/` / compose / test harness / factory modules) and reuse those wrappers, helpers, and packages. Don't write a raw client when a project module already does the job — the system-analyzer surfaces these in `learnUpdates.dataEntryPaths`, `factories`, and `techAdaptations.<techId>.helpers[]`; Play/Status designers must consult them before inventing new code.
-- **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder — emit just `scripts/play.ts`.
-- **Writing `LEARN.md` inside a per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every flow** in the host repo — never inside `<flow-name>/`.
+- **Calling `flows:create` instead of `projects:create` for a brand-new project.** `flows:create --project <p> --flow <f>` adds a flow to an *existing* project's manifest; a brand-new project always starts with `projects:create`, which writes both `seeflow.json` and the first `flows/main/flow.json` in one shot.
+- **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder under `flows/<flowSlug>/nodes/<id>/` — emit just `scripts/play.ts`.
+- **Writing `LEARN.md` inside a per-project or per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every project + flow** in the host repo — never inside `<projectSlug>/` or `<projectSlug>/flows/<flowSlug>/`.
 
 ## Operations
 
