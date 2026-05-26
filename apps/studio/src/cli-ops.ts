@@ -51,8 +51,7 @@ export type RegisterProjectOutcome =
  * from US-004 onward.
  */
 export function registerProject(opts: RegisterProjectOpts): RegisterProjectOutcome {
-  const registry =
-    opts.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
+  const registry = opts.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const scan = scanProject(opts.repoPath);
   if (scan.kind !== 'ok') return scan;
 

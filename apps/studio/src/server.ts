@@ -85,8 +85,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const mode = options.mode ?? inferMode();
   const viteDevUrl = options.viteDevUrl ?? DEFAULT_VITE_DEV_URL;
   const staticRoot = options.staticRoot ?? DEFAULT_STATIC_ROOT;
-  const registry =
-    options.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
+  const registry = options.registry ?? createRegistry({ isLoadableEntry: manifestOnlyEntryFilter });
   const events = options.events ?? createEventBus();
   const watcher = options.disableWatcher
     ? undefined
