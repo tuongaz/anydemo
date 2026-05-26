@@ -80,7 +80,7 @@ with this exact shape — and nothing else outside the fence:
         }
       },
       "scriptFile": {
-        "path": "nodes/order-server/scripts/play.ts",
+        "path": "flows/main/nodes/order-server/scripts/play.ts",
         "body": "#!/usr/bin/env bun\n// full script source as a string",
         "chmod": "755"
       },
@@ -94,7 +94,7 @@ with this exact shape — and nothing else outside the fence:
 
 **How the orchestrator uses this:** for each overlay it writes
 `scriptFile.body` to `scriptFile.path` (with `chmod`), then runs
-`seeflow nodes:patch <flowId> <nodeId> --json '<patch>'`. `patch` is the
+`seeflow nodes:patch --project <projectSlug> --flow <flowSlug> <nodeId> --json '<patch>'`. `patch` is the
 exact PATCH body — every key the contract rejects is rejected here too,
 so conform to `$SEEFLOW schema action` and `$SEEFLOW schema node`
 (forwarded in your launching prompt). Action `scriptPath` values are
@@ -114,7 +114,7 @@ nodes that get none. Every `nodeId` MUST reference a node already in
   `<slug>/` or `<nodeId>/` prefix; the studio prepends the anchor.
 - **`scriptFile`** carries the file to write before the patch runs:
   - `path` is project-root-relative
-    (`nodes/<nodeId>/scripts/<filename>`).
+    (`flows/<flowSlug>/nodes/<nodeId>/scripts/<filename>`).
   - `body` is the FULL source text including shebang.
   - `chmod` defaults to `"755"`.
 - **`validationSafe`** — `true` when the script is safe to invoke during
@@ -175,8 +175,8 @@ Synthetic nodes (plus their connectors) you inject so the audience has
 something to click on an otherwise observer-only graph. Same shape as
 the node-planner's output — must conform to `$SEEFLOW schema node` /
 `$SEEFLOW schema connector`. The orchestrator forwards them together in
-one body to `seeflow flow:add-bulk` (one atomic write covering both
-arrays).
+one body to `seeflow flow:add-bulk --project <projectSlug> --flow <flowSlug>`
+(one atomic write covering both arrays).
 
 Rules for `newTriggerNodes`:
 
@@ -406,7 +406,7 @@ editTarget: null
         }
       },
       "scriptFile": {
-        "path": "nodes/order-server/scripts/play.ts",
+        "path": "flows/main/nodes/order-server/scripts/play.ts",
         "body": "#!/usr/bin/env bun\nconst input = (await Bun.stdin.text()).trim();\nlet body: unknown = { cart: [{ sku: 'SKU-1', qty: 1 }] };\nif (input.length > 0) {\n  try {\n    body = JSON.parse(input);\n  } catch {\n    /* fall back to default cart */\n  }\n}\nconst port = process.env.ORDER_PIPELINE_PORT ?? '3001';\nconst res = await fetch(`http://localhost:${port}/orders`, {\n  method: 'POST',\n  headers: { 'content-type': 'application/json' },\n  body: JSON.stringify(body),\n});\nconst text = await res.text();\nif (!res.ok) {\n  console.error(`POST /orders failed: ${res.status} ${text.slice(0, 200)}`);\n  process.exit(1);\n}\nconst order = text.length > 0 ? JSON.parse(text) : {};\nconsole.log(JSON.stringify({ ok: true, orderId: order.id ?? null, flowId: process.env.SEEFLOW_DEMO_ID }));\n",
         "chmod": "755"
       },
@@ -445,14 +445,14 @@ Notes on the example:
     {
       "nodeId": "order-store",
       "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "../escape/out-of-sandbox.ts" } },
-      "scriptFile": { "path": "nodes/order-store/scripts/play.ts", "body": "console.log('did stuff')" },
+      "scriptFile": { "path": "flows/main/nodes/order-store/scripts/play.ts", "body": "console.log('did stuff')" },
       "validationSafe": true,
       "rationale": "Play the DB"
     },
     {
       "nodeId": "inventory-worker",
       "patch": { "playAction": { "kind": "script", "interpreter": "bun", "scriptPath": "order-pipeline/scripts/play-inventory.ts" } },
-      "scriptFile": { "path": "nodes/inventory-worker/scripts/play.ts", "body": "/* placeholder */" },
+      "scriptFile": { "path": "flows/main/nodes/inventory-worker/scripts/play.ts", "body": "/* placeholder */" },
       "validationSafe": true,
       "rationale": "Play the consumer"
     }
@@ -487,7 +487,7 @@ This is wrong because:
   node folder — `scripts/<name>.<ext>`. No `<slug>/`, no `<nodeId>/`,
   no leading `/`, no `..`.
 - Every `scriptFile.path` is project-root-relative —
-  `nodes/<nodeId>/scripts/<name>.<ext>`.
+  `flows/<flowSlug>/nodes/<nodeId>/scripts/<name>.<ext>`.
 - Every `scriptFile.body` is the complete file body, including shebang.
 - Every script is idempotent.
 - `validationSafe: false` for anything that hits real third-party

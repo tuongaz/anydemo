@@ -570,8 +570,8 @@
         "Typecheck passes"
       ],
       "priority": 34,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "play-designer + status-designer: every `scriptFile.path` example re-anchored to `flows/main/nodes/<id>/scripts/<name>.<ext>` (worked examples + counter-examples + spec recap); CLI invocation `seeflow nodes:patch <flowId> <nodeId>` rewritten to `seeflow nodes:patch --project <projectSlug> --flow <flowSlug> <nodeId>`; `flow:add-bulk` reference in play-designer gains `--project --flow` flags. node-planner: `nodes/<id>/view.html` + `nodes/<id>/detail.md` externalisation paths re-anchored at `flows/<flowSlug>/nodes/<id>/`; the retype-in-place per-node-folder reference re-anchored too; `flow:add-bulk` mention in the output-shape paragraph gains `--project --flow`. code-analyzer + system-analyzer: no constructed file paths and no example CLI invocations — both files left alone per the strict reading of the AC (the `flow.json` and `<slug>` references in code-analyzer are abstract identifiers, not on-disk paths). Quality gates: bun run format (363 files clean), bun run lint (363 files clean), bun run typecheck (all 4 packages exit 0)."
     },
     {
       "id": "US-035",

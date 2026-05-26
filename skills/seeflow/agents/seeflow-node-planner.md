@@ -112,7 +112,7 @@ Field-by-field:
   rationales mean the user reviews the canvas without knowing why
   each node is there.
 
-**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk <flowId>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. Constraints on what you emit:
+**How the orchestrator uses this:** the `nodes` and `connectors` arrays are forwarded together — in a single `{ nodes, connectors }` body — to `seeflow flow:add-bulk --project <projectSlug> --flow <flowSlug>`. One transactional write; connectors can reference nodes from the same batch; a dangling source/target or any per-item validation failure rolls back both arrays together. Constraints on what you emit:
 
 - Conform to the schema in your launching prompt — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary.
 - Emit zero visual fields — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas.
@@ -188,7 +188,7 @@ to `rectangle + data.icon: "database"` for an actual database.
   `html` only after confirming the catalog can't render the content.
   `data.html` is raw markup; the studio sanitises (`<script>`,
   `<style>`, `<iframe>`, `on*=`, `javascript:` URLs all stripped) and
-  externalises to `nodes/<id>/view.html`.
+  externalises to `flows/<flowSlug>/nodes/<id>/view.html`.
 - **`icon`, `image`** — do NOT use at this phase. The Phase 4
   designers and the canvas author them when needed.
 
@@ -264,7 +264,7 @@ in `$SEEFLOW schema node`.
   shape ships with 1–3 short markdown paragraphs from the audience's
   perspective: what this node does, what it emits or stores, why it
   matters, source file(s) when known. The studio auto-externalises to
-  `nodes/<id>/detail.md`; pass the raw markdown, never a `file://…`
+  `flows/<flowSlug>/nodes/<id>/detail.md`; pass the raw markdown, never a `file://…`
   link. Omission renders a blank card on the canvas and a blank
   sidebar when the user clicks the node. **The rule applies whether
   or not the node carries `playAction` / `statusAction`** — static
@@ -519,11 +519,12 @@ If `contextBrief.existingDemo.diffTarget === true`:
   it with its **existing id** but the new `type`. The orchestrator
   routes this to a non-destructive `nodes:patch { type, ... }` instead
   of `delete` + `flow:add-bulk`, so the per-node folder
-  (`nodes/<id>/`) — scripts, detail.md, view.html, uploaded images —
-  survives. Supply any fields the new type requires in the same patch
-  (e.g. `* → image` needs `path` starting with `nodes/<id>/`,
-  `* → icon` needs `icon`); the server fails the call with `badSchema`
-  otherwise.
+  (`flows/<flowSlug>/nodes/<id>/`) — scripts, detail.md, view.html,
+  uploaded images — survives. Supply any fields the new type requires
+  in the same patch (e.g. `* → image` needs `path` starting with
+  `nodes/<id>/` — flow-folder-relative, the studio prepends
+  `flows/<flowSlug>/`; `* → icon` needs `icon`); the server fails the
+  call with `badSchema` otherwise.
 - The orchestrator computes the `+ / ~ / -` diff from your output
   against `editTarget`; you do not annotate the diff yourself.
 
