@@ -3008,39 +3008,11 @@ export function DemoView({
         </div>
       ) : null}
 
-      {/* US-024: flow switcher anchored top-left near the project title.
-          design/design.html — spacing follows the canvas-floating-toolbar
-          pattern (top-3 left-3 inset for floating affordances). */}
-      <div className="absolute top-3 left-3 z-20">
-        <FlowSwitcher
-          project={project}
-          activeFlow={flow}
-          flows={projectFlows ?? []}
-          onSelect={(nextFlow) => {
-            if (nextFlow === flow) return;
-            navigate(flowPath(project, nextFlow));
-          }}
-          onCreate={() => setFlowCreateOpen(true)}
-          onRename={(flowSlug) => {
-            const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
-            if (!target) return;
-            setFlowRenameTarget({
-              flowSlug: target.flowSlug,
-              name: target.name,
-              icon: target.icon,
-            });
-          }}
-          onDelete={(flowSlug) => {
-            const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
-            if (!target) return;
-            setFlowDeleteTarget({
-              flowSlug: target.flowSlug,
-              name: target.name,
-              isDefault: target.isDefault,
-            });
-          }}
-        />
-      </div>
+      {/* US-024: the FlowSwitcher itself is now mounted via SeeflowCanvas's
+          topLeftSlot (US-037) so it shares the toolbar's flex flex-col gap-2
+          Panel column instead of overlapping it. Only the dialog siblings stay
+          here — they portal to document.body via Radix Dialog and don't need
+          to live inside the canvas. */}
       <FlowCreateDialog
         open={flowCreateOpen}
         onOpenChange={setFlowCreateOpen}
@@ -3092,6 +3064,40 @@ export function DemoView({
           ref={canvasRef}
           mode="edit"
           adapter={adapter}
+          // US-037: the FlowSwitcher rides inside the canvas's top-left Panel
+          // (stacked above the toolbar via `sf:flex sf:flex-col sf:gap-2`) so
+          // the two affordances never overlap. Dialog siblings remain in
+          // demo-view because Radix portals them to document.body.
+          topLeftSlot={
+            <FlowSwitcher
+              project={project}
+              activeFlow={flow}
+              flows={projectFlows ?? []}
+              onSelect={(nextFlow) => {
+                if (nextFlow === flow) return;
+                navigate(flowPath(project, nextFlow));
+              }}
+              onCreate={() => setFlowCreateOpen(true)}
+              onRename={(flowSlug) => {
+                const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
+                if (!target) return;
+                setFlowRenameTarget({
+                  flowSlug: target.flowSlug,
+                  name: target.name,
+                  icon: target.icon,
+                });
+              }}
+              onDelete={(flowSlug) => {
+                const target = projectFlows?.find((f) => f.flowSlug === flowSlug);
+                if (!target) return;
+                setFlowDeleteTarget({
+                  flowSlug: target.flowSlug,
+                  name: target.name,
+                  isDefault: target.isDefault,
+                });
+              }}
+            />
+          }
           // US-010: SeeflowCanvas.projectId drives the project-scoped file URL
           // composition (see fileUrl in @seeflow/canvas) and the embed snippet.
           // Post-US-008, file routes are addressed by project slug — so we

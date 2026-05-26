@@ -350,6 +350,14 @@ export function resolveFlags(
  */
 interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   /**
+   * US-037: optional content rendered inside the top-left Panel column ABOVE
+   * the toolbar (and StyleStrip) so external floating affordances share the
+   * same flex flex-col gap-2 layout as the canvas's own chrome. Used by the
+   * studio to mount the FlowSwitcher without overlapping the toolbar. Absent
+   * → the Panel renders only its built-in children.
+   */
+  topLeftSlot?: React.ReactNode;
+  /**
    * US-004: project id used by file-backed nodes (type:'image', type:'html')
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
    * into each node's runtime `data` so renderers can fetch from
@@ -1758,6 +1766,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // other mutation site still goes through the explicit callback props the
     // parent supplies.
     adapter,
+    topLeftSlot,
     projectId,
     flowSlug,
     fileBaseUrl,
@@ -4427,9 +4436,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onMultiResize={onMultiResize}
               />
             ) : null}
-            {flags.showToolbar || (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
+            {topLeftSlot ||
+            flags.showToolbar ||
+            (flags.showStyleStrip && onStyleNode && onStyleConnector) ? (
               <Panel position="top-left">
                 <div className="sf:flex sf:flex-col sf:gap-2">
+                  {/* US-037: external content (e.g. the studio's FlowSwitcher)
+                  stacks first so it sits above the toolbar / StyleStrip in the
+                  same absolutely-positioned Panel column — no more overlap. */}
+                  {topLeftSlot}
                   {flags.showToolbar ? (
                     // View mode renders the toolbar with only Select + Hand
                     // (no shape-creation affordances). Edit mode threads in the

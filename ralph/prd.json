@@ -622,8 +622,8 @@
         "Verify in browser: open /projects/order-pipeline/flows/main; FlowSwitcher visible above the toolbar with clear visual separation; clicking the toolbar still works (no click-through bug from a stacked layer)"
       ],
       "priority": 37,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Visual overlap fixed by stacking FlowSwitcher and the CanvasToolbar in the SAME absolutely-positioned Panel column (the AC's preferred approach). To do this without pulling the toolbar out of the canvas package, added a new SeeflowCanvas prop `topLeftSlot?: React.ReactNode` (packages/canvas/src/components/seeflow-canvas.tsx) that renders inside the existing top-left `<Panel position=\"top-left\">` ABOVE the toolbar/StyleStrip in the same `sf:flex sf:flex-col sf:gap-2` div — so FlowSwitcher first, toolbar second, gap-2 between them, no z-index hack. demo-view.tsx now passes the FlowSwitcher via that slot instead of wrapping it in its own absolute top-3 left-3 div. The FlowCreate/Rename/Delete dialog siblings stay in demo-view because Radix portals them to document.body. Quality gates: format clean (366 files), lint clean (366 files), typecheck clean across all 4 packages, bun test 2124 pass / 1 skip / 0 fail (one transient registry/events test flake on first pass was clean on rerun — pre-existing pattern, not introduced here). Visual baselines: bun run test:it:update-snapshots reproduced the existing chromium-linux PNGs byte-for-byte — the snapshots all crop to specific nodes / panels rather than the top-left chrome, so the new layout doesn't regress any. bun run test:it:e2e exits 0 with one historically-flaky retry on multi-flow's initial Main assertion (same flake noted in US-031). Browser verification deferred — Ralph loop ran without a live studio; manual browser verification belongs to the next interactive session (same precedent as US-024/US-025/US-026/US-030/US-036)."
     },
     {
       "id": "US-038",
