@@ -160,3 +160,28 @@ export const drainStdin: StdinReader = async () => {
   }
   return new TextDecoder().decode(Buffer.concat(chunks));
 };
+
+/**
+ * Extract `--project <p>` and `--flow <f>` from a raw argv array. Throws when
+ * either flag is missing — every flow-scoped CLI verb (US-020) routes through
+ * this helper so the addressing convention stays uniform.
+ *
+ * Accepts both `--name value` and `--name=value` forms; the first occurrence
+ * wins (matches the behaviour of cli.ts's internal `flagValue`).
+ */
+export function parseProjectFlow(argv: readonly string[]): { project: string; flow: string } {
+  const project = readArgvFlag(argv, 'project');
+  if (!project) throw new Error('Missing required flag: --project');
+  const flow = readArgvFlag(argv, 'flow');
+  if (!flow) throw new Error('Missing required flag: --flow');
+  return { project, flow };
+}
+
+function readArgvFlag(argv: readonly string[], name: string): string | undefined {
+  const flag = `--${name}`;
+  const eqArg = argv.find((a) => a.startsWith(`${flag}=`));
+  if (eqArg) return eqArg.slice(`${flag}=`.length);
+  const idx = argv.indexOf(flag);
+  if (idx >= 0 && idx + 1 < argv.length) return argv[idx + 1];
+  return undefined;
+}

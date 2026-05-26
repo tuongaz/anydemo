@@ -103,19 +103,17 @@ describe('renderCommandHelp', () => {
     expect(() => renderCommandHelp('nope:nope')).toThrow();
   });
 
-  it('renders a body-bearing JSON command with all sections (nodes:add)', () => {
-    const out = renderCommandHelp('nodes:add');
-    expect(out).toMatch(/^# nodes:add/m);
+  it('renders a body-bearing JSON command with all sections (nodes:patch)', () => {
+    const out = renderCommandHelp('nodes:patch');
+    expect(out).toMatch(/^# nodes:patch/m);
     expect(out).toContain('## Synopsis');
     expect(out).toContain('## Arguments');
     expect(out).toContain('## Flags');
     expect(out).toContain('## Input (body)');
-    // example body
-    expect(out).toContain('Example body');
-    expect(out).toContain('"rectangle"');
+    // schemaRef NodePatchBody resolves via zod-to-json-schema
+    expect(out).toContain('"type": "object"');
     // output envelope
     expect(out).toContain('## Output');
-    expect(out).toContain('"ok": true');
     expect(out).toContain('"error"');
     expect(out).toContain('"code"');
     // per-command exit-code table
@@ -127,10 +125,11 @@ describe('renderCommandHelp', () => {
     expect(out).toContain('Requires studio running: no');
   });
 
-  it('omits the Input section for commands with no body (flows:get)', () => {
+  it('omits the Arguments section for commands with no positionals (flows:get)', () => {
     const out = renderCommandHelp('flows:get');
     expect(out).not.toContain('## Input (body)');
-    expect(out).toContain('## Arguments');
+    expect(out).not.toContain('## Arguments');
+    expect(out).toContain('## Flags');
     expect(out).toContain('## Output');
   });
 

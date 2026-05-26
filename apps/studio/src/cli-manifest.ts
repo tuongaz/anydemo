@@ -201,52 +201,66 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'flows:get',
-    synopsis: 'seeflow flows:get <flowId>',
+    synopsis: 'seeflow flows:get --project <p> --flow <f>',
     description: 'Get the full merged flow definition and on-disk state for one flow.',
     category: 'flows',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: [],
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+    ],
     outputs: { errorKinds: ['notFound', 'fileNotFound'] },
     requiresStudio: false,
-    examples: ['seeflow flows:get abc12345'],
+    examples: ['seeflow flows:get --project order-pipeline --flow main'],
   },
   {
     name: 'flows:graph',
-    synopsis: 'seeflow flows:graph <flowId>',
+    synopsis: 'seeflow flows:graph --project <p> --flow <f>',
     description:
       'Get nodes + connectors for one flow without inlining per-node file-backed ' +
       'content (detail.md, view.html). Cheap topology read.',
     category: 'flows',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: [],
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+    ],
     outputs: { errorKinds: ['notFound', 'fileNotFound', 'badJson', 'badSchema'] },
     requiresStudio: false,
-    examples: ['seeflow flows:graph abc12345'],
+    examples: ['seeflow flows:graph --project order-pipeline --flow main'],
   },
   {
     name: 'flows:delete',
-    synopsis: 'seeflow flows:delete (--project <p> --flow <f> [--new-default <other>]) | <flowId>',
+    synopsis: 'seeflow flows:delete --project <p> --flow <f> [--new-default <other>]',
     description:
-      'Manifest-aware delete when --project + --flow are supplied: removes the ' +
-      '`flows/<flow>/` folder, updates `seeflow.json`, and drops the registry entry. ' +
-      'Refuses to delete the last flow in a project or the project default without ' +
-      '--new-default. Falls back to a registry-only unregister when called with a ' +
-      'bare positional <flowId> (the on-disk file is left untouched).',
+      'Delete a flow from a project. Removes the `flows/<flow>/` folder, updates ' +
+      '`seeflow.json`, and drops the registry entry. Refuses to delete the last flow ' +
+      'in a project or the project default without --new-default.',
     category: 'flows',
-    args: [
-      {
-        name: 'flowId',
-        required: false,
-        description: 'Flow id or slug (legacy registry-only delete; ignored when --project is set)',
-      },
-    ],
+    args: [],
     flags: [
       {
         name: 'project',
         valuePlaceholder: '<p>',
-        description: 'Project slug (manifest-aware delete)',
+        description: 'Project slug',
+        required: true,
       },
-      { name: 'flow', valuePlaceholder: '<f>', description: 'Flow id within the project' },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
       {
         name: 'new-default',
         valuePlaceholder: '<other>',
@@ -261,7 +275,6 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     examples: [
       'seeflow flows:delete --project order-pipeline --flow retry',
       'seeflow flows:delete --project order-pipeline --flow main --new-default retry',
-      'seeflow flows:delete abc12345',
     ],
   },
   {
@@ -348,24 +361,33 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'flows:layout',
-    synopsis: 'seeflow flows:layout <flowId> [--json | --file | --stdin]',
+    synopsis: 'seeflow flows:layout --project <p> --flow <f> [--json | --file | --stdin]',
     description:
       'Compute an ELK layout for the flow and write style.json next to flow.json. ' +
       'Body is optional — `{ options? }` shape. Empty body uses defaults.',
     category: 'flows',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
+    ],
     body: { example: { options: { 'elk.direction': 'RIGHT' } } },
     outputs: {
       okExample: { ok: true },
       errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'writeFailed'],
     },
     requiresStudio: false,
-    examples: ['seeflow flows:layout abc12345'],
+    examples: ['seeflow flows:layout --project order-pipeline --flow main'],
   },
   {
     name: 'flow:add-bulk',
-    synopsis: 'seeflow flow:add-bulk <flowId> [--json | --file | --stdin]',
+    synopsis: 'seeflow flow:add-bulk --project <p> --flow <f> [--json | --file | --stdin]',
     description:
       'Add up to 100 nodes + 100 connectors atomically. Body shape: ' +
       '`{ nodes?: Node[], connectors?: Connector[] }` (at least one non-empty). ' +
@@ -373,8 +395,17 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'is re-validated post-merge so a dangling source/target — or any per-item ' +
       'schema failure — rolls back both arrays together and emits no broadcast.',
     category: 'flows',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
+    ],
     body: { schemaRef: 'FlowBulkBody' },
     outputs: {
       okExample: {
@@ -393,29 +424,35 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     },
     requiresStudio: false,
     examples: [
-      'seeflow flow:add-bulk abc12345 --json \'{"nodes":[{"id":"a","type":"rectangle","data":{}}],"connectors":[]}\'',
-      'seeflow flow:add-bulk abc12345 --file batch.json',
+      'seeflow flow:add-bulk --project order-pipeline --flow main --json \'{"nodes":[{"id":"a","type":"rectangle","data":{}}],"connectors":[]}\'',
+      'seeflow flow:add-bulk --project order-pipeline --flow main --file batch.json',
     ],
   },
   {
     name: 'flows:play',
-    synopsis: 'seeflow flows:play <flowId> <nodeId> [--no-start]',
+    synopsis: 'seeflow flows:play --project <p> --flow <f> <nodeId> [--no-start]',
     description:
       "Trigger the node's playAction on the studio and wait for the spawn-level " +
       'result. The studio also broadcasts node:running/done/error events on the ' +
       "flow's SSE stream — subscribe separately if you want live progress. " +
       'Requires a running studio.',
     category: 'live',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      { name: 'no-start', description: 'Fail if the studio is not already running' },
     ],
-    flags: [{ name: 'no-start', description: 'Fail if the studio is not already running' }],
     outputs: {
       okExample: { runId: 'run-9b3', status: 200, body: { ok: true } },
     },
     requiresStudio: true,
-    examples: ['seeflow flows:play abc12345 api-checkout'],
+    examples: ['seeflow flows:play --project order-pipeline --flow main api-checkout'],
   },
   // ---- project -----------------------------------------------------------
   {
@@ -454,11 +491,20 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   // ---- nodes -------------------------------------------------------------
   {
     name: 'nodes:add',
-    synopsis: 'seeflow nodes:add <flowId> [--json | --file | --stdin]',
+    synopsis: 'seeflow nodes:add --project <p> --flow <f> [--json | --file | --stdin]',
     description: 'Add a single node to a flow. Body is the node object (auto-id if omitted).',
     category: 'nodes',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
+    ],
     body: {
       example: {
         type: 'rectangle',
@@ -470,34 +516,47 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'writeFailed'],
     },
     requiresStudio: false,
-    examples: ['seeflow nodes:add abc12345 --json \'{"type":"rectangle","data":{}}\''],
+    examples: [
+      'seeflow nodes:add --project order-pipeline --flow main --json \'{"type":"rectangle","data":{}}\'',
+    ],
   },
   {
     name: 'nodes:get',
-    synopsis: 'seeflow nodes:get <flowId> <nodeId>',
+    synopsis: 'seeflow nodes:get --project <p> --flow <f> <nodeId>',
     description:
       'Get one node with its file-backed content (detail.md, view.html) inlined. ' +
       'Use after flows:graph to drill in.',
     category: 'nodes',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
     ],
-    flags: [],
     outputs: { errorKinds: ['notFound', 'fileNotFound', 'unknownNode', 'badJson', 'badSchema'] },
     requiresStudio: false,
-    examples: ['seeflow nodes:get abc12345 api-checkout'],
+    examples: ['seeflow nodes:get --project order-pipeline --flow main api-checkout'],
   },
   {
     name: 'nodes:patch',
-    synopsis: 'seeflow nodes:patch <flowId> <nodeId> [--json | --file | --stdin]',
+    synopsis: 'seeflow nodes:patch --project <p> --flow <f> <nodeId> [--json | --file | --stdin]',
     description: 'Patch fields on an existing node. Validates the partial against NodePatchBody.',
     category: 'nodes',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
     ],
-    flags: BODY_FLAGS,
     body: { schemaRef: 'NodePatchBody' },
     outputs: {
       errorKinds: [
@@ -510,18 +569,24 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: ['seeflow nodes:patch abc12345 api-checkout --json \'{"data":{"name":"renamed"}}\''],
+    examples: [
+      'seeflow nodes:patch --project order-pipeline --flow main api-checkout --json \'{"data":{"name":"renamed"}}\'',
+    ],
   },
   {
     name: 'nodes:move',
-    synopsis: 'seeflow nodes:move <flowId> <nodeId> --x <n> --y <n>',
+    synopsis: 'seeflow nodes:move --project <p> --flow <f> <nodeId> --x <n> --y <n>',
     description: 'Set the node position in style.json (does not touch flow.json).',
     category: 'nodes',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
-    ],
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
     flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
       { name: 'x', valuePlaceholder: '<n>', description: 'X coordinate', required: true },
       { name: 'y', valuePlaceholder: '<n>', description: 'Y coordinate', required: true },
     ],
@@ -537,19 +602,25 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: ['seeflow nodes:move abc12345 api-checkout --x 250 --y 320'],
+    examples: [
+      'seeflow nodes:move --project order-pipeline --flow main api-checkout --x 250 --y 320',
+    ],
   },
   {
     name: 'nodes:reorder',
     synopsis:
-      'seeflow nodes:reorder <flowId> <nodeId> --op forward|backward|toFront|toBack|toIndex [--index <n>]',
+      'seeflow nodes:reorder --project <p> --flow <f> <nodeId> --op forward|backward|toFront|toBack|toIndex [--index <n>]',
     description: "Reorder a node's z-position within the flow.",
     category: 'nodes',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
-    ],
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
     flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
       {
         name: 'op',
         valuePlaceholder: '<op>',
@@ -571,20 +642,25 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     },
     requiresStudio: false,
     examples: [
-      'seeflow nodes:reorder abc12345 api-checkout --op forward',
-      'seeflow nodes:reorder abc12345 api-checkout --op toIndex --index 0',
+      'seeflow nodes:reorder --project order-pipeline --flow main api-checkout --op forward',
+      'seeflow nodes:reorder --project order-pipeline --flow main api-checkout --op toIndex --index 0',
     ],
   },
   {
     name: 'nodes:delete',
-    synopsis: 'seeflow nodes:delete <flowId> <nodeId>',
+    synopsis: 'seeflow nodes:delete --project <p> --flow <f> <nodeId>',
     description: 'Delete a node and any connectors that reference it.',
     category: 'nodes',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'nodeId', required: true, description: 'Node id in the flow' },
+    args: [{ name: 'nodeId', required: true, description: 'Node id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
     ],
-    flags: [],
     outputs: {
       okExample: { ok: true, removedConnectors: 0 },
       errorKinds: [
@@ -597,18 +673,27 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: ['seeflow nodes:delete abc12345 api-checkout'],
+    examples: ['seeflow nodes:delete --project order-pipeline --flow main api-checkout'],
   },
   // ---- connectors --------------------------------------------------------
   {
     name: 'connectors:add',
-    synopsis: 'seeflow connectors:add <flowId> [--json | --file | --stdin]',
+    synopsis: 'seeflow connectors:add --project <p> --flow <f> [--json | --file | --stdin]',
     description:
       'Add a connector. Body is the connector object — `source` and `target` are ' +
       'the connected node ids (strings). Auto-generates an id when absent.',
     category: 'connectors',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
-    flags: BODY_FLAGS,
+    args: [],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
+    ],
     body: {
       example: { source: 'a', target: 'b' },
     },
@@ -617,18 +702,27 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       errorKinds: ['flowNotFound', 'fileNotFound', 'badJson', 'badSchema', 'writeFailed'],
     },
     requiresStudio: false,
-    examples: ['seeflow connectors:add abc12345 --json \'{"source":"a","target":"b"}\''],
+    examples: [
+      'seeflow connectors:add --project order-pipeline --flow main --json \'{"source":"a","target":"b"}\'',
+    ],
   },
   {
     name: 'connectors:patch',
-    synopsis: 'seeflow connectors:patch <flowId> <connectorId> [--json | --file | --stdin]',
+    synopsis:
+      'seeflow connectors:patch --project <p> --flow <f> <connectorId> [--json | --file | --stdin]',
     description: 'Patch fields on an existing connector.',
     category: 'connectors',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'connectorId', required: true, description: 'Connector id in the flow' },
+    args: [{ name: 'connectorId', required: true, description: 'Connector id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
+      ...BODY_FLAGS,
     ],
-    flags: BODY_FLAGS,
     body: { schemaRef: 'ConnectorPatchBody' },
     outputs: {
       errorKinds: [
@@ -641,18 +735,25 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: ['seeflow connectors:patch abc12345 conn-1 --json \'{"label":"new"}\''],
+    examples: [
+      'seeflow connectors:patch --project order-pipeline --flow main conn-1 --json \'{"label":"new"}\'',
+    ],
   },
   {
     name: 'connectors:delete',
-    synopsis: 'seeflow connectors:delete <flowId> <connectorId>',
+    synopsis: 'seeflow connectors:delete --project <p> --flow <f> <connectorId>',
     description: 'Delete a connector.',
     category: 'connectors',
-    args: [
-      { name: 'flowId', required: true, description: 'Flow id or slug' },
-      { name: 'connectorId', required: true, description: 'Connector id in the flow' },
+    args: [{ name: 'connectorId', required: true, description: 'Connector id in the flow' }],
+    flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
     ],
-    flags: [],
     outputs: {
       okExample: { ok: true },
       errorKinds: [
@@ -665,7 +766,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       ],
     },
     requiresStudio: false,
-    examples: ['seeflow connectors:delete abc12345 conn-1'],
+    examples: ['seeflow connectors:delete --project order-pipeline --flow main conn-1'],
   },
   // ---- validate ----------------------------------------------------------
   {
@@ -777,7 +878,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   // ---- live --------------------------------------------------------------
   {
     name: 'e2e',
-    synopsis: 'seeflow e2e <flowId> [--skip-nodes a,b] [--no-start]',
+    synopsis: 'seeflow e2e --project <p> --flow <f> [--skip-nodes a,b] [--no-start]',
     description:
       'End-to-end validate a registered flow. Walks every node with a playAction ' +
       "in flow.json order, POSTs each play, then drains the flow's SSE stream " +
@@ -785,8 +886,15 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'when finished; exits non-zero if any play failed, any statusAction failed ' +
       'to report, or the 120s ceiling was exceeded. Requires a running studio.',
     category: 'live',
-    args: [{ name: 'flowId', required: true, description: 'Flow id or slug' }],
+    args: [],
     flags: [
+      { name: 'project', valuePlaceholder: '<p>', description: 'Project slug', required: true },
+      {
+        name: 'flow',
+        valuePlaceholder: '<f>',
+        description: 'Flow id within the project',
+        required: true,
+      },
       {
         name: 'skip-nodes',
         valuePlaceholder: '<a,b>',
@@ -803,7 +911,10 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       },
     },
     requiresStudio: true,
-    examples: ['seeflow e2e abc12345', 'seeflow e2e abc12345 --skip-nodes flaky-1,flaky-2'],
+    examples: [
+      'seeflow e2e --project order-pipeline --flow main',
+      'seeflow e2e --project order-pipeline --flow main --skip-nodes flaky-1,flaky-2',
+    ],
   },
   {
     name: 'emit',

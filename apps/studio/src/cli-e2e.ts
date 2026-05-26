@@ -43,7 +43,8 @@ export interface ValidationReport {
 }
 
 export interface ValidateOptions {
-  flowId: string;
+  project: string;
+  flow: string;
   url: string;
   hardCeilingMs?: number;
   statusWaitMs?: number;
@@ -71,10 +72,11 @@ interface FlowGetResponse {
   id?: string;
   valid?: boolean;
   error?: string | null;
-  // GET /api/flows/:id returns the resolved flow under the `flow` key (see
-  // FlowGetResponse in operations.ts). Older versions of this file used `demo`,
-  // which left the validator effectively broken (every call returned `ok:false`
-  // with "demo not valid"). Renamed to match the wire format.
+  // GET /api/projects/:project/flows/:flow returns the resolved flow under
+  // the `flow` key (see FlowGetResponse in operations.ts). Older versions of
+  // this file used `demo`, which left the validator effectively broken (every
+  // call returned `ok:false` with "demo not valid"). Renamed to match the wire
+  // format.
   flow?: FlowBody | null;
 }
 
@@ -178,7 +180,7 @@ function hasStatusAction(node: NodeShape): boolean {
 }
 
 export async function validateEndToEnd(options: ValidateOptions): Promise<ValidationReport> {
-  const { url } = options;
+  const { url, project, flow } = options;
   const hardCeilingMs = options.hardCeilingMs ?? DEFAULT_HARD_CEILING_MS;
   const statusWaitMs = options.statusWaitMs ?? DEFAULT_STATUS_WAIT_MS;
   const startedAt = Date.now();
@@ -188,7 +190,8 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
   const statuses: StatusOutcome[] = [];
   const skipped: SkippedItem[] = [];
 
-  const demoRes = await fetch(`${url}/api/flows/${encodeURIComponent(options.flowId)}`);
+  const flowBase = `${url}/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}`;
+  const demoRes = await fetch(flowBase);
   if (!demoRes.ok) {
     return {
       ok: false,
@@ -197,7 +200,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
       skipped: [
         {
           nodeId: '<demo>',
-          reason: `GET /api/flows/${options.flowId} returned HTTP ${demoRes.status}`,
+          reason: `GET /api/projects/${project}/flows/${flow} returned HTTP ${demoRes.status}`,
         },
       ],
     };
@@ -214,6 +217,17 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
           reason: `flow not valid: ${demoData.error ?? '<no error>'}`,
         },
       ],
+    };
+  }
+  // /api/events still keys by the registry's short id — resolved here from
+  // the flow GET response so the SSE subscription matches the broadcasts.
+  const flowId = demoData.id;
+  if (!flowId) {
+    return {
+      ok: false,
+      plays,
+      statuses,
+      skipped: [{ nodeId: '<flow>', reason: 'flow detail missing registry id' }],
     };
   }
 
@@ -238,7 +252,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
 
   let channel: SseChannel | undefined;
   try {
-    const sseRes = await fetch(`${url}/api/events?flowId=${encodeURIComponent(options.flowId)}`, {
+    const sseRes = await fetch(`${url}/api/events?flowId=${encodeURIComponent(flowId)}`, {
       headers: { accept: 'text/event-stream' },
     });
     if (sseRes.ok && sseRes.body) {
@@ -274,10 +288,7 @@ export async function validateEndToEnd(options: ValidateOptions): Promise<Valida
     }
     let res: Response;
     try {
-      res = await fetch(
-        `${url}/api/flows/${encodeURIComponent(options.flowId)}/play/${encodeURIComponent(nodeId)}`,
-        { method: 'POST' },
-      );
+      res = await fetch(`${flowBase}/play/${encodeURIComponent(nodeId)}`, { method: 'POST' });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       httpResults.set(nodeId, { httpError: message });

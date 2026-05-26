@@ -80,6 +80,39 @@ const runCli = async (
   return { code: proc.exitCode ?? -1, stdout, stderr };
 };
 
+/**
+ * Materialise a manifest-driven project at <tmp>/<slug>/ with the given flow
+ * ids, then call registerProject so the studio's registry knows about it.
+ * `flows[0]` becomes the defaultFlow.
+ */
+const seedProject = (
+  studio: ReturnType<typeof startTestStudio>,
+  slug: string,
+  name: string,
+  flows: Array<{ id: string; name: string }>,
+) => {
+  const repoPath = join(mkdtempSync(join(tmpdir(), 'seeflow-cli-manifest-')), slug);
+  mkdirSync(repoPath, { recursive: true });
+  const manifest = {
+    version: 1 as const,
+    name,
+    defaultFlow: flows[0]?.id ?? 'main',
+    flows,
+  };
+  writeFileSync(join(repoPath, 'seeflow.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+  for (const f of flows) {
+    const flowDir = join(repoPath, 'flows', f.id);
+    mkdirSync(flowDir, { recursive: true });
+    writeFileSync(
+      join(flowDir, 'flow.json'),
+      `${JSON.stringify({ version: 2, name: f.name, nodes: [], connectors: [] }, null, 2)}\n`,
+    );
+  }
+  const outcome = registerProject({ repoPath, registry: studio.registry });
+  if (outcome.kind !== 'ok') throw new Error(`registerProject failed: ${JSON.stringify(outcome)}`);
+  return { repoPath, projectSlug: outcome.projectSlug, entries: outcome.entries };
+};
+
 describe('seeflow CLI register integration', () => {
   it('two registers from the same repo with different flowPath produce two distinct studio entries', async () => {
     const studio = startTestStudio();
@@ -211,41 +244,50 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
-  it('flows:get returns the flow and flows:delete unregisters it', async () => {
+  it('flows:get returns the flow keyed by --project + --flow', async () => {
     const studio = startTestStudio();
     try {
-      const repoDir = mkdtempSync(join(tmpdir(), 'seeflow-cli-getdel-'));
-      writeFileSync(join(repoDir, 'flow.json'), JSON.stringify(VALID_DEMO));
-      const entry = studio.registry.upsert({
-        name: 'GD',
-        repoPath: repoDir,
-        flowPath: 'flow.json',
-        projectSlug: 'p',
-        flowSlug: 'main',
-        isDefault: true,
-      });
+      const { projectSlug } = seedProject(studio, 'demo-get', 'Demo Get', [
+        { id: 'main', name: 'Main' },
+      ]);
 
-      const get = await runCli(['flows:get', entry.id, '--no-start'], studio.env);
+      const get = await runCli(
+        ['flows:get', '--no-start', '--project', projectSlug, '--flow', 'main'],
+        studio.env,
+      );
       expect(get.code).toBe(0);
-      const parsedGet = JSON.parse(get.stdout) as { ok: boolean; id: string };
-      expect(parsedGet.id).toBe(entry.id);
-
-      const del = await runCli(['flows:delete', entry.id, '--no-start'], studio.env);
-      expect(del.code).toBe(0);
-      studio.registry.reload();
-      expect(studio.registry.list()).toHaveLength(0);
+      const parsedGet = JSON.parse(get.stdout) as { ok: boolean; id: string; slug: string };
+      expect(parsedGet.slug).toBe(`${projectSlug}/main`);
     } finally {
       studio.stop();
     }
   }, 20_000);
 
-  it('flows:get returns exit 3 with notFound stderr for unknown flowId', async () => {
+  it('flows:get returns exit 3 with notFound stderr for unknown project/flow', async () => {
     const studio = startTestStudio();
     try {
-      const r = await runCli(['flows:get', 'nope', '--no-start'], studio.env);
+      const r = await runCli(
+        ['flows:get', '--no-start', '--project', 'nope', '--flow', 'main'],
+        studio.env,
+      );
       expect(r.code).toBe(3);
       expect(r.stderr).toContain('not found');
       expect(r.stderr).toContain('"code":"notFound"');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('flow-scoped verbs error out when --project or --flow is missing', async () => {
+    const studio = startTestStudio();
+    try {
+      const noFlow = await runCli(['flows:get', '--project', 'p', '--no-start'], studio.env);
+      expect(noFlow.code).toBe(1);
+      expect(noFlow.stderr).toContain('Missing required flag: --flow');
+
+      const noProject = await runCli(['flows:get', '--flow', 'main', '--no-start'], studio.env);
+      expect(noProject.code).toBe(1);
+      expect(noProject.stderr).toContain('Missing required flag: --project');
     } finally {
       studio.stop();
     }
@@ -283,7 +325,16 @@ describe('seeflow CLI new subcommands', () => {
         connectors: [{ id: 'n1-to-n2', source: 'n1', target: 'n2' }],
       });
       const r = await runCli(
-        ['flow:add-bulk', entry.id, '--no-start', '--json', payload],
+        [
+          'flow:add-bulk',
+          '--no-start',
+          '--project',
+          entry.projectSlug,
+          '--flow',
+          entry.flowSlug,
+          '--json',
+          payload,
+        ],
         studio.env,
       );
       if (r.code !== 0) {
@@ -334,7 +385,16 @@ describe('seeflow CLI new subcommands', () => {
         ],
       });
       const r = await runCli(
-        ['flow:add-bulk', entry.id, '--no-start', '--json', payload],
+        [
+          'flow:add-bulk',
+          '--no-start',
+          '--project',
+          entry.projectSlug,
+          '--flow',
+          entry.flowSlug,
+          '--json',
+          payload,
+        ],
         studio.env,
       );
       expect(r.code).toBe(4);
@@ -433,7 +493,10 @@ describe('seeflow CLI new subcommands', () => {
         isDefault: true,
       });
 
-      const r = await runCli(['flows:graph', entry.id, '--no-start'], studio.env);
+      const r = await runCli(
+        ['flows:graph', '--no-start', '--project', entry.projectSlug, '--flow', entry.flowSlug],
+        studio.env,
+      );
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
@@ -606,14 +669,26 @@ describe('seeflow CLI new subcommands', () => {
       );
       const added = (await addRes.json()) as { id: string };
 
-      const r = await runCli(['nodes:get', entry.id, added.id, '--no-start'], studio.env);
+      const r = await runCli(
+        [
+          'nodes:get',
+          '--no-start',
+          '--project',
+          entry.projectSlug,
+          '--flow',
+          entry.flowSlug,
+          added.id,
+        ],
+        studio.env,
+      );
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
         flowId: string;
         node: { data: { detail?: string } };
       };
-      expect(parsed.flowId).toBe(entry.id);
+      // ops.getNode echoes the slug it was called with (US-020 cutover).
+      expect(parsed.flowId).toBe(`${entry.projectSlug}/${entry.flowSlug}`);
       expect(parsed.node.data.detail).toBe('# inlined body');
     } finally {
       studio.stop();
@@ -621,40 +696,6 @@ describe('seeflow CLI new subcommands', () => {
   }, 20_000);
 
   // -- Manifest CRUD verbs (US-019) ----------------------------------------
-
-  /**
-   * Materialise a manifest-driven project at <tmp>/<slug>/ with the given flow
-   * ids, then call registerProject so the studio's registry knows about it.
-   * `flows[0]` becomes the defaultFlow.
-   */
-  const seedProject = (
-    studio: ReturnType<typeof startTestStudio>,
-    slug: string,
-    name: string,
-    flows: Array<{ id: string; name: string }>,
-  ) => {
-    const repoPath = join(mkdtempSync(join(tmpdir(), 'seeflow-cli-manifest-')), slug);
-    mkdirSync(repoPath, { recursive: true });
-    const manifest = {
-      version: 1 as const,
-      name,
-      defaultFlow: flows[0]?.id ?? 'main',
-      flows,
-    };
-    writeFileSync(join(repoPath, 'seeflow.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-    for (const f of flows) {
-      const flowDir = join(repoPath, 'flows', f.id);
-      mkdirSync(flowDir, { recursive: true });
-      writeFileSync(
-        join(flowDir, 'flow.json'),
-        `${JSON.stringify({ version: 2, name: f.name, nodes: [], connectors: [] }, null, 2)}\n`,
-      );
-    }
-    const outcome = registerProject({ repoPath, registry: studio.registry });
-    if (outcome.kind !== 'ok')
-      throw new Error(`registerProject failed: ${JSON.stringify(outcome)}`);
-    return { repoPath, projectSlug: outcome.projectSlug, entries: outcome.entries };
-  };
 
   it('flows:create writes the new flow on disk and registers it', async () => {
     const studio = startTestStudio();

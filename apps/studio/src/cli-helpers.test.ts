@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { EXIT_CODE_BY_KIND, exitCodeForKind, loadBody } from './cli-helpers.ts';
+import { EXIT_CODE_BY_KIND, exitCodeForKind, loadBody, parseProjectFlow } from './cli-helpers.ts';
 
 describe('loadBody', () => {
   it('reads inline JSON from --json', async () => {
@@ -53,6 +53,7 @@ describe('EXIT_CODE_BY_KIND', () => {
     expect(EXIT_CODE_BY_KIND).toEqual({
       badSchema: 2,
       badJson: 2,
+      badJq: 2,
       notFound: 3,
       flowNotFound: 3,
       fileNotFound: 3,
@@ -74,5 +75,53 @@ describe('EXIT_CODE_BY_KIND', () => {
     expect(exitCodeForKind('badSchema')).toBe(2);
     expect(exitCodeForKind('flowNotFound')).toBe(3);
     expect(exitCodeForKind('writeFailed')).toBe(5);
+  });
+});
+
+describe('parseProjectFlow', () => {
+  it('reads --project and --flow from a space-separated argv', () => {
+    expect(parseProjectFlow(['nodes:add', '--project', 'orders', '--flow', 'main'])).toEqual({
+      project: 'orders',
+      flow: 'main',
+    });
+  });
+
+  it('reads --project=p and --flow=f equal-sign forms', () => {
+    expect(parseProjectFlow(['nodes:add', '--project=orders', '--flow=main'])).toEqual({
+      project: 'orders',
+      flow: 'main',
+    });
+  });
+
+  it('ignores positional arguments + other flags', () => {
+    expect(
+      parseProjectFlow([
+        'nodes:add',
+        'unused-positional',
+        '--no-start',
+        '--project',
+        'orders',
+        '--flow',
+        'retry',
+        '--json',
+        '{}',
+      ]),
+    ).toEqual({ project: 'orders', flow: 'retry' });
+  });
+
+  it('throws with a clear message when --project is missing', () => {
+    expect(() => parseProjectFlow(['nodes:add', '--flow', 'main'])).toThrow(
+      /Missing required flag: --project/,
+    );
+  });
+
+  it('throws with a clear message when --flow is missing', () => {
+    expect(() => parseProjectFlow(['nodes:add', '--project', 'orders'])).toThrow(
+      /Missing required flag: --flow/,
+    );
+  });
+
+  it('throws when both flags are missing', () => {
+    expect(() => parseProjectFlow(['nodes:add'])).toThrow(/Missing required flag: --project/);
   });
 });

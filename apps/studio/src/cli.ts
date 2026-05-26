@@ -1,7 +1,14 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
-import { drainStdin, loadBody, printError, printOk, printOutcome } from './cli-helpers.ts';
+import {
+  drainStdin,
+  loadBody,
+  parseProjectFlow,
+  printError,
+  printOk,
+  printOutcome,
+} from './cli-helpers.ts';
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations, registerProject } from './cli-ops.ts';
 import { createEventBus } from './events.ts';
@@ -59,6 +66,53 @@ const requireArg = (idx: number, name: string): string => {
     printError(`Missing required positional argument: ${name}`);
   }
   return v as string;
+};
+
+/**
+ * Walk argv (after the subcommand at argv[0]) and return non-flag positionals
+ * in order. Skips `--name value` and `--name=value` pairs so callers can mix
+ * positional arguments freely with --project/--flow (US-020). Boolean-style
+ * `--name` flags (e.g. `--no-start`, `--stdin`) are detected because the next
+ * argv entry either starts with `--` or is out of bounds.
+ */
+const positionalArgs = (): string[] => {
+  const out: string[] = [];
+  for (let i = 1; i < argv.length; i++) {
+    const arg = argv[i] as string;
+    if (arg.startsWith('--')) {
+      // `--name=value` is self-contained; `--name value` consumes the next slot
+      // only when that slot is not itself another flag (boolean flag otherwise).
+      if (!arg.includes('=')) {
+        const next = argv[i + 1];
+        if (next !== undefined && !next.startsWith('--')) i++;
+      }
+      continue;
+    }
+    out.push(arg);
+  }
+  return out;
+};
+
+const requirePositional = (idx: number, name: string): string => {
+  const v = positionalArgs()[idx];
+  if (!v) printError(`Missing required positional argument: ${name}`);
+  return v as string;
+};
+
+/**
+ * Resolve the (project, flow) pair every flow-scoped CLI verb expects (US-020).
+ * Surfaces clear `Missing required flag: --project|--flow` errors through
+ * `printError` instead of throwing — matches the rest of the CLI's exit
+ * behaviour. The returned `slug` (`${project}/${flow}`) is what the in-process
+ * `ops.*` calls accept via `registry.resolve(idOrSlug)`.
+ */
+const requireProjectFlow = (): { project: string; flow: string; slug: string } => {
+  try {
+    const { project, flow } = parseProjectFlow(argv);
+    return { project, flow, slug: `${project}/${flow}` };
+  } catch (err) {
+    printError(err instanceof Error ? err.message : String(err));
+  }
 };
 
 async function studioUrlOrDie(noStart: boolean): Promise<{ url: string; port: number }> {
@@ -194,22 +248,22 @@ Commands (work without a running studio):
   projects:create      Scaffold a new project (writes <path>/seeflow.json + <path>/flows/main/flow.json) — (--path <dir> --name <name> [--description <text>])
   flows:list           List registered flows
   flows:summary        List registered flows (id + name + description only)
-  flows:get <id>       Get flow details
-  flows:graph <id>     List nodes + connectors without inlined file content
+  flows:get            Get flow details (--project <p> --flow <f>)
+  flows:graph          List nodes + connectors without inlined file content (--project <p> --flow <f>)
   flows:create         Create a new flow within a project (--project <p> --flow <id> --name <n> [--icon <i>])
   flows:rename         Rename a flow id/name/icon (--project <p> --flow <id> [--new-id <x>] [--name <n>] [--icon <i>])
-  flows:delete         Delete a flow (manifest-aware: --project <p> --flow <id> [--new-default <other>]) or unregister by id (<id>)
-  flows:layout <id>    Apply ELK layout, writing style.json (--json/--file/--stdin optional)
-  flow:add-bulk <id>   Add many nodes + connectors atomically (--json/--file/--stdin; body { nodes?, connectors? })
-  nodes:add <id>       Add a node (--json/--file/--stdin)
-  nodes:get <id> <n>   Get a node with detail / html content inlined
-  nodes:patch <id> <n> Patch a node (--json/--file/--stdin)
-  nodes:move <id> <n>  Move a node (--x N --y N)
-  nodes:reorder <id> <n> Reorder a node (--op forward|backward|toFront|toBack|toIndex [--index N])
-  nodes:delete <id> <n> Delete a node
-  connectors:add <id>  Add a connector (--json/--file/--stdin)
-  connectors:patch <id> <connId>  Patch a connector (--json/--file/--stdin)
-  connectors:delete <id> <connId> Delete a connector
+  flows:delete         Delete a flow (--project <p> --flow <f> [--new-default <other>])
+  flows:layout         Apply ELK layout, writing style.json (--project <p> --flow <f>) [--json/--file/--stdin]
+  flow:add-bulk        Add many nodes + connectors atomically (--project <p> --flow <f>) [--json/--file/--stdin; body { nodes?, connectors? }]
+  nodes:add            Add a node (--project <p> --flow <f>) [--json/--file/--stdin]
+  nodes:get <n>        Get a node with detail / html content inlined (--project <p> --flow <f>)
+  nodes:patch <n>      Patch a node (--project <p> --flow <f>) [--json/--file/--stdin]
+  nodes:move <n>       Move a node (--project <p> --flow <f> --x N --y N)
+  nodes:reorder <n>    Reorder a node (--project <p> --flow <f> --op forward|backward|toFront|toBack|toIndex [--index N])
+  nodes:delete <n>     Delete a node (--project <p> --flow <f>)
+  connectors:add       Add a connector (--project <p> --flow <f>) [--json/--file/--stdin]
+  connectors:patch <connId>  Patch a connector (--project <p> --flow <f>) [--json/--file/--stdin]
+  connectors:delete <connId> Delete a connector (--project <p> --flow <f>)
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
   schema [<category>]  Get the flow.json schema. No arg → category index;
                        category arg → full JSON Schema(s) for that category
@@ -220,10 +274,10 @@ Commands (work without a running studio):
                        'ids connector 12').
 
 Commands (require a running studio):
-  flows:play <id> <n>  Trigger a play on node <n>
+  flows:play <n>       Trigger a play on node <n> (--project <p> --flow <f>)
   emit <id> <n> <st>   Broadcast a status event for node <n> (st: running|done|error)
                        [--run-id <id>] [--payload <json>] [--studio-url <url>]
-  e2e <id>             End-to-end validate a registered flow (--skip-nodes a,b)
+  e2e                  End-to-end validate a registered flow (--project <p> --flow <f> [--skip-nodes a,b])
 
 Meta:
   version              Print the CLI version
@@ -663,32 +717,21 @@ async function runFlowsSummary() {
 }
 
 async function runFlowsGet() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   const ops = createCliOperations();
-  const result = await ops.getFlow(flowId);
+  const result = await ops.getFlow(slug);
   printOutcome(result);
 }
 
 async function runFlowsGraph() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   const ops = createCliOperations();
-  const result = await ops.getFlowGraph(flowId);
+  const result = await ops.getFlowGraph(slug);
   printOutcome(result);
 }
 
 async function runFlowsDelete() {
-  // New manifest-aware shape: flows:delete --project <p> --flow <f> [--new-default <o>].
-  // Falls back to the legacy registry-only delete (flows:delete <flowId>) when
-  // neither --project nor --flow is supplied, so existing single-arg callers
-  // keep working until US-020 cuts every flow-scoped verb over to --project --flow.
-  if (flagValue('project') !== undefined || flagValue('flow') !== undefined) {
-    await runFlowsDeleteManifest();
-    return;
-  }
-  const flowId = requireArg(1, '<flowId>');
-  const ops = createCliOperations();
-  const result = ops.deleteFlow(flowId);
-  printOutcome(result);
+  await runFlowsDeleteManifest();
 }
 
 async function runFlowsCreate() {
@@ -763,7 +806,7 @@ async function runFlowsDeleteManifest() {
 }
 
 async function runFlowsLayout() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   // Body is optional — `{ options? }` shape if provided. Empty when omitted.
   let options: LayoutOptions | undefined;
   if (hasFlag('json') || hasFlag('file') || hasFlag('stdin')) {
@@ -771,16 +814,16 @@ async function runFlowsLayout() {
     options = body?.options;
   }
   const ops = createCliOperations();
-  const result = await ops.applyLayout(flowId, options);
+  const result = await ops.applyLayout(slug, options);
   printOutcome(result);
 }
 
 async function runFlowsPlay() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { project, flow } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const { url } = await studioUrlOrDie(hasFlag('no-start'));
   const res = await postJson(
-    `${url}/api/flows/${encodeURIComponent(flowId)}/play/${encodeURIComponent(nodeId)}`,
+    `${url}/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}/play/${encodeURIComponent(nodeId)}`,
     {},
   );
   const out = (await handleResponse(res)) as object;
@@ -827,52 +870,52 @@ async function runEmit() {
 }
 
 async function runNodesAdd() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   const body = await bodyFromFlags();
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     printError('Body must be an object');
   }
   const ops = createCliOperations();
-  const result = await ops.addNode(flowId, body as Record<string, unknown>);
+  const result = await ops.addNode(slug, body as Record<string, unknown>);
   printOutcome(result);
 }
 
 async function runFlowAddBulk() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   const body = await bodyFromFlags();
   const parsed = FlowBulkBodySchema.safeParse(body);
   if (!parsed.success) {
     printError(`Invalid flow:add-bulk body: ${JSON.stringify(parsed.error.issues)}`);
   }
   const ops = createCliOperations();
-  const result = await ops.addBulk(flowId, parsed.data);
+  const result = await ops.addBulk(slug, parsed.data);
   printOutcome(result);
 }
 
 async function runNodesGet() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { slug } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const ops = createCliOperations();
-  const result = await ops.getNode(flowId, nodeId);
+  const result = await ops.getNode(slug, nodeId);
   printOutcome(result);
 }
 
 async function runNodesPatch() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { slug } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const body = await bodyFromFlags();
   const parsed = NodePatchBodySchema.safeParse(body);
   if (!parsed.success) {
     printError(`Invalid nodes:patch body: ${JSON.stringify(parsed.error.issues)}`);
   }
   const ops = createCliOperations();
-  const result = await ops.patchNode(flowId, nodeId, parsed.data);
+  const result = await ops.patchNode(slug, nodeId, parsed.data);
   printOutcome(result);
 }
 
 async function runNodesMove() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { slug } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const xRaw = flagValue('x');
   const yRaw = flagValue('y');
   if (xRaw === undefined || yRaw === undefined) {
@@ -884,13 +927,13 @@ async function runNodesMove() {
     printError('--x and --y must be finite numbers');
   }
   const ops = createCliOperations();
-  const result = await ops.moveNode(flowId, nodeId, { x, y });
+  const result = await ops.moveNode(slug, nodeId, { x, y });
   printOutcome(result);
 }
 
 async function runNodesReorder() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { slug } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const op = flagValue('op');
   if (!op) printError('nodes:reorder requires --op forward|backward|toFront|toBack|toIndex');
   let raw: Record<string, unknown> = { op };
@@ -908,47 +951,47 @@ async function runNodesReorder() {
     printError(`Invalid nodes:reorder body: ${JSON.stringify(parsed.error.issues)}`);
   }
   const ops = createCliOperations();
-  const result = await ops.reorderNode(flowId, nodeId, parsed.data);
+  const result = await ops.reorderNode(slug, nodeId, parsed.data);
   printOutcome(result);
 }
 
 async function runNodesDelete() {
-  const flowId = requireArg(1, '<flowId>');
-  const nodeId = requireArg(2, '<nodeId>');
+  const { slug } = requireProjectFlow();
+  const nodeId = requirePositional(0, '<nodeId>');
   const ops = createCliOperations();
-  const result = await ops.deleteNode(flowId, nodeId);
+  const result = await ops.deleteNode(slug, nodeId);
   printOutcome(result);
 }
 
 async function runConnectorsAdd() {
-  const flowId = requireArg(1, '<flowId>');
+  const { slug } = requireProjectFlow();
   const body = await bodyFromFlags();
   if (!body || typeof body !== 'object' || Array.isArray(body)) {
     printError('Body must be an object');
   }
   const ops = createCliOperations();
-  const result = await ops.addConnector(flowId, body as Record<string, unknown>);
+  const result = await ops.addConnector(slug, body as Record<string, unknown>);
   printOutcome(result);
 }
 
 async function runConnectorsPatch() {
-  const flowId = requireArg(1, '<flowId>');
-  const connId = requireArg(2, '<connectorId>');
+  const { slug } = requireProjectFlow();
+  const connId = requirePositional(0, '<connectorId>');
   const body = await bodyFromFlags();
   const parsed = ConnectorPatchBodySchema.safeParse(body);
   if (!parsed.success) {
     printError(`Invalid connectors:patch body: ${JSON.stringify(parsed.error.issues)}`);
   }
   const ops = createCliOperations();
-  const result = await ops.patchConnector(flowId, connId, parsed.data);
+  const result = await ops.patchConnector(slug, connId, parsed.data);
   printOutcome(result);
 }
 
 async function runConnectorsDelete() {
-  const flowId = requireArg(1, '<flowId>');
-  const connId = requireArg(2, '<connectorId>');
+  const { slug } = requireProjectFlow();
+  const connId = requirePositional(0, '<connectorId>');
   const ops = createCliOperations();
-  const result = await ops.deleteConnector(flowId, connId);
+  const result = await ops.deleteConnector(slug, connId);
   printOutcome(result);
 }
 
@@ -1025,12 +1068,12 @@ function applyJqOrDie(input: unknown, filterStr: string): unknown {
 }
 
 async function runE2e() {
-  const flowId = requireArg(1, '<flowId>');
+  const { project, flow } = requireProjectFlow();
   const skipNodesRaw = flagValue('skip-nodes');
   const skipNodes = skipNodesRaw ? skipNodesRaw.split(',').filter(Boolean) : [];
   const { url } = await studioUrlOrDie(hasFlag('no-start'));
   const { validateEndToEnd } = await import('./cli-e2e.ts');
-  const report = await validateEndToEnd({ flowId, url, skipNodes });
+  const report = await validateEndToEnd({ project, flow, url, skipNodes });
   if (!report.ok) {
     process.stderr.write(`${JSON.stringify(report)}\n`);
     process.exit(1);
