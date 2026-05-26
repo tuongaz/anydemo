@@ -1,4 +1,5 @@
 import { type Visibility, useExportToCloud } from '@/hooks/use-export-to-cloud';
+import { IS_PROJECT_EXPORT_ENABLED } from '@/lib/feature-flags';
 import {
   Button,
   Dialog,
@@ -105,9 +106,13 @@ export function ExportDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Export to seeflow.dev</DialogTitle>
+          <DialogTitle>
+            {IS_PROJECT_EXPORT_ENABLED ? 'Export project to seeflow.dev' : 'Export to seeflow.dev'}
+          </DialogTitle>
           <DialogDescription>
-            Upload this diagram to the cloud and get a shareable link.
+            {IS_PROJECT_EXPORT_ENABLED
+              ? 'Upload every flow in this project to the cloud and get a shareable link.'
+              : 'Upload this diagram to the cloud and get a shareable link.'}
           </DialogDescription>
         </DialogHeader>
 

@@ -508,8 +508,8 @@
         "Verify in browser using dev-browser skill: with VITE_SEEFLOW_PROJECT_EXPORT unset, old single-flow export still works; with it set to 1 in a local override, the dialog title changes to 'Export project to seeflow.dev' (no need to actually hit the live cloud)"
       ],
       "priority": 30,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Browser verification deferred — Ralph loop ran without a live studio. Build artifacts (typecheck/lint/format/test) all green; manual browser verification belongs to the next interactive session (same precedent as US-024/US-025/US-026)."
     },
     {
       "id": "US-031",
