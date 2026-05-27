@@ -25,99 +25,100 @@ const COLOR_TOKEN_MAP: Record<
   },
   // Named tokens: `background` and `headerBackground` are translucent overlays
   // of the same hue as `edge` so the rendered fill reads as the same color
-  // family the picker swatch advertises. Mirrors the design system's badge
-  // pattern (design.html lines 626-628: `rgba(<color>, 0.15)` on a dark
-  // canvas). Theme-agnostic — works on both light and dark backgrounds.
-  // Header sits at a higher alpha so it stays distinct from the body fill.
+  // family the picker swatch advertises. Alphas are deliberately low (0.08
+  // body / 0.14 header) so the fill stays close to the neutral card color —
+  // a hint of hue rather than a band of color. Theme-agnostic — works on
+  // both light and dark backgrounds. Header sits at a higher alpha so it
+  // stays distinct from the body fill.
   slate: {
     border: 'hsl(215, 20%, 40%)',
-    background: 'hsla(215, 16%, 47%, 0.15)',
+    background: 'hsla(215, 16%, 47%, 0.08)',
     edge: 'hsl(215, 16%, 47%)',
-    headerBackground: 'hsla(215, 16%, 47%, 0.25)',
+    headerBackground: 'hsla(215, 16%, 47%, 0.14)',
   },
   gray: {
     border: 'hsl(220, 9%, 46%)',
-    background: 'hsla(220, 9%, 55%, 0.15)',
+    background: 'hsla(220, 9%, 55%, 0.08)',
     edge: 'hsl(220, 9%, 55%)',
-    headerBackground: 'hsla(220, 9%, 55%, 0.25)',
+    headerBackground: 'hsla(220, 9%, 55%, 0.14)',
   },
   red: {
     border: 'hsl(0, 70%, 55%)',
-    background: 'hsla(0, 84%, 60%, 0.15)',
+    background: 'hsla(0, 84%, 60%, 0.08)',
     edge: 'hsl(0, 84%, 60%)',
-    headerBackground: 'hsla(0, 84%, 60%, 0.25)',
+    headerBackground: 'hsla(0, 84%, 60%, 0.14)',
   },
   rose: {
     border: 'hsl(347, 70%, 55%)',
-    background: 'hsla(347, 84%, 60%, 0.15)',
+    background: 'hsla(347, 84%, 60%, 0.08)',
     edge: 'hsl(347, 84%, 60%)',
-    headerBackground: 'hsla(347, 84%, 60%, 0.25)',
+    headerBackground: 'hsla(347, 84%, 60%, 0.14)',
   },
   orange: {
     border: 'hsl(25, 80%, 53%)',
-    background: 'hsla(25, 95%, 55%, 0.15)',
+    background: 'hsla(25, 95%, 55%, 0.08)',
     edge: 'hsl(25, 95%, 55%)',
-    headerBackground: 'hsla(25, 95%, 55%, 0.25)',
+    headerBackground: 'hsla(25, 95%, 55%, 0.14)',
   },
   amber: {
     border: 'hsl(43, 70%, 50%)',
-    background: 'hsla(38, 92%, 50%, 0.15)',
+    background: 'hsla(38, 92%, 50%, 0.08)',
     edge: 'hsl(38, 92%, 50%)',
-    headerBackground: 'hsla(38, 92%, 50%, 0.25)',
+    headerBackground: 'hsla(38, 92%, 50%, 0.14)',
   },
   lime: {
     border: 'hsl(85, 60%, 50%)',
-    background: 'hsla(85, 78%, 55%, 0.15)',
+    background: 'hsla(85, 78%, 55%, 0.08)',
     edge: 'hsl(85, 78%, 55%)',
-    headerBackground: 'hsla(85, 78%, 55%, 0.25)',
+    headerBackground: 'hsla(85, 78%, 55%, 0.14)',
   },
   green: {
     border: 'hsl(142, 50%, 45%)',
-    background: 'hsla(142, 71%, 45%, 0.15)',
+    background: 'hsla(142, 71%, 45%, 0.08)',
     edge: 'hsl(142, 71%, 45%)',
-    headerBackground: 'hsla(142, 71%, 45%, 0.25)',
+    headerBackground: 'hsla(142, 71%, 45%, 0.14)',
   },
   teal: {
     border: 'hsl(173, 60%, 45%)',
-    background: 'hsla(173, 80%, 50%, 0.15)',
+    background: 'hsla(173, 80%, 50%, 0.08)',
     edge: 'hsl(173, 80%, 50%)',
-    headerBackground: 'hsla(173, 80%, 50%, 0.25)',
+    headerBackground: 'hsla(173, 80%, 50%, 0.14)',
   },
   cyan: {
     border: 'hsl(189, 70%, 50%)',
-    background: 'hsla(189, 94%, 55%, 0.15)',
+    background: 'hsla(189, 94%, 55%, 0.08)',
     edge: 'hsl(189, 94%, 55%)',
-    headerBackground: 'hsla(189, 94%, 55%, 0.25)',
+    headerBackground: 'hsla(189, 94%, 55%, 0.14)',
   },
   blue: {
     border: 'hsl(213, 70%, 55%)',
-    background: 'hsla(217, 91%, 60%, 0.15)',
+    background: 'hsla(217, 91%, 60%, 0.08)',
     edge: 'hsl(217, 91%, 60%)',
-    headerBackground: 'hsla(217, 91%, 60%, 0.25)',
+    headerBackground: 'hsla(217, 91%, 60%, 0.14)',
   },
   indigo: {
     border: 'hsl(231, 60%, 60%)',
-    background: 'hsla(231, 88%, 65%, 0.15)',
+    background: 'hsla(231, 88%, 65%, 0.08)',
     edge: 'hsl(231, 88%, 65%)',
-    headerBackground: 'hsla(231, 88%, 65%, 0.25)',
+    headerBackground: 'hsla(231, 88%, 65%, 0.14)',
   },
   violet: {
     border: 'hsl(252, 60%, 62%)',
-    background: 'hsla(252, 88%, 68%, 0.15)',
+    background: 'hsla(252, 88%, 68%, 0.08)',
     edge: 'hsl(252, 88%, 68%)',
-    headerBackground: 'hsla(252, 88%, 68%, 0.25)',
+    headerBackground: 'hsla(252, 88%, 68%, 0.14)',
   },
   purple: {
     border: 'hsl(270, 60%, 60%)',
-    background: 'hsla(271, 91%, 65%, 0.15)',
+    background: 'hsla(271, 91%, 65%, 0.08)',
     edge: 'hsl(271, 91%, 65%)',
-    headerBackground: 'hsla(271, 91%, 65%, 0.25)',
+    headerBackground: 'hsla(271, 91%, 65%, 0.14)',
   },
   pink: {
     border: 'hsl(330, 60%, 60%)',
-    background: 'hsla(330, 81%, 60%, 0.15)',
+    background: 'hsla(330, 81%, 60%, 0.08)',
     edge: 'hsl(330, 81%, 60%)',
-    headerBackground: 'hsla(330, 81%, 60%, 0.25)',
+    headerBackground: 'hsla(330, 81%, 60%, 0.14)',
   },
 };
 
