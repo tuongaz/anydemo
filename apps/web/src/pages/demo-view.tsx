@@ -1395,7 +1395,7 @@ export function DemoView({
         undo: async () => {
           await adapter.updateNode(nodeId, { icon: prev });
         },
-        coalesceKey: `node:${nodeId}:icon`,
+        coalesceKey: `node:${nodeId}:icon-sidebar`,
       });
       adapter.updateNode(nodeId, { icon: next }).catch((err) => {
         dropUndoTop();
@@ -1723,7 +1723,7 @@ export function DemoView({
               undo: async () => {
                 await adapter.updateNode(targetId, { icon: prev });
               },
-              coalesceKey: `node:${targetId}:icon`,
+              coalesceKey: `node:${targetId}:icon-replace`,
             });
           }
           adapter.updateNode(targetId, { icon: name }).catch((err) => {
