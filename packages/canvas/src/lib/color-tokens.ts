@@ -30,6 +30,15 @@ const COLOR_TOKEN_MAP: Record<
   // a hint of hue rather than a band of color. Theme-agnostic — works on
   // both light and dark backgrounds. Header sits at a higher alpha so it
   // stays distinct from the body fill.
+  // `white` is the exception: opaque white throughout so users who pick it
+  // get a literal white node (not a tinted hint). Header sits one shade
+  // darker so it stays distinct from the body per the cross-token contract.
+  white: {
+    border: 'hsl(0, 0%, 100%)',
+    background: 'hsl(0, 0%, 100%)',
+    edge: 'hsl(0, 0%, 100%)',
+    headerBackground: 'hsl(0, 0%, 96%)',
+  },
   slate: {
     border: 'hsl(215, 20%, 40%)',
     background: 'hsla(215, 16%, 47%, 0.08)',

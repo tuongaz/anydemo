@@ -5,6 +5,7 @@ import { COLOR_TOKENS, colorTokenStyle } from './color-tokens.ts';
 const ALL_TOKENS: ColorToken[] = [
   'none',
   'default',
+  'white',
   'slate',
   'gray',
   'red',

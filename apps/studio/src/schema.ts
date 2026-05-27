@@ -18,6 +18,7 @@ export const ColorTokenSchema = z.enum([
   // and edges aren't useful, and `'default'` already covers "inherit".
   'none',
   'default',
+  'white',
   'slate',
   'gray',
   'red',

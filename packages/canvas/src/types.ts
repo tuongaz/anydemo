@@ -8,6 +8,7 @@ export type NodeStatus = 'idle' | 'running' | 'done' | 'error';
 export type ColorToken =
   | 'none'
   | 'default'
+  | 'white'
   | 'slate'
   | 'gray'
   | 'red'

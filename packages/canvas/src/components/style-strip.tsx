@@ -107,12 +107,15 @@ const DEFAULT_CORNER_RADIUS = 8;
 // `shadow` set — keeps the readout meaningful when the popover first opens.
 const DEFAULT_SHADOW = 1;
 
-// 18-slot palette: 2 special tokens (`none`, `default`) + 16 named colors.
-// `'none'` renders transparent border / fill — hidden from text-color and
-// connector-color pickers via `<ColorSwatchGrid allowNone={false}>`.
+// Pickable palette: `'none'` + 17 named colors (incl. `white`). `'default'`
+// is intentionally omitted — it's a fallback for unset values, not a
+// user-facing choice; the half/half swatch confused users who couldn't tell
+// what they were picking. `'none'` renders transparent border / fill —
+// hidden from text-color and connector-color pickers via
+// `<ColorSwatchGrid allowNone={false}>`.
 const PALETTE_TOKENS: ColorToken[] = [
   'none',
-  'default',
+  'white',
   'slate',
   'gray',
   'red',
@@ -849,16 +852,15 @@ export function StyleStrip({
 type SwatchPreviewKind = 'border' | 'background' | 'edge';
 
 // Single source of truth for swatch fill across triggers and grid cells.
-// Tokens render as a flat saturated tint (palette.edge); `'default'` shows a
-// half-and-half split conveying "border + fill from theme"; `'none'` is
-// rendered separately by SwatchCell (transparent body + diagonal slash).
+// Tokens render as a flat saturated tint (palette.edge). `'default'` is no
+// longer pickable, but a node whose stored value is still `'default'` shows
+// the neutral card color (matches the rendered "theme default" surface,
+// avoids the half/half visual that confused users). `'none'` is rendered
+// separately by SwatchCell (transparent body + diagonal slash). `'white'`
+// is also rendered separately by SwatchCell (needs a 1px ring to stay
+// visible against the popover background).
 function swatchFillStyle(token: ColorToken): CSSProperties {
-  if (token === 'default') {
-    return {
-      backgroundImage:
-        'linear-gradient(to right, hsl(var(--primary)) 0%, hsl(var(--primary)) 50%, hsl(var(--card)) 50%, hsl(var(--card)) 100%)',
-    };
-  }
+  if (token === 'default') return { backgroundColor: 'hsl(var(--card))' };
   return { backgroundColor: COLOR_TOKENS[token].edge };
 }
 
@@ -898,6 +900,7 @@ function SwatchCell({
   ariaLabel: string;
 }) {
   const isNone = token === 'none';
+  const isWhite = token === 'white';
   return (
     <button
       type="button"
@@ -910,6 +913,9 @@ function SwatchCell({
       className={cn(
         'sf:relative sf:flex sf:h-5 sf:w-5 sf:items-center sf:justify-center sf:rounded-full sf:transition-all',
         isNone && 'sf:border sf:border-border sf:bg-card',
+        // White needs a 1px border to read against the popover background;
+        // without it the swatch would look like an empty slot.
+        isWhite && 'sf:border sf:border-border',
         isActive
           ? 'sf:ring-2 sf:ring-ring sf:ring-offset-1 sf:ring-offset-popover'
           : 'sf:hover:scale-110',
@@ -920,7 +926,7 @@ function SwatchCell({
       {isActive && !isNone ? (
         <Check
           className="sf:h-2.5 sf:w-2.5 sf:drop-shadow-sm"
-          style={{ color: 'hsl(var(--foreground))' }}
+          style={{ color: isWhite ? 'hsl(0, 0%, 30%)' : 'hsl(var(--foreground))' }}
         />
       ) : null}
     </button>
@@ -1043,7 +1049,7 @@ function ColorSwatchGrid({
       data-testid={testId}
       data-active-token={activeToken}
       data-inner-testid={innerTestId}
-      className="sf:grid sf:grid-cols-6 sf:gap-1"
+      className="sf:grid sf:grid-cols-6 sf:gap-2 sf:p-1"
     >
       {tokens.map((token) => (
         <SwatchCell
