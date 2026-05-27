@@ -1187,7 +1187,15 @@ export function DemoView({
         for (const f of connResults) {
           if (f !== null) failures.push(f);
         }
-        if (failures.length > 0 && failures[0] !== undefined) setEditError(failures[0]);
+        // Mirror onDeleteNode's `.catch(dropUndoTop)` shape: if ANY leg
+        // rejected, the optimistic state for failed legs has already been
+        // reverted above — now drop the poisoned undo entry so Cmd+Z doesn't
+        // try to recreate nodes that may still exist server-side. Fires ONCE
+        // per partial-failure event regardless of how many legs rejected.
+        if (failures.length > 0) {
+          dropUndoTop();
+          if (failures[0] !== undefined) setEditError(failures[0]);
+        }
       })();
     },
     [
@@ -1202,6 +1210,7 @@ export function DemoView({
       unmarkConnectorDeleted,
       unmarkConnectorsDeleted,
       pushUndo,
+      dropUndoTop,
       markMutation,
     ],
   );
