@@ -34,6 +34,12 @@ export interface NodeVisual {
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
   textColor?: ColorToken;
+  /**
+   * Horizontal alignment for the node's text content. Defaults to `'center'`
+   * at render time when unset (most node labels read better centered); the
+   * toolbar's Align toggle persists explicit picks via this field.
+   */
+  textAlign?: 'left' | 'center' | 'right';
   cornerRadius?: number;
   /** Elevation level 0–5; renders as `var(--node-shadow-N)`. */
   shadow?: number;
@@ -130,6 +136,7 @@ export const CANVAS_NODE_DATA_FIELDS = {
   borderStyle: true,
   fontSize: true,
   textColor: true,
+  textAlign: true,
   cornerRadius: true,
   shadow: true,
   // capabilities

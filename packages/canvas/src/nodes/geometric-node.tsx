@@ -262,9 +262,19 @@ function GeometricNodeImpl({
     ...shapeChromeStyle(shape, data),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
   };
+  // Text-shape only: the toolbar's Align toggle persists explicit picks via
+  // `data.textAlign`; the fresh-text default is `'center'` since a chromeless
+  // text node sits in a centered flex container and the previous
+  // shrink-to-content button made multi-line text appear left-aligned. Other
+  // shapes (sticky / ellipse / header-body rectangle) keep their existing
+  // class-driven defaults unless the user explicitly picks an alignment via
+  // the strip's Align toggle.
+  const resolvedTextAlign: 'left' | 'center' | 'right' | undefined =
+    data.textAlign ?? (isText ? 'center' : undefined);
   const labelFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...textColorStyle,
+    ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
   const style: CSSProperties = sized
     ? colorStyle
@@ -378,6 +388,7 @@ function GeometricNodeImpl({
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...textColorStyle,
+    ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
 
   let singleLabelContent: ReactNode;
@@ -398,7 +409,7 @@ function GeometricNodeImpl({
         <button
           type="button"
           className={cn(
-            'sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
+            'sf:relative sf:block sf:w-full sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
             hasDescription ? 'break-words' : 'sf:italic sf:text-muted-foreground/40',
           )}
           style={descriptionFontStyle}
@@ -423,7 +434,7 @@ function GeometricNodeImpl({
         <button
           type="button"
           className={cn(
-            'sf:relative sf:block sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
+            'sf:relative sf:block sf:w-full sf:whitespace-pre-wrap sf:bg-transparent sf:p-0 sf:font-medium sf:leading-tight',
             data.name ? 'break-words' : 'sf:text-muted-foreground/40 sf:italic',
           )}
           style={labelFontStyle}

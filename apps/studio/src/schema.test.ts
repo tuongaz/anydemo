@@ -2675,6 +2675,7 @@ const STRIPPED_VISUAL_FIELDS = new Set([
   'borderStyle',
   'fontSize',
   'textColor',
+  'textAlign',
   'cornerRadius',
   'shadow',
 ]);

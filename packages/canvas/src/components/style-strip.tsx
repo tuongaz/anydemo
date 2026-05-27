@@ -1,4 +1,7 @@
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   ArrowLeftRight,
   ArrowRight,
   Check,
@@ -44,6 +47,9 @@ export interface NodeStylePatch {
    * foreground when unset. Text shapes also fall back to `borderColor` for
    * backward compat with older demos that stored their text color there. */
   textColor?: ColorToken;
+  /** Horizontal alignment for the node's text content. Defaults to `'center'`
+   * at render time when unset. */
+  textAlign?: 'left' | 'center' | 'right';
   cornerRadius?: number;
   /** Elevation level 0–5; maps to `var(--node-shadow-N)` at render time. */
   shadow?: number;
@@ -158,6 +164,20 @@ const CONNECTOR_STYLE_OPTIONS: IconToggleOption<ConnectorStyle>[] = [
 const PATH_OPTIONS: IconToggleOption<ConnectorPath>[] = [
   { value: 'curve', icon: PathCurveIcon, label: 'Curve', testId: 'style-tab-edge-path-curve' },
   { value: 'step', icon: PathStepIcon, label: 'Zigzag', testId: 'style-tab-edge-path-step' },
+];
+
+type TextAlign = 'left' | 'center' | 'right';
+
+// Default alignment when a node has no explicit `textAlign` set yet. Most
+// node labels read better centered (the canvas's text shape, sticky body,
+// rectangle single-label layout all sit in a centered flex container), so
+// `'center'` is the friendlier seed for the toolbar toggle.
+const DEFAULT_TEXT_ALIGN: TextAlign = 'center';
+
+const TEXT_ALIGN_OPTIONS: IconToggleOption<TextAlign>[] = [
+  { value: 'left', icon: AlignLeft, label: 'Left', testId: 'style-tab-text-align-left' },
+  { value: 'center', icon: AlignCenter, label: 'Center', testId: 'style-tab-text-align-center' },
+  { value: 'right', icon: AlignRight, label: 'Right', testId: 'style-tab-text-align-right' },
 ];
 
 const DIRECTION_OPTIONS: IconToggleOption<ConnectorDirection>[] = [
@@ -296,6 +316,22 @@ export function StyleStrip({
   const textColorActive: ColorToken =
     firstVisualNode?.data.textColor ??
     (isTextShape ? (firstVisualNode?.data.borderColor ?? 'default') : 'default');
+  // Text alignment fan-out. Mirrors the textColor apply path so multi-node
+  // selections commit through the atomic batch API when available, falling
+  // back to the per-node loop otherwise. Active value defaults to
+  // DEFAULT_TEXT_ALIGN (center) when unset so the toggle reads "Center" out
+  // of the box rather than the browser's left-aligned native default.
+  const applyTextAlign = (align: TextAlign) => {
+    if (nodes.length > 1 && onStyleNodes) {
+      onStyleNodes(
+        nodes.map((node) => node.id),
+        { textAlign: align },
+      );
+    } else {
+      for (const node of nodes) onStyleNode(node.id, { textAlign: align });
+    }
+  };
+  const textAlignActive: TextAlign = firstVisualNode?.data.textAlign ?? DEFAULT_TEXT_ALIGN;
   // US-018: per-connector label font size. Fan-out + indeterminate handling
   // mirror the node fontSize fan-out above.
   const applyConnectorFontSize = (n: number) => {
@@ -794,6 +830,16 @@ export function StyleStrip({
                     ariaLabel="text color"
                     allowNone={false}
                     onSelect={applyTextColor}
+                  />
+                </PopoverSection>
+              ) : null}
+              {hasNodes ? (
+                <PopoverSection label="Align" testId="style-strip-text-align">
+                  <IconToggleGroup<TextAlign>
+                    ariaLabel="Text alignment"
+                    value={textAlignActive}
+                    onChange={applyTextAlign}
+                    options={TEXT_ALIGN_OPTIONS}
                   />
                 </PopoverSection>
               ) : null}

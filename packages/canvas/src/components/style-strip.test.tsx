@@ -557,3 +557,76 @@ describe('StyleStrip — corners + shadow popovers', () => {
     expect(onStyleNode).toHaveBeenCalledWith('i1', { shadow: 2 });
   });
 });
+
+// Align is the third section of the Text popover (next to Size + Color).
+// Lets the user pick left / center / right for a node's text; persists via
+// the textAlign field on NodeStylePatch. Toggle defaults to 'center' when
+// the selected node has no explicit textAlign set yet.
+describe('StyleStrip — text alignment toggle', () => {
+  function textFixture(id: string, data: Record<string, unknown> = {}): FlowNode {
+    return {
+      id,
+      type: 'text',
+      position: { x: 0, y: 0 },
+      data,
+    } as FlowNode;
+  }
+
+  function findAlignToggle(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-text-align'));
+    if (!section) throw new Error('text-align section missing');
+    const toggle = findElement(section, (el) => {
+      const p = el.props as { ariaLabel?: string };
+      return p.ariaLabel === 'Text alignment';
+    });
+    if (!toggle) throw new Error('text-align toggle missing');
+    return toggle;
+  }
+
+  it('renders the Align section in the Text popover for a node selection', () => {
+    const tree = callStrip({ nodes: [textFixture('t1')] });
+    expect(findElement(tree, testIdEquals('style-strip-text-align'))).not.toBeNull();
+  });
+
+  it("defaults to 'center' when data.textAlign is unset", () => {
+    const tree = callStrip({ nodes: [textFixture('t1')] });
+    const toggle = findAlignToggle(tree);
+    expect((toggle.props as { value?: string }).value).toBe('center');
+  });
+
+  it('reflects an explicit data.textAlign as the active value', () => {
+    const tree = callStrip({ nodes: [textFixture('t1', { textAlign: 'right' })] });
+    const toggle = findAlignToggle(tree);
+    expect((toggle.props as { value?: string }).value).toBe('right');
+  });
+
+  it("picking 'left' dispatches onStyleNode with { textAlign: 'left' }", () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [textFixture('t1')], onStyleNode });
+    const toggle = findAlignToggle(tree);
+    (toggle.props as { onChange: (v: 'left' | 'center' | 'right') => void }).onChange('left');
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('t1', { textAlign: 'left' });
+  });
+
+  it('fans the pick out via onStyleNodes when a multi-node selection has the batch API', () => {
+    const onStyleNodes = mock(() => {});
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({
+      nodes: [textFixture('t1'), textFixture('t2', { textAlign: 'left' })],
+      onStyleNode,
+      onStyleNodes,
+    });
+    const toggle = findAlignToggle(tree);
+    (toggle.props as { onChange: (v: 'left' | 'center' | 'right') => void }).onChange('center');
+    expect(onStyleNodes).toHaveBeenCalledTimes(1);
+    expect(onStyleNodes).toHaveBeenCalledWith(['t1', 't2'], { textAlign: 'center' });
+    expect(onStyleNode).not.toHaveBeenCalled();
+  });
+
+  it('does NOT render the Align section for a pure-connector selection (no node to align)', () => {
+    const cn: Connector = { id: 'c1', source: 'a', target: 'b' } as Connector;
+    const tree = callStrip({ nodes: [], connectors: [cn] });
+    expect(findElement(tree, testIdEquals('style-strip-text-align'))).toBeNull();
+  });
+});

@@ -48,6 +48,10 @@ const NodeVisualBaseShape = {
   borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
   fontSize: z.number().positive().optional(),
   textColor: ColorTokenSchema.optional(),
+  // Horizontal alignment for the node's text content. Defaults to 'center'
+  // at render time when omitted; explicit picks from the toolbar's Align
+  // toggle persist here.
+  textAlign: z.enum(['left', 'center', 'right']).optional(),
   cornerRadius: z.number().min(0).optional(),
   // Theme-aware elevation level (0 = none, 5 = deepest). Undefined preserves
   // each renderer's baseline shadow (e.g. rectangle: sf:shadow-sm); explicit
@@ -708,6 +712,7 @@ const NodeStyleSchema = z
     borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
     fontSize: z.number().positive().optional(),
     textColor: ColorTokenSchema.optional(),
+    textAlign: z.enum(['left', 'center', 'right']).optional(),
     cornerRadius: z.number().min(0).optional(),
     shadow: z.number().int().min(0).max(5).optional(),
     // type:'image'-specific
