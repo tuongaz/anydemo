@@ -140,7 +140,6 @@ export interface DemoViewProps {
    */
   statusByNode: NodeStatuses;
   onPlayNode: (nodeId: string) => void;
-  onRestartDemo?: () => Promise<unknown>;
   /** US-031: refresh the global demos list. Called after flow CRUD so the
    *  navigation lands on a page that resolves through `demos.find(...)`. */
   refreshFlows: () => Promise<void> | void;
@@ -157,7 +156,6 @@ export function DemoView({
   nodeEvents,
   statusByNode,
   onPlayNode,
-  onRestartDemo,
   refreshFlows,
 }: DemoViewProps) {
   const summary = demos.find((d) => d.slug === slug);
@@ -201,10 +199,6 @@ export function DemoView({
   const onDeleteSelectionRef = useRef<((nodeIds: string[], connIds: string[]) => void) | null>(
     null,
   );
-  // Bridge for `runCommand` (defined above the session helper) so the new
-  // palette entry can invoke it without re-ordering the file. Same pattern as
-  // `onDeleteSelectionRef` above.
-  const onRestartDemoRef = useRef<(() => Promise<unknown>) | null>(null);
   // US-015: imperative handle on the in-canvas ShareMenu / export workflow.
   // The canvas owns capture (fit-view + snapshot + restore) and dispatches
   // PDF/PNG downloads internally; the studio reaches in through this ref for
@@ -2593,10 +2587,6 @@ export function DemoView({
           canvasRef.current?.exportPng();
           return;
         }
-        case 'session.reset': {
-          onRestartDemoRef.current?.();
-          return;
-        }
       }
     },
     [
@@ -2635,13 +2625,6 @@ export function DemoView({
   // `useCanvasExport` in @seeflow/canvas). The studio reaches in through
   // `canvasRef` for the command-palette entries above; the in-canvas
   // ShareMenu handles user-driven clicks directly.
-
-  // Keep the dispatcher's ref pointed at the latest closure so the palette
-  // entry routes to the current implementation without rebuilding
-  // `runCommand` on every render.
-  useEffect(() => {
-    onRestartDemoRef.current = onRestartDemo ?? null;
-  }, [onRestartDemo]);
 
   // Drag an edge endpoint onto another node's handle to retarget it, OR drag
   // it onto a different handle on the same node (US-002). The patch only
@@ -2973,11 +2956,11 @@ export function DemoView({
         </div>
       ) : null}
 
-      {/* US-024: the FlowSwitcher itself is now mounted via SeeflowCanvas's
-          topLeftSlot (US-037) so it shares the toolbar's flex flex-col gap-2
-          Panel column instead of overlapping it. Only the dialog siblings stay
-          here — they portal to document.body via Radix Dialog and don't need
-          to live inside the canvas. */}
+      {/* US-024: the FlowSwitcher itself is mounted via SeeflowCanvas's
+          topRightSlot so it sits to the LEFT of the ShareMenu in the canvas's
+          top-right action cluster. Only the dialog siblings stay here — they
+          portal to document.body via Radix Dialog and don't need to live
+          inside the canvas. */}
       <FlowCreateDialog
         open={flowCreateOpen}
         onOpenChange={setFlowCreateOpen}
@@ -3036,11 +3019,11 @@ export function DemoView({
           ref={canvasRef}
           mode="edit"
           adapter={adapter}
-          // US-037: the FlowSwitcher rides inside the canvas's top-left Panel
-          // (stacked above the toolbar via `sf:flex sf:flex-col sf:gap-2`) so
-          // the two affordances never overlap. Dialog siblings remain in
+          // The FlowSwitcher rides inside the canvas's top-right Panel,
+          // sitting to the LEFT of the ShareMenu in the same `sf:flex
+          // sf:items-center sf:gap-1` row. Dialog siblings remain in
           // demo-view because Radix portals them to document.body.
-          topLeftSlot={
+          topRightSlot={
             <FlowSwitcher
               project={project}
               activeFlow={flow}
@@ -3080,7 +3063,6 @@ export function DemoView({
           flowSlug={flow}
           enableEmbed={false}
           onExportToCloud={flowId ? () => setExportDialogOpen(true) : undefined}
-          onRestartDemo={onRestartDemo}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
           selectedNodeIds={selectedIds}
@@ -3178,11 +3160,9 @@ export function DemoView({
           canUndo,
           canRedo,
           hasClipboard,
-          // Export/restart commands need a backing demo. flowId is non-null
-          // whenever the canvas can render; `onRestartDemo` is optional on the
-          // props and falls back to false when the parent didn't supply it.
+          // Export commands need a backing demo. flowId is non-null whenever
+          // the canvas can render.
           canExportDemo: Boolean(flowId),
-          canResetSession: Boolean(onRestartDemo),
         }}
       />
 
