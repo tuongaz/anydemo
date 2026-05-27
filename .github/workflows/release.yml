@@ -178,30 +178,43 @@ jobs:
           tag="${tag#v}"
           tmp=$(mktemp -d)
           trap 'rm -rf "$tmp"' EXIT
-          for attempt in 1 2 3 4 5; do
-            echo "Smoke attempt ${attempt}: npm install @tuongaz/seeflow@${tag}"
-            # Drop --silent so npm's error output (404s, auth failures,
-            # propagation lag, etc.) lands in the job log instead of being
-            # swallowed — the loop is short enough that the extra logs are
-            # cheaper than another silent-fail debug round-trip.
-            install_out=$(cd "$tmp" && npm install --no-fund --no-audit "@tuongaz/seeflow@${tag}" 2>&1)
-            install_status=$?
-            if [ $install_status -ne 0 ]; then
-              echo "$install_out" >&2
-              sleep $((attempt * 10))
-              continue
+
+          # Phase 1 — wait for the published version to appear in the registry
+          # listing. `npm install <pkg>@<ver>` short-circuits to ETARGET if the
+          # CDN hasn't seen the new version yet (observed taking >2.5min after
+          # publish), so checking with `npm view` first separates propagation
+          # waiting from real install failures.
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            seen=$(npm view "@tuongaz/seeflow@${tag}" version 2>/dev/null | tail -n1)
+            if [ "$seen" = "$tag" ]; then
+              echo "Registry serves ${tag} (attempt ${attempt})"
+              break
             fi
-            run_out=$("$tmp/node_modules/.bin/seeflow" version 2>&1 | tail -n1)
-            echo "seeflow version => $run_out"
-            if [ "$run_out" = "$tag" ]; then
-              echo "Smoke OK — installed version matches ${tag}"
-              exit 0
+            echo "Registry hasn't picked up ${tag} yet (attempt ${attempt}); sleeping 30s"
+            if [ "$attempt" -eq 10 ]; then
+              echo "Registry never returned ${tag} after 5min of polling" >&2
+              exit 1
             fi
-            echo "Version mismatch: expected ${tag}, got ${run_out}" >&2
-            sleep $((attempt * 10))
+            sleep 30
           done
-          echo "Smoke test failed after retries" >&2
-          exit 1
+
+          # Phase 2 — actually install + invoke the bin. With propagation
+          # confirmed above, any failure here is a real packaging regression,
+          # so a single attempt with full error output is enough.
+          install_out=$(cd "$tmp" && npm install --no-fund --no-audit "@tuongaz/seeflow@${tag}" 2>&1)
+          install_status=$?
+          if [ $install_status -ne 0 ]; then
+            echo "$install_out" >&2
+            echo "Smoke install failed for ${tag}" >&2
+            exit 1
+          fi
+          run_out=$("$tmp/node_modules/.bin/seeflow" version 2>&1 | tail -n1)
+          echo "seeflow version => $run_out"
+          if [ "$run_out" != "$tag" ]; then
+            echo "Version mismatch: expected ${tag}, got ${run_out}" >&2
+            exit 1
+          fi
+          echo "Smoke OK — installed version matches ${tag}"
 
       - name: Summary
         env:
