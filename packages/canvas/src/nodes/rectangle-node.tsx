@@ -74,6 +74,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
+    ...(data.textAlign !== undefined ? { textAlign: data.textAlign } : {}),
   };
 
   // When data.shadow is set, the renderer paints `var(--node-shadow-N)`
@@ -153,6 +154,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           selected={selected}
           fontSize={data.fontSize}
           textColor={data.textColor}
+          textAlign={data.textAlign}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}
           trailing={
@@ -193,7 +195,8 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           <button
             type="button"
             className={cn(
-              'sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:text-[18px] sf:text-muted-foreground',
+              'sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-[18px] sf:text-muted-foreground',
+              data.textAlign === undefined ? 'sf:text-left' : '',
               descEditable ? 'sf:hover:opacity-80' : '',
             )}
             style={descriptionFontStyle}

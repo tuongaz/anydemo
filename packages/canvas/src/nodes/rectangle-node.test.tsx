@@ -248,3 +248,47 @@ describe('RectangleNode shadow elevation', () => {
     expect(className).not.toContain('sf:shadow-sm');
   });
 });
+
+// The Align toggle on the style strip writes data.textAlign; the rectangle
+// renderer must (a) thread it into NodeHeader so the title aligns, (b) bake
+// it into descriptionFontStyle so the body button aligns, and (c) drop the
+// hardcoded `sf:text-left` class once an explicit alignment is set (otherwise
+// the class wins regardless of the inline style). Earlier fix only touched
+// geometric-node.tsx, leaving rectangles unaligned — this fence guards that.
+describe('RectangleNode textAlign fan-out', () => {
+  function findDescButton(tree: unknown): ReactElementLike {
+    const buttons = findAll(tree, (el) => {
+      if (el.type !== 'button') return false;
+      const cls = (el.props as { className?: string }).className ?? '';
+      return cls.includes('sf:text-muted-foreground');
+    });
+    if (!buttons[0]) throw new Error('description button missing');
+    return buttons[0];
+  }
+
+  it('passes data.textAlign to NodeHeader', () => {
+    const tree = callRectangleNode({ name: 'svc', textAlign: 'right' });
+    const header = findByComponentName(tree, 'NodeHeader')[0];
+    if (!header) throw new Error('NodeHeader missing');
+    expect((header.props as { textAlign?: string }).textAlign).toBe('right');
+  });
+
+  it('applies data.textAlign to the description button inline style', () => {
+    const tree = callRectangleNode({ name: 's', description: 'body', textAlign: 'center' });
+    const desc = findDescButton(tree);
+    const style = (desc.props as { style?: Record<string, string> }).style ?? {};
+    expect(style.textAlign).toBe('center');
+  });
+
+  it('drops the hardcoded sf:text-left class once textAlign is set', () => {
+    const tree = callRectangleNode({ name: 's', description: 'body', textAlign: 'right' });
+    const cls = (findDescButton(tree).props as { className?: string }).className ?? '';
+    expect(cls).not.toContain('sf:text-left');
+  });
+
+  it('keeps sf:text-left when data.textAlign is undefined (back-compat default)', () => {
+    const tree = callRectangleNode({ name: 's', description: 'body' });
+    const cls = (findDescButton(tree).props as { className?: string }).className ?? '';
+    expect(cls).toContain('sf:text-left');
+  });
+});

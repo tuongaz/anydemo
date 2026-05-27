@@ -20,6 +20,8 @@ export interface NodeHeaderProps {
   fontSize?: number;
   /** Color-token name; resolved internally via colorTokenStyle. */
   textColor?: ColorToken;
+  /** Horizontal alignment for the title text; undefined leaves the default. */
+  textAlign?: 'left' | 'center' | 'right';
   /** When omitted, the title is read-only. */
   onNameChange?: (nodeId: string, name: string) => void;
   /** When omitted (or selected/icon falsy), the icon is read-only. */
@@ -37,6 +39,7 @@ export function NodeHeader({
   selected,
   fontSize,
   textColor,
+  textAlign,
   onNameChange,
   onIconChange,
   trailing,
@@ -52,6 +55,7 @@ export function NodeHeader({
   const labelFontStyle: CSSProperties = {
     ...(fontSize !== undefined ? { fontSize: `${fontSize}px` } : {}),
     ...colorTokenStyle(textColor, 'text'),
+    ...(textAlign !== undefined ? { textAlign } : {}),
   };
 
   const handleDoubleClick = nameEditable
