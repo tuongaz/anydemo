@@ -178,6 +178,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runRegister();
 } else if (sub === 'projects:create') {
   await runProjectsCreate();
+} else if (sub === 'projects:list') {
+  await runProjectsList();
 } else if (sub === 'flows:list') {
   await runFlowsList();
 } else if (sub === 'flows:summary') {
@@ -243,10 +245,11 @@ Usage:
 Commands (work without a running studio):
   start                Start the SeeFlow Studio server (default port 4321) — default when no command is given
   stop                 Stop a background studio instance
-  register             Register a demo repo, writing to ~/.seeflow/registry.json (alias of flows:register)
-  flows:register       Register a demo repo
+  register             Register a demo repo. Manifest-aware: when <repoPath>/seeflow.json exists, re-scans every declared flow; otherwise reads <repoPath>/<flow> (defaults to flow.json) as a single-flow project (alias of flows:register)
+  flows:register       Register a demo repo (manifest-aware — same behaviour as register)
   projects:create      Scaffold a new project (writes <path>/seeflow.json + <path>/flows/main/flow.json) — (--path <dir> --name <name> [--description <text>])
-  flows:list           List registered flows
+  projects:list        List every registered project with projectSlug, name, defaultFlow, flowCount
+  flows:list           List registered flows. With --project <p>, filters to one project (returns flowSlug, name, icon?, isDefault per flow)
   flows:summary        List registered flows (id + name + description only)
   flows:get            Get flow details (--project <p> --flow <f>)
   flows:graph          List nodes + connectors without inlined file content (--project <p> --flow <f>)
@@ -594,12 +597,24 @@ function isEsrch(err: unknown): boolean {
 
 async function runRegister() {
   const repoPath = resolve(flagValue('path') ?? '.');
-  const demoPathArg = flagValue('flow') ?? DEFAULT_FLOW_PATH;
 
+  // Manifest-aware path: if <repoPath>/seeflow.json is on disk, scan and
+  // upsert every declared flow in one shot.
+  if (existsSync(join(repoPath, 'seeflow.json'))) {
+    await runRegisterManifest(repoPath);
+    return;
+  }
+
+  // Legacy single-flow path: pre-manifest projects (and skill tests that
+  // exercise registerFlow directly) still pass a bare flow.json at the
+  // root. Read it, schema-validate, upsert one entry.
+  const demoPathArg = flagValue('flow') ?? DEFAULT_FLOW_PATH;
   const fullPath = isAbsolute(demoPathArg) ? demoPathArg : join(repoPath, demoPathArg);
   if (!existsSync(fullPath)) {
     console.error(`No demo file at ${fullPath}`);
-    console.error(`Create ${DEFAULT_FLOW_PATH} in your repo, or pass --flow <path>.`);
+    console.error(
+      `Create ${DEFAULT_FLOW_PATH} in your repo, or pass --flow <path>. For manifest-driven projects, place a seeflow.json at the repo root.`,
+    );
     process.exit(1);
   }
 
@@ -640,6 +655,48 @@ async function runRegister() {
     console.log(`Registered "${parsed.data.name}" → ${url}/d/${body.slug}`);
   } else {
     console.log(`Registered "${parsed.data.name}" (slug: ${body.slug})`);
+  }
+}
+
+async function runRegisterManifest(repoPath: string) {
+  const outcome = registerProject({ repoPath });
+  if (outcome.kind !== 'ok') {
+    switch (outcome.kind) {
+      case 'manifest-invalid':
+        console.error(`${join(repoPath, 'seeflow.json')} is invalid: ${outcome.message}`);
+        process.exit(2);
+        break;
+      case 'manifest-missing':
+        // Defensive — runRegister gated on existsSync, so this should not fire.
+        console.error(`No seeflow.json at ${repoPath}`);
+        process.exit(3);
+        break;
+      case 'legacy-root-flow':
+        console.error(
+          `${repoPath} has a legacy root flow.json but no seeflow.json. Migrate it into the new flows/<id>/ layout before re-registering.`,
+        );
+        process.exit(3);
+        break;
+      case 'flow-json-missing':
+        console.error(
+          `Manifest declares flow "${outcome.flowId}" but ${outcome.flowPath} is missing.`,
+        );
+        process.exit(3);
+        break;
+    }
+    process.exit(1);
+  }
+
+  const pid = readPid();
+  const live = pid !== undefined && isPidAlive(pid);
+  const overrideUrl = process.env.SEEFLOW_STUDIO_URL?.replace(/\/+$/, '');
+  const baseUrl = live ? (overrideUrl ?? studioUrl(readConfig())) : null;
+
+  for (const entry of outcome.entries) {
+    const tail = baseUrl
+      ? ` → ${baseUrl}/projects/${outcome.projectSlug}/flows/${entry.flowSlug}`
+      : ` (slug: ${entry.slug})`;
+    console.log(`Registered "${entry.name}"${tail}`);
   }
 }
 
@@ -709,8 +766,21 @@ async function runProjectsCreate() {
 
 async function runFlowsList() {
   const ops = createCliOperations();
+  const project = flagValue('project');
+  if (project) {
+    const result = ops.listFlowsByProject(project);
+    if (result.kind !== 'ok') printOutcome(result);
+    printOk({ projectSlug: result.data.projectSlug, flows: result.data.flows });
+    return;
+  }
   const result = ops.listFlows();
   printOk({ flows: result.data });
+}
+
+function runProjectsList() {
+  const ops = createCliOperations();
+  const result = ops.listProjects();
+  printOk({ projects: result.data });
 }
 
 async function runFlowsSummary() {

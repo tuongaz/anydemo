@@ -56,6 +56,7 @@ describe('EXIT_CODE_BY_KIND', () => {
       badJq: 2,
       notFound: 3,
       flowNotFound: 3,
+      projectNotFound: 3,
       fileNotFound: 3,
       unknownNode: 3,
       unknownConnector: 3,

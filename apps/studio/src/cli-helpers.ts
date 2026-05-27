@@ -92,6 +92,8 @@ function describeOutcome(outcome: { kind: string } & Record<string, unknown>): s
     case 'notFound':
     case 'flowNotFound':
       return 'not found';
+    case 'projectNotFound':
+      return `Unknown project: ${String(outcome.projectSlug ?? '')}`;
     case 'fileNotFound':
       return `Flow file not found: ${String(outcome.path ?? '')}`;
     case 'unknownNode':
@@ -139,6 +141,7 @@ export const EXIT_CODE_BY_KIND: Record<string, number> = {
   badJq: 2,
   notFound: 3,
   flowNotFound: 3,
+  projectNotFound: 3,
   fileNotFound: 3,
   unknownNode: 3,
   unknownConnector: 3,

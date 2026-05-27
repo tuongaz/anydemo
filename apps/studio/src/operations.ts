@@ -22,8 +22,8 @@ import {
   removeNodeDir,
   writeNodeFile,
 } from './node-files.ts';
-import { scanProject } from './project-scanner.ts';
-import { type Registry, slugify } from './registry.ts';
+import { readProjectManifest, scanProject } from './project-scanner.ts';
+import { type FlowEntry, type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
   ComponentSpecSchema,
@@ -403,6 +403,31 @@ export interface CreateProjectSuccess {
 }
 
 export type ListFlowsOutcome = { kind: 'ok'; data: FlowListItem[] };
+
+export interface ProjectListItem {
+  projectSlug: string;
+  name: string;
+  description?: string;
+  defaultFlow: string;
+  flowCount: number;
+  repoPath: string;
+}
+
+export type ListProjectsOutcome = { kind: 'ok'; data: ProjectListItem[] };
+
+export interface ProjectFlowListItem {
+  id: string;
+  slug: string;
+  flowSlug: string;
+  name: string;
+  icon?: string;
+  isDefault: boolean;
+  valid: boolean;
+}
+
+export type ListFlowsByProjectOutcome =
+  | { kind: 'ok'; data: { projectSlug: string; flows: ProjectFlowListItem[] } }
+  | { kind: 'projectNotFound'; projectSlug: string };
 
 // Minimal projection for agent/CLI discovery — `description` and `name` come
 // from the live watcher snapshot when available so author edits to flow.json
@@ -949,6 +974,52 @@ export function listDemosImpl(deps: OperationsDeps): ListFlowsOutcome {
     };
   });
   return { kind: 'ok', data };
+}
+
+export function listProjectsImpl(deps: OperationsDeps): ListProjectsOutcome {
+  const grouped = new Map<string, FlowEntry[]>();
+  for (const entry of deps.registry.list()) {
+    const existing = grouped.get(entry.projectSlug);
+    if (existing) existing.push(entry);
+    else grouped.set(entry.projectSlug, [entry]);
+  }
+  const data: ProjectListItem[] = [];
+  for (const [projectSlug, entries] of grouped) {
+    const head = entries[0];
+    if (!head) continue;
+    const manifest = readProjectManifest(head.repoPath);
+    const defaultEntry = entries.find((e) => e.isDefault) ?? head;
+    data.push({
+      projectSlug,
+      name: manifest?.name ?? projectSlug,
+      ...(manifest?.description !== undefined ? { description: manifest.description } : {}),
+      defaultFlow: manifest?.defaultFlow ?? defaultEntry.flowSlug,
+      flowCount: entries.length,
+      repoPath: head.repoPath,
+    });
+  }
+  return { kind: 'ok', data };
+}
+
+export function listFlowsByProjectImpl(
+  deps: OperationsDeps,
+  projectSlug: string,
+): ListFlowsByProjectOutcome {
+  const entries = deps.registry.list().filter((e) => e.projectSlug === projectSlug);
+  if (entries.length === 0) return { kind: 'projectNotFound', projectSlug };
+  const flows: ProjectFlowListItem[] = entries.map((e) => {
+    const fileExists = existsSync(resolveFilePath(e.repoPath, e.flowPath));
+    return {
+      id: e.id,
+      slug: e.slug,
+      flowSlug: e.flowSlug,
+      name: e.name,
+      ...(e.icon !== undefined ? { icon: e.icon } : {}),
+      isDefault: e.isDefault,
+      valid: e.valid && fileExists,
+    };
+  });
+  return { kind: 'ok', data: { projectSlug, flows } };
 }
 
 export function listFlowsSummaryImpl(deps: OperationsDeps): ListFlowsSummaryOutcome {
@@ -1899,6 +1970,8 @@ export async function applyLayoutImpl(
 export interface Operations {
   listFlows(): ReturnType<typeof listDemosImpl>;
   listFlowsSummary(): ReturnType<typeof listFlowsSummaryImpl>;
+  listProjects(): ReturnType<typeof listProjectsImpl>;
+  listFlowsByProject(projectSlug: string): ReturnType<typeof listFlowsByProjectImpl>;
   getFlow(id: string): ReturnType<typeof getFlowImpl>;
   getFlowGraph(id: string): ReturnType<typeof getFlowGraphImpl>;
   getNode(flowId: string, nodeId: string): ReturnType<typeof getNodeImpl>;
@@ -1946,6 +2019,8 @@ export function createOperations(deps: OperationsDeps): Operations {
   return {
     listFlows: () => listDemosImpl(deps),
     listFlowsSummary: () => listFlowsSummaryImpl(deps),
+    listProjects: () => listProjectsImpl(deps),
+    listFlowsByProject: (projectSlug) => listFlowsByProjectImpl(deps, projectSlug),
     getFlow: (id) => getFlowImpl(deps, id),
     getFlowGraph: (id) => getFlowGraphImpl(deps, id),
     getNode: (flowId, nodeId) => getNodeImpl(deps, flowId, nodeId),

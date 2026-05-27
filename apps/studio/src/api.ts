@@ -29,6 +29,7 @@ import {
   writeFileAtomic,
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
+import { readProjectManifest } from './project-scanner.ts';
 import {
   type PlayResult,
   type ResetResult,
@@ -48,7 +49,7 @@ import {
   schemaCategoryNames,
 } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
-import { FlowIdPattern, FlowSchema, ResolvedFlowSchema, SeeflowManifestSchema } from './schema.ts';
+import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -167,22 +168,6 @@ function resolveProjectFile(
   }
 
   return { kind: 'ok', absPath: realTarget, projectRoot: realRoot };
-}
-
-// Read + validate `<repoPath>/seeflow.json` for the project listing routes.
-// Returns `null` for missing or malformed manifests so callers can fall back
-// to derived defaults (projectSlug + isDefault entry) instead of failing the
-// whole listing on one bad project.
-function readProjectManifest(repoPath: string): SeeflowManifest | null {
-  const manifestPath = join(repoPath, 'seeflow.json');
-  if (!existsSync(manifestPath)) return null;
-  try {
-    const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
-    const parsed = SeeflowManifestSchema.safeParse(raw);
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
-  }
 }
 
 // Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the

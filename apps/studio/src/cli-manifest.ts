@@ -133,9 +133,10 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     name: 'register',
     synopsis: 'seeflow register [--path <dir>] [--flow <file>]',
     description:
-      'Register a demo repo with the studio. Reads <repoPath>/<flow> (defaulting ' +
-      'to ./flow.json), validates the schema, and writes an entry to ' +
-      '~/.seeflow/registry.json. Alias of flows:register.',
+      'Register a demo repo with the studio. Manifest-aware: when <repoPath>/seeflow.json ' +
+      'exists, scans every declared flow under flows/<id>/flow.json and upserts one entry ' +
+      'per flow. Otherwise reads <repoPath>/<flow> (defaulting to ./flow.json) as a ' +
+      'single-flow project. Writes to ~/.seeflow/registry.json. Alias of flows:register.',
     category: 'flows',
     args: [],
     flags: [
@@ -143,20 +144,25 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'flow',
         valuePlaceholder: '<file>',
-        description: 'Path to flow.json relative to repo root (default: flow.json)',
+        description:
+          'Path to flow.json relative to repo root (default: flow.json). Ignored when seeflow.json exists.',
       },
     ],
     outputs: {
       okExample: { id: 'abc12345', slug: 'checkout' },
-      errorKinds: ['fileNotFound', 'badJson', 'badSchema'],
+      errorKinds: ['fileNotFound', 'badJson', 'badSchema', 'manifestInvalid'],
     },
     requiresStudio: false,
-    examples: ['seeflow register', 'seeflow register --path ./my-app'],
+    examples: [
+      'seeflow register',
+      'seeflow register --path ./my-app',
+      'seeflow register --path ./checkout  # manifest-aware re-scan',
+    ],
   },
   {
     name: 'flows:register',
     synopsis: 'seeflow flows:register [--path <dir>] [--flow <file>]',
-    description: 'Register a demo repo. Identical behaviour to `register`.',
+    description: 'Register a demo repo. Identical behaviour to `register` (manifest-aware).',
     category: 'flows',
     args: [],
     flags: [
@@ -164,27 +170,40 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'flow',
         valuePlaceholder: '<file>',
-        description: 'Path to flow.json relative to repo root (default: flow.json)',
+        description:
+          'Path to flow.json relative to repo root (default: flow.json). Ignored when seeflow.json exists.',
       },
     ],
     body: { schemaRef: 'RegisterBody' },
     outputs: {
       okExample: { id: 'abc12345', slug: 'checkout' },
-      errorKinds: ['fileNotFound', 'badJson', 'badSchema'],
+      errorKinds: ['fileNotFound', 'badJson', 'badSchema', 'manifestInvalid'],
     },
     requiresStudio: false,
     examples: ['seeflow flows:register --path ./my-app'],
   },
   {
     name: 'flows:list',
-    synopsis: 'seeflow flows:list',
-    description: 'List every registered flow with id, slug, name, repoPath, and valid flag.',
+    synopsis: 'seeflow flows:list [--project <p>]',
+    description:
+      'List every registered flow with id, slug, name, repoPath, and valid flag. With ' +
+      '--project <p>, filters to one project and returns { projectSlug, flows: [{ flowSlug, ' +
+      'name, icon?, isDefault, valid }] }.',
     category: 'flows',
     args: [],
-    flags: [],
-    outputs: { okExample: { flows: [{ id: 'abc12345', slug: 'checkout', name: 'Checkout' }] } },
+    flags: [
+      {
+        name: 'project',
+        valuePlaceholder: '<p>',
+        description: 'Project slug — filters output to flows under this project',
+      },
+    ],
+    outputs: {
+      okExample: { flows: [{ id: 'abc12345', slug: 'checkout', name: 'Checkout' }] },
+      errorKinds: ['projectNotFound'],
+    },
     requiresStudio: false,
-    examples: ['seeflow flows:list'],
+    examples: ['seeflow flows:list', 'seeflow flows:list --project order-pipeline'],
   },
   {
     name: 'flows:summary',
@@ -487,6 +506,33 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     examples: [
       'seeflow projects:create --path ./checkout --name "Checkout" --description "Cart + payments flow"',
     ],
+  },
+  {
+    name: 'projects:list',
+    synopsis: 'seeflow projects:list',
+    description:
+      'List every registered project: groups the registry by projectSlug and reads each ' +
+      'seeflow.json for the human-readable name + defaultFlow. Falls back to the ' +
+      "projectSlug and the registry's isDefault entry when a manifest is missing or " +
+      'malformed, so a partially-broken project still surfaces.',
+    category: 'project',
+    args: [],
+    flags: [],
+    outputs: {
+      okExample: {
+        projects: [
+          {
+            projectSlug: 'checkout',
+            name: 'Checkout',
+            defaultFlow: 'main',
+            flowCount: 2,
+            repoPath: '/abs/path/to/.seeflow/checkout',
+          },
+        ],
+      },
+    },
+    requiresStudio: false,
+    examples: ['seeflow projects:list'],
   },
   // ---- nodes -------------------------------------------------------------
   {

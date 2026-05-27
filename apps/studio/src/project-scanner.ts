@@ -47,6 +47,24 @@ export type ScanResult =
 const MANIFEST_FILENAME = 'seeflow.json';
 const LEGACY_FLOW_FILENAME = 'flow.json';
 
+/**
+ * Best-effort manifest read for listing routes / CLI listing verbs.
+ * Returns `null` when the manifest is missing or malformed — callers fall
+ * back to derived defaults (projectSlug, isDefault entry) so one broken
+ * project does not collapse the whole listing.
+ */
+export function readProjectManifest(repoPath: string): SeeflowManifest | null {
+  const manifestPath = join(repoPath, MANIFEST_FILENAME);
+  if (!existsSync(manifestPath)) return null;
+  try {
+    const raw = JSON.parse(readFileSync(manifestPath, 'utf8'));
+    const parsed = SeeflowManifestSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
 export function scanProject(repoPath: string): ScanResult {
   const manifestPath = join(repoPath, MANIFEST_FILENAME);
   if (!existsSync(manifestPath)) {
