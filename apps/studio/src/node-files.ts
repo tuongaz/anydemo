@@ -8,16 +8,54 @@ import { writeFileAtomic } from './atomic-write.ts';
 // `flows/<flow-id>/nodes/<id>/`; for legacy single-flow fixtures with
 // `flowPath: 'flow.json'` it collapses to the project root. `nodeTypes` (when
 // present) scopes the spec entry to specific node types; absent means
-// "applies to every node type". Adding a future text field is one line.
+// "applies to every node type".
+//
+// Two flavors of externalization:
+// - `kind: 'ref'` (default) — write the file, replace `data[field]` with
+//   `file://<fileName>`. The ref survives splitFlow (the field is in
+//   NODE_DATA_FLOW_KEYS in merge.ts). Used by string fields like `detail`
+//   and `html`.
+// - `kind: 'sidecar'` — write the file, leave `data[field]` untouched on
+//   the in-memory node so the post-mutation parse still sees the original
+//   value. splitFlow drops the field from flow.json on write; the resolver
+//   inlines it from disk on read. Used by JSON fields like component `spec`.
+//
+// `serialize` turns the in-memory value into file contents. Returning `null`
+// skips the write entirely — used by `spec` to no-op when the caller didn't
+// supply one, instead of writing an empty file that would fail JSON parse
+// on the next read.
 export interface ExternalizedFieldSpec {
   field: string;
   fileName: string;
   nodeTypes?: readonly string[];
+  kind?: 'ref' | 'sidecar';
+  serialize?: (value: unknown) => string | null;
 }
+
+// Default serializer: strings pass through; non-strings coerce to empty.
+// Keeps the historical detail/html behavior — an absent detail still writes
+// an empty detail.md so the file:// ref points somewhere.
+export const defaultExternalizedSerializer = (value: unknown): string =>
+  typeof value === 'string' ? value : '';
+
+// JSON serializer for sidecar fields: pretty-print plain objects with a
+// trailing newline. Returns null for anything else so the loop can skip the
+// write rather than emit an invalid sidecar.
+const jsonExternalizedSerializer = (value: unknown): string | null =>
+  value !== null && typeof value === 'object' && !Array.isArray(value)
+    ? `${JSON.stringify(value, null, 2)}\n`
+    : null;
 
 export const EXTERNALIZED_NODE_FIELDS: readonly ExternalizedFieldSpec[] = [
   { field: 'detail', fileName: 'detail.md' },
   { field: 'html', fileName: 'view.html', nodeTypes: ['html'] },
+  {
+    field: 'spec',
+    fileName: 'spec.json',
+    nodeTypes: ['component'],
+    kind: 'sidecar',
+    serialize: jsonExternalizedSerializer,
+  },
 ];
 
 export const externalizedFieldsForNodeType = (

@@ -434,6 +434,100 @@ describe('patchNodeImpl + component spec sidecar (US-007)', () => {
   });
 });
 
+// addNodeImpl + addFlowBulkImpl must externalize data.spec on component nodes
+// to nodes/<id>/spec.json the same way patchNodeImpl does — otherwise creating
+// a component node with an inline spec leaves the studio in an unreadable
+// state (data.spec stripped from flow.json by splitFlow, sidecar never
+// written, resolver fails with "Missing spec file" on next read).
+describe('addNodeImpl + component spec sidecar', () => {
+  const spec = {
+    root: 'root',
+    elements: {
+      root: { type: 'Text', props: { text: 'inline' } },
+    },
+  };
+
+  it('writes nodes/<id>/spec.json when adding a component node with inline data.spec', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addNodeImpl(deps, flowId, {
+      id: 'c1',
+      type: 'component',
+      data: { spec },
+    });
+    expect(res.kind).toBe('ok');
+
+    const specAbs = nodeFileAbsPath(repoPath, '', 'c1', 'spec.json');
+    const onDisk = readFileSync(specAbs, 'utf8');
+    expect(JSON.parse(onDisk)).toEqual(spec);
+    expect(onDisk.endsWith('\n')).toBe(true);
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === 'c1');
+    expect(node).toBeDefined();
+    expect('spec' in node.data).toBe(false);
+
+    const reread = readMergedFlow(flowAbs);
+    expect(reread.valid).toBe(true);
+    if (!reread.valid || !reread.flow) throw new Error('expected valid round-trip');
+    const reNode = reread.flow.nodes[0];
+    if (reNode?.type !== 'component') throw new Error('expected component node');
+    expect(reNode.data.spec).toEqual(spec);
+  });
+});
+
+describe('addFlowBulkImpl + component spec sidecar', () => {
+  const specA = {
+    root: 'root',
+    elements: { root: { type: 'Text', props: { text: 'A' } } },
+  };
+  const specB = {
+    root: 'root',
+    elements: { root: { type: 'Text', props: { text: 'B' } } },
+  };
+
+  it('writes nodes/<id>/spec.json for every component node in the batch', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [
+        { id: 'cA', type: 'component', data: { spec: specA } },
+        { id: 'cB', type: 'component', data: { spec: specB } },
+      ],
+    });
+    expect(res.kind).toBe('ok');
+
+    expect(
+      JSON.parse(readFileSync(nodeFileAbsPath(repoPath, '', 'cA', 'spec.json'), 'utf8')),
+    ).toEqual(specA);
+    expect(
+      JSON.parse(readFileSync(nodeFileAbsPath(repoPath, '', 'cB', 'spec.json'), 'utf8')),
+    ).toEqual(specB);
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    for (const n of flow.nodes) {
+      expect('spec' in n.data).toBe(false);
+    }
+
+    const reread = readMergedFlow(flowAbs);
+    expect(reread.valid).toBe(true);
+  });
+
+  it('rolls back sidecars on a batch-level failure (dangling connector target)', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    const res = await addFlowBulkImpl(deps, flowId, {
+      nodes: [{ id: 'cA', type: 'component', data: { spec: specA } }],
+      connectors: [{ source: 'cA', target: 'never-added' }],
+    });
+    expect(res.kind).toBe('badSchema');
+
+    // Sidecar was rolled back along with the per-node folder, same as detail/html.
+    expect(existsSync(nodeFileAbsPath(repoPath, '', 'cA', 'spec.json'))).toBe(false);
+    expect(existsSync(join(repoPath, 'nodes', 'cA'))).toBe(false);
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    expect(flow.nodes).toHaveLength(0);
+  });
+});
+
 describe('addFlowBulkImpl', () => {
   it('appends nodes + connectors atomically in one write, with connectors referencing same-batch nodes', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();

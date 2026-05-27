@@ -16,6 +16,7 @@ import { type LayoutOptions, computeLayout } from './layout.ts';
 import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
   EXTERNALIZED_NODE_FIELDS,
+  defaultExternalizedSerializer,
   externalizedFieldsForNodeType,
   nodeFileAbsPath,
   nodeFileRef,
@@ -1347,12 +1348,16 @@ export async function addNodeImpl(
       ? { ...(newNode.data as Record<string, unknown>) }
       : {};
     const flowDir = dirname(entry.flowPath);
-    for (const { field, fileName } of externalizedFieldsForNodeType(newNode.type)) {
-      const incoming = data[field];
-      const content = typeof incoming === 'string' ? incoming : '';
-      data[field] = nodeFileRef(newId, fileName);
+    for (const spec of externalizedFieldsForNodeType(newNode.type)) {
+      const incoming = data[spec.field];
+      const serializer = spec.serialize ?? defaultExternalizedSerializer;
+      const content = serializer(incoming);
+      if (content === null) continue; // serializer opted out (e.g. spec absent)
+      if ((spec.kind ?? 'ref') === 'ref') {
+        data[spec.field] = nodeFileRef(newId, spec.fileName);
+      }
       externalized.push({
-        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, fileName),
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, spec.fileName),
         content,
       });
     }
@@ -1431,12 +1436,16 @@ export async function addFlowBulkImpl(
     const data: Record<string, unknown> = dataIsRecord
       ? { ...(newNode.data as Record<string, unknown>) }
       : {};
-    for (const { field, fileName } of externalizedFieldsForNodeType(newNode.type)) {
-      const incoming = data[field];
-      const content = typeof incoming === 'string' ? incoming : '';
-      data[field] = nodeFileRef(newId, fileName);
+    for (const spec of externalizedFieldsForNodeType(newNode.type)) {
+      const incoming = data[spec.field];
+      const serializer = spec.serialize ?? defaultExternalizedSerializer;
+      const content = serializer(incoming);
+      if (content === null) continue; // serializer opted out (e.g. spec absent)
+      if ((spec.kind ?? 'ref') === 'ref') {
+        data[spec.field] = nodeFileRef(newId, spec.fileName);
+      }
       externalized.push({
-        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, fileName),
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, newId, spec.fileName),
         content,
       });
     }
@@ -1637,15 +1646,20 @@ export async function patchNodeImpl(
       ref: string;
       field: string;
       content: string;
+      kind: 'ref' | 'sidecar';
     }> = [];
-    for (const { field, fileName } of externalizedFieldsForNodeType(node.type)) {
-      const incoming = (updates as Record<string, unknown>)[field];
+    for (const spec of externalizedFieldsForNodeType(node.type)) {
+      const incoming = (updates as Record<string, unknown>)[spec.field];
       if (incoming === undefined) continue;
+      const serializer = spec.serialize ?? defaultExternalizedSerializer;
+      const content = serializer(incoming);
+      if (content === null) continue; // serializer opted out
       externalizedWrites.push({
-        absPath: nodeFileAbsPath(entry.repoPath, flowDir, nodeId, fileName),
-        ref: nodeFileRef(nodeId, fileName),
-        field,
-        content: typeof incoming === 'string' ? incoming : '',
+        absPath: nodeFileAbsPath(entry.repoPath, flowDir, nodeId, spec.fileName),
+        ref: nodeFileRef(nodeId, spec.fileName),
+        field: spec.field,
+        content,
+        kind: spec.kind ?? 'ref',
       });
     }
     mergeNodeUpdates(node, updates);
@@ -1664,25 +1678,13 @@ export async function patchNodeImpl(
             message: err instanceof Error ? err.message : String(err),
           };
         }
-        data[w.field] = w.ref;
+        // 'ref' fields swap data[field] for a file:// pointer; 'sidecar'
+        // fields (e.g. component spec) leave the in-memory value alone so the
+        // post-mutation parse still sees it — splitFlow drops it from flow.json
+        // on write and the resolver inlines it back from disk on read.
+        if (w.kind === 'ref') data[w.field] = w.ref;
       }
       node.data = data;
-    }
-    // Component spec sidecar — write the pretty-printed JSON to
-    // `<repoPath>/<flowDir>/nodes/<id>/spec.json` so the on-disk source of
-    // truth stays in sync. mergeNodeUpdates already put data.spec on the
-    // merged tree for the post-mutation ResolvedFlowSchema parse; splitFlow
-    // strips it from flow.json so we don't double-store the spec.
-    if (node.type === 'component' && updates.spec !== undefined) {
-      const specAbs = nodeFileAbsPath(entry.repoPath, flowDir, nodeId, 'spec.json');
-      try {
-        writeNodeFile(specAbs, `${JSON.stringify(updates.spec, null, 2)}\n`);
-      } catch (err) {
-        return {
-          kind: 'writeFailed',
-          message: err instanceof Error ? err.message : String(err),
-        };
-      }
     }
     return { kind: 'ok' };
   });
