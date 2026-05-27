@@ -160,11 +160,17 @@ jobs:
         # GitHub-hosted Ubuntu runners.
         env:
           REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
+          # The .npmrc setup-node writes references ${NODE_AUTH_TOKEN}. If the
+          # env var isn't present, npm 10 substitutes the empty string and
+          # subsequent installs silently fail authentication against the
+          # registry URL (even for public packages). Re-export the same token
+          # the publish step uses so the smoke install resolves correctly.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         # GitHub Actions defaults to `bash -e`. Without disabling errexit here,
         # the `install_out=$(...)` capture would abort the whole step the
-        # moment the first `npm install` attempt fails — which always happens
-        # right after publish while the registry is still propagating — and
-        # the retry loop never gets a chance to run.
+        # moment the first `npm install` attempt fails (e.g. while the registry
+        # is still propagating the freshly published version), and the retry
+        # loop never gets a chance to run.
         run: |
           set +e
           set -uo pipefail
@@ -174,7 +180,11 @@ jobs:
           trap 'rm -rf "$tmp"' EXIT
           for attempt in 1 2 3 4 5; do
             echo "Smoke attempt ${attempt}: npm install @tuongaz/seeflow@${tag}"
-            install_out=$(cd "$tmp" && npm install --silent --no-fund --no-audit "@tuongaz/seeflow@${tag}" 2>&1)
+            # Drop --silent so npm's error output (404s, auth failures,
+            # propagation lag, etc.) lands in the job log instead of being
+            # swallowed — the loop is short enough that the extra logs are
+            # cheaper than another silent-fail debug round-trip.
+            install_out=$(cd "$tmp" && npm install --no-fund --no-audit "@tuongaz/seeflow@${tag}" 2>&1)
             install_status=$?
             if [ $install_status -ne 0 ]; then
               echo "$install_out" >&2
