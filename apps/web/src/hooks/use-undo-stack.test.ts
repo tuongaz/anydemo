@@ -133,6 +133,35 @@ describe('applyPush', () => {
     const s2 = applyPush(s1, entry({ coalesceKey: 'a' }), { now: 100 });
     expect(s2.stack.length).toBe(2);
   });
+
+  it('preserves the OLDEST undo when coalescing (merged-snapshot semantics)', () => {
+    // Two coalesced pushes with the same key should merge `do` to the latest but
+    // keep `undo` from the first push so the gesture reverts to the pre-burst
+    // state.
+    const undos: string[] = [];
+    const e1 = entry({
+      coalesceKey: 'k',
+      undo: async () => {
+        undos.push('first-undo');
+      },
+      do: async () => {},
+    });
+    const e2 = entry({
+      coalesceKey: 'k',
+      undo: async () => {
+        undos.push('second-undo');
+      },
+      do: async () => {},
+    });
+    let s = applyPush(initial, e1, { now: 100 });
+    s = applyPush(s, e2, { now: 200 }); // within COALESCE_WINDOW_MS
+    expect(s.stack.length).toBe(1);
+    expect(s.cursor).toBe(1);
+    // The kept undo MUST be the first one (pre-burst state).
+    return s.stack[0]!.undo().then(() => {
+      expect(undos).toEqual(['first-undo']);
+    });
+  });
 });
 
 describe('applyUndo', () => {

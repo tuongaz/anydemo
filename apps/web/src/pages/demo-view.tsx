@@ -767,7 +767,7 @@ export function DemoView({
           undo: async () => {
             await adapter.updateNode(nodeId, prevPatch);
           },
-          coalesceKey: `node:${nodeId}:style`,
+          coalesceKey: `node:${nodeId}:style:${Object.keys(patch).sort().join(',')}`,
         });
       }
       adapter.updateNode(nodeId, patch).catch((err) => {
@@ -875,7 +875,7 @@ export function DemoView({
           undo: async () => {
             await adapter.updateConnector(connId, prevPatch);
           },
-          coalesceKey: `connector:${connId}:style`,
+          coalesceKey: `connector:${connId}:style:${Object.keys(patch).sort().join(',')}`,
         });
       }
       adapter.updateConnector(connId, patch).catch((err) => {
