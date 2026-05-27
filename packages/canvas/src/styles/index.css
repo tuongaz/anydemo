@@ -464,9 +464,19 @@ layer(base);
   z-index: -1;
 }
 
+/* xyflow renders this rect over the bounding box of the multi-selection when
+ * `nodesSelectionActive: true` (set after a marquee). Its parent
+ * `.react-flow__nodesselection` is z-index 3 — above the viewport's z-index 2
+ * — so the rect sits on top of every selected node regardless of per-node
+ * z-index. xyflow's defaults (`cursor: grab`, `pointer-events: all`) would
+ * leak a pan-hand cursor through and steal clicks meant for nodes underneath;
+ * we drop pointer-events here. Multi-node drag still works because each
+ * selected node owns its own drag handler that moves the whole selection. */
 .seeflow-canvas-root .react-flow__nodesselection-rect {
   background: transparent;
   border: none;
+  cursor: default;
+  pointer-events: none;
 }
 
 .seeflow-canvas-root .react-flow__node-group {
