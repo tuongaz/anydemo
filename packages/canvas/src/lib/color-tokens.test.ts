@@ -68,26 +68,33 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
   });
 
-  it('paints translucent-body tokens with an hsla() fill at the shared body alpha', () => {
+  it('paints translucent-body tokens with an hsla() body fill at the shared body alpha', () => {
     for (const token of TRANSLUCENT_BODY_TOKENS) {
       const entry = COLOR_TOKENS[token];
       expect(entry.background.startsWith('hsla(')).toBe(true);
-      expect(entry.background).toContain(', 0.3)');
+      expect(entry.background).toContain(', 0.12)');
     }
   });
 
-  it('headerBackground matches background for every painted token (header sits flush on body)', () => {
+  it('paints headerBackground at full saturation (opaque hsl) for every painted token', () => {
     for (const token of PAINTED_TOKENS.filter((t) => t !== 'default')) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.headerBackground).toBe(entry.background);
+      expect(entry.headerBackground.startsWith('hsl(')).toBe(true);
+      expect(entry.headerBackground).not.toMatch(/hsla\(/);
     }
   });
 
-  it('edges paint at full saturation (not the body tint) so connectors stay visible', () => {
+  it('headerBackground differs from body for translucent-body tokens (header is solid, body is tinted)', () => {
     for (const token of TRANSLUCENT_BODY_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.edge.startsWith('hsl(')).toBe(true);
-      expect(entry.edge).not.toMatch(/hsla\(/);
+      expect(entry.headerBackground).not.toBe(entry.background);
+    }
+  });
+
+  it('headerBackground matches edge for translucent-body tokens (both at full saturation)', () => {
+    for (const token of TRANSLUCENT_BODY_TOKENS) {
+      const entry = COLOR_TOKENS[token];
+      expect(entry.headerBackground).toBe(entry.edge);
     }
   });
 });
@@ -139,13 +146,35 @@ describe('colorTokenStyle', () => {
     }
   });
 
-  it('returns the same backgroundColor for node and node-header on painted tokens (header matches body)', () => {
-    const nonDefault = PAINTED_TOKENS.filter((t) => t !== 'default');
-    for (const token of nonDefault) {
-      const node = colorTokenStyle(token, 'node');
-      const header = colorTokenStyle(token, 'node-header');
-      expect(header.backgroundColor).toBe(node.backgroundColor);
-    }
+  describe('kind=node-header-text', () => {
+    it('returns an empty style for theme-backed tokens (default + undefined + none)', () => {
+      expect(colorTokenStyle(undefined, 'node-header-text')).toEqual({});
+      expect(colorTokenStyle('default', 'node-header-text')).toEqual({});
+      expect(colorTokenStyle('none', 'node-header-text')).toEqual({});
+    });
+
+    it('returns dark text for light-header tokens', () => {
+      const darkText = 'hsl(220, 15%, 15%)';
+      for (const token of [
+        'white',
+        'indigo',
+        'violet',
+        'purple',
+        'red',
+        'rose',
+        'blue',
+        'pink',
+      ] as const) {
+        expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: darkText });
+      }
+    });
+
+    it('returns light text for darker-header tokens', () => {
+      const lightText = 'hsl(0, 0%, 98%)';
+      for (const token of ['slate', 'green', 'teal', 'amber'] as const) {
+        expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: lightText });
+      }
+    });
   });
 
   describe('none token', () => {

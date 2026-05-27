@@ -1,19 +1,19 @@
 import type { CSSProperties } from 'react';
 import type { ColorToken } from '../types.ts';
 
-// Per-token palette: `body` is the hue that drives the painted node body
-// (rendered at `BODY_ALPHA` — a subtle tint, not a solid fill, so theme
-// foreground text stays readable). `border` keeps its hand-tuned
-// hue/saturation/lightness so the outline reads as a subtly darker,
-// less-saturated variant of the body. `headerBackground` matches the body
-// exactly — the header sits flush on top of the body fill, with a subtle
-// theme border-bottom drawn by the renderer as the only separator.
+// Per-token palette: `body` is the hue. The rendered body fill is
+// `hsla(H, S%, L%, BODY_ALPHA)` — a very subtle tint over the canvas
+// surface so the description text stays on a near-neutral background. The
+// `headerBackground` paints at FULL saturation (opaque hsl) so the header
+// reads as a proper title bar — solid color, no border-bottom separator.
+// `border` keeps its hand-tuned hue/saturation/lightness so the outline
+// reads as a subtly darker, less-saturated variant of the body.
 //
 // `default` and `none` are special-cased below — `default` uses theme
 // tokens so it adapts to dark mode; `none` paints transparent.
 type Hsl = readonly [h: number, s: number, l: number];
 
-const BODY_ALPHA = 0.3;
+const BODY_ALPHA = 0.12;
 
 const PALETTE: Record<
   Exclude<ColorToken, 'default' | 'none' | 'white'>,
@@ -56,15 +56,16 @@ const PAINTED_ENTRIES = Object.fromEntries(
     ([token, { body, border }]) => {
       const [bh, bs, bl] = body;
       const [rh, rs, rl] = border;
-      const bodyFill = hsla(bh, bs, bl, BODY_ALPHA);
+      const solid = hsl(bh, bs, bl);
       const entry: TokenEntry = {
         border: hsl(rh, rs, rl),
-        background: bodyFill,
-        // Edge connectors still paint at full saturation so the line
-        // stays visible against the canvas surface; the body tint is the
-        // softened variant.
-        edge: hsl(bh, bs, bl),
-        headerBackground: bodyFill,
+        // Body sits at a very subtle alpha so it reads as a faint hue
+        // over the canvas surface — text stays on a near-neutral fill.
+        background: hsla(bh, bs, bl, BODY_ALPHA),
+        // Edge connectors and the header bar both paint at full
+        // saturation so they remain visually punchy.
+        edge: solid,
+        headerBackground: solid,
       };
       return [token, entry];
     },
@@ -89,8 +90,9 @@ const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
     edge: 'hsl(var(--muted-foreground))',
     headerBackground: 'hsl(var(--muted))',
   },
-  // White is opaque white throughout; the painted header still matches
-  // the body so the border-bottom is the only separator.
+  // White is opaque white throughout (body + header both solid white).
+  // No hsla alpha here — the user-facing "white" choice should look
+  // literally white, not a barely-there tint.
   white: {
     border: 'hsl(0, 0%, 100%)',
     background: 'hsl(0, 0%, 100%)',
@@ -104,6 +106,20 @@ export const COLOR_TOKENS = COLOR_TOKEN_MAP;
 
 export const NODE_DEFAULT_BG_WHITE = 'hsl(var(--card))';
 
+// Foreground used by `'node-header-text'` when the header bar is painted
+// with a color token (skipped for `'default'` / `'none'` / undefined —
+// those keep the theme foreground). Light headers get dark text, dark
+// headers get light text so the title stays readable on the solid bar.
+const TEXT_ON_LIGHT = 'hsl(220, 15%, 15%)';
+const TEXT_ON_DARK = 'hsl(0, 0%, 98%)';
+const TEXT_LIGHTNESS_THRESHOLD = 60;
+
+function paintedLightness(token: ColorToken): number | null {
+  if (token === 'white') return 100;
+  if (token in PALETTE) return PALETTE[token as keyof typeof PALETTE].body[2];
+  return null;
+}
+
 export type NodeColorStyle = Pick<CSSProperties, 'borderColor' | 'backgroundColor'>;
 export type NodeHeaderColorStyle = Pick<CSSProperties, 'backgroundColor'>;
 export type EdgeColorStyle = Pick<CSSProperties, 'stroke'>;
@@ -114,11 +130,15 @@ export function colorTokenStyle(
   token: ColorToken | undefined,
   kind: 'node-header',
 ): NodeHeaderColorStyle;
+export function colorTokenStyle(
+  token: ColorToken | undefined,
+  kind: 'node-header-text',
+): TextColorStyle;
 export function colorTokenStyle(token: ColorToken | undefined, kind: 'edge'): EdgeColorStyle;
 export function colorTokenStyle(token: ColorToken | undefined, kind: 'text'): TextColorStyle;
 export function colorTokenStyle(
   token: ColorToken | undefined,
-  kind: 'node' | 'node-header' | 'edge' | 'text',
+  kind: 'node' | 'node-header' | 'node-header-text' | 'edge' | 'text',
 ): NodeColorStyle | NodeHeaderColorStyle | EdgeColorStyle | TextColorStyle {
   const resolved = token ?? 'default';
   // `'none'` short-circuits every kind to transparent. The picker hides the
@@ -129,6 +149,12 @@ export function colorTokenStyle(
     if (kind === 'node-header') return { backgroundColor: 'transparent' };
     if (kind === 'edge') return { stroke: 'transparent' };
     return {};
+  }
+  if (kind === 'node-header-text') {
+    if (resolved === 'default') return {};
+    const l = paintedLightness(resolved);
+    if (l === null) return {};
+    return { color: l >= TEXT_LIGHTNESS_THRESHOLD ? TEXT_ON_LIGHT : TEXT_ON_DARK };
   }
   const entry = COLOR_TOKEN_MAP[resolved];
   if (kind === 'edge') return { stroke: entry.edge };

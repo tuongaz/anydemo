@@ -276,6 +276,15 @@ function GeometricNodeImpl({
     ...textColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
+  // Header-layout shapes paint a solid `node-header` bar above the faint
+  // body. The header title sits on the saturated color, so it needs
+  // contrast adaptation when the user hasn't picked an explicit textColor.
+  const headerLabelFontStyle: CSSProperties = {
+    ...labelFontStyle,
+    ...(explicitTextColor === undefined
+      ? colorTokenStyle(data.backgroundColor, 'node-header-text')
+      : {}),
+  };
   const style: CSSProperties = sized
     ? colorStyle
     : { ...colorStyle, width: data.width ?? size.width, height: data.height ?? size.height };
@@ -453,7 +462,7 @@ function GeometricNodeImpl({
       >
         <div
           className="sf:min-w-0 sf:flex-1 sf:whitespace-pre-wrap sf:wrap-break-word sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight"
-          style={labelFontStyle}
+          style={headerLabelFontStyle}
         >
           {editing === 'name' && nameEditable ? (
             <InlineEdit
@@ -463,7 +472,7 @@ function GeometricNodeImpl({
               onCommit={(v) => data.onNameChange?.(id, v)}
               onExit={() => setEditing(null)}
               className="sf:text-[18px] sf:font-semibold"
-              style={labelFontStyle}
+              style={headerLabelFontStyle}
               placeholder="Title"
             />
           ) : (
@@ -473,7 +482,7 @@ function GeometricNodeImpl({
                 'sf:block sf:w-full sf:whitespace-pre-wrap sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-left sf:font-semibold sf:text-[18px] sf:leading-tight',
                 nameEditable ? 'sf:hover:opacity-80' : '',
               )}
-              style={labelFontStyle}
+              style={headerLabelFontStyle}
             >
               {data.name}
             </button>
