@@ -160,7 +160,13 @@ jobs:
         # GitHub-hosted Ubuntu runners.
         env:
           REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
+        # GitHub Actions defaults to `bash -e`. Without disabling errexit here,
+        # the `install_out=$(...)` capture would abort the whole step the
+        # moment the first `npm install` attempt fails — which always happens
+        # right after publish while the registry is still propagating — and
+        # the retry loop never gets a chance to run.
         run: |
+          set +e
           set -uo pipefail
           tag="${REF#refs/tags/}"
           tag="${tag#v}"
