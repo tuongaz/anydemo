@@ -12,6 +12,11 @@ WORKDIR /src
 COPY package.json bun.lock ./
 COPY apps/studio/package.json apps/studio/package.json
 COPY apps/web/package.json apps/web/package.json
+# apps/mcp-app is part of the `apps/*` workspace glob — its manifest must be
+# present before `bun install --frozen-lockfile`, or bun 1.3.14+ flags the
+# missing workspace as lockfile drift and refuses to install (even though the
+# SPA build below doesn't depend on mcp-app's source).
+COPY apps/mcp-app/package.json apps/mcp-app/package.json
 # apps/web depends on @seeflow/canvas via `file:../../packages/canvas`. Bun
 # copies the source at install time (vs. symlinking workspace deps), so the
 # canvas dir — including the committed dist/ — must exist before the install,
