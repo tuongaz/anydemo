@@ -6,19 +6,20 @@ import {
   dashFor,
 } from './types.ts';
 
-// Cloud silhouette: large top-left bump joined to a smaller top-right
-// bump, with a flat bottom and softly rounded bottom-left / bottom-right
-// corners — the classic "iCloud" / cloud-icon shape.
+// Cloud silhouette: large top bump joined to a smaller upper-right lobe,
+// with a flat bottom and softly rounded corners — the classic Material
+// cloud-filled silhouette.
 //
-// The reference arc geometry is borrowed from the Heroicons cloud-outline
-// glyph (24×24 viewBox) but only occupies x ∈ [2.25, 19.332],
-// y ∈ [~4.15, 19.5]. We shift it to the origin and rescale it to fill the
-// node's full `width × height` so the glyph spans edge-to-edge at any
-// aspect ratio.
-const HX_OFFSET = 2.25;
-const HY_OFFSET = 4.15;
-const HX_RANGE = 17.082; // 19.332 - 2.25
-const HY_RANGE = 15.35; // 19.5 - 4.15
+// The path is described with cubic Béziers (rather than elliptical arcs)
+// so the curve stays smooth — and corners stay visibly rounded — even
+// when the node is stretched to a much wider aspect ratio than the
+// design's natural 24×16 (1.5:1). With arcs, the right-side rounded
+// corner would collapse into a near-vertical sliver as `width / height`
+// grew; with Béziers the control points scale with the stretch and the
+// corner keeps its weight.
+const HX_RANGE = 24;
+const HY_RANGE = 16;
+const HY_OFFSET = 4; // raw path uses y ∈ [4, 20]; shift to [0, 16]
 
 export function CloudShape({
   width,
@@ -40,19 +41,18 @@ export function CloudShape({
   const h = Math.max(0, height - strokeWidth);
   const sx = w / HX_RANGE;
   const sy = h / HY_RANGE;
-  const X = (x: number) => (inset + (x - HX_OFFSET) * sx).toFixed(3);
+  const X = (x: number) => (inset + x * sx).toFixed(3);
   const Y = (y: number) => (inset + (y - HY_OFFSET) * sy).toFixed(3);
-  const RX = (r: number) => (r * sx).toFixed(3);
-  const RY = (r: number) => (r * sy).toFixed(3);
 
   const d = [
-    `M ${X(2.25)} ${Y(15)}`,
-    `A ${RX(4.5)} ${RY(4.5)} 0 0 0 ${X(6.75)} ${Y(19.5)}`,
-    `L ${X(18)} ${Y(19.5)}`,
-    `A ${RX(3.75)} ${RY(3.75)} 0 0 0 ${X(19.332)} ${Y(12.243)}`,
-    `A ${RX(3)} ${RY(3)} 0 0 0 ${X(15.574)} ${Y(8.395)}`,
-    `A ${RX(5.25)} ${RY(5.25)} 0 0 0 ${X(5.341)} ${Y(10.725)}`,
-    `A ${RX(4.502)} ${RY(4.502)} 0 0 0 ${X(2.25)} ${Y(15)}`,
+    `M ${X(19.36)} ${Y(10.04)}`,
+    `C ${X(18.67)} ${Y(6.59)}, ${X(15.64)} ${Y(4)}, ${X(12)} ${Y(4)}`,
+    `C ${X(9.11)} ${Y(4)}, ${X(6.6)} ${Y(5.64)}, ${X(5.35)} ${Y(8.04)}`,
+    `C ${X(2.39)} ${Y(8.36)}, ${X(0)} ${Y(10.91)}, ${X(0)} ${Y(14)}`,
+    `C ${X(0)} ${Y(17.31)}, ${X(2.69)} ${Y(20)}, ${X(6)} ${Y(20)}`,
+    `L ${X(19)} ${Y(20)}`,
+    `C ${X(21.76)} ${Y(20)}, ${X(24)} ${Y(17.76)}, ${X(24)} ${Y(15)}`,
+    `C ${X(24)} ${Y(12.36)}, ${X(21.95)} ${Y(10.22)}, ${X(19.36)} ${Y(10.04)}`,
     'Z',
   ].join(' ');
 
