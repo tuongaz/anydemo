@@ -6,21 +6,19 @@ import {
   dashFor,
 } from './types.ts';
 
-// Cloud glyph — three bumps on the top (small / large / small) and three
-// equal bumps along the bottom. Both bump rows sit on a shared horizontal
-// axis (`baselineY = height / 2`), so there's no vertical "seam" between
-// the top and bottom curves — the silhouette is one continuous puffy
-// outline, the way AWS / Azure / draw.io cloud icons paint.
+// Cloud silhouette: large top-left bump joined to a smaller top-right
+// bump, with a flat bottom and softly rounded bottom-left / bottom-right
+// corners — the classic "iCloud" / cloud-icon shape.
 //
-// Bump-radius ratios:
-//   top    : 1 : 1.5 : 1   (small-large-small, center mound dominates)
-//   bottom : 1 : 1 : 1     (three equal lobes — smaller than the top centre
-//                           so the cloud's silhouette stays top-heavy and
-//                           doesn't read as a balloon)
-//
-// `SIDE_MARGIN` keeps the outermost bumps from kissing the viewBox edge so
-// the stroke isn't clipped by the wrapper.
-const SIDE_MARGIN = 5;
+// The reference arc geometry is borrowed from the Heroicons cloud-outline
+// glyph (24×24 viewBox) but only occupies x ∈ [2.25, 19.332],
+// y ∈ [~4.15, 19.5]. We shift it to the origin and rescale it to fill the
+// node's full `width × height` so the glyph spans edge-to-edge at any
+// aspect ratio.
+const HX_OFFSET = 2.25;
+const HY_OFFSET = 4.15;
+const HX_RANGE = 17.082; // 19.332 - 2.25
+const HY_RANGE = 15.35; // 19.5 - 4.15
 
 export function CloudShape({
   width,
@@ -35,32 +33,26 @@ export function CloudShape({
   const strokeWidth = borderSize ?? DEFAULT_STROKE_WIDTH;
   const dash = dashFor(borderStyle);
 
-  const usableW = width - 2 * SIDE_MARGIN;
+  // Inset by half the stroke so the outline isn't clipped at the viewBox
+  // edges when borderSize grows.
+  const inset = strokeWidth / 2;
+  const w = Math.max(0, width - strokeWidth);
+  const h = Math.max(0, height - strokeWidth);
+  const sx = w / HX_RANGE;
+  const sy = h / HY_RANGE;
+  const X = (x: number) => (inset + (x - HX_OFFSET) * sx).toFixed(3);
+  const Y = (y: number) => (inset + (y - HY_OFFSET) * sy).toFixed(3);
+  const RX = (r: number) => (r * sx).toFixed(3);
+  const RY = (r: number) => (r * sy).toFixed(3);
 
-  // Three top bumps: radii sum to usableW / 2 with center 1.5x the sides.
-  //   r1 + r2 + r3 = usableW/2  with r2 = 1.5*r1  →  r1 = r3 = usableW/7.
-  const rt1 = usableW / 7;
-  const rt2 = (usableW / 7) * 1.5;
-  const rt3 = rt1;
-
-  // Three bottom bumps: equal radii summing to usableW/2  →  rb = usableW/6.
-  const rb = usableW / 6;
-
-  const xLeft = SIDE_MARGIN;
-  const xRight = xLeft + usableW;
-  const baselineY = height / 2;
-
-  // SVG arc convention: sweep-flag=1 curves to the right of the travel
-  // direction. Top bumps travel left-to-right and bulge UP; bottom bumps
-  // travel right-to-left and bulge DOWN. Both use sweep=1.
   const d = [
-    `M ${xLeft} ${baselineY}`,
-    `A ${rt1} ${rt1} 0 0 1 ${xLeft + 2 * rt1} ${baselineY}`,
-    `A ${rt2} ${rt2} 0 0 1 ${xLeft + 2 * rt1 + 2 * rt2} ${baselineY}`,
-    `A ${rt3} ${rt3} 0 0 1 ${xRight} ${baselineY}`,
-    `A ${rb} ${rb} 0 0 1 ${xRight - 2 * rb} ${baselineY}`,
-    `A ${rb} ${rb} 0 0 1 ${xRight - 4 * rb} ${baselineY}`,
-    `A ${rb} ${rb} 0 0 1 ${xLeft} ${baselineY}`,
+    `M ${X(2.25)} ${Y(15)}`,
+    `A ${RX(4.5)} ${RY(4.5)} 0 0 0 ${X(6.75)} ${Y(19.5)}`,
+    `L ${X(18)} ${Y(19.5)}`,
+    `A ${RX(3.75)} ${RY(3.75)} 0 0 0 ${X(19.332)} ${Y(12.243)}`,
+    `A ${RX(3)} ${RY(3)} 0 0 0 ${X(15.574)} ${Y(8.395)}`,
+    `A ${RX(5.25)} ${RY(5.25)} 0 0 0 ${X(5.341)} ${Y(10.725)}`,
+    `A ${RX(4.502)} ${RY(4.502)} 0 0 0 ${X(2.25)} ${Y(15)}`,
     'Z',
   ].join(' ');
 
@@ -75,7 +67,15 @@ export function CloudShape({
       data-testid="cloud-shape"
     >
       <title>Cloud</title>
-      <path d={d} fill={fill} stroke={stroke} strokeWidth={strokeWidth} strokeDasharray={dash} />
+      <path
+        d={d}
+        fill={fill}
+        stroke={stroke}
+        strokeWidth={strokeWidth}
+        strokeDasharray={dash}
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
     </svg>
   );
 }
