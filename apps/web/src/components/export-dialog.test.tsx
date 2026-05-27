@@ -1,16 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as React from 'react';
 
-// Module mocks must be installed before the component is imported. ExportDialog
-// pulls in @/lib/feature-flags as a top-level const, so we stub that — and the
-// two hooks the dialog calls — to keep the hook-shim render tree clean.
-
-const featureFlags = { IS_PROJECT_EXPORT_ENABLED: true };
-mock.module('@/lib/feature-flags', () => ({
-  get IS_PROJECT_EXPORT_ENABLED() {
-    return featureFlags.IS_PROJECT_EXPORT_ENABLED;
-  },
-}));
+// Module mocks must be installed before the component is imported. We stub
+// the two hooks the dialog calls so the hook-shim render tree only walks
+// ExportDialog's own useState calls.
 
 let projectFlowsResult: {
   flows: Array<{ flowSlug: string; name: string; icon?: string; isDefault: boolean }> | null;
@@ -37,8 +30,7 @@ const cloudCalls: Array<{
 }> = [];
 
 // `mock.module` is process-global in bun:test, so include the rest of the
-// module's named exports (used by use-export-to-cloud.test.ts) — otherwise
-// that test fails with "Export named 'exportToCloud' not found".
+// module's named exports (used by use-export-to-cloud.test.ts).
 const realModule = await import('@/hooks/use-export-to-cloud');
 mock.module('@/hooks/use-export-to-cloud', () => ({
   ...realModule,
@@ -157,7 +149,6 @@ function defaultProps(): ExportDialogProps {
     open: true,
     onOpenChange: () => {},
     project: 'demo',
-    flow: 'main',
   };
 }
 
@@ -189,13 +180,11 @@ const SLOT_NAME = 1;
 const SLOT_SELECTED_FLOWS = 5;
 
 beforeEach(() => {
-  featureFlags.IS_PROJECT_EXPORT_ENABLED = true;
   projectFlowsResult = { flows: null, loading: false, error: null };
   cloudCalls.length = 0;
 });
 
 afterEach(() => {
-  featureFlags.IS_PROJECT_EXPORT_ENABLED = true;
   projectFlowsResult = { flows: null, loading: false, error: null };
   cloudCalls.length = 0;
 });

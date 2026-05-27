@@ -32,7 +32,7 @@ no deployed viewer SPA knows about projects.
 | Picker UI | Inline checkbox list in the existing dialog, below Visibility. |
 | Picker default | All flows checked. |
 | Single-flow project | Picker hidden entirely. |
-| Feature flag | Keep `IS_PROJECT_EXPORT_ENABLED`; picker only renders when on. |
+| Feature flag | Removed — project export is the only export path. |
 | Backward compat | None required. |
 
 ## Studio side (`seeflow`)
@@ -229,11 +229,11 @@ Extend `apps/studio/e2e/multi-flow.e2e.ts` or add
 
 ## Rollout
 
-1. Land viewer cloud + SPA changes; deploy. The new routes exist but are
-   unreachable from prod studio (flag still off).
-2. Land studio dialog + bundle changes behind the existing
-   `VITE_SEEFLOW_PROJECT_EXPORT` flag.
-3. Flip the flag; ship.
+1. Land viewer cloud + SPA changes (`POST /projects`, `GET /projects*`,
+   `/project/:uuid` SPA route); deploy.
+2. Land studio dialog + bundle changes; ship.
 
-Single-flow export (`POST /api/flows`) keeps working throughout — no users
-are affected by step 1 or 2.
+Single-flow viewer routes (`POST /flows`, `GET /flows*`, `/flow/:uuid`)
+keep working for already-published share links, but the studio no longer
+emits new single-flow uploads — every export now goes through the
+project bundle. Old `seeflow.dev/flow/<uuid>` URLs continue to resolve.

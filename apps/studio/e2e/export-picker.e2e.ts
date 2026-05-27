@@ -1,13 +1,5 @@
 // End-to-end coverage for the export-dialog flow picker.
 //
-// The picker only renders when the SPA is built with
-// `VITE_SEEFLOW_PROJECT_EXPORT=1`. The default test run builds the studio dist
-// without the flag, so this suite is gated on `SEEFLOW_E2E_PROJECT_EXPORT=1`
-// — set it after rebuilding the SPA with the project-export flag on, e.g.:
-//
-//   VITE_SEEFLOW_PROJECT_EXPORT=1 bun run --filter @seeflow/web build && \
-//   SEEFLOW_E2E_PROJECT_EXPORT=1 bun run test:it:e2e export-picker
-//
 // Unit tests in apps/web/src/components/export-dialog.test.tsx cover the
 // picker rendering, checkbox toggling, "Select all/Clear" behavior, default
 // flow star marker, and the disabled-when-zero-selected gate against a
@@ -22,14 +14,7 @@ import {
   test,
 } from './support/studio-fixture.ts';
 
-const flagEnabled = process.env.SEEFLOW_E2E_PROJECT_EXPORT === '1';
-
 test.describe('export dialog flow picker', () => {
-  test.skip(
-    !flagEnabled,
-    'Set SEEFLOW_E2E_PROJECT_EXPORT=1 after rebuilding the SPA with VITE_SEEFLOW_PROJECT_EXPORT=1.',
-  );
-
   test('picks a subset of flows and posts only those in the bundle', async ({ page, studio }) => {
     const project = await registerManifestProject(studio.studio, {
       projectDirName: 'export-picker-demo',

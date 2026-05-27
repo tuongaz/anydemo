@@ -1,6 +1,5 @@
 import { type Visibility, useExportToCloud } from '@/hooks/use-export-to-cloud';
 import { useProjectFlows } from '@/hooks/use-project-flows';
-import { IS_PROJECT_EXPORT_ENABLED } from '@/lib/feature-flags';
 import {
   Button,
   Dialog,
@@ -26,11 +25,9 @@ type State =
 export interface ExportDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  /** US-010: project slug — drives the project-scoped file fetches inside the
-   * bundle. */
+  /** Project slug — drives the manifest + per-flow fetches inside the bundle. */
   project: string;
-  /** US-010: flow slug — drives the per-flow detail fetch. */
-  flow: string;
+  /** Initial value for the "Project name" field, if you want to preseed it. */
   flowName?: string;
   onCapturePreview?: () => Promise<string | undefined>;
 }
@@ -39,7 +36,6 @@ export function ExportDialog({
   open,
   onOpenChange,
   project,
-  flow,
   flowName,
   onCapturePreview,
 }: ExportDialogProps) {
@@ -49,11 +45,10 @@ export function ExportDialog({
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [copied, setCopied] = useState(false);
   const [selectedFlows, setSelectedFlows] = useState<Set<string>>(new Set());
-  const exportToCloud = useExportToCloud(project, flow);
-  // In project-export mode, load the project's flow list so users can pick
-  // which flows to ship. Pass `null` (idle) when the dialog is closed or the
-  // flag is off — no fetch, hook returns flows:null.
-  const projectFlowsApi = useProjectFlows(open && IS_PROJECT_EXPORT_ENABLED ? project : null);
+  const exportToCloud = useExportToCloud(project);
+  // Load the project's flow list so users can pick which flows to ship.
+  // Pass `null` (idle) when the dialog is closed — no fetch.
+  const projectFlowsApi = useProjectFlows(open ? project : null);
   const availableFlows = projectFlowsApi.flows;
 
   useEffect(() => {
@@ -122,15 +117,16 @@ export function ExportDialog({
   }, [state]);
 
   const isLoading = state.kind === 'loading';
-  // Project mode requires the flow list to have arrived AND at least one
-  // selection. Single-flow mode (or flag off) ignores the picker.
-  const projectModeReady = IS_PROJECT_EXPORT_ENABLED
-    ? availableFlows !== null && projectFlowsApi.error === null && selectedFlows.size > 0
-    : true;
-  const canExport = email.trim().length > 0 && name.trim().length > 0 && projectModeReady;
-  const showFlowPicker = IS_PROJECT_EXPORT_ENABLED && (availableFlows?.length ?? 0) >= 2;
-  const showFlowsLoading = IS_PROJECT_EXPORT_ENABLED && projectFlowsApi.loading;
-  const showFlowsError = IS_PROJECT_EXPORT_ENABLED && projectFlowsApi.error !== null;
+  // The export needs the flow list AND at least one pick before it can fire.
+  const canExport =
+    email.trim().length > 0 &&
+    name.trim().length > 0 &&
+    availableFlows !== null &&
+    projectFlowsApi.error === null &&
+    selectedFlows.size > 0;
+  const showFlowPicker = (availableFlows?.length ?? 0) >= 2;
+  const showFlowsLoading = projectFlowsApi.loading;
+  const showFlowsError = projectFlowsApi.error !== null;
   const allSelected = availableFlows !== null && selectedFlows.size === availableFlows.length;
 
   return (
@@ -147,13 +143,9 @@ export function ExportDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>
-            {IS_PROJECT_EXPORT_ENABLED ? 'Export project to seeflow.dev' : 'Export to seeflow.dev'}
-          </DialogTitle>
+          <DialogTitle>Export project to seeflow.dev</DialogTitle>
           <DialogDescription>
-            {IS_PROJECT_EXPORT_ENABLED
-              ? 'Upload every flow in this project to the cloud and get a shareable link.'
-              : 'Upload this diagram to the cloud and get a shareable link.'}
+            Upload this project to the cloud and get a shareable link.
           </DialogDescription>
         </DialogHeader>
 
