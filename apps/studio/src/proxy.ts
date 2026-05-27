@@ -16,7 +16,7 @@ import { realpathSync } from 'node:fs';
 import { join, resolve, sep } from 'node:path';
 import type { EventBus } from './events.ts';
 import { type ProcessSpawner, type SpawnHandle, defaultProcessSpawner } from './process-spawner.ts';
-import type { PlayAction, ResetAction } from './schema.ts';
+import type { PlayAction } from './schema.ts';
 import { shortId } from './short-id.ts';
 
 export interface PlayResult {
@@ -73,31 +73,6 @@ function resolveScript(cwd: string, nodeId: string, scriptPath: string): Resolve
   return { ok: true, absPath: realTarget };
 }
 
-// Legacy anchor for resetAction (kept until resetAction gets its own design
-// round). Same realpath escape check as resolveScript, but rooted at the
-// project root rather than a per-node folder.
-function resolveResetScript(cwd: string, scriptPath: string): Resolved {
-  const projectRoot = cwd;
-  let realRoot: string;
-  try {
-    realRoot = realpathSync(projectRoot);
-  } catch {
-    return { ok: false };
-  }
-  const target = resolve(projectRoot, scriptPath);
-  let realTarget: string;
-  try {
-    realTarget = realpathSync(target);
-  } catch {
-    return { ok: false };
-  }
-  const rootWithSep = realRoot.endsWith(sep) ? realRoot : realRoot + sep;
-  if (realTarget !== realRoot && !realTarget.startsWith(rootWithSep)) {
-    return { ok: false };
-  }
-  return { ok: true, absPath: realTarget };
-}
-
 // Copy `process.env` into a string-only record, then layer the per-run extras.
 // Bun.spawn's env contract is `Record<string, string>` so the undefineds that
 // `process.env` advertises in its type must be filtered out first.
@@ -128,54 +103,6 @@ async function writeStdinPayload(handle: SpawnHandle, input: unknown): Promise<v
       /* stdin already closed by child — not fatal */
     });
   }
-}
-
-// Live play-script handles indexed by flowId. Populated by runPlay() on spawn;
-// entries are removed when each handle's `exited` promise resolves (success
-// AND error paths). `stopAllPlays(flowId)` consults this map to terminate
-// every in-flight play for a demo on /reset.
-const livePlayHandles = new Map<string, Set<SpawnHandle>>();
-
-function registerLiveHandle(flowId: string, handle: SpawnHandle): void {
-  let set = livePlayHandles.get(flowId);
-  if (!set) {
-    set = new Set();
-    livePlayHandles.set(flowId, set);
-  }
-  set.add(handle);
-  handle.exited.finally(() => {
-    const current = livePlayHandles.get(flowId);
-    if (!current) return;
-    current.delete(handle);
-    if (current.size === 0) livePlayHandles.delete(flowId);
-  });
-}
-
-async function killWithGrace(handle: SpawnHandle): Promise<void> {
-  handle.kill('SIGTERM');
-  let graceTimer: ReturnType<typeof setTimeout> | undefined;
-  const gracePromise = new Promise<'grace'>((res) => {
-    graceTimer = setTimeout(() => res('grace'), SIGKILL_GRACE_MS);
-  });
-  const winner = await Promise.race([handle.exited.then(() => 'exited' as const), gracePromise]);
-  if (graceTimer) clearTimeout(graceTimer);
-  if (winner === 'grace') {
-    handle.kill('SIGKILL');
-    await handle.exited;
-  }
-}
-
-// Kill every live play-script for `flowId` (SIGTERM → 2s grace → SIGKILL in
-// parallel) and wait for each to exit. Idempotent on an unknown flowId. The
-// map is keyed by flowId so a stop on demo A never touches demo B.
-export async function stopAllPlays(flowId: string): Promise<void> {
-  const set = livePlayHandles.get(flowId);
-  if (!set || set.size === 0) return;
-  const handles = [...set];
-  // Clear eagerly so a parallel runPlay can't double-count an entry we're
-  // about to await on. The exited.finally() will no-op the second delete.
-  livePlayHandles.delete(flowId);
-  await Promise.all(handles.map((h) => killWithGrace(h)));
 }
 
 export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
@@ -228,8 +155,6 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
     });
     return { runId, error: message };
   }
-
-  registerLiveHandle(flowId, handle);
 
   // Drain stdout AND stderr CONCURRENTLY with the process running so OS pipe
   // buffers (~64 KB) don't fill up and deadlock the child.
@@ -302,121 +227,4 @@ export async function runPlay(options: RunPlayOptions): Promise<PlayResult> {
     payload: { nodeId, runId, message },
   });
   return { runId, error: message };
-}
-
-export interface RunResetOptions {
-  events: EventBus;
-  flowId: string;
-  /** Project root (`<repoPath>`). Script resolves under `<cwd>/`. */
-  cwd: string;
-  action: ResetAction;
-  /** Injectable for tests; defaults to `defaultProcessSpawner`. */
-  spawner?: ProcessSpawner;
-}
-
-export interface ResetResult {
-  ok: boolean;
-  body?: unknown;
-  error?: string;
-}
-
-// Run the demo's one-shot `resetAction` script. Same spawn discipline as
-// runPlay (realpath-guarded scriptPath, concurrent stdout/stderr drain,
-// optional stdin payload, SIGTERM→2s→SIGKILL escalation on timeout) but the
-// lifecycle SSE event is the single `demo:reset` broadcast that mirrors the
-// returned shape. Callers (the /reset endpoint) decide what HTTP status to
-// surface; this returns `{ ok }` plus body/error so the endpoint can map.
-export async function runReset(options: RunResetOptions): Promise<ResetResult> {
-  const { events, flowId, cwd, action } = options;
-  const spawner = options.spawner ?? defaultProcessSpawner;
-
-  // resetAction is anchored at the project root — design defers per-node
-  // resetAction to a later round (decision #7).
-  const resolved = resolveResetScript(cwd, action.scriptPath);
-  if (!resolved.ok) {
-    events.broadcast({
-      type: 'demo:reset',
-      flowId,
-      payload: { ok: false, error: SCRIPT_PATH_ESCAPE },
-    });
-    return { ok: false, error: SCRIPT_PATH_ESCAPE };
-  }
-
-  const wantsStdin = action.input !== undefined;
-  const env = buildChildEnv({ SEEFLOW_DEMO_ID: flowId });
-
-  let handle: SpawnHandle;
-  try {
-    handle = spawner.spawn({
-      cmd: [action.interpreter, ...(action.args ?? []), resolved.absPath],
-      cwd,
-      env,
-      stdin: wantsStdin ? 'pipe' : 'ignore',
-    });
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    events.broadcast({
-      type: 'demo:reset',
-      flowId,
-      payload: { ok: false, error: message },
-    });
-    return { ok: false, error: message };
-  }
-
-  const stdoutPromise = new Response(handle.stdout).text();
-  const stderrPromise = new Response(handle.stderr).text();
-
-  if (wantsStdin) {
-    await writeStdinPayload(handle, action.input);
-  }
-
-  const timeoutMs = action.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  const timeoutPromise = new Promise<'timeout'>((res) => {
-    timer = setTimeout(() => res('timeout'), timeoutMs);
-  });
-  const exitPromise = handle.exited.then((code) => ({ code }) as const);
-
-  const race = await Promise.race([exitPromise, timeoutPromise]);
-  if (timer) clearTimeout(timer);
-
-  if (race === 'timeout') {
-    await killWithGrace(handle);
-    await Promise.allSettled([stdoutPromise, stderrPromise]);
-    const message = `reset script timed out after ${timeoutMs}ms`;
-    events.broadcast({
-      type: 'demo:reset',
-      flowId,
-      payload: { ok: false, error: message },
-    });
-    return { ok: false, error: message };
-  }
-
-  const code = race.code;
-  const [stdout, stderr] = await Promise.all([stdoutPromise, stderrPromise]);
-
-  if (code === 0) {
-    let body: unknown;
-    try {
-      body = JSON.parse(stdout);
-    } catch {
-      body = stdout;
-    }
-    events.broadcast({
-      type: 'demo:reset',
-      flowId,
-      payload: { ok: true, body },
-    });
-    return { ok: true, body };
-  }
-
-  const lastLine = lastNonEmptyLine(stderr);
-  const truncated = lastLine.slice(0, STDERR_TRUNCATE);
-  const message = truncated.length > 0 ? truncated : `reset script exited with code ${code}`;
-  events.broadcast({
-    type: 'demo:reset',
-    flowId,
-    payload: { ok: false, error: message },
-  });
-  return { ok: false, error: message };
 }

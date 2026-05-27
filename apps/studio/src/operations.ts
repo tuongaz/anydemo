@@ -762,7 +762,6 @@ function readRawFlowAndStyle(flowPath: string): ReadRawResult {
 type MutateMergedFlowMutator<E> = (flow: {
   version: number;
   name: string;
-  resetAction?: unknown;
   nodes: Array<Record<string, unknown>>;
   connectors: Array<Record<string, unknown>>;
 }) => { kind: 'ok' } | E;
@@ -808,7 +807,6 @@ export async function mutateMergedFlow<E extends { kind: string }>(
   const merged = inlinedFlow as unknown as {
     version: number;
     name: string;
-    resetAction?: unknown;
     nodes: Array<Record<string, unknown>>;
     connectors: Array<Record<string, unknown>>;
   };

@@ -1081,56 +1081,6 @@ describe('ResolvedFlowSchema', () => {
     expect(result.data.connectors).toHaveLength(3);
   });
 
-  it('parses a demo with a top-level resetAction (US-003 / US-008 script-shape)', () => {
-    const demo = {
-      version: 2 as const,
-      name: 'reset-demo',
-      nodes: [
-        {
-          id: 'a',
-          type: 'rectangle' as const,
-          position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
-        },
-      ],
-      connectors: [],
-      resetAction: {
-        kind: 'script' as const,
-        interpreter: 'bun',
-        args: ['run'],
-        scriptPath: 'scripts/reset.ts',
-      },
-    };
-    const result = ResolvedFlowSchema.safeParse(demo);
-    if (!result.success) {
-      throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-    }
-    expect(result.data.resetAction?.kind).toBe('script');
-    expect(result.data.resetAction?.interpreter).toBe('bun');
-    expect(result.data.resetAction?.scriptPath).toBe('scripts/reset.ts');
-  });
-
-  it('parses a demo without resetAction (back-compat for US-003)', () => {
-    const demo = {
-      version: 2 as const,
-      name: 'no-reset',
-      nodes: [
-        {
-          id: 'a',
-          type: 'rectangle' as const,
-          position: { x: 0, y: 0 },
-          data: { name: 'A', stateSource: { kind: 'request' as const } },
-        },
-      ],
-      connectors: [],
-    };
-    const result = ResolvedFlowSchema.safeParse(demo);
-    if (!result.success) {
-      throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-    }
-    expect(result.data.resetAction).toBeUndefined();
-  });
-
   it('parses a type:icon node with only the required icon field (US-008)', () => {
     const demo = {
       version: 2 as const,
@@ -1679,8 +1629,6 @@ describe('ResolvedFlowSchema', () => {
   });
 
   // US-001: script-based playAction + optional statusAction + StatusReport.
-  // US-008: PlayAction AND resetAction are both script-shaped now; the
-  // legacy HttpAction schema has been removed.
   describe('script-based playAction + statusAction (US-001)', () => {
     const makeDemoWithPlayAction = (playAction: unknown) => ({
       version: 2 as const,
@@ -1969,62 +1917,6 @@ describe('ResolvedFlowSchema', () => {
     it('rejects a StatusReport whose summary exceeds 120 chars', () => {
       const long = 'a'.repeat(121);
       const result = StatusReportSchema.safeParse({ state: 'ok', summary: long });
-      expect(result.success).toBe(false);
-    });
-
-    it('resetAction on the demo uses the script action shape (US-008)', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'reset-demo',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-            },
-          },
-        ],
-        connectors: [],
-        resetAction: {
-          kind: 'script' as const,
-          interpreter: 'bun',
-          scriptPath: 'scripts/reset.ts',
-        },
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
-      if (!result.success) {
-        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
-      }
-      expect(result.data.resetAction?.kind).toBe('script');
-      expect(result.data.resetAction?.interpreter).toBe('bun');
-      expect(result.data.resetAction?.scriptPath).toBe('scripts/reset.ts');
-    });
-
-    it('rejects a legacy HTTP-shaped resetAction (US-008 cut)', () => {
-      const demo = {
-        version: 2 as const,
-        name: 'reset-demo',
-        nodes: [
-          {
-            id: 's',
-            type: 'rectangle' as const,
-            position: { x: 0, y: 0 },
-            data: {
-              name: 'S',
-              stateSource: { kind: 'event' as const },
-            },
-          },
-        ],
-        connectors: [],
-        resetAction: {
-          method: 'POST' as const,
-          url: 'http://localhost:3000/reset',
-        },
-      };
-      const result = ResolvedFlowSchema.safeParse(demo);
       expect(result.success).toBe(false);
     });
   });

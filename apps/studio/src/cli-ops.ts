@@ -10,8 +10,8 @@ import {
 /**
  * Build a single Operations handle for in-process CLI use.
  *
- * The CLI has no watcher and no statusRunner — play/reset are server-only
- * features that still go via HTTP. When a CLI mutates a flow file, the
+ * The CLI has no watcher and no statusRunner — play is server-only
+ * and still goes via HTTP. When a CLI mutates a flow file, the
  * running studio's flow watcher picks up the disk write externally and
  * broadcasts flow:reload to connected SPA clients.
  *

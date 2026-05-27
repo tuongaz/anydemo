@@ -32,7 +32,6 @@ export function mergeFlowAndStyle(flow: Flow, style: Style): ResolvedFlow {
     version: flow.version,
     name: flow.name,
     ...(flow.description !== undefined ? { description: flow.description } : {}),
-    ...(flow.resetAction ? { resetAction: flow.resetAction } : {}),
     nodes: mergedNodes,
     connectors: mergedConnectors,
   } as ResolvedFlow;
@@ -114,7 +113,6 @@ export function splitFlow(resolved: {
   version: number;
   name: string;
   description?: string;
-  resetAction?: unknown;
   nodes: Array<Record<string, unknown>>;
   connectors: Array<Record<string, unknown>>;
 }): { flow: Record<string, unknown>; style: Record<string, unknown> } {
@@ -187,7 +185,6 @@ export function splitFlow(resolved: {
     connectors: flowConnectors,
   };
   if (resolved.description !== undefined) flow.description = resolved.description;
-  if (resolved.resetAction !== undefined) flow.resetAction = resolved.resetAction;
 
   const style: Record<string, unknown> = {};
   if (Object.keys(styleNodes).length > 0) style.nodes = styleNodes;

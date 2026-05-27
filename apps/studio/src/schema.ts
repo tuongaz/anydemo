@@ -115,9 +115,6 @@ export const ScriptActionSchema = z.object({
 
 export const PlayActionSchema = ScriptActionSchema;
 
-// resetAction is a one-shot script with the same shape as a play script.
-export const ResetActionSchema = ScriptActionSchema;
-
 // Long-running status script. Same spawn shape as ScriptAction (interpreter +
 // args + scriptPath) but no stdin payload and a much longer max lifetime since
 // these processes tick continuously and stream StatusReports to stdout.
@@ -395,10 +392,6 @@ export const ResolvedFlowSchema = z
     description: z.string().optional(),
     nodes: z.array(NodeSchema),
     connectors: z.array(ConnectorSchema),
-    // Optional one-shot script the studio runs when the user clicks Restart.
-    // The studio kills every live play + status script for the flow BEFORE
-    // invoking this script, so the script sees no stragglers.
-    resetAction: ResetActionSchema.optional(),
   })
   .superRefine((resolved, ctx) => {
     const nodeIds = new Set(resolved.nodes.map((n) => n.id));
@@ -476,7 +469,6 @@ export type EdgePinSide = z.infer<typeof EdgePinSideSchema>;
 export type PlayAction = z.infer<typeof PlayActionSchema>;
 export type StatusAction = z.infer<typeof StatusActionSchema>;
 export type StatusReport = z.infer<typeof StatusReportSchema>;
-export type ResetAction = z.infer<typeof ResetActionSchema>;
 export type StateSource = z.infer<typeof StateSourceSchema>;
 
 // =============================================================================
@@ -648,7 +640,6 @@ export const FlowSchema = z
     version: z.literal(2),
     name: z.string().min(1),
     description: z.string().optional(),
-    resetAction: ResetActionSchema.optional(),
     nodes: z.array(FlowNodeSchema),
     connectors: z.array(FlowConnectorSchema),
   })
@@ -687,7 +678,6 @@ export const FlowEnvelopeSchema = z
     version: z.literal(2),
     name: z.string().min(1),
     description: z.string().optional(),
-    resetAction: ResetActionSchema.optional(),
     nodes: z.array(z.unknown().describe('See `seeflow schema node`')),
     connectors: z.array(z.unknown().describe('See `seeflow schema connector`')),
   })

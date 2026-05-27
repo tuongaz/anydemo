@@ -103,7 +103,6 @@ const FULL_CTX: CommandContext = {
   canRedo: true,
   hasClipboard: true,
   canExportDemo: true,
-  canResetSession: true,
 };
 
 const EMPTY_CTX: CommandContext = {
@@ -112,7 +111,6 @@ const EMPTY_CTX: CommandContext = {
   canRedo: false,
   hasClipboard: false,
   canExportDemo: false,
-  canResetSession: false,
 };
 
 // useState call order in CommandPalette: [query, highlightedIndex, recents].
@@ -336,24 +334,22 @@ describe('CommandPalette', () => {
     expect(labels).toEqual(['File', 'Edit', 'View', 'Tools', 'Layout', 'Selection', 'Help']);
   });
 
-  it('renders File-category rows for export-to-pdf, image, and restart-session commands', () => {
-    const tree = renderPalette({}, { recents: ['export.pdf', 'export.png', 'session.reset'] });
+  it('renders File-category rows for export-to-pdf and image commands', () => {
+    const tree = renderPalette({}, { recents: ['export.pdf', 'export.png'] });
     expect(findRow(tree, 'export.pdf')).not.toBeNull();
     expect(findRow(tree, 'export.png')).not.toBeNull();
-    expect(findRow(tree, 'session.reset')).not.toBeNull();
   });
 
-  it('disables export and session rows when the demo context does not support them', () => {
+  it('disables export rows when the demo context does not support them', () => {
     const ctx: CommandContext = {
       hasSelection: false,
       canUndo: false,
       canRedo: false,
       hasClipboard: false,
       canExportDemo: false,
-      canResetSession: false,
     };
-    const tree = renderPalette({ ctx }, { recents: ['export.pdf', 'export.png', 'session.reset'] });
-    for (const id of ['export.pdf', 'export.png', 'session.reset']) {
+    const tree = renderPalette({ ctx }, { recents: ['export.pdf', 'export.png'] });
+    for (const id of ['export.pdf', 'export.png']) {
       const row = findRow(tree, id);
       if (!row) throw new Error(`missing row for ${id}`);
       expect(row.props.disabled).toBe(true);

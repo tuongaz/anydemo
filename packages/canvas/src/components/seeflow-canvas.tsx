@@ -91,7 +91,6 @@ import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import { GlowOverlay } from './glow-overlay.tsx';
-import { RestartDemoButton } from './restart-demo-button.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -160,14 +159,6 @@ export interface CanvasFeatureOverrides {
    * `view` modes); the item still requires a `projectId` to actually render.
    */
   enableEmbed?: boolean;
-  /**
-   * Gates the top-right Restart-demo button (rendered next to ShareMenu).
-   * Default ON for `edit`, OFF for `view` and `mini` — restart is a host-side
-   * runtime action and embedders should not be able to mutate demo state.
-   * Even when this is ON, the button only renders if the host provides
-   * {@link SeeflowCanvasProps.onRestartDemo}.
-   */
-  showRestart?: boolean;
   enableKeyboard?: boolean;
   enableContextMenu?: boolean;
   enableDragDrop?: boolean;
@@ -204,7 +195,6 @@ export interface ResolvedCanvasFlags {
   showControls: boolean;
   showShareMenu: boolean;
   showMiniMap: boolean;
-  showRestart: boolean;
   enableKeyboard: boolean;
   enableContextMenu: boolean;
   enableDragDrop: boolean;
@@ -225,7 +215,6 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   showControls: true,
   showShareMenu: true,
   showMiniMap: true,
-  showRestart: true,
   enableKeyboard: true,
   enableContextMenu: true,
   enableDragDrop: true,
@@ -259,8 +248,6 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   // View mode keeps the MiniMap — it's a navigation aid that pairs with the
   // pan/zoom that stays on in this mode.
   showMiniMap: true,
-  // Restart is a host-side runtime action — embedders never see it.
-  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -296,7 +283,6 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   showShareMenu: false,
   // Mini mode IS the thumbnail — nesting a MiniMap inside would be redundant.
   showMiniMap: false,
-  showRestart: false,
   enableKeyboard: false,
   enableContextMenu: false,
   enableDragDrop: false,
@@ -329,7 +315,6 @@ export function resolveFlags(
     showControls: input.showControls ?? defaults.showControls,
     showShareMenu: input.showShareMenu ?? defaults.showShareMenu,
     showMiniMap: input.showMiniMap ?? defaults.showMiniMap,
-    showRestart: input.showRestart ?? defaults.showRestart,
     enableKeyboard: input.enableKeyboard ?? defaults.enableKeyboard,
     enableContextMenu: input.enableContextMenu ?? defaults.enableContextMenu,
     enableDragDrop: input.enableDragDrop ?? defaults.enableDragDrop,
@@ -357,6 +342,15 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * → the Panel renders only its built-in children.
    */
   topLeftSlot?: React.ReactNode;
+  /**
+   * Optional content rendered inside the top-right Panel to the LEFT of the
+   * built-in ShareMenu. Shares the same flex row as ShareMenu (`flex items-
+   * center gap-1`) so external affordances (e.g. the studio's FlowSwitcher)
+   * sit alongside the share/download cluster. Renders even when
+   * `showShareMenu` is off — the host gets a stable mount point for floating
+   * chrome regardless of canvas mode.
+   */
+  topRightSlot?: React.ReactNode;
   /**
    * US-004: project id used by file-backed nodes (type:'image', type:'html')
    * to build project-scoped file URLs via `fileUrl(projectId, path)`. Threaded
@@ -833,13 +827,6 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * upload affordance. Absent → the item is hidden.
    */
   onExportToCloud?: () => void;
-  /**
-   * Opt-in callback that wires the top-right Restart-demo button (rendered
-   * alongside the ShareMenu). Edit-mode-only — the `showRestart` flag is OFF
-   * by default in view and mini modes. Absent → the button is hidden even
-   * when `showRestart` is true.
-   */
-  onRestartDemo?: () => Promise<unknown>;
   /**
    * Telemetry: fired once when any node drag begins. Pure passthrough — the
    * canvas's internal `draggingRef` bookkeeping runs regardless. Wired by the
@@ -1773,6 +1760,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // parent supplies.
     adapter,
     topLeftSlot,
+    topRightSlot,
     projectId,
     flowSlug,
     fileBaseUrl,
@@ -1844,7 +1832,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     autoFitViewSignal,
     customIcons,
     onExportToCloud,
-    onRestartDemo,
     onNodeDragStart,
     onNodeDragStop,
     onViewportChange,
@@ -1856,7 +1843,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     showControls,
     showShareMenu,
     showMiniMap,
-    showRestart,
     enableKeyboard,
     enableContextMenu,
     enableDragDrop,
@@ -1885,7 +1871,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         showControls,
         showShareMenu,
         showMiniMap,
-        showRestart,
         enableKeyboard,
         enableContextMenu,
         enableDragDrop,
@@ -1906,7 +1891,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       showControls,
       showShareMenu,
       showMiniMap,
-      showRestart,
       enableKeyboard,
       enableContextMenu,
       enableDragDrop,
@@ -4505,18 +4489,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 </div>
               </Panel>
             ) : null}
-            {/* Top-right action cluster: Restart-demo + ShareMenu. Sharing one
-            Panel keeps them side-by-side so they never overlap. ShareMenu
-            mode is mapped to 'view' for mini defensively (the Panel itself
-            is gated below). EmbedDialog state is hoisted into this
-            component so the imperative ref handle can open it without
-            going through the menu. */}
-            {flags.showShareMenu || (flags.showRestart && onRestartDemo) ? (
+            {/* Top-right action cluster: host-provided topRightSlot + ShareMenu.
+            Sharing one Panel keeps them side-by-side so they never overlap.
+            ShareMenu mode is mapped to 'view' for mini defensively (the Panel
+            itself is gated below). EmbedDialog state is hoisted into this
+            component so the imperative ref handle can open it without going
+            through the menu. */}
+            {flags.showShareMenu || topRightSlot ? (
               <Panel position="top-right">
                 <div className="sf:flex sf:items-center sf:gap-1">
-                  {flags.showRestart && onRestartDemo ? (
-                    <RestartDemoButton onRestartDemo={onRestartDemo} />
-                  ) : null}
+                  {topRightSlot}
                   {flags.showShareMenu ? (
                     <ShareMenu
                       mode={mode === 'mini' ? 'view' : mode}

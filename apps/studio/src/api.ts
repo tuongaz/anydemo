@@ -30,15 +30,7 @@ import {
 } from './operations.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
 import { readProjectManifest } from './project-scanner.ts';
-import {
-  type PlayResult,
-  type ResetResult,
-  type RunPlayOptions,
-  type RunResetOptions,
-  runPlay as defaultRunPlay,
-  runReset as defaultRunReset,
-  stopAllPlays as defaultStopAllPlays,
-} from './proxy.ts';
+import { type PlayResult, type RunPlayOptions, runPlay as defaultRunPlay } from './proxy.ts';
 import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import {
@@ -219,28 +211,22 @@ export interface ApiOptions {
    *  launching real child processes for the play-action script. */
   processSpawner?: ProcessSpawner;
   /** Injectable proxy facade — defaults wrap the proxy.ts module exports.
-   *  Tests use this to record call order across runPlay / runReset /
-   *  stopAllPlays and to drive each in isolation. */
+   *  Tests use this to drive runPlay in isolation. */
   proxy?: ProxyFacade;
 }
 
 /**
  * Thin call-through wrapper around the proxy.ts module exports. Lets tests
- * inject a recording fake to assert call order across runPlay, runReset, and
- * stopAllPlays — none of which can be observed via the underlying
- * ProcessSpawner alone because the play-run map and event broadcasts are
- * encapsulated inside proxy.ts.
+ * inject a recording fake to observe runPlay invocations — the play-run map
+ * and event broadcasts are encapsulated inside proxy.ts and not otherwise
+ * observable via the underlying ProcessSpawner.
  */
 export interface ProxyFacade {
   runPlay(options: RunPlayOptions): Promise<PlayResult>;
-  runReset(options: RunResetOptions): Promise<ResetResult>;
-  stopAllPlays(flowId: string): Promise<void>;
 }
 
 export const defaultProxyFacade: ProxyFacade = {
   runPlay: defaultRunPlay,
-  runReset: defaultRunReset,
-  stopAllPlays: defaultStopAllPlays,
 };
 
 export function createApi(options: ApiOptions): Hono {
@@ -1553,82 +1539,6 @@ export function createApi(options: ApiOptions): Hono {
       return c.json({ error: result.error }, result.statusHint as 400 | 404 | 500 | 504);
     }
     return c.json(result.body);
-  });
-
-  // POST /api/projects/:project/flows/:flow/reset — the "Restart demo"
-  // workflow (US-008). Order:
-  //   1. Stop every live play-script + every long-running status-script for
-  //      this demo in parallel — both must complete before any reset script
-  //      spawns so the script sees no stragglers.
-  //   2. Run the demo's `resetAction` script (if declared); any non-zero exit
-  //      becomes a 502 to the caller but does NOT suppress reload/restart.
-  //   3. Broadcast `flow:reload` unconditionally so the canvas re-fetches.
-  //   4. Fire-and-forget `statusRunner.restart` so the next status batch is
-  //      spawning by the time the response lands. Individual spawn failures
-  //      surface via console.warn but never fail the /reset call.
-  api.post('/projects/:project/flows/:flow/reset', async (c) => {
-    const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
-    if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
-    const entry = resolved.entry;
-    const id = entry.id;
-    if (!events) return c.json({ error: 'events not enabled' }, 500);
-
-    const fullPath = resolveFilePath(entry.repoPath, entry.flowPath);
-    if (!existsSync(fullPath)) {
-      return c.json({ error: `Flow file not found: ${fullPath}` }, 404);
-    }
-    const merged = readMergedFlow(fullPath);
-    if (!merged.flow) {
-      return c.json({ error: merged.error ?? 'Flow read failed' }, 400);
-    }
-
-    // 1. Stop every play + status script in parallel. await BOTH before
-    //    spawning the reset script so a still-running play can't race the
-    //    reset and re-dirty the running app's state.
-    const stopPromises: Array<Promise<void>> = [proxy.stopAllPlays(id)];
-    if (statusRunner) stopPromises.push(statusRunner.stop(id));
-    await Promise.all(stopPromises);
-
-    // 2. Run resetAction (if declared).
-    const resetAction = merged.flow.resetAction;
-    let calledResetAction = false;
-    let resetActionError: string | undefined;
-
-    if (resetAction) {
-      calledResetAction = true;
-      const result = await proxy.runReset({
-        events,
-        flowId: id,
-        cwd: entry.repoPath,
-        action: resetAction,
-      });
-      if (!result.ok && result.error) {
-        resetActionError = result.error;
-      }
-    }
-
-    // 3. Broadcast reload unconditionally — even when resetAction failed,
-    //    the canvas should still refresh from disk in case the user just
-    //    edited the file.
-    events.broadcast({
-      type: 'flow:reload',
-      flowId: id,
-      payload: {},
-    });
-
-    // 4. Fire-and-forget the next status batch.
-    if (statusRunner) {
-      void statusRunner.restart(id).catch((err) => {
-        console.warn(
-          `[api] statusRunner.restart(${id}) failed: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      });
-    }
-
-    if (resetActionError) {
-      return c.json({ error: resetActionError, calledResetAction }, 502);
-    }
-    return c.json({ ok: true, calledResetAction });
   });
 
   // PATCH a single node's position back into the on-disk flow.json. Atomic

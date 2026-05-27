@@ -51,8 +51,7 @@ function captureStdin(): { stream: WritableStream<Uint8Array>; captured: Capture
 }
 
 // Same fake-spawner shape as proxy.test.ts (kept local so the two test files
-// stay independent — the proxy fake serves runPlay/runReset's slightly
-// different needs around `killExitsOn` modeling).
+// stay independent).
 function makeFakeSpawner(opts: FakeOptions): { spawner: ProcessSpawner; record: FakeRecord } {
   const record: FakeRecord = {
     spawnCalls: [],

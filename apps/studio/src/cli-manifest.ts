@@ -906,7 +906,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
           'Optional named schema within the category — e.g. for `node`: ' +
           'rectangle, ellipse, sticky, text, database, server, user, queue, ' +
           'cloud, image, html, icon, component. For `action`: playAction, ' +
-          'statusAction, resetAction, statusReport, componentAction. For ' +
+          'statusAction, statusReport, componentAction. For ' +
           '`componentSpec`: componentSpec, componentSpecElement.',
       },
     ],

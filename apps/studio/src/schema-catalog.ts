@@ -27,7 +27,6 @@ import {
   FlowTextNodeSchema,
   FlowUserNodeSchema,
   PlayActionSchema,
-  ResetActionSchema,
   StatusActionSchema,
   StatusReportSchema,
   StyleSchema,
@@ -63,7 +62,7 @@ const CATEGORIES: SchemaCategory[] = [
   {
     name: 'action',
     description:
-      'playAction, statusAction, resetAction, statusReport, plus componentAction (the set | script discriminated union dispatched on component-node action handles).',
+      'playAction, statusAction, statusReport, plus componentAction (the set | script discriminated union dispatched on component-node action handles).',
   },
   {
     name: 'componentSpec',
@@ -112,7 +111,6 @@ const PAYLOADS: Record<string, SchemaPayload> = {
     schemas: {
       playAction: toJsonSchema(PlayActionSchema),
       statusAction: toJsonSchema(StatusActionSchema),
-      resetAction: toJsonSchema(ResetActionSchema),
       statusReport: toJsonSchema(StatusReportSchema),
       componentAction: toJsonSchema(ComponentActionSchema),
     },

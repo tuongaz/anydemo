@@ -266,30 +266,6 @@ export const createProject = async (body: CreateProjectBody): Promise<CreateProj
   return (await res.json()) as CreateProjectResult;
 };
 
-export interface RestartFlowResult {
-  ok: true;
-  calledResetAction: boolean;
-}
-
-export const restartFlow = async (project: string, flow: string): Promise<RestartFlowResult> => {
-  const url = `${flowApiBase(project, flow)}/reset`;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: '{}',
-  });
-  if (!res.ok) {
-    let errorBody: { error?: string } | null = null;
-    try {
-      errorBody = (await res.json()) as { error?: string };
-    } catch {
-      // ignore
-    }
-    throw new Error(errorBody?.error ?? `POST ${url} → ${res.status}`);
-  }
-  return (await res.json()) as RestartFlowResult;
-};
-
 /**
  * US-018: response shape for the two project-file shell-out endpoints
  * (`/files/open` and `/files/reveal`). The backend always returns the

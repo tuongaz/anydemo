@@ -430,7 +430,6 @@ describe('COMMANDS registry (US-002)', () => {
     'help.commandPalette',
     'export.pdf',
     'export.png',
-    'session.reset',
   ];
 
   it('contains exactly one entry per CommandId (no duplicates, no missing)', () => {

@@ -3040,7 +3040,6 @@ describe('US-027: resolveFlags helper', () => {
       showControls: true,
       showShareMenu: true,
       showMiniMap: true,
-      showRestart: true,
       enableKeyboard: true,
       enableContextMenu: true,
       enableDragDrop: true,
@@ -3072,7 +3071,6 @@ describe('US-027: resolveFlags helper', () => {
       showControls: true,
       showShareMenu: true,
       showMiniMap: true,
-      showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,
@@ -3102,7 +3100,6 @@ describe('US-027: resolveFlags helper', () => {
       // Mini IS the thumbnail — the high-level outline is suppressed so the
       // canvas doesn't nest a minimap inside itself.
       showMiniMap: false,
-      showRestart: false,
       enableKeyboard: false,
       enableContextMenu: false,
       enableDragDrop: false,

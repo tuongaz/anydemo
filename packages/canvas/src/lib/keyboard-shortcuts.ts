@@ -87,8 +87,7 @@ export type CommandId =
   | 'selection.deselect'
   | 'help.commandPalette'
   | 'export.pdf'
-  | 'export.png'
-  | 'session.reset';
+  | 'export.png';
 
 export type CommandCategory = 'Edit' | 'View' | 'Tools' | 'Layout' | 'Selection' | 'File' | 'Help';
 
@@ -102,11 +101,6 @@ export type CommandContext = {
   // dispatcher noops if the demo isn't ready yet — surface that here so the
   // palette greys the rows instead of letting Enter do nothing.
   canExportDemo: boolean;
-  // True when the open demo supports a runtime reset. Separate from
-  // `canExportDemo` because the parent only wires `onRestartDemo` for demos
-  // that have a registered reset action — exports always work on a loaded
-  // demo, but restart is gated on the demo declaring one.
-  canResetSession: boolean;
 };
 
 export type CommandDef = {
@@ -316,13 +310,6 @@ export const COMMANDS: readonly CommandDef[] = [
     description: 'Download the current canvas as a PNG',
     category: 'File',
     enabled: (ctx) => ctx.canExportDemo,
-  },
-  {
-    id: 'session.reset',
-    label: 'Restart the demo',
-    description: 'Stop running scripts and re-run the reset script',
-    category: 'File',
-    enabled: (ctx) => ctx.canResetSession,
   },
 ];
 

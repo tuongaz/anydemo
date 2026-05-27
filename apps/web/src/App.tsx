@@ -8,7 +8,7 @@ import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
-import { type CreateProjectResult, type FlowDetail, playFlowNode, restartFlow } from '@/lib/api';
+import { type CreateProjectResult, type FlowDetail, playFlowNode } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import {
@@ -149,15 +149,6 @@ export function App() {
 
   useStudioEvents(flowId, { onHello, onFlowReload, onEvent });
 
-  const onRestartDemo = useCallback(async (): Promise<void> => {
-    if (!project || !flow) return;
-    try {
-      await restartFlow(project, flow);
-    } catch (err) {
-      console.error('Failed to restart demo:', err);
-    }
-  }, [project, flow]);
-
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
       writeLastProjectId(result.id);
@@ -258,7 +249,6 @@ export function App() {
               nodeEvents={nodeEvents}
               statusByNode={statusByNode}
               onPlayNode={onPlayNode}
-              onRestartDemo={flowId ? onRestartDemo : undefined}
               refreshFlows={refreshFlows}
             />
           ) : (

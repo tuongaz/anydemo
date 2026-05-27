@@ -6,7 +6,6 @@
 
 export type StudioEventType =
   | 'flow:reload'
-  | 'demo:reset'
   | 'node:running'
   | 'node:done'
   | 'node:error'

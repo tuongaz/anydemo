@@ -52,8 +52,7 @@ export interface CreateAppOptions {
    *  proxy.ts pick `defaultProcessSpawner`. Tests use this to drive runPlay
    *  with an in-memory fake spawner. */
   processSpawner?: ProcessSpawner;
-  /** Inject a ProxyFacade — tests use this to short-circuit runPlay /
-   *  runReset / stopAllPlays and assert call order. */
+  /** Inject a ProxyFacade — tests use this to short-circuit runPlay. */
   proxy?: ProxyFacade;
   /** Per-process token gating `Origin: null` requests (sandboxed MCP App
    *  iframe). Generated at studio boot; delivered to the iframe via

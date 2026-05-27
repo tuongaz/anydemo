@@ -295,7 +295,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       'spec, or flow envelope looks like before authoring writes. Categories: ' +
       '`flow`, `node` (13 flat variants — rectangle/ellipse/sticky/text/' +
       'database/server/user/queue/cloud/image/html/icon/component), ' +
-      '`connector`, `action` (playAction/statusAction/resetAction/statusReport/' +
+      '`connector`, `action` (playAction/statusAction/statusReport/' +
       "componentAction), `componentSpec` (sidecar shape for type:'component' " +
       'nodes), `style`.',
     inputSchema: {
@@ -311,7 +311,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
             'Optional named schema within the category (requires `name`). For ' +
             "name='node': rectangle, ellipse, sticky, text, database, server, " +
             'user, queue, cloud, image, html, icon, component. For ' +
-            "name='action': playAction, statusAction, resetAction, statusReport, " +
+            "name='action': playAction, statusAction, statusReport, " +
             "componentAction. For name='componentSpec': componentSpec, " +
             'componentSpecElement.',
         },
