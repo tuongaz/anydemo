@@ -15,7 +15,7 @@
     "test:it:e2e": "bun apps/studio/scripts/run-e2e.ts",
     "test:it:update-snapshots": "bun apps/studio/scripts/run-e2e.ts --update-snapshots",
     "predev": "bun run --filter @seeflow/canvas build:js",
-    "dev": "concurrently -n canvas-css,workspaces -c blue,green \"cd packages/canvas && bun run build:css:watch\" \"bun run --filter '*' dev\""
+    "dev": "concurrently -n canvas-css,workspaces -c blue,green \"cd packages/canvas && bun run build:css:watch\" \"bun run --filter @tuongaz/seeflow --filter @seeflow/web dev\""
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
