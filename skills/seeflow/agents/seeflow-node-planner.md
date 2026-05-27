@@ -174,18 +174,23 @@ to `rectangle + data.icon: "database"` for an actual database.
   | Support agent triaging tickets in an internal tool | `type:'user'` is correct |
 - **`ellipse`, `sticky`, `text`** — decorative geometric shapes for
   callouts, labels, and notes. No capability chrome in v1.
-- **`component`** — catalog-driven reactive UI element. **The default
-  for `inputClass === "document"` flows** (gap analyses, comparisons,
-  status reports, checklists, architectural narratives) when a
-  catalog entry covers the content. `data.spec.elements[].type` must
-  match a name from the `componentCatalog` input — the studio
-  rejects unknown names with `badSchema`. Run `$SEEFLOW schema node`
-  via the orchestrator's cache for the full `component` variant
-  shape; the catalog enum lives there too.
-- **`html`** — escape hatch for content that no `component` catalog
-  entry covers (one-off layouts, custom legends, prose that needs
-  Tailwind utility classes the catalog doesn't expose). Reach for
-  `html` only after confirming the catalog can't render the content.
+- **`component`** — catalog-driven reactive UI element. **Preferred
+  for any rich or complex node content** regardless of `inputClass`
+  (gap analyses, comparisons, status reports, checklists, KPI tiles,
+  architectural narratives). Components are typed, theme-aware, and
+  participate in updates automatically; the studio validates each
+  `spec.elements[].type` against the `componentCatalog` input and
+  rejects unknown names with `badSchema`. Default for
+  `inputClass === "document"` flows; also the right pick whenever a
+  `code` / `conversation` flow legitimately needs an embedded info
+  panel. Run `$SEEFLOW schema node` via the orchestrator's cache for
+  the full `component` variant shape; the catalog enum lives there too.
+- **`html`** — **last-resort** escape hatch for content that no
+  `component` catalog entry covers (custom one-off layouts, bespoke
+  legends, prose that needs Tailwind utility classes the catalog
+  doesn't expose). **Always confirm the catalog can't render the
+  content first** — same rule for every input class — and cite the
+  catalog gap in `rationales[nodeId]` so the fallback is reviewable.
   `data.html` is raw markup; the studio sanitises (`<script>`,
   `<style>`, `<iframe>`, `on*=`, `javascript:` URLs all stripped) and
   externalises to `flows/<flowSlug>/nodes/<id>/view.html`.
@@ -225,7 +230,10 @@ predates the skirt.
   status pills and Play buttons render on the illustrative skirt
   whenever the entity matches. `component` and `html` are off the
   table unless the user explicitly asked for an information panel
-  embedded in the diagram.
+  embedded in the diagram — in that case, follow the universal
+  preference: try `component` first against `componentCatalog`, and
+  fall back to `html` only when the catalog genuinely can't render
+  the content (cite the gap in `rationales[nodeId]`).
 - **`conversation`** — same defaults as `code`. The brief came from
   the in-session discussion rather than a fresh code-analyzer run, but
   the subject is still a running system; the semantic-shape ladder
@@ -513,6 +521,7 @@ A compact cheat-sheet — full rules live in the sections above.
 - **Output:** ONE fenced JSON block, nothing else. Envelope MUST include `name`, `slug`, `nodes`, `connectors`, `rationales` — all five keys, every run.
 - **Conform** to `$SEEFLOW schema node` / `connector` from the launching prompt — anything outside is rejected at `flow:add-bulk`.
 - **Type ladder by `inputClass`** (§"Picking node `type` by input class"): `code` / `conversation` → semantic shape (`database` / `queue` / `cloud` / `server` / `user` / `rectangle`); `document` → `component` from `componentCatalog`, `html` fallback.
+- **Universal rule for complex/rich node content (any input class):** always try `type:'component'` against `componentCatalog` first. Reach for `type:'html'` only after confirming the catalog can't render it — and cite the gap in `rationales[nodeId]`.
 - **Exactly one trigger** for `code` / `conversation` — set `data.playAction` to `{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }`. `document` flows usually have none — omit rather than fabricate.
 - **Resources are mandatory** (§"Resource nodes are mandatory") — every DB, queue, bus, cache, file store, SaaS the brief mentions gets a node. Document flows are the only exception.
 - **`data.detail`** on every non-decorative node (§"Semantic requirements"). Phase 3 backfill is a safety net, not a license to skip.

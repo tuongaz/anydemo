@@ -157,6 +157,7 @@ Full text in `references/core-rules.md`:
 - **Calling `flows:create` instead of `projects:create` for a brand-new project.** `flows:create --project <p> --flow <f>` adds a flow to an *existing* project's manifest; a brand-new project always starts with `projects:create`, which writes both `seeflow.json` and the first `flows/main/flow.json` in one shot.
 - **Passing `<slug>/scripts/…` as `scriptPath`.** The anchor is the node folder under `flows/<flowSlug>/nodes/<id>/` — emit just `scripts/play.ts`.
 - **Writing `LEARN.md` inside a per-project or per-flow folder.** `$learnPath = $PWD/.seeflow/LEARN.md` is **shared across every project + flow** in the host repo — never inside `<projectSlug>/` or `<projectSlug>/flows/<flowSlug>/`.
+- **Reaching for `type:'html'` before trying `type:'component'`.** The component catalog is the typed, theme-aware way to render rich node content (status cards, comparison tables, checklists, KPI tiles, gap rows) — and the rule is universal across every `inputClass`, not just `document`. `html` is a last-resort escape hatch, only legitimate once `$SEEFLOW schema node`'s `component.spec.elements[].type` enum is confirmed not to cover the content, with the gap cited in `rationales[nodeId]`. See `references/schema.md` §"When to use which node type" and `agents/seeflow-node-planner.md` §"Picking node `type`".
 
 ## Red flags — stop and reconsider
 
@@ -169,6 +170,7 @@ If you catch yourself thinking any of the following, you are rationalising — s
 - "Direct INSERT into the DB is faster than going through the API." → Rule 2. The natural data-entry path is what the flow exists to show.
 - "Phase 6 e2e looks fine from the scripts — I'll skip the run." → mandatory for `inputClass === "code"`. Only `"document"` flows legitimately skip it.
 - "I'll narrate the LEARN.md write so the user knows it happened." → both writes are silent by contract; narration is noise.
+- "I'll just drop in an `html` node — it's only a small comparison table / status card / checklist." → no. `type:'component'` is the first choice for complex node content (any `inputClass`); `html` is only legitimate after `$SEEFLOW schema node`'s `component.spec.elements[].type` enum is confirmed not to cover it, with the gap cited in `rationales[nodeId]`.
 
 ## Operations
 
