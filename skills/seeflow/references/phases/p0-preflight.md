@@ -41,6 +41,8 @@ $SEEFLOW schema node component --jq '<jq path to the spec.elements[].type enum>'
 
 Run `$SEEFLOW help schema` once this session before reaching for `--jq` — it documents the supported jq-path subset (identity `.`, field access `.foo`, brackets `.["foo"]` / `.[3]`, iteration `.foo[]`, optional `?`, pipe `|`) and the `badJq` error kind (exit 2). Resolve the exact path against the live schema output, not from memory — node-component's shape evolves and `--jq` errors fast on bad paths.
 
+If `--jq` returns exit 2 (`badJq`): the path is wrong — the schema evolved. Run `$SEEFLOW schema node component` **without** `--jq` to inspect the live structure, derive the correct path from the output, then retry with the corrected expression. Never fall back to Python, JS, or any in-process parser. Treat `badJq` as a path-debugging signal, not a tool-capability gap.
+
 Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
 
 ## Schema-type surface diff — silent
