@@ -265,8 +265,11 @@ Commands (work without a running studio):
   connectors:patch <connId>  Patch a connector (--project <p> --flow <f>) [--json/--file/--stdin]
   connectors:delete <connId> Delete a connector (--project <p> --flow <f>)
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
-  schema [<category>]  Get the flow.json schema. No arg → category index;
-                       category arg → full JSON Schema(s) for that category
+  schema [<category> [<subname>]]
+                       Get the flow.json schema. No arg → category index;
+                       category arg → full JSON Schema(s) for that category;
+                       subname arg → just that named schema (e.g.
+                       'schema node component', 'schema node rectangle')
   ids <type> <count>   Print <count> short ids of the given <type>, one per
                        line. <type> is 'node' (-> 'node-...') or 'connector'
                        (-> 'conn-...'). <count> is 1..100. Call once per type
@@ -1025,12 +1028,52 @@ async function runValidate() {
 
 async function runSchema() {
   const category = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
+  const subname = argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined;
   const jqFilter = flagValue('jq');
-  const { listSchemaCategories, getSchemaCategory } = await import('./schema-catalog.ts');
+  const { listSchemaCategories, getSchemaCategory, getCategorySubschema, listCategorySubnames } =
+    await import('./schema-catalog.ts');
   if (!category) {
     const base = { categories: listSchemaCategories() };
     if (jqFilter !== undefined) {
       printOk({ result: applyJqOrDie(base, jqFilter) });
+    }
+    printOk(base);
+  }
+  // Drill into a single named schema within the category — e.g.
+  // `seeflow schema node component`. Notes ride along unchanged because the
+  // cross-variant invariants (image path prefix, scriptPath rooting, etc.)
+  // are still relevant when you're looking at one variant.
+  if (subname) {
+    const single = getCategorySubschema(category as string, subname);
+    if (!single) {
+      const availableSubs = listCategorySubnames(category as string);
+      if (availableSubs === null) {
+        const available = listSchemaCategories().map((c) => c.name);
+        const message = `unknown schema category: ${category}`;
+        process.stderr.write(
+          `${JSON.stringify({ error: message, code: 'notFound', available })}\n`,
+        );
+        process.exit(3);
+      }
+      const message = `unknown schema subname: ${subname}`;
+      process.stderr.write(
+        `${JSON.stringify({
+          error: message,
+          code: 'notFound',
+          category,
+          available: availableSubs,
+        })}\n`,
+      );
+      process.exit(3);
+    }
+    const base = {
+      name: category,
+      subname,
+      schemas: single.schemas,
+      notes: single.notes,
+    };
+    if (jqFilter !== undefined) {
+      printOk({ name: category, subname, result: applyJqOrDie(base, jqFilter) });
     }
     printOk(base);
   }

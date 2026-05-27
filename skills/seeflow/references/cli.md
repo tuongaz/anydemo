@@ -32,6 +32,26 @@ If a Phase 0 schema call fails, the run stops and surfaces the failure
 to the user — downstream agents can't author conforming JSON without
 the contract.
 
+### Drilling into one schema (`subname` positional)
+
+`$SEEFLOW schema <category>` returns every schema in the category. Pass
+a third positional `subname` to get just one named schema — cheaper
+than the whole category, and the same `notes` ride along because the
+cross-variant invariants still apply:
+
+```
+$SEEFLOW schema node component        # just the component variant
+$SEEFLOW schema node rectangle        # just the rectangle variant
+$SEEFLOW schema action playAction     # just the playAction shape
+```
+
+Unknown subname → exit 3 with `{ code:"notFound", category, available:[…] }`
+listing the valid subnames. The same access patterns exist on every
+transport: MCP `seeflow_schema { name, subname }` and REST
+`GET /api/schema/<category>/<subname>`. Use this when an agent only
+needs one variant's contract (e.g. patching a single node type) instead
+of forwarding the full category payload.
+
 ## Addressing — `--project` + `--flow`
 
 Every flow-scoped CLI verb (`nodes:*`, `connectors:*`, `flow:add-bulk`,

@@ -823,7 +823,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
   },
   {
     name: 'schema',
-    synopsis: 'seeflow schema [<category>] [--jq <filter>]',
+    synopsis: 'seeflow schema [<category> [<subname>]] [--jq <filter>]',
     description:
       'Introspect the SeeFlow flow.json / style.json / spec.json schemas at ' +
       'runtime. Call without arguments to list the six categories (flow, node, ' +
@@ -831,9 +831,13 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'get its full JSON Schema(s) (Draft-07) plus a `notes` array of cross-' +
       "field invariants the schema can't express. The `node` payload includes " +
       "all 13 flat variants (including type:'component', whose `spec` field " +
-      'lives in a sidecar — drill into `componentSpec` for that shape). Use ' +
-      'this before authoring any flow.json / spec.json write — never memorise ' +
-      'field shapes.\n\n' +
+      'lives in a sidecar — drill into `componentSpec` for that shape).\n\n' +
+      'Pass a third positional `subname` to get just one named schema within ' +
+      'the category — e.g. `seeflow schema node component`, `seeflow schema ' +
+      'node rectangle`, `seeflow schema action playAction`. The category-' +
+      'level `notes` ride along unchanged because the cross-variant invariants ' +
+      'still apply when looking at one variant. Use this before authoring any ' +
+      'flow.json / spec.json write — never memorise field shapes.\n\n' +
       'Pass --jq <filter> to extract a slice of the response with a jq path ' +
       'expression. Supported subset: identity (`.`), field access ' +
       '(`.foo.bar`), bracket access (`.["foo"]`, `.[3]`, negative indices ' +
@@ -848,6 +852,16 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
         name: 'category',
         required: false,
         description: 'One of: flow, node, connector, action, componentSpec, style',
+      },
+      {
+        name: 'subname',
+        required: false,
+        description:
+          'Optional named schema within the category — e.g. for `node`: ' +
+          'rectangle, ellipse, sticky, text, database, server, user, queue, ' +
+          'cloud, image, html, icon, component. For `action`: playAction, ' +
+          'statusAction, resetAction, statusReport, componentAction. For ' +
+          '`componentSpec`: componentSpec, componentSpecElement.',
       },
     ],
     flags: [
@@ -868,6 +882,9 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     examples: [
       'seeflow schema',
       'seeflow schema node',
+      'seeflow schema node component',
+      'seeflow schema node rectangle',
+      'seeflow schema action playAction',
       'seeflow schema connector',
       'seeflow schema componentSpec',
       'seeflow schema node --jq .schemas.rectangle',

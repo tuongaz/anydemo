@@ -40,7 +40,13 @@ import {
 } from './proxy.ts';
 import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
-import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
+import {
+  getCategorySubschema,
+  getSchemaCategory,
+  listCategorySubnames,
+  listSchemaCategories,
+  schemaCategoryNames,
+} from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema, SeeflowManifestSchema } from './schema.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
@@ -540,6 +546,41 @@ export function createApi(options: ApiOptions): Hono {
       );
     }
     return c.json({ ok: true as const, name, schemas: payload.schemas, notes: payload.notes });
+  });
+
+  // GET /api/schema/:name/:subname — drill into one named schema within a
+  // category. Mirrors `seeflow schema <category> <subname>` and the MCP
+  // `seeflow_schema` tool's `subname` arg. Notes ride along unchanged because
+  // they describe cross-variant invariants the caller still needs (image
+  // path prefix, scriptPath rooting, etc.).
+  api.get('/schema/:name/:subname', (c) => {
+    const name = c.req.param('name');
+    const subname = c.req.param('subname');
+    const single = getCategorySubschema(name, subname);
+    if (single) {
+      return c.json({
+        ok: true as const,
+        name,
+        subname,
+        schemas: single.schemas,
+        notes: single.notes,
+      });
+    }
+    const availableSubs = listCategorySubnames(name);
+    if (availableSubs === null) {
+      return c.json(
+        { error: `unknown schema category: ${name}`, available: schemaCategoryNames() },
+        404,
+      );
+    }
+    return c.json(
+      {
+        error: `unknown schema subname: ${subname}`,
+        category: name,
+        available: availableSubs,
+      },
+      404,
+    );
   });
 
   // GET /api/ids/:type/:count — batch-mint canonical short ids. Mirrors

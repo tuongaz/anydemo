@@ -267,6 +267,29 @@ describe('integration: MCP — read-only tools', () => {
     // Unknown category → errorResult with the available names surfaced.
     const bogus = await client.callTool('seeflow_schema', { name: 'does-not-exist' });
     expect(bogus.isError).toBe(true);
+
+    // With name + subname → just that named schema (e.g. node + component).
+    const single = await client.callTool('seeflow_schema', {
+      name: 'node',
+      subname: 'component',
+    });
+    const singleBody = okJson<{
+      name: string;
+      subname: string;
+      schemas: Record<string, unknown>;
+      notes: string[];
+    }>(single);
+    expect(singleBody.name).toBe('node');
+    expect(singleBody.subname).toBe('component');
+    expect(Object.keys(singleBody.schemas)).toEqual(['component']);
+    expect(Array.isArray(singleBody.notes)).toBe(true);
+
+    // Unknown subname → error mentioning the available subnames.
+    const badSub = await client.callTool('seeflow_schema', {
+      name: 'node',
+      subname: 'nope',
+    });
+    expect(badSub.isError).toBe(true);
   });
 
   it('validate_seeflow returns { ok: true } for a minimal valid flow', async () => {

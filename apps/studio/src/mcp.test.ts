@@ -210,6 +210,80 @@ describe('seeflow_schema', () => {
     expect(msg).toContain('unknown schema category: bogus');
     expect(msg).toContain('flow');
   });
+
+  it('returns just the named schema when called with name + subname', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { name: 'node', subname: 'component' });
+    const body = expectOk(envelope) as {
+      name: string;
+      subname: string;
+      schemas: Record<string, { type: string }>;
+      notes: string[];
+    };
+    expect(body.name).toBe('node');
+    expect(body.subname).toBe('component');
+    expect(Object.keys(body.schemas)).toEqual(['component']);
+    expect(body.schemas.component?.type).toBe('object');
+    expect(body.notes.length).toBeGreaterThan(0);
+  });
+
+  it('name=node, subname=rectangle returns just rectangle', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { name: 'node', subname: 'rectangle' });
+    const body = expectOk(envelope) as {
+      name: string;
+      subname: string;
+      schemas: Record<string, unknown>;
+    };
+    expect(body.subname).toBe('rectangle');
+    expect(Object.keys(body.schemas)).toEqual(['rectangle']);
+  });
+
+  it('returns isError listing available subnames when subname is unknown within a known category', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { name: 'node', subname: 'bogus' });
+    const msg = expectError(envelope);
+    expect(msg).toContain('unknown schema subname: bogus');
+    expect(msg).toContain('node');
+    expect(msg).toContain('rectangle');
+  });
+
+  it('returns isError listing categories when category is unknown (subname provided)', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', {
+      name: 'bogus',
+      subname: 'rectangle',
+    });
+    const msg = expectError(envelope);
+    expect(msg).toContain('unknown schema category: bogus');
+  });
+
+  it('rejects subname without name', async () => {
+    const { app } = buildApp();
+    const envelope = await callTool(app, 'seeflow_schema', { subname: 'rectangle' });
+    const msg = expectError(envelope);
+    expect(msg).toContain('`subname` requires `name`');
+  });
+
+  it('input schema advertises the subname argument', async () => {
+    const { app } = buildApp();
+    const envelope = await mcpRequest(app, 'tools/list', {});
+    const tool = (envelope.result?.tools ?? []).find((t) => t.name === 'seeflow_schema');
+    expect(tool).toBeDefined();
+    const schema = tool?.inputSchema as {
+      type: string;
+      properties: {
+        name: { type: string; description?: string };
+        subname: { type: string; description?: string };
+      };
+      additionalProperties: boolean;
+    };
+    expect(schema.type).toBe('object');
+    expect(schema.properties.name.type).toBe('string');
+    expect(schema.properties.subname.type).toBe('string');
+    expect((schema.properties.subname.description ?? '').length).toBeGreaterThan(0);
+    expect(schema.additionalProperties).toBe(false);
+  });
 });
 
 describe('seeflow_ids', () => {

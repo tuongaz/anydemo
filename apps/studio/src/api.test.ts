@@ -762,6 +762,80 @@ describe('GET /api/schema', () => {
       'style',
     ]);
   });
+
+  it('GET /api/schema/:name/:subname returns just that named schema + category notes', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/node/component');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      ok: boolean;
+      name: string;
+      subname: string;
+      schemas: Record<string, { type?: string }>;
+      notes: string[];
+    };
+    expect(body.ok).toBe(true);
+    expect(body.name).toBe('node');
+    expect(body.subname).toBe('component');
+    expect(Object.keys(body.schemas)).toEqual(['component']);
+    expect(body.schemas.component?.type).toBe('object');
+    expect(body.notes.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/schema/node/rectangle returns just rectangle', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/node/rectangle');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      name: string;
+      subname: string;
+      schemas: Record<string, unknown>;
+    };
+    expect(body.subname).toBe('rectangle');
+    expect(Object.keys(body.schemas)).toEqual(['rectangle']);
+  });
+
+  it('GET /api/schema/:name/:subname returns 404 with category + available subnames for an unknown subname', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/node/bogus');
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string; category: string; available: string[] };
+    expect(body.error).toContain('unknown schema subname: bogus');
+    expect(body.category).toBe('node');
+    expect(body.available.sort()).toEqual(
+      [
+        'cloud',
+        'component',
+        'database',
+        'ellipse',
+        'html',
+        'icon',
+        'image',
+        'queue',
+        'rectangle',
+        'server',
+        'sticky',
+        'text',
+        'user',
+      ].sort(),
+    );
+  });
+
+  it('GET /api/schema/:name/:subname returns 404 with category list when the category itself is unknown', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/bogus/rectangle');
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string; available: string[] };
+    expect(body.error).toContain('unknown schema category: bogus');
+    expect(body.available).toEqual([
+      'flow',
+      'node',
+      'connector',
+      'action',
+      'componentSpec',
+      'style',
+    ]);
+  });
 });
 
 describe('GET /api/ids/:type/:count', () => {

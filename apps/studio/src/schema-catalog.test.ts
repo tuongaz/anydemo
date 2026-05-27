@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
+import {
+  getCategorySubschema,
+  getSchemaCategory,
+  listCategorySubnames,
+  listSchemaCategories,
+  schemaCategoryNames,
+} from './schema-catalog.ts';
 
 // Strict accessor that fails the test loudly if a category is unknown — beats
 // scattering `!` non-null assertions across every it() body.
@@ -168,6 +174,88 @@ describe('schema-catalog', () => {
   describe('schemaCategoryNames', () => {
     it('matches listSchemaCategories', () => {
       expect(schemaCategoryNames()).toEqual(listSchemaCategories().map((c) => c.name));
+    });
+  });
+
+  describe('getCategorySubschema', () => {
+    it('returns just the requested variant under schemas, keyed by subname', () => {
+      const payload = getCategorySubschema('node', 'rectangle');
+      if (!payload) throw new Error('expected node.rectangle');
+      expect(Object.keys(payload.schemas)).toEqual(['rectangle']);
+      const schema = payload.schemas.rectangle as Record<string, unknown>;
+      expect(schema.type).toBe('object');
+    });
+
+    it('preserves the category-level notes verbatim (cross-variant invariants still apply)', () => {
+      const category = getSchemaCategory('node');
+      const single = getCategorySubschema('node', 'image');
+      if (!category || !single) throw new Error('expected node + image');
+      expect(single.notes).toEqual(category.notes);
+    });
+
+    it('works for every multi-schema category (action subname, componentSpec subname)', () => {
+      const action = getCategorySubschema('action', 'playAction');
+      if (!action) throw new Error('expected action.playAction');
+      expect(Object.keys(action.schemas)).toEqual(['playAction']);
+      const spec = getCategorySubschema('componentSpec', 'componentSpecElement');
+      if (!spec) throw new Error('expected componentSpec.componentSpecElement');
+      expect(Object.keys(spec.schemas)).toEqual(['componentSpecElement']);
+    });
+
+    it('returns null when the category is unknown', () => {
+      expect(getCategorySubschema('bogus', 'rectangle')).toBeNull();
+      expect(getCategorySubschema('', 'rectangle')).toBeNull();
+    });
+
+    it('returns null when the subname is unknown within a known category', () => {
+      expect(getCategorySubschema('node', 'bogus')).toBeNull();
+      expect(getCategorySubschema('node', '')).toBeNull();
+    });
+
+    it('returns a fresh payload (caller-mutation safe)', () => {
+      const first = getCategorySubschema('node', 'rectangle');
+      if (!first) throw new Error('expected node.rectangle');
+      first.notes.push('tampered');
+      first.schemas.rectangle = { tampered: true };
+      const second = getCategorySubschema('node', 'rectangle');
+      if (!second) throw new Error('expected node.rectangle (refetch)');
+      expect(second.notes.some((n) => n === 'tampered')).toBe(false);
+      expect((second.schemas.rectangle as { type?: string })?.type).toBe('object');
+    });
+  });
+
+  describe('listCategorySubnames', () => {
+    it('lists every variant for the node category', () => {
+      const subnames = listCategorySubnames('node');
+      expect(subnames).not.toBeNull();
+      expect(subnames?.sort()).toEqual(
+        [
+          'cloud',
+          'component',
+          'database',
+          'ellipse',
+          'html',
+          'icon',
+          'image',
+          'queue',
+          'rectangle',
+          'server',
+          'sticky',
+          'text',
+          'user',
+        ].sort(),
+      );
+    });
+
+    it('returns the singleton key for single-schema categories', () => {
+      expect(listCategorySubnames('flow')).toEqual(['flow']);
+      expect(listCategorySubnames('connector')).toEqual(['connector']);
+      expect(listCategorySubnames('style')).toEqual(['style']);
+    });
+
+    it('returns null for unknown categories', () => {
+      expect(listCategorySubnames('bogus')).toBeNull();
+      expect(listCategorySubnames('')).toBeNull();
     });
   });
 

@@ -535,6 +535,118 @@ describe('seeflow CLI new subcommands', () => {
     }
   }, 20_000);
 
+  it('schema <category> <subname> returns just that named schema', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', 'component', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        name: string;
+        subname: string;
+        schemas: Record<string, { type: string }>;
+        notes: string[];
+      };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.name).toBe('node');
+      expect(parsed.subname).toBe('component');
+      expect(Object.keys(parsed.schemas)).toEqual(['component']);
+      expect(parsed.schemas.component?.type).toBe('object');
+      expect(parsed.notes.length).toBeGreaterThan(0);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema node rectangle returns just rectangle (regression for the example in CLI help)', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', 'rectangle', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        name: string;
+        subname: string;
+        schemas: Record<string, { type: string }>;
+      };
+      expect(parsed.name).toBe('node');
+      expect(parsed.subname).toBe('rectangle');
+      expect(Object.keys(parsed.schemas)).toEqual(['rectangle']);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema action playAction returns just playAction (subname works for any multi-schema category)', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'action', 'playAction', '--no-start'], studio.env);
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        name: string;
+        subname: string;
+        schemas: Record<string, unknown>;
+      };
+      expect(parsed.name).toBe('action');
+      expect(parsed.subname).toBe('playAction');
+      expect(Object.keys(parsed.schemas)).toEqual(['playAction']);
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema <category> <subname> --jq narrows further into the single schema', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(
+        ['schema', 'node', 'rectangle', '--jq', '.schemas.rectangle.type', '--no-start'],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as {
+        ok: boolean;
+        name: string;
+        subname: string;
+        result: string;
+      };
+      expect(parsed.subname).toBe('rectangle');
+      expect(parsed.result).toBe('object');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema <category> <bogusSubname> exits 3 with notFound + category + available subnames', async () => {
+    const studio = startTestStudio();
+    try {
+      const r = await runCli(['schema', 'node', 'bogus', '--no-start'], studio.env);
+      expect(r.code).toBe(3);
+      expect(r.stderr).toContain('"code":"notFound"');
+      expect(r.stderr).toContain('unknown schema subname: bogus');
+      const parsedErr = JSON.parse(r.stderr) as { category: string; available: string[] };
+      expect(parsedErr.category).toBe('node');
+      expect(parsedErr.available.sort()).toEqual(
+        [
+          'cloud',
+          'component',
+          'database',
+          'ellipse',
+          'html',
+          'icon',
+          'image',
+          'queue',
+          'rectangle',
+          'server',
+          'sticky',
+          'text',
+          'user',
+        ].sort(),
+      );
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
   it('schema with unknown category exits 3 with notFound + available list', async () => {
     const studio = startTestStudio();
     try {

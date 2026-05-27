@@ -37,12 +37,28 @@ the contract **once at Phase 0** and caches it for the rest of the run
     $SEEFLOW schema action       # every action variant
     $SEEFLOW schema style        # style.json envelope (for reference)
 
+Pass a third positional `subname` to drill into a single named schema
+within a category — useful for cheap per-variant lookups without
+re-paying for the whole category payload:
+
+    $SEEFLOW schema node component        # just the component variant
+    $SEEFLOW schema node rectangle        # just the rectangle variant
+    $SEEFLOW schema node image            # just the image variant
+    $SEEFLOW schema action playAction     # just the playAction shape
+    $SEEFLOW schema componentSpec componentSpecElement
+
+The category-level `notes` ride along unchanged because the cross-
+variant invariants still apply when you're looking at one variant.
+Unknown subnames exit 3 with `code:"notFound"` plus an `available` list
+of valid subnames for the category.
+
 Each call returns the contract per variant plus a `notes` array carrying
 cross-field invariants the contract can't express. The same output is
-reachable over MCP (`seeflow_schema`) and REST (`GET /api/schema[/:name]`)
-— pick whichever transport you're already on. The Phase 0 cache is
-forwarded to the node-planner (Phase 2) and the play/status designers
-(Phase 4) in their launching prompts; downstream agents never re-fetch.
+reachable over MCP (`seeflow_schema` — accepts `name` and `subname`)
+and REST (`GET /api/schema[/:name[/:subname]]`) — pick whichever
+transport you're already on. The Phase 0 cache is forwarded to the
+node-planner (Phase 2) and the play/status designers (Phase 4) in
+their launching prompts; downstream agents never re-fetch.
 
 If a field name, type, required-list, or enum value is not in `$SEEFLOW
 schema`, it does not exist. Do not infer one from this file, from the

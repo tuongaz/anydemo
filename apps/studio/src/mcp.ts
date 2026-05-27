@@ -29,7 +29,13 @@ import {
   flowBulkNonEmpty,
 } from './operations.ts';
 import type { Registry } from './registry.ts';
-import { getSchemaCategory, listSchemaCategories, schemaCategoryNames } from './schema-catalog.ts';
+import {
+  getCategorySubschema,
+  getSchemaCategory,
+  listCategorySubnames,
+  listSchemaCategories,
+  schemaCategoryNames,
+} from './schema-catalog.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { FlowWatcher } from './watcher.ts';
 
@@ -280,13 +286,18 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
     name: 'seeflow_schema',
     description:
       'Get the SeeFlow flow.json / spec.json schemas. Call with no args for a ' +
-      "category index; call with `name` for one category's full JSON Schemas. " +
-      'Use this to learn what a node, connector, action, component spec, or ' +
-      'flow envelope looks like before authoring writes. Categories: `flow`, ' +
-      '`node` (13 flat variants — rectangle/ellipse/sticky/text/database/server/' +
-      'user/queue/cloud/image/html/icon/component), `connector`, `action` ' +
-      '(playAction/statusAction/resetAction/statusReport/componentAction), ' +
-      "`componentSpec` (sidecar shape for type:'component' nodes), `style`.",
+      "category index; call with `name` for one category's full JSON Schemas; " +
+      'call with `name` + `subname` for just one named schema within that ' +
+      "category (e.g. name='node', subname='component' → just the component " +
+      "node variant; name='node', subname='rectangle' → just the rectangle " +
+      "node variant; name='action', subname='playAction' → just the playAction " +
+      'shape). Use this to learn what a node, connector, action, component ' +
+      'spec, or flow envelope looks like before authoring writes. Categories: ' +
+      '`flow`, `node` (13 flat variants — rectangle/ellipse/sticky/text/' +
+      'database/server/user/queue/cloud/image/html/icon/component), ' +
+      '`connector`, `action` (playAction/statusAction/resetAction/statusReport/' +
+      "componentAction), `componentSpec` (sidecar shape for type:'component' " +
+      'nodes), `style`.',
     inputSchema: {
       type: 'object',
       properties: {
@@ -294,19 +305,57 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           type: 'string',
           description: 'Optional category name. Omit for the index.',
         },
+        subname: {
+          type: 'string',
+          description:
+            'Optional named schema within the category (requires `name`). For ' +
+            "name='node': rectangle, ellipse, sticky, text, database, server, " +
+            'user, queue, cloud, image, html, icon, component. For ' +
+            "name='action': playAction, statusAction, resetAction, statusReport, " +
+            "componentAction. For name='componentSpec': componentSpec, " +
+            'componentSpecElement.',
+        },
       },
       additionalProperties: false,
     },
     handler: async (args) => {
-      const name =
+      const argObj =
         args && typeof args === 'object' && !Array.isArray(args)
-          ? (args as { name?: unknown }).name
-          : undefined;
+          ? (args as { name?: unknown; subname?: unknown })
+          : {};
+      const name = argObj.name;
+      const subname = argObj.subname;
       if (name === undefined || name === null || name === '') {
+        if (subname !== undefined && subname !== null && subname !== '') {
+          return errorResult('Invalid arguments: `subname` requires `name` to be set');
+        }
         return okResult({ categories: listSchemaCategories() });
       }
       if (typeof name !== 'string') {
         return errorResult('Invalid arguments: `name` must be a string when present');
+      }
+      if (subname !== undefined && subname !== null && subname !== '') {
+        if (typeof subname !== 'string') {
+          return errorResult('Invalid arguments: `subname` must be a string when present');
+        }
+        const single = getCategorySubschema(name, subname);
+        if (single) {
+          return okResult({
+            name,
+            subname,
+            schemas: single.schemas,
+            notes: single.notes,
+          });
+        }
+        const availableSubs = listCategorySubnames(name);
+        if (availableSubs === null) {
+          return errorResult(
+            `unknown schema category: ${name} (available: ${schemaCategoryNames().join(', ')})`,
+          );
+        }
+        return errorResult(
+          `unknown schema subname: ${subname} in category ${name} (available: ${availableSubs.join(', ')})`,
+        );
       }
       const payload = getSchemaCategory(name);
       if (!payload) {

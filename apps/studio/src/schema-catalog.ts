@@ -151,3 +151,26 @@ export function getSchemaCategory(name: string): SchemaPayload | null {
 export function schemaCategoryNames(): string[] {
   return CATEGORIES.map((c) => c.name);
 }
+
+// Drill into one named schema inside a category — e.g. ('node', 'rectangle')
+// returns just the rectangle variant. The category-level notes ride along
+// unchanged because they describe cross-variant invariants the caller still
+// needs (image path prefix, scriptPath rooting, etc.). Returns null if either
+// the category or the subname is unknown; callers use listCategorySubnames
+// to build a helpful "available" list in that case.
+export function getCategorySubschema(category: string, subname: string): SchemaPayload | null {
+  const payload = PAYLOADS[category];
+  if (!payload) return null;
+  const schema = payload.schemas[subname];
+  if (schema === undefined) return null;
+  return { schemas: { [subname]: schema }, notes: [...payload.notes] };
+}
+
+// Returns the subname keys (rectangle, ellipse, …) for a known category, or
+// null if the category itself is unknown. Used to surface "available" lists
+// on lookup failures so the error message is self-correcting.
+export function listCategorySubnames(category: string): string[] | null {
+  const payload = PAYLOADS[category];
+  if (!payload) return null;
+  return Object.keys(payload.schemas);
+}
