@@ -52,6 +52,13 @@ transport: MCP `seeflow_schema { name, subname }` and REST
 needs one variant's contract (e.g. patching a single node type) instead
 of forwarding the full category payload.
 
+Pair `subname` with `--jq <filter>` to extract a slice in the CLI rather
+than post-processing the JSON downstream — jq-path subset (identity,
+field access, brackets, iteration, optional `?`, pipe). Run `$SEEFLOW
+help schema` for the grammar and examples; bad filters exit 2 with
+`code:"badJq"`. This is the canonical extraction path — reach for it
+before in-process parsing.
+
 ## Addressing — `--project` + `--flow`
 
 Every flow-scoped CLI verb (`nodes:*`, `connectors:*`, `flow:add-bulk`,

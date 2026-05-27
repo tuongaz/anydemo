@@ -33,7 +33,15 @@ Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache 
 
 > **Drilling further.** When a downstream agent only needs one variant (e.g. forwarding just the `component` node contract to the status-designer), the orchestrator can either slice the cached payload or re-fetch a narrow slice with `$SEEFLOW schema <category> <subname>` — for example `$SEEFLOW schema node component`, `$SEEFLOW schema action playAction`. Same shape, same `notes`, just one schema. Prefer slicing the cache when it's already in hand; reach for the sub-lookup when re-running mid-session or when stitching launching prompts from MCP/REST (`seeflow_schema { name, subname }` / `GET /api/schema/:name/:subname`).
 
-**Extract the component catalog.** Pull the legal `spec.elements[].type` enum from `$schemaCache.node`'s `component` variant into `$componentCatalog`. Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
+**Extract the component catalog.** Pull the legal `spec.elements[].type` enum from `$schemaCache.node`'s `component` variant into `$componentCatalog`. Use the schema command's `--jq` flag for the slice — do **not** parse `$schemaCache.node` in-process (Python, JS, hand-rolled walkers):
+
+```
+$SEEFLOW schema node component --jq '<jq path to the spec.elements[].type enum>'
+```
+
+Run `$SEEFLOW help schema` once this session before reaching for `--jq` — it documents the supported jq-path subset (identity `.`, field access `.foo`, brackets `.["foo"]` / `.[3]`, iteration `.foo[]`, optional `?`, pipe `|`) and the `badJq` error kind (exit 2). Resolve the exact path against the live schema output, not from memory — node-component's shape evolves and `--jq` errors fast on bad paths.
+
+Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
 
 ## Schema-type surface diff — silent
 

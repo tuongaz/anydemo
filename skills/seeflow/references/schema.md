@@ -52,6 +52,17 @@ variant invariants still apply when you're looking at one variant.
 Unknown subnames exit 3 with `code:"notFound"` plus an `available` list
 of valid subnames for the category.
 
+Pass `--jq <filter>` to slice the response inside the CLI instead of
+post-processing the JSON in this orchestrator. Supported subset is a
+jq-path grammar (identity `.`, field access `.foo`, bracket access
+`.["foo"]` / `.[3]` / negative indices, iteration `.foo[]`, optional `?`,
+pipe `|`). Single-output filters return `{ result: <value> }`;
+multi-output filters (from `[]` or `|`) return `{ result: [<v1>, …] }`.
+Bad filters exit 2 with `code:"badJq"`. Reach for `--jq` (paired with
+`subname` when you want a single variant) **before** parsing schema JSON
+in-process — that's the canonical extraction path. Run `$SEEFLOW help
+schema` for the authoritative grammar and live examples.
+
 Each call returns the contract per variant plus a `notes` array carrying
 cross-field invariants the contract can't express. The same output is
 reachable over MCP (`seeflow_schema` — accepts `name` and `subname`)

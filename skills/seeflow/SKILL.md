@@ -171,6 +171,7 @@ If you catch yourself thinking any of the following, you are rationalising — s
 - "Phase 6 e2e looks fine from the scripts — I'll skip the run." → mandatory for `inputClass === "code"`. Only `"document"` flows legitimately skip it.
 - "I'll narrate the LEARN.md write so the user knows it happened." → both writes are silent by contract; narration is noise.
 - "I'll just drop in an `html` node — it's only a small comparison table / status card / checklist." → no. `type:'component'` is the first choice for complex node content (any `inputClass`); `html` is only legitimate after `$SEEFLOW schema node`'s `component.spec.elements[].type` enum is confirmed not to cover it, with the gap cited in `rationales[nodeId]`.
+- "Schema output is just JSON — I'll parse `$schemaCache.node` myself (Python / hand-rolled walker / inline JS)." → no. The "don't memorise CLI syntax — run `$SEEFLOW help`" rule in §"Conventions" applies to every subcommand, schema included. Run `$SEEFLOW help schema` once: it documents the `<subname>` positional for per-variant drill-down AND the `--jq <filter>` flag for path extraction (jq-subset grammar, `badJq` exit 2). Reach for those before in-process JSON parsing.
 
 ## Operations
 
