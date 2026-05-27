@@ -68,18 +68,20 @@ describe('schema-catalog', () => {
       expect(payload.notes[0]).toMatch(/source.*target.*nodes\[\]\.id/);
     });
 
-    it('node → all 13 flat variants', () => {
+    it('node → all 15 flat variants', () => {
       const payload = loadCategory('node');
       const keys = Object.keys(payload.schemas).sort();
       // Flat-types refactor: schema-catalog returns one schema per
-      // FlowNodeSchema variant — 9 geometric tags + image + html + icon +
+      // FlowNodeSchema variant — 11 geometric tags + image + html + icon +
       // component.
       expect(keys).toEqual(
         [
           'cloud',
           'component',
           'database',
+          'diamond',
           'ellipse',
+          'hexagon',
           'html',
           'icon',
           'image',
@@ -233,7 +235,9 @@ describe('schema-catalog', () => {
           'cloud',
           'component',
           'database',
+          'diamond',
           'ellipse',
+          'hexagon',
           'html',
           'icon',
           'image',

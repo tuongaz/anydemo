@@ -293,8 +293,8 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
       "node variant; name='action', subname='playAction' → just the playAction " +
       'shape). Use this to learn what a node, connector, action, component ' +
       'spec, or flow envelope looks like before authoring writes. Categories: ' +
-      '`flow`, `node` (13 flat variants — rectangle/ellipse/sticky/text/' +
-      'database/server/user/queue/cloud/image/html/icon/component), ' +
+      '`flow`, `node` (15 flat variants — rectangle/ellipse/sticky/text/' +
+      'database/server/user/queue/cloud/diamond/hexagon/image/html/icon/component), ' +
       '`connector`, `action` (playAction/statusAction/statusReport/' +
       "componentAction), `componentSpec` (sidecar shape for type:'component' " +
       'nodes), `style`.',
@@ -310,7 +310,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           description:
             'Optional named schema within the category (requires `name`). For ' +
             "name='node': rectangle, ellipse, sticky, text, database, server, " +
-            'user, queue, cloud, image, html, icon, component. For ' +
+            'user, queue, cloud, diamond, hexagon, image, html, icon, component. For ' +
             "name='action': playAction, statusAction, statusReport, " +
             "componentAction. For name='componentSpec': componentSpec, " +
             'componentSpecElement.',
@@ -763,7 +763,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
   {
     name: 'seeflow_patch_node',
     description:
-      "Update fields on an existing node (position, name, description, detail, icon, colors, border, font, dimensions, autoSize, plus type:'icon'-only color/strokeWidth/alt and capabilities playAction/statusAction/stateSource). `type` can flip a node between any of the 12 visual variants (rectangle/ellipse/sticky/text/database/server/user/queue/cloud/image/html/icon); the post-merge schema reparse gates required fields on the new type (image.data.path, icon.data.icon). Setting detail (every node) or html (type:'html') writes the content to <project>/nodes/<id>/{detail.md|view.html}; the file:// ref on the node persists. Empty-string detail empties the file but keeps the ref.",
+      "Update fields on an existing node (position, name, description, detail, icon, colors, border, font, dimensions, autoSize, plus type:'icon'-only color/strokeWidth/alt and capabilities playAction/statusAction/stateSource). `type` can flip a node between any of the 14 visual variants (rectangle/ellipse/sticky/text/database/server/user/queue/cloud/diamond/hexagon/image/html/icon); the post-merge schema reparse gates required fields on the new type (image.data.path, icon.data.icon). Setting detail (every node) or html (type:'html') writes the content to <project>/nodes/<id>/{detail.md|view.html}; the file:// ref on the node persists. Empty-string detail empties the file but keeps the ref.",
     inputSchema: inputSchemaFromZod(PatchNodeInputSchema),
     handler: async (args) => {
       const parsed = PatchNodeInputSchema.safeParse(args);

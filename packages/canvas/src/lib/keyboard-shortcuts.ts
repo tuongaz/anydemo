@@ -71,6 +71,8 @@ export type CommandId =
   | 'tool.user'
   | 'tool.queue'
   | 'tool.cloud'
+  | 'tool.diamond'
+  | 'tool.hexagon'
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.copy'
@@ -191,6 +193,18 @@ export const COMMANDS: readonly CommandDef[] = [
     id: 'tool.cloud',
     label: 'Cloud',
     description: 'Add a cloud node',
+    category: 'Tools',
+  },
+  {
+    id: 'tool.diamond',
+    label: 'Diamond',
+    description: 'Add a diamond node (decision / gateway)',
+    category: 'Tools',
+  },
+  {
+    id: 'tool.hexagon',
+    label: 'Hexagon',
+    description: 'Add a hexagon node (microservice)',
     category: 'Tools',
   },
   {

@@ -461,14 +461,16 @@ describe('seeflow CLI new subcommands', () => {
         notes: string[];
       };
       expect(parsed.name).toBe('node');
-      // Flat-types refactor: schema-catalog returns 13 variants (9 geometric
+      // Flat-types refactor: schema-catalog returns 15 variants (11 geometric
       // + image + html + icon + component) — pinned in alphabetical order.
       expect(Object.keys(parsed.schemas).sort()).toEqual(
         [
           'cloud',
           'component',
           'database',
+          'diamond',
           'ellipse',
+          'hexagon',
           'html',
           'icon',
           'image',
@@ -516,9 +518,9 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; name: string; result: unknown[] };
       expect(parsed.ok).toBe(true);
-      // 13 flat variants iterated.
+      // 15 flat variants iterated.
       expect(Array.isArray(parsed.result)).toBe(true);
-      expect(parsed.result).toHaveLength(13);
+      expect(parsed.result).toHaveLength(15);
     } finally {
       studio.stop();
     }
@@ -630,7 +632,9 @@ describe('seeflow CLI new subcommands', () => {
           'cloud',
           'component',
           'database',
+          'diamond',
           'ellipse',
+          'hexagon',
           'html',
           'icon',
           'image',

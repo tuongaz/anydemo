@@ -133,7 +133,7 @@ describe('ResolvedFlowSchema', () => {
   });
 
   it('round-trips each geometric node variant', () => {
-    // Flat-types refactor: visual kind is the `type` field. The 9 geometric
+    // Flat-types refactor: visual kind is the `type` field. The 11 geometric
     // variants share the same data schema; the discriminated union routes
     // them to the right renderer via `type` alone.
     const make = (
@@ -146,7 +146,9 @@ describe('ResolvedFlowSchema', () => {
         | 'server'
         | 'user'
         | 'queue'
-        | 'cloud',
+        | 'cloud'
+        | 'diamond'
+        | 'hexagon',
     ) => ({
       version: 2 as const,
       name: 'shape-demo',
@@ -171,6 +173,8 @@ describe('ResolvedFlowSchema', () => {
       'user',
       'queue',
       'cloud',
+      'diamond',
+      'hexagon',
     ] as const) {
       const result = ResolvedFlowSchema.safeParse(make(type));
       if (!result.success) {
@@ -2184,12 +2188,12 @@ describe('flow description field', () => {
   });
 });
 
-// US-009: flat-node-types refactor — coverage that pins the 12-tag discriminator
+// US-009: flat-node-types refactor — coverage that pins the 14-tag discriminator
 // surface, the per-type required fields, and the capability-on-every-type
 // invariant at the schema level. The flat schema's central claim is that
 // `playAction` / `statusAction` / `stateSource` are independent of `type` —
 // these tests fence that claim against drift.
-describe('US-009: flat node types — 12-tag matrix + capability invariants', () => {
+describe('US-009: flat node types — 14-tag matrix + capability invariants', () => {
   const ALL_TYPES = [
     'rectangle',
     'ellipse',
@@ -2200,6 +2204,8 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     'user',
     'queue',
     'cloud',
+    'diamond',
+    'hexagon',
     'image',
     'html',
     'icon',
@@ -2215,7 +2221,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     return {};
   };
 
-  it('every one of the 12 type tags parses with a minimal valid payload', () => {
+  it('every one of the 14 type tags parses with a minimal valid payload', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
@@ -2234,7 +2240,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     }
   });
 
-  it('rejects an unknown type tag (only the 13 flat tags are valid)', () => {
+  it('rejects an unknown type tag (only the 15 flat tags are valid)', () => {
     const demo = {
       version: 2 as const,
       name: 'unknown-type',
@@ -2354,7 +2360,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
   // (playAction, statusAction, stateSource) are independent of `type` and
   // accepted on every variant. The renderer phasing gates *chrome* to
   // rectangle, but the schema accepts the data fields on all 12 types.
-  it('every one of the 12 type tags accepts playAction in data', () => {
+  it('every one of the 14 type tags accepts playAction in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
@@ -2389,7 +2395,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     }
   });
 
-  it('every one of the 12 type tags accepts statusAction in data', () => {
+  it('every one of the 14 type tags accepts statusAction in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
@@ -2424,7 +2430,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
     }
   });
 
-  it('every one of the 12 type tags accepts stateSource in data', () => {
+  it('every one of the 14 type tags accepts stateSource in data', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
@@ -2459,7 +2465,7 @@ describe('US-009: flat node types — 12-tag matrix + capability invariants', ()
   // since the disk-side data schemas are `.strict()`, this is a stronger
   // assertion than the ResolvedFlowSchema variant above: the capability fields
   // are explicitly enumerated in each variant's allowed-keys set.
-  it('FlowSchema accepts playAction + statusAction + stateSource on every one of the 12 types', () => {
+  it('FlowSchema accepts playAction + statusAction + stateSource on every one of the 14 types', () => {
     const minimalFlowData = (type: (typeof ALL_TYPES)[number], id: string) => {
       const base = {
         playAction: {

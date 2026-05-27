@@ -2,6 +2,8 @@ import type { FC } from 'react';
 import type { GeometricNodeType } from '../../types.ts';
 import { CloudShape } from './cloud.tsx';
 import { DatabaseShape } from './database.tsx';
+import { DiamondShape } from './diamond.tsx';
+import { HexagonShape } from './hexagon.tsx';
 import { QueueShape } from './queue.tsx';
 import { ServerShape } from './server.tsx';
 import type { ShapePartProps } from './types.ts';
@@ -21,4 +23,6 @@ export const ILLUSTRATIVE_SHAPE_RENDERERS: Partial<Record<GeometricNodeType, FC<
     user: UserShape,
     queue: QueueShape,
     cloud: CloudShape,
+    diamond: DiamondShape,
+    hexagon: HexagonShape,
   };

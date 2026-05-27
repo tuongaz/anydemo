@@ -101,6 +101,8 @@ export const GEOMETRIC_NODE_TYPES = [
   'user',
   'queue',
   'cloud',
+  'diamond',
+  'hexagon',
 ] as const;
 export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 

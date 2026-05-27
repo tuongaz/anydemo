@@ -73,6 +73,8 @@ const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: numb
   user: { width: 100, height: 140 },
   queue: { width: 220, height: 80 },
   cloud: { width: 180, height: 120 },
+  diamond: { width: 160, height: 120 },
+  hexagon: { width: 180, height: 120 },
   image: { width: 200, height: 150 },
   html: { width: 320, height: 200 },
   icon: { width: 80, height: 80 },

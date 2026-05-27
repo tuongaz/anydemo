@@ -448,6 +448,8 @@ export function createApi(options: ApiOptions): Hono {
             | 'user'
             | 'queue'
             | 'cloud'
+            | 'diamond'
+            | 'hexagon'
             | 'image'
             | 'html'
             | 'icon',

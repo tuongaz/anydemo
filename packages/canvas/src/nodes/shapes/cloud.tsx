@@ -6,14 +6,19 @@ import {
   dashFor,
 } from './types.ts';
 
-// US-025: cloud glyph — three top bumps (small / large / small) sitting on a
-// short rectangular skirt with a flat bottom. The bumps are sized so they
-// touch (right base of bump_i = left base of bump_{i+1}), forming a single
-// continuous puffy upper outline that reads as a cloud at any aspect ratio.
+// Cloud glyph — three bumps on the top (small / large / small) and three
+// equal bumps along the bottom. Both bump rows sit on a shared horizontal
+// axis (`baselineY = height / 2`), so there's no vertical "seam" between
+// the top and bottom curves — the silhouette is one continuous puffy
+// outline, the way AWS / Azure / draw.io cloud icons paint.
 //
-// Bump-radius ratio is 1 : 1.5 : 1 — the center mound is the tallest, matching
-// the convention used in AWS / Azure / draw.io cloud icons. Side margins
-// (`SIDE_MARGIN`) keep the outermost bumps from kissing the viewBox edge so
+// Bump-radius ratios:
+//   top    : 1 : 1.5 : 1   (small-large-small, center mound dominates)
+//   bottom : 1 : 1 : 1     (three equal lobes — smaller than the top centre
+//                           so the cloud's silhouette stays top-heavy and
+//                           doesn't read as a balloon)
+//
+// `SIDE_MARGIN` keeps the outermost bumps from kissing the viewBox edge so
 // the stroke isn't clipped by the wrapper.
 const SIDE_MARGIN = 5;
 
@@ -30,33 +35,32 @@ export function CloudShape({
   const strokeWidth = borderSize ?? DEFAULT_STROKE_WIDTH;
   const dash = dashFor(borderStyle);
 
-  // Three radii sized so r1 + r2 + r3 = (width - 2*margin) / 2, with the
-  // center bump 1.5x the side bumps. Solving the constraint gives
-  //   r1 = r3 = usableW / 7,  r2 = 1.5 * (usableW / 7).
   const usableW = width - 2 * SIDE_MARGIN;
-  const r1 = usableW / 7;
-  const r2 = (usableW / 7) * 1.5;
-  const r3 = r1;
+
+  // Three top bumps: radii sum to usableW / 2 with center 1.5x the sides.
+  //   r1 + r2 + r3 = usableW/2  with r2 = 1.5*r1  →  r1 = r3 = usableW/7.
+  const rt1 = usableW / 7;
+  const rt2 = (usableW / 7) * 1.5;
+  const rt3 = rt1;
+
+  // Three bottom bumps: equal radii summing to usableW/2  →  rb = usableW/6.
+  const rb = usableW / 6;
 
   const xLeft = SIDE_MARGIN;
-  const cx1 = xLeft + r1;
-  const cx2 = cx1 + r1 + r2;
-  const cx3 = cx2 + r2 + r3;
-  const xRight = cx3 + r3;
+  const xRight = xLeft + usableW;
+  const baselineY = height / 2;
 
-  // Baseline at 85% of height leaves a short skirt below the bumps so the
-  // cloud silhouette has a small flat body to "sit" on. Center bump apex
-  // reaches baselineY - r2, so the cloud spans roughly the top 70% of the
-  // viewBox.
-  const baselineY = height * 0.85;
-
+  // SVG arc convention: sweep-flag=1 curves to the right of the travel
+  // direction. Top bumps travel left-to-right and bulge UP; bottom bumps
+  // travel right-to-left and bulge DOWN. Both use sweep=1.
   const d = [
     `M ${xLeft} ${baselineY}`,
-    `A ${r1} ${r1} 0 0 1 ${cx1 + r1} ${baselineY}`,
-    `A ${r2} ${r2} 0 0 1 ${cx2 + r2} ${baselineY}`,
-    `A ${r3} ${r3} 0 0 1 ${xRight} ${baselineY}`,
-    `L ${xRight} ${height}`,
-    `L ${xLeft} ${height}`,
+    `A ${rt1} ${rt1} 0 0 1 ${xLeft + 2 * rt1} ${baselineY}`,
+    `A ${rt2} ${rt2} 0 0 1 ${xLeft + 2 * rt1 + 2 * rt2} ${baselineY}`,
+    `A ${rt3} ${rt3} 0 0 1 ${xRight} ${baselineY}`,
+    `A ${rb} ${rb} 0 0 1 ${xRight - 2 * rb} ${baselineY}`,
+    `A ${rb} ${rb} 0 0 1 ${xRight - 4 * rb} ${baselineY}`,
+    `A ${rb} ${rb} 0 0 1 ${xLeft} ${baselineY}`,
     'Z',
   ].join(' ');
 

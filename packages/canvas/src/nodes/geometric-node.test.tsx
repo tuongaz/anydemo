@@ -117,7 +117,9 @@ function callGeometric(
     | 'server'
     | 'user'
     | 'queue'
-    | 'cloud',
+    | 'cloud'
+    | 'diamond'
+    | 'hexagon',
   data: Record<string, unknown>,
   overrides: Partial<NodeProps<GeometricNodeFlowNode>> = {},
 ): unknown {
@@ -152,12 +154,14 @@ describe('capability-chrome skirt derivation', () => {
     expect(SKIRT_HEIGHT).toBe(32);
   });
 
-  it('isIllustrativeShape returns true for the 5 illustrative tags', () => {
+  it('isIllustrativeShape returns true for the 7 illustrative tags', () => {
     expect(isIllustrativeShape('database')).toBe(true);
     expect(isIllustrativeShape('server')).toBe(true);
     expect(isIllustrativeShape('queue')).toBe(true);
     expect(isIllustrativeShape('cloud')).toBe(true);
     expect(isIllustrativeShape('user')).toBe(true);
+    expect(isIllustrativeShape('diamond')).toBe(true);
+    expect(isIllustrativeShape('hexagon')).toBe(true);
   });
 
   it('isIllustrativeShape returns false for rectangle / ellipse / sticky / text', () => {
@@ -327,7 +331,7 @@ describe('capability-chrome skirt rendering on illustrative shapes', () => {
     expect(findPlayButtons(tree)).toHaveLength(1);
   });
 
-  for (const shape of ['server', 'queue', 'cloud', 'user'] as const) {
+  for (const shape of ['server', 'queue', 'cloud', 'user', 'diamond', 'hexagon'] as const) {
     it(`${shape} with playAction + statusReport renders the same skirt structure`, () => {
       const tree = callGeometric(shape, {
         name: shape,

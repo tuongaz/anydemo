@@ -3,7 +3,9 @@ import {
   Cloud,
   Columns3,
   Database,
+  Diamond,
   Hand,
+  Hexagon,
   MousePointer2,
   Server,
   Shapes,
@@ -126,6 +128,12 @@ const ILLUSTRATIVE_SHAPES: ToolbarShapeEntry[] = [
   // US-025: cloud glyph for managed services / "the internet" / abstract
   // boundaries. lucide's Cloud icon mirrors the puffy SVG silhouette.
   { shape: 'cloud', label: 'Cloud', commandId: 'tool.cloud', Icon: Cloud },
+  // Diamond — decision / gateway glyph (BPMN-style). lucide's Diamond icon
+  // mirrors the four-vertex rhombus rendered on the canvas.
+  { shape: 'diamond', label: 'Diamond', commandId: 'tool.diamond', Icon: Diamond },
+  // Hexagon — owned microservice / hexagonal-architecture cell. lucide's
+  // Hexagon icon is a flat-top hex, same orientation as the SVG.
+  { shape: 'hexagon', label: 'Hexagon', commandId: 'tool.hexagon', Icon: Hexagon },
 ];
 
 // Combined list, exported so US-015's drop-on-pane popover can list the same

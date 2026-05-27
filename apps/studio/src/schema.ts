@@ -180,7 +180,7 @@ const NodeCapabilitiesShape = {
     ),
 };
 
-// 13 flat node types. The first 9 are geometric/illustrative and share
+// 15 flat node types. The first 11 are geometric/illustrative and share
 // GeometricNodeData. `image`, `html`, `icon`, `component` carry per-type
 // fields. The renderer picks the SVG / chrome by `type`; the schema treats
 // them (apart from the per-type fields below) as identical.
@@ -194,6 +194,8 @@ export const GEOMETRIC_NODE_TYPES = [
   'user',
   'queue',
   'cloud',
+  'diamond',
+  'hexagon',
 ] as const;
 
 export const NodeTypeSchema = z.enum([
@@ -329,6 +331,8 @@ const NodeSchema = z.discriminatedUnion('type', [
   makeResolvedGeometricSchema('user'),
   makeResolvedGeometricSchema('queue'),
   makeResolvedGeometricSchema('cloud'),
+  makeResolvedGeometricSchema('diamond'),
+  makeResolvedGeometricSchema('hexagon'),
   z.object({ ...NodeBaseShape, type: z.literal('image'), data: ResolvedImageNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('html'), data: ResolvedHtmlNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('icon'), data: ResolvedIconNodeData }),
@@ -570,6 +574,8 @@ export const FlowServerNodeSchema = makeFlowGeometricSchema('server');
 export const FlowUserNodeSchema = makeFlowGeometricSchema('user');
 export const FlowQueueNodeSchema = makeFlowGeometricSchema('queue');
 export const FlowCloudNodeSchema = makeFlowGeometricSchema('cloud');
+export const FlowDiamondNodeSchema = makeFlowGeometricSchema('diamond');
+export const FlowHexagonNodeSchema = makeFlowGeometricSchema('hexagon');
 
 export const FlowImageNodeSchema = z
   .object({
@@ -613,6 +619,8 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowUserNodeSchema,
   FlowQueueNodeSchema,
   FlowCloudNodeSchema,
+  FlowDiamondNodeSchema,
+  FlowHexagonNodeSchema,
   FlowImageNodeSchema,
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,

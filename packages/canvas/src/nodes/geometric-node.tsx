@@ -97,6 +97,8 @@ export const SHAPE_DEFAULT_SIZE: Record<GeometricKind, { width: number; height: 
   user: { width: 100, height: 140 },
   queue: { width: 220, height: 80 },
   cloud: { width: 180, height: 120 },
+  diamond: { width: 160, height: 120 },
+  hexagon: { width: 180, height: 120 },
 };
 
 // `text` deliberately omits border + background so the shape reads as a free
@@ -119,6 +121,8 @@ export const SHAPE_CLASS: Record<GeometricKind, string> = {
   user: '',
   queue: '',
   cloud: '',
+  diamond: '',
+  hexagon: '',
 };
 
 // Tailwind's `sf:shadow-md` resolved value — applied inline so an explicit

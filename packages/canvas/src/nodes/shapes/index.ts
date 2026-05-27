@@ -1,5 +1,7 @@
 export { CloudShape } from './cloud.tsx';
 export { DatabaseShape } from './database.tsx';
+export { DiamondShape } from './diamond.tsx';
+export { HexagonShape } from './hexagon.tsx';
 export { QueueShape } from './queue.tsx';
 export { ILLUSTRATIVE_SHAPE_RENDERERS } from './registry.ts';
 export { ServerShape } from './server.tsx';

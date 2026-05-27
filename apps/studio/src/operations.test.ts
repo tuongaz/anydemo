@@ -1076,6 +1076,8 @@ describe('NodePatchBodySchema type field', () => {
       'user',
       'queue',
       'cloud',
+      'diamond',
+      'hexagon',
       'image',
       'html',
       'icon',
@@ -1374,7 +1376,7 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
     expect(result.success).toBe(false);
   });
 
-  it('accepts a capability field (playAction) on every one of the 12 types via FlowSchema', async () => {
+  it('accepts a capability field (playAction) on every one of the 14 types via FlowSchema', async () => {
     const types = [
       'rectangle',
       'ellipse',
@@ -1385,6 +1387,8 @@ describe('US-009: patchNodeImpl rejects cross-type fields on persist', () => {
       'user',
       'queue',
       'cloud',
+      'diamond',
+      'hexagon',
     ] as const;
     const { FlowSchema } = await import('./schema.ts');
     for (const type of types) {

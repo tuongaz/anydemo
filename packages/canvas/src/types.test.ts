@@ -85,6 +85,8 @@ describe('US-010: component node types', () => {
         case 'user':
         case 'queue':
         case 'cloud':
+        case 'diamond':
+        case 'hexagon':
           return 'geometric';
         case 'image':
           return 'image';

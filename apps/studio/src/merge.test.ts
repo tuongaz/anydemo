@@ -162,6 +162,8 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
       'user',
       'queue',
       'cloud',
+      'diamond',
+      'hexagon',
     ] as const;
     for (const from of GEOMETRIC) {
       for (const to of GEOMETRIC) {

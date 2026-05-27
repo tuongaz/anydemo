@@ -413,6 +413,8 @@ describe('COMMANDS registry (US-002)', () => {
     'tool.user',
     'tool.queue',
     'tool.cloud',
+    'tool.diamond',
+    'tool.hexagon',
     'edit.undo',
     'edit.redo',
     'edit.copy',
