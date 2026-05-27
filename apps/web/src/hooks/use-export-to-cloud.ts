@@ -1,4 +1,4 @@
-import { fetchFlowDetail, fetchProjectFlows } from '@/lib/api';
+import { fetchFlowDetail } from '@/lib/api';
 import { buildProjectBundle } from '@/lib/build-project-bundle';
 import { IS_PROJECT_EXPORT_ENABLED } from '@/lib/feature-flags';
 import { strToU8, unzipSync, zipSync } from 'fflate';
@@ -86,9 +86,12 @@ export async function exportToCloud(
 
 /**
  * US-030: whole-project export. Gated behind `VITE_SEEFLOW_PROJECT_EXPORT`.
- * Fetches the per-project flow list, builds the multi-flow bundle (US-029),
- * and POSTs it to `${CLOUD_API_BASE}/projects`. The cloud returns the project
+ * Builds a multi-flow bundle (US-029) from the slugs the caller picked, and
+ * POSTs it to `${CLOUD_API_BASE}/projects`. The cloud returns the project
  * viewer URL (typically `seeflow.dev/project/<uuid>`).
+ *
+ * The caller (the export dialog) already has the project's flow list, so
+ * the slugs to bundle are passed in directly — no extra fetch here.
  *
  * `previewDataUrl` and `visibility` are accepted for API parity with the
  * single-flow export but are passed through as zip-level extras (preview.png
@@ -99,12 +102,12 @@ export async function exportProjectToCloud(
   email: string,
   name: string,
   visibility: Visibility,
-  previewDataUrl?: string,
+  previewDataUrl: string | undefined,
+  selectedFlowSlugs: string[],
 ): Promise<{ shareUrl: string }> {
-  const flows = await fetchProjectFlows(project);
   const bundle = await buildProjectBundle({
     project,
-    flows: flows.map((f) => ({ flowSlug: f.flowSlug })),
+    flows: selectedFlowSlugs.map((flowSlug) => ({ flowSlug })),
   });
 
   // Splice preview.png into the bundle when the canvas captured a screenshot.
@@ -148,11 +151,25 @@ export function useExportToCloud(
   name: string,
   visibility: Visibility,
   previewDataUrl?: string,
+  selectedFlowSlugs?: string[],
 ) => Promise<{ shareUrl: string }> {
   return useCallback(
-    (email: string, name: string, visibility: Visibility, previewDataUrl?: string) =>
+    (
+      email: string,
+      name: string,
+      visibility: Visibility,
+      previewDataUrl?: string,
+      selectedFlowSlugs?: string[],
+    ) =>
       IS_PROJECT_EXPORT_ENABLED
-        ? exportProjectToCloud(project, email, name, visibility, previewDataUrl)
+        ? exportProjectToCloud(
+            project,
+            email,
+            name,
+            visibility,
+            previewDataUrl,
+            selectedFlowSlugs ?? [],
+          )
         : exportToCloud(project, flow, email, name, visibility, previewDataUrl),
     [project, flow],
   );

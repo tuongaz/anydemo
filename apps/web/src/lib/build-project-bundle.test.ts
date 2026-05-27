@@ -270,6 +270,60 @@ describe('buildProjectBundle', () => {
     ).rejects.toThrow('/api/projects/demo/flows/main/graph → 500');
   });
 
+  it('keeps meta.defaultFlow when the subset still includes it', async () => {
+    installMock((url) => {
+      if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
+      if (url === '/api/projects/demo/flows/main/graph')
+        return { status: 200, body: emptyGraph('main', 'Main') };
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const zip = await buildProjectBundle({
+      project: 'demo',
+      flows: [{ flowSlug: 'main' }],
+    });
+
+    const entries = unzipSync(zip);
+    const manifest = JSON.parse(strFromU8(entries['seeflow.json'] as Uint8Array));
+    expect(manifest.defaultFlow).toBe('main');
+    expect(manifest.flows).toEqual([{ id: 'main', name: 'Main' }]);
+  });
+
+  it('falls back to the first selected slug when meta.defaultFlow is excluded from the subset', async () => {
+    installMock((url) => {
+      if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
+      if (url === '/api/projects/demo/flows/retry/graph')
+        return { status: 200, body: emptyGraph('retry', 'Retry') };
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    const zip = await buildProjectBundle({
+      project: 'demo',
+      flows: [{ flowSlug: 'retry' }],
+    });
+
+    const entries = unzipSync(zip);
+    const manifest = JSON.parse(strFromU8(entries['seeflow.json'] as Uint8Array));
+    expect(manifest.defaultFlow).toBe('retry');
+    expect(manifest.flows).toEqual([{ id: 'retry', name: 'Retry', icon: 'refresh-ccw' }]);
+  });
+
+  it('only fetches graphs + assets for flows in the subset', async () => {
+    const requested: string[] = [];
+    installMock((url) => {
+      requested.push(url);
+      if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
+      if (url === '/api/projects/demo/flows/main/graph')
+        return { status: 200, body: emptyGraph('main', 'Main') };
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await buildProjectBundle({ project: 'demo', flows: [{ flowSlug: 'main' }] });
+
+    expect(requested).toContain('/api/projects/demo/flows/main/graph');
+    expect(requested).not.toContain('/api/projects/demo/flows/retry/graph');
+  });
+
   it('omits manifest.description when the project has none', async () => {
     const { description: _ignored, ...metaNoDescription } = baseMeta;
     installMock((url) => {

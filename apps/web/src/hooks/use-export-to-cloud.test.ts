@@ -407,13 +407,6 @@ const projectMeta = {
   ],
 };
 
-const projectFlowList = {
-  flows: [
-    { id: 'entry-main', flowSlug: 'main', name: 'Main', isDefault: true },
-    { id: 'entry-retry', flowSlug: 'retry', name: 'Retry', isDefault: false },
-  ],
-};
-
 const projectGraph = (slug: string, name: string) => ({
   id: `entry-${slug}`,
   slug: `demo/${slug}`,
@@ -440,7 +433,6 @@ describe('exportProjectToCloud', () => {
       }
       requests.push({ url, method, headers });
 
-      if (url === '/api/projects/demo/flows') return { status: 200, body: projectFlowList };
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
       if (url === '/api/projects/demo/flows/main/graph')
         return { status: 200, body: projectGraph('main', 'Main') };
@@ -454,7 +446,14 @@ describe('exportProjectToCloud', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
 
-    const result = await exportProjectToCloud('demo', 'test@example.com', 'My Project', 'public');
+    const result = await exportProjectToCloud(
+      'demo',
+      'test@example.com',
+      'My Project',
+      'public',
+      undefined,
+      ['main', 'retry'],
+    );
 
     expect(result.shareUrl).toBe('https://seeflow.dev/project/uuid-abc');
 
@@ -487,7 +486,6 @@ describe('exportProjectToCloud', () => {
 
     installMock((url) => {
       capturedUrls.push(url);
-      if (url === '/api/projects/demo/flows') return { status: 200, body: projectFlowList };
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
       if (url === '/api/projects/demo/flows/main/graph')
         return { status: 200, body: projectGraph('main', 'Main') };
@@ -498,7 +496,7 @@ describe('exportProjectToCloud', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
 
-    await exportProjectToCloud('demo', 'u@example.com', 'P', 'link');
+    await exportProjectToCloud('demo', 'u@example.com', 'P', 'link', undefined, ['main', 'retry']);
 
     const cloudUrl = capturedUrls.find((u) => u.startsWith('https://seeflow.dev'));
     expect(cloudUrl).toBeDefined();
@@ -511,7 +509,6 @@ describe('exportProjectToCloud', () => {
     let capturedBody: ArrayBuffer | null = null;
 
     installMock((url, init) => {
-      if (url === '/api/projects/demo/flows') return { status: 200, body: projectFlowList };
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
       if (url === '/api/projects/demo/flows/main/graph')
         return { status: 200, body: projectGraph('main', 'Main') };
@@ -531,6 +528,7 @@ describe('exportProjectToCloud', () => {
       'P',
       'public',
       `data:image/png;base64,${base64}`,
+      ['main', 'retry'],
     );
 
     assertArrayBuffer(capturedBody);
@@ -541,7 +539,6 @@ describe('exportProjectToCloud', () => {
 
   it('throws when cloud API returns non-ok status', async () => {
     installMock((url) => {
-      if (url === '/api/projects/demo/flows') return { status: 200, body: projectFlowList };
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
       if (url === '/api/projects/demo/flows/main/graph')
         return { status: 200, body: projectGraph('main', 'Main') };
@@ -552,14 +549,13 @@ describe('exportProjectToCloud', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
 
-    await expect(exportProjectToCloud('demo', 'u@example.com', 'P', 'public')).rejects.toThrow(
-      'Export failed with status 413',
-    );
+    await expect(
+      exportProjectToCloud('demo', 'u@example.com', 'P', 'public', undefined, ['main', 'retry']),
+    ).rejects.toThrow('Export failed with status 413');
   });
 
   it('throws when cloud API response is missing url field', async () => {
     installMock((url) => {
-      if (url === '/api/projects/demo/flows') return { status: 200, body: projectFlowList };
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
       if (url === '/api/projects/demo/flows/main/graph')
         return { status: 200, body: projectGraph('main', 'Main') };
@@ -570,8 +566,43 @@ describe('exportProjectToCloud', () => {
       throw new Error(`Unexpected URL: ${url}`);
     });
 
-    await expect(exportProjectToCloud('demo', 'u@example.com', 'P', 'public')).rejects.toThrow(
-      'missing url',
-    );
+    await expect(
+      exportProjectToCloud('demo', 'u@example.com', 'P', 'public', undefined, ['main', 'retry']),
+    ).rejects.toThrow('missing url');
+  });
+
+  it('bundles only the selected flows when a subset is provided', async () => {
+    let capturedBody: ArrayBuffer | null = null;
+    const graphRequests: string[] = [];
+
+    installMock((url, init) => {
+      if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
+      if (url.includes('/graph')) graphRequests.push(url);
+      if (url === '/api/projects/demo/flows/main/graph')
+        return { status: 200, body: projectGraph('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry/graph')
+        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url.startsWith('https://seeflow.dev/api/projects')) {
+        const raw = init?.body;
+        capturedBody = raw instanceof ArrayBuffer ? raw : null;
+        return { status: 201, body: { url: 'https://seeflow.dev/project/uuid-subset' } };
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    });
+
+    await exportProjectToCloud('demo', 'u@example.com', 'P', 'public', undefined, ['retry']);
+
+    expect(graphRequests).toEqual(['/api/projects/demo/flows/retry/graph']);
+
+    assertArrayBuffer(capturedBody);
+    const entries = unzipSync(new Uint8Array(capturedBody));
+    expect(Object.keys(entries).sort()).toEqual(['flows/retry/flow.json', 'seeflow.json']);
+
+    const seeflowEntry = entries['seeflow.json'];
+    if (!seeflowEntry) throw new Error('seeflow.json missing from zip');
+    const manifest = JSON.parse(strFromU8(seeflowEntry));
+    expect(manifest.flows).toEqual([{ id: 'retry', name: 'Retry' }]);
+    // defaultFlow was 'main' in meta; falls back to 'retry' because that's the only selected slug.
+    expect(manifest.defaultFlow).toBe('retry');
   });
 });

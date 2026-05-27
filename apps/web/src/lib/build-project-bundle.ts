@@ -86,11 +86,17 @@ export async function buildProjectBundle({
   }
   const meta = (await projectRes.json()) as ProjectMetaResponse;
 
+  const selected = new Set(flows.map((f) => f.flowSlug));
+  const selectedMetaFlows = meta.flows.filter((f) => selected.has(f.flowSlug));
+  const defaultFlow = selected.has(meta.defaultFlow)
+    ? meta.defaultFlow
+    : (selectedMetaFlows[0]?.flowSlug ?? meta.defaultFlow);
+
   const manifest: ManifestOnDisk = {
     version: 1,
     name: meta.name,
-    defaultFlow: meta.defaultFlow,
-    flows: meta.flows.map((f) => {
+    defaultFlow,
+    flows: selectedMetaFlows.map((f) => {
       const entry: ManifestOnDisk['flows'][number] = { id: f.flowSlug, name: f.name };
       if (f.icon !== undefined) entry.icon = f.icon;
       return entry;

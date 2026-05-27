@@ -1,4 +1,5 @@
 import { type Visibility, useExportToCloud } from '@/hooks/use-export-to-cloud';
+import { useProjectFlows } from '@/hooks/use-project-flows';
 import { IS_PROJECT_EXPORT_ENABLED } from '@/lib/feature-flags';
 import {
   Button,
@@ -9,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@seeflow/canvas';
-import { Check, Copy, ExternalLink, Loader2 } from 'lucide-react';
+import { Check, Copy, ExternalLink, Loader2, Star } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 
 const EMAIL_STORAGE_KEY = 'seeflow.export.email';
@@ -47,7 +48,13 @@ export function ExportDialog({
   const [visibility, setVisibility] = useState<Visibility>('public');
   const [state, setState] = useState<State>({ kind: 'idle' });
   const [copied, setCopied] = useState(false);
+  const [selectedFlows, setSelectedFlows] = useState<Set<string>>(new Set());
   const exportToCloud = useExportToCloud(project, flow);
+  // In project-export mode, load the project's flow list so users can pick
+  // which flows to ship. Pass `null` (idle) when the dialog is closed or the
+  // flag is off — no fetch, hook returns flows:null.
+  const projectFlowsApi = useProjectFlows(open && IS_PROJECT_EXPORT_ENABLED ? project : null);
+  const availableFlows = projectFlowsApi.flows;
 
   useEffect(() => {
     if (open) {
@@ -59,6 +66,12 @@ export function ExportDialog({
     }
   }, [open, flowName]);
 
+  useEffect(() => {
+    if (open && availableFlows) {
+      setSelectedFlows(new Set(availableFlows.map((f) => f.flowSlug)));
+    }
+  }, [open, availableFlows]);
+
   const handleExport = useCallback(async () => {
     setState({ kind: 'loading' });
     try {
@@ -68,6 +81,7 @@ export function ExportDialog({
         name.trim(),
         visibility,
         previewDataUrl,
+        Array.from(selectedFlows),
       );
       localStorage.setItem(EMAIL_STORAGE_KEY, email.trim());
       localStorage.setItem(NAME_STORAGE_KEY, name.trim());
@@ -76,7 +90,25 @@ export function ExportDialog({
     } catch (err) {
       setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
     }
-  }, [exportToCloud, email, name, visibility, onCapturePreview]);
+  }, [exportToCloud, email, name, visibility, onCapturePreview, selectedFlows]);
+
+  const toggleFlow = useCallback((slug: string) => {
+    setSelectedFlows((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }, []);
+
+  const selectAllOrClear = useCallback(() => {
+    if (!availableFlows) return;
+    setSelectedFlows((prev) =>
+      prev.size === availableFlows.length
+        ? new Set()
+        : new Set(availableFlows.map((f) => f.flowSlug)),
+    );
+  }, [availableFlows]);
 
   const handleCopy = useCallback(async () => {
     if (state.kind !== 'done') return;
@@ -90,7 +122,16 @@ export function ExportDialog({
   }, [state]);
 
   const isLoading = state.kind === 'loading';
-  const canExport = email.trim().length > 0 && name.trim().length > 0;
+  // Project mode requires the flow list to have arrived AND at least one
+  // selection. Single-flow mode (or flag off) ignores the picker.
+  const projectModeReady = IS_PROJECT_EXPORT_ENABLED
+    ? availableFlows !== null && projectFlowsApi.error === null && selectedFlows.size > 0
+    : true;
+  const canExport = email.trim().length > 0 && name.trim().length > 0 && projectModeReady;
+  const showFlowPicker = IS_PROJECT_EXPORT_ENABLED && (availableFlows?.length ?? 0) >= 2;
+  const showFlowsLoading = IS_PROJECT_EXPORT_ENABLED && projectFlowsApi.loading;
+  const showFlowsError = IS_PROJECT_EXPORT_ENABLED && projectFlowsApi.error !== null;
+  const allSelected = availableFlows !== null && selectedFlows.size === availableFlows.length;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -162,6 +203,66 @@ export function ExportDialog({
                   <option value="link">Anyone with the link</option>
                 </select>
               </label>
+
+              {showFlowsLoading ? (
+                <div
+                  className="flex items-center gap-2 text-sm text-muted-foreground"
+                  data-testid="export-flows-loading"
+                >
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <span>Loading flows…</span>
+                </div>
+              ) : null}
+
+              {showFlowsError ? (
+                <div
+                  role="alert"
+                  data-testid="export-flows-error"
+                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                >
+                  Couldn't load flows. Try closing and reopening the dialog.
+                </div>
+              ) : null}
+
+              {showFlowPicker && availableFlows ? (
+                <div className="flex flex-col gap-1.5 text-sm" data-testid="export-flows-section">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium">Flows</span>
+                    <button
+                      type="button"
+                      onClick={selectAllOrClear}
+                      disabled={isLoading}
+                      data-testid="export-flows-toggle-all"
+                      className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {allSelected ? 'Clear' : 'Select all'}
+                    </button>
+                  </div>
+                  <ul className="flex max-h-48 flex-col gap-1 overflow-y-auto rounded-md border bg-background p-2">
+                    {availableFlows.map((f) => (
+                      <li key={f.flowSlug}>
+                        <label className="flex items-center gap-2 rounded px-2 py-1 hover:bg-muted">
+                          <input
+                            type="checkbox"
+                            checked={selectedFlows.has(f.flowSlug)}
+                            onChange={() => toggleFlow(f.flowSlug)}
+                            disabled={isLoading}
+                            data-testid={`export-flow-checkbox-${f.flowSlug}`}
+                          />
+                          <span className="flex-1 truncate">{f.name}</span>
+                          {f.isDefault ? (
+                            <Star
+                              className="h-3.5 w-3.5 text-muted-foreground"
+                              aria-label="default flow"
+                              data-testid={`export-flow-default-${f.flowSlug}`}
+                            />
+                          ) : null}
+                        </label>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
 
               {state.kind === 'error' ? (
                 <div
