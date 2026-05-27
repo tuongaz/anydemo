@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import {
   applyClear,
+  applyDropRedoBranch,
   applyDropTop,
   applyPush,
   applyRedo,
@@ -241,6 +242,59 @@ describe('applyDropTop', () => {
   it('returns the same reference when cursor is 0', () => {
     const next = applyDropTop(initial);
     expect(next).toBe(initial);
+  });
+});
+
+describe('applyDropRedoBranch', () => {
+  it('returns the same reference when there is no redo branch', () => {
+    const s1 = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    const s2 = applyPush(s1, entry({ capturedAt: 2 }), { now: 2 });
+    expect(s2.cursor).toBe(s2.stack.length);
+    const out = applyDropRedoBranch(s2);
+    expect(out).toBe(s2);
+  });
+
+  it('truncates the stack to cursor length while leaving the cursor untouched', () => {
+    let s = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    s = applyPush(s, entry({ capturedAt: 2 }), { now: 2 });
+    s = applyPush(s, entry({ capturedAt: 3 }), { now: 3 });
+    // Undo twice → cursor 1, stack length still 3 (redo branch present).
+    s = applyUndo(s).state;
+    s = applyUndo(s).state;
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(3);
+
+    const out = applyDropRedoBranch(s);
+    expect(out.stack.length).toBe(1);
+    expect(out.cursor).toBe(1);
+    expect(out.stack[0]?.capturedAt).toBe(1);
+  });
+
+  it('returns the same reference for an empty state', () => {
+    const out = applyDropRedoBranch(initial);
+    expect(out).toBe(initial);
+  });
+
+  it('after undo + drop, a fresh push lands at cursor position (end-to-end contract)', () => {
+    let s = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    s = applyPush(s, entry({ capturedAt: 2 }), { now: 2 });
+    s = applyPush(s, entry({ capturedAt: 3 }), { now: 3 });
+    // Undo twice → cursor 1, stack still has 3 entries.
+    s = applyUndo(s).state;
+    s = applyUndo(s).state;
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(3);
+
+    // Synchronously drop the redo branch — mirrors what the wrapper does.
+    s = applyDropRedoBranch(s);
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(1);
+
+    // A subsequent push lands at cursor 2, with no leftover redo entries.
+    s = applyPush(s, entry({ capturedAt: 99 }), { now: 99 });
+    expect(s.cursor).toBe(2);
+    expect(s.stack.length).toBe(2);
+    expect(s.stack[1]?.capturedAt).toBe(99);
   });
 });
 

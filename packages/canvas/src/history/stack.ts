@@ -116,6 +116,19 @@ export const applyDropTop = (state: HistoryState): HistoryState => {
 };
 
 /**
+ * Synchronously discards the redo branch without pushing any entry. The
+ * wrapper calls this at the start of every intercepted adapter method
+ * (before awaiting the inner call) so a late-arriving push cannot
+ * silently truncate a redo branch the user has built between call and
+ * resolution. Returns the same reference if there's nothing to drop, so
+ * callers can compare cheaply.
+ */
+export const applyDropRedoBranch = (state: HistoryState): HistoryState => {
+  if (state.cursor === state.stack.length) return state;
+  return { stack: state.stack.slice(0, state.cursor), cursor: state.cursor };
+};
+
+/**
  * If `now - lastMutationAt > windowMs`, return a fresh empty state
  * (caller should treat the next external change as foreign). Otherwise
  * return the same reference so callers can compare cheaply.
