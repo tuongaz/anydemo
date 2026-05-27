@@ -28,6 +28,10 @@ const ALL_TOKENS: ColorToken[] = [
 // `colorTokenStyle` short-circuits before reading them.
 const PAINTED_TOKENS: ColorToken[] = ALL_TOKENS.filter((t) => t !== 'none');
 
+// Tokens whose body is a literal HSL color (no theme variable). White is
+// included; `default` is excluded because its body resolves via theme tokens.
+const LITERAL_BODY_TOKENS: ColorToken[] = PAINTED_TOKENS.filter((t) => t !== 'default');
+
 describe('COLOR_TOKENS map', () => {
   it('has an entry for every ColorToken enum value', () => {
     for (const token of ALL_TOKENS) {
@@ -59,6 +63,23 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.none.background).toBe('transparent');
     expect(COLOR_TOKENS.none.edge).toBe('transparent');
     expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
+  });
+
+  it('paints every literal-body token with an opaque hsl() string (no hsla)', () => {
+    for (const token of LITERAL_BODY_TOKENS) {
+      const entry = COLOR_TOKENS[token];
+      expect(entry.background.startsWith('hsl(')).toBe(true);
+      expect(entry.background).not.toMatch(/hsla\(/);
+      expect(entry.headerBackground.startsWith('hsl(')).toBe(true);
+      expect(entry.headerBackground).not.toMatch(/hsla\(/);
+    }
+  });
+
+  it('paints body and edge with the same color for non-white literal tokens (swatch ↔ body parity)', () => {
+    for (const token of LITERAL_BODY_TOKENS.filter((t) => t !== 'white')) {
+      const entry = COLOR_TOKENS[token];
+      expect(entry.background).toBe(entry.edge);
+    }
   });
 });
 
@@ -116,6 +137,37 @@ describe('colorTokenStyle', () => {
       const header = colorTokenStyle(token, 'node-header');
       expect(header.backgroundColor).not.toBe(node.backgroundColor);
     }
+  });
+
+  describe('kind=node-body-text', () => {
+    it('returns an empty style for theme-backed tokens (default + undefined + none)', () => {
+      expect(colorTokenStyle(undefined, 'node-body-text')).toEqual({});
+      expect(colorTokenStyle('default', 'node-body-text')).toEqual({});
+      expect(colorTokenStyle('none', 'node-body-text')).toEqual({});
+    });
+
+    it('returns dark text for light-body tokens', () => {
+      const darkText = 'hsl(220, 15%, 15%)';
+      for (const token of [
+        'white',
+        'indigo',
+        'violet',
+        'purple',
+        'red',
+        'rose',
+        'blue',
+        'pink',
+      ] as const) {
+        expect(colorTokenStyle(token, 'node-body-text')).toEqual({ color: darkText });
+      }
+    });
+
+    it('returns light text for darker-body tokens', () => {
+      const lightText = 'hsl(0, 0%, 98%)';
+      for (const token of ['slate', 'green', 'teal', 'amber'] as const) {
+        expect(colorTokenStyle(token, 'node-body-text')).toEqual({ color: lightText });
+      }
+    });
   });
 
   describe('none token', () => {

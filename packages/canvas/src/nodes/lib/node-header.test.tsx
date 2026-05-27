@@ -306,3 +306,44 @@ describe('NodeHeader — title styling', () => {
     expect(style.fontSize).toBeUndefined();
   });
 });
+
+describe('NodeHeader — colored background', () => {
+  it('falls back to sf:bg-muted when backgroundColor is undefined', () => {
+    const tree = callNodeHeader();
+    const header = findByTestId(tree, 'node-header');
+    const className = (header?.props as { className?: string }).className ?? '';
+    expect(className).toContain('sf:bg-muted');
+    const style = (header?.props as { style?: CSSProperties }).style;
+    expect(style).toBeUndefined();
+  });
+
+  it("falls back to sf:bg-muted when backgroundColor is 'default'", () => {
+    const tree = callNodeHeader({ backgroundColor: 'default' });
+    const header = findByTestId(tree, 'node-header');
+    const className = (header?.props as { className?: string }).className ?? '';
+    expect(className).toContain('sf:bg-muted');
+  });
+
+  it('paints the header from the node-header style when backgroundColor is a painted token', () => {
+    const tree = callNodeHeader({ backgroundColor: 'blue' });
+    const header = findByTestId(tree, 'node-header');
+    const className = (header?.props as { className?: string }).className ?? '';
+    expect(className).not.toContain('sf:bg-muted');
+    const style = (header?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.backgroundColor).toBe(colorTokenStyle('blue', 'node-header').backgroundColor);
+  });
+
+  it('adapts the title color to the body via node-body-text when no explicit textColor is set', () => {
+    const tree = callNodeHeader({ backgroundColor: 'blue' });
+    const title = findByTestId(tree, 'node-title');
+    const style = (title?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.color).toBe(colorTokenStyle('blue', 'node-body-text').color);
+  });
+
+  it('lets an explicit textColor win over the adapted body-text color', () => {
+    const tree = callNodeHeader({ backgroundColor: 'blue', textColor: 'red' });
+    const title = findByTestId(tree, 'node-title');
+    const style = (title?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.color).toBe(colorTokenStyle('red', 'text').color);
+  });
+});

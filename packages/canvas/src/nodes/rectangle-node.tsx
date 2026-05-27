@@ -71,9 +71,15 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   const [descEditing, setDescEditing] = useState(false);
   const descEditable = !!data.onDescriptionChange;
   const sized = data.width !== undefined || data.height !== undefined;
+  // When the body is painted with a color token AND the user hasn't picked
+  // an explicit textColor, adapt the description color for contrast against
+  // the new solid body fill.
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
+    ...(data.textColor === undefined
+      ? colorTokenStyle(data.backgroundColor, 'node-body-text')
+      : {}),
     ...(data.textAlign !== undefined ? { textAlign: data.textAlign } : {}),
   };
 
@@ -154,6 +160,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           selected={selected}
           fontSize={data.fontSize}
           textColor={data.textColor}
+          backgroundColor={data.backgroundColor}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}
           trailing={
