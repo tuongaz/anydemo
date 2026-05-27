@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  SCHEMA_INDEX_USAGE,
+  buildJqHints,
   getCategorySubschema,
+  getDataFieldNames,
   getSchemaCategory,
   listCategorySubnames,
   listSchemaCategories,
@@ -41,6 +44,39 @@ describe('schema-catalog', () => {
       first.name = 'mutated';
       const reloaded = listSchemaCategories()[0];
       expect(reloaded?.name).toBe('flow');
+    });
+
+    it('inlines subnames on every category so callers can drill in without a second lookup', () => {
+      const cats = listSchemaCategories();
+      const byName = Object.fromEntries(cats.map((c) => [c.name, c]));
+      expect(byName.flow?.subnames).toEqual(['flow']);
+      expect(byName.connector?.subnames).toEqual(['connector']);
+      expect(byName.style?.subnames).toEqual(['style']);
+      expect(byName.node?.subnames?.sort()).toEqual(
+        [
+          'cloud',
+          'component',
+          'database',
+          'diamond',
+          'ellipse',
+          'hexagon',
+          'html',
+          'icon',
+          'image',
+          'queue',
+          'rectangle',
+          'server',
+          'sticky',
+          'text',
+          'user',
+        ].sort(),
+      );
+      expect(byName.action?.subnames?.sort()).toEqual(
+        ['componentAction', 'playAction', 'statusAction', 'statusReport'].sort(),
+      );
+      expect(byName.componentSpec?.subnames?.sort()).toEqual(
+        ['componentSpec', 'componentSpecElement'].sort(),
+      );
     });
   });
 
@@ -260,6 +296,90 @@ describe('schema-catalog', () => {
     it('returns null for unknown categories', () => {
       expect(listCategorySubnames('bogus')).toBeNull();
       expect(listCategorySubnames('')).toBeNull();
+    });
+  });
+
+  describe('getDataFieldNames', () => {
+    it('lists every data.* key for a node variant (rectangle)', () => {
+      const fields = getDataFieldNames('node', 'rectangle');
+      expect(fields).not.toBeNull();
+      // Rectangle is the kitchen-sink variant — must surface the capability
+      // fields the play/status designers patch.
+      expect(fields).toEqual(expect.arrayContaining(['playAction', 'statusAction', 'stateSource']));
+      // And the descriptive header fields the planner sets.
+      expect(fields).toEqual(expect.arrayContaining(['name', 'detail']));
+    });
+
+    it('returns null for shapes / categories with no data.properties wrapper', () => {
+      // Action schemas are top-level — no data wrapper.
+      expect(getDataFieldNames('action', 'playAction')).toBeNull();
+      // Bogus subname / category.
+      expect(getDataFieldNames('node', 'bogus')).toBeNull();
+      expect(getDataFieldNames('bogus', 'rectangle')).toBeNull();
+    });
+  });
+
+  describe('buildJqHints', () => {
+    it('category-level hints include sample drill paths + a tip that names the subnames', () => {
+      const hints = buildJqHints('node');
+      expect(hints).not.toBeNull();
+      if (!hints) return;
+      expect(hints.examples).toEqual(
+        expect.arrayContaining(['.schemas', '.schemas[]', '.notes[]']),
+      );
+      // Tip should mention at least one concrete subname so the agent can paste it.
+      expect(hints.tip).toMatch(/rectangle/);
+      // No dataFields at the category level — that's a per-variant detail.
+      expect(hints.dataFields).toBeUndefined();
+    });
+
+    it('per-subname hints expose dataFields + ready-to-paste paths for each data field', () => {
+      const hints = buildJqHints('node', 'rectangle');
+      expect(hints).not.toBeNull();
+      if (!hints) return;
+      // dataFields must surface the per-shape data.* keys so the agent can target one.
+      expect(hints.dataFields).toEqual(
+        expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+      );
+      // Every example path under data.properties must be addressable by .schemas.rectangle.
+      for (const example of hints.examples) {
+        if (example.startsWith('.schemas.')) {
+          expect(example.startsWith('.schemas.rectangle')).toBe(true);
+        }
+      }
+      // At least one example must point at a real data.<field> so agents see the pattern.
+      expect(
+        hints.examples.some((e) => /\.schemas\.rectangle\.properties\.data\.properties\./.test(e)),
+      ).toBe(true);
+      // Tip should reference dataFields for affordance.
+      expect(hints.tip).toMatch(/dataFields/i);
+    });
+
+    it('per-subname hints on action variants (no data wrapper) skip dataFields gracefully', () => {
+      const hints = buildJqHints('action', 'playAction');
+      expect(hints).not.toBeNull();
+      if (!hints) return;
+      expect(hints.dataFields).toBeUndefined();
+      // Examples still point at the variant.
+      expect(hints.examples).toEqual(
+        expect.arrayContaining(['.schemas.playAction', '.schemas.playAction.required']),
+      );
+    });
+
+    it('returns null for unknown category / subname so callers can fall through to error paths', () => {
+      expect(buildJqHints('bogus')).toBeNull();
+      expect(buildJqHints('node', 'bogus')).toBeNull();
+    });
+  });
+
+  describe('SCHEMA_INDEX_USAGE', () => {
+    it('carries copy-paste examples for the progressive workflow', () => {
+      // The agent sees this block on `seeflow schema` and on GET /api/schema —
+      // it must teach drill (with subname) + filter (with --jq) inline.
+      expect(SCHEMA_INDEX_USAGE.drill).toMatch(/schema <category>/);
+      expect(SCHEMA_INDEX_USAGE.filter).toMatch(/--jq/);
+      expect(SCHEMA_INDEX_USAGE.examples.some((e) => e.includes('seeflow schema node'))).toBe(true);
+      expect(SCHEMA_INDEX_USAGE.examples.some((e) => e.includes('--jq'))).toBe(true);
     });
   });
 

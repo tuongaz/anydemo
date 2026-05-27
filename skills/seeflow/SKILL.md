@@ -60,6 +60,21 @@ Always call `seeflow projects:create --path "$repoPath" --name "..."` — the CL
 
 **Every flow mutation goes through the CLI.** The studio validates every write server-side — there is no separate validation step. Don't memorise CLI syntax — run `$SEEFLOW help` to see every subcommand and `$SEEFLOW help <command>` for synopsis, body shape, output, and error kinds. Treat the help output as the source of truth and follow what it prints. See `references/cli.md` for the resolver snippet.
 
+**Run `$SEEFLOW schema` BEFORE designing or authoring any node.** The CLI is the only source of truth for field shapes, and it's built for cheap progressive disclosure:
+
+1. `$SEEFLOW schema` → catalog of categories with `subnames` inlined on each + a `usage` block.
+2. `$SEEFLOW schema <category>` (e.g. `node`, `action`) → full schemas, `notes`, `subnames`, and a `jqHints` block listing concrete drill paths to try next.
+3. `$SEEFLOW schema <category> <subname>` (e.g. `node rectangle`, `action playAction`) → one variant with `jqHints.dataFields` — the EXACT list of `data.<field>` names you can target with `--jq` on the next call.
+
+Slice with `--jq` to pull a single field's contract instead of the whole schema, using a path from `jqHints.examples` or assembled from `jqHints.dataFields`:
+
+```
+$SEEFLOW schema node rectangle \
+    --jq '.schemas.rectangle.properties.data.properties.playAction'
+```
+
+Phase 0 caches the categories; downstream sub-agents are expected to drill into single subnames (with `--jq`) as they compose patches. Full grammar + every response field in `references/schema.md` § "Look up the contract at runtime" and `references/cli.md` § "Schema cache — fetched once at Phase 0".
+
 ### Scratch files & cleanup
 
 Any intermediate file the orchestrator or a generated Play/Status script needs (curl output, jq scratch, downloaded fixtures, comparison snapshots, etc.) goes under `$SEEFLOW_TMP` — never `/tmp`, `/var/tmp`, or `$TMPDIR`. The per-flow path requires no extra permission, survives the run for debugging, and is gitignored by convention (the project lives inside the host's `.seeflow/` container, which is gitignored — add `flows/*/.tmp/` explicitly if not).
@@ -172,7 +187,8 @@ If you catch yourself thinking any of the following, you are rationalising — s
 - "I'll narrate the LEARN.md write so the user knows it happened." → both writes are silent by contract; narration is noise.
 - "I'll just drop in an `html` node — it's only a small comparison table / status card / checklist." → no. `type:'component'` is the first choice for complex node content (any `inputClass`); `html` is only legitimate after `$SEEFLOW schema node`'s `component.spec.elements[].type` enum is confirmed not to cover it, with the gap cited in `rationales[nodeId]`.
 - "Schema output is just JSON — I'll parse `$schemaCache.node` myself (Python / hand-rolled walker / inline JS)." → no. The "don't memorise CLI syntax — run `$SEEFLOW help`" rule in §"Conventions" applies to every subcommand, schema included. Run `$SEEFLOW help schema` once: it documents the `<subname>` positional for per-variant drill-down AND the `--jq <filter>` flag for path extraction (jq-subset grammar, `badJq` exit 2). Reach for those before in-process JSON parsing.
-- "My `--jq` got `badJq` — I'll parse the JSON with Python/JS instead." → no. `badJq` = wrong path, not a tool failure. Run `$SEEFLOW schema node component` raw to inspect the live shape, fix the path, retry `--jq`. Never switch tools.
+- "My `--jq` got `badJq` — I'll parse the JSON with Python/JS instead." → no. `badJq` = wrong path, not a tool failure. Re-run the parent call (`$SEEFLOW schema node rectangle`) WITHOUT `--jq`, read `jqHints.examples` (and `jqHints.dataFields` for node variants — that's the exact `data.<field>` list you can target), then retry `--jq` with one of those paths. Never switch tools.
+- "I'll design the node first and look up the schema when I'm ready to patch." → no. `$SEEFLOW schema` runs in milliseconds and tells you exactly which fields each variant accepts; designing before checking burns sub-agent iterations on shapes the CLI would have rejected. Run `$SEEFLOW schema <category>` (then `<subname>` for the variant you're about to author) before you draft a single `nodes:add` / `nodes:patch` body.
 
 ## Operations
 

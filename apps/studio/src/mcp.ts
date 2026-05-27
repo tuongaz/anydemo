@@ -30,6 +30,8 @@ import {
 } from './operations.ts';
 import type { Registry } from './registry.ts';
 import {
+  SCHEMA_INDEX_USAGE,
+  buildJqHints,
   getCategorySubschema,
   getSchemaCategory,
   listCategorySubnames,
@@ -329,7 +331,10 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         if (subname !== undefined && subname !== null && subname !== '') {
           return errorResult('Invalid arguments: `subname` requires `name` to be set');
         }
-        return okResult({ categories: listSchemaCategories() });
+        return okResult({
+          categories: listSchemaCategories(),
+          usage: SCHEMA_INDEX_USAGE,
+        });
       }
       if (typeof name !== 'string') {
         return errorResult('Invalid arguments: `name` must be a string when present');
@@ -345,6 +350,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
             subname,
             schemas: single.schemas,
             notes: single.notes,
+            jqHints: buildJqHints(name, subname),
           });
         }
         const availableSubs = listCategorySubnames(name);
@@ -363,7 +369,13 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
           `unknown schema category: ${name} (available: ${schemaCategoryNames().join(', ')})`,
         );
       }
-      return okResult({ name, schemas: payload.schemas, notes: payload.notes });
+      return okResult({
+        name,
+        schemas: payload.schemas,
+        notes: payload.notes,
+        subnames: listCategorySubnames(name) ?? [],
+        jqHints: buildJqHints(name),
+      });
     },
   },
   {

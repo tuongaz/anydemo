@@ -34,6 +34,8 @@ import { type PlayResult, type RunPlayOptions, runPlay as defaultRunPlay } from 
 import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import {
+  SCHEMA_INDEX_USAGE,
+  buildJqHints,
   getCategorySubschema,
   getSchemaCategory,
   listCategorySubnames,
@@ -507,7 +509,15 @@ export function createApi(options: ApiOptions): Hono {
   // GET /api/schema — index of categories the skill / agents can introspect.
   // Mirrors `seeflow schema` and the `seeflow_schema` MCP tool. Drill in via
   // GET /api/schema/:name for the full JSON Schema(s) + invariant notes.
-  api.get('/schema', (c) => c.json({ ok: true as const, categories: listSchemaCategories() }));
+  // Each category carries its subnames inline so the agent can pick a drill
+  // target without a second round-trip.
+  api.get('/schema', (c) =>
+    c.json({
+      ok: true as const,
+      categories: listSchemaCategories(),
+      usage: SCHEMA_INDEX_USAGE,
+    }),
+  );
 
   api.get('/schema/:name', (c) => {
     const name = c.req.param('name');
@@ -518,7 +528,14 @@ export function createApi(options: ApiOptions): Hono {
         404,
       );
     }
-    return c.json({ ok: true as const, name, schemas: payload.schemas, notes: payload.notes });
+    return c.json({
+      ok: true as const,
+      name,
+      schemas: payload.schemas,
+      notes: payload.notes,
+      subnames: listCategorySubnames(name) ?? [],
+      jqHints: buildJqHints(name),
+    });
   });
 
   // GET /api/schema/:name/:subname — drill into one named schema within a
@@ -537,6 +554,7 @@ export function createApi(options: ApiOptions): Hono {
         subname,
         schemas: single.schemas,
         notes: single.notes,
+        jqHints: buildJqHints(name, subname),
       });
     }
     const availableSubs = listCategorySubnames(name);

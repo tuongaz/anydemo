@@ -872,26 +872,36 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     synopsis: 'seeflow schema [<category> [<subname>]] [--jq <filter>]',
     description:
       'Introspect the SeeFlow flow.json / style.json / spec.json schemas at ' +
-      'runtime. Call without arguments to list the six categories (flow, node, ' +
-      'connector, action, componentSpec, style); call with a category name to ' +
-      'get its full JSON Schema(s) (Draft-07) plus a `notes` array of cross-' +
-      "field invariants the schema can't express. The `node` payload includes " +
-      "all 13 flat variants (including type:'component', whose `spec` field " +
-      'lives in a sidecar — drill into `componentSpec` for that shape).\n\n' +
-      'Pass a third positional `subname` to get just one named schema within ' +
-      'the category — e.g. `seeflow schema node component`, `seeflow schema ' +
-      'node rectangle`, `seeflow schema action playAction`. The category-' +
-      'level `notes` ride along unchanged because the cross-variant invariants ' +
-      'still apply when looking at one variant. Use this before authoring any ' +
-      'flow.json / spec.json write — never memorise field shapes.\n\n' +
-      'Pass --jq <filter> to extract a slice of the response with a jq path ' +
-      'expression. Supported subset: identity (`.`), field access ' +
-      '(`.foo.bar`), bracket access (`.["foo"]`, `.[3]`, negative indices ' +
-      'allowed), iteration (`.foo[]`), optional `?` (e.g. `.foo?` to suppress ' +
-      'type errors), and pipe (`|`). Single-output filters return the value ' +
-      'under `{ result: <value> }`; multi-output filters (from `[]` or `|`) ' +
-      'return `{ result: [<v1>, <v2>, ...] }`. Bad filters exit with code 2 ' +
-      'and `code:"badJq"`.',
+      'runtime. **Run this before designing or authoring any node** — the CLI ' +
+      'is the only source of truth for field shapes, never memorise them.\n\n' +
+      'Progressive workflow:\n' +
+      '  1. `seeflow schema` → index of the six categories (flow, node, ' +
+      'connector, action, componentSpec, style) with every drill `subname` ' +
+      'inlined under each `categories[].subnames`, plus a `usage` block with ' +
+      'copy-paste examples.\n' +
+      '  2. `seeflow schema <category>` → full JSON Schema(s) (Draft-07) for ' +
+      "every variant in the category, the cross-variant `notes`, the category's " +
+      '`subnames`, and a `jqHints` block listing concrete filter paths to try ' +
+      'next.\n' +
+      '  3. `seeflow schema <category> <subname>` → just one named schema ' +
+      "(e.g. `node rectangle`, `action playAction`). The response's " +
+      '`jqHints.dataFields` lists every `data.<field>` available on the variant, ' +
+      'and `jqHints.examples` gives ready-to-paste `--jq` paths pointing at ' +
+      'each one — drill straight to the field you care about without re-paying ' +
+      'for the full schema.\n\n' +
+      "The `node` payload includes all 13 flat variants (including type:'component', " +
+      'whose `spec` field lives in a sidecar — drill into `componentSpec` for ' +
+      'that shape). The category-level `notes` ride along unchanged on subname ' +
+      'lookups because the cross-variant invariants still apply.\n\n' +
+      'Pass `--jq <filter>` to extract a slice of the response with a jq path ' +
+      'expression. Supported subset: identity (`.`), field access (`.foo.bar`), ' +
+      'bracket access (`.["foo"]`, `.[3]`, negative indices allowed), iteration ' +
+      '(`.foo[]`), optional `?` (e.g. `.foo?` to suppress type errors), and pipe ' +
+      '(`|`). Single-output filters return the value under `{ result: <value> }`; ' +
+      'multi-output filters (from `[]` or `|`) return `{ result: [<v1>, <v2>, ...] }`. ' +
+      'Bad filters exit with code 2 and `code:"badJq"`. The fastest pattern is ' +
+      '`seeflow schema <category> <subname> --jq .schemas.<subname>.properties.data.properties.<field>` ' +
+      '— pulls one field shape and nothing else.',
     category: 'meta',
     args: [
       {
@@ -915,13 +925,27 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
         name: 'jq',
         valuePlaceholder: '<filter>',
         description:
-          'Apply a jq path-subset filter to the response payload. Examples: ' +
-          '`.schemas.rectangle`, `.schemas.image.properties.data.properties.path`, ' +
-          '`.schemas[]`, `.notes[0]`.',
+          'Apply a jq path-subset filter to the response payload. Common paths: ' +
+          '`.schemas.<subname>` (one variant), ' +
+          '`.schemas.<subname>.required` (required fields), ' +
+          '`.schemas.<subname>.properties.data.properties` (every data.* shape), ' +
+          '`.schemas.<subname>.properties.data.properties.<field>` (one data.* ' +
+          'shape — `jqHints.dataFields` enumerates `<field>` for you), ' +
+          '`.schemas[]` (iterate variants), `.notes[]` (iterate invariants). ' +
+          'Single-variant lookups surface `jqHints.examples` with these paths ' +
+          'pre-built for the chosen subname.',
       },
     ],
     outputs: {
-      okExample: { categories: [{ name: 'flow', description: 'Top-level flow.json envelope.' }] },
+      okExample: {
+        categories: [
+          { name: 'flow', description: 'Top-level flow.json envelope.', subnames: ['flow'] },
+        ],
+        usage: {
+          drill: 'seeflow schema <category> [<subname>]',
+          filter: 'seeflow schema <category> [<subname>] --jq <jq-path>',
+        },
+      },
       errorKinds: ['notFound', 'badJq'],
     },
     requiresStudio: false,
@@ -934,6 +958,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow schema connector',
       'seeflow schema componentSpec',
       'seeflow schema node --jq .schemas.rectangle',
+      "seeflow schema node rectangle --jq '.schemas.rectangle.properties.data.properties.playAction'",
       "seeflow schema node --jq '.schemas.image.properties.data.properties.path'",
       "seeflow schema node --jq '.schemas[]'",
     ],

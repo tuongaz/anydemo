@@ -24,11 +24,27 @@ together.
 
 **The CLI is the only source of truth for field shapes.** This file
 documents conventions, file layout, and when-to-use guidance — it does
-**not** document fields, types, or enum values. The orchestrator fetches
-the contract **once at Phase 0** and caches it for the rest of the run
-(see `phases/p0-preflight.md` §"Capability probe"):
+**not** document fields, types, or enum values. **Before designing or
+authoring any node, run the schema CLI** — Phase 0 caches the payload
+for the orchestrator, and Phase 2 (planner) / Phase 4 (designers)
+re-drill into specific variants as they compose patches. If a field
+name, type, required-list, or enum value is not in `$SEEFLOW schema`,
+it does not exist.
 
-    $SEEFLOW schema              # category index
+### Progressive workflow (run these before designing nodes)
+
+The CLI is built for cheap progressive disclosure — start broad, drill
+narrow, then `--jq` to a single field. Each level enriches the response
+with affordances the next step needs:
+
+    # 1. See the whole catalog.
+    $SEEFLOW schema
+    #    → { categories: [{ name, description, subnames: [...] }, …],
+    #        usage: { drill, filter, examples } }
+    #    Every category surfaces its drill targets inline under
+    #    `categories[].subnames` so you never need a second listing call.
+
+    # 2. Drill into one category for the full variant tree.
     $SEEFLOW schema flow         # top-level envelope
     $SEEFLOW schema node         # every node variant (also yields the
                                  # component catalog via the `component`
@@ -36,44 +52,82 @@ the contract **once at Phase 0** and caches it for the rest of the run
     $SEEFLOW schema connector    # every connector variant
     $SEEFLOW schema action       # every action variant
     $SEEFLOW schema style        # style.json envelope (for reference)
+    #    → { name, schemas, notes, subnames: [...],
+    #        jqHints: { examples: [...], tip } }
+    #    `subnames` is the legal drill list; `jqHints.examples` are
+    #    copy-paste jq paths to feed back as `--jq` on the next call.
 
-Pass a third positional `subname` to drill into a single named schema
-within a category — useful for cheap per-variant lookups without
-re-paying for the whole category payload:
-
-    $SEEFLOW schema node component        # just the component variant
-    $SEEFLOW schema node rectangle        # just the rectangle variant
-    $SEEFLOW schema node image            # just the image variant
-    $SEEFLOW schema action playAction     # just the playAction shape
+    # 3. Drill into one variant for one shape — the fastest read.
+    $SEEFLOW schema node rectangle
+    $SEEFLOW schema node component
+    $SEEFLOW schema node image
+    $SEEFLOW schema action playAction
     $SEEFLOW schema componentSpec componentSpecElement
+    #    → { name, subname, schemas, notes,
+    #        jqHints: { dataFields: [...], examples: [...], tip } }
+    #    `jqHints.dataFields` is the per-variant `data.<field>` list —
+    #    EXACTLY the names you can paste under
+    #    `.schemas.<subname>.properties.data.properties.<field>` to pull
+    #    one field's contract with `--jq`. `jqHints.examples`
+    #    pre-builds those paths for the variant.
 
 The category-level `notes` ride along unchanged because the cross-
 variant invariants still apply when you're looking at one variant.
 Unknown subnames exit 3 with `code:"notFound"` plus an `available` list
 of valid subnames for the category.
 
-Pass `--jq <filter>` to slice the response inside the CLI instead of
-post-processing the JSON in this orchestrator. Supported subset is a
-jq-path grammar (identity `.`, field access `.foo`, bracket access
-`.["foo"]` / `.[3]` / negative indices, iteration `.foo[]`, optional `?`,
-pipe `|`). Single-output filters return `{ result: <value> }`;
-multi-output filters (from `[]` or `|`) return `{ result: [<v1>, …] }`.
-Bad filters exit 2 with `code:"badJq"`. Reach for `--jq` (paired with
-`subname` when you want a single variant) **before** parsing schema JSON
-in-process — that's the canonical extraction path. Run `$SEEFLOW help
-schema` for the authoritative grammar and live examples.
+### Slicing with `--jq`
 
-Each call returns the contract per variant plus a `notes` array carrying
-cross-field invariants the contract can't express. The same output is
-reachable over MCP (`seeflow_schema` — accepts `name` and `subname`)
-and REST (`GET /api/schema[/:name[/:subname]]`) — pick whichever
-transport you're already on. The Phase 0 cache is forwarded to the
-node-planner (Phase 2) and the play/status designers (Phase 4) in
-their launching prompts; downstream agents never re-fetch.
+Pass `--jq <filter>` to extract just the slice you need inside the CLI
+instead of post-processing the JSON in this orchestrator. Supported
+subset is a jq-path grammar (identity `.`, field access `.foo`, bracket
+access `.["foo"]` / `.[3]` / negative indices, iteration `.foo[]`,
+optional `?`, pipe `|`). Single-output filters return `{ result:
+<value> }`; multi-output filters (from `[]` or `|`) return `{ result:
+[<v1>, …] }`. Bad filters exit 2 with `code:"badJq"`.
 
-If a field name, type, required-list, or enum value is not in `$SEEFLOW
-schema`, it does not exist. Do not infer one from this file, from the
-agent prompts, or from older skill memory — read the cached answer.
+**Canonical pattern:** drill in with `subname`, then `--jq` straight to
+the `data.<field>` the planner or designer is about to set, using one
+of the paths the CLI listed in `jqHints.examples`:
+
+    $SEEFLOW schema node rectangle \
+        --jq '.schemas.rectangle.properties.data.properties.playAction'
+
+    $SEEFLOW schema node component \
+        --jq '.schemas.component.properties.data.properties.spec'
+
+    $SEEFLOW schema action playAction \
+        --jq '.schemas.playAction.required'
+
+`jqHints.dataFields` is the answer to "what fields can I jq for?" —
+for any node variant it lists every `data.<field>` you can target.
+Non-node variants (action, connector, componentSpec, style) have no
+`data` wrapper, so `dataFields` is absent on those responses; use
+`jqHints.examples` instead.
+
+If `--jq` returns `badJq` it means the path is wrong, **not** that the
+tool is broken — re-run the parent (`$SEEFLOW schema node rectangle`)
+without `--jq`, read `jqHints.examples` / `jqHints.dataFields` for the
+correct path, then retry. Never switch to in-process JSON parsing.
+
+Run `$SEEFLOW help schema` for the authoritative grammar and live
+examples; the response of every schema call also carries the relevant
+hints inline.
+
+Each call returns the contract per variant plus a `notes` array
+carrying cross-field invariants the contract can't express, plus the
+`subnames` / `jqHints` affordances above. The same output (with the
+same `subnames`, `usage`, and `jqHints` fields) is reachable over MCP
+(`seeflow_schema` — accepts `name` and `subname`) and REST (`GET
+/api/schema[/:name[/:subname]]`) — pick whichever transport you're
+already on. The Phase 0 cache is forwarded to the node-planner (Phase
+2) and the play/status designers (Phase 4) in their launching prompts;
+downstream agents never re-fetch the whole category but ARE expected
+to re-drill into a single subname (with `--jq` for a single field)
+when composing patches.
+
+Do not infer a field shape from this file, from the agent prompts, or
+from older skill memory — read the cached answer.
 
 ## Skill-known node types
 

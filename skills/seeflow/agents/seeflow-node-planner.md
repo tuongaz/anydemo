@@ -29,6 +29,16 @@ entity, you mark that entity out of scope rather than inventing detail.
 
 When in doubt: the only way `data.<X>` is legal is if `$SEEFLOW schema node` lists `<X>` for that node's `type`. If it doesn't, drop the field — don't ship and let the orchestrator strip it.
 
+**Drill in cheaply with `<subname>` + `--jq`.** When you need to double-check one variant's fields without re-paying for the whole `node` payload in the launching prompt, run `$SEEFLOW schema node <variant>` — the response includes `jqHints.dataFields` listing every `data.<field>` the variant accepts and `jqHints.examples` with ready-to-paste `--jq` paths. Use that pattern to confirm a field's required-list or to read the enum of an unfamiliar `data.<X>` before emitting it:
+
+    $SEEFLOW schema node rectangle \
+        --jq '.schemas.rectangle.properties.data.required'
+
+    $SEEFLOW schema node component \
+        --jq '.schemas.component.properties.data.properties.spec'
+
+A `badJq` exit means the path is wrong, not that the tool is broken — re-read `jqHints` and retry. Never parse the schema JSON in-process.
+
 ## Inputs
 
 The launching prompt will give you:

@@ -161,7 +161,8 @@ describe('seeflow_schema', () => {
     const { app } = buildApp();
     const envelope = await callTool(app, 'seeflow_schema');
     const body = expectOk(envelope) as {
-      categories: Array<{ name: string; description: string }>;
+      categories: Array<{ name: string; description: string; subnames: string[] }>;
+      usage: { drill: string; filter: string; examples: string[] };
     };
     expect(body.categories.map((c) => c.name)).toEqual([
       'flow',
@@ -171,6 +172,12 @@ describe('seeflow_schema', () => {
       'componentSpec',
       'style',
     ]);
+    // Each category surfaces its drill targets inline, and the response
+    // carries a usage block so MCP callers see the progressive workflow.
+    const node = body.categories.find((c) => c.name === 'node');
+    expect(node?.subnames).toEqual(expect.arrayContaining(['rectangle', 'component']));
+    expect(body.usage.drill).toMatch(/schema <category>/);
+    expect(body.usage.filter).toMatch(/--jq/);
   });
 
   it('returns full JSON Schemas + notes for a named category', async () => {
@@ -236,9 +243,20 @@ describe('seeflow_schema', () => {
       name: string;
       subname: string;
       schemas: Record<string, unknown>;
+      jqHints: { dataFields?: string[]; examples: string[] };
     };
     expect(body.subname).toBe('rectangle');
     expect(Object.keys(body.schemas)).toEqual(['rectangle']);
+    // MCP per-subname response carries the same jqHints affordances the CLI prints —
+    // dataFields enumerates `data.<field>` keys; examples include drill paths.
+    expect(body.jqHints.dataFields).toEqual(
+      expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+    );
+    expect(
+      body.jqHints.examples.some((e) =>
+        /\.schemas\.rectangle\.properties\.data\.properties\./.test(e),
+      ),
+    ).toBe(true);
   });
 
   it('returns isError listing available subnames when subname is unknown within a known category', async () => {

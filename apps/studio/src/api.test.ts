@@ -739,12 +739,49 @@ describe('GET /api/schema', () => {
         name: string;
         schemas: Record<string, { type?: string }>;
         notes: string[];
+        subnames: string[];
+        jqHints: { examples: string[]; tip?: string };
       };
       expect(body.ok).toBe(true);
       expect(body.name).toBe(name);
       expect(Object.keys(body.schemas).length).toBeGreaterThan(0);
       expect(Array.isArray(body.notes)).toBe(true);
+      // Per-category responses surface subnames + jqHints so REST callers
+      // (skill / docs site) get the same drill affordances the CLI prints.
+      expect(body.subnames).toEqual(Object.keys(body.schemas));
+      expect(body.jqHints.examples.length).toBeGreaterThan(0);
     }
+  });
+
+  it('index response surfaces subnames per category + a usage block', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      categories: Array<{ name: string; subnames: string[] }>;
+      usage: { drill: string; filter: string; examples: string[] };
+    };
+    const node = body.categories.find((c) => c.name === 'node');
+    expect(node?.subnames).toEqual(expect.arrayContaining(['rectangle', 'component']));
+    expect(body.usage.drill).toMatch(/schema <category>/);
+    expect(body.usage.filter).toMatch(/--jq/);
+  });
+
+  it('GET /api/schema/node/rectangle surfaces jqHints.dataFields with the variant data.* keys', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/schema/node/rectangle');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      jqHints: { dataFields?: string[]; examples: string[] };
+    };
+    expect(body.jqHints.dataFields).toEqual(
+      expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+    );
+    expect(
+      body.jqHints.examples.some((e) =>
+        /\.schemas\.rectangle\.properties\.data\.properties\./.test(e),
+      ),
+    ).toBe(true);
   });
 
   it('returns 404 with available list for unknown categories', async () => {

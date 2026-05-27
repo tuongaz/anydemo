@@ -268,11 +268,14 @@ Commands (work without a running studio):
   connectors:patch <connId>  Patch a connector (--project <p> --flow <f>) [--json/--file/--stdin]
   connectors:delete <connId> Delete a connector (--project <p> --flow <f>)
   validate             Schema-validate a flow.json (--file <file> [--style <file>])
-  schema [<category> [<subname>]]
-                       Get the flow.json schema. No arg → category index;
-                       category arg → full JSON Schema(s) for that category;
-                       subname arg → just that named schema (e.g.
-                       'schema node component', 'schema node rectangle')
+  schema [<category> [<subname>]] [--jq <path>]
+                       Get the flow.json schema. Run this before designing /
+                       authoring nodes. No arg → category index with subnames
+                       inlined; category arg → full JSON Schema(s) + jqHints;
+                       subname arg → one variant + jqHints.dataFields listing
+                       every data.<field> available. Pair with --jq to slice
+                       (e.g. 'schema node rectangle --jq
+                       .schemas.rectangle.properties.data.properties.playAction').
   ids <type> <count>   Print <count> short ids of the given <type>, one per
                        line. <type> is 'node' (-> 'node-...') or 'connector'
                        (-> 'conn-...'). <count> is 1..100. Call once per type
@@ -1100,10 +1103,19 @@ async function runSchema() {
   const category = argv[1] && !argv[1].startsWith('--') ? argv[1] : undefined;
   const subname = argv[2] && !argv[2].startsWith('--') ? argv[2] : undefined;
   const jqFilter = flagValue('jq');
-  const { listSchemaCategories, getSchemaCategory, getCategorySubschema, listCategorySubnames } =
-    await import('./schema-catalog.ts');
+  const {
+    listSchemaCategories,
+    getSchemaCategory,
+    getCategorySubschema,
+    listCategorySubnames,
+    buildJqHints,
+    SCHEMA_INDEX_USAGE,
+  } = await import('./schema-catalog.ts');
   if (!category) {
-    const base = { categories: listSchemaCategories() };
+    const base = {
+      categories: listSchemaCategories(),
+      usage: SCHEMA_INDEX_USAGE,
+    };
     if (jqFilter !== undefined) {
       printOk({ result: applyJqOrDie(base, jqFilter) });
     }
@@ -1141,6 +1153,7 @@ async function runSchema() {
       subname,
       schemas: single.schemas,
       notes: single.notes,
+      jqHints: buildJqHints(category as string, subname),
     };
     if (jqFilter !== undefined) {
       printOk({ name: category, subname, result: applyJqOrDie(base, jqFilter) });
@@ -1154,7 +1167,13 @@ async function runSchema() {
     process.stderr.write(`${JSON.stringify({ error: message, code: 'notFound', available })}\n`);
     process.exit(3);
   }
-  const base = { name: category, schemas: payload.schemas, notes: payload.notes };
+  const base = {
+    name: category,
+    schemas: payload.schemas,
+    notes: payload.notes,
+    subnames: listCategorySubnames(category as string) ?? [],
+    jqHints: buildJqHints(category as string),
+  };
   if (jqFilter !== undefined) {
     printOk({ name: category, result: applyJqOrDie(base, jqFilter) });
   }

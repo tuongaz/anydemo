@@ -433,7 +433,8 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as {
         ok: boolean;
-        categories: Array<{ name: string; description: string }>;
+        categories: Array<{ name: string; description: string; subnames: string[] }>;
+        usage: { drill: string; filter: string; examples: string[] };
       };
       expect(parsed.ok).toBe(true);
       expect(parsed.categories.map((c) => c.name)).toEqual([
@@ -444,6 +445,16 @@ describe('seeflow CLI new subcommands', () => {
         'componentSpec',
         'style',
       ]);
+      // Every category surfaces drill targets inline so the agent doesn't
+      // round-trip back through listCategorySubnames.
+      const node = parsed.categories.find((c) => c.name === 'node');
+      expect(node?.subnames).toEqual(expect.arrayContaining(['rectangle', 'component', 'image']));
+      const flow = parsed.categories.find((c) => c.name === 'flow');
+      expect(flow?.subnames).toEqual(['flow']);
+      // Usage block teaches the progressive workflow inline.
+      expect(parsed.usage.drill).toMatch(/schema <category>/);
+      expect(parsed.usage.filter).toMatch(/--jq/);
+      expect(parsed.usage.examples.length).toBeGreaterThan(0);
     } finally {
       studio.stop();
     }
@@ -459,6 +470,8 @@ describe('seeflow CLI new subcommands', () => {
         name: string;
         schemas: Record<string, { type: string }>;
         notes: string[];
+        subnames: string[];
+        jqHints: { examples: string[]; tip?: string };
       };
       expect(parsed.name).toBe('node');
       // Flat-types refactor: schema-catalog returns 15 variants (11 geometric
@@ -484,6 +497,13 @@ describe('seeflow CLI new subcommands', () => {
       );
       expect(parsed.schemas.rectangle?.type).toBe('object');
       expect(parsed.notes.length).toBeGreaterThan(0);
+      // Category response surfaces subnames + jqHints so the agent can drill
+      // in without parsing the schema map.
+      expect(parsed.subnames).toEqual(expect.arrayContaining(['rectangle', 'component']));
+      expect(parsed.jqHints.examples).toEqual(
+        expect.arrayContaining(['.schemas', '.schemas[]', '.notes[]']),
+      );
+      expect(parsed.jqHints.tip).toMatch(/rectangle/);
     } finally {
       studio.stop();
     }
@@ -570,10 +590,23 @@ describe('seeflow CLI new subcommands', () => {
         name: string;
         subname: string;
         schemas: Record<string, { type: string }>;
+        jqHints: { dataFields?: string[]; examples: string[]; tip?: string };
       };
       expect(parsed.name).toBe('node');
       expect(parsed.subname).toBe('rectangle');
       expect(Object.keys(parsed.schemas)).toEqual(['rectangle']);
+      // jqHints.dataFields tells the agent which data.<field>s exist on the
+      // variant so they can `--jq` straight to the one they care about.
+      expect(parsed.jqHints.dataFields).toEqual(
+        expect.arrayContaining(['playAction', 'statusAction', 'stateSource']),
+      );
+      // jqHints.examples must include at least one ready-to-paste data-field path.
+      expect(
+        parsed.jqHints.examples.some((e) =>
+          /\.schemas\.rectangle\.properties\.data\.properties\./.test(e),
+        ),
+      ).toBe(true);
+      expect(parsed.jqHints.tip).toMatch(/dataFields/i);
     } finally {
       studio.stop();
     }

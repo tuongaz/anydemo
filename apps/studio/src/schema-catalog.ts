@@ -37,11 +37,25 @@ import {
 export interface SchemaCategory {
   name: string;
   description: string;
+  // Every drill target valid for `seeflow schema <name> <subname>`. Lets the
+  // agent pick a variant without a second round-trip to listCategorySubnames.
+  subnames: string[];
 }
 
 export interface SchemaPayload {
   schemas: Record<string, unknown>;
   notes: string[];
+}
+
+// Hint payload attached to every schema response so the agent can drill in
+// further without round-tripping. `examples` are ready-to-paste jq paths;
+// `dataFields` lists the node-variant `data.<field>` keys (single-variant
+// lookups only — undefined for non-node categories or category-level
+// responses).
+export interface JqHints {
+  dataFields?: string[];
+  examples: string[];
+  tip?: string;
 }
 
 // Draft-07 pin matches the widest tool support; the same target string is
@@ -50,7 +64,23 @@ export interface SchemaPayload {
 const toJsonSchema = (schema: ZodTypeAny): unknown =>
   zodToJsonSchema(schema, { $refStrategy: 'none', target: 'jsonSchema7' });
 
-const CATEGORIES: SchemaCategory[] = [
+// Recipe block returned on the schema index (CLI / REST / MCP) so the agent
+// sees the drill + filter pattern in the response itself, not just in
+// `seeflow help schema`.
+export const SCHEMA_INDEX_USAGE = {
+  drill: 'seeflow schema <category> [<subname>]',
+  filter: 'seeflow schema <category> [<subname>] --jq <jq-path>',
+  examples: [
+    'seeflow schema node',
+    'seeflow schema node rectangle',
+    'seeflow schema node rectangle --jq .schemas.rectangle.properties.data.properties.playAction',
+    'seeflow schema action playAction',
+  ],
+} as const;
+
+// Description metadata. `subnames` are filled in by listSchemaCategories()
+// at call time from PAYLOADS, so the two stay in lockstep automatically.
+const CATEGORY_META: Array<Omit<SchemaCategory, 'subnames'>> = [
   { name: 'flow', description: 'Top-level flow.json envelope.' },
   {
     name: 'node',
@@ -141,7 +171,10 @@ const PAYLOADS: Record<string, SchemaPayload> = {
 };
 
 export function listSchemaCategories(): SchemaCategory[] {
-  return CATEGORIES.map((c) => ({ ...c }));
+  return CATEGORY_META.map((c) => ({
+    ...c,
+    subnames: Object.keys(PAYLOADS[c.name]?.schemas ?? {}),
+  }));
 }
 
 export function getSchemaCategory(name: string): SchemaPayload | null {
@@ -151,7 +184,7 @@ export function getSchemaCategory(name: string): SchemaPayload | null {
 }
 
 export function schemaCategoryNames(): string[] {
-  return CATEGORIES.map((c) => c.name);
+  return CATEGORY_META.map((c) => c.name);
 }
 
 // Drill into one named schema inside a category — e.g. ('node', 'rectangle')
@@ -175,4 +208,77 @@ export function listCategorySubnames(category: string): string[] | null {
   const payload = PAYLOADS[category];
   if (!payload) return null;
   return Object.keys(payload.schemas);
+}
+
+// Top-level keys under `data.properties` for a single node variant — i.e.
+// the per-shape data fields an author actually sets on a flow.json node
+// (`name`, `icon`, `playAction`, etc.). Returns null when the variant has
+// no `data.properties` wrapper (action / connector / style / componentSpec
+// schemas, plus anything malformed). Pure helper consumed by buildJqHints
+// to surface concrete drill-down paths.
+export function getDataFieldNames(category: string, subname: string): string[] | null {
+  const sub = PAYLOADS[category]?.schemas[subname] as
+    | { properties?: { data?: { properties?: Record<string, unknown> } } }
+    | undefined;
+  const dataProps = sub?.properties?.data?.properties;
+  if (!dataProps) return null;
+  return Object.keys(dataProps);
+}
+
+// Build ready-to-paste jq path examples for a schema response. When `subname`
+// is provided, the examples drill into that single variant — including one
+// path per `data.<field>` so the agent can `--jq` straight to (say)
+// `.schemas.rectangle.properties.data.properties.playAction` without first
+// reading the whole envelope. When `subname` is omitted, the hints cover the
+// whole category (iteration, one sample variant, notes). `dataFields` only
+// surfaces on single-variant lookups for shapes that actually carry a
+// `data.properties` wrapper.
+export function buildJqHints(category: string, subname?: string): JqHints | null {
+  const payload = PAYLOADS[category];
+  if (!payload) return null;
+  if (subname) {
+    if (payload.schemas[subname] === undefined) return null;
+    const dataFields = getDataFieldNames(category, subname);
+    const examples = [
+      `.schemas.${subname}`,
+      `.schemas.${subname}.required`,
+      ...(dataFields && dataFields.length > 0
+        ? [
+            `.schemas.${subname}.properties.data.properties`,
+            ...dataFields
+              .slice(0, 6)
+              .map((f) => `.schemas.${subname}.properties.data.properties.${f}`),
+          ]
+        : [`.schemas.${subname}.properties`]),
+      '.notes',
+      '.notes[]',
+    ];
+    const hint = dataFields
+      ? `dataFields lists every \`data.<field>\` available on this variant — point \`--jq\` at any of them with \`.schemas.${subname}.properties.data.properties.<field>\`.`
+      : `Use \`--jq\` to pluck a single property — e.g. \`.schemas.${subname}.required\`.`;
+    return {
+      ...(dataFields ? { dataFields } : {}),
+      examples,
+      tip: hint,
+    };
+  }
+  const subs = Object.keys(payload.schemas);
+  const sample = subs[0];
+  if (!sample) return { examples: ['.schemas', '.notes', '.notes[]'] };
+  const examples = [
+    '.schemas',
+    `.schemas.${sample}`,
+    `.schemas.${sample}.required`,
+    `.schemas.${sample}.properties.data.properties`,
+    '.schemas[]',
+    '.notes',
+    '.notes[]',
+  ];
+  return {
+    examples,
+    tip:
+      subs.length > 1
+        ? `Pass \`seeflow schema ${category} <subname>\` (one of: ${subs.join(', ')}) to drop the other ${subs.length - 1} variant(s) from the payload before \`--jq\`-ing.`
+        : `Single-variant category — \`--jq\` paths drill straight into \`.schemas.${sample}\`.`,
+  };
 }
