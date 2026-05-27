@@ -249,12 +249,14 @@ describe('RectangleNode shadow elevation', () => {
   });
 });
 
-// The Align toggle on the style strip writes data.textAlign; the rectangle
-// renderer must (a) thread it into NodeHeader so the title aligns, (b) bake
-// it into descriptionFontStyle so the body button aligns, and (c) drop the
-// hardcoded `sf:text-left` class once an explicit alignment is set (otherwise
-// the class wins regardless of the inline style). Earlier fix only touched
-// geometric-node.tsx, leaving rectangles unaligned — this fence guards that.
+// The Align toggle on the style strip writes data.textAlign; for rectangles
+// it must (a) bake into descriptionFontStyle so the body button reflows and
+// (b) drop the hardcoded `sf:text-left` class once explicit alignment is set
+// (otherwise the class wins regardless of the inline style). The header
+// title is deliberately NOT aligned — title stays left, play button stays
+// right — so the trailing slot remains anchored. Earlier fix only touched
+// geometric-node.tsx, leaving rectangle bodies unaligned — this fence
+// guards the body half of the contract.
 describe('RectangleNode textAlign fan-out', () => {
   function findDescButton(tree: unknown): ReactElementLike {
     const buttons = findAll(tree, (el) => {
@@ -266,11 +268,11 @@ describe('RectangleNode textAlign fan-out', () => {
     return buttons[0];
   }
 
-  it('passes data.textAlign to NodeHeader', () => {
+  it('does NOT thread textAlign into NodeHeader (header title stays left)', () => {
     const tree = callRectangleNode({ name: 'svc', textAlign: 'right' });
     const header = findByComponentName(tree, 'NodeHeader')[0];
     if (!header) throw new Error('NodeHeader missing');
-    expect((header.props as { textAlign?: string }).textAlign).toBe('right');
+    expect((header.props as { textAlign?: string }).textAlign).toBeUndefined();
   });
 
   it('applies data.textAlign to the description button inline style', () => {

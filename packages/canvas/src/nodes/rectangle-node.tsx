@@ -154,7 +154,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           selected={selected}
           fontSize={data.fontSize}
           textColor={data.textColor}
-          textAlign={data.textAlign}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}
           trailing={
