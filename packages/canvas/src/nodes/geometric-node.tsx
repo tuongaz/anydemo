@@ -252,16 +252,12 @@ function GeometricNodeImpl({
 
   const isText = shape === 'text';
   const explicitTextColor = data.textColor;
-  // When no explicit textColor is set AND the body is painted with a color
-  // token, adapt the label color for contrast against the new solid body.
-  // For text shapes (chromeless) the borderColor still wins as the explicit
-  // color choice the user controls via the strip.
   const textColorStyle =
     explicitTextColor !== undefined
       ? colorTokenStyle(explicitTextColor, 'text')
       : isText
         ? colorTokenStyle(data.borderColor, 'text')
-        : colorTokenStyle(data.backgroundColor, 'node-body-text');
+        : {};
   const colorStyle: CSSProperties = {
     ...shapeChromeStyle(shape, data),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
@@ -451,7 +447,7 @@ function GeometricNodeImpl({
   const headerBodyContent = (
     <>
       <div
-        className="sf:relative sf:flex sf:shrink-0 sf:items-center sf:border-b sf:border-border sf:px-3 sf:py-2.5"
+        className="sf:relative sf:flex sf:shrink-0 sf:items-center sf:px-3 sf:py-2.5"
         style={colorTokenStyle(data.backgroundColor, 'node-header')}
         data-testid="geometric-node-header"
       >

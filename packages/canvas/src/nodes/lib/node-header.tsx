@@ -22,10 +22,9 @@ export interface NodeHeaderProps {
   textColor?: ColorToken;
   /**
    * Node body color. When set to a painted token (anything other than
-   * `'default'` / `'none'` / undefined), the header paints its background
-   * from the same palette family via `colorTokenStyle(..., 'node-header')`,
-   * and the title text auto-adapts for contrast via `'node-body-text'`.
-   * When unset, the header falls back to the theme `sf:bg-muted` look.
+   * `'default'` / `'none'` / undefined), the header skips its theme
+   * `sf:bg-muted` fill so the body's painted color shows through —
+   * header sits flush with the body, no separator.
    */
   backgroundColor?: ColorToken;
   /** When omitted, the title is read-only. */
@@ -58,26 +57,16 @@ export function NodeHeader({
   const nameEditable = !!onNameChange;
   const iconEditable = !!onIconChange && !!selected && !!icon;
 
-  // When the host node is painted with a color token, paint the header from
-  // the same family and adapt the title text color for contrast. When unset
-  // (or `'default'` / `'none'`), `colorTokenStyle` returns no style and the
-  // Tailwind `sf:bg-muted` fallback paints the header.
+  // When the host node is painted with a color token, drop the theme
+  // muted-fill background — the parent's painted body shows through and
+  // becomes the header background too. No separator border on this side;
+  // the rectangle's rounded outer border is the only chrome.
   const headerColored =
     backgroundColor !== undefined && backgroundColor !== 'default' && backgroundColor !== 'none';
-  const headerBackgroundStyle = headerColored
-    ? colorTokenStyle(backgroundColor, 'node-header')
-    : undefined;
-  // Explicit text-color choice still wins; the body-text adaptation only
-  // applies when the user hasn't set a textColor on the node.
-  const adaptedTextStyle =
-    headerColored && textColor === undefined
-      ? colorTokenStyle(backgroundColor, 'node-body-text')
-      : undefined;
 
   const labelFontStyle: CSSProperties = {
     ...(fontSize !== undefined ? { fontSize: `${fontSize}px` } : {}),
     ...colorTokenStyle(textColor, 'text'),
-    ...adaptedTextStyle,
   };
 
   const handleDoubleClick = nameEditable
@@ -96,10 +85,9 @@ export function NodeHeader({
     <div
       data-testid={testId}
       className={cn(
-        'sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:border-b sf:border-border sf:px-3 sf:py-3',
+        'sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:px-3 sf:py-3',
         headerColored ? '' : 'sf:bg-muted',
       )}
-      style={headerBackgroundStyle}
       onDoubleClick={handleDoubleClick}
     >
       {icon ? (
@@ -128,7 +116,7 @@ export function NodeHeader({
                 <Icon
                   name={icon}
                   size={16}
-                  style={{ ...colorTokenStyle(textColor, 'text'), ...adaptedTextStyle }}
+                  style={colorTokenStyle(textColor, 'text')}
                   aria-hidden
                 />
               </button>
@@ -139,7 +127,7 @@ export function NodeHeader({
             name={icon}
             size={16}
             className="sf:shrink-0"
-            style={{ ...colorTokenStyle(textColor, 'text'), ...adaptedTextStyle }}
+            style={colorTokenStyle(textColor, 'text')}
             aria-hidden
           />
         )

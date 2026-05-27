@@ -75,9 +75,6 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...colorTokenStyle(data.textColor, 'text'),
-    ...(data.textColor === undefined
-      ? colorTokenStyle(data.backgroundColor, 'node-body-text')
-      : {}),
   };
 
   const outerStyle: CSSProperties = userSized

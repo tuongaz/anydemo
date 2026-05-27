@@ -313,8 +313,6 @@ describe('NodeHeader — colored background', () => {
     const header = findByTestId(tree, 'node-header');
     const className = (header?.props as { className?: string }).className ?? '';
     expect(className).toContain('sf:bg-muted');
-    const style = (header?.props as { style?: CSSProperties }).style;
-    expect(style).toBeUndefined();
   });
 
   it("falls back to sf:bg-muted when backgroundColor is 'default'", () => {
@@ -324,26 +322,17 @@ describe('NodeHeader — colored background', () => {
     expect(className).toContain('sf:bg-muted');
   });
 
-  it('paints the header from the node-header style when backgroundColor is a painted token', () => {
+  it("drops sf:bg-muted when backgroundColor is a painted token (parent body's tint shows through)", () => {
     const tree = callNodeHeader({ backgroundColor: 'blue' });
     const header = findByTestId(tree, 'node-header');
     const className = (header?.props as { className?: string }).className ?? '';
     expect(className).not.toContain('sf:bg-muted');
-    const style = (header?.props as { style?: CSSProperties }).style ?? {};
-    expect(style.backgroundColor).toBe(colorTokenStyle('blue', 'node-header').backgroundColor);
   });
 
-  it('adapts the title color to the body via node-body-text when no explicit textColor is set', () => {
+  it('never draws a border-bottom on the header (no separator chrome)', () => {
     const tree = callNodeHeader({ backgroundColor: 'blue' });
-    const title = findByTestId(tree, 'node-title');
-    const style = (title?.props as { style?: CSSProperties }).style ?? {};
-    expect(style.color).toBe(colorTokenStyle('blue', 'node-body-text').color);
-  });
-
-  it('lets an explicit textColor win over the adapted body-text color', () => {
-    const tree = callNodeHeader({ backgroundColor: 'blue', textColor: 'red' });
-    const title = findByTestId(tree, 'node-title');
-    const style = (title?.props as { style?: CSSProperties }).style ?? {};
-    expect(style.color).toBe(colorTokenStyle('red', 'text').color);
+    const header = findByTestId(tree, 'node-header');
+    const className = (header?.props as { className?: string }).className ?? '';
+    expect(className).not.toMatch(/\bsf:border-b\b/);
   });
 });
