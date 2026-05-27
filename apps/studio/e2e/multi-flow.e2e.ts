@@ -3,10 +3,11 @@
 //   1. Project boots with a single flow (`main`).
 //   2. Operator opens the switcher and creates a new `retry` flow via the
 //      dialog. URL transitions to `/projects/component-demo/flows/retry`.
-//   3. Operator renames `retry` → `retry-v2` via the per-row pencil button.
-//      URL follows the rename.
-//   4. Operator deletes `retry-v2`. Active-flow guard sends the user back
-//      to the project default (`main`), and the popover no longer lists it.
+//   3. Operator renames `retry`'s display name via the per-row pencil button.
+//      The slimmed rename dialog locks the flow id, so the URL stays at
+//      `/flows/retry`; only the trigger label changes.
+//   4. Operator deletes `retry`. Active-flow guard sends the user back to
+//      the project default (`main`), and the popover no longer lists it.
 //
 // Filename ends in `.e2e.ts` (not `.spec.ts` as the PRD literal suggests)
 // because the Playwright config matches `**/*.e2e.ts` so bun test's default
@@ -31,16 +32,22 @@ const DISABLE_MOTION_CSS = `
 
 test.describe('flow switcher CRUD (US-027)', () => {
   test('create, rename, and delete flows from the popover', async ({ page, studio }) => {
+    // The worker-scoped studio is shared with component-node.e2e.ts, whose
+    // seedComponentDemo registers a flow named 'Component Demo' via the legacy
+    // /api/flows/register endpoint. That endpoint synthesises projectSlug from
+    // slugify(name) → `component-demo` and pins flowSlug=`main` — colliding
+    // with anything we'd register here under the same name. Pick a name whose
+    // slug is unique so /api/projects/:project/flows returns only OUR flow.
     const project = await registerManifestProject(studio.studio, {
-      projectDirName: 'multi-flow-component-demo',
-      name: 'Component Demo',
+      projectDirName: 'multi-flow-demo',
+      name: 'Multi Flow Demo',
       defaultFlow: 'main',
       flows: [{ id: 'main', name: 'Main' }],
     });
 
     // Sanity check: registerManifestProject synthesises projectSlug via
-    // slugify(name). 'Component Demo' → 'component-demo' — the AC pins this.
-    expect(project.projectSlug).toBe('component-demo');
+    // slugify(name). 'Multi Flow Demo' → 'multi-flow-demo' — the AC pins this.
+    expect(project.projectSlug).toBe('multi-flow-demo');
     expect(project.flowSlug).toBe('main');
 
     await page.goto(
@@ -75,7 +82,7 @@ test.describe('flow switcher CRUD (US-027)', () => {
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await expect(trigger).toContainText('Retry');
 
-    // ── 2. Rename `retry` → `retry-v2` ────────────────────────────────────
+    // ── 2. Rename `retry`'s display name (id stays `retry`) ──────────────
     await trigger.click();
     await page.locator('[data-testid="flow-switcher-popover"]').waitFor({ state: 'visible' });
     // The per-row rename button is data-testid="flow-switcher-rename-<slug>".
@@ -86,24 +93,27 @@ test.describe('flow switcher CRUD (US-027)', () => {
 
     const renameDialog = page.locator('[data-testid="flow-rename-dialog"]');
     await expect(renameDialog).toBeVisible();
-    await page.locator('[data-testid="flow-rename-id-input"]').fill('retry-v2');
+    // The slimmed rename dialog disables the flow-id input (id is fixed once
+    // created) — we can only change the display name. Confirm the lock, then
+    // edit the name field.
+    await expect(page.locator('[data-testid="flow-rename-id-input"]')).toBeDisabled();
+    await page.locator('[data-testid="flow-rename-name-input"]').fill('Retry V2');
     await page.locator('[data-testid="flow-rename-submit"]').click();
 
-    await page.waitForURL(`**${projectFlowPath(project.projectSlug, 'retry-v2')}`, {
-      timeout: 10_000,
-    });
+    // URL must NOT change — only the display name was edited. Assert the
+    // trigger picks up the new name while the path remains /flows/retry.
     await expect(renameDialog).toHaveCount(0);
-    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
-    await expect(trigger).toContainText('Retry');
+    await expect(trigger).toContainText('Retry V2');
+    expect(new URL(page.url()).pathname).toBe(projectFlowPath(project.projectSlug, 'retry'));
 
-    // ── 3. Delete `retry-v2` ──────────────────────────────────────────────
+    // ── 3. Delete `retry` ────────────────────────────────────────────────
     await trigger.click();
     await page.locator('[data-testid="flow-switcher-popover"]').waitFor({ state: 'visible' });
-    await page.locator('[data-testid="flow-switcher-delete-retry-v2"]').click({ force: true });
+    await page.locator('[data-testid="flow-switcher-delete-retry"]').click({ force: true });
 
     const deleteDialog = page.locator('[data-testid="flow-delete-dialog"]');
     await expect(deleteDialog).toBeVisible();
-    // `retry-v2` is NOT the project default — the new-default picker stays hidden.
+    // `retry` is NOT the project default — the new-default picker stays hidden.
     await expect(page.locator('[data-testid="flow-delete-new-default-select"]')).toHaveCount(0);
     await page.locator('[data-testid="flow-delete-submit"]').click();
 
@@ -114,11 +124,10 @@ test.describe('flow switcher CRUD (US-027)', () => {
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await expect(trigger).toContainText('Main');
 
-    // ── 4. Popover no longer lists `retry-v2` ────────────────────────────
+    // ── 4. Popover no longer lists `retry` ───────────────────────────────
     await trigger.click();
     await page.locator('[data-testid="flow-switcher-popover"]').waitFor({ state: 'visible' });
     await expect(page.locator('[data-testid="flow-switcher-row-main"]')).toHaveCount(1);
-    await expect(page.locator('[data-testid="flow-switcher-row-retry-v2"]')).toHaveCount(0);
     await expect(page.locator('[data-testid="flow-switcher-row-retry"]')).toHaveCount(0);
   });
 });

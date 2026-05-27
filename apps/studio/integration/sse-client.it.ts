@@ -8,6 +8,11 @@ describe('integration: sse client', () => {
   let studio: StudioHandle;
   let flowId: string;
 
+  // bun-test defaults hooks to 5s, but spawnStudio waits up to 10s for
+  // /healthz to flip plus the project POST round-trip — on a loaded system
+  // (Docker building images in parallel, see test-integration.ts) the cold
+  // start can blow past 5s and the hook flakes. 30s gives the studio's own
+  // health-poll window the full headroom it was designed for.
   beforeAll(async () => {
     studio = await spawnStudio();
     // The /api/events route is flow-scoped — register one project so we can
@@ -23,7 +28,7 @@ describe('integration: sse client', () => {
     expect(projRes.status).toBe(200);
     const project = (await projRes.json()) as { id: string };
     flowId = project.id;
-  });
+  }, 30_000);
 
   afterAll(async () => {
     if (studio) await studio.stop();

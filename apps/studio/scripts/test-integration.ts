@@ -25,6 +25,16 @@ const DIST_INDEX = join(STUDIO_DIR, 'dist/web/index.html');
 // apps/web bundles @seeflow/canvas inline at build time, so a canvas source
 // edit silently leaves the web bundle stale unless we invalidate against it.
 const WEB_SRC_ROOTS = [join(REPO_ROOT, 'apps/web/src'), join(REPO_ROOT, 'packages/canvas/src')];
+// US-011: mcp-app.e2e.ts loads apps/mcp-app/dist/index.html via the bundle
+// fixture and fails its beforeAll guard if the bundle is missing. A fresh
+// checkout has nothing in apps/mcp-app/dist/ (the dir is gitignored), so the
+// orchestrator must build the bundle before handing off to playwright — same
+// freshness contract as the web bundle.
+const MCP_APP_DIST_INDEX = join(REPO_ROOT, 'apps/mcp-app/dist/index.html');
+const MCP_APP_SRC_ROOTS = [
+  join(REPO_ROOT, 'apps/mcp-app/src'),
+  join(REPO_ROOT, 'packages/canvas/src'),
+];
 const ARTIFACT_ROOT = join(STUDIO_DIR, 'integration/.artifacts');
 // run-e2e.ts dispatches between native playwright (Linux/CI) and the official
 // Playwright Docker image (macOS/Windows dev) so visual baselines compare
@@ -53,17 +63,24 @@ async function newestMtimeMs(dir: string): Promise<number> {
   return newest;
 }
 
-async function ensureWebBundleFresh(): Promise<void> {
+interface BundleSpec {
+  label: string;
+  distIndex: string;
+  srcRoots: string[];
+  buildFilter: string;
+}
+
+async function ensureBundleFresh(spec: BundleSpec): Promise<void> {
   let needsBuild = false;
   let reason = '';
-  if (!existsSync(DIST_INDEX)) {
+  if (!existsSync(spec.distIndex)) {
     needsBuild = true;
-    reason = `${DIST_INDEX} missing`;
+    reason = `${spec.distIndex} missing`;
   } else {
-    const distMtime = statSync(DIST_INDEX).mtimeMs;
+    const distMtime = statSync(spec.distIndex).mtimeMs;
     let newestSrc = 0;
     let newestRoot = '';
-    for (const root of WEB_SRC_ROOTS) {
+    for (const root of spec.srcRoots) {
       const m = await newestMtimeMs(root);
       if (m > newestSrc) {
         newestSrc = m;
@@ -72,23 +89,23 @@ async function ensureWebBundleFresh(): Promise<void> {
     }
     if (newestSrc > distMtime) {
       needsBuild = true;
-      reason = `${newestRoot} newer than dist/web (src=${new Date(newestSrc).toISOString()}, dist=${new Date(distMtime).toISOString()})`;
+      reason = `${newestRoot} newer than ${spec.label} (src=${new Date(newestSrc).toISOString()}, dist=${new Date(distMtime).toISOString()})`;
     }
   }
   if (!needsBuild) {
-    console.log('[orchestrator] dist/web is fresh — skipping rebuild');
+    console.log(`[orchestrator] ${spec.label} is fresh — skipping rebuild`);
     return;
   }
-  console.log(`[orchestrator] Rebuilding web bundle (${reason})`);
+  console.log(`[orchestrator] Rebuilding ${spec.label} (${reason})`);
   const proc = Bun.spawn({
-    cmd: ['bun', 'run', '--filter', '@seeflow/web', 'build'],
+    cmd: ['bun', 'run', '--filter', spec.buildFilter, 'build'],
     cwd: REPO_ROOT,
     stdout: 'inherit',
     stderr: 'inherit',
   });
   const code = await proc.exited;
   if (code !== 0) {
-    console.error(`[orchestrator] web build failed (exit ${code})`);
+    console.error(`[orchestrator] ${spec.label} build failed (exit ${code})`);
     process.exit(code);
   }
 }
@@ -110,7 +127,18 @@ async function runStep(name: string, cmd: string[]): Promise<StepResult> {
 }
 
 async function main(): Promise<void> {
-  await ensureWebBundleFresh();
+  await ensureBundleFresh({
+    label: 'dist/web',
+    distIndex: DIST_INDEX,
+    srcRoots: WEB_SRC_ROOTS,
+    buildFilter: '@seeflow/web',
+  });
+  await ensureBundleFresh({
+    label: 'apps/mcp-app/dist',
+    distIndex: MCP_APP_DIST_INDEX,
+    srcRoots: MCP_APP_SRC_ROOTS,
+    buildFilter: '@seeflow/mcp-app',
+  });
 
   const runId = new Date().toISOString().replace(/[:.]/g, '-');
   const artifactDir = join(ARTIFACT_ROOT, runId);
