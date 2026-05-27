@@ -241,13 +241,18 @@ export function DemoView({
   // US-006: command-palette open state. The Cmd/Ctrl+P chord flips this true
   // and the (placeholder) dialog renders gated on it. Full UI lands in US-007.
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // US-010: monotonic counter handed to <SeeflowCanvas autoFitViewSignal>. Bumped
-  // by the demoNodes-diff effect below when an SSE-driven reload adds or removes
-  // a node id that wasn't part of an in-flight local mutation. Local creates /
-  // deletes echo back through the same SSE stream but their ids sit in the
-  // pending-override / pending-deletion sets at echo time and are filtered out.
-  const [autoFitViewSignal, setAutoFitViewSignal] = useState(0);
-  const prevDemoNodeIdsRef = useRef<ReadonlySet<string> | null>(null);
+  // Per-tab record of (project, flow) pairs that have already received their
+  // one auto-fit. SeeflowCanvas remounts on every flow switch (its `key` is
+  // `${project}/${flow}`), so without this gate every switch-back would re-fit
+  // and yank the user's viewport. Lives in a ref so adding a key never
+  // schedules a re-render. Resets on a full page reload — desired: the first
+  // flow opened after reload still gets the framing convenience.
+  const fittedFlowsRef = useRef<Set<string>>(new Set());
+  const flowKey = `${project}/${flow}`;
+  const isFirstLoad = !fittedFlowsRef.current.has(flowKey);
+  useEffect(() => {
+    fittedFlowsRef.current.add(flowKey);
+  }, [flowKey]);
   // React Flow instance handed up from `<SeeflowCanvas onRfInit>` (US-024). Used
   // by the zoom-chord handler below — only the page owns the keyboard
   // listener so the canvas stays free of page-level chord wiring.
@@ -333,46 +338,6 @@ export function DemoView({
     }
     if (Date.now() - undoLastMutationAt() > 2000) clearUndo();
   }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, undoLastMutationAt, clearUndo]);
-
-  // US-010: bump `autoFitViewSignal` whenever the SSE-driven flow:reload echo
-  // adds or removes a node id that wasn't part of a still-pending local
-  // mutation. Read from closure: the pending-override and pending-deletion
-  // sets are still populated at the moment the echo arrives (the prune effect
-  // above schedules their clear, but its setOverrides/setIds dispatch only
-  // resolves in the next render, so this render's closure still holds them).
-  // The first observed snapshot is treated as a baseline — no bump on initial
-  // load. Same suppression covers demo-id resets (the reset effect on
-  // detail.id empties overrides/deletions BEFORE the new demoNodes lands, so
-  // a fresh demo's nodes count as external and bump — desired: a demo switch
-  // should re-frame the canvas).
-  // biome-ignore lint/correctness/useExhaustiveDependencies: overrides/deletions read from render closure; only re-run on demoNodes change
-  useEffect(() => {
-    if (!demoNodes) return;
-    const prev = prevDemoNodeIdsRef.current;
-    const curr: ReadonlySet<string> = new Set(demoNodes.map((n) => n.id));
-    prevDemoNodeIdsRef.current = curr;
-    if (prev === null) return;
-    const overrideIds = nodePending.overrides;
-    const deletedIds = nodeDeletions.ids;
-    let external = false;
-    for (const id of curr) {
-      if (prev.has(id)) continue;
-      if (!(id in overrideIds)) {
-        external = true;
-        break;
-      }
-    }
-    if (!external) {
-      for (const id of prev) {
-        if (curr.has(id)) continue;
-        if (!deletedIds.has(id)) {
-          external = true;
-          break;
-        }
-      }
-    }
-    if (external) setAutoFitViewSignal((s) => s + 1);
-  }, [demoNodes]);
 
   useEffect(() => {
     if (demoConnectors) {
@@ -3019,6 +2984,10 @@ export function DemoView({
         onCreate={createProjectFlow}
         onCreated={async (result) => {
           await refreshFlows();
+          // Brand-new flow: pre-seed the fitted set so the late-nodes mount-fit
+          // path doesn't fire when the user adds the first node to the empty
+          // canvas. (See `fittedFlowsRef` above for the per-tab policy.)
+          fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
           navigate(flowPath(project, result.flowSlug));
         }}
       />
@@ -3032,6 +3001,9 @@ export function DemoView({
         onRenamed={async (result, previousFlowSlug) => {
           await refreshFlows();
           if (result.flowSlug !== previousFlowSlug) {
+            // Rename re-keys the canvas (key={`${project}/${flow}`}) so it
+            // remounts under the new slug. Same content though — don't re-fit.
+            fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
             navigate(flowPath(project, result.flowSlug));
           }
         }}
@@ -3169,8 +3141,7 @@ export function DemoView({
           onDescriptionChange={onNodeDescriptionChange}
           onDetailChange={onNodeDetailChange}
           onIconChange={onNodeIconChange}
-          autoFitView={true}
-          autoFitViewSignal={autoFitViewSignal}
+          autoFitView={isFirstLoad}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
