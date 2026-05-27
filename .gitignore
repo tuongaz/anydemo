@@ -17,6 +17,7 @@ docs
 ralph/
 .claude/scheduled_tasks.lock
 .claude/skills/agent-browser
+.claude/skills/shadcdn
 .claude/ralph-loop.local.md
 ,claude/settings.local.json
 .claude/skills/run-ralph
