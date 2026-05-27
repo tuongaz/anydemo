@@ -29,54 +29,16 @@ Check these patterns first (ask the system-analyzer — `dataEntryPaths` in its 
 | **Admin / backoffice API** | Internal endpoint for creating records | Use it |
 | **File-based import** | CSV/JSON/NDJSON import endpoint or CLI | Drop a fixture or call the import endpoint |
 
-Examples:
-
-- Order pipeline needs an order in the DB → call `POST /api/orders`; the API validates, emits events, writes the row.
-- Data-warehouse pipeline needs staging rows → drop a CSV into the watched S3 bucket; the file-processor picks it up.
-- Notification system needs a queue message → call `POST /api/notify`; the producer publishes on your behalf.
-- Recommendation engine needs user-event data → fire a `track` event at the analytics endpoint.
-
 If no higher-level path exists, document the reason in `rationale` and resort to a direct INSERT/PUBLISH.
 
-## Rule 3 — match the project's primary language
+## Rule 3 — follow the project's existing approach for running scripts
 
-Use `runtimeProfile.primaryLanguage` from Phase 1 as the interpreter for every script. The project already has types, helpers, and clients in that language — reuse them.
+Before picking an interpreter, **inspect how the project already invokes code** and mirror that. The project's existing approach is always the right first choice; the script you ship runs in the same toolchain the project already supports, with the same helpers and clients the project already maintains.
 
-| `primaryLanguage` | `interpreter` | `args` |
-|---|---|---|
-| `typescript` / `javascript` | `bun` | `["run"]` |
-| `go` | `go` | `["run"]` |
-| `python` | `python3` | `["-u"]` |
-| `ruby` | `ruby` | `[]` |
-| `java` / `kotlin` | `kotlinc` or `java` | depends on build tool |
-| `rust` | `cargo` | `["script"]` (if available) |
+**Decision order — apply in this order every time:**
 
-### TypeScript example
+1. **Use the project's existing approach.** Look at Phase 1 evidence — `runtimeProfile` (`primaryLanguage`, `packageManager`, dev/test commands, `integrationTestCommand`, `setupPattern`), `codePointers`, integration tests, fixtures, seed scripts, `Makefile` targets, helper modules. Whatever interpreter the project already uses to run scripts of this kind (call the running app, seed data, drop a fixture, poll state), use the **same** interpreter, the **same** args, and the **same** helper modules / clients. Integration tests in particular are pre-existing examples of "how this app gets called" — copy their pattern.
+2. **No existing approach?** Pick the option that lets the script reach the real service most directly with the smallest payload, using a runtime the project's host already has available. Prefer something present in `runtimeProfile.devCommand` / `testCommand` over introducing a new tool.
+3. **Explain any deviation** in `rationale` whenever you do not match `runtimeProfile.primaryLanguage`. Reviewers should see the reason for the fallback at a glance.
 
-```typescript
-// <repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/play-checkout.ts
-import type { CartPayload } from "<host>/src/types";
-const input: CartPayload = JSON.parse(await Bun.stdin.text());
-const res = await fetch("http://localhost:3001/checkout", {
-  method: "POST", headers: { "Content-Type": "application/json" },
-  body: JSON.stringify(input),
-});
-console.log(await res.json());
-```
-
-### Go example
-
-```go
-// <repoPath>/flows/<flowSlug>/nodes/<nodeId>/scripts/play-order.go
-package main
-import ("encoding/json"; "fmt"; "net/http"; "bytes"; "os")
-func main() {
-    var payload map[string]any
-    json.NewDecoder(os.Stdin).Decode(&payload)
-    body, _ := json.Marshal(payload)
-    res, _ := http.Post("http://localhost:8080/orders", "application/json", bytes.NewReader(body))
-    var out any; json.NewDecoder(res.Body).Decode(&out); fmt.Println(out)
-}
-```
-
-**Fallback:** Use `bash` / `python3` only when the project runtime can't execute scripts directly. Note the reason in `rationale`.
+The interpreter MUST be runnable on the project's host — never require a runtime the project does not already declare. Never invent a script convention the project doesn't already use.

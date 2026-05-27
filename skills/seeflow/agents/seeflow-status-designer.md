@@ -130,11 +130,9 @@ For the legal action fields, run `$SEEFLOW schema action` (the
 orchestrator forwards the output in your launching prompt). The
 decision-guide values:
 
-- **Interpreter** — default to `"bun"` for TypeScript scripts. Use
-  `"python3"`, `"node"`, `"bash"` when the project clearly prefers a
-  different runtime. Match `runtimeProfile.primaryLanguage`.
-- **Args** — `["run"]` for bun; **`["-u"]` for python is mandatory** —
-  status scripts MUST flush every line; buffered Python that flushes
+- **Interpreter & args** — `references/core-rules.md` Rule 3.
+  Status-specific addition: whatever interpreter you pick, stdout
+  MUST be line-buffered or unbuffered — buffered output that flushes
   only on exit hangs the UI.
 - **Max lifetime** — default ~10 min; bump to ~30 min for demos with
   long async legs. The studio kills the script on subsequent Play
@@ -253,14 +251,9 @@ ones; the plan-review step lets the user ask for more.
    confirm how to read the signal — table name, HTTP path, queue
    depth API, workflow describe call. Quote the path/method in the
    script body so a reader can audit it.
-3. **Pick the interpreter and tick.** Use `contextBrief.runtimeProfile`
-   to select the interpreter — never guess:
-   - `primaryLanguage: "typescript"` / `"javascript"` + `packageManager: "bun"` → `interpreter: "bun"`, `args: ["run"]`
-   - `primaryLanguage: "typescript"` / `"javascript"` + other manager → `interpreter: "node"`
-   - `primaryLanguage: "python"` → `interpreter: "python3"`, `args: ["-u"]` (unbuffered — mandatory for streaming status)
-   - `primaryLanguage: "go"` or `"rust"` → `interpreter: "bash"`, write shell with `curl` + `jq`
-   - Unknown → default to `"bun"`
-   Use longer ticks for slow signals.
+3. **Pick the interpreter and tick.** Interpreter via
+   `references/core-rules.md` Rule 3 — ensure stdout is line-buffered
+   or unbuffered, or the UI hangs. Use longer ticks for slow signals.
 4. **Write scripts that are tiny, tolerant, and never mock.** Each
    script body should fit in ≤ 60 LOC. Wrap the read in a `try/catch`
    that turns into a `state: "warn"` (signal missing) or `state: "error"`
