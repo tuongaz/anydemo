@@ -643,15 +643,21 @@ layer(base);
      `data-active` flips back to `false` from either mouseleave or the 1.2s
      idle timer in createGlowHandlers — the glow lingers and dissipates. */
   transition: opacity 800ms ease-out;
+  /* Glow spotlight is a dark-mode-only flourish. Hide by default and let the
+     `:where(.dark) .glow-overlay` rule below re-enable it. Inverting the
+     selector this way avoids the `:not(.dark)` descendant trap: a selector
+     like `:not(.dark) .glow-overlay` matches whenever ANY ancestor lacks
+     `.dark` — and since `.dark` lives on `<html>` while `<body>` (and every
+     other intermediate ancestor) does not, the negation fires in dark mode
+     too, hiding the glow even when the theme is actually dark. */
+  display: none;
+}
+:where(.dark) .seeflow-canvas-root .glow-overlay {
+  display: block;
 }
 .seeflow-canvas-root .glow-overlay[data-active='true'] {
   opacity: 1;
   transition: opacity 120ms ease-out;
-}
-/* Glow spotlight is a dark-mode-only flourish. Wrapping the negation in
-   :where() keeps specificity at 0 so the .dark rules above still win cleanly. */
-:where(:not(.dark)) .seeflow-canvas-root .glow-overlay {
-  display: none;
 }
 
 /* React Flow MiniMap theming. Mirrors the <Controls> cluster so the bottom
