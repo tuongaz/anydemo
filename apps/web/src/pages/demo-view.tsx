@@ -10,7 +10,6 @@ import type { NodeStatuses } from '@/hooks/use-node-statuses';
 import { usePendingDeletions } from '@/hooks/use-pending-deletions';
 import { usePendingOverrides } from '@/hooks/use-pending-overrides';
 import { useProjectFlows } from '@/hooks/use-project-flows';
-import { useUndoStack } from '@/hooks/use-undo-stack';
 import type {
   Connector,
   EdgePin,
@@ -255,13 +254,6 @@ export function DemoView({
   const onRfInit = useCallback((instance: ReactFlowInstance) => {
     rfInstanceRef.current = instance;
   }, []);
-  const undoStack = useUndoStack();
-  // Only `markMutation` is still consumed: it stamps every mutation so the
-  // wrapped adapter's `history.markExternalChange()` knows whether the next
-  // SSE echo is ours or external. Push / undo / redo / canUndo / canRedo /
-  // dropTop / clear / lastMutationAt are all owned by the wrapped adapter's
-  // `history` handle now — the hook itself is deleted in Task 27.
-  const { markMutation } = undoStack;
 
   const { reset: resetNodeOverrides } = nodePending;
   const { reset: resetConnectorOverrides } = connectorPending;
@@ -419,7 +411,6 @@ export function DemoView({
       // waiting for the PATCH response.
       setNodeOverride(nodeId, { position });
       setEditError(null);
-      markMutation();
       adapter.updateNodePosition(nodeId, position).catch((err) => {
         // Revert: drop the override so the canvas falls back to server data.
         // The wrapped adapter only pushes on success, so no undo cleanup
@@ -429,7 +420,7 @@ export function DemoView({
         console.error('updateNodePosition failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // US-013: atomic multi-node move (drag-stop with multiple nodes moving
@@ -453,7 +444,6 @@ export function DemoView({
         setNodeOverride(t.id, { position: t.next });
       }
       setEditError(null);
-      markMutation();
       // Wrap the fan-out in a batch so a partial failure rolls back via the
       // batch helper (every successful leg's inverse runs in reverse). On
       // rejection drop every optimistic override for this gesture so the
@@ -470,7 +460,7 @@ export function DemoView({
           console.error('updateNodePosition batch failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
   );
 
   // Per-tick resize callback. Fires on every mouse-move during the gesture.
@@ -510,14 +500,13 @@ export function DemoView({
         data: { width: next.width, height: next.height },
       } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, next).catch((err) => {
         dropNodeOverride(nodeId);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode resize failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // Flip the node back to auto-size mode. Used by both type:'html' and
@@ -535,14 +524,13 @@ export function DemoView({
         data: { autoSize: true, width: undefined, height: undefined },
       } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, next).catch((err) => {
         dropNodeOverride(nodeId);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode (fit-to-content) failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // US-007: atomic multi-select bounding-box resize. The canvas overlay
@@ -591,7 +579,6 @@ export function DemoView({
         } as Partial<FlowNode>);
       }
       setEditError(null);
-      markMutation();
       // Wrap the fan-out in a batch so a partial failure rolls back via the
       // batch helper. Pass a coalesceKey keyed on the SORTED set of node
       // ids: a multi-select resize drag fires this callback per pointer
@@ -622,7 +609,7 @@ export function DemoView({
           console.error('updateNode multi-resize batch failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
   );
 
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
@@ -665,14 +652,13 @@ export function DemoView({
       rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
       setNodeOverride(nodeId, { data: patch } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, patch).catch((err) => {
         dropNodeOverride(nodeId);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode style failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // US-008: atomic style-edit across a multi-node selection. Snapshots prev
@@ -692,7 +678,6 @@ export function DemoView({
         setNodeOverride(id, { data: patch } as Partial<FlowNode>);
       }
       setEditError(null);
-      markMutation();
       // Wrap the fan-out in a batch so partial failures roll back via the
       // batch helper. On rejection drop every optimistic override for this
       // gesture so the canvas falls back to server state.
@@ -708,7 +693,7 @@ export function DemoView({
           console.error('updateNode style-nodes batch failed', err);
         });
     },
-    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
   );
 
   // Style-tab edit on a connector: color, edge style, direction.
@@ -718,7 +703,6 @@ export function DemoView({
       rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, patch);
       setConnectorOverride(connId, patch as Partial<Connector>);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
@@ -726,7 +710,7 @@ export function DemoView({
         console.error('updateConnector failed', err);
       });
     },
-    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride],
   );
 
   const {
@@ -761,7 +745,6 @@ export function DemoView({
       if (cascadedIds.length > 0) markConnectorsDeleted(cascadedIds);
       setSelectedIds((prev) => prev.filter((id) => id !== nodeId));
       setSelectedConnectorIds((prev) => prev.filter((id) => !cascadedIdSet.has(id)));
-      markMutation();
       // The wrapped adapter's `deleteNode` snapshots the node + every
       // connector touching it (in insertion order) BEFORE forwarding to
       // the inner adapter, then pushes an undo entry that recreates them
@@ -782,7 +765,6 @@ export function DemoView({
       markConnectorsDeleted,
       unmarkNodeDeleted,
       unmarkConnectorsDeleted,
-      markMutation,
     ],
   );
 
@@ -802,7 +784,6 @@ export function DemoView({
       if (!newIds) return;
       setNodeOrderOverride(newIds);
       setEditError(null);
-      markMutation();
       adapter.reorderNode(nodeId, op).catch((err) => {
         // Revert: drop the override entirely. The next render uses server
         // state.
@@ -811,7 +792,7 @@ export function DemoView({
         console.error('reorderNode failed', err);
       });
     },
-    [flowId, adapter, demoNodes, nodeOrderOverride, markMutation],
+    [flowId, adapter, demoNodes, nodeOrderOverride],
   );
 
   // US-013: atomic multi-target delete. Snapshots every doomed node + every
@@ -868,7 +849,6 @@ export function DemoView({
       setSelectedConnectorIds((prev) =>
         prev.filter((id) => !explicitConnIdSet.has(id) && !cascadedConnIdSet.has(id)),
       );
-      markMutation();
       // Wrap the fan-out in a batch. The wrapper's `deleteNode` snapshots
       // each node + its cascaded connectors per-call, so the batch's
       // combined undo entry restores every doomed node + every cascaded
@@ -909,7 +889,6 @@ export function DemoView({
       markConnectorsDeleted,
       unmarkNodesDeleted,
       unmarkConnectorsDeleted,
-      markMutation,
     ],
   );
 
@@ -966,13 +945,12 @@ export function DemoView({
       if (!flowId || !adapter) return;
       setNodeOverride(nodeId, { data: { name } } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, { name }).catch((err) => {
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode name failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride],
   );
 
   const onNodeDescriptionChange = useCallback(
@@ -980,13 +958,12 @@ export function DemoView({
       if (!flowId || !adapter) return;
       setNodeOverride(nodeId, { data: { description: next } } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, { description: next }).catch((err) => {
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode description failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride],
   );
 
   const onNodeDetailChange = useCallback(
@@ -994,13 +971,12 @@ export function DemoView({
       if (!flowId || !adapter) return;
       setNodeOverride(nodeId, { data: { detail: next } } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, { detail: next }).catch((err) => {
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode detail failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride],
   );
 
   // US-009: persist a new icon name (or clear it via null) from the
@@ -1015,13 +991,12 @@ export function DemoView({
         data: { icon: next ?? undefined },
       } as Partial<FlowNode>);
       setEditError(null);
-      markMutation();
       adapter.updateNode(nodeId, { icon: next }).catch((err) => {
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode icon failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride],
   );
 
   const onCreateShapeNode = useCallback(
@@ -1055,7 +1030,6 @@ export function DemoView({
         data,
       };
       setNodeOverride(id, optimistic as Partial<FlowNode>);
-      markMutation();
       // Wrapped adapter records the create/delete inverse internally.
       adapter.createNode(payload).catch((err) => {
         dropNodeOverride(id);
@@ -1063,7 +1037,7 @@ export function DemoView({
         console.error('createNode failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // US-013 (icon picker): commit a new type:'icon' node at the picked viewport
@@ -1095,14 +1069,13 @@ export function DemoView({
       };
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
-      markMutation();
       adapter.createNode(payload).catch((err) => {
         dropNodeOverride(id);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('createNode (icon) failed', err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // Commit a new type:'html' node at the drop position from the toolbar's HTML
@@ -1133,14 +1106,13 @@ export function DemoView({
       };
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
-      markMutation();
       adapter.createNode(payload).catch((err) => {
         dropNodeOverride(id);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error("createNode (type:'html') failed", err);
       });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   // US-008: retry map for in-flight image uploads. Keyed by the optimistic
@@ -1193,7 +1165,6 @@ export function DemoView({
     }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
-      markMutation();
       // US-025: image-upload-flow's deps still match the legacy (flowId, …)
       // signatures from `@/lib/api`. Wrap the bound adapter into those shapes
       // so the orchestrator continues to work unchanged; refactoring its
@@ -1219,7 +1190,7 @@ export function DemoView({
         console.error('image-upload-flow failed', err);
       });
     },
-    [flowId, adapter, history, setNodeOverride, markMutation, rememberImageRetry, forgetImageRetry],
+    [flowId, adapter, history, setNodeOverride, rememberImageRetry, forgetImageRetry],
   );
 
   const onCreateImageFromFile = useCallback(
@@ -1282,7 +1253,6 @@ export function DemoView({
           const targetId = iconPicker.nodeId;
           setNodeOverride(targetId, { data: { icon: name } } as Partial<FlowNode>);
           setEditError(null);
-          markMutation();
           // Wrapped adapter records the per-field inverse internally.
           adapter.updateNode(targetId, { icon: name }).catch((err) => {
             dropNodeOverride(targetId);
@@ -1309,7 +1279,6 @@ export function DemoView({
       adapter,
       setNodeOverride,
       dropNodeOverride,
-      markMutation,
       onCreateIconNode,
       closeIconPicker,
     ],
@@ -1320,7 +1289,6 @@ export function DemoView({
       if (!flowId || !adapter) return;
       setConnectorOverride(connId, { label } as Partial<Connector>);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { label }).catch((err) => {
         // US-021: keep optimistic visible — see `onNodeNameChange` for the
@@ -1329,7 +1297,7 @@ export function DemoView({
         console.error('updateConnector label failed', err);
       });
     },
-    [flowId, adapter, setConnectorOverride, markMutation],
+    [flowId, adapter, setConnectorOverride],
   );
 
   // Create a default connector from a handle-drag gesture (US-029). We
@@ -1369,7 +1337,6 @@ export function DemoView({
       };
       setConnectorOverride(id, optimistic as Partial<Connector>);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the create/delete inverse internally.
       adapter.createConnector(payload).catch((err) => {
         dropConnectorOverride(id);
@@ -1377,7 +1344,7 @@ export function DemoView({
         console.error('createConnector failed', err);
       });
     },
-    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride],
   );
 
   // US-015: drop-on-pane create-and-connect. Combines `onCreateShapeNode` and
@@ -1433,7 +1400,6 @@ export function DemoView({
       setNodeOverride(newNodeId, optimisticNode as Partial<FlowNode>);
       setConnectorOverride(newConnId, connPayload as Partial<Connector>);
       setPendingEditNodeId(newNodeId);
-      markMutation();
       // Persist node first (referential integrity for the connector), then
       // the connector — wrapped in history.batch so the pair undoes together
       // (reverse order: connector first, then node), and partial-failure
@@ -1458,7 +1424,6 @@ export function DemoView({
       dropNodeOverride,
       setConnectorOverride,
       dropConnectorOverride,
-      markMutation,
     ],
   );
 
@@ -1534,7 +1499,6 @@ export function DemoView({
       setSelectedIds(newNodes.map((n) => n.id));
       setSelectedConnectorIds(newConnectors.map((c) => c.id));
       setEditError(null);
-      markMutation();
 
       // Wrap the fan-out in a batch. The wrapper's `createNode` /
       // `createConnector` snapshot their inverse-delete per-call; the
@@ -1573,7 +1537,6 @@ export function DemoView({
       dropNodeOverride,
       setConnectorOverride,
       dropConnectorOverride,
-      markMutation,
     ],
   );
 
@@ -1765,7 +1728,6 @@ export function DemoView({
       for (const m of moves) {
         setNodeOverride(m.id, { position: m.next });
       }
-      markMutation();
       // Wrap the fan-out in a batch. The wrapper's `updateNodePosition`
       // snapshots each node's prior position per-call; the batch's
       // combined undo restores every prior position in reverse order.
@@ -1792,7 +1754,6 @@ export function DemoView({
       nodePending.overrides,
       setNodeOverride,
       dropNodeOverride,
-      markMutation,
     ],
   );
 
@@ -2136,7 +2097,6 @@ export function DemoView({
       };
       setConnectorOverride(connId, optimistic);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
@@ -2144,7 +2104,7 @@ export function DemoView({
         console.error('updateConnector reconnect failed', err);
       });
     },
-    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride],
   );
 
   // US-007: persist a new perimeter pin for the named endpoint of a connector.
@@ -2158,7 +2118,6 @@ export function DemoView({
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
       setConnectorOverride(connId, { [field]: pin } as Partial<Connector>);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { [field]: pin }).catch((err) => {
         dropConnectorOverride(connId);
@@ -2166,7 +2125,7 @@ export function DemoView({
         console.error('updateConnector pin failed', err);
       });
     },
-    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride],
   );
 
   // US-007: clear an existing pin for the named endpoint of a connector. The
@@ -2183,7 +2142,6 @@ export function DemoView({
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
       setConnectorOverride(connId, { [field]: undefined } as Partial<Connector>);
       setEditError(null);
-      markMutation();
       // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { [field]: null }).catch((err) => {
         dropConnectorOverride(connId);
@@ -2191,7 +2149,7 @@ export function DemoView({
         console.error('updateConnector unpin failed', err);
       });
     },
-    [flowId, adapter, demoConnectors, setConnectorOverride, dropConnectorOverride, markMutation],
+    [flowId, adapter, demoConnectors, setConnectorOverride, dropConnectorOverride],
   );
 
   // Merge pending overrides onto the selected entity so Style-tab controls
