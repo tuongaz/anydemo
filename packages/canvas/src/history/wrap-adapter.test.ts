@@ -873,4 +873,276 @@ describe('wrapAdapterWithHistory', () => {
     await adapter.uploadImage('n-1', file, 'a.png');
     expect(history.canUndo).toBe(false);
   });
+
+  // --------------------------------------------------------------------
+  // Task 15: batch() with rollback
+  // --------------------------------------------------------------------
+
+  it('batch with N successful calls produces ONE entry', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    // Two creates in a batch → should land as exactly one combined entry,
+    // not two individual entries (the whole point of batch).
+    await history.batch('m', async () => {
+      await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+      await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    });
+
+    expect(history.canUndo).toBe(true);
+    // One combined entry → exactly one undo brings canUndo back to false.
+    await history.undo();
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('batch undo runs inverses in REVERSE order', async () => {
+    const inner = fakeAdapter();
+    // createNode returns DIFFERENT ids per call so the inverses are
+    // distinguishable in the recorded order.
+    let nextId = 1;
+    inner.createNode = async (input) => {
+      const id = `n-${nextId++}`;
+      inner.calls.push(`createNode:${id}:${input.type}`);
+      return { id, node: {} };
+    };
+    inner.createConnector = async (input) => {
+      inner.createConnectorCalls.push(input);
+      inner.calls.push(`createConn:c-1:${input.source}->${input.target}`);
+      return { id: 'c-1' };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    // Batch: create A (n-1), B (n-2), connector C (c-1). On undo the
+    // inverses run in REVERSE order: delConn(c-1) → del(n-2) → del(n-1).
+    await history.batch('m', async () => {
+      await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+      await adapter.createNode({ type: 'rectangle', position: { x: 1, y: 1 }, data: {} });
+      await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    });
+
+    inner.calls.length = 0;
+    await history.undo();
+
+    expect(inner.calls).toEqual(['delConn:c-1', 'del:n-2', 'del:n-1']);
+  });
+
+  it('batch with empty ops list pushes nothing', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+    // Silence the unused-binding linter — `adapter` is intentionally
+    // unused inside the empty batch body.
+    expect(adapter).toBeDefined();
+
+    await history.batch('m', async () => {
+      // no adapter calls → no ops collected → nothing to push.
+    });
+
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('batch with mid-flight rejection rolls back collected ops and rethrows', async () => {
+    const inner = fakeAdapter();
+    let nextId = 1;
+    inner.createNode = async (input) => {
+      const id = `n-${nextId++}`;
+      // Third createNode throws — A and B succeed, C fails.
+      if (nextId === 4) throw new Error('boom on C');
+      inner.calls.push(`createNode:${id}:${input.type}`);
+      return { id, node: {} };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    let caught: unknown = null;
+    try {
+      await history.batch('m', async () => {
+        await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+        await adapter.createNode({ type: 'rectangle', position: { x: 1, y: 1 }, data: {} });
+        await adapter.createNode({ type: 'rectangle', position: { x: 2, y: 2 }, data: {} });
+      });
+    } catch (err) {
+      caught = err;
+    }
+
+    // Original error propagated.
+    expect((caught as Error).message).toBe('boom on C');
+    // Stack has NO new entry (rollback ran, batch never pushed).
+    expect(history.canUndo).toBe(false);
+    // Rollback ran: deleteNode(B=n-2), then deleteNode(A=n-1), in reverse
+    // order. The strings recorded mid-batch are:
+    //   createNode:n-1:rectangle, createNode:n-2:rectangle, del:n-2, del:n-1
+    // (the third createNode threw BEFORE pushing its 'createNode:n-3' string).
+    expect(inner.calls).toEqual([
+      'createNode:n-1:rectangle',
+      'createNode:n-2:rectangle',
+      'del:n-2',
+      'del:n-1',
+    ]);
+  });
+
+  it('batch rollback swallows per-leg inverse failures via console.warn', async () => {
+    const inner = fakeAdapter();
+    let nextId = 1;
+    inner.createNode = async (input) => {
+      const id = `n-${nextId++}`;
+      // Second createNode throws → rollback runs for the first only.
+      if (nextId === 3) throw new Error('boom on B');
+      inner.calls.push(`createNode:${id}:${input.type}`);
+      return { id, node: {} };
+    };
+    // Patch deleteNode to ALSO reject — the rollback's per-leg failure
+    // must be swallowed (logged via console.warn), and the original
+    // batch error must still propagate.
+    inner.deleteNode = async (id) => {
+      throw new Error(`delete failed for ${id}`);
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    const originalWarn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    let caught: unknown = null;
+    try {
+      try {
+        await history.batch('m', async () => {
+          await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+          await adapter.createNode({ type: 'rectangle', position: { x: 1, y: 1 }, data: {} });
+        });
+      } catch (err) {
+        caught = err;
+      }
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    // Original batch error propagated, NOT the rollback's inverse error.
+    expect((caught as Error).message).toBe('boom on B');
+    // Rollback inverse failure surfaced through console.warn.
+    expect(warnings.length).toBe(1);
+    // No entry landed despite the failure swallow.
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('batch redo runs forward ops in ORIGINAL order', async () => {
+    const inner = fakeAdapter();
+    // Honor a supplied input.id so the createNode wrapper's `do` closure
+    // (which threads `{ ...input, id: result.id }`) lands at the same id
+    // on redo as it did on the original call.
+    let nextId = 1;
+    inner.createNode = async (input) => {
+      const id = input.id ?? `n-${nextId++}`;
+      inner.calls.push(`createNode:${id}:${input.type}`);
+      return { id, node: {} };
+    };
+    inner.createConnector = async (input) => {
+      inner.createConnectorCalls.push(input);
+      inner.calls.push(`createConn:${input.id ?? 'c-1'}:${input.source}->${input.target}`);
+      return { id: input.id ?? 'c-1' };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await history.batch('m', async () => {
+      await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+      await adapter.createNode({ type: 'rectangle', position: { x: 1, y: 1 }, data: {} });
+      await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    });
+
+    await history.undo();
+    inner.calls.length = 0;
+    await history.redo();
+
+    // Redo replays the recorded `redo` ops in ORIGINAL order. The
+    // createNode wrapper's `do` threads `{ ...input, id: result.id }` so
+    // redo lands at the same ids the original calls assigned (n-1, n-2).
+    expect(inner.calls).toEqual([
+      'createNode:n-1:rectangle',
+      'createNode:n-2:rectangle',
+      'createConn:c-1:n-1->n-2',
+    ]);
+  });
+
+  it('nested batches flatten — inner adapter calls accumulate into outer batch entry', async () => {
+    const inner = fakeAdapter();
+    let nextId = 1;
+    inner.createNode = async (input) => {
+      const id = `n-${nextId++}`;
+      inner.calls.push(`createNode:${id}:${input.type}`);
+      return { id, node: {} };
+    };
+    inner.createConnector = async (input) => {
+      inner.createConnectorCalls.push(input);
+      inner.calls.push(`createConn:c-1:${input.source}->${input.target}`);
+      return { id: 'c-1' };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await history.batch('outer', async () => {
+      await history.batch('inner', async () => {
+        await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+      });
+      await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    });
+
+    // One combined entry only — the nested batch did not push its own.
+    expect(history.canUndo).toBe(true);
+    inner.calls.length = 0;
+    await history.undo();
+    // After one undo the stack is empty.
+    expect(history.canUndo).toBe(false);
+    // Reverse order: connector first, then node.
+    expect(inner.calls).toEqual(['delConn:c-1', 'del:n-1']);
+  });
+
+  it('batch does NOT push individual intercept entries — only the outer combined entry', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    // Mid-batch hook: after the FIRST adapter call but before the second,
+    // canUndo must STILL be false — proves no individual entry was pushed
+    // mid-batch.
+    const observed: boolean[] = [];
+    await history.batch('m', async () => {
+      await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+      observed.push(history.canUndo);
+      await adapter.createNode({ type: 'rectangle', position: { x: 1, y: 1 }, data: {} });
+      observed.push(history.canUndo);
+    });
+
+    expect(observed).toEqual([false, false]);
+    expect(history.canUndo).toBe(true);
+  });
+
+  it('batch synchronously truncates the redo branch at start', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+
+    // Seed one entry on the stack + undo so canRedo is true.
+    await adapter.updateNodePosition('n-1', { x: 5, y: 5 });
+    await history.undo();
+    expect(history.canRedo).toBe(true);
+
+    // Begin a batch via a never-resolving deferred. Synchronously after
+    // calling `batch(...)`, the redo branch must already be gone — even
+    // though `fn` hasn't done any work yet and the batch itself hasn't
+    // resolved.
+    let release: (() => void) | null = null;
+    const pending = history.batch('m', async () => {
+      await new Promise<void>((resolve) => {
+        release = resolve;
+      });
+    });
+
+    // Synchronous assertion: truncation happened at batch start.
+    expect(history.canRedo).toBe(false);
+
+    // Resolve the deferred + the batch (empty ops, so nothing lands).
+    // biome-ignore lint/style/noNonNullAssertion: assigned by the promise above
+    release!();
+    await pending;
+  });
 });

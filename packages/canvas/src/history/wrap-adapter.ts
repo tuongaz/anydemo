@@ -44,6 +44,23 @@ export function wrapAdapterWithHistory(
   let lastMutationAt = 0;
   const subscribers = new Set<(s: { canUndo: boolean; canRedo: boolean }) => void>();
 
+  // Active batch context — non-null while a `batch()` is awaiting its `fn`.
+  // Inner intercepted methods route their `{redo, undo}` ops into
+  // `batchCtx.ops` instead of pushing onto the main stack. On batch resolve
+  // we push ONE combined entry; on rejection we run collected inverses in
+  // reverse + push nothing. Nested `batch()` calls flatten — the nested
+  // invocation just awaits `fn()` directly so its inner ops accumulate into
+  // the outer context's same list.
+  interface BatchOp {
+    redo: () => Promise<void>;
+    undo: () => Promise<void>;
+  }
+  interface BatchCtx {
+    name: string;
+    ops: BatchOp[];
+  }
+  let batchCtx: BatchCtx | null = null;
+
   const snapshot = (): { canUndo: boolean; canRedo: boolean } => ({
     canUndo: state.cursor > 0,
     canRedo: state.cursor < state.stack.length,
@@ -60,8 +77,20 @@ export function wrapAdapterWithHistory(
    * silently nuke a redo the user built between call + resolution — design
    * §5) and stamps `lastMutationAt` so the SSE stale-clear treats the
    * round-trip echo as "ours" rather than foreign.
+   *
+   * While a batch is active the batch itself has ALREADY truncated + stamped
+   * at the moment `batch()` opened, so inner methods must NOT re-truncate.
+   * `applyDropRedoBranch` is idempotent (returns the same reference when
+   * there's nothing to drop), but the intent here is also to avoid spurious
+   * subscriber pings mid-batch — subscribers should see exactly ONE
+   * transition (the batch's combined entry landing) rather than N pings
+   * per inner adapter call.
    */
   const beginIntercept = (): void => {
+    if (batchCtx) {
+      lastMutationAt = Date.now();
+      return;
+    }
     const next = applyDropRedoBranch(state);
     lastMutationAt = Date.now();
     if (next !== state) {
@@ -71,6 +100,17 @@ export function wrapAdapterWithHistory(
   };
 
   const push = (entry: Omit<HistoryEntry, 'capturedAt'>): void => {
+    if (batchCtx) {
+      // Mid-batch: divert into the active context's ops list. We discard
+      // `coalesceKey` and `beforeFields` here — the batch entry itself
+      // doesn't coalesce, and the inverses we capture already close over
+      // the right `before` state.
+      batchCtx.ops.push({
+        redo: entry.do,
+        undo: entry.undo,
+      });
+      return;
+    }
     state = applyPush(state, { ...entry, capturedAt: Date.now() });
     notify();
   };
@@ -496,9 +536,94 @@ export function wrapAdapterWithHistory(
         notify();
       }
     },
-    // TODO(Task 15): real batch with rollback. Transparent stub for now so
-    // individual intercepted methods still push as if no batch is open.
-    batch: async <T>(_name: string, fn: () => Promise<T>): Promise<T> => fn(),
+    /**
+     * Bundle a multi-step gesture into a single undo entry with full
+     * rollback on partial failure (design §4).
+     *
+     * Behavior:
+     * - Nested `batch()` calls FLATTEN: if a batch is already active the
+     *   nested invocation just awaits `fn()` directly so its inner adapter
+     *   calls accumulate into the outer batch's ops list. Hosts can wrap a
+     *   canvas-internal batched path safely.
+     * - On open (non-nested): synchronously truncate the redo branch and
+     *   stamp `lastMutationAt` (mirrors `beginIntercept` so a never-
+     *   resolving batch still satisfies the design §5 truncate-on-call
+     *   invariant). Then install `batchCtx` so inner intercepted methods
+     *   divert their `{redo, undo}` into the local ops list.
+     * - On full success: push ONE combined entry. `entry.do` replays every
+     *   collected forward op in original order. `entry.undo` runs every
+     *   collected inverse in REVERSE order. No coalesce key, no
+     *   `beforeFields` — batches are atomic gestures, not coalesce
+     *   candidates.
+     * - On any rejection mid-batch: run the already-collected inverses in
+     *   REVERSE order, swallowing per-leg failures via console.warn the
+     *   same way deleteNode's cascade restore does. Push NOTHING. Re-throw
+     *   the original error so callers can roll back optimistic UI.
+     */
+    batch: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+      if (batchCtx) {
+        // Nested → flatten. The outer batch's ctx is still installed; the
+        // inner `fn()`'s adapter calls will land in the outer ops list.
+        return fn();
+      }
+      // Open a new batch. Synchronous redo-branch truncate + stamp + notify
+      // — once, at gesture start, not once per inner call.
+      const truncated = applyDropRedoBranch(state);
+      lastMutationAt = Date.now();
+      if (truncated !== state) {
+        state = truncated;
+        notify();
+      }
+      const ctx: BatchCtx = { name, ops: [] };
+      batchCtx = ctx;
+      try {
+        const result = await fn();
+        // Detach ctx BEFORE pushing the combined entry so the push itself
+        // takes the normal (non-batched) path.
+        batchCtx = null;
+        if (ctx.ops.length > 0) {
+          // Snapshot the ops array at push time so the closures below
+          // can't be mutated by a stray later push (defensive — we
+          // already cleared batchCtx so this shouldn't happen).
+          const ops = ctx.ops.slice();
+          state = applyPush(state, {
+            do: async () => {
+              for (const op of ops) {
+                await op.redo();
+              }
+            },
+            undo: async () => {
+              for (let i = ops.length - 1; i >= 0; i--) {
+                // biome-ignore lint/style/noNonNullAssertion: bounded loop
+                await ops[i]!.undo();
+              }
+            },
+            capturedAt: Date.now(),
+          });
+          notify();
+        }
+        return result;
+      } catch (err) {
+        batchCtx = null;
+        // Roll back: run collected inverses in REVERSE order. Per-leg
+        // inverse failures are swallowed via console.warn so a broken
+        // rollback leg doesn't mask the original error (and doesn't tank
+        // the remaining rollback work). Mirrors the deleteNode cascade
+        // restore's per-connector error handling.
+        for (let i = ctx.ops.length - 1; i >= 0; i--) {
+          try {
+            // biome-ignore lint/style/noNonNullAssertion: bounded loop
+            await ctx.ops[i]!.undo();
+          } catch (rollbackErr) {
+            console.warn(
+              `[seeflow/canvas] batch '${name}' rollback inverse rejected:`,
+              rollbackErr,
+            );
+          }
+        }
+        throw err;
+      }
+    },
     // TODO(Task 16): real subscribe wired to the subscribers Set above. The
     // Set already exists and `notify()` already calls it — this stub is a
     // no-op subscriber because no test in Task 9 exercises subscribe.
