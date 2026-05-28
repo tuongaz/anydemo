@@ -2594,7 +2594,9 @@ describe('SeeflowCanvas', () => {
 
   describe('US-007: built-in DetailPanel sidebar', () => {
     // Selection-driven sidebar: SeeflowCanvas internalizes <DetailPanel> and
-    // derives its target from selectedNodeIds[0] / selectedConnectorIds[0].
+    // derives its target from the sole selected entity — the panel opens ONLY
+    // for a single-entity selection (one node OR one connector). Any multi-
+    // selection collapses node/connector to null so the Sheet stays closed.
     // The hook-shim tree captures <DetailPanel ...> as a placeholder element
     // (its body isn't executed) so we can assert its forwarded props directly.
 
@@ -2608,7 +2610,7 @@ describe('SeeflowCanvas', () => {
       expect(panel).not.toBeNull();
     });
 
-    it('passes the first selected node into DetailPanel.node', () => {
+    it('passes the sole selected node into DetailPanel.node', () => {
       const a = makeShapeNode('a');
       const b = makeShapeNode('b');
       const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a'] });
@@ -2618,7 +2620,35 @@ describe('SeeflowCanvas', () => {
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
     });
 
-    it('passes the first selected connector into DetailPanel.connector', () => {
+    it('passes null when multiple nodes are selected', () => {
+      const a = makeShapeNode('a');
+      const b = makeShapeNode('b');
+      const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a', 'b'] });
+      const panel = findDetailPanel(tree);
+      expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('passes null when a node and a connector are both selected', () => {
+      const conn: Connector = {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        sourceHandleAutoPicked: true,
+        targetHandleAutoPicked: true,
+      } as Connector;
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        connectors: [conn],
+        selectedNodeIds: ['a'],
+        selectedConnectorIds: ['c1'],
+      });
+      const panel = findDetailPanel(tree);
+      expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
+    });
+
+    it('passes the sole selected connector into DetailPanel.connector', () => {
       const conn: Connector = {
         id: 'c1',
         source: 'a',

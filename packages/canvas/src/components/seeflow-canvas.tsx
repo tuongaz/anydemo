@@ -4160,14 +4160,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         : 'grab'
       : undefined;
 
-  // US-007: derive the built-in sidebar's target entity from the first selected
-  // node / connector. Reads from the canvas's existing `nodes` / `connectors`
-  // props — the parent applies its pending overrides upstream so the lookup
-  // here already sees the optimistic edits. Multi-select keeps the first id as
-  // the inspected target; the rest still light up the selection ring + drive
-  // the style strip via `selectedNodes` / `selectedConnectors`.
-  const sidebarNodeId = selectedNodeIds[0];
-  const sidebarConnectorId = selectedConnectorIds[0];
+  // US-007: derive the built-in sidebar's target entity from the sole selected
+  // node / connector. The panel opens ONLY for a single-entity selection — one
+  // node OR one connector, nothing else. Any multi-selection (marquee, Cmd+A,
+  // Cmd+Click — all funnel through `onSelectionChange` and grow these arrays)
+  // collapses the target to `undefined`, so the Sheet stays closed and the
+  // selected nodes instead drive the multi-select style strip / resize overlay
+  // via `selectedNodes` / `selectedConnectors`. Reads from the canvas's
+  // existing `nodes` / `connectors` props — the parent applies its pending
+  // overrides upstream so the lookup here already sees the optimistic edits.
+  const isSingleSelection = selectedNodeIds.length + selectedConnectorIds.length === 1;
+  const sidebarNodeId = isSingleSelection ? selectedNodeIds[0] : undefined;
+  const sidebarConnectorId = isSingleSelection ? selectedConnectorIds[0] : undefined;
   const sidebarNode = sidebarNodeId ? (nodes.find((n) => n.id === sidebarNodeId) ?? null) : null;
   const sidebarConnector = sidebarConnectorId
     ? (connectors.find((c) => c.id === sidebarConnectorId) ?? null)
