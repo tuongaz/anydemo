@@ -101,12 +101,14 @@ const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
     edge: 'hsl(var(--muted-foreground))',
     headerBackground: 'hsl(var(--muted))',
   },
-  // White is opaque white throughout (body + header both solid white).
+  // White body is solid white; the header sits a touch grey so it still reads
+  // as a header bar (matching the muted bar the `default` node shows) instead
+  // of vanishing into the white body.
   white: {
     border: 'hsl(0, 0%, 100%)',
     background: 'hsl(0, 0%, 100%)',
     edge: 'hsl(0, 0%, 100%)',
-    headerBackground: 'hsl(0, 0%, 100%)',
+    headerBackground: 'hsl(0, 0%, 96%)',
   },
   ...PAINTED_ENTRIES,
 };
