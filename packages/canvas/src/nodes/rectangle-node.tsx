@@ -73,6 +73,11 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   const sized = data.width !== undefined || data.height !== undefined;
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    // A themed/white fill is a light pastel island in every canvas mode, so the
+    // description needs fixed dark text — otherwise the `text-muted-foreground`
+    // class renders light in dark mode and washes out on the pastel body.
+    // default/none fills fall through to the (mode-adapting) muted foreground.
+    ...colorTokenStyle(data.backgroundColor, 'node-body-text'),
     ...(data.textAlign !== undefined ? { textAlign: data.textAlign } : {}),
   };
 

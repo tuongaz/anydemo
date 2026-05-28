@@ -121,6 +121,14 @@ export const NODE_DEFAULT_BG_WHITE = 'hsl(var(--card))';
 const TEXT_ON_LIGHT = 'hsl(220, 15%, 15%)';
 const TEXT_ON_DARK = 'hsl(0, 0%, 98%)';
 
+// Body text (description + body labels) sits on the node's FILL, which for
+// themed + white tokens is always a light pastel island regardless of canvas
+// mode. So body text must be a fixed dark — otherwise in dark mode it inherits
+// the theme's light `--muted-foreground` and washes out on the pastel. Muted
+// (L36) so it still reads as secondary against the body. `default`/`none`
+// fills inherit the theme foreground, which adapts to dark mode on its own.
+const BODY_TEXT_ON_LIGHT = 'hsl(220, 14%, 36%)';
+
 export type NodeColorStyle = Pick<CSSProperties, 'borderColor' | 'backgroundColor'>;
 export type NodeHeaderColorStyle = Pick<CSSProperties, 'backgroundColor'>;
 export type EdgeColorStyle = Pick<CSSProperties, 'stroke'>;
@@ -135,11 +143,15 @@ export function colorTokenStyle(
   token: ColorToken | undefined,
   kind: 'node-header-text',
 ): TextColorStyle;
+export function colorTokenStyle(
+  token: ColorToken | undefined,
+  kind: 'node-body-text',
+): TextColorStyle;
 export function colorTokenStyle(token: ColorToken | undefined, kind: 'edge'): EdgeColorStyle;
 export function colorTokenStyle(token: ColorToken | undefined, kind: 'text'): TextColorStyle;
 export function colorTokenStyle(
   token: ColorToken | undefined,
-  kind: 'node' | 'node-header' | 'node-header-text' | 'edge' | 'text',
+  kind: 'node' | 'node-header' | 'node-header-text' | 'node-body-text' | 'edge' | 'text',
 ): NodeColorStyle | NodeHeaderColorStyle | EdgeColorStyle | TextColorStyle {
   const resolved = token ?? 'default';
   if (resolved === 'none') {
@@ -153,6 +165,12 @@ export function colorTokenStyle(
     if (resolved === 'white') return { color: TEXT_ON_LIGHT };
     const theme = THEMES[resolved as ThemeToken];
     return { color: theme.text === 'light' ? TEXT_ON_LIGHT : TEXT_ON_DARK };
+  }
+  if (kind === 'node-body-text') {
+    // Themed + white fills are light pastel islands → fixed dark text. The
+    // theme-backed `default` fill inherits the (mode-adapting) foreground.
+    if (resolved === 'default') return {};
+    return { color: BODY_TEXT_ON_LIGHT };
   }
   const entry = COLOR_TOKEN_MAP[resolved];
   if (kind === 'edge') return { stroke: entry.edge };

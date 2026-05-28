@@ -192,6 +192,21 @@ describe('colorTokenStyle', () => {
     });
   });
 
+  describe('kind=node-body-text', () => {
+    it('inherits theme foreground for default + undefined + none fills', () => {
+      expect(colorTokenStyle(undefined, 'node-body-text')).toEqual({});
+      expect(colorTokenStyle('default', 'node-body-text')).toEqual({});
+      expect(colorTokenStyle('none', 'node-body-text')).toEqual({});
+    });
+
+    it('returns fixed dark text for white + every themed fill (light pastel islands)', () => {
+      const bodyText = 'hsl(220, 14%, 36%)';
+      for (const token of ['white', ...THEMED_TOKENS] as const) {
+        expect(colorTokenStyle(token, 'node-body-text')).toEqual({ color: bodyText });
+      }
+    });
+  });
+
   describe('none token', () => {
     it('returns transparent border + background for kind=node', () => {
       const style = colorTokenStyle('none', 'node');

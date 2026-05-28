@@ -256,6 +256,12 @@ function GeometricNodeImpl({
   // chromeless text shape only borderColor matters). Other shapes inherit
   // theme foreground.
   const textColorStyle = isText ? colorTokenStyle(data.borderColor, 'text') : {};
+  // Body labels (name + description) sit on the node's fill. Themed + white
+  // fills are light pastel islands regardless of canvas mode, so their body
+  // text must be a fixed dark — otherwise it inherits the theme's light
+  // `--muted-foreground` and washes out in dark mode. Text shapes carry their
+  // own color via `borderColor` (textColorStyle), so they opt out here.
+  const bodyTextColorStyle = isText ? {} : colorTokenStyle(data.backgroundColor, 'node-body-text');
   const colorStyle: CSSProperties = {
     ...shapeChromeStyle(shape, data),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
@@ -271,6 +277,7 @@ function GeometricNodeImpl({
   const labelFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...textColorStyle,
+    ...bodyTextColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
   // Header-layout shapes paint a solid `node-header` bar above the body.
@@ -392,6 +399,7 @@ function GeometricNodeImpl({
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
     ...textColorStyle,
+    ...bodyTextColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
 
