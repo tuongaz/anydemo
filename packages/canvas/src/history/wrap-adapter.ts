@@ -249,9 +249,30 @@ export function wrapAdapterWithHistory(
       });
     },
 
-    reorderNode: (nodeId: string, op: ReorderOp) => {
-      // TODO(Task 13): snapshot prior index, push inverse reorderNode(toIndex).
-      return inner.reorderNode(nodeId, op);
+    reorderNode: async (nodeId: string, op: ReorderOp): Promise<void> => {
+      beginIntercept();
+      const { nodes } = getFlowState();
+      const priorIndex = nodes.findIndex((n) => n.id === nodeId);
+      // No snapshot to invert against — mirror the other passthrough
+      // branches and forward without pushing. Skipping a push is safe
+      // because the inner adapter still runs; the wrapper just can't
+      // construct a meaningful inverse without the prior index.
+      if (priorIndex < 0) {
+        await inner.reorderNode(nodeId, op);
+        return;
+      }
+      await inner.reorderNode(nodeId, op);
+      // No coalesce: reorder bursts are rare and visually obvious, so
+      // discrete per-click entries are the right UX. No beforeFields:
+      // reorder is a positional rewrite (no key set to merge).
+      push({
+        do: async () => {
+          await inner.reorderNode(nodeId, op);
+        },
+        undo: async () => {
+          await inner.reorderNode(nodeId, { op: 'toIndex', index: priorIndex });
+        },
+      });
     },
 
     createConnector: async (input: ConnectorCreateInput) => {
@@ -270,14 +291,98 @@ export function wrapAdapterWithHistory(
       return result;
     },
 
-    updateConnector: (connectorId: string, patch: ConnectorPatch) => {
-      // TODO(Task 13): snapshot touched keys, push inverse updateConnector(before).
-      return inner.updateConnector(connectorId, patch);
+    updateConnector: async (connectorId: string, patch: ConnectorPatch): Promise<void> => {
+      beginIntercept();
+      const { connectors } = getFlowState();
+      const connector = connectors.find((c) => c.id === connectorId);
+      // No snapshot to invert against (stale id, race, or the host stripped
+      // the connector before the adapter call landed). Mirror the
+      // `updateNode` skip-push-silently behaviour rather than guess at the
+      // prior state.
+      if (!connector) {
+        await inner.updateConnector(connectorId, patch);
+        return;
+      }
+      // Snapshot ONLY the keys the patch touches. Every `ConnectorPatch`
+      // field lives at the top level of the `Connector` (no nested `data`
+      // bag the way nodes have), so the read is a direct property lookup
+      // off the saved connector. When a key isn't set on the connector,
+      // `before[k] = undefined`; passing `{k: undefined}` back to
+      // inner.updateConnector mirrors the post-clear state for the happy
+      // paths the studio adapter handles today.
+      const before: ConnectorPatch = {};
+      const source = connector as unknown as Record<string, unknown>;
+      for (const key of Object.keys(patch) as (keyof ConnectorPatch)[]) {
+        (before as Record<string, unknown>)[key] = source[key as string];
+      }
+      await inner.updateConnector(connectorId, patch);
+      const sortedKeys = Object.keys(patch).sort().join(',');
+      push({
+        do: async () => {
+          await inner.updateConnector(connectorId, patch);
+        },
+        // Closure-captures `before` directly: same reasoning as `updateNode`.
+        // Distinct touched-field sets land in DIFFERENT coalesce slots (the
+        // sortedKeys suffix below), so two entries that DO share a key
+        // necessarily snapshot the SAME field set — `applyPush`'s
+        // field-by-field merge is then equivalent to keeping the older
+        // `before` wholesale.
+        undo: async () => {
+          await inner.updateConnector(connectorId, before);
+        },
+        coalesceKey: `update:conn:${connectorId}:${sortedKeys}`,
+        beforeFields: before as Record<string, unknown>,
+      });
     },
 
-    deleteConnector: (connectorId: string) => {
-      // TODO(Task 13): snapshot connector, push inverse createConnector(saved).
-      return inner.deleteConnector(connectorId);
+    deleteConnector: async (connectorId: string): Promise<void> => {
+      beginIntercept();
+      const { connectors } = getFlowState();
+      const saved = connectors.find((c) => c.id === connectorId);
+      // No snapshot to invert against — mirror the other passthrough
+      // branches and forward without pushing. The inner adapter still
+      // runs (the host may have a stricter idea of "live" than the
+      // wrapper's getFlowState snapshot — e.g. a stale id the server
+      // can still resolve).
+      if (!saved) {
+        await inner.deleteConnector(connectorId);
+        return;
+      }
+      await inner.deleteConnector(connectorId);
+      // Delete is a full-replacement operation — no `beforeFields`
+      // snapshot, no coalesceKey. Two deletes of the same id within
+      // 500ms is not a meaningful "burst".
+      push({
+        do: async () => {
+          await inner.deleteConnector(connectorId);
+        },
+        undo: async () => {
+          // Thread EVERY field of the saved connector through so the undo
+          // is a faithful restoration: id (so subsequent entries that
+          // captured the original id still resolve), source/target (the
+          // structural identity), and every optional field the connector
+          // carried (handles, pins, label, style, etc.).
+          await inner.createConnector({
+            id: saved.id,
+            source: saved.source,
+            target: saved.target,
+            sourceHandle: saved.sourceHandle,
+            targetHandle: saved.targetHandle,
+            sourceHandleAutoPicked: saved.sourceHandleAutoPicked,
+            targetHandleAutoPicked: saved.targetHandleAutoPicked,
+            sourcePin: saved.sourcePin,
+            targetPin: saved.targetPin,
+            label: saved.label,
+            style: saved.style,
+            color: saved.color,
+            direction: saved.direction,
+            eventName: saved.eventName,
+            queueName: saved.queueName,
+            method: saved.method,
+            url: saved.url,
+          });
+        },
+      });
     },
 
     uploadImage: (nodeId: string, file: File, filename: string): Promise<UploadImageResult> => {

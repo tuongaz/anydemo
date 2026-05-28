@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import type { CanvasAdapter, ConnectorCreateInput } from '../adapter/types.ts';
+import type {
+  CanvasAdapter,
+  ConnectorCreateInput,
+  ConnectorPatch,
+  ReorderOp,
+} from '../adapter/types.ts';
 import type { Connector, FlowNode } from '../types.ts';
 import type { GetFlowState } from './types.ts';
 import { wrapAdapterWithHistory } from './wrap-adapter.ts';
@@ -12,6 +17,17 @@ interface FakeAdapter extends CanvasAdapter {
    * verify cascade restore preserves insertion order + original ids).
    */
   createConnectorCalls: ConnectorCreateInput[];
+  /**
+   * Rich record of every updateConnector call so Task 13 tests can assert
+   * the exact `{id, patch}` shape the wrapper threads through on undo
+   * (touched-key patches; raw equality on the patch object).
+   */
+  updateConnectorCalls: Array<{ id: string; patch: ConnectorPatch }>;
+  /**
+   * Rich record of every reorderNode call so Task 13 tests can assert the
+   * inverse `{op: 'toIndex', index}` shape the wrapper sends on undo.
+   */
+  reorderNodeCalls: Array<{ id: string; op: ReorderOp }>;
 }
 
 /**
@@ -23,9 +39,13 @@ interface FakeAdapter extends CanvasAdapter {
 const fakeAdapter = (): FakeAdapter => {
   const calls: string[] = [];
   const createConnectorCalls: ConnectorCreateInput[] = [];
+  const updateConnectorCalls: Array<{ id: string; patch: ConnectorPatch }> = [];
+  const reorderNodeCalls: Array<{ id: string; op: ReorderOp }> = [];
   return {
     calls,
     createConnectorCalls,
+    updateConnectorCalls,
+    reorderNodeCalls,
     createNode: async (input) => {
       calls.push(`createNode:${input.id ?? 'n-?'}:${input.type}`);
       return { id: input.id ?? 'n-1', node: {} };
@@ -41,6 +61,7 @@ const fakeAdapter = (): FakeAdapter => {
       calls.push(`del:${id}`);
     },
     reorderNode: async (id, op) => {
+      reorderNodeCalls.push({ id, op });
       calls.push(`reorder:${id}:${JSON.stringify(op)}`);
     },
     createConnector: async (input) => {
@@ -49,6 +70,7 @@ const fakeAdapter = (): FakeAdapter => {
       return { id: input.id ?? 'c-1' };
     },
     updateConnector: async (id, patch) => {
+      updateConnectorCalls.push({ id, patch });
       calls.push(`updateConn:${id}:${JSON.stringify(patch)}`);
     },
     deleteConnector: async (id) => {
@@ -661,6 +683,175 @@ describe('wrapAdapterWithHistory', () => {
       .createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} })
       .catch(() => {});
 
+    expect(history.canUndo).toBe(false);
+  });
+
+  // --------------------------------------------------------------------
+  // Task 13: updateConnector + deleteConnector + reorderNode
+  // --------------------------------------------------------------------
+
+  it('updateConnector undo reverts the touched keys', async () => {
+    const inner = fakeAdapter();
+    const connectors: Connector[] = [
+      { id: 'c-1', source: 'n-1', target: 'n-2', label: 'A', color: 'blue' },
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes: [],
+      connectors,
+    }));
+
+    await adapter.updateConnector('c-1', { label: 'B' });
+    inner.updateConnectorCalls.length = 0;
+    await history.undo();
+
+    // Inverse touches ONLY the `label` key — `color` is untouched.
+    expect(inner.updateConnectorCalls).toEqual([{ id: 'c-1', patch: { label: 'A' } }]);
+  });
+
+  it('updateConnector coalesces same touched-field set within the window', async () => {
+    const inner = fakeAdapter();
+    const connectors: Connector[] = [{ id: 'c-1', source: 'n-1', target: 'n-2', label: 'A' }];
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes: [],
+      connectors,
+    }));
+    // Two rapid label edits → same coalesce key → single merged entry.
+    // The merged undo must restore to the ORIGINAL 'A', not the
+    // intermediate 'B'.
+    await adapter.updateConnector('c-1', { label: 'B' });
+    await adapter.updateConnector('c-1', { label: 'C' });
+    inner.updateConnectorCalls.length = 0;
+
+    await history.undo();
+    expect(inner.updateConnectorCalls).toEqual([{ id: 'c-1', patch: { label: 'A' } }]);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('updateConnector coalesce key includes sorted touched-field names', async () => {
+    const inner = fakeAdapter();
+    const connectors: Connector[] = [
+      { id: 'c-1', source: 'n-1', target: 'n-2', label: 'A', color: 'blue' },
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes: [],
+      connectors,
+    }));
+    // Two rapid patches touching DIFFERENT fields → different coalesce
+    // keys → two distinct stack entries (mirrors Phase-1 style-burst fix).
+    await adapter.updateConnector('c-1', { label: 'B' });
+    await adapter.updateConnector('c-1', { color: 'red' });
+    inner.updateConnectorCalls.length = 0;
+
+    // First undo reverts the last patch only (color back to blue).
+    await history.undo();
+    expect(inner.updateConnectorCalls).toEqual([{ id: 'c-1', patch: { color: 'blue' } }]);
+
+    inner.updateConnectorCalls.length = 0;
+    // Second undo reverts the first patch (label back to A).
+    await history.undo();
+    expect(inner.updateConnectorCalls).toEqual([{ id: 'c-1', patch: { label: 'A' } }]);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('deleteConnector undo recreates the connector with the original id and fields', async () => {
+    const inner = fakeAdapter();
+    const richConnector: Connector = {
+      id: 'c-1',
+      source: 'n-1',
+      target: 'n-2',
+      sourceHandle: 'r',
+      targetHandle: 'l',
+      label: 'hello',
+      style: 'dashed',
+      color: 'red',
+      direction: 'both',
+      borderSize: 3,
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes: [],
+      connectors: [richConnector],
+    }));
+
+    await adapter.deleteConnector('c-1');
+    expect(inner.calls).toEqual(['delConn:c-1']);
+
+    inner.createConnectorCalls.length = 0;
+    await history.undo();
+
+    // The recreated connector preserves the original id + every field.
+    expect(inner.createConnectorCalls).toHaveLength(1);
+    const recreated = inner.createConnectorCalls[0];
+    expect(recreated?.id).toBe('c-1');
+    expect(recreated?.source).toBe('n-1');
+    expect(recreated?.target).toBe('n-2');
+    expect(recreated?.sourceHandle).toBe('r');
+    expect(recreated?.targetHandle).toBe('l');
+    expect(recreated?.label).toBe('hello');
+    expect(recreated?.style).toBe('dashed');
+    expect(recreated?.color).toBe('red');
+    expect(recreated?.direction).toBe('both');
+  });
+
+  it('deleteConnector without snapshotted state passes through silently', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.deleteConnector('missing-id');
+
+    // Inner still received the call; no push.
+    expect(inner.calls).toEqual(['delConn:missing-id']);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('reorderNode undo moves the node back to its prior index', async () => {
+    const inner = fakeAdapter();
+    const nodes: FlowNode[] = [
+      { id: 'a', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+      { id: 'b', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+      { id: 'c', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes,
+      connectors: [],
+    }));
+
+    // 'c' is at index 2 (last). Bring it to the front, then undo —
+    // expect it to be restored to index 2.
+    await adapter.reorderNode('c', { op: 'toFront' });
+    inner.reorderNodeCalls.length = 0;
+    await history.undo();
+
+    expect(inner.reorderNodeCalls).toEqual([{ id: 'c', op: { op: 'toIndex', index: 2 } }]);
+  });
+
+  it('reorderNode undo handles toBack', async () => {
+    const inner = fakeAdapter();
+    const nodes: FlowNode[] = [
+      { id: 'a', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+      { id: 'b', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+      { id: 'c', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes,
+      connectors: [],
+    }));
+
+    // 'a' is at index 0. Send it to the back, then undo — expect 0.
+    await adapter.reorderNode('a', { op: 'toBack' });
+    inner.reorderNodeCalls.length = 0;
+    await history.undo();
+
+    expect(inner.reorderNodeCalls).toEqual([{ id: 'a', op: { op: 'toIndex', index: 0 } }]);
+  });
+
+  it('reorderNode without snapshotted state passes through silently', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.reorderNode('missing-id', { op: 'toFront' });
+
+    // Inner still received the call; no push.
+    expect(inner.calls).toEqual([`reorder:missing-id:${JSON.stringify({ op: 'toFront' })}`]);
     expect(history.canUndo).toBe(false);
   });
 });
