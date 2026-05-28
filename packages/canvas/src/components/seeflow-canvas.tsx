@@ -54,6 +54,7 @@ import {
   getNodeIntersection,
   projectCursorToPerimeter,
 } from '../lib/floating-edge-geometry.ts';
+import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
 import { ComponentNode } from '../nodes/component-node.tsx';
@@ -1866,8 +1867,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     history,
     canUndo,
     canRedo,
-    onUndo: _onUndo,
-    onRedo: _onRedo,
+    onUndo,
+    onRedo,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -2299,6 +2300,52 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [exitDrawMode, flags.enableKeyboard]);
+
+  // Cmd/Ctrl+Z / Cmd/Ctrl+Shift+Z / Cmd/Ctrl+Y — undo/redo. Wired ABOVE the
+  // clipboard chord on purpose: history is the single most-used shortcut, so
+  // the matching listener fires first. Editable-surface detection mirrors the
+  // clipboard handler's path (`isEditableTarget`) so native browser undo keeps
+  // working inside inputs/textareas/InlineEdit. When `history` is supplied the
+  // canvas owns the stack; otherwise we fall back to the legacy
+  // `onUndo`/`onRedo` props (kept until Task 26). If neither is wired the
+  // event passes through so the host or browser can handle it.
+  useEffect(() => {
+    if (!flags.enableKeyboard) return;
+    const onKey = (e: KeyboardEvent) => {
+      const histChord = resolveHistoryChord(e, {
+        isEditableActive: isEditableTarget(document.activeElement),
+      });
+      if (!histChord) return;
+      if (history) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (histChord === 'undo') {
+          void history.undo();
+        } else {
+          void history.redo();
+        }
+        return;
+      }
+      // Legacy path: route to onUndo/onRedo props if supplied (host owns the
+      // stack). Removed in Task 26 once every host supplies `history`.
+      if (histChord === 'undo' && onUndo) {
+        e.preventDefault();
+        e.stopPropagation();
+        onUndo();
+        return;
+      }
+      if (histChord === 'redo' && onRedo) {
+        e.preventDefault();
+        e.stopPropagation();
+        onRedo();
+        return;
+      }
+      // Neither history nor legacy callback supplied — let the event fall
+      // through to the host or browser.
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [history, onUndo, onRedo, flags.enableKeyboard]);
 
   // US-022: Cmd/Ctrl + C / Cmd/Ctrl + V — copy/paste the current selection.
   // Mirrors the US-017 pattern: pure helper drives the dispatch, the listener
