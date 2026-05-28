@@ -85,9 +85,53 @@ export function wrapAdapterWithHistory(
       return inner.createNode(input);
     },
 
-    updateNode: (nodeId: string, patch: NodePatch) => {
-      // TODO(Task 10): snapshot touched keys, push inverse updateNode(before).
-      return inner.updateNode(nodeId, patch);
+    updateNode: async (nodeId: string, patch: NodePatch): Promise<void> => {
+      beginIntercept();
+      const { nodes } = getFlowState();
+      const node = nodes.find((n) => n.id === nodeId);
+      // No snapshot to invert against (stale id, race, or the host stripped
+      // the node before the adapter call landed). Mirror the
+      // `updateNodePosition` skip-push-silently behaviour rather than guess
+      // at the prior state.
+      if (!node) {
+        await inner.updateNode(nodeId, patch);
+        return;
+      }
+      // Snapshot ONLY the keys the patch touches — `before[k]` is the
+      // current value at `k` on the node (top-level for `type`/`position`,
+      // `node.data[k]` otherwise). When a key isn't set on the node,
+      // `before[k] = undefined`; passing `{k: undefined}` back to
+      // inner.updateNode mirrors the post-clear state at least for the
+      // happy paths the studio adapter handles today (design §3).
+      const before: NodePatch = {};
+      const data = (node.data ?? {}) as Record<string, unknown>;
+      for (const key of Object.keys(patch) as (keyof NodePatch)[]) {
+        if (key === 'position') {
+          (before as Record<string, unknown>)[key] = node.position;
+        } else if (key === 'type') {
+          (before as Record<string, unknown>)[key] = node.type;
+        } else {
+          (before as Record<string, unknown>)[key] = data[key as string];
+        }
+      }
+      await inner.updateNode(nodeId, patch);
+      const sortedKeys = Object.keys(patch).sort().join(',');
+      push({
+        do: async () => {
+          await inner.updateNode(nodeId, patch);
+        },
+        // Closure-captures `before` directly: design §3 settles on the
+        // simpler closure because distinct touched-field sets land in
+        // DIFFERENT coalesce slots (the sortedKeys suffix below), so two
+        // entries with the SAME key necessarily snapshot the SAME field
+        // set — `applyPush`'s field-by-field merge is then equivalent to
+        // keeping the older `before` wholesale.
+        undo: async () => {
+          await inner.updateNode(nodeId, before);
+        },
+        coalesceKey: `update:${nodeId}:${sortedKeys}`,
+        beforeFields: before as Record<string, unknown>,
+      });
     },
 
     updateNodePosition: async (

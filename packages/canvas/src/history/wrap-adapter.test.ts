@@ -63,6 +63,25 @@ const stateWithNode = (id: string, pos: { x: number; y: number }): GetFlowState 
   return () => ({ nodes: [node], connectors: [] });
 };
 
+/**
+ * Build a `GetFlowState` whose single node has the supplied `data` fields
+ * (`borderColor`, `borderSize`, …). The wrapper's `updateNode` path reads
+ * these for the per-key `before` snapshot.
+ */
+const stateWithNodeData = (
+  id: string,
+  pos: { x: number; y: number },
+  data: Record<string, unknown>,
+): GetFlowState => {
+  const node = {
+    id,
+    type: 'rectangle' as const,
+    position: pos,
+    data,
+  } as unknown as FlowNode;
+  return () => ({ nodes: [node], connectors: [] });
+};
+
 describe('wrapAdapterWithHistory', () => {
   it('forwards every adapter call to the underlying adapter', async () => {
     const inner = fakeAdapter();
@@ -206,4 +225,111 @@ describe('wrapAdapterWithHistory', () => {
   // (`applyStaleClear`) is already pinned in stack.test.ts and the wrapper
   // forwards to it directly; injecting a fake clock through the wrapper
   // requires the broader test plumbing that Task 16 introduces.
+
+  // --------------------------------------------------------------------
+  // Task 10: updateNode + coalesce-burst tests
+  // --------------------------------------------------------------------
+
+  it('updateNode pushes an entry whose undo reverts the touched keys', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeData('n-1', { x: 0, y: 0 }, { borderColor: 'gray', borderSize: 2 }),
+    );
+    await adapter.updateNode('n-1', { borderColor: 'white' });
+    inner.calls.length = 0;
+    await history.undo();
+    // Inverse touches ONLY borderColor — borderSize is not in the patch.
+    expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ borderColor: 'gray' })}`]);
+  });
+
+  it('updateNode coalesce key includes sorted touched-field names', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeData('n-1', { x: 0, y: 0 }, { borderColor: 'gray', borderSize: 2 }),
+    );
+    // Two rapid patches touching DIFFERENT fields → different coalesce keys
+    // (`update:n-1:borderColor` vs `update:n-1:borderSize`), so they land in
+    // two distinct stack entries. This is exactly the Phase-1 style-burst
+    // regression we want to prevent at the architecture layer.
+    await adapter.updateNode('n-1', { borderColor: 'white' });
+    await adapter.updateNode('n-1', { borderSize: 4 });
+    inner.calls.length = 0;
+
+    // First undo reverts the LAST patch only (borderSize back to 2).
+    await history.undo();
+    expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ borderSize: 2 })}`]);
+
+    inner.calls.length = 0;
+    // Second undo reverts the FIRST patch (borderColor back to gray).
+    await history.undo();
+    expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ borderColor: 'gray' })}`]);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('updateNode coalesces same touched-field set within the window', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeData('n-1', { x: 0, y: 0 }, { borderColor: 'gray' }),
+    );
+    // Same touched field across two patches → same coalesce key → merged.
+    // The merged entry must keep the OLDEST `undo` (closure over 'gray')
+    // so a single undo reverts to the pre-burst state, not just the
+    // intermediate 'white'.
+    await adapter.updateNode('n-1', { borderColor: 'white' });
+    await adapter.updateNode('n-1', { borderColor: 'red' });
+    inner.calls.length = 0;
+
+    await history.undo();
+    expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ borderColor: 'gray' })}`]);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('updateNodePosition coalesces per id within the window', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    // Two rapid position updates for the SAME node → coalesce on `pos:n-1`
+    // → single stack entry. The merged undo closes over the FIRST starting
+    // position (0,0), not the intermediate (5,5).
+    await adapter.updateNodePosition('n-1', { x: 5, y: 5 });
+    await adapter.updateNodePosition('n-1', { x: 10, y: 10 });
+    inner.calls.length = 0;
+
+    await history.undo();
+    expect(inner.calls).toEqual(['pos:n-1:0,0']);
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('updateNodePosition does NOT coalesce across distinct node ids', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, () => ({
+      nodes: [
+        { id: 'a', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+        { id: 'b', type: 'rectangle', position: { x: 0, y: 0 }, data: {} } as unknown as FlowNode,
+      ],
+      connectors: [],
+    }));
+    // Burst across A then B → different coalesce keys per id → the stack
+    // ends with one entry per node (not one merged entry that mixes both).
+    // We intentionally do NOT alternate: coalesce only checks the TOP of
+    // the stack, so an A→B→A→B sequence would yield FOUR entries (a
+    // separate concern). Per-id-bursting is the case this pins.
+    await adapter.updateNodePosition('a', { x: 1, y: 1 });
+    await adapter.updateNodePosition('a', { x: 2, y: 2 });
+    await adapter.updateNodePosition('b', { x: 3, y: 3 });
+    await adapter.updateNodePosition('b', { x: 4, y: 4 });
+    inner.calls.length = 0;
+
+    // Stack: [a(merged: redo→2,2 / undo→0,0), b(merged: redo→4,4 / undo→0,0)].
+    // Two undos in LIFO order revert b first, then a.
+    await history.undo();
+    await history.undo();
+    expect(inner.calls).toEqual(['pos:b:0,0', 'pos:a:0,0']);
+    expect(history.canUndo).toBe(false);
+  });
 });
