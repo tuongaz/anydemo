@@ -421,45 +421,21 @@ export function DemoView({
   const onNodePositionChange = useCallback(
     (nodeId: string, position: Position) => {
       if (!flowId || !adapter) return;
-      // Snapshot the on-disk pre-state BEFORE the optimistic override so the
-      // undo entry can revert to where the node was before the drag started.
-      const prev = demoNodes?.find((n) => n.id === nodeId)?.position;
       // Optimistic — the visual stays where the user dropped it without
       // waiting for the PATCH response.
       setNodeOverride(nodeId, { position });
       setEditError(null);
       markMutation();
-      if (prev) {
-        pushUndo({
-          do: async () => {
-            await adapter.updateNodePosition(nodeId, position);
-          },
-          undo: async () => {
-            await adapter.updateNodePosition(nodeId, prev);
-          },
-          coalesceKey: `node:${nodeId}:position`,
-        });
-      }
       adapter.updateNodePosition(nodeId, position).catch((err) => {
-        // Revert: drop the override so the canvas falls back to server data,
-        // and drop the optimistic stack entry so the user isn't holding a
-        // phantom undo step pointing at a state we never persisted.
+        // Revert: drop the override so the canvas falls back to server data.
+        // The wrapped adapter only pushes on success, so no undo cleanup
+        // is needed on rejection.
         dropNodeOverride(nodeId);
-        if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNodePosition failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoNodes,
-      setNodeOverride,
-      dropNodeOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // US-013: atomic multi-node move (drag-stop with multiple nodes moving
@@ -471,50 +447,36 @@ export function DemoView({
     (updates: { id: string; position: Position }[]) => {
       if (!flowId || !adapter) return;
       if (updates.length === 0) return;
-      const overrides = nodeOverridesRef.current;
       const targets = updates
         .map((u) => {
           const node = demoNodes?.find((n) => n.id === u.id);
           if (!node) return null;
-          // Capture the LIVE pre-move position (override > server) so undo
-          // restores the visual position the user started the drag from. If
-          // an in-flight optimistic move is still pending its server echo,
-          // the override wins.
-          const prev = overrides[u.id]?.position ?? node.position;
-          return { id: u.id, prev, next: u.position };
+          return { id: u.id, next: u.position };
         })
-        .filter((t): t is { id: string; prev: Position; next: Position } => t !== null);
+        .filter((t): t is { id: string; next: Position } => t !== null);
       if (targets.length === 0) return;
       for (const t of targets) {
         setNodeOverride(t.id, { position: t.next });
       }
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNodePosition(t.id, t.next)));
-        },
-        undo: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNodePosition(t.id, t.prev)));
-        },
-      });
-      // Fan-out PATCHes; surface a single banner if any leg failed.
-      Promise.all(
-        targets.map(async (t) => {
-          try {
+      // Wrap the fan-out in a batch so a partial failure rolls back via the
+      // batch helper (every successful leg's inverse runs in reverse). On
+      // rejection drop every optimistic override for this gesture so the
+      // canvas falls back to server state.
+      history
+        .batch('move-nodes', async () => {
+          for (const t of targets) {
             await adapter.updateNodePosition(t.id, t.next);
-            return null;
-          } catch (err) {
-            dropNodeOverride(t.id);
-            return err instanceof Error ? err.message : String(err);
           }
-        }),
-      ).then((failures) => {
-        const firstErr = failures.find((f): f is string => f !== null);
-        if (firstErr) setEditError(firstErr);
-      });
+        })
+        .catch((err) => {
+          for (const t of targets) dropNodeOverride(t.id);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('updateNodePosition batch failed', err);
+        });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // Per-tick resize callback. Fires on every mouse-move during the gesture.
@@ -540,14 +502,6 @@ export function DemoView({
   const onNodeResizeEnd = useCallback(
     (nodeId: string, dims: { width: number; height: number; x: number; y: number }) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      const prev = node
-        ? {
-            width: node.data.width,
-            height: node.data.height,
-            position: { x: node.position.x, y: node.position.y },
-          }
-        : undefined;
       const next = {
         width: dims.width,
         height: dims.height,
@@ -563,34 +517,13 @@ export function DemoView({
       } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      if (prev) {
-        pushUndo({
-          do: async () => {
-            await adapter.updateNode(nodeId, next);
-          },
-          undo: async () => {
-            await adapter.updateNode(nodeId, prev);
-          },
-          coalesceKey: `node:${nodeId}:resize`,
-        });
-      }
       adapter.updateNode(nodeId, next).catch((err) => {
         dropNodeOverride(nodeId);
-        if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode resize failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoNodes,
-      setNodeOverride,
-      dropNodeOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // Flip the node back to auto-size mode. Used by both type:'html' and
@@ -601,13 +534,6 @@ export function DemoView({
   const onHtmlNodeFitToContent = useCallback(
     (nodeId: string) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prev = {
-        autoSize: (node.data as { autoSize?: boolean }).autoSize,
-        width: node.data.width,
-        height: node.data.height,
-      };
       const next = { autoSize: true };
       // Optimistic strip: hide the persisted dims locally so the renderer
       // immediately switches to auto-size layout while the PATCH is in flight.
@@ -616,32 +542,13 @@ export function DemoView({
       } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.updateNode(nodeId, next);
-        },
-        undo: async () => {
-          await adapter.updateNode(nodeId, prev);
-        },
-        coalesceKey: `node:${nodeId}:fit-to-content`,
-      });
       adapter.updateNode(nodeId, next).catch((err) => {
         dropNodeOverride(nodeId);
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode (fit-to-content) failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoNodes,
-      setNodeOverride,
-      dropNodeOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // US-007: atomic multi-select bounding-box resize. The canvas overlay
@@ -669,21 +576,15 @@ export function DemoView({
         height?: number;
         position: { x: number; y: number };
       };
-      type Target = { id: string; prev: DimsPatch; next: DimsPatch };
+      type Target = { id: string; next: DimsPatch };
       const targets: Target[] = [];
       for (const u of updates) {
         const node = demoNodes?.find((n) => n.id === u.id);
         if (!node) continue;
-        const nData = node.data as { width?: number; height?: number };
-        const prev: DimsPatch = {
-          position: { x: node.position.x, y: node.position.y },
-        };
-        if (nData.width !== undefined) prev.width = nData.width;
-        if (nData.height !== undefined) prev.height = nData.height;
         const next: DimsPatch = { position: u.position };
         if (u.width !== undefined) next.width = u.width;
         if (u.height !== undefined) next.height = u.height;
-        targets.push({ id: u.id, prev, next });
+        targets.push({ id: u.id, next });
       }
       if (targets.length === 0) return;
       for (const t of targets) {
@@ -697,38 +598,23 @@ export function DemoView({
       }
       setEditError(null);
       markMutation();
-      // US-016: per-tick multi-select resize dispatches many updates through
-      // this callback. The coalesce key (sorted-id list, stable across ticks
-      // of the same selection) folds them into one undo entry — first push
-      // captures the original `undo`; subsequent pushes within
-      // COALESCE_WINDOW_MS replace `do` with the latest state. One Cmd+Z
-      // reverts the whole gesture.
-      const sortedIds = targets.map((t) => t.id).sort();
-      pushUndo({
-        do: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.next)));
-        },
-        undo: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.prev)));
-        },
-        coalesceKey: `multi:resize:${sortedIds.join(',')}`,
-      });
-      Promise.all(
-        targets.map(async (t) => {
-          try {
+      // Wrap the fan-out in a batch so a partial failure rolls back via the
+      // batch helper. The wrapper's per-id updateNode coalesce key
+      // (`update:<id>:<sortedKeys>`) covers per-tick burst behaviour for
+      // each id; the batch wraps every leg of one tick into a single entry.
+      history
+        .batch('multi-resize', async () => {
+          for (const t of targets) {
             await adapter.updateNode(t.id, t.next);
-            return null;
-          } catch (err) {
-            dropNodeOverride(t.id);
-            return err instanceof Error ? err.message : String(err);
           }
-        }),
-      ).then((errs) => {
-        const first = errs.find((e): e is string => e !== null);
-        if (first) setEditError(first);
-      });
+        })
+        .catch((err) => {
+          for (const t of targets) dropNodeOverride(t.id);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('updateNode multi-resize batch failed', err);
+        });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
@@ -769,49 +655,16 @@ export function DemoView({
       // intent (what they picked), not server-confirmed state. A later network
       // failure does not roll the bucket back.
       rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      // Snapshot only the keys the caller is touching — we want undo to
-      // restore those exact fields and leave anything else alone.
-      let prev: NodeStylePatch | null = null;
-      if (node) {
-        prev = {};
-        const data = node.data as unknown as Record<string, unknown>;
-        for (const k of Object.keys(patch)) {
-          (prev as Record<string, unknown>)[k] = data[k];
-        }
-      }
       setNodeOverride(nodeId, { data: patch } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      if (prev) {
-        const prevPatch = prev;
-        pushUndo({
-          do: async () => {
-            await adapter.updateNode(nodeId, patch);
-          },
-          undo: async () => {
-            await adapter.updateNode(nodeId, prevPatch);
-          },
-          coalesceKey: `node:${nodeId}:style:${Object.keys(patch).sort().join(',')}`,
-        });
-      }
       adapter.updateNode(nodeId, patch).catch((err) => {
         dropNodeOverride(nodeId);
-        if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode style failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoNodes,
-      setNodeOverride,
-      dropNodeOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // US-008: atomic style-edit across a multi-node selection. Snapshots prev
@@ -825,51 +678,29 @@ export function DemoView({
       // Remember the user's pick on the batch path too — the single-node
       // `onStyleNode` does the same.
       rememberNodeStyle(DEFAULT_STORAGE_PREFIX, patch);
-      const targets = nodeIds
-        .map((id) => {
-          const node = demoNodes?.find((n) => n.id === id);
-          if (!node) return null;
-          const data = node.data as unknown as Record<string, unknown>;
-          const prev: NodeStylePatch = {};
-          for (const k of Object.keys(patch)) {
-            (prev as Record<string, unknown>)[k] = data[k];
-          }
-          return { id, prev };
-        })
-        .filter((t): t is { id: string; prev: NodeStylePatch } => t !== null);
-      if (targets.length === 0) return;
-      for (const t of targets) {
-        setNodeOverride(t.id, { data: patch } as Partial<FlowNode>);
+      const targetIds = nodeIds.filter((id) => demoNodes?.some((n) => n.id === id));
+      if (targetIds.length === 0) return;
+      for (const id of targetIds) {
+        setNodeOverride(id, { data: patch } as Partial<FlowNode>);
       }
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, patch)));
-        },
-        undo: async () => {
-          await Promise.allSettled(targets.map((t) => adapter.updateNode(t.id, t.prev)));
-        },
-      });
-      // Fire-and-forget fan-out. On per-node failure, drop that node's
-      // override so the canvas falls back to server state and surface a
-      // single banner.
-      Promise.all(
-        targets.map(async (t) => {
-          try {
-            await adapter.updateNode(t.id, patch);
-            return null;
-          } catch (err) {
-            dropNodeOverride(t.id);
-            return err instanceof Error ? err.message : String(err);
+      // Wrap the fan-out in a batch so partial failures roll back via the
+      // batch helper. On rejection drop every optimistic override for this
+      // gesture so the canvas falls back to server state.
+      history
+        .batch('style-nodes', async () => {
+          for (const id of targetIds) {
+            await adapter.updateNode(id, patch);
           }
-        }),
-      ).then((errs) => {
-        const first = errs.find((e): e is string => e !== null);
-        if (first) setEditError(first);
-      });
+        })
+        .catch((err) => {
+          for (const id of targetIds) dropNodeOverride(id);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('updateNode style-nodes batch failed', err);
+        });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // Style-tab edit on a connector: color, edge style, direction.
@@ -1017,29 +848,18 @@ export function DemoView({
       const currentIds = nodeOrderOverride ?? demoNodes.map((n) => n.id);
       const newIds = applyReorderOpToIds(currentIds, nodeId, op);
       if (!newIds) return;
-      const fromIdx = currentIds.indexOf(nodeId);
       setNodeOrderOverride(newIds);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.reorderNode(nodeId, op);
-        },
-        undo: async () => {
-          await adapter.reorderNode(nodeId, { op: 'toIndex', index: fromIdx });
-        },
-      });
       adapter.reorderNode(nodeId, op).catch((err) => {
         // Revert: drop the override entirely. The next render uses server
-        // state. The optimistic stack entry is also dropped because the do()
-        // it wraps was the just-failed call.
+        // state.
         setNodeOrderOverride(null);
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('reorderNode failed', err);
       });
     },
-    [flowId, adapter, demoNodes, nodeOrderOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, demoNodes, nodeOrderOverride, markMutation],
   );
 
   const onDeleteConnector = useCallback(
@@ -1291,88 +1111,43 @@ export function DemoView({
   const onNodeNameChange = useCallback(
     (nodeId: string, name: string) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      const prevName = node && 'name' in node.data ? node.data.name : undefined;
-      // Undo must restore the previous name including the "no name" case.
-      // Rectangle nodes with capability chrome (playAction/statusAction)
-      // typically carry a non-empty prevName; optional-name variants (icon/
-      // other geometric/html) treat '' as clear.
-      const undoName = prevName ?? '';
       setNodeOverride(nodeId, { data: { name } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      if (node) {
-        pushUndo({
-          do: async () => {
-            await adapter.updateNode(nodeId, { name });
-          },
-          undo: async () => {
-            await adapter.updateNode(nodeId, { name: undoName });
-          },
-          coalesceKey: `node:${nodeId}:name`,
-        });
-      }
       adapter.updateNode(nodeId, { name }).catch((err) => {
-        if (node) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode name failed', err);
       });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, setNodeOverride, markMutation],
   );
 
   const onNodeDescriptionChange = useCallback(
     (nodeId: string, next: string) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prev = node.data.description ?? '';
       setNodeOverride(nodeId, { data: { description: next } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.updateNode(nodeId, { description: next });
-        },
-        undo: async () => {
-          await adapter.updateNode(nodeId, { description: prev });
-        },
-        coalesceKey: `node:${nodeId}:description`,
-      });
       adapter.updateNode(nodeId, { description: next }).catch((err) => {
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode description failed', err);
       });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, setNodeOverride, markMutation],
   );
 
   const onNodeDetailChange = useCallback(
     (nodeId: string, next: string) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prev = node.data.detail ?? '';
       setNodeOverride(nodeId, { data: { detail: next } } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.updateNode(nodeId, { detail: next });
-        },
-        undo: async () => {
-          await adapter.updateNode(nodeId, { detail: prev });
-        },
-        coalesceKey: `node:${nodeId}:detail`,
-      });
       adapter.updateNode(nodeId, { detail: next }).catch((err) => {
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode detail failed', err);
       });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, setNodeOverride, markMutation],
   );
 
   // US-009: persist a new icon name (or clear it via null) from the
@@ -1383,30 +1158,17 @@ export function DemoView({
   const onNodeIconChange = useCallback(
     (nodeId: string, next: string | null) => {
       if (!flowId || !adapter) return;
-      const node = demoNodes?.find((n) => n.id === nodeId);
-      if (!node) return;
-      const prev = 'icon' in node.data ? (node.data.icon ?? null) : null;
       setNodeOverride(nodeId, {
         data: { icon: next ?? undefined },
       } as Partial<FlowNode>);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.updateNode(nodeId, { icon: next });
-        },
-        undo: async () => {
-          await adapter.updateNode(nodeId, { icon: prev });
-        },
-        coalesceKey: `node:${nodeId}:icon-sidebar`,
-      });
       adapter.updateNode(nodeId, { icon: next }).catch((err) => {
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateNode icon failed', err);
       });
     },
-    [flowId, adapter, demoNodes, setNodeOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, setNodeOverride, markMutation],
   );
 
   const onCreateShapeNode = useCallback(
