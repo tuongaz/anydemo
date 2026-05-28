@@ -256,15 +256,13 @@ export function DemoView({
     rfInstanceRef.current = instance;
   }, []);
   const undoStack = useUndoStack();
-  // Stable handles for the mutation handlers below. push/dropTop/markMutation
-  // are useCallback-stable so their identity doesn't churn dep arrays.
-  const {
-    push: pushUndo,
-    dropTop: dropUndoTop,
-    markMutation,
-    clear: clearUndo,
-    lastMutationAt: undoLastMutationAt,
-  } = undoStack;
+  // Only `markMutation` / `clear` / `lastMutationAt` are still consumed:
+  // `markMutation` stamps every mutation so the SSE stale-clear (Task 25)
+  // can treat the echo as ours; `clear` resets on flow switch; and
+  // `lastMutationAt` feeds the same stale-clear comparison. Push / undo /
+  // redo / canUndo / canRedo / dropTop are all owned by the wrapped
+  // adapter's `history` handle now — the hook itself is deleted in Task 27.
+  const { markMutation, clear: clearUndo, lastMutationAt: undoLastMutationAt } = undoStack;
 
   const { reset: resetNodeOverrides } = nodePending;
   const { reset: resetConnectorOverrides } = connectorPending;
@@ -741,25 +739,23 @@ export function DemoView({
     unmark: unmarkNodeDeleted,
     unmarkMany: unmarkNodesDeleted,
   } = nodeDeletions;
-  const {
-    markMany: markConnectorsDeleted,
-    unmark: unmarkConnectorDeleted,
-    unmarkMany: unmarkConnectorsDeleted,
-  } = connectorDeletions;
+  const { markMany: markConnectorsDeleted, unmarkMany: unmarkConnectorsDeleted } =
+    connectorDeletions;
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
       if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
-      // Snapshot the node + every cascaded connector BEFORE the delete API
-      // call, so undo can recreate them all (preserving original ids and
-      // adjacency order). The server cascades via the same source/target
-      // filter; mirroring it here keeps the undo round-trip faithful.
-      const cascaded = (demoConnectors ?? []).filter(
-        (c) => c.source === nodeId || c.target === nodeId,
-      );
-      const cascadedIds = cascaded.map((c) => c.id);
+      // Mirror the wrapper's cascade-restore: capture every connector
+      // touching the node up-front so the optimistic-delete revert path
+      // (on adapter failure) can also clear their hidden flag. The
+      // wrapper itself ALSO snapshots cascaded connectors in its
+      // `deleteNode` undo — this list is purely for the failure-path
+      // unmark, not for restore.
+      const cascadedIds = (demoConnectors ?? [])
+        .filter((c) => c.source === nodeId || c.target === nodeId)
+        .map((c) => c.id);
       const cascadedIdSet = new Set(cascadedIds);
       setEditError(null);
       // US-016: optimistic delete. Hide the node + every cascaded connector
@@ -770,32 +766,13 @@ export function DemoView({
       setSelectedIds((prev) => prev.filter((id) => id !== nodeId));
       setSelectedConnectorIds((prev) => prev.filter((id) => !cascadedIdSet.has(id)));
       markMutation();
-      const nodeSnapshot = node;
-      const connectorSnapshots = cascaded;
-      pushUndo({
-        do: async () => {
-          markNodeDeleted(nodeId);
-          if (cascadedIds.length > 0) markConnectorsDeleted(cascadedIds);
-          await adapter.deleteNode(nodeId);
-        },
-        undo: async () => {
-          unmarkNodeDeleted(nodeId);
-          if (cascadedIds.length > 0) unmarkConnectorsDeleted(cascadedIds);
-          await adapter.createNode({
-            id: nodeSnapshot.id,
-            type: nodeSnapshot.type,
-            position: nodeSnapshot.position,
-            data: nodeSnapshot.data as unknown as Record<string, unknown>,
-          });
-          for (const c of connectorSnapshots) {
-            await adapter.createConnector({ ...c, id: c.id });
-          }
-        },
-      });
+      // The wrapped adapter's `deleteNode` snapshots the node + every
+      // connector touching it (in insertion order) BEFORE forwarding to
+      // the inner adapter, then pushes an undo entry that recreates them
+      // all. We no longer need a host-side cascade-restore closure.
       adapter.deleteNode(nodeId).catch((err) => {
         unmarkNodeDeleted(nodeId);
         if (cascadedIds.length > 0) unmarkConnectorsDeleted(cascadedIds);
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('deleteNode failed', err);
       });
@@ -809,8 +786,6 @@ export function DemoView({
       markConnectorsDeleted,
       unmarkNodeDeleted,
       unmarkConnectorsDeleted,
-      pushUndo,
-      dropUndoTop,
       markMutation,
     ],
   );
@@ -898,103 +873,46 @@ export function DemoView({
         prev.filter((id) => !explicitConnIdSet.has(id) && !cascadedConnIdSet.has(id)),
       );
       markMutation();
-      // ONE undo entry. `do` re-runs the batch deletes; `undo` re-creates
-      // every node first (so connector endpoints exist on disk) and then
-      // every connector (cascaded + explicit). We re-issue cascaded
-      // connectors on undo, NOT during the do leg — the server cascades
-      // those automatically when the node is deleted.
-      pushUndo({
-        do: async () => {
-          if (allDoomedNodeIds.length > 0) markNodesDeleted(allDoomedNodeIds);
-          if (allDoomedConnIds.length > 0) markConnectorsDeleted(allDoomedConnIds);
+      // Wrap the fan-out in a batch. The wrapper's `deleteNode` snapshots
+      // each node + its cascaded connectors per-call, so the batch's
+      // combined undo entry restores every doomed node + every cascaded
+      // + explicit connector in a single Cmd+Z. Partial-failure rollback
+      // is handled by the batch helper — successful legs' inverses run
+      // in reverse, eliminating the prior `dropUndoTop` path.
+      //
+      // US-014: serialize node deletes in children-first order so the
+      // schema invariant holds at every intermediate state. Connector
+      // deletes fire in parallel — they have no inter-dependencies and
+      // the batch helper only cares about ops accumulating in order
+      // inside `batchCtx`.
+      history
+        .batch('delete-selection', async () => {
           for (const n of childFirstNodeSnapshots) {
-            await adapter.deleteNode(n.id).catch(() => {});
+            await adapter.deleteNode(n.id);
           }
-          await Promise.allSettled(explicitConnSnapshots.map((c) => adapter.deleteConnector(c.id)));
-        },
-        undo: async () => {
+          await Promise.all(explicitConnSnapshots.map((c) => adapter.deleteConnector(c.id)));
+        })
+        .catch((err) => {
+          // Batch rolled back what it could on the server; restore the
+          // optimistic visibility for every doomed entity so the canvas
+          // returns to the pre-gesture state. (Some legs may have
+          // actually deleted on disk — the SSE echo will reconcile.)
           if (allDoomedNodeIds.length > 0) unmarkNodesDeleted(allDoomedNodeIds);
           if (allDoomedConnIds.length > 0) unmarkConnectorsDeleted(allDoomedConnIds);
-          for (let i = childFirstNodeSnapshots.length - 1; i >= 0; i--) {
-            const n = childFirstNodeSnapshots[i];
-            if (!n) continue;
-            await adapter.createNode({
-              id: n.id,
-              type: n.type,
-              position: n.position,
-              data: n.data as unknown as Record<string, unknown>,
-            });
-          }
-          for (const c of [...cascadedConnectors, ...explicitConnSnapshots]) {
-            await adapter.createConnector({ ...c, id: c.id });
-          }
-        },
-      });
-      // US-016: per-target rollback. When a delete fails, restore that
-      // entity's visibility (and its cascaded connectors, for nodes) by
-      // dropping it from the optimistic-delete set. Other successful
-      // entities stay hidden until SSE prunes them.
-      // US-014: serialize node deletes in children-first order so the
-      // schema invariant holds at every intermediate state (see do-leg
-      // comment above). Connector deletes can still fire in parallel — they
-      // have no inter-dependencies on each other.
-      const cascadedByNodeId = new Map<string, string[]>();
-      for (const n of nodeSnapshots) {
-        cascadedByNodeId.set(
-          n.id,
-          cascadedConnectors.filter((c) => c.source === n.id || c.target === n.id).map((c) => c.id),
-        );
-      }
-      (async () => {
-        const failures: string[] = [];
-        for (const n of childFirstNodeSnapshots) {
-          try {
-            await adapter.deleteNode(n.id);
-          } catch (err) {
-            unmarkNodeDeleted(n.id);
-            const cascadedForN = cascadedByNodeId.get(n.id) ?? [];
-            if (cascadedForN.length > 0) unmarkConnectorsDeleted(cascadedForN);
-            failures.push(err instanceof Error ? err.message : String(err));
-          }
-        }
-        const connResults = await Promise.all(
-          explicitConnSnapshots.map(async (c) => {
-            try {
-              await adapter.deleteConnector(c.id);
-              return null;
-            } catch (err) {
-              unmarkConnectorDeleted(c.id);
-              return err instanceof Error ? err.message : String(err);
-            }
-          }),
-        );
-        for (const f of connResults) {
-          if (f !== null) failures.push(f);
-        }
-        // Mirror onDeleteNode's `.catch(dropUndoTop)` shape: if ANY leg
-        // rejected, the optimistic state for failed legs has already been
-        // reverted above — now drop the poisoned undo entry so Cmd+Z doesn't
-        // try to recreate nodes that may still exist server-side. Fires ONCE
-        // per partial-failure event regardless of how many legs rejected.
-        if (failures.length > 0) {
-          dropUndoTop();
-          if (failures[0] !== undefined) setEditError(failures[0]);
-        }
-      })();
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('deleteSelection batch failed', err);
+        });
     },
     [
       flowId,
       adapter,
+      history,
       demoNodes,
       demoConnectors,
       markNodesDeleted,
       markConnectorsDeleted,
-      unmarkNodeDeleted,
       unmarkNodesDeleted,
-      unmarkConnectorDeleted,
       unmarkConnectorsDeleted,
-      pushUndo,
-      dropUndoTop,
       markMutation,
     ],
   );
@@ -1622,15 +1540,16 @@ export function DemoView({
       setEditError(null);
       markMutation();
 
-      // Fire creates: nodes first (referential integrity for connectors),
-      // then connectors. On any failure, drop overrides and surface the
-      // error banner; partial state on disk is fine since each POST is
-      // schema-validated independently.
-      // US-013: push ONE undo entry for the whole paste so a single Cmd+Z
-      // removes every pasted node + connector together. Pushed only after
-      // the create-leg succeeds so undo's do-leg has stable ids to delete.
-      (async () => {
-        try {
+      // Wrap the fan-out in a batch. The wrapper's `createNode` /
+      // `createConnector` snapshot their inverse-delete per-call; the
+      // batch's combined undo runs them in REVERSE order — i.e.
+      // connectors first (avoids "deleted node still has edges" cascade
+      // chatter on the server) then nodes. US-013: one Cmd+Z removes
+      // every pasted node + connector together. Partial-failure rollback
+      // is handled by the batch helper — successful legs' inverses run
+      // automatically, then we drop every override.
+      history
+        .batch('paste', async () => {
           for (const n of newNodes) {
             await adapter.createNode({
               id: n.id,
@@ -1642,44 +1561,23 @@ export function DemoView({
           for (const c of newConnectors) {
             await adapter.createConnector(c);
           }
-          pushUndo({
-            do: async () => {
-              for (const n of newNodes) {
-                await adapter.createNode({
-                  id: n.id,
-                  type: n.type,
-                  position: n.position,
-                  data: n.data as unknown as Record<string, unknown>,
-                });
-              }
-              for (const c of newConnectors) {
-                await adapter.createConnector(c);
-              }
-            },
-            undo: async () => {
-              // Delete connectors first (avoid the "deleted node still has
-              // edges" cascade chatter on the server), then nodes.
-              await Promise.allSettled(newConnectors.map((c) => adapter.deleteConnector(c.id)));
-              await Promise.allSettled(newNodes.map((n) => adapter.deleteNode(n.id)));
-            },
-          });
-        } catch (err) {
+        })
+        .catch((err) => {
           for (const n of newNodes) dropNodeOverride(n.id);
           for (const c of newConnectors) dropConnectorOverride(c.id);
           setEditError(err instanceof Error ? err.message : String(err));
           console.error('paste failed', err);
-        }
-      })();
+        });
     },
     [
       flowId,
       adapter,
+      history,
       setNodeOverride,
       dropNodeOverride,
       setConnectorOverride,
       dropConnectorOverride,
       markMutation,
-      pushUndo,
     ],
   );
 
@@ -1872,49 +1770,32 @@ export function DemoView({
         setNodeOverride(m.id, { position: m.next });
       }
       markMutation();
-      // ONE undo entry that re-applies the whole batch (do) or restores it
-      // (undo). Cmd+Z reverts every node in a single keystroke.
-      pushUndo({
-        do: async () => {
-          await Promise.allSettled(moves.map((m) => adapter.updateNodePosition(m.id, m.next)));
-        },
-        undo: async () => {
-          await Promise.allSettled(moves.map((m) => adapter.updateNodePosition(m.id, m.prev)));
-        },
-      });
-      // Fan-out PATCHes; surface a single banner if any leg failed. Successful
-      // PATCHes still commit on disk — partial state isn't auto-rolled-back
-      // (the user can Cmd+Z the whole batch). Per-failure: drop that node's
-      // override so the canvas falls back to server state.
-      Promise.all(
-        moves.map(async (m) => {
-          try {
+      // Wrap the fan-out in a batch. The wrapper's `updateNodePosition`
+      // snapshots each node's prior position per-call; the batch's
+      // combined undo restores every prior position in reverse order.
+      // On partial failure the batch helper rolls back successful legs;
+      // we drop every override so the canvas falls back to server state.
+      history
+        .batch('tidy', async () => {
+          for (const m of moves) {
             await adapter.updateNodePosition(m.id, m.next);
-            return null;
-          } catch (err) {
-            dropNodeOverride(m.id);
-            return err instanceof Error ? err.message : String(err);
           }
-        }),
-      ).then((failures) => {
-        const errs = failures.filter((f): f is string => f !== null);
-        const firstErr = errs[0];
-        if (!firstErr) return;
-        setEditError(
-          errs.length === 1 ? firstErr : `${errs.length} node updates failed (first: ${firstErr})`,
-        );
-        console.error('Tidy: some updateNodePosition calls failed', errs);
-      });
+        })
+        .catch((err) => {
+          for (const m of moves) dropNodeOverride(m.id);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('Tidy batch failed', err);
+        });
     },
     [
       flowId,
       adapter,
+      history,
       demoNodes,
       demoConnectors,
       nodePending.overrides,
       setNodeOverride,
       dropNodeOverride,
-      pushUndo,
       markMutation,
     ],
   );
