@@ -32,7 +32,7 @@ export function PlayButton({
       title={buttonLabel}
       onClick={onClick}
       className={cn(
-        'sf:group sf:relative sf:h-8 sf:w-8 sf:rounded-full sf:p-0',
+        'sf:group sf:relative sf:h-8 sf:w-8 sf:cursor-pointer sf:rounded-full sf:p-0',
         'sf:hover:bg-primary sf:hover:text-primary-foreground',
         'sf:focus-visible:bg-primary sf:focus-visible:text-primary-foreground',
         visualStatus === 'success' && 'sf:seeflow-play-pop',
