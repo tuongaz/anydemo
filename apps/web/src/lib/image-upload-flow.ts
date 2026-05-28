@@ -1,5 +1,6 @@
 import type { FlowNode, ImageNodeData } from '@/lib/api';
 import {
+  type HistoryHandle,
   type ImageDataDefaults,
   type NodeCreateInput,
   type NodeStylePatch,
@@ -16,7 +17,10 @@ import {
  *   1. setOverride(nodeId, optimistic with `_uploading: true`)
  *   2. upload(projectId, file, originalFilename)
  *   3a. On success: setOverride(nodeId, real data, `_uploading` cleared);
- *       createNode(...); push undo entry.
+ *       createNode(...). The upload + create are wrapped in
+ *       `history.batch('insert-image', ...)` so a single Cmd+Z reverts the
+ *       pair (the wrapped createNode contributes the inverse delete; the
+ *       backend cascades the uploaded file when the node is deleted).
  *   3b. On failure: setOverride(nodeId, real dims + `_uploadError`); leave
  *       node on the canvas for the user to retry. NEVER auto-delete.
  *
@@ -53,10 +57,15 @@ export interface PerformImageDropUploadDeps {
     filename: string,
   ) => Promise<{ path: string }>;
   createNode: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
-  deleteNode: (flowId: string, nodeId: string) => Promise<{ ok: true }>;
   setOverride: (id: string, partial: Partial<FlowNode>) => void;
-  /** Push the create-undo entry on success. Absent → undo not wired. */
-  pushUndo?: (entry: { do: () => Promise<void>; undo: () => Promise<void> }) => void;
+  /**
+   * History handle. The upload + createNode pair is wrapped in
+   * `history.batch('insert-image', ...)` so a single Cmd+Z reverts both
+   * (the createNode's adapter-level inverse runs deleteNode, and the
+   * backend cascades the uploaded file). Optional — when absent the
+   * upload + createNode run unwrapped (test fixtures, mostly).
+   */
+  history?: Pick<HistoryHandle, 'batch'>;
   /** Stash the upload args for a possible retry after failure. */
   rememberRetry: (
     nodeId: string,
@@ -148,39 +157,39 @@ export const performImageDropUpload = async (
   // 2. Optimistic placement.
   deps.setOverride(nodeId, buildUploadingOverride({ position, dims, originalFilename }));
 
-  let path: string;
-  try {
-    const result = await deps.upload(flowId, nodeId, file, originalFilename);
-    path = result.path;
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    deps.setOverride(nodeId, buildFailedOverride({ position, dims, originalFilename, message }));
-    throw err;
-  }
+  // The upload + createNode pair runs inside `history.batch('insert-image')`
+  // so undo deletes the node (the wrapped createNode contributes the
+  // deleteNode inverse) and the backend cascades the uploaded file. When
+  // `history` is absent (test fixtures) the run executes unwrapped.
+  const run = async (): Promise<void> => {
+    let path: string;
+    try {
+      const result = await deps.upload(flowId, nodeId, file, originalFilename);
+      path = result.path;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      deps.setOverride(nodeId, buildFailedOverride({ position, dims, originalFilename, message }));
+      throw err;
+    }
 
-  // 3. Update override to the final data (so pruneAgainst can drop it once the
-  //    server echo lands) and persist via createNode.
-  deps.setOverride(nodeId, buildUploadedOverride({ path, dims, originalFilename, lastUsed }));
-  const data = buildUploadedImageData({ path, dims, originalFilename, lastUsed });
-  const payload: NodeCreateInput = {
-    id: nodeId,
-    type: 'image',
-    position,
-    data,
+    // 3. Update override to the final data (so pruneAgainst can drop it once the
+    //    server echo lands) and persist via createNode.
+    deps.setOverride(nodeId, buildUploadedOverride({ path, dims, originalFilename, lastUsed }));
+    const data = buildUploadedImageData({ path, dims, originalFilename, lastUsed });
+    const payload: NodeCreateInput = {
+      id: nodeId,
+      type: 'image',
+      position,
+      data,
+    };
+    await deps.createNode(flowId, payload);
+    // 4. Upload + persist both succeeded — drop the retry entry.
+    deps.forgetRetry(nodeId);
   };
-  const { id: returnedId } = await deps.createNode(flowId, payload);
-  // 4. Upload + persist both succeeded — drop the retry entry.
-  deps.forgetRetry(nodeId);
-  // 5. Push the undo entry bound to the server-issued id (matches
-  //    onCreateShapeNode's pattern in demo-view.tsx).
-  if (deps.pushUndo) {
-    deps.pushUndo({
-      do: async () => {
-        await deps.createNode(flowId, { ...payload, id: returnedId });
-      },
-      undo: async () => {
-        await deps.deleteNode(flowId, returnedId);
-      },
-    });
+
+  if (deps.history) {
+    await deps.history.batch('insert-image', run);
+    return;
   }
+  await run();
 };

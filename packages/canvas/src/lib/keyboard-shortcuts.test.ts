@@ -9,6 +9,7 @@ import {
   getNudgeDelta,
   getZoomChord,
   resolveClipboardChord,
+  resolveHistoryChord,
   resolveToolShortcut,
 } from './keyboard-shortcuts';
 
@@ -517,5 +518,68 @@ describe('resolveToolShortcut (US-003)', () => {
     expect(resolveToolShortcut(ev({ key: 'Enter' }))).toBeNull();
     expect(resolveToolShortcut(ev({ key: 'Escape' }))).toBeNull();
     expect(resolveToolShortcut(ev({ key: ' ' }))).toBeNull();
+  });
+});
+
+describe('resolveHistoryChord', () => {
+  // Mirrors resolveClipboardChord's gating: Cmd/Ctrl required, Alt rejected,
+  // editable-surface aware so native browser undo keeps working inside text
+  // fields. Cmd+Y is the Windows-style redo alias for muscle-memory parity.
+  it('Cmd+Z (mac) → undo', () => {
+    expect(resolveHistoryChord(ev({ key: 'z', metaKey: true }), { isEditableActive: false })).toBe(
+      'undo',
+    );
+  });
+
+  it('Ctrl+Z (non-mac) → undo', () => {
+    expect(resolveHistoryChord(ev({ key: 'z', ctrlKey: true }), { isEditableActive: false })).toBe(
+      'undo',
+    );
+  });
+
+  it('Cmd+Shift+Z → redo', () => {
+    expect(
+      resolveHistoryChord(ev({ key: 'z', metaKey: true, shiftKey: true }), {
+        isEditableActive: false,
+      }),
+    ).toBe('redo');
+  });
+
+  it('Ctrl+Y → redo (Windows-style alias)', () => {
+    expect(resolveHistoryChord(ev({ key: 'y', ctrlKey: true }), { isEditableActive: false })).toBe(
+      'redo',
+    );
+  });
+
+  it('Ctrl+Shift+Y → null (Shift+Y is unspecified; reject for predictability)', () => {
+    expect(
+      resolveHistoryChord(ev({ key: 'y', ctrlKey: true, shiftKey: true }), {
+        isEditableActive: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('Cmd+Alt+Z → null (Alt rejected)', () => {
+    expect(
+      resolveHistoryChord(ev({ key: 'z', metaKey: true, altKey: true }), {
+        isEditableActive: false,
+      }),
+    ).toBeNull();
+  });
+
+  it('bare Z → null', () => {
+    expect(resolveHistoryChord(ev({ key: 'z' }), { isEditableActive: false })).toBeNull();
+  });
+
+  it("Cmd+A → null (different key — proves we don't shadow other chords)", () => {
+    expect(
+      resolveHistoryChord(ev({ key: 'a', metaKey: true }), { isEditableActive: false }),
+    ).toBeNull();
+  });
+
+  it('isEditableActive: true with Cmd+Z → null (defer to browser)', () => {
+    expect(
+      resolveHistoryChord(ev({ key: 'z', metaKey: true }), { isEditableActive: true }),
+    ).toBeNull();
   });
 });

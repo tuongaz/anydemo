@@ -479,6 +479,35 @@ export const resolveClipboardChord = ({
   return { type: 'paste' };
 };
 
+export type HistoryChord = 'undo' | 'redo' | null;
+
+/**
+ * Resolve a Cmd/Ctrl-prefixed history chord. Mirrors `resolveClipboardChord`'s
+ * gating: requires Cmd OR Ctrl, rejects Alt, defers to the browser when an
+ * editable surface is active (input/textarea/contentEditable) so native undo
+ * keeps working inside text fields.
+ *
+ * Bindings:
+ *   - Cmd/Ctrl+Z         → 'undo'
+ *   - Cmd/Ctrl+Shift+Z   → 'redo'
+ *   - Cmd/Ctrl+Y         → 'redo'  (no Shift; Windows-style redo for users who
+ *                                    type it out of habit)
+ *
+ * All other keys / unrelated modifiers → null.
+ */
+export const resolveHistoryChord = (
+  e: ModifierEvent,
+  opts: { isEditableActive: boolean },
+): HistoryChord => {
+  if (opts.isEditableActive) return null;
+  if (!(e.metaKey || e.ctrlKey)) return null;
+  if (e.altKey) return null;
+  const k = e.key.toLowerCase();
+  if (k === 'z') return e.shiftKey ? 'redo' : 'undo';
+  if (k === 'y' && !e.shiftKey) return 'redo';
+  return null;
+};
+
 // US-003: tool-switch bare-key resolver. Maps Figma/Miro-style single letters
 // (V/R/O/T/S/D) to the toolbar's draw-mode value. Returns null for any chord —
 // these bindings are intentionally bare-only so they don't collide with Cmd+V

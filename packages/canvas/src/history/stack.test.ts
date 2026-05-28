@@ -1,28 +1,31 @@
 import { describe, expect, it } from 'bun:test';
 import {
-  COALESCE_WINDOW_MS,
-  MAX_HISTORY,
-  STALE_MUTATION_WINDOW_MS,
-  type UndoEntry,
-  type UndoStackState,
   applyClear,
+  applyDropRedoBranch,
   applyDropTop,
   applyPush,
   applyRedo,
   applyStaleClear,
   applyUndo,
-} from '@/hooks/use-undo-stack';
+} from './stack.ts';
+import {
+  COALESCE_WINDOW_MS,
+  type HistoryEntry,
+  type HistoryState,
+  MAX_HISTORY,
+  STALE_MUTATION_WINDOW_MS,
+} from './types.ts';
 
 const noop = async () => {};
 
-const entry = (overrides: Partial<UndoEntry> = {}): UndoEntry => ({
+const entry = (overrides: Partial<HistoryEntry> = {}): HistoryEntry => ({
   do: noop,
   undo: noop,
   capturedAt: 0,
   ...overrides,
 });
 
-const initial: UndoStackState = { stack: [], cursor: 0 };
+const initial: HistoryState = { stack: [], cursor: 0 };
 
 describe('constants', () => {
   it('MAX_HISTORY = 500', () => {
@@ -31,6 +34,10 @@ describe('constants', () => {
 
   it('COALESCE_WINDOW_MS = 500', () => {
     expect(COALESCE_WINDOW_MS).toBe(500);
+  });
+
+  it('STALE_MUTATION_WINDOW_MS = 2000', () => {
+    expect(STALE_MUTATION_WINDOW_MS).toBe(2000);
   });
 });
 
@@ -82,7 +89,7 @@ describe('applyPush', () => {
     expect(s.stack[MAX_HISTORY - 1]?.capturedAt).toBe(MAX_HISTORY + 9);
   });
 
-  it('coalesces within the window: replaces top do, keeps original undo, cursor unchanged', () => {
+  it('coalesces within the window: replaces top do, keeps OLDEST undo, cursor unchanged', () => {
     const undoA = async () => {};
     const doA = async () => {};
     const doB = async () => {};
@@ -108,7 +115,45 @@ describe('applyPush', () => {
     expect(s2.stack[0]?.capturedAt).toBe(101);
   });
 
-  it('does NOT coalesce after the window expires (pushes a new entry instead)', () => {
+  it('merges beforeFields field-by-field on coalesce (oldest-per-field wins)', () => {
+    // Two coalesced pushes with disjoint beforeFields → both fields survive.
+    const e1 = entry({ coalesceKey: 'k', beforeFields: { a: 1 } });
+    const e2 = entry({ coalesceKey: 'k', beforeFields: { b: 2 } });
+    let s = applyPush(initial, e1, { now: 100 });
+    s = applyPush(s, e2, { now: 200 });
+    expect(s.stack.length).toBe(1);
+    expect(s.stack[0]?.beforeFields).toEqual({ a: 1, b: 2 });
+  });
+
+  it('merges beforeFields oldest-per-field across three coalesced pushes', () => {
+    // Overlapping fields: oldest value per field wins. Field `a` is set in
+    // pushes 1 and 3; the value from push 1 must survive. Field `b` only in
+    // push 2. Field `c` only in push 3.
+    const e1 = entry({ coalesceKey: 'k', beforeFields: { a: 'oldest-a' } });
+    const e2 = entry({ coalesceKey: 'k', beforeFields: { b: 'oldest-b' } });
+    const e3 = entry({
+      coalesceKey: 'k',
+      beforeFields: { a: 'newest-a', c: 'oldest-c' },
+    });
+    let s = applyPush(initial, e1, { now: 100 });
+    s = applyPush(s, e2, { now: 200 });
+    s = applyPush(s, e3, { now: 300 });
+    expect(s.stack.length).toBe(1);
+    expect(s.stack[0]?.beforeFields).toEqual({
+      a: 'oldest-a',
+      b: 'oldest-b',
+      c: 'oldest-c',
+    });
+  });
+
+  it('leaves beforeFields undefined when neither entry carries one (host-reducer parity)', () => {
+    const s1 = applyPush(initial, entry({ coalesceKey: 'k' }), { now: 1 });
+    const s2 = applyPush(s1, entry({ coalesceKey: 'k' }), { now: 100 });
+    expect(s2.stack.length).toBe(1);
+    expect(s2.stack[0]?.beforeFields).toBeUndefined();
+  });
+
+  it('does NOT coalesce after the window expires', () => {
     const s1 = applyPush(initial, entry({ coalesceKey: 'k' }), { now: 0 });
     const s2 = applyPush(s1, entry({ coalesceKey: 'k' }), { now: COALESCE_WINDOW_MS + 1 });
     expect(s2.stack.length).toBe(2);
@@ -185,7 +230,7 @@ describe('applyClear', () => {
 });
 
 describe('applyDropTop', () => {
-  it('reverts an optimistic push: removes the top entry and decrements cursor', () => {
+  it('removes the entry just above the cursor and decrements it', () => {
     const s1 = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
     const s2 = applyPush(s1, entry({ capturedAt: 2 }), { now: 2 });
     const next = applyDropTop(s2);
@@ -200,111 +245,61 @@ describe('applyDropTop', () => {
   });
 });
 
-// US-013: a "group action" (multi-node move, multi-node style, multi-node
-// delete, multi-node paste) must produce EXACTLY ONE entry on the undo stack.
-// The batch shape is a single `pushUndo` call whose `do`/`undo` fan out across
-// every target — so the contract reduces to "one applyPush call, one stack
-// entry", regardless of how many targets the entry touches at run time.
-describe('group action — single undo entry contract (US-013)', () => {
-  it('one batched push for N targets produces stack.length === 1, cursor === 1', () => {
-    const targets = [
-      { id: 'n-a', prev: { x: 0, y: 0 }, next: { x: 100, y: 100 } },
-      { id: 'n-b', prev: { x: 50, y: 50 }, next: { x: 150, y: 150 } },
-      { id: 'n-c', prev: { x: 200, y: 0 }, next: { x: 300, y: 100 } },
-    ];
-    const doCallsRef: { count: number } = { count: 0 };
-    const undoCallsRef: { count: number } = { count: 0 };
-    const batchEntry: UndoEntry = {
-      do: async () => {
-        // Real consumer fan-outs N PATCHes; the test counts the calls so the
-        // batch's undo does N reverts — not 1.
-        await Promise.allSettled(targets.map(async () => doCallsRef.count++));
-      },
-      undo: async () => {
-        await Promise.allSettled(targets.map(async () => undoCallsRef.count++));
-      },
-      capturedAt: 0,
-    };
-
-    const s1 = applyPush(initial, batchEntry, { now: 1 });
-    expect(s1.stack.length).toBe(1);
-    expect(s1.cursor).toBe(1);
-
-    // Compare against the legacy per-target behavior: N pushes → N entries.
-    let legacy = initial;
-    for (const t of targets) {
-      legacy = applyPush(legacy, entry({ capturedAt: t.prev.x }), { now: t.prev.x + 1 });
-    }
-    expect(legacy.stack.length).toBe(targets.length);
-    expect(legacy.cursor).toBe(targets.length);
+describe('applyDropRedoBranch', () => {
+  it('returns the same reference when there is no redo branch', () => {
+    const s1 = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    const s2 = applyPush(s1, entry({ capturedAt: 2 }), { now: 2 });
+    expect(s2.cursor).toBe(s2.stack.length);
+    const out = applyDropRedoBranch(s2);
+    expect(out).toBe(s2);
   });
 
-  it('a single undo of a batch entry is enough to revert every target (one-step revert)', async () => {
-    const reverts: string[] = [];
-    const targets = ['n-a', 'n-b', 'n-c'];
-    const batchEntry: UndoEntry = {
-      do: async () => {},
-      undo: async () => {
-        await Promise.allSettled(
-          targets.map(async (id) => {
-            reverts.push(id);
-          }),
-        );
-      },
-      capturedAt: 0,
-    };
+  it('truncates the stack to cursor length while leaving the cursor untouched', () => {
+    let s = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    s = applyPush(s, entry({ capturedAt: 2 }), { now: 2 });
+    s = applyPush(s, entry({ capturedAt: 3 }), { now: 3 });
+    // Undo twice → cursor 1, stack length still 3 (redo branch present).
+    s = applyUndo(s).state;
+    s = applyUndo(s).state;
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(3);
 
-    const pushed = applyPush(initial, batchEntry, { now: 1 });
-    const popped = applyUndo(pushed);
-    expect(popped.entry).toBeDefined();
-    // The caller runs the popped entry's undo() — that's where the fan-out
-    // happens. After ONE undo call, every target is reverted.
-    if (popped.entry) await popped.entry.undo();
-    expect(reverts.sort()).toEqual([...targets].sort());
-    // Cursor moved by exactly one step.
-    expect(popped.state.cursor).toBe(0);
-    expect(popped.state.stack.length).toBe(1);
+    const out = applyDropRedoBranch(s);
+    expect(out.stack.length).toBe(1);
+    expect(out.cursor).toBe(1);
+    expect(out.stack[0]?.capturedAt).toBe(1);
   });
 
-  it('redo of a batch entry replays every target (one-step replay)', async () => {
-    const replays: string[] = [];
-    const targets = ['n-a', 'n-b'];
-    const batchEntry: UndoEntry = {
-      do: async () => {
-        await Promise.allSettled(
-          targets.map(async (id) => {
-            replays.push(id);
-          }),
-        );
-      },
-      undo: async () => {},
-      capturedAt: 0,
-    };
-
-    const pushed = applyPush(initial, batchEntry, { now: 1 });
-    const undone = applyUndo(pushed).state;
-    const r = applyRedo(undone);
-    expect(r.entry).toBeDefined();
-    if (r.entry) await r.entry.do();
-    expect(replays.sort()).toEqual([...targets].sort());
-    expect(r.state.cursor).toBe(1);
+  it('returns the same reference for an empty state', () => {
+    const out = applyDropRedoBranch(initial);
+    expect(out).toBe(initial);
   });
 
-  it('single-target operations remain a single entry (no regression)', () => {
-    const single = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
-    expect(single.stack.length).toBe(1);
-    expect(single.cursor).toBe(1);
+  it('after undo + drop, a fresh push lands at cursor position (end-to-end contract)', () => {
+    let s = applyPush(initial, entry({ capturedAt: 1 }), { now: 1 });
+    s = applyPush(s, entry({ capturedAt: 2 }), { now: 2 });
+    s = applyPush(s, entry({ capturedAt: 3 }), { now: 3 });
+    // Undo twice → cursor 1, stack still has 3 entries.
+    s = applyUndo(s).state;
+    s = applyUndo(s).state;
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(3);
+
+    // Synchronously drop the redo branch — mirrors what the wrapper does.
+    s = applyDropRedoBranch(s);
+    expect(s.cursor).toBe(1);
+    expect(s.stack.length).toBe(1);
+
+    // A subsequent push lands at cursor 2, with no leftover redo entries.
+    s = applyPush(s, entry({ capturedAt: 99 }), { now: 99 });
+    expect(s.cursor).toBe(2);
+    expect(s.stack.length).toBe(2);
+    expect(s.stack[1]?.capturedAt).toBe(99);
   });
 });
 
 describe('applyStaleClear', () => {
-  it('STALE_MUTATION_WINDOW_MS = 2000', () => {
-    expect(STALE_MUTATION_WINDOW_MS).toBe(2000);
-  });
-
-  it('clears the stack when the gap exceeds the window (push then >2000ms later → cleared)', () => {
-    // Simulate a UI mutation at t=1000 that pushed an entry, followed by an
-    // external file change observed at t=4000 (gap = 3000ms > window).
+  it('clears when the gap exceeds the window (gap > window → cleared)', () => {
     const pushed = applyPush(initial, entry({ capturedAt: 1000 }), { now: 1000 });
     expect(pushed.stack.length).toBe(1);
     const next = applyStaleClear(pushed, /* lastMutationAt */ 1000, /* now */ 4000);
@@ -312,7 +307,7 @@ describe('applyStaleClear', () => {
     expect(next.cursor).toBe(0);
   });
 
-  it('survives when checked immediately (push then check at same instant → unchanged)', () => {
+  it('survives when checked immediately (gap === 0)', () => {
     const pushed = applyPush(initial, entry({ capturedAt: 1000 }), { now: 1000 });
     const next = applyStaleClear(pushed, /* lastMutationAt */ 1000, /* now */ 1000);
     expect(next).toBe(pushed);
