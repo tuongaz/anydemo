@@ -367,6 +367,15 @@ layer(base);
 .seeflow-canvas-root .react-flow__node button:not([data-testid="play-button"]) {
   cursor: default;
 }
+/* The play button is the one in-node button that stays clickable. Its icon /
+   ring children are matched by `.react-flow__node *` above (cursor: default),
+   so without this they flicker against the button's own `pointer` as the mouse
+   crosses them. Cover the button AND its descendants. Disabled play buttons
+   carry `pointer-events: none`, so their cursor reflects the node behind. */
+.seeflow-canvas-root .react-flow__node [data-testid="play-button"]:not(:disabled),
+.seeflow-canvas-root .react-flow__node [data-testid="play-button"]:not(:disabled) * {
+  cursor: pointer;
+}
 
 /* Pane cursor */
 .seeflow-canvas-root .react-flow .react-flow__pane.selection {
