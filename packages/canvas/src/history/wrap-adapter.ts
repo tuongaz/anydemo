@@ -80,9 +80,23 @@ export function wrapAdapterWithHistory(
   // -----------------------------------------------------------------------
 
   const wrappedAdapter: CanvasAdapter = {
-    createNode: (input: NodeCreateInput) => {
-      // TODO(Task 12): wrap so undo calls inner.deleteNode(returnedId).
-      return inner.createNode(input);
+    createNode: async (input: NodeCreateInput) => {
+      beginIntercept();
+      const result = await inner.createNode(input);
+      // Use the RETURNED id (not `input.id`) so the inverse delete + a
+      // redo's recreate both reference the same id the server assigned.
+      // Threading `{...input, id: result.id}` on redo keeps the entity at
+      // the same id across create→undo→redo chains, so any later entries
+      // that captured the original id still resolve.
+      push({
+        do: async () => {
+          await inner.createNode({ ...input, id: result.id });
+        },
+        undo: async () => {
+          await inner.deleteNode(result.id);
+        },
+      });
+      return result;
     },
 
     updateNode: async (nodeId: string, patch: NodePatch): Promise<void> => {
@@ -240,9 +254,20 @@ export function wrapAdapterWithHistory(
       return inner.reorderNode(nodeId, op);
     },
 
-    createConnector: (input: ConnectorCreateInput) => {
-      // TODO(Task 12): push inverse deleteConnector(returnedId).
-      return inner.createConnector(input);
+    createConnector: async (input: ConnectorCreateInput) => {
+      beginIntercept();
+      const result = await inner.createConnector(input);
+      // Same shape as createNode: redo recreates with the server-assigned
+      // id so the entity lives at a stable id across create→undo→redo.
+      push({
+        do: async () => {
+          await inner.createConnector({ ...input, id: result.id });
+        },
+        undo: async () => {
+          await inner.deleteConnector(result.id);
+        },
+      });
+      return result;
     },
 
     updateConnector: (connectorId: string, patch: ConnectorPatch) => {

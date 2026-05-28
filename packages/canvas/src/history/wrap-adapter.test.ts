@@ -576,4 +576,91 @@ describe('wrapAdapterWithHistory', () => {
     // rejection.
     expect(warnings.length).toBe(1);
   });
+
+  // --------------------------------------------------------------------
+  // Task 12: createNode + createConnector
+  // --------------------------------------------------------------------
+
+  it('createNode undo deletes the just-created node by returned id', async () => {
+    const inner = fakeAdapter();
+    // Override createNode so the returned id is independent of any input.id,
+    // proving the wrapper uses the RETURNED id (not the input's optional id)
+    // for the inverse delete.
+    inner.createNode = async (input) => {
+      inner.calls.push(`createNode:${input.id ?? 'n-?'}:${input.type}`);
+      return { id: 'n-42', node: {} };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+    inner.calls.length = 0;
+    await history.undo();
+
+    expect(inner.calls).toEqual(['del:n-42']);
+  });
+
+  it('createNode redo recreates with the original returned id', async () => {
+    const inner = fakeAdapter();
+    inner.createNode = async (input) => {
+      inner.calls.push(`createNode:${input.id ?? 'n-?'}:${input.type}`);
+      return { id: 'n-42', node: {} };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} });
+    await history.undo();
+    inner.calls.length = 0;
+    await history.redo();
+
+    // The second createNode receives id='n-42' so the redo lands at the
+    // same id any downstream entry may still reference.
+    expect(inner.calls).toEqual(['createNode:n-42:rectangle']);
+  });
+
+  it('createConnector undo deletes the just-created connector by returned id', async () => {
+    const inner = fakeAdapter();
+    inner.createConnector = async (input) => {
+      inner.createConnectorCalls.push(input);
+      inner.calls.push(`createConn:${input.id ?? 'c-?'}:${input.source}->${input.target}`);
+      return { id: 'c-42' };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    inner.calls.length = 0;
+    await history.undo();
+
+    expect(inner.calls).toEqual(['delConn:c-42']);
+  });
+
+  it('createConnector redo recreates with the original returned id', async () => {
+    const inner = fakeAdapter();
+    inner.createConnector = async (input) => {
+      inner.createConnectorCalls.push(input);
+      inner.calls.push(`createConn:${input.id ?? 'c-?'}:${input.source}->${input.target}`);
+      return { id: 'c-42' };
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.createConnector({ source: 'n-1', target: 'n-2' });
+    await history.undo();
+    inner.calls.length = 0;
+    await history.redo();
+
+    expect(inner.calls).toEqual(['createConn:c-42:n-1->n-2']);
+  });
+
+  it('createNode failure does not push an entry', async () => {
+    const inner = fakeAdapter();
+    inner.createNode = async () => {
+      throw new Error('boom');
+    };
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter
+      .createNode({ type: 'rectangle', position: { x: 0, y: 0 }, data: {} })
+      .catch(() => {});
+
+    expect(history.canUndo).toBe(false);
+  });
 });
