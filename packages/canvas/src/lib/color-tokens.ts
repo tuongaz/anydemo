@@ -108,7 +108,7 @@ const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
     border: 'hsl(0, 0%, 100%)',
     background: 'hsl(0, 0%, 100%)',
     edge: 'hsl(0, 0%, 100%)',
-    headerBackground: 'hsl(0, 0%, 96%)',
+    headerBackground: 'hsl(0, 0%, 91%)',
   },
   ...PAINTED_ENTRIES,
 };
