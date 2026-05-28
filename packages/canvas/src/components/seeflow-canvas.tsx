@@ -854,30 +854,14 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
   /**
-   * Internal undo/redo state. When supplied, the canvas subscribes for
-   * canUndo/canRedo (overriding the legacy `canUndo` / `canRedo` props) and
-   * routes Cmd+Z / Cmd+Shift+Z to it (Task 20). When absent, the legacy
-   * `canUndo` / `canRedo` / `onUndo` / `onRedo` props are used and the
-   * canvas's keyboard dispatcher delegates to `onUndo` / `onRedo`. The
-   * legacy props are removed in Task 26 once the host migrates.
+   * Internal undo/redo state, produced by `wrapAdapterWithHistory`. When
+   * supplied, the canvas subscribes for `{canUndo, canRedo}` snapshots
+   * (driving the toolbar + command palette enable predicates) and routes
+   * Cmd+Z / Cmd+Shift+Z / Cmd+Y through `history.undo()` / `history.redo()`.
+   * When absent, undo is unavailable — the keyboard chord falls through to
+   * the host or browser. There is no host-owned fallback path.
    */
   history?: HistoryHandle;
-  /**
-   * Legacy: undo/redo enable state owned by the host. Read by the toolbar
-   * and command palette enable predicates when `history` is absent. Deleted
-   * in Task 26 once every host supplies `history`.
-   */
-  canUndo?: boolean;
-  /** Legacy: see {@link canUndo}. */
-  canRedo?: boolean;
-  /**
-   * Legacy: host-owned undo dispatcher invoked by Cmd+Z when `history` is
-   * absent (Task 20 routes through `history.undo()` when supplied). Deleted
-   * in Task 26.
-   */
-  onUndo?: () => void;
-  /** Legacy: see {@link onUndo}. */
-  onRedo?: () => void;
 }
 
 /**
@@ -1865,10 +1849,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeDragStop,
     onViewportChange,
     history,
-    canUndo,
-    canRedo,
-    onUndo,
-    onRedo,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -2305,9 +2285,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // clipboard chord on purpose: history is the single most-used shortcut, so
   // the matching listener fires first. Editable-surface detection mirrors the
   // clipboard handler's path (`isEditableTarget`) so native browser undo keeps
-  // working inside inputs/textareas/InlineEdit. When `history` is supplied the
-  // canvas owns the stack; otherwise we fall back to the legacy
-  // `onUndo`/`onRedo` props (kept until Task 26). If neither is wired the
+  // working inside inputs/textareas/InlineEdit. When `history` is absent the
   // event passes through so the host or browser can handle it.
   useEffect(() => {
     if (!flags.enableKeyboard) return;
@@ -2324,28 +2302,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         } else {
           void history.redo();
         }
-        return;
       }
-      // Legacy path: route to onUndo/onRedo props if supplied (host owns the
-      // stack). Removed in Task 26 once every host supplies `history`.
-      if (histChord === 'undo' && onUndo) {
-        e.preventDefault();
-        e.stopPropagation();
-        onUndo();
-        return;
-      }
-      if (histChord === 'redo' && onRedo) {
-        e.preventDefault();
-        e.stopPropagation();
-        onRedo();
-        return;
-      }
-      // Neither history nor legacy callback supplied — let the event fall
-      // through to the host or browser.
+      // No `history` supplied — let the event fall through to the host or
+      // browser.
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [history, onUndo, onRedo, flags.enableKeyboard]);
+  }, [history, flags.enableKeyboard]);
 
   // US-022: Cmd/Ctrl + C / Cmd/Ctrl + V — copy/paste the current selection.
   // Mirrors the US-017 pattern: pure helper drives the dispatch, the listener
@@ -3981,7 +3944,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // state so the toolbar + command palette can resolve effective values
   // (via `effectiveCanUndo` / `effectiveCanRedo` below) without subscribing
   // to the handle themselves. When `history` is absent the seed values
-  // default to false and the legacy `canUndo` / `canRedo` props win.
+  // default to false and undo is unavailable.
   const [historyState, setHistoryState] = useState<{ canUndo: boolean; canRedo: boolean }>(() => ({
     canUndo: history?.canUndo ?? false,
     canRedo: history?.canRedo ?? false,
@@ -3991,12 +3954,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const off = history.subscribe(setHistoryState);
     return off;
   }, [history]);
-  // Effective enable state: subscribed values win when `history` is supplied,
-  // otherwise fall back to the legacy props. The four legacy
-  // `canUndo`/`canRedo`/`onUndo`/`onRedo` props are removed in Task 26 once
-  // every host supplies `history`.
-  const effectiveCanUndo = history ? historyState.canUndo : (canUndo ?? false);
-  const effectiveCanRedo = history ? historyState.canRedo : (canRedo ?? false);
+  // Effective enable state: subscribed values when `history` is supplied,
+  // false otherwise. Undo is available iff the host wires a HistoryHandle.
+  const effectiveCanUndo = history ? historyState.canUndo : false;
+  const effectiveCanRedo = history ? historyState.canRedo : false;
   // US-014: shared export workflow — fit-view + viewport capture + filename
   // derivation + dynamic-import of jspdf — exposed both through the ShareMenu
   // wired below and the imperative ref handle. The hook owns `lastError`
