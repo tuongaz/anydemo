@@ -14,30 +14,47 @@ type Hsl = readonly [h: number, s: number, l: number];
 
 type ThemeToken =
   | 'slate'
+  | 'gray'
   | 'red'
   | 'orange'
   | 'amber'
+  | 'yellow'
+  | 'lime'
   | 'green'
   | 'teal'
   | 'cyan'
+  | 'sky'
   | 'blue'
   | 'indigo'
   | 'violet'
+  | 'fuchsia'
   | 'pink';
 
 type Theme = { body: Hsl; header: Hsl; border: Hsl; text: 'light' | 'dark' };
 
 const THEMES: Record<ThemeToken, Theme> = {
   slate: { body: [215, 16, 92], header: [215, 20, 45], border: [215, 25, 35], text: 'dark' },
+  // Near-neutral grey (sat ≤9) — distinct from slate's blue-grey (sat 16–25).
+  gray: { body: [220, 8, 92], header: [220, 7, 46], border: [220, 9, 42], text: 'dark' },
   red: { body: [0, 84, 94], header: [0, 70, 50], border: [0, 70, 42], text: 'dark' },
-  orange: { body: [25, 95, 92], header: [25, 85, 50], border: [25, 80, 42], text: 'dark' },
-  amber: { body: [43, 92, 90], header: [38, 85, 50], border: [38, 80, 42], text: 'dark' },
+  // Header darkened L50→46 so white title text keeps a comfortable margin.
+  orange: { body: [25, 95, 92], header: [25, 85, 46], border: [25, 80, 42], text: 'dark' },
+  // amber is too luminous for white text (was ~2:1) → dark title text.
+  amber: { body: [43, 92, 90], header: [38, 85, 50], border: [38, 80, 42], text: 'light' },
+  // yellow + lime fill the amber→green gap; both luminous → dark title text.
+  yellow: { body: [52, 96, 90], header: [50, 95, 52], border: [47, 90, 42], text: 'light' },
+  lime: { body: [90, 70, 90], header: [95, 60, 45], border: [98, 65, 35], text: 'light' },
   green: { body: [142, 50, 92], header: [142, 60, 38], border: [142, 65, 30], text: 'dark' },
   teal: { body: [173, 60, 92], header: [173, 65, 38], border: [173, 70, 30], text: 'dark' },
-  cyan: { body: [189, 70, 92], header: [189, 75, 42], border: [189, 80, 35], text: 'dark' },
+  // Header darkened L42→38 so white text clears ~5:1 (cyan is luminous).
+  cyan: { body: [189, 70, 92], header: [189, 80, 38], border: [189, 80, 35], text: 'dark' },
+  // sky slots between cyan(189) and blue(217).
+  sky: { body: [200, 90, 92], header: [200, 88, 46], border: [202, 90, 39], text: 'dark' },
   blue: { body: [217, 70, 93], header: [217, 80, 52], border: [217, 85, 45], text: 'dark' },
   indigo: { body: [231, 60, 94], header: [231, 70, 58], border: [231, 75, 50], text: 'light' },
   violet: { body: [262, 60, 94], header: [262, 70, 60], border: [262, 75, 52], text: 'light' },
+  // fuchsia fills the violet→pink gap; matches their dark-text treatment.
+  fuchsia: { body: [292, 70, 94], header: [292, 68, 58], border: [292, 75, 49], text: 'light' },
   pink: { body: [330, 70, 94], header: [330, 70, 58], border: [330, 75, 50], text: 'light' },
 };
 

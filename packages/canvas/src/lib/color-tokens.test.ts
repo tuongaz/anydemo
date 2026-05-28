@@ -2,23 +2,28 @@ import { describe, expect, it } from 'bun:test';
 import type { ColorToken } from '../types.ts';
 import { COLOR_TOKENS, colorTokenStyle } from './color-tokens.ts';
 
-// The 14-slot curated palette: 11 themed tokens + the 3 specials. The
-// `gray`/`rose`/`lime`/`purple` entries were dropped — the studio's Zod
-// transform forward-migrates them to the nearest surviving neighbor.
+// The 19-slot curated palette: 16 themed tokens + the 3 specials. There is no
+// color migration — old projects are regenerated (commit 3dfc9f7), so dropped
+// tokens that later return (e.g. `gray`/`lime`) are not remapped anywhere.
 const ALL_TOKENS: ColorToken[] = [
   'none',
   'default',
   'white',
   'slate',
+  'gray',
   'red',
   'orange',
   'amber',
+  'yellow',
+  'lime',
   'green',
   'teal',
   'cyan',
+  'sky',
   'blue',
   'indigo',
   'violet',
+  'fuchsia',
   'pink',
 ];
 
@@ -27,7 +32,7 @@ const ALL_TOKENS: ColorToken[] = [
 // `colorTokenStyle` short-circuits before reading them.
 const PAINTED_TOKENS: ColorToken[] = ALL_TOKENS.filter((t) => t !== 'none');
 
-// The 11 themed tokens — used in palette-math assertions that don't apply to
+// The 16 themed tokens — used in palette-math assertions that don't apply to
 // the theme-backed `default` or the opaque-white `white` token.
 const THEMED_TOKENS: ColorToken[] = PAINTED_TOKENS.filter((t) => t !== 'default' && t !== 'white');
 
@@ -151,25 +156,35 @@ describe('colorTokenStyle', () => {
     it('returns dark text for light-header tokens (text:"light")', () => {
       const darkText = 'hsl(220, 15%, 15%)';
       // `white` is opaque white throughout — treated as a light header so
-      // the title stays readable. The themed tokens with `text:'light'` in
-      // the THEMES table (header L≥58) get dark text too.
-      for (const token of ['white', 'indigo', 'violet', 'pink'] as const) {
+      // the title stays readable. Themed tokens with `text:'light'` get dark
+      // text: the high-L hues (indigo/violet/fuchsia/pink) plus the luminous
+      // yellow-family hues (amber/yellow/lime) that read too light for white.
+      for (const token of [
+        'white',
+        'amber',
+        'yellow',
+        'lime',
+        'indigo',
+        'violet',
+        'fuchsia',
+        'pink',
+      ] as const) {
         expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: darkText });
       }
     });
 
     it('returns light text for darker-header tokens (text:"dark")', () => {
       const lightText = 'hsl(0, 0%, 98%)';
-      // Themed tokens whose header HSL has L < 55 — light text reads on the
-      // saturated mid-dark header bar.
+      // Themed tokens whose saturated mid-dark header reads light text well.
       for (const token of [
         'slate',
+        'gray',
         'red',
         'orange',
-        'amber',
         'green',
         'teal',
         'cyan',
+        'sky',
         'blue',
       ] as const) {
         expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: lightText });

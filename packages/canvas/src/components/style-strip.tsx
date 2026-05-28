@@ -109,7 +109,7 @@ const DEFAULT_CORNER_RADIUS = 8;
 // `shadow` set — keeps the readout meaningful when the popover first opens.
 const DEFAULT_SHADOW = 1;
 
-// Pickable palette: `'none'` + `'white'` + the 11 curated themed tokens.
+// Pickable palette: `'none'` + `'white'` + the 16 curated themed tokens.
 // `'default'` is intentionally omitted — it's a fallback for unset values,
 // not a user-facing choice. `'none'` renders transparent border + fill —
 // hidden from the connector-color picker via `<ColorSwatchGrid allowNone={false}>`.
@@ -117,15 +117,20 @@ const PALETTE_TOKENS: ColorToken[] = [
   'none',
   'white',
   'slate',
+  'gray',
   'red',
   'orange',
   'amber',
+  'yellow',
+  'lime',
   'green',
   'teal',
   'cyan',
+  'sky',
   'blue',
   'indigo',
   'violet',
+  'fuchsia',
   'pink',
 ];
 

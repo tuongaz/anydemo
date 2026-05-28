@@ -352,7 +352,7 @@ describe('ResolvedFlowSchema', () => {
           data: {
             name: 'S',
             stateSource: { kind: 'request' as const },
-            borderColor: 'fuchsia',
+            borderColor: 'magenta',
           },
         },
       ],
@@ -707,7 +707,7 @@ describe('ResolvedFlowSchema', () => {
           data: { name: 'B', stateSource: { kind: 'request' as const } },
         },
       ],
-      connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'fuchsia' }],
+      connectors: [{ id: 'c1', source: 'a', target: 'b', color: 'magenta' }],
     };
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
   });

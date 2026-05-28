@@ -10,15 +10,20 @@ export type ColorToken =
   | 'default'
   | 'white'
   | 'slate'
+  | 'gray'
   | 'red'
   | 'orange'
   | 'amber'
+  | 'yellow'
+  | 'lime'
   | 'green'
   | 'teal'
   | 'cyan'
+  | 'sky'
   | 'blue'
   | 'indigo'
   | 'violet'
+  | 'fuchsia'
   | 'pink';
 
 export interface NodeVisual {
