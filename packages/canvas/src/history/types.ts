@@ -47,7 +47,15 @@ export interface HistoryHandle {
   redo(): Promise<void>;
   clear(): void;
   markExternalChange(): void;
-  batch<T>(name: string, fn: () => Promise<T>): Promise<T>;
+  /**
+   * Bundle a multi-step gesture into a single undo entry. `opts.coalesceKey`
+   * is forwarded to `applyPush` so per-tick gestures (e.g. multi-select
+   * resize drag) can merge consecutive batch entries within the 500ms
+   * window — the merged entry's `undo` is the OLDEST batch's inverses
+   * (oldest-wins, same as single-method coalesce), and its `do` is the
+   * NEWEST batch's forward replay (latest tick).
+   */
+  batch<T>(name: string, fn: () => Promise<T>, opts?: { coalesceKey?: string }): Promise<T>;
   /**
    * Subscribe to `{canUndo, canRedo}` snapshots. The callback is invoked
    * ONCE IMMEDIATELY with the current state so consumers can populate

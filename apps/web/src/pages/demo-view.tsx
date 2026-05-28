@@ -599,15 +599,29 @@ export function DemoView({
       setEditError(null);
       markMutation();
       // Wrap the fan-out in a batch so a partial failure rolls back via the
-      // batch helper. The wrapper's per-id updateNode coalesce key
-      // (`update:<id>:<sortedKeys>`) covers per-tick burst behaviour for
-      // each id; the batch wraps every leg of one tick into a single entry.
+      // batch helper. Pass a coalesceKey keyed on the SORTED set of node
+      // ids: a multi-select resize drag fires this callback per pointer
+      // tick (potentially dozens of times in one gesture). Without
+      // coalesce, every tick becomes its own batch entry and Cmd+Z only
+      // reverts the LAST tick. With coalesce, ticks of the same selection
+      // merge into ONE entry within the 500ms window — the merged entry's
+      // `undo` is the OLDEST batch's inverses (pre-drag sizes), so a
+      // single Cmd+Z reverts the whole drag.
+      const sortedIds = targets
+        .map((t) => t.id)
+        .slice()
+        .sort()
+        .join(',');
       history
-        .batch('multi-resize', async () => {
-          for (const t of targets) {
-            await adapter.updateNode(t.id, t.next);
-          }
-        })
+        .batch(
+          'multi-resize',
+          async () => {
+            for (const t of targets) {
+              await adapter.updateNode(t.id, t.next);
+            }
+          },
+          { coalesceKey: `multi:resize:${sortedIds}` },
+        )
         .catch((err) => {
           for (const t of targets) dropNodeOverride(t.id);
           setEditError(err instanceof Error ? err.message : String(err));

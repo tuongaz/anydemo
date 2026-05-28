@@ -1208,6 +1208,126 @@ describe('wrapAdapterWithHistory', () => {
     expect(snaps).toEqual([{ canUndo: false, canRedo: false }]);
   });
 
+  // --------------------------------------------------------------------
+  // Batch coalesceKey — per-tick gestures like multi-select resize need
+  // their batch entries to merge inside the 500ms window so Cmd+Z reverts
+  // the whole drag, not just the last tick.
+  // --------------------------------------------------------------------
+
+  it('batch with coalesceKey merges into the prior batch within the window', async () => {
+    const inner = fakeAdapter();
+    // Two batches back-to-back with the SAME coalesceKey. Each batch makes
+    // one call so the per-tick inverses are distinguishable: the OLDER
+    // batch's undo runs `pos:n-1:0,0` (revert to the pre-burst position);
+    // the NEWER batch's `do` runs `pos:n-1:7,7` (the latest tick).
+    let positions: { x: number; y: number } = { x: 0, y: 0 };
+    const getState: GetFlowState = () => ({
+      nodes: [
+        {
+          id: 'n-1',
+          type: 'rectangle' as const,
+          position: positions,
+          data: {},
+        } as unknown as FlowNode,
+      ],
+      connectors: [],
+    });
+    const { adapter, history } = wrapAdapterWithHistory(inner, getState);
+
+    // Tick 1: drag from (0,0) to (3,3). After the call the live position
+    // moves to (3,3) so the SECOND batch snapshots THIS as its `before`.
+    await history.batch(
+      'multi-resize',
+      async () => {
+        await adapter.updateNodePosition('n-1', { x: 3, y: 3 });
+      },
+      { coalesceKey: 'multi:resize:n-1' },
+    );
+    positions = { x: 3, y: 3 };
+
+    // Tick 2: drag from (3,3) to (7,7). Same key → must merge with tick 1.
+    await history.batch(
+      'multi-resize',
+      async () => {
+        await adapter.updateNodePosition('n-1', { x: 7, y: 7 });
+      },
+      { coalesceKey: 'multi:resize:n-1' },
+    );
+
+    // ONE merged entry on the stack.
+    expect(history.canUndo).toBe(true);
+    inner.calls.length = 0;
+    await history.undo();
+    expect(history.canUndo).toBe(false);
+    // Oldest-undo-wins: the merged entry's `undo` is the OLDER batch's
+    // inverses, which revert to the pre-burst position (0,0) — NOT the
+    // tick-2 starting position (3,3). This is the whole point of
+    // forwarding the coalesceKey through.
+    expect(inner.calls).toEqual(['pos:n-1:0,0']);
+
+    // Redo: the merged entry's `do` is the NEWER batch's forward replay
+    // — the LATEST tick (7,7), not every intermediate tick.
+    inner.calls.length = 0;
+    await history.redo();
+    expect(inner.calls).toEqual(['pos:n-1:7,7']);
+  });
+
+  it('batch with coalesceKey does NOT merge across different keys', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+
+    // Two batches with DIFFERENT coalesceKeys → two distinct entries on
+    // the stack (different selections, different gestures).
+    await history.batch(
+      'multi-resize',
+      async () => {
+        await adapter.updateNodePosition('n-1', { x: 1, y: 1 });
+      },
+      { coalesceKey: 'multi:resize:n-1' },
+    );
+    await history.batch(
+      'multi-resize',
+      async () => {
+        await adapter.updateNodePosition('n-1', { x: 2, y: 2 });
+      },
+      { coalesceKey: 'multi:resize:n-2' },
+    );
+
+    // Two entries: two undos required to clear the stack.
+    expect(history.canUndo).toBe(true);
+    await history.undo();
+    expect(history.canUndo).toBe(true);
+    await history.undo();
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('batch with no coalesceKey defaults to no-merge', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+
+    // Two batches with NO coalesceKey (pre-migration behavior) → two
+    // distinct entries on the stack, even back-to-back inside the
+    // would-be window. Preserves the 81 existing batch tests' shape.
+    await history.batch('m', async () => {
+      await adapter.updateNodePosition('n-1', { x: 1, y: 1 });
+    });
+    await history.batch('m', async () => {
+      await adapter.updateNodePosition('n-1', { x: 2, y: 2 });
+    });
+
+    expect(history.canUndo).toBe(true);
+    await history.undo();
+    expect(history.canUndo).toBe(true);
+    await history.undo();
+    expect(history.canUndo).toBe(false);
+  });
+
   it('batch synchronously truncates the redo branch at start', async () => {
     const inner = fakeAdapter();
     const { adapter, history } = wrapAdapterWithHistory(

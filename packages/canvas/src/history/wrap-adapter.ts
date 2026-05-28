@@ -543,8 +543,10 @@ export function wrapAdapterWithHistory(
      * Behavior:
      * - Nested `batch()` calls FLATTEN: if a batch is already active the
      *   nested invocation just awaits `fn()` directly so its inner adapter
-     *   calls accumulate into the outer batch's ops list. Hosts can wrap a
-     *   canvas-internal batched path safely.
+     *   calls accumulate into the outer batch's ops list. The nested call's
+     *   `opts.coalesceKey` is IGNORED — only the outer batch's key (if any)
+     *   reaches `applyPush`. Hosts can wrap a canvas-internal batched path
+     *   safely.
      * - On open (non-nested): synchronously truncate the redo branch and
      *   stamp `lastMutationAt` (mirrors `beginIntercept` so a never-
      *   resolving batch still satisfies the design §5 truncate-on-call
@@ -552,15 +554,23 @@ export function wrapAdapterWithHistory(
      *   divert their `{redo, undo}` into the local ops list.
      * - On full success: push ONE combined entry. `entry.do` replays every
      *   collected forward op in original order. `entry.undo` runs every
-     *   collected inverse in REVERSE order. No coalesce key, no
-     *   `beforeFields` — batches are atomic gestures, not coalesce
-     *   candidates.
+     *   collected inverse in REVERSE order. When `opts.coalesceKey` is
+     *   supplied, the entry carries the key so `applyPush` can merge with
+     *   a prior batch within the 500ms window — merged-entry semantics
+     *   match single-method coalesce: oldest `undo` wins (revert covers
+     *   the whole burst back to its pre-gesture state), newest `do` wins
+     *   (a redo replays the LATEST tick only, not every intermediate
+     *   tick). No `beforeFields` — batches don't carry a field snapshot.
      * - On any rejection mid-batch: run the already-collected inverses in
      *   REVERSE order, swallowing per-leg failures via console.warn the
      *   same way deleteNode's cascade restore does. Push NOTHING. Re-throw
      *   the original error so callers can roll back optimistic UI.
      */
-    batch: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+    batch: async <T>(
+      name: string,
+      fn: () => Promise<T>,
+      opts?: { coalesceKey?: string },
+    ): Promise<T> => {
       if (batchCtx) {
         // Nested → flatten. The outer batch's ctx is still installed; the
         // inner `fn()`'s adapter calls will land in the outer ops list.
@@ -598,6 +608,14 @@ export function wrapAdapterWithHistory(
                 await ops[i]!.undo();
               }
             },
+            // Forward the host-supplied key so `applyPush` can merge
+            // consecutive same-key batches within the 500ms window. The
+            // merged entry keeps the OLDER batch's `undo` (oldest-wins,
+            // covers the whole burst back to its pre-gesture state) and
+            // replaces `do` with the NEWER batch's forward replay (latest
+            // tick). When `coalesceKey` is undefined the entry behaves
+            // exactly as before — no merge.
+            coalesceKey: opts?.coalesceKey,
             capturedAt: Date.now(),
           });
           notify();
