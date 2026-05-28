@@ -36,7 +36,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
   const trimmedPath = path.trim();
   const trimmedName = name.trim();
   const trimmedDescription = description.trim();
-  const canSubmit = trimmedPath.length > 0 && trimmedName.length > 0 && !submitting;
+  const canSubmit = trimmedName.length > 0 && !submitting;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,8 +45,8 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
     setError(null);
     try {
       const result = await createProject({
-        path: trimmedPath,
         name: trimmedName,
+        ...(trimmedPath.length > 0 ? { path: trimmedPath } : {}),
         ...(trimmedDescription.length > 0 ? { description: trimmedDescription } : {}),
       });
       onCreated(result);
@@ -65,7 +65,7 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
         onOpenAutoFocus={(e) => {
           e.preventDefault();
           const input = document.querySelector<HTMLInputElement>(
-            '[data-testid="create-project-path-input"]',
+            '[data-testid="create-project-name-input"]',
           );
           input?.focus();
         }}
@@ -73,24 +73,11 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
         <DialogHeader>
           <DialogTitle>Create new project</DialogTitle>
           <DialogDescription>
-            Scaffold a new SeeFlow project at the path you provide.
+            Scaffold a new SeeFlow project. It's created in ~/.seeflow/projects/ unless you give a
+            path.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <label className="flex flex-col gap-1.5 text-sm">
-            <span className="font-medium">Project path</span>
-            <input
-              type="text"
-              required
-              autoComplete="off"
-              spellCheck={false}
-              placeholder="/absolute/path/to/my-project"
-              value={path}
-              onChange={(e) => setPath(e.target.value)}
-              data-testid="create-project-path-input"
-              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-            />
-          </label>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">Project name</span>
             <input
@@ -103,6 +90,24 @@ export function CreateProjectDialog({ open, onOpenChange, onCreated }: CreatePro
               data-testid="create-project-name-input"
               className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
             />
+          </label>
+          <label className="flex flex-col gap-1.5 text-sm">
+            <span className="font-medium">
+              Project path <span className="text-muted-foreground">(optional)</span>
+            </span>
+            <input
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="/absolute/path/to/my-project"
+              value={path}
+              onChange={(e) => setPath(e.target.value)}
+              data-testid="create-project-path-input"
+              className="rounded-md border bg-background px-3 py-2 text-sm outline-hidden ring-offset-background focus:border-ring focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            <span className="text-xs text-muted-foreground">
+              Leave blank to create it in ~/.seeflow/projects/
+            </span>
           </label>
           <label className="flex flex-col gap-1.5 text-sm">
             <span className="font-medium">

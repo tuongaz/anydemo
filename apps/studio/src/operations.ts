@@ -23,6 +23,7 @@ import {
   removeNodeDir,
   writeNodeFile,
 } from './node-files.ts';
+import { seeflowHome } from './paths.ts';
 import { readProjectManifest, scanProject } from './project-scanner.ts';
 import { type FlowEntry, type Registry, slugify } from './registry.ts';
 import {
@@ -53,7 +54,9 @@ export const RegisterBodySchema = z.object({
 export type RegisterBody = z.infer<typeof RegisterBodySchema>;
 
 export const CreateProjectBodySchema = z.object({
-  path: z.string().min(1),
+  // Optional: when omitted the project is scaffolded under
+  // <seeflowHome>/projects/<slug-of-name>. See createProjectImpl.
+  path: z.string().min(1).optional(),
   name: z.string().min(1),
   description: z.string().min(1).optional(),
 });
@@ -1239,7 +1242,15 @@ export async function createProjectImpl(
   body: CreateProjectBody,
 ): Promise<CreateProjectOutcome> {
   const { registry, watcher } = deps;
-  const { path: folderPath, name, description } = body;
+  const { name, description } = body;
+
+  // Path is optional: when the caller omits it, scaffold under the studio's
+  // home at <seeflowHome>/projects/<slug-of-name> so projects created from the
+  // UI without a path land in a predictable, writable location.
+  const folderPath =
+    body.path && body.path.trim().length > 0
+      ? body.path
+      : join(seeflowHome(), 'projects', slugify(name));
 
   // Manifest-driven layout (US-018): a project is the seeflow.json manifest
   // plus one flow folder under flows/<id>/. The default flow id for a

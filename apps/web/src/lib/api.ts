@@ -136,7 +136,8 @@ export interface PlayResult {
 }
 
 export interface CreateProjectBody {
-  path: string;
+  /** Optional: when omitted the studio scaffolds under ~/.seeflow/projects/<slug>. */
+  path?: string;
   name: string;
   description?: string;
 }

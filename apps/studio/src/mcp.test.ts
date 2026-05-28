@@ -152,7 +152,7 @@ describe('POST /mcp tools/list', () => {
     const cpProps = createProject?.inputSchema?.properties as Record<string, unknown>;
     expect(Object.keys(cpProps).sort()).toEqual(['description', 'name', 'path']);
     const cpRequired = createProject?.inputSchema?.required as string[];
-    expect(cpRequired.sort()).toEqual(['name', 'path']);
+    expect(cpRequired.sort()).toEqual(['name']);
   });
 });
 
@@ -673,6 +673,31 @@ describe('seeflow_create_project', () => {
     expect(existsSync(join(projectPath, '.tmp'))).toBe(true);
     expect(readFileSync(join(projectPath, '.tmp', '.gitignore'), 'utf8')).toBe('*\n!.gitignore\n');
     expect(registry.list()).toHaveLength(1);
+  });
+
+  it('scaffolds under <seeflowHome>/projects/<slug> when no path is given', async () => {
+    const workspace = tmpEmptyFolder();
+    const prevWorkspace = process.env.SEEFLOW_WORKSPACE;
+    process.env.SEEFLOW_WORKSPACE = workspace;
+    try {
+      const { app, registry } = buildApp();
+      const envelope = await callTool(app, 'seeflow_create_project', {
+        name: 'No Path Project',
+      });
+      const body = expectOk(envelope) as { id: string; slug: string };
+      expect(body.slug).toBe('no-path-project/main');
+      const expectedDir = join(workspace, '.seeflow', 'projects', 'no-path-project');
+      expect(existsSync(join(expectedDir, 'seeflow.json'))).toBe(true);
+      expect(existsSync(join(expectedDir, 'flows', 'main', 'flow.json'))).toBe(true);
+      expect(registry.list()).toHaveLength(1);
+    } finally {
+      if (prevWorkspace === undefined) {
+        // biome-ignore lint/performance/noDelete: assigning undefined would store the string "undefined"; we need the var truly unset.
+        delete process.env.SEEFLOW_WORKSPACE;
+      } else {
+        process.env.SEEFLOW_WORKSPACE = prevWorkspace;
+      }
+    }
   });
 
   it('errors when a project already exists at <path>/seeflow.json', async () => {

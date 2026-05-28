@@ -4417,11 +4417,25 @@ describe('POST /api/projects', () => {
     expect(registry.list()).toHaveLength(0);
   });
 
-  it('rejects missing path with 400', async () => {
-    const { app, registry } = buildApp();
-    const res = await post(app, '/api/projects', { name: 'No Path' });
-    expect(res.status).toBe(400);
-    expect(registry.list()).toHaveLength(0);
+  it('defaults to <seeflowHome>/projects/<slug> when path is omitted', async () => {
+    const workspace = mkdtempSync(join(tmpdir(), 'seeflow-create-nopath-'));
+    const prevWorkspace = process.env.SEEFLOW_WORKSPACE;
+    process.env.SEEFLOW_WORKSPACE = workspace;
+    try {
+      const { app, registry } = buildApp();
+      const res = await post(app, '/api/projects', { name: 'No Path' });
+      expect(res.status).toBe(200);
+      const expectedDir = join(workspace, '.seeflow', 'projects', 'no-path');
+      expect(existsSync(join(expectedDir, 'seeflow.json'))).toBe(true);
+      expect(registry.list()).toHaveLength(1);
+    } finally {
+      if (prevWorkspace === undefined) {
+        // biome-ignore lint/performance/noDelete: assigning undefined would store the string "undefined"; we need the var truly unset.
+        delete process.env.SEEFLOW_WORKSPACE;
+      } else {
+        process.env.SEEFLOW_WORKSPACE = prevWorkspace;
+      }
+    }
   });
 });
 
