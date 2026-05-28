@@ -47,6 +47,7 @@ import {
   rememberNodeStyle,
   resolveClipboardChord,
   resolveToolShortcut,
+  wrapAdapterWithHistory,
 } from '@seeflow/canvas';
 import type { ReactFlowInstance } from '@xyflow/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -368,7 +369,31 @@ export function DemoView({
   // through DemoViewProps. Bound to one (project, flow) for its lifetime;
   // rebuilt on flow switch. Every REST mutation in this file (and the prop
   // threaded to <SeeflowCanvas>) now routes through this adapter.
-  const adapter = useMemo(() => createRestAdapter({ baseUrl: '', project, flow }), [project, flow]);
+  const rawAdapter = useMemo(
+    () => createRestAdapter({ baseUrl: '', project, flow }),
+    [project, flow],
+  );
+  // Live snapshot of the flow state the wrapper reads when an intercepted
+  // mutation needs a `before` value. We use a ref (not the values themselves)
+  // so the wrapper identity stays stable across renders — without this every
+  // node-state change would invalidate the memo and reset the history stack.
+  const flowStateRef = useRef<{ nodes: readonly FlowNode[]; connectors: readonly Connector[] }>({
+    nodes: [],
+    connectors: [],
+  });
+  useEffect(() => {
+    flowStateRef.current = {
+      nodes: demoNodes ?? [],
+      connectors: demoConnectors ?? [],
+    };
+  }, [demoNodes, demoConnectors]);
+  // One wrapper per flow id — the wrapper's internal history clears naturally
+  // when the wrapper is discarded on flow switch.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: flowId intentionally re-creates the wrapper per flow
+  const { adapter, history } = useMemo(
+    () => wrapAdapterWithHistory(rawAdapter, () => flowStateRef.current),
+    [rawAdapter, flowId],
+  );
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   // US-025: flow switcher mutation dialogs. Open state lives in this page so
   // the popover (which closes on action) can hand off without keeping itself
@@ -1250,41 +1275,10 @@ export function DemoView({
     return () => window.removeEventListener('keydown', handler);
   }, [onDeleteSelection]);
 
-  // Cmd/Ctrl+Z (undo) and Cmd/Ctrl+Shift+Z (redo). Skipped while focus is in
-  // any editable element so native browser undo handles input/textarea/
-  // contentEditable. We always preventDefault on the chord — even when the
-  // stack is empty — so the browser doesn't navigate back on Cmd+Z with no
-  // selected text.
-  const { undo: undoFn, redo: redoFn, canUndo, canRedo } = undoStack;
-  useEffect(() => {
-    const handler = async (e: KeyboardEvent) => {
-      if (!(e.metaKey || e.ctrlKey)) return;
-      if (e.key.toLowerCase() !== 'z') return;
-      if (isEditableElement(document.activeElement)) return;
-      e.preventDefault();
-      if (e.shiftKey) {
-        if (!canRedo) return;
-        try {
-          const result = await redoFn();
-          if (result?.entry) await result.entry.do();
-        } catch (err) {
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error('redo failed', err);
-        }
-        return;
-      }
-      if (!canUndo) return;
-      try {
-        const result = await undoFn();
-        if (result?.entry) await result.entry.undo();
-      } catch (err) {
-        setEditError(err instanceof Error ? err.message : String(err));
-        console.error('undo failed', err);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [undoFn, redoFn, canUndo, canRedo]);
+  // Cmd/Ctrl+Z (undo) and Cmd/Ctrl+Shift+Z (redo) are now owned by
+  // <SeeflowCanvas> via the `history` prop (Task 20) — keeping a host-side
+  // handler here would double-fire on every chord. The legacy host branch
+  // was deleted as part of Task 21.
 
   // Three-field consolidation: name (canvas header + sidebar header),
   // description (canvas body + sidebar light-bold), detail (sidebar long-form
@@ -1973,6 +1967,21 @@ export function DemoView({
   // demo-id change via the same effect that clears selection state.
   const clipboardRef = useRef<{ nodes: FlowNode[]; connectors: Connector[] } | null>(null);
   const [hasClipboard, setHasClipboard] = useState(false);
+  // Mirror the history wrapper's {canUndo, canRedo} into React state so the
+  // command palette's enable predicates re-render when entries are pushed /
+  // popped. Subscribe once per history identity — the wrapper is rebuilt on
+  // flow switch (see the useMemo at the top of the component) so the
+  // subscription re-binds automatically. Appended at the END per the
+  // CLAUDE.md append-only useState rule for components with hook-shim tests
+  // (defensive: the rule also applies to siblings that may grow shims later).
+  const [historyState, setHistoryState] = useState<{ canUndo: boolean; canRedo: boolean }>(() => ({
+    canUndo: history.canUndo,
+    canRedo: history.canRedo,
+  }));
+  useEffect(() => {
+    const off = history.subscribe(setHistoryState);
+    return off;
+  }, [history]);
 
   const onCopyNodes = useCallback(
     (nodeIds: string[]) => {
@@ -2482,29 +2491,19 @@ export function DemoView({
           setCanvasMode({ kind: 'draw', shape: 'database' });
           return;
         case 'edit.undo': {
-          if (!canUndo) return;
-          (async () => {
-            try {
-              const result = await undoFn();
-              if (result?.entry) await result.entry.undo();
-            } catch (err) {
-              setEditError(err instanceof Error ? err.message : String(err));
-              console.error('undo failed', err);
-            }
-          })();
+          if (!history.canUndo) return;
+          history.undo().catch((err) => {
+            setEditError(err instanceof Error ? err.message : String(err));
+            console.error('undo failed', err);
+          });
           return;
         }
         case 'edit.redo': {
-          if (!canRedo) return;
-          (async () => {
-            try {
-              const result = await redoFn();
-              if (result?.entry) await result.entry.do();
-            } catch (err) {
-              setEditError(err instanceof Error ? err.message : String(err));
-              console.error('redo failed', err);
-            }
-          })();
+          if (!history.canRedo) return;
+          history.redo().catch((err) => {
+            setEditError(err instanceof Error ? err.message : String(err));
+            console.error('redo failed', err);
+          });
           return;
         }
         case 'edit.copy': {
@@ -2598,18 +2597,7 @@ export function DemoView({
         }
       }
     },
-    [
-      canUndo,
-      canRedo,
-      undoFn,
-      redoFn,
-      onCopyNodes,
-      onPasteNodes,
-      onDeleteSelection,
-      demoNodes,
-      demoConnectors,
-      onTidy,
-    ],
+    [history, onCopyNodes, onPasteNodes, onDeleteSelection, demoNodes, demoConnectors, onTidy],
   );
 
   // US-006: Cmd/Ctrl+P opens the command palette. preventDefault fires the
@@ -3028,6 +3016,7 @@ export function DemoView({
           ref={canvasRef}
           mode="edit"
           adapter={adapter}
+          history={history}
           // The FlowSwitcher rides inside the canvas's top-right Panel,
           // sitting to the LEFT of the ShareMenu in the same `sf:flex
           // sf:items-center sf:gap-1` row. Dialog siblings remain in
@@ -3166,8 +3155,8 @@ export function DemoView({
         runCommand={runCommand}
         ctx={{
           hasSelection: selectedIds.length > 0 || selectedConnectorIds.length > 0,
-          canUndo,
-          canRedo,
+          canUndo: historyState.canUndo,
+          canRedo: historyState.canRedo,
           hasClipboard,
           // Export commands need a backing demo. flowId is non-null whenever
           // the canvas can render.
