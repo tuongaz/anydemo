@@ -45,22 +45,26 @@ const baseMeta = {
   ],
 };
 
-const emptyGraph = (slug: string, name: string) => ({
+// The bundle builder reads the merged detail endpoint
+// (`/api/projects/:project/flows/:flow`) — NOT `/graph` — so the bundled
+// flow.json carries node positions + visual style from style.json. The
+// detail response wraps the resolved flow under a `flow` key.
+const emptyDetail = (slug: string, name: string) => ({
   id: `entry-${slug}`,
   slug: `demo/${slug}`,
   name,
-  nodes: [],
-  connectors: [],
+  filePath: `/repo/${slug}/flow.json`,
+  flow: { version: 2, name, nodes: [], connectors: [] },
 });
 
 describe('buildProjectBundle', () => {
   it('emits seeflow.json + per-flow flow.json with the right keys', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: emptyGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: emptyGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: emptyDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: emptyDetail('retry', 'Retry') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
@@ -80,9 +84,9 @@ describe('buildProjectBundle', () => {
   it('seeflow.json mirrors the manifest shape (id from flowSlug, optional icon, top-level description)', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url.endsWith('/graph')) {
-        const slug = url.includes('/main/') ? 'main' : 'retry';
-        return { status: 200, body: emptyGraph(slug, slug === 'main' ? 'Main' : 'Retry') };
+      if (url.startsWith('/api/projects/demo/flows/')) {
+        const slug = url.includes('/main') ? 'main' : 'retry';
+        return { status: 200, body: emptyDetail(slug, slug === 'main' ? 'Main' : 'Retry') };
       }
       throw new Error(`Unexpected URL: ${url}`);
     });
@@ -108,20 +112,25 @@ describe('buildProjectBundle', () => {
     });
   });
 
-  it('per-flow flow.json wraps the /graph response in a version-2 envelope', async () => {
-    const graph = {
+  it('per-flow flow.json wraps the merged flow (with positions) in a version-2 envelope', async () => {
+    const detail = {
       id: 'entry-main',
       slug: 'demo/main',
       name: 'Main',
-      description: 'main flow',
-      nodes: [{ id: 'n1', type: 'rect', position: { x: 0, y: 0 }, data: {} }],
-      connectors: [{ id: 'c1', source: 'n1', target: 'n1' }],
+      filePath: '/repo/main/flow.json',
+      flow: {
+        version: 2 as const,
+        name: 'Main',
+        description: 'main flow',
+        nodes: [{ id: 'n1', type: 'rect', position: { x: 12, y: 34 }, data: {} }],
+        connectors: [{ id: 'c1', source: 'n1', target: 'n1' }],
+      },
     };
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/main/graph') return { status: 200, body: graph };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: emptyGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main') return { status: 200, body: detail };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: emptyDetail('retry', 'Retry') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
@@ -138,26 +147,34 @@ describe('buildProjectBundle', () => {
       version: 2,
       name: 'Main',
       description: 'main flow',
-      nodes: graph.nodes,
-      connectors: graph.connectors,
+      nodes: detail.flow.nodes,
+      connectors: detail.flow.connectors,
     });
+    // Positions must survive into the bundle — their absence is what made the
+    // cloud viewer crash on `node.position.x`.
+    expect(envelope.nodes[0].position).toEqual({ x: 12, y: 34 });
   });
 
   it('bundles type:image asset bytes under flows/<flow>/files/<path>', async () => {
     const pngBytes = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
-    const graph = {
+    const detail = {
       id: 'entry-main',
       slug: 'demo/main',
       name: 'Main',
-      nodes: [
-        { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'assets/img.png' } },
-      ],
-      connectors: [],
+      filePath: '/repo/main/flow.json',
+      flow: {
+        version: 2 as const,
+        name: 'Main',
+        nodes: [
+          { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'assets/img.png' } },
+        ],
+        connectors: [],
+      },
     };
     installMock((url) => {
       if (url === '/api/projects/demo')
         return { status: 200, body: { ...baseMeta, flows: [baseMeta.flows[0]] } };
-      if (url === '/api/projects/demo/flows/main/graph') return { status: 200, body: graph };
+      if (url === '/api/projects/demo/flows/main') return { status: 200, body: detail };
       if (url === '/api/projects/demo/files/assets/img.png')
         return { status: 200, binary: pngBytes };
       throw new Error(`Unexpected URL: ${url}`);
@@ -170,21 +187,26 @@ describe('buildProjectBundle', () => {
   });
 
   it('deduplicates the same asset path across multiple image nodes', async () => {
-    const graph = {
+    const detail = {
       id: 'entry-main',
       slug: 'demo/main',
       name: 'Main',
-      nodes: [
-        { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'shared.png' } },
-        { id: 'n2', type: 'image', position: { x: 50, y: 0 }, data: { path: 'shared.png' } },
-      ],
-      connectors: [],
+      filePath: '/repo/main/flow.json',
+      flow: {
+        version: 2 as const,
+        name: 'Main',
+        nodes: [
+          { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'shared.png' } },
+          { id: 'n2', type: 'image', position: { x: 50, y: 0 }, data: { path: 'shared.png' } },
+        ],
+        connectors: [],
+      },
     };
     const fileRequests: string[] = [];
     installMock((url) => {
       if (url === '/api/projects/demo')
         return { status: 200, body: { ...baseMeta, flows: [baseMeta.flows[0]] } };
-      if (url === '/api/projects/demo/flows/main/graph') return { status: 200, body: graph };
+      if (url === '/api/projects/demo/flows/main') return { status: 200, body: detail };
       if (url === '/api/projects/demo/files/shared.png') {
         fileRequests.push(url);
         return { status: 200, binary: new Uint8Array([1]) };
@@ -197,17 +219,24 @@ describe('buildProjectBundle', () => {
   });
 
   it('skips assets that return a non-ok status', async () => {
-    const graph = {
+    const detail = {
       id: 'entry-main',
       slug: 'demo/main',
       name: 'Main',
-      nodes: [{ id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'missing.png' } }],
-      connectors: [],
+      filePath: '/repo/main/flow.json',
+      flow: {
+        version: 2 as const,
+        name: 'Main',
+        nodes: [
+          { id: 'n1', type: 'image', position: { x: 0, y: 0 }, data: { path: 'missing.png' } },
+        ],
+        connectors: [],
+      },
     };
     installMock((url) => {
       if (url === '/api/projects/demo')
         return { status: 200, body: { ...baseMeta, flows: [baseMeta.flows[0]] } };
-      if (url === '/api/projects/demo/flows/main/graph') return { status: 200, body: graph };
+      if (url === '/api/projects/demo/flows/main') return { status: 200, body: detail };
       if (url === '/api/projects/demo/files/missing.png')
         return { status: 404, body: { error: 'not found' } };
       throw new Error(`Unexpected URL: ${url}`);
@@ -235,14 +264,14 @@ describe('buildProjectBundle', () => {
             defaultFlow: 'a/b',
           },
         };
-      if (url === '/api/projects/my%20proj/flows/a%2Fb/graph')
-        return { status: 200, body: emptyGraph('a/b', 'A') };
+      if (url === '/api/projects/my%20proj/flows/a%2Fb')
+        return { status: 200, body: emptyDetail('a/b', 'A') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
     await buildProjectBundle({ project: 'my proj', flows: [{ flowSlug: 'a/b' }] });
     expect(captured).toContain('/api/projects/my%20proj');
-    expect(captured).toContain('/api/projects/my%20proj/flows/a%2Fb/graph');
+    expect(captured).toContain('/api/projects/my%20proj/flows/a%2Fb');
   });
 
   it('throws when the project metadata fetch returns a non-ok status', async () => {
@@ -257,24 +286,23 @@ describe('buildProjectBundle', () => {
     ).rejects.toThrow('GET /api/projects/nope → 404');
   });
 
-  it('throws when a flow graph fetch returns a non-ok status', async () => {
+  it('throws when a flow detail fetch returns a non-ok status', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 500, body: { error: 'boom' } };
+      if (url === '/api/projects/demo/flows/main') return { status: 500, body: { error: 'boom' } };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
     await expect(
       buildProjectBundle({ project: 'demo', flows: [{ flowSlug: 'main' }] }),
-    ).rejects.toThrow('/api/projects/demo/flows/main/graph → 500');
+    ).rejects.toThrow('/api/projects/demo/flows/main → 500');
   });
 
   it('keeps meta.defaultFlow when the subset still includes it', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: emptyGraph('main', 'Main') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: emptyDetail('main', 'Main') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
@@ -292,8 +320,8 @@ describe('buildProjectBundle', () => {
   it('falls back to the first selected slug when meta.defaultFlow is excluded from the subset', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: emptyGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: emptyDetail('retry', 'Retry') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
@@ -308,29 +336,29 @@ describe('buildProjectBundle', () => {
     expect(manifest.flows).toEqual([{ id: 'retry', name: 'Retry', icon: 'refresh-ccw' }]);
   });
 
-  it('only fetches graphs + assets for flows in the subset', async () => {
+  it('only fetches flows + assets for flows in the subset', async () => {
     const requested: string[] = [];
     installMock((url) => {
       requested.push(url);
       if (url === '/api/projects/demo') return { status: 200, body: baseMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: emptyGraph('main', 'Main') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: emptyDetail('main', 'Main') };
       throw new Error(`Unexpected URL: ${url}`);
     });
 
     await buildProjectBundle({ project: 'demo', flows: [{ flowSlug: 'main' }] });
 
-    expect(requested).toContain('/api/projects/demo/flows/main/graph');
-    expect(requested).not.toContain('/api/projects/demo/flows/retry/graph');
+    expect(requested).toContain('/api/projects/demo/flows/main');
+    expect(requested).not.toContain('/api/projects/demo/flows/retry');
   });
 
   it('omits manifest.description when the project has none', async () => {
     const { description: _ignored, ...metaNoDescription } = baseMeta;
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: metaNoDescription };
-      if (url.endsWith('/graph')) {
-        const slug = url.includes('/main/') ? 'main' : 'retry';
-        return { status: 200, body: emptyGraph(slug, slug === 'main' ? 'Main' : 'Retry') };
+      if (url.startsWith('/api/projects/demo/flows/')) {
+        const slug = url.includes('/main') ? 'main' : 'retry';
+        return { status: 200, body: emptyDetail(slug, slug === 'main' ? 'Main' : 'Retry') };
       }
       throw new Error(`Unexpected URL: ${url}`);
     });

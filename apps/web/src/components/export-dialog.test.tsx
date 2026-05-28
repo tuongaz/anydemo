@@ -11,10 +11,14 @@ let projectFlowsResult: {
   error: string | null;
 } = { flows: null, loading: false, error: null };
 
+let refreshCalls = 0;
+
 mock.module('@/hooks/use-project-flows', () => ({
   useProjectFlows: () => ({
     ...projectFlowsResult,
-    refresh: () => {},
+    refresh: () => {
+      refreshCalls++;
+    },
     createFlow: () => Promise.reject(new Error('not implemented in test')),
     renameFlow: () => Promise.reject(new Error('not implemented in test')),
     deleteFlow: () => Promise.reject(new Error('not implemented in test')),
@@ -182,6 +186,7 @@ const SLOT_SELECTED_FLOWS = 5;
 beforeEach(() => {
   projectFlowsResult = { flows: null, loading: false, error: null };
   cloudCalls.length = 0;
+  refreshCalls = 0;
 });
 
 afterEach(() => {
@@ -406,5 +411,14 @@ describe('ExportDialog — flow picker', () => {
     expect(findByTestId(tree, 'export-flows-error')).not.toBeNull();
     const submit = findByTestId(tree, 'export-submit');
     expect((submit?.props as { disabled: boolean }).disabled).toBe(true);
+  });
+
+  it('re-fetches the flow list when the error-state Retry button is clicked', () => {
+    projectFlowsResult = { flows: null, loading: false, error: 'boom' };
+    const tree = render(['a@b.com', 'Demo']);
+    const retry = findByTestId(tree, 'export-flows-retry');
+    expect(retry).not.toBeNull();
+    (retry?.props as { onClick: () => void }).onClick();
+    expect(refreshCalls).toBe(1);
   });
 });

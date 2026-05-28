@@ -48,12 +48,14 @@ const projectMeta = {
   ],
 };
 
-const projectGraph = (slug: string, name: string) => ({
+// Mirrors the merged detail endpoint the bundle builder now reads from
+// (`/api/projects/:project/flows/:flow`), wrapping the flow under `flow`.
+const projectDetail = (slug: string, name: string) => ({
   id: `entry-${slug}`,
   slug: `demo/${slug}`,
   name,
-  nodes: [],
-  connectors: [],
+  filePath: `/repo/${slug}/flow.json`,
+  flow: { version: 2 as const, name, nodes: [], connectors: [] },
 });
 
 describe('exportProjectToCloud', () => {
@@ -75,10 +77,10 @@ describe('exportProjectToCloud', () => {
       requests.push({ url, method, headers });
 
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -128,10 +130,10 @@ describe('exportProjectToCloud', () => {
     installMock((url) => {
       capturedUrls.push(url);
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects'))
         return { status: 201, body: { url: 'https://seeflow.dev/project/uuid-link' } };
       throw new Error(`Unexpected URL: ${url}`);
@@ -151,10 +153,10 @@ describe('exportProjectToCloud', () => {
 
     installMock((url, init) => {
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -181,10 +183,10 @@ describe('exportProjectToCloud', () => {
   it('throws when cloud API returns non-ok status', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects'))
         return { status: 413, body: { error: 'too large' } };
       throw new Error(`Unexpected URL: ${url}`);
@@ -198,10 +200,10 @@ describe('exportProjectToCloud', () => {
   it('throws when cloud API response is missing url field', async () => {
     installMock((url) => {
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects'))
         return { status: 201, body: { ok: true } };
       throw new Error(`Unexpected URL: ${url}`);
@@ -218,11 +220,11 @@ describe('exportProjectToCloud', () => {
 
     installMock((url, init) => {
       if (url === '/api/projects/demo') return { status: 200, body: projectMeta };
-      if (url.includes('/graph')) graphRequests.push(url);
-      if (url === '/api/projects/demo/flows/main/graph')
-        return { status: 200, body: projectGraph('main', 'Main') };
-      if (url === '/api/projects/demo/flows/retry/graph')
-        return { status: 200, body: projectGraph('retry', 'Retry') };
+      if (url.startsWith('/api/projects/demo/flows/')) graphRequests.push(url);
+      if (url === '/api/projects/demo/flows/main')
+        return { status: 200, body: projectDetail('main', 'Main') };
+      if (url === '/api/projects/demo/flows/retry')
+        return { status: 200, body: projectDetail('retry', 'Retry') };
       if (url.startsWith('https://seeflow.dev/api/projects')) {
         const raw = init?.body;
         capturedBody = raw instanceof ArrayBuffer ? raw : null;
@@ -233,7 +235,7 @@ describe('exportProjectToCloud', () => {
 
     await exportProjectToCloud('demo', 'u@example.com', 'P', 'public', undefined, ['retry']);
 
-    expect(graphRequests).toEqual(['/api/projects/demo/flows/retry/graph']);
+    expect(graphRequests).toEqual(['/api/projects/demo/flows/retry']);
 
     assertArrayBuffer(capturedBody);
     const entries = unzipSync(new Uint8Array(capturedBody));

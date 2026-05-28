@@ -55,6 +55,9 @@ export const useProjectFlows = (project: string | null): UseProjectFlowsResult =
   const refresh = useCallback(() => {
     if (!project) return;
     setLoading(true);
+    // Clear any error from a prior attempt so the UI reflects only this fetch —
+    // otherwise a stale error flashes (or sticks) when the dialog reopens.
+    setError(null);
     fetchProjectFlows(project)
       .then((list) => {
         setFlows(list);
@@ -72,6 +75,7 @@ export const useProjectFlows = (project: string | null): UseProjectFlowsResult =
     if (!project) {
       setFlows(null);
       setLoading(false);
+      setError(null);
       return;
     }
     refresh();

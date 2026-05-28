@@ -27,13 +27,22 @@ interface ProjectMetaResponse {
   flows: Array<{ flowSlug: string; name: string; icon?: string; isDefault: boolean }>;
 }
 
-interface FlowGraphResponse {
+interface FlowDetailResponse {
   id: string;
   slug: string;
   name: string;
-  description?: string;
-  nodes: Array<Record<string, unknown>>;
-  connectors: Array<Record<string, unknown>>;
+  filePath: string;
+  // The fully merged flow: flow.json + style.json (positions + visual style)
+  // + inlined file:// detail refs. This is exactly what the studio canvas
+  // renders, so bundling it gives the cloud viewer node positions — without
+  // them React Flow throws on `node.position.x` and the page renders blank.
+  flow: {
+    version: 2;
+    name: string;
+    description?: string;
+    nodes: Array<Record<string, unknown>>;
+    connectors: Array<Record<string, unknown>>;
+  };
 }
 
 interface ManifestOnDisk {
@@ -111,29 +120,29 @@ export async function buildProjectBundle({
   };
 
   for (const { flowSlug } of flows) {
-    const graphUrl = `/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(
+    const detailUrl = `/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(
       flowSlug,
-    )}/graph`;
-    const graphRes = await fetch(graphUrl);
-    if (!graphRes.ok) {
-      throw new Error(`GET ${graphUrl} → ${graphRes.status}`);
+    )}`;
+    const detailRes = await fetch(detailUrl);
+    if (!detailRes.ok) {
+      throw new Error(`GET ${detailUrl} → ${detailRes.status}`);
     }
-    const graph = (await graphRes.json()) as FlowGraphResponse;
+    const { flow } = (await detailRes.json()) as FlowDetailResponse;
 
     const envelope: FlowEnvelopeOnDisk = {
       version: FLOW_ENVELOPE_VERSION,
-      name: graph.name,
-      nodes: graph.nodes,
-      connectors: graph.connectors,
+      name: flow.name,
+      nodes: flow.nodes,
+      connectors: flow.connectors,
     };
-    if (graph.description !== undefined) {
-      envelope.description = graph.description;
+    if (flow.description !== undefined) {
+      envelope.description = flow.description;
     }
 
     zipEntries[`flows/${flowSlug}/flow.json`] = strToU8(JSON.stringify(envelope));
 
     const seen = new Set<string>();
-    for (const node of graph.nodes) {
+    for (const node of flow.nodes) {
       const assetPath = imageAssetPath(node);
       if (!assetPath || seen.has(assetPath)) continue;
       seen.add(assetPath);

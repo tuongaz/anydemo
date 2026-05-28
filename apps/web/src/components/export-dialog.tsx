@@ -210,9 +210,18 @@ export function ExportDialog({
                 <div
                   role="alert"
                   data-testid="export-flows-error"
-                  className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
+                  className="flex items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
                 >
-                  Couldn't load flows. Try closing and reopening the dialog.
+                  <span>Couldn't load flows.</span>
+                  <button
+                    type="button"
+                    onClick={() => projectFlowsApi.refresh()}
+                    disabled={isLoading}
+                    data-testid="export-flows-retry"
+                    className="shrink-0 font-medium underline-offset-2 hover:underline disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Retry
+                  </button>
                 </div>
               ) : null}
 
