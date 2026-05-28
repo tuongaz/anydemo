@@ -854,4 +854,23 @@ describe('wrapAdapterWithHistory', () => {
     expect(inner.calls).toEqual([`reorder:missing-id:${JSON.stringify({ op: 'toFront' })}`]);
     expect(history.canUndo).toBe(false);
   });
+
+  // --------------------------------------------------------------------
+  // Task 14: uploadImage passthrough contract
+  // --------------------------------------------------------------------
+
+  it('uploadImage outside a batch does not push an entry', async () => {
+    const inner = fakeAdapter();
+    // Construct a minimal File-shaped stub. Node test envs don't have a real
+    // File constructor in all versions; cast via `unknown` to satisfy TS.
+    // The wrapper is a passthrough and never touches the file payload —
+    // it only matters that the call reaches inner.uploadImage and that no
+    // history entry is pushed (design §2: standalone uploadImage orphans
+    // the file; the inverse lives on the paired createNode inside a
+    // host-side `history.batch('insert-image', ...)`).
+    const file = new Blob(['x'], { type: 'image/png' }) as unknown as File;
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+    await adapter.uploadImage('n-1', file, 'a.png');
+    expect(history.canUndo).toBe(false);
+  });
 });

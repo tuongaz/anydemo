@@ -385,10 +385,15 @@ export function wrapAdapterWithHistory(
       });
     },
 
+    /**
+     * Passthrough — no undo entry. The undo for an image insert lives on
+     * the paired `createNode` entry inside a host-side `history.batch(
+     * 'insert-image', ...)` (design §2): undoing the batch deletes the
+     * node, and the backend cascades the file. Calling `uploadImage`
+     * standalone orphans the file; the wrapper has no inverse to push
+     * because `CanvasAdapter` exposes no `deleteFile` method.
+     */
     uploadImage: (nodeId: string, file: File, filename: string): Promise<UploadImageResult> => {
-      // Outside a batch the upload is recorded as a no-op (file orphaned;
-      // canvas doesn't know how to delete). Inside a batch (Task 14) the
-      // upload runs and the paired createNode becomes the undo handle.
       return inner.uploadImage(nodeId, file, filename);
     },
 
