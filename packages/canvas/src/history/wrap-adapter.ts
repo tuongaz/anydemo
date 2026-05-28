@@ -624,12 +624,21 @@ export function wrapAdapterWithHistory(
         throw err;
       }
     },
-    // TODO(Task 16): real subscribe wired to the subscribers Set above. The
-    // Set already exists and `notify()` already calls it — this stub is a
-    // no-op subscriber because no test in Task 9 exercises subscribe.
-    subscribe: (_cb: (s: { canUndo: boolean; canRedo: boolean }) => void) => {
+    /**
+     * Add `cb` to the subscribers Set and invoke it ONCE immediately with
+     * the current `{canUndo, canRedo}` snapshot. The immediate call
+     * matches React-style `useSyncExternalStore` expectations and lets
+     * consumers populate initial UI without a separate getSnapshot step.
+     * After that, `notify()` (called from every state-mutating path —
+     * push / undo / redo / clear / stale-clear / batch open + close)
+     * delivers subsequent snapshots. Returns an unsubscribe that removes
+     * the callback from the Set.
+     */
+    subscribe: (cb: (s: { canUndo: boolean; canRedo: boolean }) => void) => {
+      subscribers.add(cb);
+      cb(snapshot());
       return () => {
-        /* noop */
+        subscribers.delete(cb);
       };
     },
   };

@@ -48,6 +48,17 @@ export interface HistoryHandle {
   clear(): void;
   markExternalChange(): void;
   batch<T>(name: string, fn: () => Promise<T>): Promise<T>;
+  /**
+   * Subscribe to `{canUndo, canRedo}` snapshots. The callback is invoked
+   * ONCE IMMEDIATELY with the current state so consumers can populate
+   * initial UI without a separate getSnapshot step (matches the
+   * React-style `useSyncExternalStore` expectation), and then again after
+   * every state mutation: push, undo, redo, clear, stale-clear, batch
+   * open redo-branch truncation, and batch close. Mid-batch adapter calls
+   * do NOT notify — subscribers see exactly one transition per gesture.
+   *
+   * Returns an unsubscribe function. Safe to call multiple times.
+   */
   subscribe(cb: (state: { canUndo: boolean; canRedo: boolean }) => void): () => void;
   readonly canUndo: boolean;
   readonly canRedo: boolean;

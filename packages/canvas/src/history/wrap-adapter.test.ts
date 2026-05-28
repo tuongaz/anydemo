@@ -1114,6 +1114,100 @@ describe('wrapAdapterWithHistory', () => {
     expect(history.canUndo).toBe(true);
   });
 
+  // --------------------------------------------------------------------
+  // Task 16: markExternalChange + subscribe
+  // --------------------------------------------------------------------
+
+  it('markExternalChange does NOT clear within the stale window', async () => {
+    // Within-window safety: a flow:reload echo that arrives RIGHT AFTER a
+    // UI mutation must be treated as "ours" — the stack stays intact.
+    // The outside-window case (real foreign edit) is pinned at the
+    // reducer layer by stack.test.ts's applyStaleClear tests; the
+    // wrapper's `markExternalChange` accepts no `now` parameter and uses
+    // real Date.now internally, so simulating the outside-window
+    // transition here would require timer mocking that's deliberately
+    // out of scope for this task.
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    await adapter.updateNodePosition('n-1', { x: 1, y: 2 });
+    expect(history.canUndo).toBe(true);
+    // Synchronous call right after the await — well within the stale window.
+    history.markExternalChange();
+    expect(history.canUndo).toBe(true);
+  });
+
+  it('subscribe invokes the callback immediately with current state', () => {
+    const inner = fakeAdapter();
+    const { history } = wrapAdapterWithHistory(inner, noState);
+    const snaps: Array<{ canUndo: boolean; canRedo: boolean }> = [];
+    history.subscribe((s) => snaps.push(s));
+    // Immediate-on-subscribe semantics (documented in HistoryHandle.subscribe):
+    // empty stack → both flags false.
+    expect(snaps).toEqual([{ canUndo: false, canRedo: false }]);
+  });
+
+  it('subscribe receives a snapshot after every state mutation', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    const snaps: Array<{ canUndo: boolean; canRedo: boolean }> = [];
+    history.subscribe((s) => snaps.push(s));
+    // After mutate: immediate snap on subscribe + one post-mutation snap.
+    await adapter.updateNodePosition('n-1', { x: 1, y: 2 });
+    expect(snaps.length).toBe(2);
+    expect(snaps[1]).toEqual({ canUndo: true, canRedo: false });
+  });
+
+  it('unsubscribe removes the callback', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    const snaps: Array<{ canUndo: boolean; canRedo: boolean }> = [];
+    const off = history.subscribe((s) => snaps.push(s));
+    off();
+    await adapter.updateNodePosition('n-1', { x: 1, y: 2 });
+    // Only the immediate-on-subscribe call landed.
+    expect(snaps.length).toBe(1);
+  });
+
+  it('subscribe fires on undo/redo cursor transitions', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    await adapter.updateNodePosition('n-1', { x: 1, y: 2 });
+    const snaps: Array<{ canUndo: boolean; canRedo: boolean }> = [];
+    history.subscribe((s) => snaps.push(s));
+    // Immediate snap: post-mutation state.
+    expect(snaps).toEqual([{ canUndo: true, canRedo: false }]);
+    await history.undo();
+    expect(snaps[snaps.length - 1]).toEqual({ canUndo: false, canRedo: true });
+    await history.redo();
+    expect(snaps[snaps.length - 1]).toEqual({ canUndo: true, canRedo: false });
+  });
+
+  it('subscribe fires on clear()', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNode('n-1', { x: 0, y: 0 }),
+    );
+    await adapter.updateNodePosition('n-1', { x: 1, y: 2 });
+    const snaps: Array<{ canUndo: boolean; canRedo: boolean }> = [];
+    history.subscribe((s) => snaps.push(s));
+    snaps.length = 0;
+    history.clear();
+    expect(snaps).toEqual([{ canUndo: false, canRedo: false }]);
+  });
+
   it('batch synchronously truncates the redo branch at start', async () => {
     const inner = fakeAdapter();
     const { adapter, history } = wrapAdapterWithHistory(
