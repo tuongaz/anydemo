@@ -42,6 +42,7 @@ import {
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
 import type { LayoutNodeInput } from '../adapter/types.ts';
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
+import type { HistoryHandle } from '../history/types.ts';
 import { useCanvasExport } from '../hooks/use-canvas-export.ts';
 import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { cn } from '../lib/cn.ts';
@@ -851,6 +852,31 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * `updateModelContext`. Absent → no telemetry.
    */
   onViewportChange?: (viewport: { x: number; y: number; zoom: number }) => void;
+  /**
+   * Internal undo/redo state. When supplied, the canvas subscribes for
+   * canUndo/canRedo (overriding the legacy `canUndo` / `canRedo` props) and
+   * routes Cmd+Z / Cmd+Shift+Z to it (Task 20). When absent, the legacy
+   * `canUndo` / `canRedo` / `onUndo` / `onRedo` props are used and the
+   * canvas's keyboard dispatcher delegates to `onUndo` / `onRedo`. The
+   * legacy props are removed in Task 26 once the host migrates.
+   */
+  history?: HistoryHandle;
+  /**
+   * Legacy: undo/redo enable state owned by the host. Read by the toolbar
+   * and command palette enable predicates when `history` is absent. Deleted
+   * in Task 26 once every host supplies `history`.
+   */
+  canUndo?: boolean;
+  /** Legacy: see {@link canUndo}. */
+  canRedo?: boolean;
+  /**
+   * Legacy: host-owned undo dispatcher invoked by Cmd+Z when `history` is
+   * absent (Task 20 routes through `history.undo()` when supplied). Deleted
+   * in Task 26.
+   */
+  onUndo?: () => void;
+  /** Legacy: see {@link onUndo}. */
+  onRedo?: () => void;
 }
 
 /**
@@ -1837,6 +1863,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeDragStart,
     onNodeDragStop,
     onViewportChange,
+    history,
+    canUndo,
+    canRedo,
+    onUndo: _onUndo,
+    onRedo: _onRedo,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -3898,6 +3929,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // ShareMenu still falls back to its own internal state when these props are
   // absent, so the controlled lift is opt-in.
   const [shareEmbedDialogOpen, setShareEmbedDialogOpen] = useState(false);
+  // SLOT 13 — must remain at end per CLAUDE.md hook-shim rule. Mirrors the
+  // optional `history` prop's `{canUndo, canRedo}` snapshots into React
+  // state so the toolbar + command palette can resolve effective values
+  // (via `effectiveCanUndo` / `effectiveCanRedo` below) without subscribing
+  // to the handle themselves. When `history` is absent the seed values
+  // default to false and the legacy `canUndo` / `canRedo` props win.
+  const [historyState, setHistoryState] = useState<{ canUndo: boolean; canRedo: boolean }>(() => ({
+    canUndo: history?.canUndo ?? false,
+    canRedo: history?.canRedo ?? false,
+  }));
+  useEffect(() => {
+    if (!history) return;
+    const off = history.subscribe(setHistoryState);
+    return off;
+  }, [history]);
+  // Effective enable state: subscribed values win when `history` is supplied,
+  // otherwise fall back to the legacy props. The four legacy
+  // `canUndo`/`canRedo`/`onUndo`/`onRedo` props are removed in Task 26 once
+  // every host supplies `history`.
+  const effectiveCanUndo = history ? historyState.canUndo : (canUndo ?? false);
+  const effectiveCanRedo = history ? historyState.canRedo : (canRedo ?? false);
   // US-014: shared export workflow — fit-view + viewport capture + filename
   // derivation + dynamic-import of jspdf — exposed both through the ShareMenu
   // wired below and the imperative ref handle. The hook owns `lastError`
@@ -4130,6 +4182,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         data-testid="seeflow-canvas"
         data-mode={mode}
         data-canvas-mode={canvasMode.kind}
+        data-can-undo={effectiveCanUndo ? 'true' : 'false'}
+        data-can-redo={effectiveCanRedo ? 'true' : 'false'}
         ref={wrapperRef}
         className="seeflow-canvas-root sf:relative sf:h-full sf:w-full"
         style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
