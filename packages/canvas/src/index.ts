@@ -7,6 +7,7 @@
 //   3. Icon registry         — built-in lucide icon set
 //   4. Helpers               — pure functions / browser utilities
 //   5. Adapter               — REST adapter + adapter contract types
+//  5b. History               — undo/redo wrapper + handle types
 //   6. Nodes                 — React Flow node components
 //   7. Edges                 — React Flow edge components
 //   8. UI primitives         — buttons, dialogs, popovers, etc.
@@ -150,6 +151,7 @@ export {
   getZoomChord,
   IS_MAC,
   resolveClipboardChord,
+  resolveHistoryChord,
   resolveToolShortcut,
 } from './lib/keyboard-shortcuts.ts';
 export type {
@@ -159,6 +161,7 @@ export type {
   CommandContext,
   CommandDef,
   CommandId,
+  HistoryChord,
   ModifierEvent,
   NudgeDelta,
   ShortcutParts,
@@ -208,6 +211,23 @@ export type {
   UpdateNodePositionResult,
   UploadImageResult,
 } from './adapter/types.ts';
+
+// ----------------------------------------------------------------------------
+// 5b. History
+// ----------------------------------------------------------------------------
+export { wrapAdapterWithHistory } from './history/wrap-adapter.ts';
+export {
+  COALESCE_WINDOW_MS,
+  MAX_HISTORY,
+  STALE_MUTATION_WINDOW_MS,
+} from './history/types.ts';
+export type {
+  FlowStateSnapshot,
+  GetFlowState,
+  HistoryEntry,
+  HistoryHandle,
+  HistoryState,
+} from './history/types.ts';
 
 // ----------------------------------------------------------------------------
 // 6. Nodes (re-exports from ./nodes/index.ts)
