@@ -103,9 +103,12 @@ const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
   },
   // White body is solid white; the header sits a touch grey so it still reads
   // as a header bar (matching the muted bar the `default` node shows) instead
-  // of vanishing into the white body.
+  // of vanishing into the white body. The border is a light grey so the card
+  // edge stays visible against a white canvas (a white border would vanish).
+  // `edge` stays pure white so the picker swatch (which has its own chip
+  // border) still reads as "white".
   white: {
-    border: 'hsl(0, 0%, 100%)',
+    border: 'hsl(0, 0%, 82%)',
     background: 'hsl(0, 0%, 100%)',
     edge: 'hsl(0, 0%, 100%)',
     headerBackground: 'hsl(0, 0%, 91%)',
