@@ -13,6 +13,12 @@ interface OverrideEvent {
   partial: Partial<FlowNode>;
 }
 
+interface BatchCall {
+  name: string;
+  resolved: boolean;
+  rejected: boolean;
+}
+
 const stubFile = (name = 'pic.png', type = 'image/png'): File =>
   new File([new Uint8Array([0])], name, { type });
 
@@ -24,14 +30,29 @@ const buildDeps = (overrides?: {
     filename: string,
   ) => Promise<{ path: string }>;
   createNode?: (flowId: string, body: NodeCreateInput) => Promise<{ id: string }>;
+  withHistory?: boolean;
 }) => {
   const overrideEvents: OverrideEvent[] = [];
   const uploadCalls: { projectId: string; nodeId: string; file: File; filename: string }[] = [];
   const createCalls: { flowId: string; body: NodeCreateInput }[] = [];
-  const deleteCalls: { flowId: string; nodeId: string }[] = [];
-  const undoCalls: { do: () => Promise<void>; undo: () => Promise<void> }[] = [];
   const retryRemembered: { nodeId: string; args: unknown }[] = [];
   const retryForgotten: string[] = [];
+  const batchCalls: BatchCall[] = [];
+
+  const history = {
+    batch: async <T>(name: string, fn: () => Promise<T>): Promise<T> => {
+      const call: BatchCall = { name, resolved: false, rejected: false };
+      batchCalls.push(call);
+      try {
+        const result = await fn();
+        call.resolved = true;
+        return result;
+      } catch (err) {
+        call.rejected = true;
+        throw err;
+      }
+    },
+  };
 
   const deps = {
     upload:
@@ -46,16 +67,10 @@ const buildDeps = (overrides?: {
         createCalls.push({ flowId, body });
         return { id: body.id ?? 'server-generated' };
       }),
-    deleteNode: async (flowId: string, nodeId: string) => {
-      deleteCalls.push({ flowId, nodeId });
-      return { ok: true as const };
-    },
     setOverride: (id: string, partial: Partial<FlowNode>) => {
       overrideEvents.push({ id, partial });
     },
-    pushUndo: (entry: { do: () => Promise<void>; undo: () => Promise<void> }) => {
-      undoCalls.push(entry);
-    },
+    ...(overrides?.withHistory === false ? {} : { history }),
     rememberRetry: (nodeId: string, args: unknown) => {
       retryRemembered.push({ nodeId, args });
     },
@@ -69,10 +84,9 @@ const buildDeps = (overrides?: {
     overrideEvents,
     uploadCalls,
     createCalls,
-    deleteCalls,
-    undoCalls,
     retryRemembered,
     retryForgotten,
+    batchCalls,
   };
 };
 
@@ -175,16 +189,27 @@ describe('performImageDropUpload (US-008)', () => {
     expect(ctx.retryForgotten).toEqual(['node-test-1']);
   });
 
-  it('pushes an undo entry whose undo() calls deleteNode with the server-issued id', async () => {
-    const ctx = buildDeps({
-      createNode: async () => ({ id: 'server-id-42' }),
-    });
+  it("wraps the upload + createNode pair in history.batch('insert-image')", async () => {
+    const ctx = buildDeps();
     await performImageDropUpload(baseArgs(), ctx.deps);
-    expect(ctx.undoCalls).toHaveLength(1);
-    const entry = ctx.undoCalls[0];
-    if (!entry) throw new Error('expected one undo entry');
-    await entry.undo();
-    expect(ctx.deleteCalls).toEqual([{ flowId: 'demo-1', nodeId: 'server-id-42' }]);
+    expect(ctx.batchCalls).toHaveLength(1);
+    expect(ctx.batchCalls[0]?.name).toBe('insert-image');
+    expect(ctx.batchCalls[0]?.resolved).toBe(true);
+    expect(ctx.batchCalls[0]?.rejected).toBe(false);
+    // Inside the batch the createNode lands — undo for that batch is the
+    // wrapped adapter's createNode→deleteNode inverse (covered in
+    // wrap-adapter.test.ts), not asserted here.
+    expect(ctx.createCalls).toHaveLength(1);
+  });
+
+  it('runs the upload + createNode pair without a batch when history is omitted', async () => {
+    const ctx = buildDeps({ withHistory: false });
+    await performImageDropUpload(baseArgs(), ctx.deps);
+    expect(ctx.batchCalls).toHaveLength(0);
+    // The pair still executes.
+    expect(ctx.uploadCalls).toHaveLength(1);
+    expect(ctx.createCalls).toHaveLength(1);
+    expect(ctx.retryForgotten).toEqual(['node-test-1']);
   });
 
   it('on upload FAILURE: sets _uploadError override, does NOT call createNode, keeps retry entry', async () => {
@@ -214,7 +239,7 @@ describe('performImageDropUpload (US-008)', () => {
     expect(ctx.retryRemembered).toHaveLength(1);
   });
 
-  it('on createNode FAILURE (after upload succeeded): does NOT forget retry, does NOT push undo', async () => {
+  it('on createNode FAILURE (after upload succeeded): batch rejects, does NOT forget retry', async () => {
     const ctx = buildDeps({
       createNode: async () => {
         throw new Error('PATCH 500');
@@ -229,9 +254,11 @@ describe('performImageDropUpload (US-008)', () => {
     expect((caught as Error | null)?.message).toBe('PATCH 500');
     // Upload succeeded → uploaded override was applied.
     expect(ctx.overrideEvents.length).toBeGreaterThanOrEqual(2);
-    // But createNode failed → retry NOT forgotten and no undo pushed.
+    // But createNode failed → retry NOT forgotten; the batch reports the
+    // rejection so the wrapped adapter's batch rollback fires.
     expect(ctx.retryForgotten).toHaveLength(0);
-    expect(ctx.undoCalls).toHaveLength(0);
+    expect(ctx.batchCalls).toHaveLength(1);
+    expect(ctx.batchCalls[0]?.rejected).toBe(true);
   });
 });
 

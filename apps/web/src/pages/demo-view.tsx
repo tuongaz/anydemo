@@ -722,49 +722,17 @@ export function DemoView({
     (connId: string, patch: ConnectorStylePatch) => {
       if (!flowId || !adapter) return;
       rememberConnectorStyle(DEFAULT_STORAGE_PREFIX, patch);
-      const conn = demoConnectors?.find((c) => c.id === connId);
-      // Snapshot only the keys the caller is touching so undo restores those
-      // exact fields and leaves anything else alone.
-      let prev: ConnectorStylePatch | null = null;
-      if (conn) {
-        prev = {};
-        const data = conn as unknown as Record<string, unknown>;
-        for (const k of Object.keys(patch)) {
-          (prev as Record<string, unknown>)[k] = data[k];
-        }
-      }
       setConnectorOverride(connId, patch as Partial<Connector>);
       setEditError(null);
       markMutation();
-      if (prev) {
-        const prevPatch = prev;
-        pushUndo({
-          do: async () => {
-            await adapter.updateConnector(connId, patch);
-          },
-          undo: async () => {
-            await adapter.updateConnector(connId, prevPatch);
-          },
-          coalesceKey: `connector:${connId}:style:${Object.keys(patch).sort().join(',')}`,
-        });
-      }
+      // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
-        if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateConnector failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoConnectors,
-      setConnectorOverride,
-      dropConnectorOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
   );
 
   const {
@@ -774,7 +742,6 @@ export function DemoView({
     unmarkMany: unmarkNodesDeleted,
   } = nodeDeletions;
   const {
-    mark: markConnectorDeleted,
     markMany: markConnectorsDeleted,
     unmark: unmarkConnectorDeleted,
     unmarkMany: unmarkConnectorsDeleted,
@@ -874,48 +841,6 @@ export function DemoView({
       });
     },
     [flowId, adapter, demoNodes, nodeOrderOverride, markMutation],
-  );
-
-  const onDeleteConnector = useCallback(
-    (connId: string) => {
-      if (!flowId || !adapter) return;
-      // Snapshot the full connector BEFORE the delete API call so undo can
-      // recreate it with the original id and properties.
-      const conn = demoConnectors?.find((c) => c.id === connId);
-      if (!conn) return;
-      setEditError(null);
-      // US-016: hide the connector from the canvas immediately.
-      markConnectorDeleted(connId);
-      setSelectedConnectorIds((prev) => prev.filter((id) => id !== connId));
-      markMutation();
-      const connSnapshot = conn;
-      pushUndo({
-        do: async () => {
-          markConnectorDeleted(connId);
-          await adapter.deleteConnector(connId);
-        },
-        undo: async () => {
-          unmarkConnectorDeleted(connId);
-          await adapter.createConnector({ ...connSnapshot, id: connSnapshot.id });
-        },
-      });
-      adapter.deleteConnector(connId).catch((err) => {
-        unmarkConnectorDeleted(connId);
-        dropUndoTop();
-        setEditError(err instanceof Error ? err.message : String(err));
-        console.error('deleteConnector failed', err);
-      });
-    },
-    [
-      flowId,
-      adapter,
-      demoConnectors,
-      markConnectorDeleted,
-      unmarkConnectorDeleted,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
   );
 
   // US-013: atomic multi-target delete. Snapshots every doomed node + every
@@ -1217,28 +1142,14 @@ export function DemoView({
       };
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       markMutation();
-      // Push from the .then so the undo entry binds to the server-issued id
-      // (matches `onCreateConnector`). No dropTop is needed on .catch because
-      // nothing was pushed before the API resolved.
-      adapter
-        .createNode(payload)
-        .then(({ id: returnedId }) => {
-          pushUndo({
-            do: async () => {
-              await adapter.createNode({ ...payload, id: returnedId });
-            },
-            undo: async () => {
-              await adapter.deleteNode(returnedId);
-            },
-          });
-        })
-        .catch((err) => {
-          dropNodeOverride(id);
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error('createNode failed', err);
-        });
+      // Wrapped adapter records the create/delete inverse internally.
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createNode failed', err);
+      });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // US-013 (icon picker): commit a new type:'icon' node at the picked viewport
@@ -1271,25 +1182,13 @@ export function DemoView({
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
       markMutation();
-      adapter
-        .createNode(payload)
-        .then(({ id: returnedId }) => {
-          pushUndo({
-            do: async () => {
-              await adapter.createNode({ ...payload, id: returnedId });
-            },
-            undo: async () => {
-              await adapter.deleteNode(returnedId);
-            },
-          });
-        })
-        .catch((err) => {
-          dropNodeOverride(id);
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error('createNode (icon) failed', err);
-        });
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createNode (icon) failed', err);
+      });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // Commit a new type:'html' node at the drop position from the toolbar's HTML
@@ -1321,25 +1220,13 @@ export function DemoView({
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
       markMutation();
-      adapter
-        .createNode(payload)
-        .then(({ id: returnedId }) => {
-          pushUndo({
-            do: async () => {
-              await adapter.createNode({ ...payload, id: returnedId });
-            },
-            undo: async () => {
-              await adapter.deleteNode(returnedId);
-            },
-          });
-        })
-        .catch((err) => {
-          dropNodeOverride(id);
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error("createNode (type:'html') failed", err);
-        });
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error("createNode (type:'html') failed", err);
+      });
     },
-    [flowId, adapter, setNodeOverride, dropNodeOverride, pushUndo, markMutation],
+    [flowId, adapter, setNodeOverride, dropNodeOverride, markMutation],
   );
 
   // US-008: retry map for in-flight image uploads. Keyed by the optimistic
@@ -1397,6 +1284,9 @@ export function DemoView({
       // signatures from `@/lib/api`. Wrap the bound adapter into those shapes
       // so the orchestrator continues to work unchanged; refactoring its
       // signature is out-of-scope for US-025 and lands in a later P4/P5 story.
+      // history is threaded through so the upload + createNode pair lands as
+      // a single `insert-image` batch — one Cmd+Z reverts both, and the
+      // backend cascades the uploaded file when the node is deleted.
       void performImageDropUpload(
         { ...args, flowId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
@@ -1406,12 +1296,8 @@ export function DemoView({
             const { id } = await adapter.createNode(body);
             return { id };
           },
-          deleteNode: async (_demoId, nodeId) => {
-            await adapter.deleteNode(nodeId);
-            return { ok: true as const };
-          },
           setOverride: setNodeOverride,
-          pushUndo,
+          history,
           rememberRetry: rememberImageRetry,
           forgetRetry: forgetImageRetry,
         },
@@ -1419,15 +1305,7 @@ export function DemoView({
         console.error('image-upload-flow failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      setNodeOverride,
-      pushUndo,
-      markMutation,
-      rememberImageRetry,
-      forgetImageRetry,
-    ],
+    [flowId, adapter, history, setNodeOverride, markMutation, rememberImageRetry, forgetImageRetry],
   );
 
   const onCreateImageFromFile = useCallback(
@@ -1488,26 +1366,12 @@ export function DemoView({
       if (iconPicker.mode === 'replace' && iconPicker.nodeId) {
         if (flowId && adapter) {
           const targetId = iconPicker.nodeId;
-          const node = demoNodes?.find((n) => n.id === targetId);
-          const prevIcon = node?.type === 'icon' ? node.data.icon : undefined;
           setNodeOverride(targetId, { data: { icon: name } } as Partial<FlowNode>);
           setEditError(null);
           markMutation();
-          if (prevIcon !== undefined) {
-            const prev = prevIcon;
-            pushUndo({
-              do: async () => {
-                await adapter.updateNode(targetId, { icon: name });
-              },
-              undo: async () => {
-                await adapter.updateNode(targetId, { icon: prev });
-              },
-              coalesceKey: `node:${targetId}:icon-replace`,
-            });
-          }
+          // Wrapped adapter records the per-field inverse internally.
           adapter.updateNode(targetId, { icon: name }).catch((err) => {
             dropNodeOverride(targetId);
-            if (prevIcon !== undefined) dropUndoTop();
             setEditError(err instanceof Error ? err.message : String(err));
             console.error('updateNode (icon replace) failed', err);
           });
@@ -1529,11 +1393,8 @@ export function DemoView({
       iconPicker.nodeId,
       flowId,
       adapter,
-      demoNodes,
       setNodeOverride,
       dropNodeOverride,
-      pushUndo,
-      dropUndoTop,
       markMutation,
       onCreateIconNode,
       closeIconPicker,
@@ -1543,31 +1404,18 @@ export function DemoView({
   const onConnectorLabelChange = useCallback(
     (connId: string, label: string) => {
       if (!flowId || !adapter) return;
-      const conn = demoConnectors?.find((c) => c.id === connId);
-      const prevLabel = conn?.label;
       setConnectorOverride(connId, { label } as Partial<Connector>);
       setEditError(null);
       markMutation();
-      if (conn) {
-        pushUndo({
-          do: async () => {
-            await adapter.updateConnector(connId, { label });
-          },
-          undo: async () => {
-            await adapter.updateConnector(connId, { label: prevLabel });
-          },
-          coalesceKey: `connector:${connId}:label`,
-        });
-      }
+      // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { label }).catch((err) => {
         // US-021: keep optimistic visible — see `onNodeNameChange` for the
         // failure-mode rationale.
-        if (conn) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateConnector label failed', err);
       });
     },
-    [flowId, adapter, demoConnectors, setConnectorOverride, pushUndo, dropUndoTop, markMutation],
+    [flowId, adapter, setConnectorOverride, markMutation],
   );
 
   // Create a default connector from a handle-drag gesture (US-029). We
@@ -1608,28 +1456,14 @@ export function DemoView({
       setConnectorOverride(id, optimistic as Partial<Connector>);
       setEditError(null);
       markMutation();
-      // Push from the .then so the undo entry binds to the server-issued id
-      // (matches `onCreateShapeNode`). No dropTop is needed on .catch because
-      // nothing was pushed before the API resolved.
-      adapter
-        .createConnector(payload)
-        .then(({ id: returnedId }) => {
-          pushUndo({
-            do: async () => {
-              await adapter.createConnector({ ...payload, id: returnedId });
-            },
-            undo: async () => {
-              await adapter.deleteConnector(returnedId);
-            },
-          });
-        })
-        .catch((err) => {
-          dropConnectorOverride(id);
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error('createConnector failed', err);
-        });
+      // Wrapped adapter records the create/delete inverse internally.
+      adapter.createConnector(payload).catch((err) => {
+        dropConnectorOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createConnector failed', err);
+      });
     },
-    [flowId, adapter, setConnectorOverride, dropConnectorOverride, pushUndo, markMutation],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
   );
 
   // US-015: drop-on-pane create-and-connect. Combines `onCreateShapeNode` and
@@ -1687,50 +1521,29 @@ export function DemoView({
       setPendingEditNodeId(newNodeId);
       markMutation();
       // Persist node first (referential integrity for the connector), then
-      // the connector. Push ONE undo entry from the .then so undo binds to
-      // the actually-created ids and the entry only exists if both creates
-      // succeeded.
-      (async () => {
-        try {
+      // the connector — wrapped in history.batch so the pair undoes together
+      // (reverse order: connector first, then node), and partial-failure
+      // rollback comes from the batch helper rather than a manual catch.
+      history
+        .batch('create-and-connect', async () => {
           await adapter.createNode(nodePayload);
           await adapter.createConnector(connPayload);
-          pushUndo({
-            do: async () => {
-              await adapter.createNode(nodePayload);
-              await adapter.createConnector(connPayload);
-            },
-            undo: async () => {
-              // Drop the optimistic overrides up-front so a same-tick undo
-              // (before the SSE echo of the create has pruned them) doesn't
-              // leave a phantom override-only node/connector behind. Once
-              // the deletes complete on disk, `pruneAgainst` would never
-              // drop these on its own — server has no entry to match
-              // against. After the deletes, the canvas reflects the absent
-              // state directly.
-              dropConnectorOverride(newConnId);
-              dropNodeOverride(newNodeId);
-              // Connector first (avoids server-side cascade chatter), then
-              // the node.
-              await adapter.deleteConnector(newConnId).catch(() => {});
-              await adapter.deleteNode(newNodeId).catch(() => {});
-            },
-          });
-        } catch (err) {
+        })
+        .catch((err) => {
           dropNodeOverride(newNodeId);
           dropConnectorOverride(newConnId);
           setEditError(err instanceof Error ? err.message : String(err));
           console.error('createAndConnectFromPane failed', err);
-        }
-      })();
+        });
     },
     [
       flowId,
       adapter,
+      history,
       setNodeOverride,
       dropNodeOverride,
       setConnectorOverride,
       dropConnectorOverride,
-      pushUndo,
       markMutation,
     ],
   );
@@ -2419,26 +2232,6 @@ export function DemoView({
       },
     ) => {
       if (!flowId || !adapter) return;
-      const conn = demoConnectors?.find((c) => c.id === connId);
-      // Capture every endpoint-shape field so undo can reset whichever side(s)
-      // moved (and leave the unchanged side at its original value). The
-      // auto-picked flags and pin coords are also captured so an undone
-      // reroute restores the prior float/pin/handle state.
-      const prev = conn
-        ? {
-            source: conn.source,
-            target: conn.target,
-            sourceHandle: conn.sourceHandle,
-            targetHandle: conn.targetHandle,
-            sourceHandleAutoPicked: conn.sourceHandleAutoPicked,
-            targetHandleAutoPicked: conn.targetHandleAutoPicked,
-            // `null` is the clear-on-disk signal; if the prior connector had
-            // no pin we send null on undo so any pin written by the redo step
-            // is removed. Mirrors the unpin path's wire format.
-            sourcePin: (conn.sourcePin ?? null) as EdgePin | null,
-            targetPin: (conn.targetPin ?? null) as EdgePin | null,
-          }
-        : null;
       // Optimistic override: convert wire-format `null` (clear-on-disk
       // signal, US-025) to `undefined` so the merged Connector type stays
       // valid — the visual effect is the same (the field is gone).
@@ -2467,35 +2260,14 @@ export function DemoView({
       setConnectorOverride(connId, optimistic);
       setEditError(null);
       markMutation();
-      if (prev) {
-        const prevPatch = prev;
-        pushUndo({
-          do: async () => {
-            await adapter.updateConnector(connId, patch);
-          },
-          undo: async () => {
-            await adapter.updateConnector(connId, prevPatch);
-          },
-          coalesceKey: `connector:${connId}:reconnect`,
-        });
-      }
+      // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, patch).catch((err) => {
         dropConnectorOverride(connId);
-        if (prev) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateConnector reconnect failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoConnectors,
-      setConnectorOverride,
-      dropConnectorOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
   );
 
   // US-007: persist a new perimeter pin for the named endpoint of a connector.
@@ -2506,46 +2278,18 @@ export function DemoView({
   const onPinEndpoint = useCallback(
     (connId: string, kind: 'source' | 'target', pin: EdgePin) => {
       if (!flowId || !adapter) return;
-      const conn = demoConnectors?.find((c) => c.id === connId);
-      const prevPin = conn ? (kind === 'source' ? conn.sourcePin : conn.targetPin) : undefined;
       const field = kind === 'source' ? 'sourcePin' : 'targetPin';
       setConnectorOverride(connId, { [field]: pin } as Partial<Connector>);
       setEditError(null);
       markMutation();
-      if (conn) {
-        // `null` is the wire-format signal to clear the field on disk —
-        // mirrors the US-025 reconnect-to-body path.
-        const prevPatch = { [field]: prevPin ?? null } as Partial<{
-          sourcePin: EdgePin | null;
-          targetPin: EdgePin | null;
-        }>;
-        pushUndo({
-          do: async () => {
-            await adapter.updateConnector(connId, { [field]: pin });
-          },
-          undo: async () => {
-            await adapter.updateConnector(connId, prevPatch);
-          },
-          coalesceKey: `connector:${connId}:${field}`,
-        });
-      }
+      // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { [field]: pin }).catch((err) => {
         dropConnectorOverride(connId);
-        if (conn) dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateConnector pin failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoConnectors,
-      setConnectorOverride,
-      dropConnectorOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, setConnectorOverride, dropConnectorOverride, markMutation],
   );
 
   // US-007: clear an existing pin for the named endpoint of a connector. The
@@ -2563,31 +2307,14 @@ export function DemoView({
       setConnectorOverride(connId, { [field]: undefined } as Partial<Connector>);
       setEditError(null);
       markMutation();
-      pushUndo({
-        do: async () => {
-          await adapter.updateConnector(connId, { [field]: null });
-        },
-        undo: async () => {
-          await adapter.updateConnector(connId, { [field]: prevPin });
-        },
-      });
+      // Wrapped adapter records the per-field inverse internally.
       adapter.updateConnector(connId, { [field]: null }).catch((err) => {
         dropConnectorOverride(connId);
-        dropUndoTop();
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('updateConnector unpin failed', err);
       });
     },
-    [
-      flowId,
-      adapter,
-      demoConnectors,
-      setConnectorOverride,
-      dropConnectorOverride,
-      pushUndo,
-      dropUndoTop,
-      markMutation,
-    ],
+    [flowId, adapter, demoConnectors, setConnectorOverride, dropConnectorOverride, markMutation],
   );
 
   // Merge pending overrides onto the selected entity so Style-tab controls
