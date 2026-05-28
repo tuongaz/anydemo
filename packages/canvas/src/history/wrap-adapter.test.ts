@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'bun:test';
-import type { CanvasAdapter } from '../adapter/types.ts';
-import type { FlowNode } from '../types.ts';
+import type { CanvasAdapter, ConnectorCreateInput } from '../adapter/types.ts';
+import type { Connector, FlowNode } from '../types.ts';
 import type { GetFlowState } from './types.ts';
 import { wrapAdapterWithHistory } from './wrap-adapter.ts';
 
 interface FakeAdapter extends CanvasAdapter {
   calls: string[];
+  /**
+   * Rich record of every createConnector input so order/id assertions can
+   * inspect more than just the call name (Task 11 needs the input shape to
+   * verify cascade restore preserves insertion order + original ids).
+   */
+  createConnectorCalls: ConnectorCreateInput[];
 }
 
 /**
@@ -16,11 +22,13 @@ interface FakeAdapter extends CanvasAdapter {
  */
 const fakeAdapter = (): FakeAdapter => {
   const calls: string[] = [];
+  const createConnectorCalls: ConnectorCreateInput[] = [];
   return {
     calls,
+    createConnectorCalls,
     createNode: async (input) => {
-      calls.push(`createNode:${input.type}`);
-      return { id: 'n-1', node: {} };
+      calls.push(`createNode:${input.id ?? 'n-?'}:${input.type}`);
+      return { id: input.id ?? 'n-1', node: {} };
     },
     updateNode: async (id, patch) => {
       calls.push(`updateNode:${id}:${JSON.stringify(patch)}`);
@@ -35,9 +43,10 @@ const fakeAdapter = (): FakeAdapter => {
     reorderNode: async (id, op) => {
       calls.push(`reorder:${id}:${JSON.stringify(op)}`);
     },
-    createConnector: async (_input) => {
-      calls.push('createConn');
-      return { id: 'c-1' };
+    createConnector: async (input) => {
+      createConnectorCalls.push(input);
+      calls.push(`createConn:${input.id ?? 'c-?'}:${input.source}->${input.target}`);
+      return { id: input.id ?? 'c-1' };
     },
     updateConnector: async (id, patch) => {
       calls.push(`updateConn:${id}:${JSON.stringify(patch)}`);
@@ -80,6 +89,19 @@ const stateWithNodeData = (
     data,
   } as unknown as FlowNode;
   return () => ({ nodes: [node], connectors: [] });
+};
+
+/**
+ * Build a `GetFlowState` with the supplied node + connectors. Used by the
+ * deleteNode cascade-restore tests: the wrapper snapshots the node AND
+ * every connector that touches it at intercept time, so the test fixture
+ * must surface both.
+ */
+const stateWithNodeAndConnectors = (
+  node: FlowNode,
+  connectors: readonly Connector[],
+): GetFlowState => {
+  return () => ({ nodes: [node], connectors });
 };
 
 describe('wrapAdapterWithHistory', () => {
@@ -331,5 +353,227 @@ describe('wrapAdapterWithHistory', () => {
     await history.undo();
     expect(inner.calls).toEqual(['pos:b:0,0', 'pos:a:0,0']);
     expect(history.canUndo).toBe(false);
+  });
+
+  // --------------------------------------------------------------------
+  // Task 11: deleteNode + cascade-connector restore
+  // --------------------------------------------------------------------
+
+  it('deleteNode undo recreates the node with the original id, type, position, and data', async () => {
+    const inner = fakeAdapter();
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 42, y: 99 },
+      data: { name: 'hello', borderColor: 'blue', borderSize: 3 },
+    } as unknown as FlowNode;
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, []),
+    );
+
+    await adapter.deleteNode('n-1');
+    expect(inner.calls).toEqual(['del:n-1']);
+
+    inner.calls.length = 0;
+    await history.undo();
+
+    // First call must be a createNode that reuses the original id+type so
+    // subsequent undos in the same chain still resolve against the same node.
+    expect(inner.calls[0]).toBe('createNode:n-1:rectangle');
+    // The wrapper threads the full FlowNode through (position + data
+    // verbatim). Easier to assert via the input observed at the inner
+    // adapter: read the last createNode invocation manually via the
+    // calls-array shape we control. The fake adapter only records a
+    // summary string, so we instead instrument by re-running with a
+    // patched inner.createNode that captures input.
+  });
+
+  it('deleteNode undo threads the original FlowNode (position + data) through createNode', async () => {
+    const inner = fakeAdapter();
+    const captured: Array<{ id?: string; type: string; position: unknown; data: unknown }> = [];
+    inner.createNode = async (input) => {
+      captured.push({
+        id: input.id,
+        type: input.type,
+        position: input.position,
+        data: input.data,
+      });
+      return { id: input.id ?? 'n-1', node: {} };
+    };
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 42, y: 99 },
+      data: { name: 'hello', borderColor: 'blue', borderSize: 3 },
+    } as unknown as FlowNode;
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, []),
+    );
+
+    await adapter.deleteNode('n-1');
+    await history.undo();
+
+    expect(captured).toEqual([
+      {
+        id: 'n-1',
+        type: 'rectangle',
+        position: { x: 42, y: 99 },
+        data: { name: 'hello', borderColor: 'blue', borderSize: 3 },
+      },
+    ]);
+  });
+
+  it('deleteNode undo recreates every connector touching the deleted node', async () => {
+    const inner = fakeAdapter();
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 0, y: 0 },
+      data: {},
+    } as unknown as FlowNode;
+    const connectors: Connector[] = [
+      // Outgoing: n-1 is source.
+      { id: 'c-out', source: 'n-1', target: 'n-2', label: 'outgoing' },
+      // Incoming: n-1 is target.
+      { id: 'c-in', source: 'n-0', target: 'n-1', label: 'incoming' },
+      // Unrelated connector — must NOT be replayed by undo.
+      { id: 'c-other', source: 'n-9', target: 'n-8' },
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, connectors),
+    );
+
+    await adapter.deleteNode('n-1');
+    inner.calls.length = 0;
+    inner.createConnectorCalls.length = 0;
+    await history.undo();
+
+    // createNode first, then each cascaded connector via createConnector.
+    const createConnIds = inner.createConnectorCalls.map((c) => c.id);
+    expect(createConnIds).toEqual(['c-out', 'c-in']);
+    // Unrelated connector was never recreated.
+    expect(createConnIds).not.toContain('c-other');
+  });
+
+  it('deleteNode undo preserves connector insertion order', async () => {
+    const inner = fakeAdapter();
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 0, y: 0 },
+      data: {},
+    } as unknown as FlowNode;
+    // Three connectors, all touching n-1, in a SPECIFIC order. The undo
+    // must replay createConnector in this exact order so the studio's
+    // insertion-order-derived z-order semantics are preserved.
+    const connectors: Connector[] = [
+      { id: 'c-alpha', source: 'n-1', target: 'n-2' },
+      { id: 'c-beta', source: 'n-3', target: 'n-1' },
+      { id: 'c-gamma', source: 'n-1', target: 'n-4' },
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, connectors),
+    );
+
+    await adapter.deleteNode('n-1');
+    inner.createConnectorCalls.length = 0;
+    await history.undo();
+
+    expect(inner.createConnectorCalls.map((c) => c.id)).toEqual(['c-alpha', 'c-beta', 'c-gamma']);
+  });
+
+  it('deleteNode without snapshotted state passes through silently', async () => {
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(inner, noState);
+
+    await adapter.deleteNode('missing-id');
+
+    // Inner still received the call — the wrapper never blocks a delete
+    // just because the host's live state didn't surface the node (race /
+    // stale id).
+    expect(inner.calls).toEqual(['del:missing-id']);
+    // No push, so nothing to undo.
+    expect(history.canUndo).toBe(false);
+  });
+
+  it('deleteNode redo replays the delete', async () => {
+    const inner = fakeAdapter();
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 0, y: 0 },
+      data: {},
+    } as unknown as FlowNode;
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, []),
+    );
+
+    await adapter.deleteNode('n-1');
+    await history.undo();
+    inner.calls.length = 0;
+    await history.redo();
+
+    // Redo runs the original delete again.
+    expect(inner.calls).toEqual(['del:n-1']);
+  });
+
+  it('deleteNode undo swallows per-connector restoration failures', async () => {
+    const inner = fakeAdapter();
+    const node = {
+      id: 'n-1',
+      type: 'rectangle' as const,
+      position: { x: 0, y: 0 },
+      data: {},
+    } as unknown as FlowNode;
+    const connectors: Connector[] = [
+      { id: 'c-ok-1', source: 'n-1', target: 'n-2' },
+      { id: 'c-doomed', source: 'n-1', target: 'n-3' },
+      { id: 'c-ok-2', source: 'n-1', target: 'n-4' },
+    ];
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeAndConnectors(node, connectors),
+    );
+
+    await adapter.deleteNode('n-1');
+
+    // Patch createConnector to reject for the doomed id only. This mimics
+    // the design's "snapshot from live state, same risk profile as today"
+    // failure mode where one cascaded connector now references a
+    // separately-deleted node.
+    const allInputs: ConnectorCreateInput[] = [];
+    inner.createConnector = async (input) => {
+      allInputs.push(input);
+      if (input.id === 'c-doomed') throw new Error('target n-3 missing');
+      return { id: input.id ?? 'c-?' };
+    };
+
+    // Spy on console.warn so we can assert the failure was logged (and
+    // also restore it on the way out so other tests in the file aren't
+    // affected).
+    const originalWarn = console.warn;
+    const warnings: unknown[][] = [];
+    console.warn = (...args: unknown[]) => {
+      warnings.push(args);
+    };
+
+    try {
+      // Undo must RESOLVE — not reject — even though one cascaded
+      // connector recreate fails. The node-restore is the priority.
+      await history.undo();
+    } finally {
+      console.warn = originalWarn;
+    }
+
+    // All three were attempted, in insertion order.
+    expect(allInputs.map((c) => c.id)).toEqual(['c-ok-1', 'c-doomed', 'c-ok-2']);
+    // The failure surfaced through console.warn rather than as a
+    // rejection.
+    expect(warnings.length).toBe(1);
   });
 });

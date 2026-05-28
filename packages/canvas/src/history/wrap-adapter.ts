@@ -159,9 +159,80 @@ export function wrapAdapterWithHistory(
       return result;
     },
 
-    deleteNode: (nodeId: string) => {
-      // TODO(Task 11): snapshot node + cascade connectors, push inverse.
-      return inner.deleteNode(nodeId);
+    deleteNode: async (nodeId: string): Promise<void> => {
+      beginIntercept();
+      const { nodes, connectors } = getFlowState();
+      const savedNode = nodes.find((n) => n.id === nodeId);
+      // No snapshot to invert against — mirror the other passthrough
+      // branches and forward without pushing. The inner adapter still
+      // runs (the host may have a stricter idea of "live" than the
+      // wrapper's getFlowState snapshot — e.g. a stale id the server
+      // can still resolve).
+      if (!savedNode) {
+        await inner.deleteNode(nodeId);
+        return;
+      }
+      // Capture EVERY connector touching the node, in the order the host
+      // surfaces them. Insertion order matters: the studio derives
+      // connector z-order from list position, so the undo must replay
+      // them in the same sequence to keep visual stacking stable.
+      const cascadedConnectors = connectors.filter(
+        (c) => c.source === nodeId || c.target === nodeId,
+      );
+      await inner.deleteNode(nodeId);
+      push({
+        // Delete is a full-replacement operation — no `beforeFields`
+        // snapshot, no coalesceKey. Two deletes of the same id within
+        // 500ms is not a meaningful "burst" the way a style toggle is.
+        do: async () => {
+          await inner.deleteNode(nodeId);
+        },
+        undo: async () => {
+          // Node restore is the priority: if THIS fails, the undo
+          // failed and we MUST surface the error (callers rely on the
+          // rejection to roll back UI state).
+          await inner.createNode({
+            id: savedNode.id,
+            type: savedNode.type,
+            position: savedNode.position,
+            data: (savedNode.data ?? {}) as Record<string, unknown>,
+          });
+          // Cascade-restore every connector. Per-connector failures are
+          // swallowed (and surfaced via console.warn) — design §2 calls
+          // out that snapshots come from live state and carry the same
+          // risk profile as today; one broken connector should NOT tank
+          // the entire restore. Insertion order is preserved by the
+          // sequential for-loop.
+          for (const c of cascadedConnectors) {
+            try {
+              await inner.createConnector({
+                id: c.id,
+                source: c.source,
+                target: c.target,
+                sourceHandle: c.sourceHandle,
+                targetHandle: c.targetHandle,
+                sourceHandleAutoPicked: c.sourceHandleAutoPicked,
+                targetHandleAutoPicked: c.targetHandleAutoPicked,
+                sourcePin: c.sourcePin,
+                targetPin: c.targetPin,
+                label: c.label,
+                style: c.style,
+                color: c.color,
+                direction: c.direction,
+                eventName: c.eventName,
+                queueName: c.queueName,
+                method: c.method,
+                url: c.url,
+              });
+            } catch (err) {
+              console.warn(
+                `[seeflow/canvas] failed to restore connector ${c.id} during deleteNode undo:`,
+                err,
+              );
+            }
+          }
+        },
+      });
     },
 
     reorderNode: (nodeId: string, op: ReorderOp) => {
