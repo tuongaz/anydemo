@@ -1368,7 +1368,7 @@ describe('SeeflowCanvas', () => {
 
     it('illustrative (cloud) ghost SVG picks up borderColor / backgroundColor / borderSize / borderStyle from last-used', () => {
       seedNodeLastUsed({
-        borderColor: 'purple',
+        borderColor: 'violet',
         backgroundColor: 'amber',
         borderSize: 3,
         borderStyle: 'dashed',
@@ -1377,7 +1377,7 @@ describe('SeeflowCanvas', () => {
       const cloudShape = findElement(ghost, (el) => el.type === CloudShape);
       if (!cloudShape) throw new Error('CloudShape not found inside ghost');
       const props = cloudShape.props as Record<string, unknown>;
-      expect(props.borderColor).toBe(COLOR_TOKENS.purple.border);
+      expect(props.borderColor).toBe(COLOR_TOKENS.violet.border);
       expect(props.backgroundColor).toBe(COLOR_TOKENS.amber.background);
       expect(props.borderSize).toBe(3);
       expect(props.borderStyle).toBe('dashed');

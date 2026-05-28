@@ -14,25 +14,21 @@ const HttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']);
 // them to actual CSS values (theme-aware, light + dark).
 export const ColorTokenSchema = z.enum([
   // `'none'` renders transparent border / fill on nodes (no stroke, no fill).
-  // Hidden from the text-color and connector-color pickers — invisible text
-  // and edges aren't useful, and `'default'` already covers "inherit".
+  // Hidden from the connector-color picker — invisible edges aren't useful,
+  // and `'default'` already covers "inherit".
   'none',
   'default',
   'white',
   'slate',
-  'gray',
   'red',
-  'rose',
   'orange',
   'amber',
-  'lime',
   'green',
   'teal',
   'cyan',
   'blue',
   'indigo',
   'violet',
-  'purple',
   'pink',
 ]);
 
@@ -47,7 +43,6 @@ const NodeVisualBaseShape = {
   borderSize: z.number().min(0).optional(),
   borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
   fontSize: z.number().positive().optional(),
-  textColor: ColorTokenSchema.optional(),
   // Horizontal alignment for the node's text content. Defaults to 'center'
   // at render time when omitted; explicit picks from the toolbar's Align
   // toggle persist here.
@@ -711,7 +706,6 @@ const NodeStyleSchema = z
     borderSize: z.number().min(0).optional(),
     borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
     fontSize: z.number().positive().optional(),
-    textColor: ColorTokenSchema.optional(),
     textAlign: z.enum(['left', 'center', 'right']).optional(),
     cornerRadius: z.number().min(0).optional(),
     shadow: z.number().int().min(0).max(5).optional(),

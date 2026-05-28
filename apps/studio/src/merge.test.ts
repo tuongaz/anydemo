@@ -196,7 +196,6 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
         borderSize: 2,
         borderStyle: 'dashed',
         fontSize: 14,
-        textColor: 'slate',
         cornerRadius: 8,
       },
     };
@@ -209,7 +208,6 @@ describe('mergeNodeUpdates retype: geometric ↔ geometric is strip-free', () =>
     expect(data.borderSize).toBe(2);
     expect(data.borderStyle).toBe('dashed');
     expect(data.fontSize).toBe(14);
-    expect(data.textColor).toBe('slate');
     expect(data.cornerRadius).toBe(8);
   });
 });

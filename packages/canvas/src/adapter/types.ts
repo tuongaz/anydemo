@@ -54,7 +54,6 @@ export interface NodePatch {
   borderWidth?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
-  textColor?: ColorToken;
   cornerRadius?: number;
   /** Elevation level 0–5; renders as `var(--node-shadow-N)`. */
   shadow?: number;

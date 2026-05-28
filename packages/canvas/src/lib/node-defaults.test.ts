@@ -117,9 +117,9 @@ describe('buildNewShapeData with lastUsed', () => {
     const data = buildNewShapeData(
       'ellipse',
       { width: 160, height: 100 },
-      { cornerRadius: 12, borderColor: 'purple' },
+      { cornerRadius: 12, borderColor: 'violet' },
     );
-    expect(data.borderColor).toBe('purple');
+    expect(data.borderColor).toBe('violet');
     expect('cornerRadius' in data).toBe(false);
   });
 

@@ -73,7 +73,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   const sized = data.width !== undefined || data.height !== undefined;
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
-    ...colorTokenStyle(data.textColor, 'text'),
     ...(data.textAlign !== undefined ? { textAlign: data.textAlign } : {}),
   };
 
@@ -153,7 +152,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           icon={data.icon}
           selected={selected}
           fontSize={data.fontSize}
-          textColor={data.textColor}
           backgroundColor={data.backgroundColor}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}

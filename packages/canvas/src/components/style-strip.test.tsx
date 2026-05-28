@@ -139,10 +139,9 @@ describe('StyleStrip — icon color picker (US-014)', () => {
     expect((iconSwatch?.props as { previewKind?: string }).previewKind).toBe('edge');
 
     // None of the shared / geometric controls should appear in the icon-only
-    // strip — no fill, no border style/size, no font size, no corner radius
-    // or shadow.
-    expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-fill'))).toBeNull();
+    // strip — no color picker, no border style/size, no font size, no corner
+    // radius or shadow.
+    expect(findElement(tree, testIdEquals('style-strip-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-style'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-size'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-font-size'))).toBeNull();
@@ -193,14 +192,14 @@ describe('StyleStrip — icon color picker (US-014)', () => {
     const tree = callStrip({ nodes: [rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
     // The existing geometric strip should still be present.
-    expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-color'))).not.toBeNull();
   });
 
   it('does NOT render the icon-color swatch in a mixed (icon + geometric) selection', () => {
     const tree = callStrip({ nodes: [iconFixture('n1', 'blue'), rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
     // Shared controls drive the non-icon nodes; border-color swatch is visible.
-    expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-color'))).not.toBeNull();
   });
 
   it('the patch shape uses `color` (not borderColor/backgroundColor) — type-level check', () => {
@@ -325,10 +324,9 @@ describe('StyleStrip — image border editor (US-014)', () => {
     expect(findElement(tree, testIdEquals('style-strip-image-corner-radius'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-shadow'))).not.toBeNull();
     // Geometric-only controls must NOT leak into the image branch.
-    expect(findElement(tree, testIdEquals('style-strip-border-color'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-border-size'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-font-size'))).toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-fill'))).toBeNull();
     // Group-only controls must not leak either.
     expect(findElement(tree, testIdEquals('style-strip-group-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-group-border-width'))).toBeNull();
@@ -366,10 +364,10 @@ describe('StyleStrip — image border editor (US-014)', () => {
     });
     const swatch = findElement(tree, testIdEquals('style-strip-image-border-color'));
     if (!swatch) throw new Error('image border-color swatch missing');
-    (swatch.props as { onSelect: (t: string) => void }).onSelect('purple');
+    (swatch.props as { onSelect: (t: string) => void }).onSelect('violet');
     expect(onStyleNode).toHaveBeenCalledTimes(2);
-    expect(onStyleNode).toHaveBeenNthCalledWith(1, 'i1', { borderColor: 'purple' });
-    expect(onStyleNode).toHaveBeenNthCalledWith(2, 'i2', { borderColor: 'purple' });
+    expect(onStyleNode).toHaveBeenNthCalledWith(1, 'i1', { borderColor: 'violet' });
+    expect(onStyleNode).toHaveBeenNthCalledWith(2, 'i2', { borderColor: 'violet' });
   });
 
   it('the border-style toggle dispatches onStyleNode with { borderStyle }', () => {
@@ -425,7 +423,7 @@ describe('StyleStrip — image border editor (US-014)', () => {
     const tree = callStrip({ nodes: [imageFixture('i1'), rectangleFixture('s1')] });
     expect(findElement(tree, testIdEquals('style-strip-image-border-color'))).toBeNull();
     // Mixed selection falls through to the shared geometric strip.
-    expect(findElement(tree, testIdEquals('style-strip-border-color'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-color'))).not.toBeNull();
   });
 
   it('does NOT render the image branch when a connector is also selected', () => {
@@ -536,7 +534,7 @@ describe('StyleStrip — corners + shadow popovers', () => {
     const tree = callStrip({ nodes: [], connectors: [cn] });
     // Border-color button still renders (for connector color) but corners +
     // shadow are gated on hasNodes.
-    expect(findElement(tree, testIdEquals('style-strip-border-color-button'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-color-button'))).not.toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-corner-radius-button'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-shadow-button'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).toBeNull();
@@ -558,7 +556,97 @@ describe('StyleStrip — corners + shadow popovers', () => {
   });
 });
 
-// Align is the third section of the Text popover (next to Size + Color).
+// The unified Color popover replaces the separate Border-color / Fill /
+// Text-color affordances. A single pick writes BOTH `borderColor` and
+// `backgroundColor` atomically per undo entry — multi-node selections
+// route through the batched `onStyleNodes` API so the apply commits as
+// one undo-stack entry, single-node selections still use `onStyleNode`.
+describe('StyleStrip — unified Color picker', () => {
+  function findColorGrid(tree: unknown): ReactElementLike {
+    const grid = findElement(tree, testIdEquals('style-strip-color'));
+    if (!grid) throw new Error('style-strip-color grid missing');
+    return grid;
+  }
+
+  it('reads the active token from data.backgroundColor (the dominant visual)', () => {
+    const rect: FlowNode = {
+      id: 'r1',
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data: { name: 's', backgroundColor: 'amber', borderColor: 'blue' },
+    } as FlowNode;
+    const tree = callStrip({ nodes: [rect] });
+    const grid = findColorGrid(tree);
+    expect((grid.props as { activeToken?: string }).activeToken).toBe('amber');
+  });
+
+  it('falls back to data.borderColor on text shapes (chromeless — borderColor IS the label color)', () => {
+    const textNode: FlowNode = {
+      id: 't1',
+      type: 'text',
+      position: { x: 0, y: 0 },
+      data: { borderColor: 'green' },
+    } as FlowNode;
+    const tree = callStrip({ nodes: [textNode] });
+    const grid = findColorGrid(tree);
+    expect((grid.props as { activeToken?: string }).activeToken).toBe('green');
+  });
+
+  it('writes both borderColor and backgroundColor in a single per-node call for single selection', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [rectangleFixture('r1')], onStyleNode });
+    const grid = findColorGrid(tree);
+    (grid.props as { onSelect: (t: string) => void }).onSelect('teal');
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('r1', { borderColor: 'teal', backgroundColor: 'teal' });
+  });
+
+  it('writes both fields in ONE onStyleNodes batch for multi-node selection (single undo entry)', () => {
+    const onStyleNodes = mock(() => {});
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('a'), rectangleFixture('b')],
+      onStyleNode,
+      onStyleNodes,
+    });
+    const grid = findColorGrid(tree);
+    (grid.props as { onSelect: (t: string) => void }).onSelect('blue');
+    expect(onStyleNodes).toHaveBeenCalledTimes(1);
+    expect(onStyleNodes).toHaveBeenCalledWith(['a', 'b'], {
+      borderColor: 'blue',
+      backgroundColor: 'blue',
+    });
+    expect(onStyleNode).not.toHaveBeenCalled();
+  });
+
+  it('also fans the picked color out to connector color on mixed selections', () => {
+    const onStyleNode = mock(() => {});
+    const onStyleConnector = mock(() => {});
+    const cn: Connector = { id: 'c1', source: 'a', target: 'b' } as Connector;
+    const tree = callStrip({
+      nodes: [rectangleFixture('r1')],
+      connectors: [cn],
+      onStyleNode,
+      onStyleConnector,
+    });
+    const grid = findColorGrid(tree);
+    (grid.props as { onSelect: (t: string) => void }).onSelect('pink');
+    expect(onStyleNode).toHaveBeenCalledWith('r1', {
+      borderColor: 'pink',
+      backgroundColor: 'pink',
+    });
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { color: 'pink' });
+  });
+
+  it('uses connector.color as the active token for a pure-connector selection', () => {
+    const cn: Connector = { id: 'c1', source: 'a', target: 'b', color: 'red' } as Connector;
+    const tree = callStrip({ nodes: [], connectors: [cn] });
+    const grid = findColorGrid(tree);
+    expect((grid.props as { activeToken?: string }).activeToken).toBe('red');
+  });
+});
+
+// Align is the third section of the Text popover (next to Size).
 // Lets the user pick left / center / right for a node's text; persists via
 // the textAlign field on NodeStylePatch. Toggle defaults to 'center' when
 // the selected node has no explicit textAlign set yet.

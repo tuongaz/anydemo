@@ -204,8 +204,9 @@ describe('IconNode', () => {
 
     const coloredTree = callIconNode({ icon: 'shopping-cart', color: 'blue' });
     const coloredLucide = findElement(coloredTree, (type) => type === lucideType);
-    // 'blue' token resolves to the saturated edge HSL — color-tokens.ts:24.
-    expect(coloredLucide?.props.color).toBe('hsl(217, 91%, 60%)');
+    // 'blue' token's edge equals its border HSL in the curated palette — see
+    // THEMES.blue.border in color-tokens.ts.
+    expect(coloredLucide?.props.color).toBe('hsl(217, 85%, 45%)');
   });
 
   it('ResizeControls fires data.onResize on resize end with width/height/x/y', () => {

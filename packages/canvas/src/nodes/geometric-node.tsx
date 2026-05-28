@@ -251,13 +251,11 @@ function GeometricNodeImpl({
   const sized = data.width !== undefined || data.height !== undefined;
 
   const isText = shape === 'text';
-  const explicitTextColor = data.textColor;
-  const textColorStyle =
-    explicitTextColor !== undefined
-      ? colorTokenStyle(explicitTextColor, 'text')
-      : isText
-        ? colorTokenStyle(data.borderColor, 'text')
-        : {};
+  // Text shapes carry their label color in `borderColor` (the toolbar's
+  // unified "Color" pick writes both borderColor + backgroundColor, but on a
+  // chromeless text shape only borderColor matters). Other shapes inherit
+  // theme foreground.
+  const textColorStyle = isText ? colorTokenStyle(data.borderColor, 'text') : {};
   const colorStyle: CSSProperties = {
     ...shapeChromeStyle(shape, data),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
@@ -266,9 +264,8 @@ function GeometricNodeImpl({
   // `data.textAlign`; the fresh-text default is `'center'` since a chromeless
   // text node sits in a centered flex container and the previous
   // shrink-to-content button made multi-line text appear left-aligned. Other
-  // shapes (sticky / ellipse / header-body rectangle) keep their existing
-  // class-driven defaults unless the user explicitly picks an alignment via
-  // the strip's Align toggle.
+  // shapes keep their existing class-driven defaults unless the user picks
+  // an alignment via the strip's Align toggle.
   const resolvedTextAlign: 'left' | 'center' | 'right' | undefined =
     data.textAlign ?? (isText ? 'center' : undefined);
   const labelFontStyle: CSSProperties = {
@@ -276,14 +273,12 @@ function GeometricNodeImpl({
     ...textColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
   };
-  // Header-layout shapes paint a solid `node-header` bar above the faint
-  // body. The header title sits on the saturated color, so it needs
-  // contrast adaptation when the user hasn't picked an explicit textColor.
+  // Header-layout shapes paint a solid `node-header` bar above the body.
+  // The header title sits on the saturated color; the auto-adapt branch
+  // reads `THEMES[backgroundColor].text` via `'node-header-text'`.
   const headerLabelFontStyle: CSSProperties = {
     ...labelFontStyle,
-    ...(explicitTextColor === undefined
-      ? colorTokenStyle(data.backgroundColor, 'node-header-text')
-      : {}),
+    ...colorTokenStyle(data.backgroundColor, 'node-header-text'),
   };
   const style: CSSProperties = sized
     ? colorStyle

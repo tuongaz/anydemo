@@ -1,47 +1,48 @@
 import type { CSSProperties } from 'react';
 import type { ColorToken } from '../types.ts';
 
-// Per-token palette: `body` is the hue. The rendered body fill is
-// `hsla(H, S%, L%, BODY_ALPHA)` — a very subtle tint over the canvas
-// surface so the description text stays on a near-neutral background. The
-// `headerBackground` paints at FULL saturation (opaque hsl) so the header
-// reads as a proper title bar — solid color, no border-bottom separator.
-// `border` keeps its hand-tuned hue/saturation/lightness so the outline
-// reads as a subtly darker, less-saturated variant of the body.
-//
-// `default` and `none` are special-cased below — `default` uses theme
-// tokens so it adapts to dark mode; `none` paints transparent.
+// Curated palette. Every theme is a hand-tuned (body, header, border) tuple
+// at FULL opacity — no alpha trick. Bodies sit at L≥90 (pastel) so dark text
+// reads on them; headers sit at L≈38–60 (saturated mid) so they act as
+// proper title bars; borders sit at L≈30–52 (darker / more saturated than
+// the header) so the outline reads as a deeper variant of the same hue.
+// `text` flags whether the header is light enough for dark text (`'light'`)
+// or dark enough that it needs light text (`'dark'`) — `colorTokenStyle`
+// reads this directly for `'node-header-text'`, replacing the old
+// lightness-threshold heuristic.
 type Hsl = readonly [h: number, s: number, l: number];
 
-const BODY_ALPHA = 0.12;
+type ThemeToken =
+  | 'slate'
+  | 'red'
+  | 'orange'
+  | 'amber'
+  | 'green'
+  | 'teal'
+  | 'cyan'
+  | 'blue'
+  | 'indigo'
+  | 'violet'
+  | 'pink';
 
-const PALETTE: Record<
-  Exclude<ColorToken, 'default' | 'none' | 'white'>,
-  { body: Hsl; border: Hsl }
-> = {
-  slate: { body: [215, 16, 47], border: [215, 20, 40] },
-  gray: { body: [220, 9, 55], border: [220, 9, 46] },
-  red: { body: [0, 84, 60], border: [0, 70, 55] },
-  rose: { body: [347, 84, 60], border: [347, 70, 55] },
-  orange: { body: [25, 95, 55], border: [25, 80, 53] },
-  amber: { body: [38, 92, 50], border: [43, 70, 50] },
-  lime: { body: [85, 78, 55], border: [85, 60, 50] },
-  green: { body: [142, 71, 45], border: [142, 50, 45] },
-  teal: { body: [173, 80, 50], border: [173, 60, 45] },
-  cyan: { body: [189, 94, 55], border: [189, 70, 50] },
-  blue: { body: [217, 91, 60], border: [213, 70, 55] },
-  indigo: { body: [231, 88, 65], border: [231, 60, 60] },
-  violet: { body: [252, 88, 68], border: [252, 60, 62] },
-  purple: { body: [271, 91, 65], border: [270, 60, 60] },
-  pink: { body: [330, 81, 60], border: [330, 60, 60] },
+type Theme = { body: Hsl; header: Hsl; border: Hsl; text: 'light' | 'dark' };
+
+const THEMES: Record<ThemeToken, Theme> = {
+  slate: { body: [215, 16, 92], header: [215, 20, 45], border: [215, 25, 35], text: 'dark' },
+  red: { body: [0, 84, 94], header: [0, 70, 50], border: [0, 70, 42], text: 'dark' },
+  orange: { body: [25, 95, 92], header: [25, 85, 50], border: [25, 80, 42], text: 'dark' },
+  amber: { body: [43, 92, 90], header: [38, 85, 50], border: [38, 80, 42], text: 'dark' },
+  green: { body: [142, 50, 92], header: [142, 60, 38], border: [142, 65, 30], text: 'dark' },
+  teal: { body: [173, 60, 92], header: [173, 65, 38], border: [173, 70, 30], text: 'dark' },
+  cyan: { body: [189, 70, 92], header: [189, 75, 42], border: [189, 80, 35], text: 'dark' },
+  blue: { body: [217, 70, 93], header: [217, 80, 52], border: [217, 85, 45], text: 'dark' },
+  indigo: { body: [231, 60, 94], header: [231, 70, 58], border: [231, 75, 50], text: 'light' },
+  violet: { body: [262, 60, 94], header: [262, 70, 60], border: [262, 75, 52], text: 'light' },
+  pink: { body: [330, 70, 94], header: [330, 70, 58], border: [330, 75, 50], text: 'light' },
 };
 
 function hsl(h: number, s: number, l: number): string {
   return `hsl(${h}, ${s}%, ${l}%)`;
-}
-
-function hsla(h: number, s: number, l: number, a: number): string {
-  return `hsla(${h}, ${s}%, ${l}%, ${a})`;
 }
 
 type TokenEntry = {
@@ -52,25 +53,20 @@ type TokenEntry = {
 };
 
 const PAINTED_ENTRIES = Object.fromEntries(
-  (Object.entries(PALETTE) as [keyof typeof PALETTE, (typeof PALETTE)[keyof typeof PALETTE]][]).map(
-    ([token, { body, border }]) => {
-      const [bh, bs, bl] = body;
-      const [rh, rs, rl] = border;
-      const solid = hsl(bh, bs, bl);
-      const entry: TokenEntry = {
-        border: hsl(rh, rs, rl),
-        // Body sits at a very subtle alpha so it reads as a faint hue
-        // over the canvas surface — text stays on a near-neutral fill.
-        background: hsla(bh, bs, bl, BODY_ALPHA),
-        // Edge connectors and the header bar both paint at full
-        // saturation so they remain visually punchy.
-        edge: solid,
-        headerBackground: solid,
-      };
-      return [token, entry];
-    },
-  ),
-) as Record<keyof typeof PALETTE, TokenEntry>;
+  (Object.entries(THEMES) as [ThemeToken, Theme][]).map(([token, theme]) => {
+    const border = hsl(...theme.border);
+    const entry: TokenEntry = {
+      border,
+      // Body now paints at full opacity from the theme's pastel HSL.
+      background: hsl(...theme.body),
+      // Connectors + swatch chips paint at the border color (saturated).
+      edge: border,
+      // Header bar paints at the theme's mid-saturated header HSL.
+      headerBackground: hsl(...theme.header),
+    };
+    return [token, entry];
+  }),
+) as Record<ThemeToken, TokenEntry>;
 
 const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
   // `'none'` is rendered as transparent — `colorTokenStyle` short-circuits
@@ -82,17 +78,13 @@ const COLOR_TOKEN_MAP: Record<ColorToken, TokenEntry> = {
     headerBackground: 'transparent',
   },
   default: {
-    // Design system green — matches the canvas's --primary emerald token
-    // (#10b981 / hsl(160 84% 39.4%)). Applied so unstyled nodes carry the
-    // brand color on their border by default.
+    // Theme-driven so the unset fallback adapts to dark mode.
     border: 'hsl(var(--primary))',
     background: 'hsl(var(--card))',
     edge: 'hsl(var(--muted-foreground))',
     headerBackground: 'hsl(var(--muted))',
   },
   // White is opaque white throughout (body + header both solid white).
-  // No hsla alpha here — the user-facing "white" choice should look
-  // literally white, not a barely-there tint.
   white: {
     border: 'hsl(0, 0%, 100%)',
     background: 'hsl(0, 0%, 100%)',
@@ -106,19 +98,11 @@ export const COLOR_TOKENS = COLOR_TOKEN_MAP;
 
 export const NODE_DEFAULT_BG_WHITE = 'hsl(var(--card))';
 
-// Foreground used by `'node-header-text'` when the header bar is painted
-// with a color token (skipped for `'default'` / `'none'` / undefined —
-// those keep the theme foreground). Light headers get dark text, dark
-// headers get light text so the title stays readable on the solid bar.
+// Foreground used by `'node-header-text'`. Light headers (text:'light') get
+// dark text; dark headers (text:'dark') get light text. Picked once from the
+// theme tuple at apply time — no runtime lightness arithmetic.
 const TEXT_ON_LIGHT = 'hsl(220, 15%, 15%)';
 const TEXT_ON_DARK = 'hsl(0, 0%, 98%)';
-const TEXT_LIGHTNESS_THRESHOLD = 60;
-
-function paintedLightness(token: ColorToken): number | null {
-  if (token === 'white') return 100;
-  if (token in PALETTE) return PALETTE[token as keyof typeof PALETTE].body[2];
-  return null;
-}
 
 export type NodeColorStyle = Pick<CSSProperties, 'borderColor' | 'backgroundColor'>;
 export type NodeHeaderColorStyle = Pick<CSSProperties, 'backgroundColor'>;
@@ -141,9 +125,6 @@ export function colorTokenStyle(
   kind: 'node' | 'node-header' | 'node-header-text' | 'edge' | 'text',
 ): NodeColorStyle | NodeHeaderColorStyle | EdgeColorStyle | TextColorStyle {
   const resolved = token ?? 'default';
-  // `'none'` short-circuits every kind to transparent. The picker hides the
-  // `'none'` slot for text and edge kinds, but if it ever reaches here we
-  // still return a sane no-op rather than reading the placeholder entry.
   if (resolved === 'none') {
     if (kind === 'node') return { borderColor: 'transparent', backgroundColor: 'transparent' };
     if (kind === 'node-header') return { backgroundColor: 'transparent' };
@@ -152,9 +133,9 @@ export function colorTokenStyle(
   }
   if (kind === 'node-header-text') {
     if (resolved === 'default') return {};
-    const l = paintedLightness(resolved);
-    if (l === null) return {};
-    return { color: l >= TEXT_LIGHTNESS_THRESHOLD ? TEXT_ON_LIGHT : TEXT_ON_DARK };
+    if (resolved === 'white') return { color: TEXT_ON_LIGHT };
+    const theme = THEMES[resolved as ThemeToken];
+    return { color: theme.text === 'light' ? TEXT_ON_LIGHT : TEXT_ON_DARK };
   }
   const entry = COLOR_TOKEN_MAP[resolved];
   if (kind === 'edge') return { stroke: entry.edge };

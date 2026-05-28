@@ -74,7 +74,6 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
     ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
-    ...colorTokenStyle(data.textColor, 'text'),
   };
 
   const outerStyle: CSSProperties = userSized
@@ -188,7 +187,6 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
             icon={data.icon}
             selected={selected}
             fontSize={data.fontSize}
-            textColor={data.textColor}
             backgroundColor={data.backgroundColor}
             onNameChange={data.onNameChange}
             onIconChange={data.onIconChange}

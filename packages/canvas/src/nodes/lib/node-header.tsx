@@ -18,14 +18,12 @@ export interface NodeHeaderProps {
   icon?: string | null;
   selected?: boolean;
   fontSize?: number;
-  /** Color-token name; resolved internally via colorTokenStyle. */
-  textColor?: ColorToken;
   /**
    * Node body color. When set to a painted token (anything other than
-   * `'default'` / `'none'` / undefined), the header paints itself at FULL
-   * saturation (solid hsl from `'node-header'`) so it reads as a proper
-   * title bar over the body's very faint tint, and the title text auto-
-   * adapts for contrast via `'node-header-text'`.
+   * `'default'` / `'none'` / undefined), the header paints itself at the
+   * theme's saturated header HSL so it reads as a proper title bar over the
+   * body's pastel fill, and the title text auto-adapts for contrast via
+   * `'node-header-text'`.
    */
   backgroundColor?: ColorToken;
   /** When omitted, the title is read-only. */
@@ -44,7 +42,6 @@ export function NodeHeader({
   icon,
   selected,
   fontSize,
-  textColor,
   backgroundColor,
   onNameChange,
   onIconChange,
@@ -58,25 +55,21 @@ export function NodeHeader({
   const nameEditable = !!onNameChange;
   const iconEditable = !!onIconChange && !!selected && !!icon;
 
-  // When the host node is painted with a color token, paint the header
-  // at full saturation from the same palette family and adapt the title
-  // text color for contrast. When unset (or `'default'` / `'none'`), the
-  // Tailwind `sf:bg-muted` fallback paints the header.
+  // When the host node is painted with a color token, paint the header at
+  // the theme's mid-saturated HSL and adapt the title text for contrast.
+  // When unset (or `'default'` / `'none'`), the Tailwind `sf:bg-muted`
+  // fallback paints the header.
   const headerColored =
     backgroundColor !== undefined && backgroundColor !== 'default' && backgroundColor !== 'none';
   const headerBackgroundStyle = headerColored
     ? colorTokenStyle(backgroundColor, 'node-header')
     : undefined;
-  // Explicit text-color choice still wins; the header-text adaptation
-  // only applies when the user hasn't set a textColor on the node.
-  const adaptedTextStyle =
-    headerColored && textColor === undefined
-      ? colorTokenStyle(backgroundColor, 'node-header-text')
-      : undefined;
+  const adaptedTextStyle = headerColored
+    ? colorTokenStyle(backgroundColor, 'node-header-text')
+    : undefined;
 
   const labelFontStyle: CSSProperties = {
     ...(fontSize !== undefined ? { fontSize: `${fontSize}px` } : {}),
-    ...colorTokenStyle(textColor, 'text'),
     ...adaptedTextStyle,
   };
 
@@ -125,12 +118,7 @@ export function NodeHeader({
                 onMouseDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
               >
-                <Icon
-                  name={icon}
-                  size={16}
-                  style={{ ...colorTokenStyle(textColor, 'text'), ...adaptedTextStyle }}
-                  aria-hidden
-                />
+                <Icon name={icon} size={16} style={adaptedTextStyle} aria-hidden />
               </button>
             }
           />
@@ -139,7 +127,7 @@ export function NodeHeader({
             name={icon}
             size={16}
             className="sf:shrink-0"
-            style={{ ...colorTokenStyle(textColor, 'text'), ...adaptedTextStyle }}
+            style={adaptedTextStyle}
             aria-hidden
           />
         )

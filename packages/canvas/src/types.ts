@@ -10,19 +10,15 @@ export type ColorToken =
   | 'default'
   | 'white'
   | 'slate'
-  | 'gray'
   | 'red'
-  | 'rose'
   | 'orange'
   | 'amber'
-  | 'lime'
   | 'green'
   | 'teal'
   | 'cyan'
   | 'blue'
   | 'indigo'
   | 'violet'
-  | 'purple'
   | 'pink';
 
 export interface NodeVisual {
@@ -33,7 +29,6 @@ export interface NodeVisual {
   borderSize?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
-  textColor?: ColorToken;
   /**
    * Horizontal alignment for the node's text content. Defaults to `'center'`
    * at render time when unset (most node labels read better centered); the
@@ -135,7 +130,6 @@ export const CANVAS_NODE_DATA_FIELDS = {
   borderSize: true,
   borderStyle: true,
   fontSize: true,
-  textColor: true,
   textAlign: true,
   cornerRadius: true,
   shadow: true,

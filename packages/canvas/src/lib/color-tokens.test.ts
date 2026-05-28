@@ -2,24 +2,23 @@ import { describe, expect, it } from 'bun:test';
 import type { ColorToken } from '../types.ts';
 import { COLOR_TOKENS, colorTokenStyle } from './color-tokens.ts';
 
+// The 14-slot curated palette: 11 themed tokens + the 3 specials. The
+// `gray`/`rose`/`lime`/`purple` entries were dropped — the studio's Zod
+// transform forward-migrates them to the nearest surviving neighbor.
 const ALL_TOKENS: ColorToken[] = [
   'none',
   'default',
   'white',
   'slate',
-  'gray',
   'red',
-  'rose',
   'orange',
   'amber',
-  'lime',
   'green',
   'teal',
   'cyan',
   'blue',
   'indigo',
   'violet',
-  'purple',
   'pink',
 ];
 
@@ -28,10 +27,9 @@ const ALL_TOKENS: ColorToken[] = [
 // `colorTokenStyle` short-circuits before reading them.
 const PAINTED_TOKENS: ColorToken[] = ALL_TOKENS.filter((t) => t !== 'none');
 
-// Tokens whose body is rendered at a subtle alpha tint over the canvas
-// surface. White and default stay opaque/theme-backed, so they're excluded
-// from the hsla-fill assertions.
-const TRANSLUCENT_BODY_TOKENS: ColorToken[] = PAINTED_TOKENS.filter(
+// The 11 themed tokens — used in palette-math assertions that don't apply to
+// the theme-backed `default` or the opaque-white `white` token.
+const THEMED_TOKENS: ColorToken[] = PAINTED_TOKENS.filter(
   (t) => t !== 'default' && t !== 'white',
 );
 
@@ -40,7 +38,6 @@ describe('COLOR_TOKENS map', () => {
     for (const token of ALL_TOKENS) {
       expect(COLOR_TOKENS[token]).toBeDefined();
     }
-    // No extra keys beyond the enum.
     expect(Object.keys(COLOR_TOKENS).sort()).toEqual([...ALL_TOKENS].sort());
   });
 
@@ -68,33 +65,33 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
   });
 
-  it('paints translucent-body tokens with an hsla() body fill at the shared body alpha', () => {
-    for (const token of TRANSLUCENT_BODY_TOKENS) {
+  it('paints themed-token bodies at FULL opacity (opaque hsl, no alpha)', () => {
+    for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.background.startsWith('hsla(')).toBe(true);
-      expect(entry.background).toContain(', 0.12)');
+      expect(entry.background.startsWith('hsl(')).toBe(true);
+      expect(entry.background).not.toMatch(/hsla\(/);
     }
   });
 
-  it('paints headerBackground at full saturation (opaque hsl) for every painted token', () => {
-    for (const token of PAINTED_TOKENS.filter((t) => t !== 'default')) {
+  it('paints headerBackground at the saturated header HSL for every themed token', () => {
+    for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
       expect(entry.headerBackground.startsWith('hsl(')).toBe(true);
       expect(entry.headerBackground).not.toMatch(/hsla\(/);
     }
   });
 
-  it('headerBackground differs from body for translucent-body tokens (header is solid, body is tinted)', () => {
-    for (const token of TRANSLUCENT_BODY_TOKENS) {
+  it('headerBackground differs from body for themed tokens (header is saturated, body is pastel)', () => {
+    for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
       expect(entry.headerBackground).not.toBe(entry.background);
     }
   });
 
-  it('headerBackground matches edge for translucent-body tokens (both at full saturation)', () => {
-    for (const token of TRANSLUCENT_BODY_TOKENS) {
+  it('edge equals border for themed tokens (connectors paint at the border color)', () => {
+    for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.headerBackground).toBe(entry.edge);
+      expect(entry.edge).toBe(entry.border);
     }
   });
 });
@@ -153,25 +150,30 @@ describe('colorTokenStyle', () => {
       expect(colorTokenStyle('none', 'node-header-text')).toEqual({});
     });
 
-    it('returns dark text for light-header tokens', () => {
+    it('returns dark text for light-header tokens (text:"light")', () => {
       const darkText = 'hsl(220, 15%, 15%)';
-      for (const token of [
-        'white',
-        'indigo',
-        'violet',
-        'purple',
-        'red',
-        'rose',
-        'blue',
-        'pink',
-      ] as const) {
+      // `white` is opaque white throughout — treated as a light header so
+      // the title stays readable. The themed tokens with `text:'light'` in
+      // the THEMES table (header L≥58) get dark text too.
+      for (const token of ['white', 'indigo', 'violet', 'pink'] as const) {
         expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: darkText });
       }
     });
 
-    it('returns light text for darker-header tokens', () => {
+    it('returns light text for darker-header tokens (text:"dark")', () => {
       const lightText = 'hsl(0, 0%, 98%)';
-      for (const token of ['slate', 'green', 'teal', 'amber'] as const) {
+      // Themed tokens whose header HSL has L < 55 — light text reads on the
+      // saturated mid-dark header bar.
+      for (const token of [
+        'slate',
+        'red',
+        'orange',
+        'amber',
+        'green',
+        'teal',
+        'cyan',
+        'blue',
+      ] as const) {
         expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: lightText });
       }
     });

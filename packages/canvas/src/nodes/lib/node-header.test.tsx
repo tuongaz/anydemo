@@ -291,14 +291,6 @@ describe('NodeHeader — title styling', () => {
     expect(style.fontSize).toBe('24px');
   });
 
-  it('applies textColor token via colorTokenStyle on the title', () => {
-    const tree = callNodeHeader({ textColor: 'blue' });
-    const title = findByTestId(tree, 'node-title');
-    const style = (title?.props as { style?: CSSProperties }).style ?? {};
-    const expected = colorTokenStyle('blue', 'text');
-    expect(style.color).toBe(expected.color);
-  });
-
   it('emits no fontSize key when fontSize is undefined', () => {
     const tree = callNodeHeader();
     const title = findByTestId(tree, 'node-title');
@@ -340,17 +332,10 @@ describe('NodeHeader — colored background', () => {
     expect(className).not.toMatch(/\bsf:border-b\b/);
   });
 
-  it('adapts the title color via node-header-text when no explicit textColor is set', () => {
+  it('adapts the title color via node-header-text when backgroundColor is a painted token', () => {
     const tree = callNodeHeader({ backgroundColor: 'blue' });
     const title = findByTestId(tree, 'node-title');
     const style = (title?.props as { style?: CSSProperties }).style ?? {};
     expect(style.color).toBe(colorTokenStyle('blue', 'node-header-text').color);
-  });
-
-  it('lets an explicit textColor win over the adapted header-text color', () => {
-    const tree = callNodeHeader({ backgroundColor: 'blue', textColor: 'red' });
-    const title = findByTestId(tree, 'node-title');
-    const style = (title?.props as { style?: CSSProperties }).style ?? {};
-    expect(style.color).toBe(colorTokenStyle('red', 'text').color);
   });
 });

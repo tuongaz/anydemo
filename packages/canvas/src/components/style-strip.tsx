@@ -43,10 +43,6 @@ export interface NodeStylePatch {
   borderWidth?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
-  /** Optional explicit label/text color for the node. Falls back to theme
-   * foreground when unset. Text shapes also fall back to `borderColor` for
-   * backward compat with older demos that stored their text color there. */
-  textColor?: ColorToken;
   /** Horizontal alignment for the node's text content. Defaults to `'center'`
    * at render time when unset. */
   textAlign?: 'left' | 'center' | 'right';
@@ -113,29 +109,23 @@ const DEFAULT_CORNER_RADIUS = 8;
 // `shadow` set — keeps the readout meaningful when the popover first opens.
 const DEFAULT_SHADOW = 1;
 
-// Pickable palette: `'none'` + 17 named colors (incl. `white`). `'default'`
-// is intentionally omitted — it's a fallback for unset values, not a
-// user-facing choice; the half/half swatch confused users who couldn't tell
-// what they were picking. `'none'` renders transparent border / fill —
-// hidden from text-color and connector-color pickers via
-// `<ColorSwatchGrid allowNone={false}>`.
+// Pickable palette: `'none'` + `'white'` + the 11 curated themed tokens.
+// `'default'` is intentionally omitted — it's a fallback for unset values,
+// not a user-facing choice. `'none'` renders transparent border + fill —
+// hidden from the connector-color picker via `<ColorSwatchGrid allowNone={false}>`.
 const PALETTE_TOKENS: ColorToken[] = [
   'none',
   'white',
   'slate',
-  'gray',
   'red',
-  'rose',
   'orange',
   'amber',
-  'lime',
   'green',
   'teal',
   'cyan',
   'blue',
   'indigo',
   'violet',
-  'purple',
   'pink',
 ];
 
@@ -235,12 +225,22 @@ export function StyleStrip({
   // shared border controls visible, so the guard is gated on `pureNode`.
   const isTextShape = pureNode && firstNode?.type === 'text';
 
-  // Resolve current visual state. For pure-connector selections, the
-  // border-color trigger reflects the connector's color; for pure-node
-  // selections, the node's borderColor.
-  const borderColorActive: ColorToken =
-    (pureConnector ? firstConnector?.color : firstVisualNode?.data.borderColor) ?? 'default';
-  const backgroundActive: ColorToken = firstVisualNode?.data.backgroundColor ?? 'default';
+  // Resolve current visual state. The unified "Color" trigger reads the
+  // node's dominant visual:
+  //  - pure-connector → firstConnector.color
+  //  - text shape → firstNode.borderColor (chromeless shapes carry their
+  //    label color on borderColor; the unified pick still writes both fields
+  //    but the renderer only consumes borderColor on text)
+  //  - else (rectangle/sticky/illustrative) → firstNode.backgroundColor (the
+  //    body fill — the dominant visual). Mixed selections with a mismatched
+  //    borderColor vs backgroundColor (legacy data) read backgroundColor and
+  //    the picker overwrites both on click, reconciling on first edit.
+  const colorActive: ColorToken =
+    (pureConnector
+      ? firstConnector?.color
+      : isTextShape
+        ? firstVisualNode?.data.borderColor
+        : firstVisualNode?.data.backgroundColor) ?? 'default';
   const borderStyleActiveNode = (firstVisualNode?.data.borderStyle ?? 'solid') as
     | 'solid'
     | 'dashed'
@@ -251,12 +251,22 @@ export function StyleStrip({
 
   // Apply helpers — fan out a single user pick to every selected entity.
   // For "shared" properties on mixed selections, both fan-outs run.
-  const applyBorderColor = (token: ColorToken) => {
-    for (const n of nodes) onStyleNode(n.id, { borderColor: token });
+  //
+  // The unified "Color" picker writes BOTH `borderColor` and `backgroundColor`
+  // atomically per undo entry. Multi-node selections route through the batched
+  // `onStyleNodes` API so the apply commits as a single undo-stack entry;
+  // single-node selections still go through `onStyleNode` (behaviour unchanged
+  // for the per-node case, which is already atomic).
+  const applyColor = (token: ColorToken) => {
+    if (nodes.length > 1 && onStyleNodes) {
+      onStyleNodes(
+        nodes.map((n) => n.id),
+        { borderColor: token, backgroundColor: token },
+      );
+    } else {
+      for (const n of nodes) onStyleNode(n.id, { borderColor: token, backgroundColor: token });
+    }
     for (const c of connectors) onStyleConnector(c.id, { color: token });
-  };
-  const applyBackgroundColor = (token: ColorToken) => {
-    for (const n of nodes) onStyleNode(n.id, { backgroundColor: token });
   };
   const applyBorderStyle = (style: 'solid' | 'dashed' | 'dotted') => {
     for (const n of nodes) onStyleNode(n.id, { borderStyle: style });
@@ -300,23 +310,7 @@ export function StyleStrip({
   const fontSizeIndeterminate =
     visualNodes.length > 1 &&
     new Set(visualNodes.map((n) => n.data.fontSize ?? NODE_FONT_SIZE_DEFAULT)).size > 1;
-  // Text color: explicit `textColor` field on the first visual node; for text
-  // shapes (no chrome) we fall back to `borderColor` since older demos stored
-  // text color there. Mirrors the renderer fallback in shape-node.tsx.
-  const applyTextColor = (token: ColorToken) => {
-    if (nodes.length > 1 && onStyleNodes) {
-      onStyleNodes(
-        nodes.map((node) => node.id),
-        { textColor: token },
-      );
-    } else {
-      for (const node of nodes) onStyleNode(node.id, { textColor: token });
-    }
-  };
-  const textColorActive: ColorToken =
-    firstVisualNode?.data.textColor ??
-    (isTextShape ? (firstVisualNode?.data.borderColor ?? 'default') : 'default');
-  // Text alignment fan-out. Mirrors the textColor apply path so multi-node
+  // Text alignment fan-out. Mirrors the unified color apply path so multi-node
   // selections commit through the atomic batch API when available, falling
   // back to the per-node loop otherwise. Active value defaults to
   // DEFAULT_TEXT_ALIGN (center) when unset so the toggle reads "Center" out
@@ -389,15 +383,10 @@ export function StyleStrip({
   const widthDefault = pureConnector ? DEFAULT_STROKE_WIDTH : DEFAULT_BORDER_SIZE;
 
   const colorTriggerKind: SwatchPreviewKind = pureConnector ? 'edge' : 'border';
-  const colorTooltip = pureConnector ? 'Connector color' : isTextShape ? 'Color' : 'Border color';
-  const colorAriaLabel = pureConnector ? 'connector color' : isTextShape ? 'color' : 'border color';
-  const colorInnerTestId = pureConnector
-    ? 'style-tab-edge-color-trigger'
-    : isTextShape
-      ? 'style-tab-color-trigger'
-      : 'style-tab-border-color-trigger';
-  const colorTokenPrefix =
-    pureConnector || isTextShape ? 'style-tab-color' : 'style-tab-border-color';
+  const colorTooltip = pureConnector ? 'Connector color' : 'Color';
+  const colorAriaLabel = pureConnector ? 'connector color' : 'color';
+  const colorInnerTestId = 'style-tab-color-trigger';
+  const colorTokenPrefix = 'style-tab-color';
 
   if (pureIconType) {
     // US-022: Change-icon button reuses the same callback the icon node's
@@ -606,39 +595,25 @@ export function StyleStrip({
 
   // Per-control popover triggers. Each styling control gets its own icon
   // button so users can land on it in one click:
-  //   • Border color: one swatch grid (also serves connector color).
-  //   • Fill:         swatch grid; only when `showFillSection`.
+  //   • Color:        unified swatch grid — writes both borderColor and
+  //                   backgroundColor atomically per undo entry; also serves
+  //                   connector color when only connectors are selected.
   //   • Corners:      slider; only when `hasNodes`.
   //   • Shadow:       slider; only when `hasNodes`.
   //   • Border:       line style + width (hidden for text shapes — chromeless).
-  //   • Text:         font size + text color (text color hidden for pure-connector,
-  //                   since a connector has no separate text color — its label
-  //                   tracks the edge color).
-  const showFillSection = pureNode && !isTextShape;
+  //   • Text:         font size + alignment (text color collapsed into the
+  //                   unified Color picker; connectors keep just size).
   const showBorderSection = !isTextShape;
-  const showTextColorSection = !pureConnector;
-  // Single-swatch trigger for the Border color popover button. For connectors
-  // the swatch reflects the connector color; for nodes it reflects
-  // `borderColor`. `'none'` renders the diagonal-slash affordance.
-  const renderBorderColorTrigger = () => {
-    const isNone = borderColorActive === 'none';
+  // Single-swatch trigger for the unified Color popover button. Reads
+  // `colorActive` (the dominant visual — body fill for chromed nodes,
+  // connector/border color for connectors / text shapes). `'none'` renders
+  // the diagonal-slash affordance.
+  const renderColorTrigger = () => {
+    const isNone = colorActive === 'none';
     return (
       <span
         className={cn('sf:relative sf:h-5 sf:w-5 sf:rounded-full', isNone && 'sf:bg-card')}
-        style={!isNone ? swatchFillStyle(borderColorActive) : undefined}
-      >
-        {isNone ? <NoColorSlash /> : null}
-      </span>
-    );
-  };
-  // Single-swatch trigger for the Fill popover button. Mirrors the border-color
-  // trigger but reads the `backgroundColor` token.
-  const renderFillTrigger = () => {
-    const isNone = backgroundActive === 'none';
-    return (
-      <span
-        className={cn('sf:relative sf:h-5 sf:w-5 sf:rounded-full', isNone && 'sf:bg-card')}
-        style={!isNone ? swatchFillStyle(backgroundActive) : undefined}
+        style={!isNone ? swatchFillStyle(colorActive) : undefined}
       >
         {isNone ? <NoColorSlash /> : null}
       </span>
@@ -653,44 +628,23 @@ export function StyleStrip({
         data-testid="canvas-style-strip"
         className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
       >
-        {!isTextShape ? (
-          <PopoverButton
-            testId="style-strip-border-color-button"
-            tooltip={colorTooltip}
+        <PopoverButton
+          testId="style-strip-color-button"
+          tooltip={colorTooltip}
+          ariaLabel={colorAriaLabel}
+          renderIcon={renderColorTrigger}
+        >
+          <ColorSwatchGrid
+            testId="style-strip-color"
+            activeToken={colorActive}
+            previewKind={colorTriggerKind}
+            tokenTestIdPrefix={colorTokenPrefix}
+            innerTestId={colorInnerTestId}
             ariaLabel={colorAriaLabel}
-            renderIcon={renderBorderColorTrigger}
-          >
-            <ColorSwatchGrid
-              testId="style-strip-border-color"
-              activeToken={borderColorActive}
-              previewKind={colorTriggerKind}
-              tokenTestIdPrefix={colorTokenPrefix}
-              innerTestId={colorInnerTestId}
-              ariaLabel={colorAriaLabel}
-              allowNone={!pureConnector}
-              onSelect={applyBorderColor}
-            />
-          </PopoverButton>
-        ) : null}
-
-        {showFillSection ? (
-          <PopoverButton
-            testId="style-strip-fill-button"
-            tooltip="Fill"
-            ariaLabel="fill"
-            renderIcon={renderFillTrigger}
-          >
-            <ColorSwatchGrid
-              testId="style-strip-fill"
-              activeToken={backgroundActive}
-              previewKind="background"
-              tokenTestIdPrefix="style-tab-background-color"
-              innerTestId="style-tab-background-color-trigger"
-              ariaLabel="fill"
-              onSelect={applyBackgroundColor}
-            />
-          </PopoverButton>
-        ) : null}
+            allowNone={!pureConnector}
+            onSelect={applyColor}
+          />
+        </PopoverButton>
 
         {hasNodes ? (
           <PopoverButton
@@ -819,20 +773,6 @@ export function StyleStrip({
                   }
                 />
               </PopoverSection>
-              {showTextColorSection ? (
-                <PopoverSection label="Color">
-                  <ColorSwatchGrid
-                    testId="style-strip-text-color"
-                    activeToken={textColorActive}
-                    previewKind="edge"
-                    tokenTestIdPrefix="style-tab-text-color"
-                    innerTestId="style-tab-text-color-trigger"
-                    ariaLabel="text color"
-                    allowNone={false}
-                    onSelect={applyTextColor}
-                  />
-                </PopoverSection>
-              ) : null}
               {hasNodes ? (
                 <PopoverSection label="Align" testId="style-strip-text-align">
                   <IconToggleGroup<TextAlign>
