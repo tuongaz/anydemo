@@ -598,7 +598,10 @@ describe('StyleStrip — unified Color picker', () => {
     const grid = findColorGrid(tree);
     (grid.props as { onSelect: (t: string) => void }).onSelect('teal');
     expect(onStyleNode).toHaveBeenCalledTimes(1);
-    expect(onStyleNode).toHaveBeenCalledWith('r1', { borderColor: 'teal', backgroundColor: 'teal' });
+    expect(onStyleNode).toHaveBeenCalledWith('r1', {
+      borderColor: 'teal',
+      backgroundColor: 'teal',
+    });
   });
 
   it('writes both fields in ONE onStyleNodes batch for multi-node selection (single undo entry)', () => {

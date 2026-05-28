@@ -29,9 +29,7 @@ const PAINTED_TOKENS: ColorToken[] = ALL_TOKENS.filter((t) => t !== 'none');
 
 // The 11 themed tokens — used in palette-math assertions that don't apply to
 // the theme-backed `default` or the opaque-white `white` token.
-const THEMED_TOKENS: ColorToken[] = PAINTED_TOKENS.filter(
-  (t) => t !== 'default' && t !== 'white',
-);
+const THEMED_TOKENS: ColorToken[] = PAINTED_TOKENS.filter((t) => t !== 'default' && t !== 'white');
 
 describe('COLOR_TOKENS map', () => {
   it('has an entry for every ColorToken enum value', () => {
