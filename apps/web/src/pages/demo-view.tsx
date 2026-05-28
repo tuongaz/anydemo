@@ -256,13 +256,12 @@ export function DemoView({
     rfInstanceRef.current = instance;
   }, []);
   const undoStack = useUndoStack();
-  // Only `markMutation` / `clear` / `lastMutationAt` are still consumed:
-  // `markMutation` stamps every mutation so the SSE stale-clear (Task 25)
-  // can treat the echo as ours; `clear` resets on flow switch; and
-  // `lastMutationAt` feeds the same stale-clear comparison. Push / undo /
-  // redo / canUndo / canRedo / dropTop are all owned by the wrapped
-  // adapter's `history` handle now — the hook itself is deleted in Task 27.
-  const { markMutation, clear: clearUndo, lastMutationAt: undoLastMutationAt } = undoStack;
+  // Only `markMutation` is still consumed: it stamps every mutation so the
+  // wrapped adapter's `history.markExternalChange()` knows whether the next
+  // SSE echo is ours or external. Push / undo / redo / canUndo / canRedo /
+  // dropTop / clear / lastMutationAt are all owned by the wrapped adapter's
+  // `history` handle now — the hook itself is deleted in Task 27.
+  const { markMutation } = undoStack;
 
   const { reset: resetNodeOverrides } = nodePending;
   const { reset: resetConnectorOverrides } = connectorPending;
@@ -285,7 +284,9 @@ export function DemoView({
     // US-008: drop any in-flight upload retry entries — they're scoped to the
     // previous demo's optimistic nodes which have already been reset above.
     imageRetryRef.current.clear();
-    undoStack.clear();
+    // History stack is per-flow — the `useMemo` keyed on `[rawAdapter,
+    // detail?.id]` rebuilds the wrapper on flow switch so a fresh empty
+    // history falls out naturally. No manual clear needed here.
   }, [detail?.id]);
 
   // React Flow's onSelectionChange — fires for marquee, click, multi-key
@@ -309,42 +310,6 @@ export function DemoView({
   const { pruneAgainst: pruneConnectorOverrides } = connectorPending;
   const { pruneAgainst: pruneNodeDeletions } = nodeDeletions;
   const { pruneAgainst: pruneConnectorDeletions } = connectorDeletions;
-
-  // After every demo reload, drop override fields whose values already match
-  // the on-disk demo. Reconciling here (not skipping the broadcast on the
-  // server) means an editor-driven change still lands cleanly: the matching
-  // overrides clear, and the next render uses the server value.
-  //
-  // The stale-mutation check piggy-backs on the same effect: if the reload
-  // arrives more than STALE_MUTATION_WINDOW_MS after the most recent UI
-  // mutation, it's almost certainly external (text editor / git checkout) and
-  // any queued undo entries point at a state the file no longer has — clear
-  // them so undo never replays against stale state. `undoLastMutationAt` is a
-  // ref-getter (not a value) so it doesn't churn this effect's deps.
-  useEffect(() => {
-    if (demoNodes) {
-      pruneNodeOverrides(demoNodes);
-      // US-016: drop optimistic-delete ids the server has confirmed gone.
-      // If a node is still in the snapshot the delete is in flight and the
-      // suppression must stay until SSE catches up.
-      pruneNodeDeletions(demoNodes);
-    }
-    if (Date.now() - undoLastMutationAt() > 2000) clearUndo();
-  }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, undoLastMutationAt, clearUndo]);
-
-  useEffect(() => {
-    if (demoConnectors) {
-      pruneConnectorOverrides(demoConnectors);
-      pruneConnectorDeletions(demoConnectors);
-    }
-    if (Date.now() - undoLastMutationAt() > 2000) clearUndo();
-  }, [
-    demoConnectors,
-    pruneConnectorOverrides,
-    pruneConnectorDeletions,
-    undoLastMutationAt,
-    clearUndo,
-  ]);
 
   // Drop the optimistic z-order override once the server's nodes array order
   // matches it (SSE echo of the file rewrite landed). If the server array
@@ -392,6 +357,37 @@ export function DemoView({
     () => wrapAdapterWithHistory(rawAdapter, () => flowStateRef.current),
     [rawAdapter, flowId],
   );
+
+  // After every demo reload, drop override fields whose values already match
+  // the on-disk demo. Reconciling here (not skipping the broadcast on the
+  // server) means an editor-driven change still lands cleanly: the matching
+  // overrides clear, and the next render uses the server value.
+  //
+  // The stale-mutation check piggy-backs on the same effect via
+  // `history.markExternalChange()`: the wrapper internally compares its own
+  // `lastMutationAt` (stamped by every intercepted adapter call) against the
+  // STALE_MUTATION_WINDOW_MS threshold and clears the history stack when the
+  // reload looks external (text editor / git checkout). The constant lives
+  // inside `@seeflow/canvas` now — host stays out of the timing math.
+  useEffect(() => {
+    if (demoNodes) {
+      pruneNodeOverrides(demoNodes);
+      // US-016: drop optimistic-delete ids the server has confirmed gone.
+      // If a node is still in the snapshot the delete is in flight and the
+      // suppression must stay until SSE catches up.
+      pruneNodeDeletions(demoNodes);
+    }
+    history.markExternalChange();
+  }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, history]);
+
+  useEffect(() => {
+    if (demoConnectors) {
+      pruneConnectorOverrides(demoConnectors);
+      pruneConnectorDeletions(demoConnectors);
+    }
+    history.markExternalChange();
+  }, [demoConnectors, pruneConnectorOverrides, pruneConnectorDeletions, history]);
+
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   // US-025: flow switcher mutation dialogs. Open state lives in this page so
   // the popover (which closes on action) can hand off without keeping itself
