@@ -21,30 +21,46 @@ Run `$SEEFLOW help` once and confirm every required subcommand is present: `proj
 
 If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), surface the failure (`$SEEFLOW unresolved — neither local binary nor npx fallback available`) and stop.
 
+### componentCatalog support — set `$hasComponentCatalog` here
+
+The `componentCatalog` schema category (the discoverable element-type catalog the planner needs for `type:'component'` nodes) was added in `@tuongaz/seeflow` **0.1.94**. Older binaries lack it. Determine support **now**, with the always-safe schema-index call — it lists whatever categories the installed binary actually has and never errors on version:
+
+```
+$SEEFLOW schema   # → { categories:[{name:'flow',…},…], usage:{…} }
+$hasComponentCatalog = .categories[].name contains "componentCatalog"
+```
+
+- `$hasComponentCatalog === true` → the catalog is discoverable; the schema cache below fetches it and `$componentCatalog` feeds the planner as documented.
+- `$hasComponentCatalog === false` → the binary predates 0.1.94. **Do not** add `componentCatalog` to the parallel cache batch below (a `notFound` error in a parallel batch cancels its sibling fetches — that is how a single bad call takes out the `style` fetch too). Carry `$componentCatalog = null`. Component-node authoring degrades: the planner falls back to `html` for rich content, and you surface once — `component-node catalog unavailable: your seeflow predates 0.1.94; run 'npm i -g @tuongaz/seeflow@latest' for typed component nodes` — without stopping the run.
+
 ## Schema cache — fetch once, reuse everywhere
 
-In a single message, run the six schema calls in parallel and cache the outputs (`$schemaCache.flow`, `$schemaCache.node`, `$schemaCache.connector`, `$schemaCache.action`, `$schemaCache.componentCatalog`, `$schemaCache.style`):
+In a single message, run the **five always-present** schema calls in parallel and cache the outputs (`$schemaCache.flow`, `$schemaCache.node`, `$schemaCache.connector`, `$schemaCache.action`, `$schemaCache.style`):
 
 ```
-$SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema componentCatalog  ‖  $SEEFLOW schema style
+$SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema style
 ```
 
-Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so unforwarded fields are invisible to them; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the six calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
+Then **only if `$hasComponentCatalog === true`** (set in the capability probe above), add one more call — `$SEEFLOW schema componentCatalog` → `$schemaCache.componentCatalog`. Keep it **out** of the five-way batch: bundling a category that may not exist into a parallel batch lets its `notFound` cancel the sibling fetches. Run it on its own (or in a second batch) so a version miss never collateral-damages `style`.
+
+Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so unforwarded fields are invisible to them; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the five stable calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop. A failed `componentCatalog` call does **not** stop the run — treat it as `$hasComponentCatalog === false` and degrade per the capability probe.
 
 > **Drilling further.** When a downstream agent only needs one variant (e.g. forwarding just the `component` node contract to the status-designer), the orchestrator can either slice the cached payload or re-fetch a narrow slice with `$SEEFLOW schema <category> <subname>` — for example `$SEEFLOW schema node component`, `$SEEFLOW schema action playAction`. Same shape, same `notes`, just one schema. Prefer slicing the cache when it's already in hand; reach for the sub-lookup when re-running mid-session or when stitching launching prompts from MCP/REST (`seeflow_schema { name, subname }` / `GET /api/schema/:name/:subname`).
 
-**Extract the component catalog.** The `componentCatalog` schema category IS the catalog — one subname per legal `componentSpec.elements[].type`, each carrying that element's props schema. Cache `$schemaCache.componentCatalog.subnames` as `$componentCatalog` (the list of legal element-type names). It came back in the parallel fetch above — no extra call, no in-process parsing:
+**Extract the component catalog (only when `$hasComponentCatalog`).** The `componentCatalog` schema category IS the catalog — one subname per legal `componentSpec.elements[].type`, each carrying that element's props schema. When the conditional fetch above ran, cache `$schemaCache.componentCatalog.subnames` as `$componentCatalog` (the list of legal element-type names) — no in-process parsing:
 
 ```
-# $schemaCache.componentCatalog already holds:
+# $schemaCache.componentCatalog holds:
 #   { name:'componentCatalog', schemas:{ Card:{…}, Chart:{…}, … },
 #     subnames:[Card, Chart, Table, Button, …], notes:[…], jqHints:{…} }
 $componentCatalog = $schemaCache.componentCatalog.subnames
 ```
 
+When `$hasComponentCatalog === false`, `$componentCatalog = null` — the planner has no runtime element-type list and falls back to `html` for rich content (see the capability-probe degradation note). Never substitute a hand-typed list or read the canvas catalog source; the absence is a version signal, not a lookup to work around.
+
 When the planner (or a designer authoring a `spec.json`) needs the props one element type accepts, drill: `$SEEFLOW schema componentCatalog <Name>` (e.g. `$SEEFLOW schema componentCatalog Chart`) returns just that component's props JSON Schema. Pair with `--jq` (e.g. `--jq '.schemas.Chart.required'`) when you want a single slice — every response carries `jqHints.rootPath` so you never guess the filter prefix.
 
-`$componentCatalog` is required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows). Forward both the name list and — for any element type the planner commits to — the drilled props schema, since the designers have no shell.
+`$componentCatalog` is required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows) — forward both the name list and, for any element type the planner commits to, the drilled props schema, since the designers have no shell. If `$componentCatalog` is null, tell the planner so up front so it routes rich content to `html` instead of inventing element types.
 
 ## Schema-type surface diff — silent
 

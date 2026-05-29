@@ -23,7 +23,7 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
 | P0 | `schema {flow,node,connector,action,componentCatalog,style}` | Fetch the live contract once; cache for the rest of the run. Phase 2/4 reuse the cache instead of re-fetching. The `componentCatalog` category's `subnames` feed `$componentCatalog` for the planner |
-| P3 | `projects:create` | Scaffold + register a new project: writes BOTH `<repoPath>/seeflow.json` (manifest with a single `flows[]` entry `{ id: 'main', name: 'Main' }`) AND `<repoPath>/flows/main/flow.json` (empty envelope) in one shot — returns `{ projectSlug, entries: [...] }`. Required before the canvas can open at `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` |
+| P3 | `projects:create` | Scaffold + register a new project: writes BOTH `<repoPath>/seeflow.json` (manifest with a single `flows[]` entry `{ id: 'main', name: 'Main' }`) AND `<repoPath>/flows/main/flow.json` (empty envelope) in one shot — returns `{ ok, id, slug }` where `slug` is the combined `"<projectSlug>/<flowSlug>"` (split on `/` to recover each). Required before the canvas can open at `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` |
 | P3 | `register` | Re-scan an existing `seeflow.json` and re-attach every declared flow when the user picks "Open the existing project" at the gate (`phases/p3-scaffold.md` §"Existing-project gate"). Never used as an automatic fallback from `projects:create alreadyExists` — the gate always asks the user first |
 | any | `flows:create --project <p> --flow <id> --name <n> [--icon <i>]` | Add a new flow to an existing project — atomically writes `flows/<id>/flow.json`, appends to the manifest, upserts the registry entry |
 | any | `flows:rename --project <p> --flow <id> [--new-id <x>] [--name <n>] [--icon <i>]` | Rename a flow's id (atomic folder rename + manifest edit) and/or its display name / icon |
@@ -53,6 +53,8 @@ Every write is validated server-side by the studio. There is no standalone valid
 | `seeflow-status-designer` | `Read, Grep, Glob, LS` | P4: design statusActions + script bodies — same triple shape |
 
 Full prompts + worked examples in `skills/seeflow/agents/<agent>.md`.
+
+**Fallback when a named type isn't registered.** These five are shipped as plugin agent types (declared in `.claude-plugin/plugin.json`), but in some environments they aren't registered — `Agent(subagent_type: "seeflow-node-planner", …)` then errors with `Agent type '…' not found`. When that happens, **do not abandon the phase**: re-dispatch the SAME work as a `general-purpose` agent with the matching `skills/seeflow/agents/<agent>.md` contract inlined verbatim into the prompt (plus the cached schema slices and brief the named type would have received). Match the tool expectations in the table above — e.g. the planner is pure-reasoning, the analyzers/designers need read tools. The contract, not the registration, is what makes the output correct; the fallback is functionally identical, just more verbose to launch.
 
 ## General orchestration rule — parallelise sub-agents
 

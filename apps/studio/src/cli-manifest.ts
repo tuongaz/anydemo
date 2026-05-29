@@ -499,7 +499,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     ],
     body: { schemaRef: 'CreateProjectBody' },
     outputs: {
-      okExample: { id: 'abc12345', slug: 'checkout' },
+      okExample: { id: 'abc12345', slug: 'checkout/main' },
       errorKinds: ['alreadyExists', 'scaffoldFailed'],
     },
     requiresStudio: false,

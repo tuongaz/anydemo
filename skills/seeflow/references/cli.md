@@ -128,8 +128,9 @@ The canvas URL is `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>`.
   The CLI writes both `<repoPath>/seeflow.json` (manifest with a single
   `flows[]` entry `{ id: 'main', name: 'Main' }`) AND
   `<repoPath>/flows/main/flow.json` (empty envelope) in one shot, then
-  registers the resulting project — returning `{ projectSlug, entries }`
-  with one entry per declared flow. This is the default for `/seeflow`'s
+  registers the resulting project — returning `{ ok, id, slug }` where
+  `slug` is the combined `"<projectSlug>/<flowSlug>"` (split on `/`;
+  `flowSlug` is `main` for a fresh project). This is the default for `/seeflow`'s
   Phase 3. The skill convention for `<repoPath>` is
   `<host>/.seeflow/<projectSlug>/`.
 - **Existing project (manifest already on disk)** — use

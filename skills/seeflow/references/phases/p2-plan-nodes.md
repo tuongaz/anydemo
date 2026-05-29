@@ -1,6 +1,15 @@
 # Phase 2 — plan nodes
 
-Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, `$schemaCache.node`, `$schemaCache.connector` (forward verbatim — see `p0-preflight.md` §"Schema cache"), and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
+Launch `seeflow-node-planner` with: the brief (carrying `inputClass`), the resolved tech-ref paths, the matching `techAdaptations`, a **sliced** view of the node schema, `$schemaCache.connector`, and `$componentCatalog` (required whenever the planner may emit `type:'component'` — i.e. always for `inputClass === "document"` flows, defensively for the other two classes). No tools — pure reasoning. The planner reads each ref's **Node modelling** section, treats `techAdaptations` as the project-specific override, and branches on `inputClass` for the type-picker default ladder.
+
+**Don't forward `$schemaCache.node` whole.** The full payload is ~54 KB — fifteen variants, each re-inlining the identical `playAction` / `statusAction` / `stateSource` sub-schemas the planner never authors at P2 (those land in Phase 4). Forward instead:
+
+1. **The variant menu** — the node subname list from the schema index (`$SEEFLOW schema`, ~1.6 KB), so the planner sees every type it can pick.
+2. **Per-variant slices for the working set** — `$SEEFLOW schema node <subname>` returns one variant (~3.5 KB each, vs 54 KB for all fifteen). Forward the variants the brief actually needs. Defaults: a `code` / `conversation` flow → `rectangle, database, queue, cloud, server, user` (plus `component` whenever rich content is in play); a `document` flow → mostly `component` plus the decorative `sticky` / `text`.
+
+(The CLI's `--jq` is a path-extraction subset — `.schemas.rectangle.properties.data.properties` works; transform filters like `map_values` / `keys` return `badJq`. So slim by drilling per subname, not by reshaping the whole payload.)
+
+For any `component` node, also forward `$SEEFLOW schema node component` alongside `$componentCatalog`. If the planner reaches for a variant you didn't forward, the envelope-validation / `flow:add-bulk` retry catches it — under-forwarding costs at most one retry, where forwarding all fifteen costs ~50 KB on every single launch.
 
 **Inline the planner examples** (`references/planner/examples.md`) into the launching prompt on **first calls only** — the planner is a no-tools agent and cannot read the file itself. On the retry path (envelope-validation failure or `flow:add-bulk badSchema`), skip the inline — feed the CLI's `issues[]` back instead so the planner focuses on the specific gap rather than re-reading calibration material it already had.
 
