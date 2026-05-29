@@ -7,6 +7,8 @@ import { type ProxyFacade, createApi } from './api.ts';
 import { createCorsMiddleware } from './cors.ts';
 import { createDemoRouter } from './demo.ts';
 import { type EventBus, createEventBus } from './events.ts';
+import { type JobRegistry, createJobRegistry } from './icons/jobs.ts';
+import type { IconFetcher } from './icons/router.ts';
 import { createMcpServer } from './mcp.ts';
 import { seeflowHome } from './paths.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
@@ -67,6 +69,16 @@ export interface CreateAppOptions {
    *  `Bun.serve` binds — useful for the ephemeral-port boot in
    *  `mcp-shim.ts` where the URL isn't known until the server is up. */
   httpUrl?: string;
+  /** Shared icon-install job registry. Defaults to a per-app registry created
+   *  in createApp so SSE replays survive across requests within the same
+   *  studio process. Integration tests inject their own to assert state. */
+  iconJobs?: JobRegistry;
+  /** Override the icon-cache root. Production resolves it from `seeflowHome()`
+   *  inside the router; tests pass an isolated tmpdir. */
+  iconCacheRoot?: string;
+  /** Override the icon installer's fetcher. Production uses fetchWithProgress
+   *  (real network); integration tests inject a fixture-returning closure. */
+  iconFetcher?: IconFetcher;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -95,6 +107,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   const statusRunner =
     options.statusRunner ??
     createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
+  const iconJobs = options.iconJobs ?? createJobRegistry();
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
     watcher.watchAll();
@@ -155,6 +168,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       statusRunner,
       processSpawner: options.processSpawner,
       proxy: options.proxy,
+      iconJobs,
+      iconCacheRoot: options.iconCacheRoot,
+      iconFetcher: options.iconFetcher,
     }),
   );
 

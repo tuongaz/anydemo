@@ -14,6 +14,8 @@ import {
   validateDemo,
 } from './diagram.ts';
 import type { EventBus } from './events.ts';
+import { type JobRegistry, createJobRegistry } from './icons/jobs.ts';
+import { type IconFetcher, createIconsRouter } from './icons/router.ts';
 import { type LayoutOptions, computeLayout } from './layout.ts';
 import {
   ConnectorPatchBodySchema,
@@ -224,6 +226,16 @@ export interface ApiOptions {
   /** Injectable proxy facade — defaults wrap the proxy.ts module exports.
    *  Tests use this to drive runPlay in isolation. */
   proxy?: ProxyFacade;
+  /** In-memory icon-install job registry. Defaults to a fresh registry created
+   *  per request — caller (server.ts) should pass one shared instance so the
+   *  router can fanout SSE replays across requests. */
+  iconJobs?: JobRegistry;
+  /** Override the icon-cache root. Production uses `iconCacheRoot()`. Tests
+   *  pass a tmpdir for isolation. */
+  iconCacheRoot?: string;
+  /** Override the icon installer fetcher. Production uses fetchWithProgress;
+   *  integration tests inject a fixture-returning closure. */
+  iconFetcher?: IconFetcher;
 }
 
 /**
@@ -248,6 +260,16 @@ export function createApi(options: ApiOptions): Hono {
   const proxy = options.proxy ?? defaultProxyFacade;
   const ops = createOperations({ registry, watcher });
   const api = new Hono();
+
+  const iconJobs = options.iconJobs ?? createJobRegistry();
+  api.route(
+    '/icons',
+    createIconsRouter({
+      jobs: iconJobs,
+      cacheRoot: options.iconCacheRoot,
+      fetcher: options.iconFetcher,
+    }),
+  );
 
   api.post('/flows/register', async (c) => {
     let body: unknown;
