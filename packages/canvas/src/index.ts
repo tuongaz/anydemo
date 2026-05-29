@@ -39,6 +39,8 @@ export type {
   HtmlNodeData,
   IconNodeData,
   ImageNodeData,
+  LinkflowNodeData,
+  LinkflowTarget,
   NodeCapabilities,
   NodeDescription,
   NodeSemanticBase,
