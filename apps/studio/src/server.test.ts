@@ -422,19 +422,35 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
   const uploadUrl = (projectSlug: string, flowSlug: string, nodeId: string) =>
     `/api/projects/${projectSlug}/flows/${flowSlug}/nodes/${nodeId}/files/upload`;
 
-  it('writes the file under <flowDir>/nodes/<nodeId>/ and returns the flow-relative path', async () => {
+  it('writes the file under <flowDir>/nodes/<nodeId>/ and returns the project-root-relative path', async () => {
     const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
     const form = new FormData();
     form.set('file', new File([PNG_BYTES], 'logo.png', { type: 'image/png' }));
     const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
     const body = (await res.json()) as { path: string };
-    // Response path is always flow-relative (flow folder is the file:// root).
-    expect(body.path).toBe(`nodes/${NODE_ID}/logo.png`);
+    // Response path is PROJECT-ROOT-relative so the project-scoped file-serve
+    // route + fileUrl resolve it directly — for the manifest layout that
+    // includes the `flows/main/` prefix.
+    expect(body.path).toBe(`${flowDir}/nodes/${NODE_ID}/logo.png`);
     // On-disk anchor is under the flow folder.
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'logo.png'))).toBe(true);
     // And NOT under the project root for the manifest layout.
     expect(existsSync(join(repoDir, 'nodes', NODE_ID, 'logo.png'))).toBe(false);
+  });
+
+  it('returns a path the project file-serve route can resolve (manifest round-trip)', async () => {
+    const { app, projectSlug, flowSlug } = buildUploadFixture();
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'pic.png', { type: 'image/png' }));
+    const upRes = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
+    expect(upRes.status).toBe(200);
+    const { path } = (await upRes.json()) as { path: string };
+    // The path fileUrl/image-node would build must serve the bytes back, not 404.
+    const getRes = await app.fetch(
+      new Request(`http://test/api/projects/${projectSlug}/files/${path}`),
+    );
+    expect(getRes.status).toBe(200);
   });
 
   it('collapses to <repoPath>/nodes/<nodeId>/ when flow.json lives at the project root', async () => {
@@ -473,9 +489,9 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
       const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
       return (await res.json()) as { path: string };
     };
-    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a.png`);
-    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-2.png`);
-    expect((await upload()).path).toBe(`nodes/${NODE_ID}/a-3.png`);
+    expect((await upload()).path).toBe(`${flowDir}/nodes/${NODE_ID}/a.png`);
+    expect((await upload()).path).toBe(`${flowDir}/nodes/${NODE_ID}/a-2.png`);
+    expect((await upload()).path).toBe(`${flowDir}/nodes/${NODE_ID}/a-3.png`);
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a.png'))).toBe(true);
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a-2.png'))).toBe(true);
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'a-3.png'))).toBe(true);
@@ -506,7 +522,9 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
     form.set('filename', 'My Image.PNG');
     const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { path: string }).path).toBe(`nodes/${NODE_ID}/my-image.png`);
+    expect(((await res.json()) as { path: string }).path).toBe(
+      `${flowDir}/nodes/${NODE_ID}/my-image.png`,
+    );
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'my-image.png'))).toBe(true);
   });
 
@@ -538,7 +556,9 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
     form.set('file', new File([svg], 'icon.svg', { type: 'image/svg+xml' }));
     const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(200);
-    expect(((await res.json()) as { path: string }).path).toBe(`nodes/${NODE_ID}/icon.svg`);
+    expect(((await res.json()) as { path: string }).path).toBe(
+      `${flowDir}/nodes/${NODE_ID}/icon.svg`,
+    );
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'icon.svg'))).toBe(true);
   });
 });
