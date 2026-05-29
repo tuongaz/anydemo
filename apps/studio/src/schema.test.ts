@@ -1632,6 +1632,183 @@ describe('ResolvedFlowSchema', () => {
     });
   });
 
+  // type:'linkflow' — clickable node that navigates to another flow. `target`
+  // is an optional { project, flow } slug pair (both matching FlowIdPattern);
+  // unlinked is the freshly-dropped state, with the picker dialog filling it
+  // in later. Broken-link detection (does the target still resolve?) is a
+  // render-time check, not a parse-time refine.
+  describe('type:linkflow', () => {
+    it('parses a type:linkflow node with a target slug pair', () => {
+      const demo = {
+        version: 2 as const,
+        name: 'linkflow-demo',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 10, y: 20 },
+            data: { target: { project: 'demo-app', flow: 'checkout' } },
+          },
+        ],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
+      }
+      const node = result.data.nodes[0];
+      if (node?.type !== 'linkflow') throw new Error('expected linkflow');
+      expect(node.data.target).toEqual({ project: 'demo-app', flow: 'checkout' });
+    });
+
+    it('parses a type:linkflow node WITHOUT a target (unlinked state)', () => {
+      const demo = {
+        version: 2 as const,
+        name: 'linkflow-unlinked',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 0, y: 0 },
+            data: {},
+          },
+        ],
+        connectors: [],
+      };
+      const result = ResolvedFlowSchema.safeParse(demo);
+      if (!result.success) {
+        throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
+      }
+      const node = result.data.nodes[0];
+      if (node?.type !== 'linkflow') throw new Error('expected linkflow');
+      expect(node.data.target).toBeUndefined();
+    });
+
+    it('rejects a target whose project slug violates FlowIdPattern', () => {
+      const demo = {
+        version: 2 as const,
+        name: 'bad-project-slug',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 0, y: 0 },
+            data: { target: { project: 'Demo App', flow: 'checkout' } },
+          },
+        ],
+        connectors: [],
+      };
+      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    });
+
+    it('rejects a target whose flow slug violates FlowIdPattern', () => {
+      const demo = {
+        version: 2 as const,
+        name: 'bad-flow-slug',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 0, y: 0 },
+            data: { target: { project: 'demo-app', flow: '-leading-dash' } },
+          },
+        ],
+        connectors: [],
+      };
+      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);
+    });
+
+    it('rejects a target missing either project or flow', () => {
+      const missingFlow = {
+        version: 2 as const,
+        name: 'missing-flow',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 0, y: 0 },
+            data: { target: { project: 'demo-app' } },
+          },
+        ],
+        connectors: [],
+      };
+      expect(ResolvedFlowSchema.safeParse(missingFlow).success).toBe(false);
+      const missingProject = {
+        ...missingFlow,
+        nodes: [
+          {
+            ...missingFlow.nodes[0],
+            data: { target: { flow: 'checkout' } },
+          },
+        ],
+      };
+      expect(ResolvedFlowSchema.safeParse(missingProject).success).toBe(false);
+    });
+
+    it('parses unresolved targets (renames/deletes) without complaint — broken-link is a render concern', () => {
+      // Target slug pair is well-formed but the referenced flow may not exist
+      // in the registry. The schema must NOT reject this — the renderer
+      // surfaces the broken-link state at runtime.
+      const demo = {
+        version: 2 as const,
+        name: 'unresolved-target',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            position: { x: 0, y: 0 },
+            data: { target: { project: 'no-such-project', flow: 'no-such-flow' } },
+          },
+        ],
+        connectors: [],
+      };
+      expect(ResolvedFlowSchema.safeParse(demo).success).toBe(true);
+    });
+
+    it('round-trips a type:linkflow node byte-for-byte (FlowSchema, .strict())', () => {
+      const flow = {
+        version: 2 as const,
+        name: 'linkflow-round-trip',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            data: {
+              name: 'See checkout',
+              target: { project: 'demo-app', flow: 'checkout' },
+            },
+          },
+        ],
+        connectors: [],
+      };
+      const parsed = FlowSchema.safeParse(flow);
+      if (!parsed.success) {
+        throw new Error(`expected to parse, got: ${JSON.stringify(parsed.error.issues)}`);
+      }
+      const serialized = JSON.parse(JSON.stringify(parsed.data)) as unknown;
+      expect(serialized).toEqual(flow);
+    });
+
+    it('FlowSchema .strict() rejects unknown keys on a linkflow node', () => {
+      const flow = {
+        version: 2 as const,
+        name: 'linkflow-strict',
+        nodes: [
+          {
+            id: 'lf-1',
+            type: 'linkflow' as const,
+            data: {
+              target: { project: 'demo-app', flow: 'checkout' },
+              bogus: true,
+            },
+          },
+        ],
+        connectors: [],
+      };
+      expect(FlowSchema.safeParse(flow).success).toBe(false);
+    });
+  });
+
   // US-001: script-based playAction + optional statusAction + StatusReport.
   describe('script-based playAction + statusAction (US-001)', () => {
     const makeDemoWithPlayAction = (playAction: unknown) => ({

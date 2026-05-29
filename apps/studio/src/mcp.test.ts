@@ -204,6 +204,7 @@ describe('seeflow_schema', () => {
         'html',
         'icon',
         'image',
+        'linkflow',
         'queue',
         'rectangle',
         'server',

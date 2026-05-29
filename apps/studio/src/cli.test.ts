@@ -478,8 +478,8 @@ describe('seeflow CLI new subcommands', () => {
         jqHints: { examples: string[]; tip?: string };
       };
       expect(parsed.name).toBe('node');
-      // Flat-types refactor: schema-catalog returns 15 variants (11 geometric
-      // + image + html + icon + component) — pinned in alphabetical order.
+      // Flat-types refactor: schema-catalog returns 16 variants (11 geometric
+      // + image + html + icon + component + linkflow) — pinned in alphabetical order.
       expect(Object.keys(parsed.schemas).sort()).toEqual(
         [
           'cloud',
@@ -491,6 +491,7 @@ describe('seeflow CLI new subcommands', () => {
           'html',
           'icon',
           'image',
+          'linkflow',
           'queue',
           'rectangle',
           'server',
@@ -542,9 +543,9 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; name: string; result: unknown[] };
       expect(parsed.ok).toBe(true);
-      // 15 flat variants iterated.
+      // 16 flat variants iterated.
       expect(Array.isArray(parsed.result)).toBe(true);
-      expect(parsed.result).toHaveLength(15);
+      expect(parsed.result).toHaveLength(16);
     } finally {
       studio.stop();
     }
@@ -722,6 +723,7 @@ describe('seeflow CLI new subcommands', () => {
           'html',
           'icon',
           'image',
+          'linkflow',
           'queue',
           'rectangle',
           'server',

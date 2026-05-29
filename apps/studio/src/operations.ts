@@ -261,6 +261,21 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   // semantic-key set covers only the universal capability fields so retype
   // never drags `spec` through `data`. (US-007 wires the sidecar writer.)
   component: GEOMETRIC_SEMANTIC_KEYS,
+  // Linkflow nodes carry an optional `target` slug pair pointing at another
+  // flow. Retype preserves it alongside the universal semantic keys; the
+  // post-merge ResolvedFlowSchema reparse drops it when retyping AWAY from
+  // linkflow.
+  linkflow: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'target',
+  ]),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here
