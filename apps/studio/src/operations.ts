@@ -1662,8 +1662,14 @@ export async function patchNodeImpl(
       field: string;
       content: string;
       kind: 'ref' | 'sidecar';
+      value: unknown;
     }> = [];
-    for (const spec of externalizedFieldsForNodeType(node.type)) {
+    // Externalize against the node's *target* type: a retype-into-component
+    // carrying `spec` in the same patch is still geometric at this point, so
+    // keying off `node.type` would miss `spec` (only externalized for
+    // 'component'), leaving spec.json unwritten and data.spec unpopulated.
+    const targetType = updates.type ?? node.type;
+    for (const spec of externalizedFieldsForNodeType(targetType)) {
       const incoming = (updates as Record<string, unknown>)[spec.field];
       if (incoming === undefined) continue;
       const serializer = spec.serialize ?? defaultExternalizedSerializer;
@@ -1675,6 +1681,7 @@ export async function patchNodeImpl(
         field: spec.field,
         content,
         kind: spec.kind ?? 'ref',
+        value: incoming,
       });
     }
     mergeNodeUpdates(node, updates);
@@ -1694,10 +1701,12 @@ export async function patchNodeImpl(
           };
         }
         // 'ref' fields swap data[field] for a file:// pointer; 'sidecar'
-        // fields (e.g. component spec) leave the in-memory value alone so the
-        // post-mutation parse still sees it — splitFlow drops it from flow.json
-        // on write and the resolver inlines it back from disk on read.
-        if (w.kind === 'ref') data[w.field] = w.ref;
+        // fields (e.g. component spec) keep the incoming value in memory so the
+        // post-mutation reparse + SSE broadcast see it — splitFlow drops it
+        // from flow.json on write and the resolver inlines it back from disk on
+        // read. Setting it here is required for a retype-into-component patch,
+        // where there is no pre-inlined data.spec to fall back on.
+        data[w.field] = w.kind === 'ref' ? w.ref : w.value;
       }
       node.data = data;
     }

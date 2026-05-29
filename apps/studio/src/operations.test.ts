@@ -441,6 +441,37 @@ describe('patchNodeImpl + component spec sidecar (US-007)', () => {
     expect(reNode.data.spec).toEqual(newSpec);
   });
 
+  it('retype geometric -> component in the same patch externalizes spec and keeps data.spec for the reparse', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    writeFileSync(
+      flowAbs,
+      JSON.stringify({
+        version: 2,
+        name: 'Retype',
+        nodes: [{ id: 'r1', type: 'rectangle', data: { name: 'Box' } }],
+        connectors: [],
+      }),
+    );
+
+    const patch = await patchNodeImpl(deps, flowId, 'r1', { type: 'component', spec: newSpec });
+    expect(patch.kind).toBe('ok');
+
+    const specAbs = nodeFileAbsPath(repoPath, '', 'r1', 'spec.json');
+    expect(JSON.parse(readFileSync(specAbs, 'utf8'))).toEqual(newSpec);
+
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === 'r1');
+    expect(node.type).toBe('component');
+    expect('spec' in node.data).toBe(false);
+
+    const reread = readMergedFlow(flowAbs);
+    expect(reread.valid).toBe(true);
+    if (!reread.valid || !reread.flow) throw new Error('expected valid round-trip');
+    const reNode = reread.flow.nodes[0];
+    if (reNode?.type !== 'component') throw new Error('expected component node');
+    expect(reNode.data.spec).toEqual(newSpec);
+  });
+
   it('T-006: deleteNodeImpl on a component node removes nodes/<id>/spec.json via removeNodeDir cascade', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     writeComponentFixture(flowAbs, repoPath, initialSpec);
