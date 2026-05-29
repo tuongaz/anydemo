@@ -289,6 +289,28 @@ it emits, why it matters, sample payloads, links to source files, or
 anything an audience member would ask. Decorative shapes (sticky, text,
 icon) are exempt.
 
+The markdown also renders fenced **` ```mermaid `** blocks inline as
+SVG (the detail panel upgrades `language-mermaid` code fences to a live
+diagram; a bad diagram falls back to the raw source). For anything an
+audience would struggle to follow in prose — a sequence of calls, a
+state machine, a fan-out/fan-in, a request lifecycle — prefer a mermaid
+diagram (`sequenceDiagram`, `stateDiagram-v2`, `flowchart`) over a long
+paragraph. Keep the prose for the "why"; let the diagram carry the
+structure. Embed the fence directly in the `detail` string:
+
+````markdown
+## Order Server
+
+Accepts a cart, writes a pending order, publishes `order.created`.
+
+```mermaid
+sequenceDiagram
+    Client->>OrderServer: POST /orders
+    OrderServer->>OrderStore: insert pending
+    OrderServer->>EventBus: publish order.created
+```
+````
+
 **RULE — icon on rectangle nodes:** Every `rectangle` that carries
 `playAction` or `statusAction` SHOULD include an icon — a kebab-case
 Lucide icon name (`server`, `radio-tower`, `cog`, `clock`,

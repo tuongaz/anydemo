@@ -291,7 +291,11 @@ in `$SEEFLOW schema node`.
   perspective: what this node does, what it emits or stores, why it
   matters, source file(s) when known. The studio auto-externalises to
   `flows/<flowSlug>/nodes/<id>/detail.md`; pass the raw markdown, never a `file://…`
-  link. Omission renders a blank card on the canvas and a blank
+  link. The detail panel renders fenced **` ```mermaid `** blocks inline
+  as SVG — for a node whose behaviour is hard to convey in prose (a
+  multi-step call sequence, a state machine, a fan-out/fan-in), embed a
+  mermaid diagram (`sequenceDiagram`, `stateDiagram-v2`, `flowchart`)
+  inside the `detail` markdown and keep the prose for the "why". Omission renders a blank card on the canvas and a blank
   sidebar when the user clicks the node. **The rule applies whether
   or not the node carries `playAction` / `statusAction`** — static
   flows (no Phase 4–5) used to ship with blank detail because the old
