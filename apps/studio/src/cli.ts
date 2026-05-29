@@ -1252,17 +1252,79 @@ async function runIconsList() {
   printOk({ packs: summarizePacks(idx) });
 }
 
+type IconVendorSlug = 'aws' | 'gcp' | 'azure';
+
+function parseIconVendor(action: 'add' | 'remove'): IconVendorSlug {
+  const vendors: readonly IconVendorSlug[] = ['aws', 'gcp', 'azure'];
+  const raw = argv[2];
+  if (!raw || raw.startsWith('--')) {
+    const suffix = action === 'add' ? ' [--accept-terms] [--pack-url <url>]' : '';
+    console.error(`Usage: seeflow icons ${action} <vendor>${suffix}`);
+    process.exit(1);
+  }
+  if (!(vendors as readonly string[]).includes(raw)) {
+    console.error(`Unknown vendor: ${raw}. Expected one of: ${vendors.join(', ')}.`);
+    process.exit(1);
+  }
+  return raw as IconVendorSlug;
+}
+
 async function runIconsAdd() {
-  /* implemented in US-008 (Stage 2.3) */
-  printError('seeflow icons add is not yet implemented (Stage 2.3 work).');
+  const vendor = parseIconVendor('add');
+  if (vendor !== 'aws') {
+    printError(`Vendor '${vendor}' is not yet supported (Stage 5).`);
+  }
+  const acceptTerms = hasFlag('accept-terms');
+  const packUrl = flagValue('pack-url');
+
+  const { installIconPack } = await import('./icons/installer.ts');
+  const { fetchWithProgress } = await import('./icons/fetcher.ts');
+  const { iconCacheRoot } = await import('./icons/paths.ts');
+
+  const gen = installIconPack(
+    { vendor, acceptTerms, packUrl },
+    {
+      cacheRoot: iconCacheRoot(),
+      now: () => Date.now(),
+      version: () => new Date().toISOString().slice(0, 10),
+      fetcher: (url: string) =>
+        fetchWithProgress(url, {
+          onProgress: (bytes) => process.stderr.write(`download-progress ${vendor} ${bytes}\n`),
+        }),
+    },
+  );
+
+  for await (const ev of gen) {
+    if (ev.type === 'download-started') {
+      process.stderr.write(`download-started ${ev.vendor}\n`);
+    } else if (ev.type === 'download-progress') {
+      process.stderr.write(`download-progress ${ev.vendor} ${ev.receivedBytes}\n`);
+    } else if (ev.type === 'extracting') {
+      process.stderr.write(`extracting ${ev.vendor}\n`);
+    } else if (ev.type === 'indexing') {
+      process.stderr.write(`indexing ${ev.vendor} (${ev.iconCount} icons)\n`);
+    } else if (ev.type === 'terms-required') {
+      printError(
+        `Vendor '${ev.vendor}' requires accepting the license at ${ev.licenseUrl}. Re-run with --accept-terms.`,
+      );
+    } else if (ev.type === 'error') {
+      printError(`Install failed: ${ev.message}`);
+    } else if (ev.type === 'done') {
+      printOk({ installed: ev.vendor, version: ev.version, iconCount: ev.iconCount });
+    }
+  }
+  printError('Install ended without a terminal event.');
 }
 
 async function runIconsUpdate() {
-  /* implemented in US-008 (Stage 2.3) */
-  printError('seeflow icons update is not yet implemented (Stage 2.3 work).');
+  // Installer's rmSync-then-extract handles wipe; behaviour matches add.
+  await runIconsAdd();
 }
 
 async function runIconsRemove() {
-  /* implemented in US-008 (Stage 2.4) */
-  printError('seeflow icons remove is not yet implemented (Stage 2.4 work).');
+  const vendor = parseIconVendor('remove');
+  const { removeIconPack } = await import('./icons/remove.ts');
+  const { iconCacheRoot } = await import('./icons/paths.ts');
+  removeIconPack(vendor, { cacheRoot: iconCacheRoot() });
+  printOk({ removed: vendor });
 }
