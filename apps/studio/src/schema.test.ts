@@ -1173,6 +1173,50 @@ describe('ResolvedFlowSchema', () => {
     expect(node.data.name).toBe('');
   });
 
+  it('accepts a vendor-prefixed decorative icon on a geometric node (US-001 cloud icon packs)', () => {
+    const demo = {
+      version: 2 as const,
+      name: 'vendor-decorative',
+      nodes: [
+        {
+          id: 'r1',
+          type: 'rectangle' as const,
+          data: { icon: 'aws:lambda' },
+        },
+      ],
+      connectors: [],
+    };
+    const result = FlowSchema.safeParse(demo);
+    if (!result.success) {
+      throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
+    }
+    const node = result.data.nodes[0];
+    if (node?.type !== 'rectangle') throw new Error('expected rectangle');
+    expect(node.data.icon).toBe('aws:lambda');
+  });
+
+  it('accepts a vendor-prefixed icon on a type:icon node (US-001 cloud icon packs)', () => {
+    const demo = {
+      version: 2 as const,
+      name: 'vendor-icon-node',
+      nodes: [
+        {
+          id: 'icon-1',
+          type: 'icon' as const,
+          data: { icon: 'azure:functions' },
+        },
+      ],
+      connectors: [],
+    };
+    const result = FlowSchema.safeParse(demo);
+    if (!result.success) {
+      throw new Error(`expected to parse, got: ${JSON.stringify(result.error.issues)}`);
+    }
+    const node = result.data.nodes[0];
+    if (node?.type !== 'icon') throw new Error('expected icon');
+    expect(node.data.icon).toBe('azure:functions');
+  });
+
   it('rejects a type:icon node with an empty icon string (US-008)', () => {
     const demo = {
       version: 2 as const,

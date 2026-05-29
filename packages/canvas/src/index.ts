@@ -73,6 +73,8 @@ export type {
 // 3. Icon registry
 // ----------------------------------------------------------------------------
 export { ICON_FALLBACK_NAME, ICON_NAMES, ICON_REGISTRY } from './lib/icon-registry.ts';
+export { formatIconId, parseIconId } from './lib/icon-id.ts';
+export type { IconId, IconVendor } from './lib/icon-id.ts';
 
 // ----------------------------------------------------------------------------
 // 4. Helpers
