@@ -96,6 +96,7 @@ import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import { GlowOverlay } from './glow-overlay.tsx';
+import { InspectorToggle } from './inspector-toggle.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
@@ -3971,6 +3972,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const off = history.subscribe(setHistoryState);
     return off;
   }, [history]);
+  // SLOT 14 — built-in DetailPanel sidebar's visibility. Decoupled from
+  // selection: node clicks no longer auto-open the sidebar; the new top-right
+  // InspectorToggle flips this, and clicking the empty pane closes it (see
+  // handlePaneClickWithGroupExit). Connector selection never opens it (the
+  // DetailPanel's connector prop is wired to null).
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // Effective enable state: subscribed values when `history` is supplied,
   // false otherwise. Undo is available iff the host wires a HistoryHandle.
   const effectiveCanUndo = history ? historyState.canUndo : false;
@@ -4152,6 +4159,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   );
   const handlePaneClickWithGroupExit = useCallback(
     (e: ReactMouseEvent) => {
+      setSidebarOpen(false);
       onPaneClick?.();
       void e;
     },
@@ -4198,7 +4206,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // the existing `projectId` prop (which the studio already passes — identical
   // value, no new wiring at the host).
   const sidebarDemoId = projectId ?? null;
-  const shouldRenderSidebar = flags.showDetailPanel && !disableSidebar;
+  const sidebarEnabled = flags.showDetailPanel && !disableSidebar;
+  const shouldRenderSidebar = sidebarEnabled && sidebarOpen;
   // US-004: memoize the icon registry value so the IconRegistryProvider's
   // context object identity is stable across re-renders when the host's
   // `customIcons` reference is stable (or undefined). Prevents every <Icon>
@@ -4612,10 +4621,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             itself is gated below). EmbedDialog state is hoisted into this
             component so the imperative ref handle can open it without going
             through the menu. */}
-              {flags.showShareMenu || topRightSlot ? (
+              {flags.showShareMenu || topRightSlot || sidebarEnabled ? (
                 <Panel position="top-right">
                   <div className="sf:flex sf:items-center sf:gap-1">
                     {topRightSlot}
+                    {sidebarEnabled ? (
+                      <InspectorToggle
+                        open={sidebarOpen}
+                        onToggle={() => setSidebarOpen((v) => !v)}
+                      />
+                    ) : null}
                     {flags.showShareMenu ? (
                       <ShareMenu
                         mode={mode === 'mini' ? 'view' : mode}
@@ -4872,7 +4887,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               <DetailPanel
                 flowId={sidebarDemoId}
                 node={sidebarNode}
-                connector={sidebarConnector}
+                connector={null}
                 adapter={adapter ?? null}
                 statusReport={statusReport}
                 onNameChange={onNameChange}

@@ -11,6 +11,7 @@ import { UserShape } from '../nodes/shapes/user.tsx';
 import type { ComponentSpec, Connector, FlowNode } from '../types.ts';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
+import { InspectorToggle } from './inspector-toggle.tsx';
 import {
   type ClipboardShortcutEventLike,
   FIT_VIEW_OPTIONS,
@@ -65,15 +66,25 @@ type Hooks = {
  * declaration order so a test can fire individual effects manually (US-009 —
  * simulating React's mount + dep-change re-run semantics under the shim).
  */
+/**
+ * `setterSink`, when provided, captures every `setState(next)` call as
+ * `{ slot, next }` where `slot` is the useState DECLARATION index (matching
+ * `useStateOverrides[slot]`). `next` is recorded verbatim — for updater-form
+ * setters (e.g. `setX(v => !v)`), `next` is the callback function rather than
+ * the resolved value. Used to assert state-update intent without a real React
+ * renderer (the shim's setter is otherwise a no-op).
+ */
+type CapturedSetterCall = { slot: number; next: unknown };
 function renderWithHooks<T>(
   fn: () => T,
   options: {
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
     effectSink?: CapturedEffect[];
+    setterSink?: CapturedSetterCall[];
   } = {},
 ): T {
-  const { useStateOverrides, refSink, effectSink } = options;
+  const { useStateOverrides, refSink, effectSink, setterSink } = options;
   const internals = (
     React as unknown as {
       __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
@@ -86,10 +97,13 @@ function renderWithHooks<T>(
   internals.ReactCurrentDispatcher.current = {
     useState: <S,>(initial: S | (() => S)) => {
       const idx = useStateIndex++;
+      const setter = (next: S | ((prev: S) => S)) => {
+        setterSink?.push({ slot: idx, next });
+      };
       const override = useStateOverrides?.[idx];
-      if (override !== undefined) return [override as S, () => {}];
+      if (override !== undefined) return [override as S, setter];
       const value = typeof initial === 'function' ? (initial as () => S)() : initial;
-      return [value, () => {}];
+      return [value, setter];
     },
     useCallback: <T,>(fn: T) => fn,
     useMemo: <T,>(fn: () => T) => fn(),
@@ -179,6 +193,7 @@ function callSeeflowCanvas(
     useStateOverrides?: ReadonlyArray<unknown>;
     refSink?: { current: unknown }[];
     effectSink?: CapturedEffect[];
+    setterSink?: CapturedSetterCall[];
     ref?: React.ForwardedRef<SeeflowCanvasHandle>;
   } = {},
 ): unknown {
@@ -2593,27 +2608,36 @@ describe('SeeflowCanvas', () => {
   });
 
   describe('US-007: built-in DetailPanel sidebar', () => {
-    // Selection-driven sidebar: SeeflowCanvas internalizes <DetailPanel> and
-    // derives its target from the sole selected entity — the panel opens ONLY
-    // for a single-entity selection (one node OR one connector). Any multi-
-    // selection collapses node/connector to null so the Sheet stays closed.
+    // Sidebar visibility is decoupled from selection: SeeflowCanvas internalizes
+    // <DetailPanel> but mounts it ONLY when the new `sidebarOpen` state is true
+    // (driven by the top-right InspectorToggle). When mounted, its target is
+    // the sole selected node; multi-select / connector-only / empty selection
+    // resolve to a null node so the panel renders its empty-state placeholder.
     // The hook-shim tree captures <DetailPanel ...> as a placeholder element
     // (its body isn't executed) so we can assert its forwarded props directly.
+    //
+    // The new sidebar-open state lives at useStateOverrides[13] (slot 14 per
+    // packages/canvas/CLAUDE.md). Tests below force it to `true` to exercise
+    // the mounted-panel path.
+    const sidebarOpenOverrides: unknown[] = [];
+    sidebarOpenOverrides[13] = true;
 
     function findDetailPanel(tree: unknown) {
       return findElement(tree, (el) => el.type === DetailPanel);
     }
 
-    it('renders a DetailPanel sibling inside the canvas wrapper by default', () => {
+    it('does NOT render the DetailPanel by default (sidebar closed)', () => {
       const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
-      const panel = findDetailPanel(tree);
-      expect(panel).not.toBeNull();
+      expect(findDetailPanel(tree)).toBeNull();
     });
 
-    it('passes the sole selected node into DetailPanel.node', () => {
+    it('passes the sole selected node into DetailPanel.node when the sidebar is open', () => {
       const a = makeShapeNode('a');
       const b = makeShapeNode('b');
-      const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a'] });
+      const tree = callSeeflowCanvas(
+        { nodes: [a, b], selectedNodeIds: ['a'] },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
       expect((panel?.props as { node?: FlowNode }).node).toBe(a);
@@ -2623,7 +2647,10 @@ describe('SeeflowCanvas', () => {
     it('passes null when multiple nodes are selected', () => {
       const a = makeShapeNode('a');
       const b = makeShapeNode('b');
-      const tree = callSeeflowCanvas({ nodes: [a, b], selectedNodeIds: ['a', 'b'] });
+      const tree = callSeeflowCanvas(
+        { nodes: [a, b], selectedNodeIds: ['a', 'b'] },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
@@ -2637,18 +2664,23 @@ describe('SeeflowCanvas', () => {
         sourceHandleAutoPicked: true,
         targetHandleAutoPicked: true,
       } as Connector;
-      const tree = callSeeflowCanvas({
-        nodes: [makeShapeNode('a'), makeShapeNode('b')],
-        connectors: [conn],
-        selectedNodeIds: ['a'],
-        selectedConnectorIds: ['c1'],
-      });
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [makeShapeNode('a'), makeShapeNode('b')],
+          connectors: [conn],
+          selectedNodeIds: ['a'],
+          selectedConnectorIds: ['c1'],
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
     });
 
-    it('passes the sole selected connector into DetailPanel.connector', () => {
+    it('never forwards a connector — DetailPanel.connector is always null even when one is selected', () => {
+      // Connectors no longer feed the DetailPanel — selecting one and opening
+      // the sidebar surfaces the empty state, never a connector inspector.
       const conn: Connector = {
         id: 'c1',
         source: 'a',
@@ -2656,19 +2688,25 @@ describe('SeeflowCanvas', () => {
         sourceHandleAutoPicked: true,
         targetHandleAutoPicked: true,
       } as Connector;
-      const tree = callSeeflowCanvas({
-        nodes: [makeShapeNode('a'), makeShapeNode('b')],
-        connectors: [conn],
-        selectedConnectorIds: ['c1'],
-      });
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [makeShapeNode('a'), makeShapeNode('b')],
+          connectors: [conn],
+          selectedConnectorIds: ['c1'],
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
-      expect((panel?.props as { connector?: Connector }).connector).toBe(conn);
+      expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
       expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
     });
 
     it('panel.node and panel.connector are null when nothing is selected', () => {
-      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const tree = callSeeflowCanvas(
+        { nodes: [makeShapeNode('a')] },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect((panel?.props as { node?: FlowNode | null }).node).toBeNull();
       expect((panel?.props as { connector?: Connector | null }).connector).toBeNull();
@@ -2679,15 +2717,18 @@ describe('SeeflowCanvas', () => {
       const onDescriptionChange = () => {};
       const onDetailChange = () => {};
       const statusReport = { state: 'ok' as const, summary: 's', ts: 7 };
-      const tree = callSeeflowCanvas({
-        projectId: 'proj-123',
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-        statusReport,
-        onNameChange,
-        onDescriptionChange,
-        onDetailChange,
-      });
+      const tree = callSeeflowCanvas(
+        {
+          projectId: 'proj-123',
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+          statusReport,
+          onNameChange,
+          onDescriptionChange,
+          onDetailChange,
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
       const props = panel?.props as {
@@ -2707,21 +2748,27 @@ describe('SeeflowCanvas', () => {
     });
 
     it('disableSidebar={true} suppresses the DetailPanel entirely', () => {
-      const tree = callSeeflowCanvas({
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-        disableSidebar: true,
-      });
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+          disableSidebar: true,
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       expect(findDetailPanel(tree)).toBeNull();
     });
 
     it("mode='view' suppresses the DetailPanel via flags.showDetailPanel=false", () => {
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-      });
+      const tree = callSeeflowCanvas(
+        {
+          mode: 'view',
+          adapter: undefined,
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       expect(findDetailPanel(tree)).toBeNull();
     });
 
@@ -2729,33 +2776,193 @@ describe('SeeflowCanvas', () => {
       // The CanvasFeatureOverrides escape hatch — a view-mode embedder that
       // still wants the built-in sidebar can lift the gate without flipping
       // the mode (would also opt back into adapter-driven mutations).
-      const tree = callSeeflowCanvas({
-        mode: 'view',
-        adapter: undefined,
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-        showDetailPanel: true,
-      });
+      const tree = callSeeflowCanvas(
+        {
+          mode: 'view',
+          adapter: undefined,
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+          showDetailPanel: true,
+        },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       expect(findDetailPanel(tree)).not.toBeNull();
     });
 
     it('onClose clears the selection via onSelectionChange([], [])', () => {
-      // The Sheet's X button / Radix-driven dismissal routes through onClose;
-      // because the panel is selection-driven, closing it means clearing both
-      // selection arrays so the next render's panel.node/connector go null.
+      // The Sheet's X button / Radix-driven dismissal still routes through
+      // onClose; the unmount path (toggle off) is exercised separately below.
       const calls: Array<[string[], string[]]> = [];
-      const tree = callSeeflowCanvas({
-        nodes: [makeShapeNode('a')],
-        selectedNodeIds: ['a'],
-        onSelectionChange: (nodeIds, connectorIds) => {
-          calls.push([nodeIds, connectorIds]);
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+          onSelectionChange: (nodeIds, connectorIds) => {
+            calls.push([nodeIds, connectorIds]);
+          },
         },
-      });
+        { useStateOverrides: sidebarOpenOverrides },
+      );
       const panel = findDetailPanel(tree);
       const onClose = (panel?.props as { onClose?: () => void }).onClose;
       expect(typeof onClose).toBe('function');
       onClose?.();
       expect(calls).toEqual([[[], []]]);
+    });
+  });
+
+  describe('US-decouple-sidebar: InspectorToggle + sidebar-open gating', () => {
+    // The new top-right toggle owns the sidebar's mount state, decoupling it
+    // from selection. Node clicks DON'T open the panel; the toggle does; the
+    // empty-pane handler closes it; connector selection never opens it on its
+    // own. The InspectorToggle lives in the same flex row as ShareMenu, to its
+    // LEFT, and is gated on the same `flags.showDetailPanel && !disableSidebar`
+    // pair that gates the panel itself.
+    const sidebarOpenOverrides: unknown[] = [];
+    sidebarOpenOverrides[13] = true;
+
+    function findDetailPanel(tree: unknown) {
+      return findElement(tree, (el) => el.type === DetailPanel);
+    }
+    function findInspectorToggle(tree: unknown) {
+      return findElement(tree, (el) => el.type === InspectorToggle);
+    }
+    it('selecting a node does NOT mount DetailPanel by default', () => {
+      // The PRD's headline behavior: clicking (=selecting) a node leaves the
+      // sidebar closed. The user must explicitly open it via the toggle.
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        selectedNodeIds: ['a'],
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it('clicking the inspector toggle mounts DetailPanel with the selected node', () => {
+      // With the toggle "open" (sidebarOpen=true via the slot-13 override) and a
+      // node selected, DetailPanel mounts and receives that node as `node`.
+      const a = makeShapeNode('a');
+      const tree = callSeeflowCanvas(
+        { nodes: [a], selectedNodeIds: ['a'] },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { node?: FlowNode | null }).node).toBe(a);
+    });
+
+    it('clicking onPaneClick closes the sidebar (setSidebarOpen(false) before host callback)', () => {
+      // The empty-pane click handler MUST close the sidebar AND invoke the
+      // host `onPaneClick`. The setterSink captures slot-13 calls so we can
+      // assert the close intent (the hook-shim's stub setter would otherwise
+      // swallow the update silently).
+      let paneClicks = 0;
+      const setterCalls: CapturedSetterCall[] = [];
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [makeShapeNode('a')],
+          selectedNodeIds: ['a'],
+          onPaneClick: () => {
+            paneClicks++;
+          },
+        },
+        { useStateOverrides: sidebarOpenOverrides, setterSink: setterCalls },
+      );
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+      const handler = rf.props.onPaneClick as ((e: unknown) => void) | undefined;
+      expect(typeof handler).toBe('function');
+      // Drain any setter calls fired during render itself (effects don't run in
+      // the shim, but we still want a clean baseline for the handler-driven
+      // assertions below).
+      setterCalls.length = 0;
+      handler?.({} as unknown);
+      expect(paneClicks).toBe(1);
+      // The handler closed the sidebar before forwarding to the host: a
+      // setSidebarOpen(false) lands on slot 13.
+      const slot13Calls = setterCalls.filter((c) => c.slot === 13);
+      expect(slot13Calls.length).toBeGreaterThanOrEqual(1);
+      expect(slot13Calls[0]?.next).toBe(false);
+    });
+
+    it('connector-only selection does not mount DetailPanel', () => {
+      // Selecting a connector leaves the sidebar closed (toggle is the sole
+      // open path). The PRD's "Connectors never trigger the sidebar" rule.
+      const conn: Connector = {
+        id: 'c1',
+        source: 'a',
+        target: 'b',
+        sourceHandleAutoPicked: true,
+        targetHandleAutoPicked: true,
+      } as Connector;
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a'), makeShapeNode('b')],
+        connectors: [conn],
+        selectedConnectorIds: ['c1'],
+      });
+      expect(findDetailPanel(tree)).toBeNull();
+    });
+
+    it('mounts the InspectorToggle in the top-right chrome row in edit mode', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const toggle = findInspectorToggle(tree);
+      expect(toggle).not.toBeNull();
+      // The mounted toggle is passed a boolean `open` and a function `onToggle`.
+      const props = toggle?.props as { open?: unknown; onToggle?: unknown };
+      expect(typeof props.open).toBe('boolean');
+      expect(typeof props.onToggle).toBe('function');
+    });
+
+    it('disableSidebar={true} hides the InspectorToggle (same gate as panel)', () => {
+      const tree = callSeeflowCanvas({
+        nodes: [makeShapeNode('a')],
+        disableSidebar: true,
+      });
+      expect(findInspectorToggle(tree)).toBeNull();
+    });
+
+    it("mode='view' hides the InspectorToggle (flags.showDetailPanel=false)", () => {
+      const tree = callSeeflowCanvas({
+        mode: 'view',
+        adapter: undefined,
+        nodes: [makeShapeNode('a')],
+      });
+      expect(findInspectorToggle(tree)).toBeNull();
+    });
+
+    it('InspectorToggle.open reflects the sidebarOpen state', () => {
+      // Closed by default — toggle.open === false.
+      const closedTree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const closedToggle = findInspectorToggle(closedTree);
+      expect((closedToggle?.props as { open?: boolean }).open).toBe(false);
+      // Pinned open via slot-13 — toggle.open === true.
+      const openTree = callSeeflowCanvas(
+        { nodes: [makeShapeNode('a')] },
+        { useStateOverrides: sidebarOpenOverrides },
+      );
+      const openToggle = findInspectorToggle(openTree);
+      expect((openToggle?.props as { open?: boolean }).open).toBe(true);
+    });
+
+    it('InspectorToggle sits to the LEFT of ShareMenu in the shared flex row', () => {
+      // The top-right Panel hosts a `<div class="sf:flex sf:items-center sf:gap-1">`
+      // with [topRightSlot, InspectorToggle, ShareMenu] in that order. We
+      // verify InspectorToggle's index is below ShareMenu's in that flat list.
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      // Find the row's children array — the parent div that contains both.
+      const row = findElement(tree, (el) => {
+        if (!isElement(el)) return false;
+        const className = (el.props as { className?: unknown }).className;
+        return typeof className === 'string' && className.includes('sf:flex sf:items-center');
+      });
+      if (!row) throw new Error('top-right flex row not found in SeeflowCanvas tree');
+      const children = Array.isArray(row.props.children)
+        ? (row.props.children as ReactElementLike[])
+        : ([row.props.children].filter(Boolean) as ReactElementLike[]);
+      const toggleIdx = children.findIndex((c) => isElement(c) && c.type === InspectorToggle);
+      const shareIdx = children.findIndex((c) => isElement(c) && c.type === ShareMenu);
+      expect(toggleIdx).toBeGreaterThanOrEqual(0);
+      expect(shareIdx).toBeGreaterThanOrEqual(0);
+      expect(toggleIdx).toBeLessThan(shareIdx);
     });
   });
 
