@@ -12,6 +12,7 @@ import {
   projectFlowPath,
   registerManifestProject,
   test,
+  waitForCanvasSettled,
 } from './support/studio-fixture.ts';
 
 test.describe('export dialog flow picker', () => {
@@ -48,7 +49,7 @@ test.describe('export dialog flow picker', () => {
       `${studio.studio.baseURL}${projectFlowPath(project.projectSlug, project.flowSlug)}`,
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     // Open the share menu, then the export-to-cloud item.
     await page.locator('[data-testid="share-menu-trigger"]').click();

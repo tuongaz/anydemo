@@ -1,4 +1,10 @@
-import { expect, projectFlowPath, registerFlow, test } from './support/studio-fixture.ts';
+import {
+  expect,
+  projectFlowPath,
+  registerFlow,
+  test,
+  waitForCanvasSettled,
+} from './support/studio-fixture.ts';
 
 // The six flat node types present in the kitchen-sink fixture
 // (apps/studio/integration/fixtures/kitchen-sink.flow.json). One node per
@@ -33,7 +39,7 @@ test.describe('canvas — kitchen-sink fixture', () => {
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
     // Give React Flow's auto-fit + layout settle pass one paint cycle so node
     // bounding boxes are stable before any assertion runs.
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
   });
 
   test('every node type renders', async ({ page }) => {
@@ -150,7 +156,7 @@ test.describe('canvas — flat node types (US-009)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
     // Confirm every node mounted before snapshotting.
     await expect(page.locator('.react-flow__node')).toHaveCount(12);
     for (const type of TYPES) {
@@ -189,7 +195,7 @@ test.describe('canvas — flat node types (US-009)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     // The database node mounts and renders the capability-chrome skirt with
     // an inline PlayButton — this is the visual end of the data path the
@@ -232,7 +238,7 @@ test.describe('canvas — flat node types (US-009)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     const node = page.locator('[data-node-type="database"]');
     await expect(node).toBeVisible();
@@ -254,7 +260,7 @@ test.describe('canvas — flat node types (US-009)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     // Empty flow — no nodes yet.
     await expect(page.locator('.react-flow__node')).toHaveCount(0);

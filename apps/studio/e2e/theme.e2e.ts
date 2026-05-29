@@ -1,4 +1,10 @@
-import { expect, projectFlowPath, setStudioTheme, test } from './support/studio-fixture.ts';
+import {
+  expect,
+  projectFlowPath,
+  setStudioTheme,
+  test,
+  waitForCanvasSettled,
+} from './support/studio-fixture.ts';
 
 // US-008: end-to-end coverage for the Cog → Theme menu (added in US-006)
 // and the new light visual baseline. The shared studio fixture's default
@@ -31,7 +37,7 @@ test.describe('canvas — theme toggle (US-008)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     // Initial paint reflects the seeded 'light' preference. The FOUC script
     // in apps/web/index.html adds the 'light' class on first paint; the
@@ -75,7 +81,7 @@ test.describe('canvas — theme toggle (US-008)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     await expect(page.locator('html')).toHaveClass(/(^|\s)light(\s|$)/);
 

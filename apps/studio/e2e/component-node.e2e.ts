@@ -1,7 +1,13 @@
 import { cpSync, mkdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import type { Locator } from '@playwright/test';
-import { type RegisteredFlow, expect, projectFlowPath, test } from './support/studio-fixture.ts';
+import {
+  type RegisteredFlow,
+  expect,
+  projectFlowPath,
+  test,
+  waitForCanvasSettled,
+} from './support/studio-fixture.ts';
 
 // AutoSizeObserver in packages/canvas/src/nodes/component-node.tsx debounces
 // the ResizeObserver by 150ms before calling useUpdateNodeInternals. Without
@@ -91,7 +97,7 @@ test.describe('canvas — component node (US-015)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     const node = page.locator('[data-node-type="component"]');
     await expect(node).toHaveCount(1);
@@ -125,7 +131,7 @@ test.describe('canvas — component node (US-015)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     const node = page.locator('[data-node-type="component"]');
     await expect(node).toHaveCount(1);

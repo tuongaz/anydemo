@@ -19,6 +19,7 @@ import {
   projectFlowPath,
   registerManifestProject,
   test,
+  waitForCanvasSettled,
 } from './support/studio-fixture.ts';
 
 // Match the canvas/theme e2e suites — stripping transitions/animations keeps
@@ -55,7 +56,7 @@ test.describe('flow switcher CRUD (US-027)', () => {
     );
     await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
     await page.addStyleTag({ content: DISABLE_MOTION_CSS });
-    await page.waitForLoadState('networkidle');
+    await waitForCanvasSettled(page);
 
     // The switcher trigger shows the active flow's display name — confirms
     // useProjectFlows resolved against the manifest before the popover opens.

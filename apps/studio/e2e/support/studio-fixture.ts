@@ -169,6 +169,22 @@ export const test = base.extend<EmptyTestArgs, WorkerFixtures>({
 
 export { expect } from '@playwright/test';
 
+// SSE-safe replacement for `waitForLoadState('networkidle')`. The studio SPA
+// holds two persistent EventSource streams open for the lifetime of the page
+// (/api/registry/events + /api/events?flowId=), so the in-flight request count
+// never reaches zero and `networkidle` hangs until the test times out — which
+// is also why Playwright deprecates `networkidle`. Waiting on
+// `document.fonts.ready` plus two animation frames gives stable text metrics and
+// a settled paint for visual snapshots without depending on connection counts.
+// String-form eval because the studio tsconfig omits the DOM lib (see
+// installThemeInitScript above) — a function callback referencing `document`
+// would fail typecheck.
+export async function waitForCanvasSettled(page: Page): Promise<void> {
+  await page.evaluate(
+    'document.fonts.ready.then(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true)))))',
+  );
+}
+
 // US-009: per-test flow registration helper. Lets new e2e tests seed
 // arbitrary flow shapes (12-tag render matrix, capability-chrome-rectangle-
 // only fences, draw-mode interactions) on top of the shared worker-scoped
