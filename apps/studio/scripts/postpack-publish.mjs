@@ -11,22 +11,26 @@
 //
 // The CI checkout is ephemeral so leaving `package.json` stripped is fine.
 // For local `npm pack` testing, `git checkout apps/studio/package.json`
-// after the run; the backup file is also left in place for inspection.
+// after the run; the backup files are also left in place for inspection.
 
-import { existsSync, renameSync, unlinkSync } from 'node:fs';
+import { existsSync, readdirSync, renameSync, unlinkSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const studioRoot = join(here, '..');
+const srcDir = join(studioRoot, 'src');
+const vendoredCatalog = join(srcDir, 'vendored-canvas-catalog.ts');
 
-const schemaPath = join(studioRoot, 'src', 'schema.ts');
-const schemaBackup = join(studioRoot, 'schema.ts.publish-backup');
-const vendoredCatalog = join(studioRoot, 'src', 'vendored-canvas-catalog.ts');
+const BACKUP_SUFFIX = '.publish-backup';
+for (const file of readdirSync(studioRoot)) {
+  if (!file.endsWith(BACKUP_SUFFIX)) continue;
+  const original = file.slice(0, -BACKUP_SUFFIX.length);
+  renameSync(join(studioRoot, file), join(srcDir, original));
+}
 
-if (existsSync(schemaBackup)) renameSync(schemaBackup, schemaPath);
 if (existsSync(vendoredCatalog)) unlinkSync(vendoredCatalog);
 
 console.error(
-  'postpack-publish: restored schema.ts; removed vendored catalog. NOTE: package.json left in stripped state so the publish manifest matches the tarball.',
+  'postpack-publish: restored rewritten src files; removed vendored catalog. NOTE: package.json left in stripped state so the publish manifest matches the tarball.',
 );
