@@ -23,27 +23,28 @@ If `$SEEFLOW help` itself fails (binary not on PATH, `npx` unavailable), surface
 
 ## Schema cache — fetch once, reuse everywhere
 
-In a single message, run the five schema calls in parallel and cache the outputs (`$schemaCache.flow`, `$schemaCache.node`, `$schemaCache.connector`, `$schemaCache.action`, `$schemaCache.style`):
+In a single message, run the six schema calls in parallel and cache the outputs (`$schemaCache.flow`, `$schemaCache.node`, `$schemaCache.connector`, `$schemaCache.action`, `$schemaCache.componentCatalog`, `$schemaCache.style`):
 
 ```
-$SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema style
+$SEEFLOW schema flow  ‖  $SEEFLOW schema node  ‖  $SEEFLOW schema connector  ‖  $SEEFLOW schema action  ‖  $SEEFLOW schema componentCatalog  ‖  $SEEFLOW schema style
 ```
 
-Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so unforwarded fields are invisible to them; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the five calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
+Phase 2 (node-planner) and Phase 4 (play/status designers) read from this cache via their launching prompts — they never re-fetch. The designers have no shell, so unforwarded fields are invisible to them; skipping the forward lets them invent fields the CLI rejects on `flow:add-bulk` / `nodes:patch`, burning a retry. If any of the six calls fails, surface the failure (`$SEEFLOW schema <name> failed; downstream agents cannot author conforming JSON`) and stop.
 
 > **Drilling further.** When a downstream agent only needs one variant (e.g. forwarding just the `component` node contract to the status-designer), the orchestrator can either slice the cached payload or re-fetch a narrow slice with `$SEEFLOW schema <category> <subname>` — for example `$SEEFLOW schema node component`, `$SEEFLOW schema action playAction`. Same shape, same `notes`, just one schema. Prefer slicing the cache when it's already in hand; reach for the sub-lookup when re-running mid-session or when stitching launching prompts from MCP/REST (`seeflow_schema { name, subname }` / `GET /api/schema/:name/:subname`).
 
-**Extract the component catalog.** Pull the legal `spec.elements[].type` enum from `$schemaCache.node`'s `component` variant into `$componentCatalog`. Use the schema command's `--jq` flag for the slice — do **not** parse `$schemaCache.node` in-process (Python, JS, hand-rolled walkers):
+**Extract the component catalog.** The `componentCatalog` schema category IS the catalog — one subname per legal `componentSpec.elements[].type`, each carrying that element's props schema. Cache `$schemaCache.componentCatalog.subnames` as `$componentCatalog` (the list of legal element-type names). It came back in the parallel fetch above — no extra call, no in-process parsing:
 
 ```
-$SEEFLOW schema node component --jq '<jq path to the spec.elements[].type enum>'
+# $schemaCache.componentCatalog already holds:
+#   { name:'componentCatalog', schemas:{ Card:{…}, Chart:{…}, … },
+#     subnames:[Card, Chart, Table, Button, …], notes:[…], jqHints:{…} }
+$componentCatalog = $schemaCache.componentCatalog.subnames
 ```
 
-Run `$SEEFLOW help schema` once this session before reaching for `--jq` — it documents the supported jq-path subset (identity `.`, field access `.foo`, brackets `.["foo"]` / `.[3]`, iteration `.foo[]`, optional `?`, pipe `|`) and the `badJq` error kind (exit 2). Resolve the exact path against the live schema output, not from memory — node-component's shape evolves and `--jq` errors fast on bad paths.
+When the planner (or a designer authoring a `spec.json`) needs the props one element type accepts, drill: `$SEEFLOW schema componentCatalog <Name>` (e.g. `$SEEFLOW schema componentCatalog Chart`) returns just that component's props JSON Schema. Pair with `--jq` (e.g. `--jq '.schemas.Chart.required'`) when you want a single slice — every response carries `jqHints.rootPath` so you never guess the filter prefix.
 
-If `--jq` returns exit 2 (`badJq`): the path is wrong — the schema evolved. Run `$SEEFLOW schema node component` **without** `--jq` to inspect the live structure, derive the correct path from the output, then retry with the corrected expression. Never fall back to Python, JS, or any in-process parser. Treat `badJq` as a path-debugging signal, not a tool-capability gap.
-
-Required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows).
+`$componentCatalog` is required input for the planner whenever it emits `type:'component'` nodes (default for `inputClass === "document"` flows). Forward both the name list and — for any element type the planner commits to — the drilled props schema, since the designers have no shell.
 
 ## Schema-type surface diff — silent
 

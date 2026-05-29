@@ -273,8 +273,12 @@ Commands (work without a running studio):
                        authoring nodes. No arg → category index with subnames
                        inlined; category arg → full JSON Schema(s) + jqHints;
                        subname arg → one variant + jqHints.dataFields listing
-                       every data.<field> available. Pair with --jq to slice
-                       (e.g. 'schema node rectangle --jq
+                       every data.<field> available. The 'componentCatalog'
+                       category lists every legal componentSpec.elements[].type
+                       and its props (drill: 'schema componentCatalog <Name>').
+                       Every response carries jqHints.rootPath (the jq prefix
+                       for that level). Pair with --jq to slice (e.g. 'schema
+                       node rectangle --jq
                        .schemas.rectangle.properties.data.properties.playAction').
   ids <type> <count>   Print <count> short ids of the given <type>, one per
                        line. <type> is 'node' (-> 'node-...') or 'connector'
@@ -1109,12 +1113,14 @@ async function runSchema() {
     getCategorySubschema,
     listCategorySubnames,
     buildJqHints,
+    buildIndexJqHints,
     SCHEMA_INDEX_USAGE,
   } = await import('./schema-catalog.ts');
   if (!category) {
     const base = {
       categories: listSchemaCategories(),
       usage: SCHEMA_INDEX_USAGE,
+      jqHints: buildIndexJqHints(),
     };
     if (jqFilter !== undefined) {
       printOk({ result: applyJqOrDie(base, jqFilter) });

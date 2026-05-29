@@ -51,7 +51,8 @@ here introduces new constraints — it shows the rules applied.
 contextBrief:
 {
   "userIntent": "Show the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
-  "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see the HTTP entry, the event bus + queue fan-out, and the workers that drive state transitions.",
+  "audienceFraming": "Engineer-and-business audience — needs to see the HTTP entry, the event bus + queue fan-out, and the workers that drive state transitions.",
+  "depth": "walkthrough",
   "scope": {
     "rootEntities": [
       "order HTTP server",

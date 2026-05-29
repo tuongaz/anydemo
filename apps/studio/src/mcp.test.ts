@@ -163,6 +163,7 @@ describe('seeflow_schema', () => {
     const body = expectOk(envelope) as {
       categories: Array<{ name: string; description: string; subnames: string[] }>;
       usage: { drill: string; filter: string; examples: string[] };
+      jqHints: { rootPath: string };
     };
     expect(body.categories.map((c) => c.name)).toEqual([
       'flow',
@@ -170,6 +171,7 @@ describe('seeflow_schema', () => {
       'connector',
       'action',
       'componentSpec',
+      'componentCatalog',
       'style',
     ]);
     // Each category surfaces its drill targets inline, and the response
@@ -178,6 +180,8 @@ describe('seeflow_schema', () => {
     expect(node?.subnames).toEqual(expect.arrayContaining(['rectangle', 'component']));
     expect(body.usage.drill).toMatch(/schema <category>/);
     expect(body.usage.filter).toMatch(/--jq/);
+    // Index carries jqHints.rootPath so MCP callers know the filter prefix.
+    expect(body.jqHints.rootPath).toBe('.categories');
   });
 
   it('returns full JSON Schemas + notes for a named category', async () => {
@@ -257,6 +261,27 @@ describe('seeflow_schema', () => {
         /\.schemas\.rectangle\.properties\.data\.properties\./.test(e),
       ),
     ).toBe(true);
+  });
+
+  it('exposes the componentCatalog category + per-component drill with rootPath', async () => {
+    const { app } = buildApp();
+    const category = expectOk(
+      await callTool(app, 'seeflow_schema', { name: 'componentCatalog' }),
+    ) as { name: string; subnames: string[]; jqHints: { rootPath: string } };
+    expect(category.name).toBe('componentCatalog');
+    expect(category.subnames).toEqual(expect.arrayContaining(['Card', 'Chart', 'Button']));
+    expect(category.jqHints.rootPath).toBe('.schemas');
+
+    const single = expectOk(
+      await callTool(app, 'seeflow_schema', { name: 'componentCatalog', subname: 'Chart' }),
+    ) as {
+      subname: string;
+      schemas: Record<string, { properties?: Record<string, unknown> }>;
+      jqHints: { rootPath: string };
+    };
+    expect(single.subname).toBe('Chart');
+    expect(single.schemas.Chart?.properties?.kind).toBeDefined();
+    expect(single.jqHints.rootPath).toBe('.schemas.Chart');
   });
 
   it('returns isError listing available subnames when subname is unknown within a known category', async () => {

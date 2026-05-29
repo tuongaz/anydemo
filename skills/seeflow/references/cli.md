@@ -21,7 +21,7 @@ exist.
 ## Schema cache — fetched once at Phase 0
 
 **Run schema lookups BEFORE designing or authoring any node.** The
-orchestrator fetches `$SEEFLOW schema {flow,node,connector,action,style}`
+orchestrator fetches `$SEEFLOW schema {flow,node,connector,action,componentCatalog,style}`
 in parallel during Phase 0 and caches the outputs for the rest of the
 run. Phase 2 (node-planner) and Phase 4 (play/status designers) receive
 the relevant cached entries in their launching prompts — they don't
@@ -44,21 +44,32 @@ enriching the response with affordances for the next call:
 # 1. Catalog — every category, with its drill targets inlined.
 $SEEFLOW schema
 #   → { categories: [{ name, description, subnames: [...] }, …],
-#       usage: { drill, filter, examples } }
+#       usage: { drill, filter, examples },
+#       jqHints: { rootPath: '.categories', examples, tip } }
 
 # 2. Category — full schemas + subnames + jqHints to drill further.
 $SEEFLOW schema node
+$SEEFLOW schema componentCatalog      # every legal componentSpec.elements[].type
+                                      # + the props each accepts
 #   → { name, schemas, notes, subnames: [...],
-#       jqHints: { examples: [...], tip } }
+#       jqHints: { examples: [...], rootPath: '.schemas', tip } }
 
 # 3. Variant — one named schema + per-variant jqHints with the EXACT
 #    list of data.<field> names you can target with --jq.
 $SEEFLOW schema node component        # just the component variant
 $SEEFLOW schema node rectangle        # just the rectangle variant
 $SEEFLOW schema action playAction     # just the playAction shape
+$SEEFLOW schema componentCatalog Chart # just Chart's props schema
 #   → { name, subname, schemas, notes,
-#       jqHints: { dataFields: [...], examples: [...], tip } }
+#       jqHints: { dataFields: [...], examples: [...],
+#                  rootPath: '.schemas.<subname>', tip } }
 ```
+
+Every response carries `jqHints.rootPath` — the jq prefix that reaches
+the schema body at that level (`.categories` on the index, `.schemas`
+on a category, `.schemas.<subname>` on a drill). The `{ result }`
+wrapper printed under `--jq` is presentational: filters run against the
+response object itself, so never prefix a filter with `.result`.
 
 Unknown subname → exit 3 with `{ code:"notFound", category,
 available:[…] }` listing the valid subnames. The same access patterns

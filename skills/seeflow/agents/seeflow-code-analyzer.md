@@ -95,6 +95,7 @@ network, or open long-lived processes. Prefer `LS` / `Read` / `Glob` /
   "inputClass": "code",
   "userIntent": "Short paraphrase of what the user wants shown.",
   "audienceFraming": "Who the audience is and what they need to walk away knowing.",
+  "depth": "walkthrough",
   "scope": {
     "rootEntities": ["checkout API", "payments service", "fulfillment worker"],
     "outOfScope": ["admin dashboard", "marketing site"]
@@ -129,20 +130,23 @@ Field-by-field:
 - **`userIntent`** *(string, 1 sentence)* — commit to a concrete framing.
   No hedging.
 - **`audienceFraming`** *(string, 1–3 sentences)* — who this demo is for
-  (engineer-and-business is the SeeFlow default), **the depth level**
-  (one of `overview` / `walkthrough` / `deep-architectural`, named
-  verbatim), and what they need to walk away knowing. Surface scope
-  ambiguity here. The depth keyword is the planner's richness dial:
+  (engineer-and-business is the SeeFlow default) and what they need to
+  walk away knowing. Surface scope ambiguity here. Prose only — the
+  machine-consumed depth token lives in its own `depth` field, not in
+  this sentence.
+- **`depth`** *(string)* — the planner's richness dial, named verbatim
+  as one of `overview` / `walkthrough` / `deep-architectural`. This is
+  a dedicated field (not buried in `audienceFraming` prose) so the
+  planner reads it directly:
   - `overview` — collapse aggressively; one node per top-level system.
   - `walkthrough` — default; follow the abstraction rules as written.
   - `deep-architectural` — invoke Exception 4 freely when a service has
     independent state machines; surface internal pipeline stages
     (Exception 1) the audience would otherwise miss.
-  Infer the keyword from the user's verbs: `"high-level map"` /
-  `"system diagram"` → `overview`; `"how X works"` / `"show the flow"`
-  → `walkthrough`; `"deep dive"` / `"architectural review"` /
-  `"every state machine"` → `deep-architectural`. When the prompt is
-  silent, pick `walkthrough`.
+  Infer from the user's verbs: `"high-level map"` / `"system diagram"`
+  → `overview`; `"how X works"` / `"show the flow"` → `walkthrough`;
+  `"deep dive"` / `"architectural review"` / `"every state machine"` →
+  `deep-architectural`. When the prompt is silent, pick `walkthrough`.
 - **`scope.rootEntities`** *(string[])* — names of the major systems /
   services / workers / data stores that belong in the flow. Use the
   names the codebase uses, not generic labels. Order them roughly
@@ -193,7 +197,8 @@ learnContext:  null
 {
   "inputClass": "code",
   "userIntent": "Visualise the end-to-end flow of an order moving through the pipeline from HTTP creation to payment, inventory confirmation, and shipping.",
-  "audienceFraming": "Engineer-and-business audience, walkthrough depth — needs to see (a) the HTTP entry points, (b) the event bus + queue fan-out, and (c) the workers that drive state transitions. Audience should leave knowing where each side-effect happens.",
+  "audienceFraming": "Engineer-and-business audience — needs to see (a) the HTTP entry points, (b) the event bus + queue fan-out, and (c) the workers that drive state transitions. Audience should leave knowing where each side-effect happens.",
+  "depth": "walkthrough",
   "scope": {
     "rootEntities": [
       "order HTTP server",

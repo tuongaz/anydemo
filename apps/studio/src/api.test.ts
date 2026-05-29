@@ -722,6 +722,7 @@ describe('GET /api/schema', () => {
       'connector',
       'action',
       'componentSpec',
+      'componentCatalog',
       'style',
     ]);
     for (const c of body.categories) {
@@ -731,7 +732,15 @@ describe('GET /api/schema', () => {
 
   it('returns full JSON Schemas + notes for each known category', async () => {
     const { app } = buildApp();
-    for (const name of ['flow', 'node', 'connector', 'action', 'componentSpec', 'style']) {
+    for (const name of [
+      'flow',
+      'node',
+      'connector',
+      'action',
+      'componentSpec',
+      'componentCatalog',
+      'style',
+    ]) {
       const res = await app.request(`/api/schema/${name}`);
       expect(res.status).toBe(200);
       const body = (await res.json()) as {
@@ -760,11 +769,40 @@ describe('GET /api/schema', () => {
     const body = (await res.json()) as {
       categories: Array<{ name: string; subnames: string[] }>;
       usage: { drill: string; filter: string; examples: string[] };
+      jqHints: { rootPath: string };
     };
     const node = body.categories.find((c) => c.name === 'node');
     expect(node?.subnames).toEqual(expect.arrayContaining(['rectangle', 'component']));
     expect(body.usage.drill).toMatch(/schema <category>/);
     expect(body.usage.filter).toMatch(/--jq/);
+    // Index carries jqHints.rootPath relative to the schemas payload (the
+    // REST envelope adds `ok`, but `--jq` consumers root at `.categories`).
+    expect(body.jqHints.rootPath).toBe('.categories');
+  });
+
+  it('GET /api/schema/componentCatalog exposes the component props catalog with rootPath', async () => {
+    const { app } = buildApp();
+    const category = await app.request('/api/schema/componentCatalog');
+    expect(category.status).toBe(200);
+    const categoryBody = (await category.json()) as {
+      name: string;
+      subnames: string[];
+      jqHints: { rootPath: string };
+    };
+    expect(categoryBody.name).toBe('componentCatalog');
+    expect(categoryBody.subnames).toEqual(expect.arrayContaining(['Card', 'Chart', 'Button']));
+    expect(categoryBody.jqHints.rootPath).toBe('.schemas');
+
+    const single = await app.request('/api/schema/componentCatalog/Chart');
+    expect(single.status).toBe(200);
+    const singleBody = (await single.json()) as {
+      subname: string;
+      schemas: Record<string, { properties?: Record<string, unknown> }>;
+      jqHints: { rootPath: string };
+    };
+    expect(singleBody.subname).toBe('Chart');
+    expect(singleBody.schemas.Chart?.properties?.kind).toBeDefined();
+    expect(singleBody.jqHints.rootPath).toBe('.schemas.Chart');
   });
 
   it('GET /api/schema/node/rectangle surfaces jqHints.dataFields with the variant data.* keys', async () => {
@@ -796,6 +834,7 @@ describe('GET /api/schema', () => {
       'connector',
       'action',
       'componentSpec',
+      'componentCatalog',
       'style',
     ]);
   });
@@ -872,6 +911,7 @@ describe('GET /api/schema', () => {
       'connector',
       'action',
       'componentSpec',
+      'componentCatalog',
       'style',
     ]);
   });

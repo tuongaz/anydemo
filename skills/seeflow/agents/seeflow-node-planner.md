@@ -47,14 +47,18 @@ The launching prompt will give you:
    `seeflow-code-analyzer` (always present) and, when ready,
    `seeflow-system-analyzer`. Always includes `inputClass` (one of
    `"code" | "conversation" | "document"`), `userIntent`,
-   `audienceFraming`, `scope.{rootEntities,outOfScope}`, `codePointers[]`,
-   `knownEndpoints[]`, `techStack`, `existingDemo`. May also include
+   `audienceFraming`, `depth` (one of `overview` / `walkthrough` /
+   `deep-architectural`), `scope.{rootEntities,outOfScope}`,
+   `codePointers[]`, `knownEndpoints[]`, `techStack`, `existingDemo`.
+   May also include
    `runtimeProfile` once the system-analyzer has returned. **Branch on
    `inputClass` when picking node types** — see §"Picking node `type`
    by input class" below.
-1a. **`componentCatalog`** — the legal names from the `component`
-    variant's `spec.elements[].type` enum (extracted by the
-    orchestrator from the Phase 0 `$SEEFLOW schema node` cache).
+1a. **`componentCatalog`** — the legal `componentSpec.elements[].type`
+    names, sourced by the orchestrator from the Phase 0
+    `$SEEFLOW schema componentCatalog` cache (its `subnames` list).
+    Per-type props arrive drilled via `$SEEFLOW schema componentCatalog
+    <Name>` for any type the orchestrator forwarded.
     Required input when you emit any `type:'component'` node — the
     studio rejects unknown names with `badSchema`. If the catalog is
     absent from your launching prompt, do not emit `type:'component'`
@@ -193,8 +197,10 @@ to `rectangle + data.icon: "database"` for an actual database.
   rejects unknown names with `badSchema`. Default for
   `inputClass === "document"` flows; also the right pick whenever a
   `code` / `conversation` flow legitimately needs an embedded info
-  panel. Run `$SEEFLOW schema node` via the orchestrator's cache for
-  the full `component` variant shape; the catalog enum lives there too.
+  panel. The full `component` node shape comes from `$SEEFLOW schema
+  node component`; the legal element-type names + their props come from
+  the separate `componentCatalog` category (`$SEEFLOW schema
+  componentCatalog [<Name>]`), forwarded by the orchestrator.
 - **`html`** — **last-resort** escape hatch for content that no
   `component` catalog entry covers (custom one-off layouts, bespoke
   legends, prose that needs Tailwind utility classes the catalog
@@ -253,8 +259,10 @@ predates the skirt.
   Default ladder:
   1. **`component`** first — pick the catalog entry that best
      matches each section of the document (status card, comparison
-     table, checklist, gap row, KPI tile). The legal `spec.elements[].type`
-     values come from `componentCatalog` in the launching prompt.
+     table, checklist, gap row, KPI tile). The legal
+     `componentSpec.elements[].type` values come from `componentCatalog`
+     in the launching prompt (the `$SEEFLOW schema componentCatalog`
+     subnames).
   2. **`html`** when the catalog genuinely can't render the content
      (custom layout, prose that needs Tailwind utilities the catalog
      doesn't expose). Justify the fall-back in `rationales`.
@@ -410,9 +418,10 @@ their own.
 
 ## Workflow
 
-1. **Read the depth keyword from `audienceFraming`.** The code-analyzer
-   emits one of `overview` / `walkthrough` / `deep-architectural`
-   verbatim. This is your richness dial:
+1. **Read `brief.depth`.** The code-analyzer emits a dedicated `depth`
+   field — one of `overview` / `walkthrough` / `deep-architectural`.
+   Read it directly; do not scan `audienceFraming` prose for the keyword.
+   This is your richness dial:
    - `overview` — collapse aggressively; one node per top-level system,
      resource nodes still mandatory. Skip Exception 1 (pipeline stages
      internal to one workflow) unless the audience cannot understand
@@ -421,7 +430,7 @@ their own.
    - `deep-architectural` — invoke Exception 4 freely when a service has
      independent state machines; surface internal pipeline stages
      (Exception 1) that walkthrough depth would collapse.
-   If the keyword is missing, default to `walkthrough` and log nothing
+   If `depth` is missing, default to `walkthrough` and log nothing
    — the orchestrator will surface the gap to the user.
 2. **Audit the brief.** Map every `rootEntity` to a candidate node. Drop
    anything in `outOfScope`. If a `codePointers.why` mentions an entity

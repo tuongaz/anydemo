@@ -35,6 +35,7 @@ import type { FlowEntry, Registry } from './registry.ts';
 import { resolveProjectFlow } from './route-resolve.ts';
 import {
   SCHEMA_INDEX_USAGE,
+  buildIndexJqHints,
   buildJqHints,
   getCategorySubschema,
   getSchemaCategory,
@@ -524,6 +525,7 @@ export function createApi(options: ApiOptions): Hono {
       ok: true as const,
       categories: listSchemaCategories(),
       usage: SCHEMA_INDEX_USAGE,
+      jqHints: buildIndexJqHints(),
     }),
   );
 

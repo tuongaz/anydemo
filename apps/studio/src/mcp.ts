@@ -31,6 +31,7 @@ import {
 import type { Registry } from './registry.ts';
 import {
   SCHEMA_INDEX_USAGE,
+  buildIndexJqHints,
   buildJqHints,
   getCategorySubschema,
   getSchemaCategory,
@@ -334,6 +335,7 @@ const buildTools = (ops: Operations, ctx: ToolContext): McpTool[] => [
         return okResult({
           categories: listSchemaCategories(),
           usage: SCHEMA_INDEX_USAGE,
+          jqHints: buildIndexJqHints(),
         });
       }
       if (typeof name !== 'string') {

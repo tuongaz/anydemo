@@ -218,7 +218,12 @@ export const NodeTypeSchema = z.enum([
 // superRefine wired in a later story.
 
 export const ComponentSpecElementSchema = z.object({
-  type: z.string().min(1),
+  type: z
+    .string()
+    .min(1)
+    .describe(
+      'Component name from the catalog — see `seeflow schema componentCatalog` for the legal values and the props each type accepts.',
+    ),
   props: z.record(z.string(), z.unknown()).optional(),
   children: z.array(z.string()).optional(),
   watch: z.record(z.string(), z.unknown()).optional(),

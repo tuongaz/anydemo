@@ -435,6 +435,7 @@ describe('seeflow CLI new subcommands', () => {
         ok: boolean;
         categories: Array<{ name: string; description: string; subnames: string[] }>;
         usage: { drill: string; filter: string; examples: string[] };
+        jqHints: { rootPath: string; examples: string[]; tip?: string };
       };
       expect(parsed.ok).toBe(true);
       expect(parsed.categories.map((c) => c.name)).toEqual([
@@ -443,6 +444,7 @@ describe('seeflow CLI new subcommands', () => {
         'connector',
         'action',
         'componentSpec',
+        'componentCatalog',
         'style',
       ]);
       // Every category surfaces drill targets inline so the agent doesn't
@@ -455,6 +457,8 @@ describe('seeflow CLI new subcommands', () => {
       expect(parsed.usage.drill).toMatch(/schema <category>/);
       expect(parsed.usage.filter).toMatch(/--jq/);
       expect(parsed.usage.examples.length).toBeGreaterThan(0);
+      // Index carries jqHints.rootPath so the agent knows the filter prefix.
+      expect(parsed.jqHints.rootPath).toBe('.categories');
     } finally {
       studio.stop();
     }
@@ -590,7 +594,7 @@ describe('seeflow CLI new subcommands', () => {
         name: string;
         subname: string;
         schemas: Record<string, { type: string }>;
-        jqHints: { dataFields?: string[]; examples: string[]; tip?: string };
+        jqHints: { dataFields?: string[]; examples: string[]; rootPath: string; tip?: string };
       };
       expect(parsed.name).toBe('node');
       expect(parsed.subname).toBe('rectangle');
@@ -607,6 +611,53 @@ describe('seeflow CLI new subcommands', () => {
         ),
       ).toBe(true);
       expect(parsed.jqHints.tip).toMatch(/dataFields/i);
+      // rootPath reaches the single variant so the agent never guesses the prefix.
+      expect(parsed.jqHints.rootPath).toBe('.schemas.rectangle');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  it('schema componentCatalog lists every component, drills into one, and --jq slices it', async () => {
+    const studio = startTestStudio();
+    try {
+      const category = await runCli(['schema', 'componentCatalog', '--no-start'], studio.env);
+      expect(category.code).toBe(0);
+      const parsedCategory = JSON.parse(category.stdout) as {
+        name: string;
+        schemas: Record<string, { type: string }>;
+        subnames: string[];
+        jqHints: { rootPath: string };
+      };
+      expect(parsedCategory.name).toBe('componentCatalog');
+      // The catalog the agent could not previously see — Chart/Table/Button etc.
+      expect(parsedCategory.subnames).toEqual(
+        expect.arrayContaining(['Card', 'Chart', 'Table', 'Button']),
+      );
+      expect(parsedCategory.jqHints.rootPath).toBe('.schemas');
+
+      const single = await runCli(
+        ['schema', 'componentCatalog', 'Chart', '--no-start'],
+        studio.env,
+      );
+      expect(single.code).toBe(0);
+      const parsedSingle = JSON.parse(single.stdout) as {
+        subname: string;
+        schemas: Record<string, { properties?: Record<string, unknown> }>;
+        jqHints: { rootPath: string };
+      };
+      expect(parsedSingle.subname).toBe('Chart');
+      expect(Object.keys(parsedSingle.schemas)).toEqual(['Chart']);
+      expect(parsedSingle.schemas.Chart?.properties?.kind).toBeDefined();
+      expect(parsedSingle.jqHints.rootPath).toBe('.schemas.Chart');
+
+      const sliced = await runCli(
+        ['schema', 'componentCatalog', 'Chart', '--jq', '.schemas.Chart.required', '--no-start'],
+        studio.env,
+      );
+      expect(sliced.code).toBe(0);
+      const parsedSliced = JSON.parse(sliced.stdout) as { result: string[] };
+      expect(parsedSliced.result).toEqual(expect.arrayContaining(['kind', 'data']));
     } finally {
       studio.stop();
     }
@@ -698,6 +749,7 @@ describe('seeflow CLI new subcommands', () => {
         'connector',
         'action',
         'componentSpec',
+        'componentCatalog',
         'style',
       ]);
     } finally {

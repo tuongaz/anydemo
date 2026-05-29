@@ -40,22 +40,26 @@ with affordances the next step needs:
     # 1. See the whole catalog.
     $SEEFLOW schema
     #    → { categories: [{ name, description, subnames: [...] }, …],
-    #        usage: { drill, filter, examples } }
+    #        usage: { drill, filter, examples },
+    #        jqHints: { rootPath: '.categories', examples, tip } }
     #    Every category surfaces its drill targets inline under
     #    `categories[].subnames` so you never need a second listing call.
 
     # 2. Drill into one category for the full variant tree.
-    $SEEFLOW schema flow         # top-level envelope
-    $SEEFLOW schema node         # every node variant (also yields the
-                                 # component catalog via the `component`
-                                 # variant's `spec.elements[].type` enum)
-    $SEEFLOW schema connector    # every connector variant
-    $SEEFLOW schema action       # every action variant
-    $SEEFLOW schema style        # style.json envelope (for reference)
+    $SEEFLOW schema flow             # top-level envelope
+    $SEEFLOW schema node             # every node variant
+    $SEEFLOW schema connector        # every connector variant
+    $SEEFLOW schema action           # every action variant
+    $SEEFLOW schema componentSpec    # spec.json shape for type:'component'
+    $SEEFLOW schema componentCatalog # every legal componentSpec.elements[].type
+                                     # + the props each accepts (one subname
+                                     # per component: Card, Chart, Table, …)
+    $SEEFLOW schema style            # style.json envelope (for reference)
     #    → { name, schemas, notes, subnames: [...],
-    #        jqHints: { examples: [...], tip } }
+    #        jqHints: { examples: [...], rootPath: '.schemas', tip } }
     #    `subnames` is the legal drill list; `jqHints.examples` are
-    #    copy-paste jq paths to feed back as `--jq` on the next call.
+    #    copy-paste jq paths to feed back as `--jq` on the next call;
+    #    `jqHints.rootPath` is the prefix `--jq` filters root at.
 
     # 3. Drill into one variant for one shape — the fastest read.
     $SEEFLOW schema node rectangle
@@ -63,8 +67,10 @@ with affordances the next step needs:
     $SEEFLOW schema node image
     $SEEFLOW schema action playAction
     $SEEFLOW schema componentSpec componentSpecElement
+    $SEEFLOW schema componentCatalog Chart   # just Chart's props schema
     #    → { name, subname, schemas, notes,
-    #        jqHints: { dataFields: [...], examples: [...], tip } }
+    #        jqHints: { dataFields: [...], examples: [...],
+    #                   rootPath: '.schemas.<subname>', tip } }
     #    `jqHints.dataFields` is the per-variant `data.<field>` list —
     #    EXACTLY the names you can paste under
     #    `.schemas.<subname>.properties.data.properties.<field>` to pull
@@ -345,10 +351,12 @@ reports, checklists, architectural narratives). The node's `data.spec`
 references one or more entries from the canvas's component catalog
 (`@seeflow/canvas/catalog`); the studio validates each
 `spec.elements[].type` against `COMPONENT_NAMES` at write time and
-rejects unknown names with `badSchema`. The catalog is exposed via the
-`component` variant in `$SEEFLOW schema node` — the orchestrator
-forwards the legal names to the planner in Phase 2 alongside the
-contract.
+rejects unknown names with `badSchema`. The catalog is exposed as its
+own schema category: `$SEEFLOW schema componentCatalog` lists every
+legal `componentSpec.elements[].type` as a subname, and
+`$SEEFLOW schema componentCatalog <Name>` (e.g. `… Chart`) returns that
+component's props JSON Schema. The orchestrator forwards the legal
+names to the planner in Phase 2 alongside the contract.
 
 Prefer `component` over `html` whenever a catalog entry covers the
 content — components are typed, theme-aware, and participate in

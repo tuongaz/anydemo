@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { COMPONENT_NAMES } from '@seeflow/canvas/catalog';
 import {
   SCHEMA_INDEX_USAGE,
+  buildIndexJqHints,
   buildJqHints,
   getCategorySubschema,
   getDataFieldNames,
@@ -20,7 +22,7 @@ const loadCategory = (name: string) => {
 
 describe('schema-catalog', () => {
   describe('listSchemaCategories', () => {
-    it('returns the six canonical categories with descriptions', () => {
+    it('returns the seven canonical categories with descriptions', () => {
       const cats = listSchemaCategories();
       expect(cats.map((c) => c.name)).toEqual([
         'flow',
@@ -28,6 +30,7 @@ describe('schema-catalog', () => {
         'connector',
         'action',
         'componentSpec',
+        'componentCatalog',
         'style',
       ]);
       for (const c of cats) {
@@ -199,6 +202,28 @@ describe('schema-catalog', () => {
       expect(payload.notes).toEqual([]);
     });
 
+    it('componentCatalog → one props schema per catalog component', () => {
+      const payload = loadCategory('componentCatalog');
+      // Every COMPONENT_NAMES entry must be resolvable as a subname — this is
+      // the catalog the agent could not previously see through `seeflow schema`.
+      expect(Object.keys(payload.schemas).sort()).toEqual([...COMPONENT_NAMES].sort());
+      for (const name of COMPONENT_NAMES) {
+        const schema = payload.schemas[name] as Record<string, unknown>;
+        expect(schema.type).toBe('object');
+      }
+      // The ref-shape note must surface so authors know $state/$action are legal.
+      expect(payload.notes.some((n) => /\$state.*\$action|\$action.*\$state/.test(n))).toBe(true);
+    });
+
+    it('componentCatalog drills into a single component (Chart) with its props', () => {
+      const single = getCategorySubschema('componentCatalog', 'Chart');
+      if (!single) throw new Error('expected componentCatalog.Chart');
+      expect(Object.keys(single.schemas)).toEqual(['Chart']);
+      const chart = single.schemas.Chart as { properties?: Record<string, unknown> };
+      expect(chart.properties?.kind).toBeDefined();
+      expect(chart.properties?.data).toBeDefined();
+    });
+
     it('mutating the returned payload does not affect later reads', () => {
       const first = loadCategory('node');
       first.notes.push('tampered');
@@ -331,6 +356,10 @@ describe('schema-catalog', () => {
       expect(hints.tip).toMatch(/rectangle/);
       // No dataFields at the category level — that's a per-variant detail.
       expect(hints.dataFields).toBeUndefined();
+      // rootPath at the category level reaches the schema body.
+      expect(hints.rootPath).toBe('.schemas');
+      // Tip warns against the presentational `.result` wrapper.
+      expect(hints.tip).toMatch(/never prefix your filter with `\.result`/);
     });
 
     it('per-subname hints expose dataFields + ready-to-paste paths for each data field', () => {
@@ -353,6 +382,19 @@ describe('schema-catalog', () => {
       ).toBe(true);
       // Tip should reference dataFields for affordance.
       expect(hints.tip).toMatch(/dataFields/i);
+      // rootPath reaches the single variant body.
+      expect(hints.rootPath).toBe('.schemas.rectangle');
+    });
+
+    it('componentCatalog subname hints root at .schemas.<Name>', () => {
+      const hints = buildJqHints('componentCatalog', 'Chart');
+      if (!hints) throw new Error('expected componentCatalog.Chart hints');
+      expect(hints.rootPath).toBe('.schemas.Chart');
+      // Catalog props have no data.* wrapper, so no dataFields.
+      expect(hints.dataFields).toBeUndefined();
+      expect(hints.examples).toEqual(
+        expect.arrayContaining(['.schemas.Chart', '.schemas.Chart.required']),
+      );
     });
 
     it('per-subname hints on action variants (no data wrapper) skip dataFields gracefully', () => {
@@ -369,6 +411,15 @@ describe('schema-catalog', () => {
     it('returns null for unknown category / subname so callers can fall through to error paths', () => {
       expect(buildJqHints('bogus')).toBeNull();
       expect(buildJqHints('node', 'bogus')).toBeNull();
+    });
+  });
+
+  describe('buildIndexJqHints', () => {
+    it('roots the index at .categories and warns about the .result wrapper', () => {
+      const hints = buildIndexJqHints();
+      expect(hints.rootPath).toBe('.categories');
+      expect(hints.examples).toEqual(expect.arrayContaining(['.categories', '.categories[].name']));
+      expect(hints.tip).toMatch(/never prefix your filter with `\.result`/);
     });
   });
 

@@ -5,6 +5,7 @@
 // module load — each call returns a fresh shallow copy so callers can't
 // mutate the cached payload.
 
+import { componentCatalog } from '@seeflow/canvas/catalog';
 import type { ZodTypeAny } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import {
@@ -51,12 +52,24 @@ export interface SchemaPayload {
 // further without round-tripping. `examples` are ready-to-paste jq paths;
 // `dataFields` lists the node-variant `data.<field>` keys (single-variant
 // lookups only — undefined for non-node categories or category-level
-// responses).
+// responses). `rootPath` is the jq prefix that reaches the schema body at
+// this response level (`.categories` on the index, `.schemas` on a category,
+// `.schemas.<subname>` on a drill) — present in the plain (non-`--jq`)
+// response the agent reads first, so it never has to guess the prefix.
 export interface JqHints {
   dataFields?: string[];
   examples: string[];
+  rootPath: string;
   tip?: string;
 }
+
+// Appended to every `jqHints.tip`. The `--jq` filter runs against the schema
+// object itself; the `{ result }` wrapper the CLI prints under `--jq` is
+// presentational, so a filter must never be prefixed with `.result`.
+const JQ_RESULT_TIP =
+  '`--jq` runs against this object directly; the `result` wrapper in `--jq` output is presentational — never prefix your filter with `.result`.';
+
+const withResultTip = (hint: string): string => `${hint} ${JQ_RESULT_TIP}`;
 
 // Draft-07 pin matches the widest tool support; the same target string is
 // used by the MCP `tools/list` JSON Schemas (default in zod-to-json-schema)
@@ -101,6 +114,11 @@ const CATEGORY_META: Array<Omit<SchemaCategory, 'subnames'>> = [
     description:
       "Sidecar shape written to <project>/nodes/<id>/spec.json for type:'component' nodes. Carries the json-render element tree, initial state, and named actions the renderer dispatches on user input.",
   },
+  {
+    name: 'componentCatalog',
+    description:
+      'The legal values for componentSpec.elements[].type and the props each accepts. Drill: seeflow schema componentCatalog <Name>.',
+  },
   { name: 'style', description: 'style.json (studio-owned).' },
 ];
 
@@ -131,6 +149,7 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       "type:'image' data.path must start with 'nodes/<id>/'.",
       "scriptPath in playAction/statusAction is relative to nodes/<nodeId>/ and may not contain '..' or absolute paths.",
       "type:'component' nodes have no `spec` field on disk — the spec lives in <project>/nodes/<id>/spec.json (see `seeflow schema componentSpec`). The resolver inlines it into data.spec for runtime / SSE broadcasts.",
+      'The legal `elements[].type` values and their props are listed under `seeflow schema componentCatalog`.',
       "stateSource SHOULD be set on every node that has a statusAction — kind:'request' for poll-based (REST, healthcheck, DB query), kind:'event' for push-based (SSE, webhook, queue, message bus).",
       'stateSource may also be set without a statusAction on representational/architecture diagrams to signal data-flow intent (poll vs push) without wiring a runtime probe.',
     ],
@@ -162,6 +181,22 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       "spec.json is the on-disk source of truth for type:'component' nodes; the resolver inlines it into data.spec at read time and splitFlow strips it back out before writing flow.json so the sidecar is never double-stored.",
       'elements is keyed by element id; `root` names the entry element. Element ids referenced from children / actions must exist in elements.',
       'state and actions are both keyed by user-chosen names. Action handles in the rendered UI reference these names; see `seeflow schema action` for the per-action shape.',
+      'The legal `elements[].type` values and their props are listed under `seeflow schema componentCatalog`.',
+    ],
+  },
+  componentCatalog: {
+    // One subname per catalog entry; schema body = the props object that
+    // element type accepts. Built dynamically so adding a catalog component
+    // surfaces here automatically (the canvas catalog is the single source).
+    schemas: Object.fromEntries(
+      Object.entries(componentCatalog.components).map(([name, def]) => [
+        name,
+        toJsonSchema(def.props),
+      ]),
+    ),
+    notes: [
+      "Each key is a legal componentSpec.elements[].type; its schema is the props object that element type accepts. Set them on the element's `props` field.",
+      'Any prop value may instead be a { $state } / { $action } / { $cond,$then,$else } ref resolved by the json-render runtime at render time — the per-prop schema shows the concrete (non-ref) shape.',
     ],
   },
   style: {
@@ -259,12 +294,19 @@ export function buildJqHints(category: string, subname?: string): JqHints | null
     return {
       ...(dataFields ? { dataFields } : {}),
       examples,
-      tip: hint,
+      rootPath: `.schemas.${subname}`,
+      tip: withResultTip(hint),
     };
   }
   const subs = Object.keys(payload.schemas);
   const sample = subs[0];
-  if (!sample) return { examples: ['.schemas', '.notes', '.notes[]'] };
+  if (!sample) {
+    return {
+      examples: ['.schemas', '.notes', '.notes[]'],
+      rootPath: '.schemas',
+      tip: JQ_RESULT_TIP,
+    };
+  }
   const examples = [
     '.schemas',
     `.schemas.${sample}`,
@@ -276,9 +318,25 @@ export function buildJqHints(category: string, subname?: string): JqHints | null
   ];
   return {
     examples,
-    tip:
+    rootPath: '.schemas',
+    tip: withResultTip(
       subs.length > 1
         ? `Pass \`seeflow schema ${category} <subname>\` (one of: ${subs.join(', ')}) to drop the other ${subs.length - 1} variant(s) from the payload before \`--jq\`-ing.`
         : `Single-variant category — \`--jq\` paths drill straight into \`.schemas.${sample}\`.`,
+    ),
+  };
+}
+
+// jqHints for the schema index (`seeflow schema` with no category). The index
+// payload is `{ categories, usage }`, so `--jq` filters root at `.categories`.
+// Surfaced so the index carries the same `rootPath` affordance as every drill
+// level — the agent never has to guess the prefix.
+export function buildIndexJqHints(): JqHints {
+  return {
+    examples: ['.categories', '.categories[].name', '.usage', '.usage.examples'],
+    rootPath: '.categories',
+    tip: withResultTip(
+      'Each entry under `.categories` names a drill target — pass its `name` as `<category>`.',
+    ),
   };
 }

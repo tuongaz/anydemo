@@ -22,7 +22,7 @@ Per-subcommand reference lives in the CLI itself — run `$SEEFLOW help` for the
 | Phase | Subcommand | Purpose |
 |---|---|---|
 | P0 | (curl `/health`) | Studio probe — not a CLI call |
-| P0 | `schema {flow,node,connector,action,style}` | Fetch the live contract once; cache for the rest of the run. Phase 2/4 reuse the cache instead of re-fetching. The `component` variant's catalog enum feeds `$componentCatalog` for the planner |
+| P0 | `schema {flow,node,connector,action,componentCatalog,style}` | Fetch the live contract once; cache for the rest of the run. Phase 2/4 reuse the cache instead of re-fetching. The `componentCatalog` category's `subnames` feed `$componentCatalog` for the planner |
 | P3 | `projects:create` | Scaffold + register a new project: writes BOTH `<repoPath>/seeflow.json` (manifest with a single `flows[]` entry `{ id: 'main', name: 'Main' }`) AND `<repoPath>/flows/main/flow.json` (empty envelope) in one shot — returns `{ projectSlug, entries: [...] }`. Required before the canvas can open at `$STUDIO_URL/projects/<projectSlug>/flows/<flowSlug>` |
 | P3 | `register` | Re-scan an existing `seeflow.json` and re-attach every declared flow when the user picks "Open the existing project" at the gate (`phases/p3-scaffold.md` §"Existing-project gate"). Never used as an automatic fallback from `projects:create alreadyExists` — the gate always asks the user first |
 | any | `flows:create --project <p> --flow <id> --name <n> [--icon <i>]` | Add a new flow to an existing project — atomically writes `flows/<id>/flow.json`, appends to the manifest, upserts the registry entry |
