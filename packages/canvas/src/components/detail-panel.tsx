@@ -301,7 +301,11 @@ export function DetailPanel({
               <ConnectorSummary connector={connector} />
             </div>
           </div>
-        ) : null}
+        ) : (
+          <div data-testid="detail-panel-empty" className="sf:text-muted-foreground sf:text-sm">
+            Select a node to inspect.
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

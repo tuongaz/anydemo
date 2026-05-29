@@ -1,12 +1,7 @@
 import { PanelRightClose, PanelRightOpen } from 'lucide-react';
 
 import { Button } from '../ui/button.tsx';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from '../ui/tooltip.tsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx';
 
 export interface InspectorToggleProps {
   open: boolean;

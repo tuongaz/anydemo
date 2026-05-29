@@ -267,6 +267,45 @@ describe('DetailPanel', () => {
     expect(buttons.length).toBe(0);
   });
 
+  it('renders empty-state placeholder when selectedNodeId is null', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: null,
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    const empty = findByTestId(tree, 'detail-panel-empty');
+    expect(empty).not.toBeNull();
+    expect(empty?.props.children).toBe('Select a node to inspect.');
+    const className = String((empty?.props as { className?: string }).className ?? '');
+    expect(className).toContain('sf:text-muted-foreground');
+    expect(className).toContain('sf:text-sm');
+    // No editable fields render in the empty branch.
+    expect(findByTestId(tree, 'detail-panel-name')).toBeNull();
+    expect(findByTestId(tree, 'detail-panel-description')).toBeNull();
+    expect(findByTestId(tree, 'detail-panel-detail')).toBeNull();
+  });
+
+  it('does not render empty-state when selectedNodeId is set', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeRectangleNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    expect(findByTestId(tree, 'detail-panel-empty')).toBeNull();
+  });
+
   // US-007: Status section above the editable fields, only when statusReport
   // is provided. Suppressed entirely for nodes with no status entry so the
   // panel looks identical for pre-statusAction demos. The DetailPanel render
