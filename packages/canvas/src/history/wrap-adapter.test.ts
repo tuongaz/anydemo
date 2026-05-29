@@ -287,6 +287,25 @@ describe('wrapAdapterWithHistory', () => {
     expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ borderColor: 'gray' })}`]);
   });
 
+  it('updateNode undo sends null (not undefined) to clear a previously-unset style key', async () => {
+    const inner = fakeAdapter();
+    // Node has NO backgroundColor — the style edit adds it. The inverse must
+    // send `null` so the studio strips the key (reverting to the unset
+    // default); an `undefined` would be dropped by JSON and leave the field
+    // at its post-edit value (undo no-op). Regression for the style-undo bug.
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeData('n-1', { x: 0, y: 0 }, { borderColor: 'green' }),
+    );
+    await adapter.updateNode('n-1', { borderColor: 'red', backgroundColor: 'red' });
+    inner.calls.length = 0;
+    await history.undo();
+    // borderColor reverts to its prior value; backgroundColor clears via null.
+    expect(inner.calls).toEqual([
+      `updateNode:n-1:${JSON.stringify({ borderColor: 'green', backgroundColor: null })}`,
+    ]);
+  });
+
   it('updateNode coalesce key includes sorted touched-field names', async () => {
     const inner = fakeAdapter();
     const { adapter, history } = wrapAdapterWithHistory(

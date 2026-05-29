@@ -139,6 +139,13 @@ export interface DemoViewProps {
    * prop just plumbs the data down so the wiring is in place.
    */
   statusByNode: NodeStatuses;
+  /**
+   * Monotonic counter bumped by App on every genuine `flow:reload` (watcher
+   * file-change). Drives the undo-history stale-clear so it keys off real
+   * reloads rather than every `detail`/`demoNodes` identity change — a routine
+   * SSE reconnect refetch must NOT wipe a populated undo stack.
+   */
+  externalReloadSignal: number;
   onPlayNode: (nodeId: string) => void;
   /** US-031: refresh the global demos list. Called after flow CRUD so the
    *  navigation lands on a page that resolves through `demos.find(...)`. */
@@ -155,6 +162,7 @@ export function DemoView({
   runs,
   nodeEvents,
   statusByNode,
+  externalReloadSignal,
   onPlayNode,
   refreshFlows,
 }: DemoViewProps) {
@@ -355,12 +363,10 @@ export function DemoView({
   // server) means an editor-driven change still lands cleanly: the matching
   // overrides clear, and the next render uses the server value.
   //
-  // The stale-mutation check piggy-backs on the same effect via
-  // `history.markExternalChange()`: the wrapper internally compares its own
-  // `lastMutationAt` (stamped by every intercepted adapter call) against the
-  // STALE_MUTATION_WINDOW_MS threshold and clears the history stack when the
-  // reload looks external (text editor / git checkout). The constant lives
-  // inside `@seeflow/canvas` now — host stays out of the timing math.
+  // NOTE: this effect runs on EVERY `demoNodes` identity change — including
+  // reconnect catch-up refetches (`onHello` → `refreshDetail`). It must NOT
+  // touch the undo history; the stale-clear lives in its own effect below,
+  // keyed on `externalReloadSignal`, so routine reconnects can't wipe undo.
   useEffect(() => {
     if (demoNodes) {
       pruneNodeOverrides(demoNodes);
@@ -369,16 +375,31 @@ export function DemoView({
       // suppression must stay until SSE catches up.
       pruneNodeDeletions(demoNodes);
     }
-    history.markExternalChange();
-  }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions, history]);
+  }, [demoNodes, pruneNodeOverrides, pruneNodeDeletions]);
 
   useEffect(() => {
     if (demoConnectors) {
       pruneConnectorOverrides(demoConnectors);
       pruneConnectorDeletions(demoConnectors);
     }
+  }, [demoConnectors, pruneConnectorOverrides, pruneConnectorDeletions]);
+
+  // Undo-history stale-clear. Keyed on `externalReloadSignal`, which App bumps
+  // ONLY on a genuine `flow:reload` (watcher file-change) — never on reconnect
+  // refetches. `history.markExternalChange()` then compares its own
+  // `lastMutationAt` (stamped by every intercepted adapter call) against the
+  // STALE_MUTATION_WINDOW_MS threshold: our own PATCH echo is recent → kept; a
+  // true external edit (text editor / git checkout) is stale → cleared. The
+  // first run (mount) is skipped so loading a flow can't clear the fresh stack.
+  const staleClearMountedRef = useRef(false);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: externalReloadSignal is the trigger; the effect body intentionally doesn't reference it.
+  useEffect(() => {
+    if (!staleClearMountedRef.current) {
+      staleClearMountedRef.current = true;
+      return;
+    }
     history.markExternalChange();
-  }, [demoConnectors, pruneConnectorOverrides, pruneConnectorDeletions, history]);
+  }, [externalReloadSignal, history]);
 
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   // US-025: flow switcher mutation dialogs. Open state lives in this page so

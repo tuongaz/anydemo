@@ -23,6 +23,28 @@ import {
 import type { GetFlowState, HistoryEntry, HistoryHandle, HistoryState } from './types.ts';
 
 /**
+ * Style/visual node keys the studio adapter clears when sent an explicit
+ * `null` (see `mergeNodeUpdates` — null strips the key from disk). When the
+ * pre-edit value of one of these was UNSET, the inverse must send `null` to
+ * clear it; sending `undefined` is dropped by JSON.stringify and leaves the
+ * field at its post-edit value (undo no-op). Kept in sync with the nullable
+ * keys in `NodePatchBodySchema`.
+ */
+const NULL_CLEARS_NODE_KEY = new Set<string>([
+  'borderColor',
+  'backgroundColor',
+  'borderSize',
+  'borderWidth',
+  'borderStyle',
+  'fontSize',
+  'textAlign',
+  'cornerRadius',
+  'shadow',
+  'color',
+  'strokeWidth',
+]);
+
+/**
  * Wrap a host-supplied `CanvasAdapter` and return a paired
  * `{ adapter, history }` where every mutating call is intercepted to record
  * an inverse on the history stack. The returned `adapter` is a drop-in
@@ -165,7 +187,13 @@ export function wrapAdapterWithHistory(
         } else if (key === 'type') {
           (before as Record<string, unknown>)[key] = node.type;
         } else {
-          (before as Record<string, unknown>)[key] = data[key as string];
+          const prior = data[key as string];
+          // When the pre-edit value was UNSET, send `null` for keys the studio
+          // clears on null so the inverse actually reverts (an `undefined` is
+          // dropped by JSON and the PATCH becomes a no-op). Other keys keep the
+          // existing undefined behaviour.
+          (before as Record<string, unknown>)[key] =
+            prior === undefined && NULL_CLEARS_NODE_KEY.has(key as string) ? null : prior;
         }
       }
       await inner.updateNode(nodeId, patch);

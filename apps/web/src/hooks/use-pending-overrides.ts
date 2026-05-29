@@ -47,6 +47,9 @@ export const applyDropOverride = <T extends { id: string }>(
   return next;
 };
 
+const isPlainObject = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
 export const applyPruneAgainst = <T extends { id: string }>(
   prev: OverrideMap<T>,
   items: T[],
@@ -60,21 +63,45 @@ export const applyPruneAgainst = <T extends { id: string }>(
     const server = byId.get(id);
     if (!server) continue;
     const remaining: Partial<T> = {};
+    const out = remaining as Record<string, unknown>;
     let kept = false;
     for (const key of Object.keys(partial) as (keyof T)[]) {
-      if (deepEqual(partial[key], server[key])) {
-        mutated = true;
+      const pv = partial[key];
+      const sv = server[key];
+      // `data` is a partial bag overlaid on the server's FULL `data` object —
+      // comparing the two wholesale never matches (the server carries extra
+      // keys), so the override would leak forever and mask later server
+      // changes (notably an undo's revert). Reconcile its keys individually:
+      // keep only the sub-keys that still differ from the server.
+      if (key === 'data' && isPlainObject(pv) && isPlainObject(sv)) {
+        const dataDiff: Record<string, unknown> = {};
+        let dataKept = false;
+        for (const dk of Object.keys(pv)) {
+          if (!deepEqual(pv[dk], sv[dk])) {
+            dataDiff[dk] = pv[dk];
+            dataKept = true;
+          }
+        }
+        if (dataKept) {
+          out[key as string] = dataDiff;
+          kept = true;
+        }
+      } else if (deepEqual(pv, sv)) {
+        // matched — drop this key
       } else {
-        remaining[key] = partial[key];
+        out[key as string] = pv;
         kept = true;
       }
     }
-    if (kept) {
-      next[id] = remaining;
-    } else {
-      mutated = true;
+    if (!kept) {
       delete next[id];
+      mutated = true;
+    } else if (!deepEqual(remaining, partial)) {
+      next[id] = remaining;
+      mutated = true;
     }
+    // else: pruned result is identical to the existing override — keep the
+    // original reference so the map stays referentially stable.
   }
   return mutated ? next : prev;
 };

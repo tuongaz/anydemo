@@ -164,6 +164,14 @@ function resolveProjectFile(
   return { kind: 'ok', absPath: realTarget, projectRoot: realRoot };
 }
 
+// SSE keep-alive cadence. An idle event stream (no flow activity) is otherwise
+// reaped by Bun's connection idle-timeout and any intermediary proxy, forcing
+// the browser's EventSource to reconnect every ~15s. Each reconnect re-fires
+// `hello` → a client refetch, churning state. We write a comment line on this
+// cadence so the connection stays warm. Kept comfortably under common 15-30s
+// idle windows.
+const SSE_HEARTBEAT_MS = 10_000;
+
 // Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the
 // leading `.`. Stored as a Set so future expansion (PDF, video) is one-edit.
 const UPLOAD_ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
@@ -1991,9 +1999,19 @@ export function createApi(options: ApiOptions): Hono {
             await stream.writeSSE(next);
           }
           if (!active) break;
-          await new Promise<void>((r) => {
-            resume = r;
+          // Wait for the next event OR a heartbeat tick — whichever comes
+          // first. On a heartbeat we emit an SSE comment line (invisible to
+          // EventSource) so the idle connection isn't reaped mid-session.
+          let heartbeat: ReturnType<typeof setTimeout> | null = null;
+          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
+            resume = () => r('event');
+            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
           });
+          if (heartbeat) clearTimeout(heartbeat);
+          resume = null;
+          if (reason === 'heartbeat' && active) {
+            await stream.write(': ping\n\n');
+          }
         }
       } finally {
         unsubscribe();
@@ -2046,9 +2064,18 @@ export function createApi(options: ApiOptions): Hono {
             await stream.writeSSE(next);
           }
           if (!active) break;
-          await new Promise<void>((r) => {
-            resume = r;
+          // See /events: race the next event against a heartbeat tick so the
+          // idle registry stream stays warm instead of being reaped.
+          let heartbeat: ReturnType<typeof setTimeout> | null = null;
+          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
+            resume = () => r('event');
+            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
           });
+          if (heartbeat) clearTimeout(heartbeat);
+          resume = null;
+          if (reason === 'heartbeat' && active) {
+            await stream.write(': ping\n\n');
+          }
         }
       } finally {
         unsubscribe();

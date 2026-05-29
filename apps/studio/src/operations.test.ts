@@ -81,6 +81,27 @@ describe('NodePatchBodySchema autoSize', () => {
   });
 });
 
+describe('mergeNodeUpdates null clears style keys', () => {
+  it('strips a style key from data when the patch value is null', () => {
+    const node: Record<string, unknown> = {
+      id: 'n1',
+      type: 'rectangle',
+      data: { name: 'X', borderColor: 'green', backgroundColor: 'red', fontSize: 14 },
+    };
+    // Undo of a color edit clears a previously-unset field by sending null.
+    mergeNodeUpdates(node, { backgroundColor: null });
+    const data = node.data as Record<string, unknown>;
+    expect('backgroundColor' in data).toBe(false);
+    // Untouched keys are preserved.
+    expect(data).toMatchObject({ name: 'X', borderColor: 'green', fontSize: 14 });
+  });
+
+  it('accepts null on style keys through NodePatchBodySchema', () => {
+    const parsed = NodePatchBodySchema.safeParse({ borderColor: null, fontSize: null });
+    expect(parsed.success).toBe(true);
+  });
+});
+
 describe('mergeNodeUpdates autoSize invariant', () => {
   it('flips autoSize to false when width is written', () => {
     const node: Record<string, unknown> = {

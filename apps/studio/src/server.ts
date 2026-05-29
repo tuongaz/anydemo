@@ -227,7 +227,12 @@ export function serve(options: ServeOptions = {}) {
   const hostname = options.hostname ?? '0.0.0.0';
   mkdirSync(seeflowHome(), { recursive: true });
   const app = createApp(options);
-  return Bun.serve({ port, hostname, fetch: app.fetch });
+  // Bun's default per-connection idle timeout (~10s) reaps long-lived SSE
+  // streams between heartbeats, forcing the browser's EventSource to reconnect
+  // (each reconnect re-fires `hello` → a client refetch). Raise it well above
+  // the SSE heartbeat cadence so the keep-alive lands first and the stream
+  // stays warm. Max accepted by Bun is 255s.
+  return Bun.serve({ port, hostname, idleTimeout: 120, fetch: app.fetch });
 }
 
 if (import.meta.main) {

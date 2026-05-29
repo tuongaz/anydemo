@@ -22,7 +22,7 @@ import {
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
 import { TooltipProvider } from '@seeflow/canvas';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 export function App() {
   const pathname = usePathname();
@@ -75,6 +75,13 @@ export function App() {
   }, [slug, demos, currentSummary, refreshFlows]);
 
   const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(project, flow);
+  // Monotonic counter bumped ONLY when the watcher reports a real `flow:reload`
+  // (a file-change signal — our own PATCH echo OR an external text-editor/git
+  // edit). Threaded into DemoView so the undo-history stale-clear keys off
+  // genuine reloads instead of every `detail` identity change. Reconnect
+  // catch-ups (`onHello` → `refreshDetail`) deliberately do NOT bump it, so a
+  // routine SSE reconnect can't wipe a populated undo stack.
+  const [externalReloadSignal, setExternalReloadSignal] = useState(0);
   const { runs, apply: applyRun } = useNodeRuns(flowId);
   const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
   const {
@@ -130,6 +137,10 @@ export function App() {
             error: payload.error,
           };
       applyDetail(next);
+      // Signal a genuine file-change reload to DemoView's undo-history
+      // stale-clear. Fires for both our own PATCH echo (recent → kept) and a
+      // true external edit (stale → cleared); the window math lives downstream.
+      setExternalReloadSignal((n) => n + 1);
     },
     [flowId, currentSummary, applyDetail],
   );
@@ -248,6 +259,7 @@ export function App() {
               runs={runs}
               nodeEvents={nodeEvents}
               statusByNode={statusByNode}
+              externalReloadSignal={externalReloadSignal}
               onPlayNode={onPlayNode}
               refreshFlows={refreshFlows}
             />

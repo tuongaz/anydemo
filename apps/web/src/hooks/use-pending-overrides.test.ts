@@ -117,6 +117,36 @@ describe('applyPruneAgainst', () => {
     const next = applyPruneAgainst<Node>(prev, [node('a', 5, 6, 'a')]);
     expect(next).toEqual({});
   });
+
+  // Regression: a nested `data` override is a PARTIAL bag overlaid on the
+  // server's FULL `data`. Comparing them wholesale never matches, so the
+  // override used to leak forever and mask later server changes (e.g. an
+  // undo's revert). It must reconcile `data` key-by-key.
+  it('prunes a nested data override key-by-key against the full server data', () => {
+    interface DataNode {
+      id: string;
+      data: Record<string, unknown>;
+    }
+    const prev: OverrideMap<DataNode> = {
+      a: { data: { borderColor: 'red', backgroundColor: 'red' } },
+    };
+    // Server caught up on BOTH style keys; its `data` carries extra keys we
+    // must ignore. The whole override should drop.
+    const serverCaughtUp: DataNode = {
+      id: 'a',
+      data: { name: 'X', borderColor: 'red', backgroundColor: 'red', fontSize: 14 },
+    };
+    expect(applyPruneAgainst<DataNode>(prev, [serverCaughtUp])).toEqual({});
+
+    // Server caught up on borderColor only — keep just the still-divergent key.
+    const serverPartial: DataNode = {
+      id: 'a',
+      data: { name: 'X', borderColor: 'red', backgroundColor: 'green', fontSize: 14 },
+    };
+    expect(applyPruneAgainst<DataNode>(prev, [serverPartial])).toEqual({
+      a: { data: { backgroundColor: 'red' } },
+    });
+  });
 });
 
 describe('set + drop on error (revert path)', () => {

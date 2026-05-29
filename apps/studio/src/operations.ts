@@ -98,15 +98,19 @@ export const NodePatchBodySchema = z
     type: NodeTypeSchema.optional(),
     position: PositionBodySchema.optional(),
     name: z.string().optional(),
-    borderColor: ColorTokenSchema.optional(),
-    backgroundColor: ColorTokenSchema.optional(),
-    borderSize: z.number().min(0).optional(),
-    borderWidth: z.number().min(0).max(8).optional(),
-    borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
-    fontSize: z.number().positive().optional(),
-    textAlign: z.enum(['left', 'center', 'right']).optional(),
-    cornerRadius: z.number().min(0).optional(),
-    shadow: z.number().int().min(0).max(5).optional(),
+    // Style/visual keys accept explicit `null` as the clear signal (mirrors
+    // `icon`): mergeNodeUpdates strips the key from disk, so undo can revert a
+    // style field back to its pre-edit "unset" default instead of being a
+    // no-op (a dropped-undefined PATCH leaves the field untouched).
+    borderColor: ColorTokenSchema.nullable().optional(),
+    backgroundColor: ColorTokenSchema.nullable().optional(),
+    borderSize: z.number().min(0).nullable().optional(),
+    borderWidth: z.number().min(0).max(8).nullable().optional(),
+    borderStyle: z.enum(['solid', 'dashed', 'dotted']).nullable().optional(),
+    fontSize: z.number().positive().nullable().optional(),
+    textAlign: z.enum(['left', 'center', 'right']).nullable().optional(),
+    cornerRadius: z.number().min(0).nullable().optional(),
+    shadow: z.number().int().min(0).max(5).nullable().optional(),
     width: z.number().positive().optional(),
     height: z.number().positive().optional(),
     // type:'html'-only: when true, the renderer measures content and React Flow
@@ -115,11 +119,12 @@ export const NodePatchBodySchema = z
     autoSize: z.boolean().optional(),
     // type:'icon'-only: stroke color token. Lands at data.color; the
     // post-merge ResolvedFlowSchema reparse gates that this is only valid on
-    // type:'icon'.
-    color: ColorTokenSchema.optional(),
+    // type:'icon'. Nullable: explicit null clears it (undo of an icon recolor).
+    color: ColorTokenSchema.nullable().optional(),
     // type:'icon'-only: glyph stroke width. Lands at data.strokeWidth; the
-    // post-merge reparse gates the [0.5, 4] bound and arm validity.
-    strokeWidth: z.number().min(0.5).max(4).optional(),
+    // post-merge reparse gates the [0.5, 4] bound and arm validity. Nullable:
+    // explicit null clears it (undo back to the default stroke width).
+    strokeWidth: z.number().min(0.5).max(4).nullable().optional(),
     // type:'icon'/type:'image'-only: accessible alt text. Lands at data.alt.
     alt: z.string().optional(),
     // kebab-case Lucide icon name. Lands at data.icon. The post-merge reparse
@@ -305,10 +310,12 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
       }
       continue;
     }
-    // US-009: explicit null on icon is the clear signal (`.min(1)` rules out
-    // the empty-string convention used for description / detail). Strip the
-    // key from disk so a re-parsed demo doesn't reintroduce it.
-    if (key === 'icon' && updates[key] === null) {
+    // Explicit null is the clear signal for every nullable key (style/visual
+    // tokens + US-009's `icon`): strip the key from disk so a re-parsed demo
+    // doesn't reintroduce it, and so an undo can restore a field to its
+    // pre-edit "unset" default. Only keys declared `.nullable()` in
+    // NodePatchBodySchema can reach here carrying null.
+    if (updates[key] === null) {
       if (key in data) {
         delete data[key];
         touchedData = true;
