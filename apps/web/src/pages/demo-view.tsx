@@ -1,5 +1,4 @@
 import { CommandPalette } from '@/components/command-palette';
-import { ExportDialog } from '@/components/export-dialog';
 import { FlowCreateDialog } from '@/components/flow-create-dialog';
 import { FlowDeleteDialog } from '@/components/flow-delete-dialog';
 import { FlowRenameDialog } from '@/components/flow-rename-dialog';
@@ -50,7 +49,7 @@ import {
   wrapAdapterWithHistory,
 } from '@seeflow/canvas';
 import type { ReactFlowInstance } from '@xyflow/react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { type RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 type Position = { x: number; y: number };
 
@@ -151,6 +150,13 @@ export interface DemoViewProps {
   /** US-031: refresh the global demos list. Called after flow CRUD so the
    *  navigation lands on a page that resolves through `demos.find(...)`. */
   refreshFlows: () => Promise<void> | void;
+  /**
+   * Imperative handle on the canvas's export workflow, owned by App.tsx so
+   * the studio header's Share button and the cloud-export dialog can both
+   * reach the same instance. DemoView forwards it into `<SeeflowCanvas ref>`
+   * and uses it for the command-palette PDF/PNG entries.
+   */
+  canvasRef: RefObject<SeeflowCanvasHandle>;
 }
 
 export function DemoView({
@@ -166,6 +172,7 @@ export function DemoView({
   externalReloadSignal,
   onPlayNode,
   refreshFlows,
+  canvasRef,
 }: DemoViewProps) {
   const summary = demos.find((d) => d.slug === slug);
   // US-024: per-project flow list powers the Figma-style switcher popover
@@ -208,12 +215,6 @@ export function DemoView({
   const onDeleteSelectionRef = useRef<((nodeIds: string[], connIds: string[]) => void) | null>(
     null,
   );
-  // US-015: imperative handle on the in-canvas ShareMenu / export workflow.
-  // The canvas owns capture (fit-view + snapshot + restore) and dispatches
-  // PDF/PNG downloads internally; the studio reaches in through this ref for
-  // command-palette entries and the "Export to seeflow.dev" dialog's preview
-  // thumbnail.
-  const canvasRef = useRef<SeeflowCanvasHandle>(null);
   // Generalized optimistic overrides for nodes + connectors. Set on user
   // edits BEFORE firing the API call; pruned on the next flow:reload echo
   // (server caught up); dropped on API failure (revert to server state).
@@ -402,7 +403,6 @@ export function DemoView({
     history.markExternalChange();
   }, [externalReloadSignal, history]);
 
-  const [exportDialogOpen, setExportDialogOpen] = useState(false);
   // US-025: flow switcher mutation dialogs. Open state lives in this page so
   // the popover (which closes on action) can hand off without keeping itself
   // mounted; the dialog stays mounted until its own onOpenChange flips it.
@@ -2050,7 +2050,16 @@ export function DemoView({
         }
       }
     },
-    [history, onCopyNodes, onPasteNodes, onDeleteSelection, demoNodes, demoConnectors, onTidy],
+    [
+      history,
+      onCopyNodes,
+      onPasteNodes,
+      onDeleteSelection,
+      demoNodes,
+      demoConnectors,
+      onTidy,
+      canvasRef,
+    ],
   );
 
   // US-006: Cmd/Ctrl+P opens the command palette. preventDefault fires the
@@ -2424,7 +2433,10 @@ export function DemoView({
           // composition (`/api/projects/:project/flows/:flow/nodes/.../actions/...`).
           flowSlug={flow}
           enableEmbed={false}
-          onExportToCloud={flowId ? () => setExportDialogOpen(true) : undefined}
+          // ShareMenu lives in the studio header now (App.tsx). The library
+          // component still exists for embedders consuming @seeflow/canvas
+          // directly — we just don't render the in-canvas chrome here.
+          showShareMenu={false}
           nodes={visibleNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
           selectedNodeIds={selectedIds}
@@ -2527,16 +2539,6 @@ export function DemoView({
           canExportDemo: Boolean(flowId),
         }}
       />
-
-      {flowId ? (
-        <ExportDialog
-          open={exportDialogOpen}
-          onOpenChange={setExportDialogOpen}
-          project={project}
-          flowName={detail?.name ?? summary.name}
-          onCapturePreview={() => canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)}
-        />
-      ) : null}
     </div>
   );
 }

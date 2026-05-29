@@ -1,4 +1,5 @@
-import { Header } from '@/components/header';
+import { ExportDialog } from '@/components/export-dialog';
+import { Header, type HeaderShareCallbacks } from '@/components/header';
 import { useDemoData } from '@/hooks/use-demo-data';
 import { useDemos } from '@/hooks/use-demos';
 import { useNodeEvents } from '@/hooks/use-node-events';
@@ -21,8 +22,8 @@ import {
 } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
-import { TooltipProvider } from '@seeflow/canvas';
-import { useCallback, useEffect, useState } from 'react';
+import { type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 export function App() {
   const pathname = usePathname();
@@ -230,6 +231,22 @@ export function App() {
     [project, flow, applyRun],
   );
 
+  // US-015: the canvas owns export — `canvasRef` populates once SeeflowCanvas
+  // mounts inside DemoView. Lifted here (from DemoView) so the studio header
+  // and the cloud-export dialog can both reach it without prop-drilling
+  // through portals or context.
+  const canvasRef = useRef<SeeflowCanvasHandle>(null);
+  const [exportDialogOpen, setExportDialogOpen] = useState(false);
+
+  const share = useMemo<HeaderShareCallbacks | undefined>(() => {
+    if (!flowId) return undefined;
+    return {
+      onDownloadPdf: () => canvasRef.current?.exportPdf(),
+      onDownloadPng: () => canvasRef.current?.exportPng(),
+      onExportToCloud: () => setExportDialogOpen(true),
+    };
+  }, [flowId]);
+
   if (demos === null) {
     return (
       <div className="flex h-full w-full items-center justify-center bg-background text-sm text-muted-foreground">
@@ -246,6 +263,7 @@ export function App() {
           currentProjectSlug={project ?? undefined}
           onProjectCreated={onProjectCreated}
           onUnregisterProject={onUnregisterProject}
+          share={share}
         />
         <main className="min-h-0 flex-1">
           {project && flow && slug ? (
@@ -262,11 +280,23 @@ export function App() {
               externalReloadSignal={externalReloadSignal}
               onPlayNode={onPlayNode}
               refreshFlows={refreshFlows}
+              canvasRef={canvasRef}
             />
           ) : (
             <StudioHome demos={demos} />
           )}
         </main>
+        {flowId && project ? (
+          <ExportDialog
+            open={exportDialogOpen}
+            onOpenChange={setExportDialogOpen}
+            project={project}
+            flowName={detail?.name ?? currentSummary?.name}
+            onCapturePreview={() =>
+              canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)
+            }
+          />
+        ) : null}
       </div>
     </TooltipProvider>
   );

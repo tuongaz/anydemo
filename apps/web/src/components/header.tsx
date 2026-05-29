@@ -10,14 +10,28 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  ShareMenu,
 } from '@seeflow/canvas';
 import { Settings, Workflow } from 'lucide-react';
+
+export interface HeaderShareCallbacks {
+  onDownloadPdf: () => Promise<unknown> | unknown;
+  onDownloadPng: () => Promise<unknown> | unknown;
+  onExportToCloud: () => void;
+}
 
 export interface HeaderProps {
   projects: ProjectSummary[];
   currentProjectSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
   onUnregisterProject?: (projectSlug: string) => Promise<void>;
+  /**
+   * Renders the Share trigger between ProjectSwitcher and Settings. Pass
+   * `undefined` (the default) when no flow is open — the trigger is hidden
+   * entirely on StudioHome. Embed is intentionally left off here to mirror
+   * the existing studio config.
+   */
+  share?: HeaderShareCallbacks;
 }
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -31,6 +45,7 @@ export function Header({
   currentProjectSlug,
   onProjectCreated,
   onUnregisterProject,
+  share,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
 
@@ -54,6 +69,15 @@ export function Header({
           onProjectCreated={onProjectCreated}
           onUnregisterProject={onUnregisterProject}
         />
+        {share ? (
+          <ShareMenu
+            mode="edit"
+            enableEmbed={false}
+            onDownloadPdf={share.onDownloadPdf}
+            onDownloadPng={share.onDownloadPng}
+            onExportToCloud={share.onExportToCloud}
+          />
+        ) : null}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
