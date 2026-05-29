@@ -196,6 +196,8 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runFlowsDelete();
 } else if (sub === 'flows:layout') {
   await runFlowsLayout();
+} else if (sub === 'icons') {
+  await runIcons();
 } else if (sub === 'flow:add-bulk') {
   await runFlowAddBulk();
 } else if (sub === 'flows:play') {
@@ -1217,4 +1219,50 @@ async function runE2e() {
     process.exit(1);
   }
   printOk(report);
+}
+
+async function runIcons() {
+  const action = argv[1];
+  switch (action) {
+    case undefined:
+    case 'list':
+      await runIconsList();
+      break;
+    case 'add':
+      await runIconsAdd();
+      break;
+    case 'update':
+      await runIconsUpdate();
+      break;
+    case 'remove':
+      await runIconsRemove();
+      break;
+    default:
+      console.error(`Unknown icons action: ${action}`);
+      console.error('Usage: seeflow icons {list|add|update|remove} ...');
+      process.exit(1);
+  }
+}
+
+async function runIconsList() {
+  const { iconCacheRoot } = await import('./icons/paths.ts');
+  const { readIndex } = await import('./icons/index-store.ts');
+  const { summarizePacks } = await import('./icons/list-helper.ts');
+  const idx = readIndex(iconCacheRoot());
+  printOk({ packs: summarizePacks(idx) });
+}
+
+async function runIconsAdd() {
+  /* implemented in US-008 (Stage 2.3) */
+  printError('seeflow icons add is not yet implemented (Stage 2.3 work).');
+}
+
+async function runIconsUpdate() {
+  /* implemented in US-008 (Stage 2.3) */
+  printError('seeflow icons update is not yet implemented (Stage 2.3 work).');
+}
+
+async function runIconsRemove() {
+  /* implemented in US-008 (Stage 2.4) */
+  printError('seeflow icons remove is not yet implemented (Stage 2.4 work).');
 }
