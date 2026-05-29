@@ -108,7 +108,8 @@ Field-by-field:
 
 - `name` — human-readable demo title (Title Case noun phrase mirroring
   `userIntent`; e.g. `"Checkout Flow"`, `"Order Pipeline"`).
-- `slug` — kebab-case identifier mirrored as the seeflow project's directory name (`<host>/.seeflow/<slug>/`).
+- `slug` — kebab-case identifier used only for the seeflow project's directory name (`<host>/.seeflow/<slug>/`).
+  It is **advisory, not the addressing key**: `projects:create` derives the registry slug from `--name` (`slugify(name)`), and that response value — not this field — is what every follow-up `--project` call uses. To avoid a mismatch, emit `slug` as the kebab-case of `name` (e.g. `name: "Checkout Flow"` → `slug: "checkout-flow"`); do not abbreviate or drop words.
   Stable across edits: reuse `editTarget.slug` when provided.
 - `nodes` — array conforming to `$SEEFLOW schema node`. Emit as many
   nodes as the flow genuinely needs — let the abstraction rules below
@@ -130,7 +131,7 @@ Field-by-field:
 
 - Conform to the schema in your launching prompt — anything that wouldn't survive `$SEEFLOW schema node` or `$SEEFLOW schema connector` is rejected at the boundary.
 - Emit zero visual fields — presentation (positions, sizes, colors, borders) lives in `style.json`, written by `flows:layout` and the canvas.
-- Mark the trigger by setting `data.playAction` to a placeholder object. The orchestrator fills in any required fields before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`.
+- Mark the trigger by setting `data.playAction` to the concrete placeholder `{ "kind": "script", "interpreter": "bun", "scriptPath": "scripts/play.ts" }` (not a free-form `{ label, description }` object — `playAction` is a `ScriptAction`, so `kind`/`interpreter`/`scriptPath` are required and anything else is rejected at the boundary). The orchestrator may adjust the interpreter before `flow:add-bulk`; the Phase 4 play-designer overwrites the placeholder with the real action via `nodes:patch`.
 - Do not emit `statusAction` — the Phase 4 status-designer attaches those.
 
 ### Picking node `type`
