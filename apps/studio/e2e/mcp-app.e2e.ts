@@ -103,6 +103,9 @@ test.describe('mcp app — iframe bundle (US-011)', () => {
 
     // The detail panel is rendered by the canvas's built-in DetailPanel when
     // `selectedNodeIds[0]` is set. The App seeds it from widgetState.nodeId.
+    // After US-003 the sidebar is decoupled from selection — the user (or, in
+    // this case, the test) must click the InspectorToggle to mount it.
+    await page.locator('[data-testid="inspector-toggle"]').click();
     const detailPanel = page.locator('[data-testid="detail-panel"]');
     await expect(detailPanel).toBeVisible();
     // The title field shows the selected node's name; for the registered

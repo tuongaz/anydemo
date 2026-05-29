@@ -1,0 +1,79 @@
+// US-004: Playwright e2e coverage for the decoupled inspector sidebar.
+//
+// After US-003, the right-hand DetailPanel no longer auto-opens on node
+// selection — it mounts only when the user clicks the new
+// `[data-testid="inspector-toggle"]` button in the top-right chrome row, and
+// unmounts when the pane (empty canvas area) is clicked. Connectors never
+// drive the panel. This spec asserts the three required user-visible
+// scenarios as functional element-presence checks (no visual baselines —
+// baseline regeneration is handled manually after Ralph completes).
+//
+// Filename ends in `.e2e.ts` (not `.spec.ts`) so bun test's default
+// discovery can't pick it up — same convention as the other studio e2e
+// suites.
+
+import { expect, projectFlowPath, test, waitForCanvasSettled } from './support/studio-fixture.ts';
+
+const DISABLE_MOTION_CSS = `
+*,*::before,*::after {
+  transition: none !important;
+  animation: none !important;
+}
+`;
+
+test.describe('inspector toggle — sidebar decoupled from selection', () => {
+  test.beforeEach(async ({ page, studio }) => {
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(studio.flow.projectSlug, studio.flow.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
+    await waitForCanvasSettled(page);
+    // Sanity: the toggle is mounted in edit mode (the studio's default).
+    await expect(page.locator('[data-testid="inspector-toggle"]')).toBeVisible();
+  });
+
+  test('clicking a node does NOT mount the DetailPanel by default', async ({ page }) => {
+    const detailPanel = page.locator('[data-testid="detail-panel"]');
+    await expect(detailPanel).toHaveCount(0);
+
+    await page.locator('.react-flow__node[data-id="n1"]').click();
+    // Selection lands on the clicked node…
+    await expect(page.locator('.react-flow__node[data-id="n1"]')).toHaveClass(/selected/);
+    // …but the inspector stays closed.
+    await expect(detailPanel).toHaveCount(0);
+  });
+
+  test('clicking the inspector toggle while a node is selected mounts the panel', async ({
+    page,
+  }) => {
+    const detailPanel = page.locator('[data-testid="detail-panel"]');
+
+    await page.locator('.react-flow__node[data-id="n1"]').click();
+    await expect(detailPanel).toHaveCount(0);
+
+    await page.locator('[data-testid="inspector-toggle"]').click();
+    await expect(detailPanel).toBeVisible();
+  });
+
+  test('clicking the empty pane closes the inspector', async ({ page }) => {
+    const detailPanel = page.locator('[data-testid="detail-panel"]');
+
+    // Open the inspector first (no selection needed — the empty-state branch
+    // from US-002 mounts the placeholder, the panel container is still
+    // [data-testid="detail-panel"]).
+    await page.locator('[data-testid="inspector-toggle"]').click();
+    await expect(detailPanel).toBeVisible();
+
+    // Click an empty area of the pane. React Flow's `.react-flow__pane`
+    // covers the full canvas; pick a coordinate at the top-left corner of
+    // the canvas root, well away from the kitchen-sink fixture nodes (which
+    // sit in the central region after auto-fit).
+    const pane = page.locator('.react-flow__pane').first();
+    const box = await pane.boundingBox();
+    if (!box) throw new Error('react-flow pane has no bounding box');
+    await page.mouse.click(box.x + 20, box.y + 20);
+
+    await expect(detailPanel).toHaveCount(0);
+  });
+});
