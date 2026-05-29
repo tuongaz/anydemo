@@ -1,6 +1,7 @@
 import { Header } from '@/components/header';
 import { useDemoData } from '@/hooks/use-demo-data';
 import { useDemos } from '@/hooks/use-demos';
+import { ensureFlowNavigation, reset as resetFlow } from '@/hooks/use-navigate-flow';
 import { useNodeEvents } from '@/hooks/use-node-events';
 import { useNodeRuns } from '@/hooks/use-node-runs';
 import { useNodeStatuses } from '@/hooks/use-node-statuses';
@@ -11,18 +12,16 @@ import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-even
 import { type CreateProjectResult, type FlowDetail, playFlowNode } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
-import {
-  flowPath,
-  flowPathFromSlug,
-  matchProjectAlone,
-  matchProjectFlow,
-  navigate,
-  usePathname,
-} from '@/lib/router';
+import { matchProjectAlone, matchProjectFlow, splitFlowSlug, usePathname } from '@/lib/router';
 import { DemoView } from '@/pages/demo-view';
 import { StudioHome } from '@/pages/studio-home';
 import { TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect, useState } from 'react';
+
+// US-005: seed the flow navigation stack from the initial URL + stamp
+// history.state.stackDepth so the popstate handler has a reliable signal.
+// Idempotent — safe to call from App's module load (App is mounted once).
+if (typeof window !== 'undefined') ensureFlowNavigation();
 
 export function App() {
   const pathname = usePathname();
@@ -177,7 +176,7 @@ export function App() {
     async (projectSlug: string) => {
       await unregisterProject(projectSlug);
       await refreshFlows();
-      if (project === projectSlug) navigate('/');
+      if (project === projectSlug) resetFlow(null);
     },
     [unregisterProject, refreshFlows, project],
   );
@@ -189,7 +188,10 @@ export function App() {
     if (pathname !== '/') return;
     if (demos === null) return;
     const target = pickInitialDemo(demos, readLastProjectId());
-    if (target) navigate(flowPathFromSlug(target.slug));
+    if (target) {
+      const split = splitFlowSlug(target.slug);
+      if (split) resetFlow(split);
+    }
   }, [pathname, demos]);
 
   // US-001: persist whichever project is currently open so we can reopen it next visit.
@@ -210,7 +212,7 @@ export function App() {
   useEffect(() => {
     if (!projectOnlySlug || !standaloneFlows) return;
     const picked = pickInitialFlow(standaloneFlows, readLastFlow(projectOnlySlug));
-    if (picked) navigate(flowPath(projectOnlySlug, picked));
+    if (picked) resetFlow({ project: projectOnlySlug, flow: picked });
   }, [projectOnlySlug, standaloneFlows]);
 
   const onPlayNode = useCallback(

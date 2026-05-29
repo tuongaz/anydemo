@@ -1,6 +1,7 @@
 import { EmptyState } from '@/components/empty-state';
+import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { FlowSummary } from '@/lib/api';
-import { flowPathFromSlug, navigate } from '@/lib/router';
+import { splitFlowSlug } from '@/lib/router';
 
 export interface StudioHomeProps {
   demos: FlowSummary[];
@@ -22,7 +23,10 @@ export function StudioHome({ demos }: StudioHomeProps) {
             <li key={demo.id}>
               <button
                 type="button"
-                onClick={() => navigate(flowPathFromSlug(demo.slug))}
+                onClick={() => {
+                  const target = splitFlowSlug(demo.slug);
+                  if (target) resetFlow(target);
+                }}
                 data-testid={`studio-home-demo-${demo.slug}`}
                 className="flex w-full flex-col items-start gap-0.5 rounded-lg border border-border bg-card px-4 py-3 text-left transition-colors hover:border-input"
                 style={{ boxShadow: 'var(--shadow-card)' }}

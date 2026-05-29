@@ -55,6 +55,17 @@ export const flowPathFromSlug = (slug: string): string => {
 };
 
 /**
+ * US-005: split a `${projectSlug}/${flowSlug}` registry slug into its two
+ * parts so callers can pass them to the navigation hook's reset/pushLink
+ * (which take separate fields). Returns null when the slug has no `/`.
+ */
+export const splitFlowSlug = (slug: string): { project: string; flow: string } | null => {
+  const idx = slug.indexOf('/');
+  if (idx <= 0 || idx === slug.length - 1) return null;
+  return { project: slug.slice(0, idx), flow: slug.slice(idx + 1) };
+};
+
+/**
  * US-026: parse `/projects/:project` (no `/flows/:flow` segment) for the
  * project-only landing page. App.tsx redirects this case to the user's
  * last-opened flow (or the project default) via pickInitialFlow.

@@ -1,20 +1,56 @@
-import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { ProjectSwitcher, type ProjectSwitcherProps } from '@/components/project-switcher';
 import type { ProjectSummary } from '@/lib/api';
 import * as React from 'react';
 
-// router.navigate touches window.history; the apps/web bun test environment
-// has no DOM, so the test polyfills a minimal storage + history surface for
-// the navigation-priority cases. Tests that just inspect rendered React
-// elements never trip this.
+// US-005: the switcher now calls `reset({project, flow})` from
+// use-navigate-flow. mock.module() leaks process-globally in bun:test, so we
+// don't mock the hook (that would clobber use-navigate-flow.test.ts when both
+// run in the same process). Instead we stub globalThis.window so the real
+// reset() pushes into our recorder. Same `/projects/<p>/flows/<f>` assertions.
 const navigateCalls: string[] = [];
-mock.module('@/lib/router', () => ({
-  navigate: (to: string): void => {
-    navigateCalls.push(to);
+interface FakeWindow {
+  history: {
+    state: unknown;
+    pushState: (state: unknown, _t: string, url: string) => void;
+    replaceState: (state: unknown, _t: string, url: string) => void;
+    back: () => void;
+  };
+  location: { pathname: string; search: string; hash: string };
+  addEventListener: () => void;
+  removeEventListener: () => void;
+  dispatchEvent: () => boolean;
+}
+const fakeWindow: FakeWindow = {
+  history: {
+    state: { stackDepth: 0 },
+    pushState(state, _t, url) {
+      this.state = state;
+      fakeWindow.location.pathname = url;
+      navigateCalls.push(url);
+    },
+    replaceState(state, _t, url) {
+      this.state = state;
+      if (url) fakeWindow.location.pathname = url;
+    },
+    back() {},
   },
-  flowPath: (project: string, flow: string): string =>
-    `/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(flow)}`,
-}));
+  location: { pathname: '/', search: '', hash: '' },
+  addEventListener() {},
+  removeEventListener() {},
+  dispatchEvent() {
+    return true;
+  },
+};
+let originalWindow: unknown;
+beforeAll(() => {
+  const g = globalThis as { window?: unknown };
+  originalWindow = g.window;
+  g.window = fakeWindow;
+});
+afterAll(() => {
+  (globalThis as { window?: unknown }).window = originalWindow;
+});
 
 const storageStub = new Map<string, string>();
 mock.module('@/lib/last-flow', () => ({
@@ -28,6 +64,9 @@ mock.module('@/lib/last-flow', () => ({
 beforeEach(() => {
   navigateCalls.length = 0;
   storageStub.clear();
+  // Reset fake history so each test starts from `/` with depth 0.
+  fakeWindow.location.pathname = '/';
+  fakeWindow.history.state = { stackDepth: 0 };
 });
 
 afterEach(() => {

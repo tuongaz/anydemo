@@ -1,7 +1,7 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
+import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
 import { readLastFlow } from '@/lib/last-flow';
-import { flowPath, navigate } from '@/lib/router';
 import {
   Button,
   Command,
@@ -67,7 +67,7 @@ export function ProjectSwitcher({
     // the manifest's defaultFlow when no preference has been recorded yet.
     const lastFlow = readLastFlow(project.projectSlug);
     const targetFlow = lastFlow ?? project.defaultFlow;
-    navigate(flowPath(project.projectSlug, targetFlow));
+    resetFlow({ project: project.projectSlug, flow: targetFlow });
   };
 
   const handleCreated = (result: CreateProjectResult) => {

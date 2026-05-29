@@ -8,6 +8,7 @@ import {
   LinkflowPickerDialog,
   type LinkflowPickerTarget,
 } from '@/components/linkflow-picker-dialog';
+import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -24,7 +25,6 @@ import type {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
-import { flowPath, navigate } from '@/lib/router';
 import { shortId } from '@/lib/short-id';
 import {
   type CanvasMode,
@@ -2386,7 +2386,7 @@ export function DemoView({
           // path doesn't fire when the user adds the first node to the empty
           // canvas. (See `fittedFlowsRef` above for the per-tab policy.)
           fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
-          navigate(flowPath(project, result.flowSlug));
+          resetFlow({ project, flow: result.flowSlug });
         }}
       />
       <FlowRenameDialog
@@ -2402,7 +2402,7 @@ export function DemoView({
             // Rename re-keys the canvas (key={`${project}/${flow}`}) so it
             // remounts under the new slug. Same content though — don't re-fit.
             fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
-            navigate(flowPath(project, result.flowSlug));
+            resetFlow({ project, flow: result.flowSlug });
           }
         }}
       />
@@ -2420,7 +2420,7 @@ export function DemoView({
           const fallback =
             newDefault ??
             projectFlows?.find((f) => f.isDefault && f.flowSlug !== deletedFlowSlug)?.flowSlug;
-          if (fallback) navigate(flowPath(project, fallback));
+          if (fallback) resetFlow({ project, flow: fallback });
         }}
       />
 
@@ -2446,7 +2446,7 @@ export function DemoView({
               flows={projectFlows ?? []}
               onSelect={(nextFlow) => {
                 if (nextFlow === flow) return;
-                navigate(flowPath(project, nextFlow));
+                resetFlow({ project, flow: nextFlow });
               }}
               onCreate={() => setFlowCreateOpen(true)}
               onRename={(flowSlug) => {
