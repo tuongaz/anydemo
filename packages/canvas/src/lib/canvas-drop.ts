@@ -70,6 +70,23 @@ export const extractImageFile = (dt: DataTransfer | null): File | null => {
 };
 
 /**
+ * Collect EVERY acceptable image file from a `DataTransfer.files` list, in drop
+ * order. Returns an empty array when none match. The drop handler lays the
+ * whole batch out in a grid — one node per image.
+ */
+export const extractImageFiles = (dt: DataTransfer | null): File[] => {
+  if (!dt) return [];
+  const files = dt.files;
+  if (!files || files.length === 0) return [];
+  const out: File[] = [];
+  for (let i = 0; i < files.length; i++) {
+    const f = files.item(i);
+    if (f && isAcceptableImageFile(f)) out.push(f);
+  }
+  return out;
+};
+
+/**
  * Clamp the LONGEST side of `natural` to `max` (default 400px), preserving
  * aspect ratio. Returns integer dimensions so the canvas renders at clean
  * pixel boundaries.
@@ -113,28 +130,80 @@ export interface HandleCanvasFileDropArgs {
   dispatch: (args: CanvasDropDispatchArgs) => void;
 }
 
+/** Gap (flow-units) between adjacent image nodes in a multi-drop grid. */
+export const IMAGE_DROP_GRID_GAP = 24;
+/** Max columns before a multi-image drop wraps to a new row. */
+export const IMAGE_DROP_GRID_MAX_COLS = 4;
+
+/**
+ * Lay out N items (each with its own width/height) in a row-major grid whose
+ * whole bounding block is CENTERED on `center`. Columns are sized to the widest
+ * item in the column and rows to the tallest item in the row, so variable-size
+ * images never overlap. Returns each item's top-left position in the same order.
+ *
+ * A single item collapses to `center - dims/2` — i.e. identical to the legacy
+ * "center the node on the cursor" behavior. Pure + exported for unit-testing.
+ */
+export const layoutImageGrid = (
+  items: ReadonlyArray<{ width: number; height: number }>,
+  center: { x: number; y: number },
+  gap: number = IMAGE_DROP_GRID_GAP,
+  maxCols: number = IMAGE_DROP_GRID_MAX_COLS,
+): Array<{ x: number; y: number }> => {
+  if (items.length === 0) return [];
+  const cols = Math.min(items.length, Math.max(1, maxCols));
+  const rows = Math.ceil(items.length / cols);
+  const colWidth = new Array<number>(cols).fill(0);
+  const rowHeight = new Array<number>(rows).fill(0);
+  items.forEach((it, k) => {
+    const c = k % cols;
+    const r = Math.floor(k / cols);
+    colWidth[c] = Math.max(colWidth[c] as number, it.width);
+    rowHeight[r] = Math.max(rowHeight[r] as number, it.height);
+  });
+  // Prefix offsets for each column/row (cumulative size + gaps).
+  const colX = new Array<number>(cols).fill(0);
+  for (let c = 1; c < cols; c++)
+    colX[c] = (colX[c - 1] as number) + (colWidth[c - 1] as number) + gap;
+  const rowY = new Array<number>(rows).fill(0);
+  for (let r = 1; r < rows; r++)
+    rowY[r] = (rowY[r - 1] as number) + (rowHeight[r - 1] as number) + gap;
+  const totalWidth = colWidth.reduce((a, b) => a + b, 0) + gap * (cols - 1);
+  const totalHeight = rowHeight.reduce((a, b) => a + b, 0) + gap * (rows - 1);
+  const originX = center.x - totalWidth / 2;
+  const originY = center.y - totalHeight / 2;
+  return items.map((_, k) => {
+    const c = k % cols;
+    const r = Math.floor(k / cols);
+    return { x: originX + (colX[c] as number), y: originY + (rowY[r] as number) };
+  });
+};
+
 /**
  * Compose the OS-image drop flow from its primitives so the demo-canvas drop
  * handler stays a thin wiring layer over a unit-testable async pipeline.
- * Returns `false` when nothing was dispatched (no file, no rfInstance, etc.)
+ * Returns `false` when nothing was dispatched (no image, no rfInstance, etc.)
  * so the caller can decide whether to preventDefault. Promise resolves once
- * `dispatch` has been called (or short-circuited).
+ * every image in the batch has been dispatched (or short-circuited).
  *
- * Centers the drop on the cursor by subtracting half the computed dims from
- * the flow-space drop origin — the cursor lands inside the node body rather
- * than at its top-left.
+ * Multi-file drops dispatch ONE node per acceptable image, laid out in a grid
+ * whose block is centered on the cursor (`layoutImageGrid`). A single image
+ * collapses to "centered on the cursor", preserving the original behavior.
  */
 export const handleCanvasFileDrop = async (args: HandleCanvasFileDropArgs): Promise<boolean> => {
-  const file = extractImageFile(args.dataTransfer);
-  if (!file) return false;
+  const files = extractImageFiles(args.dataTransfer);
+  if (files.length === 0) return false;
   if (!args.rfInstance) return false;
   const dropFlowOrigin = args.rfInstance.screenToFlowPosition(args.clientPos);
-  const dims = await args.computeDims(file);
-  args.dispatch({
-    file,
-    position: { x: dropFlowOrigin.x - dims.width / 2, y: dropFlowOrigin.y - dims.height / 2 },
-    dims,
-    originalFilename: file.name,
+  const dims = await Promise.all(files.map((f) => args.computeDims(f)));
+  const positions = layoutImageGrid(dims, dropFlowOrigin);
+  files.forEach((file, i) => {
+    args.dispatch({
+      file,
+      position: positions[i] as { x: number; y: number },
+      dims: dims[i] as { width: number; height: number },
+      originalFilename: file.name,
+    });
   });
   return true;
 };

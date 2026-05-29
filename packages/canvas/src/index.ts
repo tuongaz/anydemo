@@ -82,13 +82,17 @@ export {
   computeImageDims,
   downscaleImageFile,
   extractImageFile,
+  extractImageFiles,
   handleCanvasFileDrop,
   IMAGE_DROP_EXTS,
+  IMAGE_DROP_GRID_GAP,
+  IMAGE_DROP_GRID_MAX_COLS,
   IMAGE_DROP_MAX_LONGEST_SIDE,
   IMAGE_DROP_SVG_FALLBACK,
   IMAGE_UPLOAD_MAX_PIXELS,
   isAcceptableImageFile,
   isRasterDownscalable,
+  layoutImageGrid,
 } from './lib/canvas-drop.ts';
 export type {
   CanvasDropDispatchArgs,

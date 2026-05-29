@@ -6,9 +6,11 @@ import {
   IMAGE_DROP_SVG_FALLBACK,
   clampImageDims,
   extractImageFile,
+  extractImageFiles,
   handleCanvasFileDrop,
   isAcceptableImageFile,
   isRasterDownscalable,
+  layoutImageGrid,
 } from './canvas-drop';
 
 /** Build a File with the given name + optional MIME type. Body content is
@@ -217,19 +219,82 @@ describe('handleCanvasFileDrop (US-008)', () => {
     expect(arg.position).toEqual({ x: 950, y: 1980 });
   });
 
-  it('selects the FIRST acceptable image when multiple files are dropped', async () => {
+  it('dispatches one node per acceptable image when multiple files are dropped', async () => {
     const dispatched: CanvasDropDispatchArgs[] = [];
     const txt = fileOf('a.txt');
     const png = fileOf('b.png');
     const jpg = fileOf('c.jpg');
-    await handleCanvasFileDrop({
+    const result = await handleCanvasFileDrop({
       dataTransfer: dtOf([txt, png, jpg]),
       clientPos: { x: 0, y: 0 },
       rfInstance: stubRf(),
       computeDims: async () => ({ width: 10, height: 10 }),
       dispatch: (args) => dispatched.push(args),
     });
-    expect(dispatched).toHaveLength(1);
-    expect(dispatched[0]?.file).toBe(png);
+    expect(result).toBe(true);
+    // Non-image files are skipped; both images get their own node.
+    expect(dispatched).toHaveLength(2);
+    expect(dispatched.map((d) => d.file)).toEqual([png, jpg]);
+    // Two 10x10 images sit side-by-side with the grid gap; positions differ.
+    expect(dispatched[0]?.position).not.toEqual(dispatched[1]?.position);
+  });
+});
+
+describe('extractImageFiles', () => {
+  it('returns [] for null / empty / no-image drops', () => {
+    expect(extractImageFiles(null)).toEqual([]);
+    expect(extractImageFiles(dtOf([]))).toEqual([]);
+    expect(extractImageFiles(dtOf([fileOf('a.txt'), fileOf('b.zip')]))).toEqual([]);
+  });
+
+  it('collects every acceptable image in drop order, skipping non-images', () => {
+    const png = fileOf('a.png');
+    const txt = fileOf('b.txt');
+    const jpg = fileOf('c.jpg');
+    expect(extractImageFiles(dtOf([png, txt, jpg]))).toEqual([png, jpg]);
+  });
+});
+
+describe('layoutImageGrid', () => {
+  it('returns [] for no items', () => {
+    expect(layoutImageGrid([], { x: 0, y: 0 })).toEqual([]);
+  });
+
+  it('centers a single item on the point (matches legacy single-drop behavior)', () => {
+    const pos = layoutImageGrid([{ width: 320, height: 180 }], { x: 100, y: 200 });
+    expect(pos).toEqual([{ x: -60, y: 110 }]);
+  });
+
+  it('lays a row out left-to-right with the gap, block centered on the point', () => {
+    // Two 100x100 items, gap 20 → block width = 220, centered on x=0 → origin x=-110.
+    const pos = layoutImageGrid(
+      [
+        { width: 100, height: 100 },
+        { width: 100, height: 100 },
+      ],
+      { x: 0, y: 0 },
+      20,
+      4,
+    );
+    expect(pos[0]).toEqual({ x: -110, y: -50 });
+    expect(pos[1]).toEqual({ x: 10, y: -50 });
+  });
+
+  it('wraps into rows after maxCols', () => {
+    // 3 items, maxCols 2 → 2 cols x 2 rows. 100x100, gap 0.
+    const pos = layoutImageGrid(
+      [
+        { width: 100, height: 100 },
+        { width: 100, height: 100 },
+        { width: 100, height: 100 },
+      ],
+      { x: 0, y: 0 },
+      0,
+      2,
+    );
+    // block 200x200 centered → origin (-100,-100).
+    expect(pos[0]).toEqual({ x: -100, y: -100 });
+    expect(pos[1]).toEqual({ x: 0, y: -100 });
+    expect(pos[2]).toEqual({ x: -100, y: 0 });
   });
 });
