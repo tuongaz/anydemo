@@ -306,6 +306,22 @@ describe('wrapAdapterWithHistory', () => {
     ]);
   });
 
+  it('updateNode undo of a first-time linkflow target sends { target: null }', async () => {
+    // US-004: target is in the NULL_CLEARS_NODE_KEY set so undo of the
+    // initial pick clears `data.target` back to unset on the server. Without
+    // the null mapping, undo would PATCH `{ target: undefined }` which JSON
+    // drops, and `data.target` would persist (undo no-op).
+    const inner = fakeAdapter();
+    const { adapter, history } = wrapAdapterWithHistory(
+      inner,
+      stateWithNodeData('n-1', { x: 0, y: 0 }, {}),
+    );
+    await adapter.updateNode('n-1', { target: { project: 'docs', flow: 'index' } });
+    inner.calls.length = 0;
+    await history.undo();
+    expect(inner.calls).toEqual([`updateNode:n-1:${JSON.stringify({ target: null })}`]);
+  });
+
   it('updateNode coalesce key includes sorted touched-field names', async () => {
     const inner = fakeAdapter();
     const { adapter, history } = wrapAdapterWithHistory(

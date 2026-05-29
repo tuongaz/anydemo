@@ -83,6 +83,12 @@ export interface NodePatch {
   description?: string;
   /** Long-form sidebar-only body text. */
   detail?: string;
+  /**
+   * type:'linkflow'-only: slug pair { project, flow } naming the target flow.
+   * Lands at data.target. Explicit `null` clears the field (the studio strips
+   * the key from disk) so undo of a link/edit reverts to the unlinked state.
+   */
+  target?: { project: string; flow: string } | null;
 }
 
 export type ReorderOp =

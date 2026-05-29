@@ -102,6 +102,50 @@ describe('mergeNodeUpdates null clears style keys', () => {
   });
 });
 
+// US-004: PATCH body accepts linkflow target; merge writes / clears data.target.
+describe('NodePatchBodySchema + mergeNodeUpdates — linkflow target', () => {
+  it('parses { target: { project, flow } } with valid slugs', () => {
+    const parsed = NodePatchBodySchema.safeParse({
+      target: { project: 'docs', flow: 'getting-started' },
+    });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('parses explicit { target: null } as the clear signal', () => {
+    const parsed = NodePatchBodySchema.safeParse({ target: null });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects target with an invalid slug', () => {
+    const parsed = NodePatchBodySchema.safeParse({
+      target: { project: 'docs', flow: 'Bad Slug!' },
+    });
+    expect(parsed.success).toBe(false);
+  });
+
+  it('writes data.target on a linkflow node', () => {
+    const node: Record<string, unknown> = {
+      id: 'lf1',
+      type: 'linkflow',
+      data: {},
+    };
+    mergeNodeUpdates(node, { target: { project: 'docs', flow: 'index' } });
+    const data = node.data as Record<string, unknown>;
+    expect(data.target).toEqual({ project: 'docs', flow: 'index' });
+  });
+
+  it('strips data.target on a null patch (undo of first-time link)', () => {
+    const node: Record<string, unknown> = {
+      id: 'lf1',
+      type: 'linkflow',
+      data: { target: { project: 'docs', flow: 'index' } },
+    };
+    mergeNodeUpdates(node, { target: null });
+    const data = node.data as Record<string, unknown>;
+    expect('target' in data).toBe(false);
+  });
+});
+
 describe('mergeNodeUpdates autoSize invariant', () => {
   it('flips autoSize to false when width is written', () => {
     const node: Record<string, unknown> = {
