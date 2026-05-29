@@ -233,7 +233,15 @@ describe('integration: MCP — read-only tools', () => {
     const index = okJson<{ categories: { name: string; description: string }[] }>(indexResult);
     expect(Array.isArray(index.categories)).toBe(true);
     const indexNames = index.categories.map((c) => c.name).sort();
-    expect(indexNames).toEqual(['action', 'componentSpec', 'connector', 'flow', 'node', 'style']);
+    expect(indexNames).toEqual([
+      'action',
+      'componentCatalog',
+      'componentSpec',
+      'connector',
+      'flow',
+      'node',
+      'style',
+    ]);
 
     // With a known category → that category's JSON Schemas + notes.
     const nodeResult = await client.callTool('seeflow_schema', { name: 'node' });
