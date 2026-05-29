@@ -25,6 +25,7 @@ import type {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
+import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
 import { shortId } from '@/lib/short-id';
 import {
   type CanvasMode,
@@ -2318,6 +2319,11 @@ export function DemoView({
   const openLinkflowPicker = useCallback((nodeId: string, mode: 'link' | 'edit') => {
     setLinkflowPicker({ nodeId, mode });
   }, []);
+  // US-008: `_resolvedTarget` is injected here so the renderer can flip between
+  // linked-healthy and broken without reaching across the package boundary
+  // into apps/web's `useDemos()`. The lookup runs against the latest `demos`
+  // prop, which App refreshes on the `registry:reload` SSE channel — so
+  // renames / deletes / project unregisters propagate without new wiring.
   const linkflowDecoratedNodes = useMemo<FlowNode[] | null>(() => {
     if (!visibleNodes) return null;
     let touched = false;
@@ -2328,13 +2334,19 @@ export function DemoView({
       const onFollow = target
         ? () => pushLink({ project: target.project, flow: target.flow })
         : undefined;
+      const resolvedTarget = target ? resolveLinkflowTarget(target, demos) : undefined;
       return {
         ...n,
-        data: { ...n.data, onOpenPicker: openLinkflowPicker.bind(null, n.id), onFollow },
+        data: {
+          ...n.data,
+          onOpenPicker: openLinkflowPicker.bind(null, n.id),
+          onFollow,
+          _resolvedTarget: resolvedTarget,
+        },
       } as FlowNode;
     });
     return touched ? out : visibleNodes;
-  }, [visibleNodes, openLinkflowPicker]);
+  }, [visibleNodes, openLinkflowPicker, demos]);
 
   // US-031: when projectFlows is still resolving OR contains the active
   // flow (e.g. just created via the switcher), show the loading state
