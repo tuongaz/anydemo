@@ -171,3 +171,64 @@ export const computeImageDims = (file: File): Promise<{ width: number; height: n
     img.src = url;
   });
 };
+
+/** US-008: cap the longest side of an uploaded RASTER image at this many pixels
+ *  before it leaves the browser. The node renders at <= 400 flow-units anyway,
+ *  so storing a full-res phone photo (often 10–50 MP) just bloats the repo and
+ *  risks the server-side size cap. 2048 keeps retina-sharp detail headroom. */
+export const IMAGE_UPLOAD_MAX_PIXELS = 2048;
+
+/**
+ * True when re-encoding the file through a <canvas> is safe + lossless-enough.
+ * SVG is vector (rasterizing would destroy it); GIF may be animated (canvas
+ * re-encode flattens to the first frame). Everything else we leave to the
+ * raster path. Pure — exported for unit-testing the format gate.
+ */
+export const isRasterDownscalable = (file: File): boolean => {
+  const type = file.type.toLowerCase();
+  return type === 'image/png' || type === 'image/jpeg' || type === 'image/webp';
+};
+
+/**
+ * Re-encode a raster image down so its longest side is <= `maxPixels`,
+ * preserving aspect ratio + MIME type. Returns the ORIGINAL file unchanged
+ * when: the format isn't safely re-encodable (SVG/GIF/unknown), the image
+ * already fits, or anything in the decode/encode path fails. Never throws —
+ * a downscale failure must not block the upload (the server cap is the
+ * backstop). Browser-only (needs <canvas> + Image); not unit-tested beyond
+ * the pure `isRasterDownscalable` gate, mirroring `computeImageDims`.
+ */
+export const downscaleImageFile = async (
+  file: File,
+  maxPixels: number = IMAGE_UPLOAD_MAX_PIXELS,
+): Promise<File> => {
+  if (!isRasterDownscalable(file)) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const longest = Math.max(bitmap.width, bitmap.height);
+    if (longest <= maxPixels) {
+      bitmap.close();
+      return file;
+    }
+    const scale = maxPixels / longest;
+    const width = Math.round(bitmap.width * scale);
+    const height = Math.round(bitmap.height * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) {
+      bitmap.close();
+      return file;
+    }
+    ctx.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob((b) => resolve(b), file.type);
+    });
+    if (!blob) return file;
+    return new File([blob], file.name, { type: file.type, lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+};

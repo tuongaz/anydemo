@@ -80,12 +80,15 @@ export { ICON_FALLBACK_NAME, ICON_NAMES, ICON_REGISTRY } from './lib/icon-regist
 export {
   clampImageDims,
   computeImageDims,
+  downscaleImageFile,
   extractImageFile,
   handleCanvasFileDrop,
   IMAGE_DROP_EXTS,
   IMAGE_DROP_MAX_LONGEST_SIDE,
   IMAGE_DROP_SVG_FALLBACK,
+  IMAGE_UPLOAD_MAX_PIXELS,
   isAcceptableImageFile,
+  isRasterDownscalable,
 } from './lib/canvas-drop.ts';
 export type {
   CanvasDropDispatchArgs,

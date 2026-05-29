@@ -528,16 +528,16 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'my-image.png'))).toBe(true);
   });
 
-  it('rejects files larger than 5 MB with 413', async () => {
+  it('rejects files larger than 25 MB with 413', async () => {
     const { app, projectSlug, flowSlug } = buildUploadFixture();
-    const big = new Uint8Array(5 * 1024 * 1024 + 1);
+    const big = new Uint8Array(25 * 1024 * 1024 + 1);
     const form = new FormData();
     form.set('file', new File([big], 'big.png', { type: 'image/png' }));
     const res = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
     expect(res.status).toBe(413);
     const body = (await res.json()) as { error: string; maxBytes: number };
     expect(body.error).toMatch(/too large/i);
-    expect(body.maxBytes).toBe(5 * 1024 * 1024);
+    expect(body.maxBytes).toBe(25 * 1024 * 1024);
   });
 
   it('returns 400 when the file field is missing', async () => {

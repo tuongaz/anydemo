@@ -8,6 +8,7 @@ import {
   extractImageFile,
   handleCanvasFileDrop,
   isAcceptableImageFile,
+  isRasterDownscalable,
 } from './canvas-drop';
 
 /** Build a File with the given name + optional MIME type. Body content is
@@ -23,6 +24,23 @@ const dtOf = (files: File[]): DataTransfer =>
       item: (i: number) => files[i] ?? null,
     },
   }) as unknown as DataTransfer;
+
+describe('isRasterDownscalable', () => {
+  it('accepts png/jpeg/webp (canvas re-encode is safe)', () => {
+    expect(isRasterDownscalable(fileOf('a.png', 'image/png'))).toBe(true);
+    expect(isRasterDownscalable(fileOf('a.jpg', 'image/jpeg'))).toBe(true);
+    expect(isRasterDownscalable(fileOf('a.webp', 'image/webp'))).toBe(true);
+  });
+
+  it('rejects svg (vector) and gif (may be animated) so they upload untouched', () => {
+    expect(isRasterDownscalable(fileOf('a.svg', 'image/svg+xml'))).toBe(false);
+    expect(isRasterDownscalable(fileOf('a.gif', 'image/gif'))).toBe(false);
+  });
+
+  it('rejects when the MIME is missing (can not safely decide to re-encode)', () => {
+    expect(isRasterDownscalable(fileOf('a.png', ''))).toBe(false);
+  });
+});
 
 describe('isAcceptableImageFile (US-008)', () => {
   it('accepts every extension in IMAGE_DROP_EXTS by name', () => {

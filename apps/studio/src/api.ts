@@ -176,7 +176,7 @@ const SSE_HEARTBEAT_MS = 10_000;
 // Allowed extensions for /nodes/:nodeId/files/upload. Lowercased; matched after dropping the
 // leading `.`. Stored as a Set so future expansion (PDF, video) is one-edit.
 const UPLOAD_ALLOWED_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg']);
-const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+const UPLOAD_MAX_BYTES = 25 * 1024 * 1024;
 
 // Turn a user-supplied filename into a `<slug>.<ext>` pair. Returns null when
 // the extension isn't on the allowlist or the slug is empty after sanitization.

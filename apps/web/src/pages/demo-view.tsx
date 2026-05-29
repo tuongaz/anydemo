@@ -38,6 +38,7 @@ import {
   buildNewShapeData,
   computeIconInsertPosition,
   createRestAdapter,
+  downscaleImageFile,
   getLastUsedStyle,
   getNudgeDelta,
   getZoomChord,
@@ -1196,8 +1197,12 @@ export function DemoView({
       void performImageDropUpload(
         { ...args, flowId, lastUsed: getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node },
         {
-          upload: (_projectId, nodeId, file, filename) =>
-            adapter.uploadImage(nodeId, file, filename),
+          // Re-encode oversized raster images down (longest side <= 2048px)
+          // before upload — the node renders <= 400 flow-units anyway, so a
+          // full-res phone photo would just bloat the repo / trip the 25 MB
+          // server cap. SVG/GIF/decode-failures pass through untouched.
+          upload: async (_projectId, nodeId, file, filename) =>
+            adapter.uploadImage(nodeId, await downscaleImageFile(file), filename),
           createNode: async (_demoId, body) => {
             const { id } = await adapter.createNode(body);
             return { id };
