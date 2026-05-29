@@ -1047,6 +1047,118 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'seeflow emit abc12345 api-charge running --run-id run-9b3 --studio-url http://localhost:4321',
     ],
   },
+  // ---- icons (local cache) ----------------------------------------------
+  {
+    name: 'icons:list',
+    synopsis: 'seeflow icons list',
+    description:
+      'List installed and available vendor icon packs (aws, gcp, azure) cached under ' +
+      '~/.seeflow/icons. Reads the on-disk index — no network access, no studio required.',
+    category: 'lifecycle',
+    args: [],
+    flags: [],
+    outputs: {
+      okExample: {
+        packs: [
+          { vendor: 'aws', installed: true, version: '2026-05-30', iconCount: 2, sizeBytes: 2 },
+          { vendor: 'gcp', installed: false },
+          { vendor: 'azure', installed: false },
+        ],
+      },
+    },
+    requiresStudio: false,
+    examples: ['seeflow icons list'],
+  },
+  {
+    name: 'icons:add',
+    synopsis: 'seeflow icons add <vendor> [--accept-terms] [--pack-url <url>]',
+    description:
+      'Download, extract, and index a vendor icon pack under ~/.seeflow/icons/<vendor>. ' +
+      'Progress events stream to stderr. Vendors requiring a license acceptance (e.g. ' +
+      'azure) emit a `terms-required` event unless --accept-terms is passed. Use ' +
+      '--pack-url to override the default download URL (useful for fixtures or pinned mirrors).',
+    category: 'lifecycle',
+    args: [
+      {
+        name: 'vendor',
+        required: true,
+        description: 'Vendor slug — one of: aws, gcp, azure',
+      },
+    ],
+    flags: [
+      {
+        name: 'accept-terms',
+        description:
+          'Accept the vendor license terms — required for vendors that gate on acceptance',
+      },
+      {
+        name: 'pack-url',
+        valuePlaceholder: '<url>',
+        description: "Override the vendor's defaultPackUrl (e.g. a fixture or mirrored ZIP)",
+      },
+    ],
+    outputs: {
+      okExample: { installed: 'aws', version: '2026-05-30', iconCount: 2 },
+    },
+    requiresStudio: false,
+    examples: [
+      'seeflow icons add aws',
+      'seeflow icons add azure --accept-terms',
+      'seeflow icons add aws --pack-url https://example.com/aws-icons.zip',
+    ],
+  },
+  {
+    name: 'icons:update',
+    synopsis: 'seeflow icons update <vendor> [--accept-terms] [--pack-url <url>]',
+    description:
+      "Re-install a vendor icon pack — same behaviour as `icons:add`. The installer's " +
+      'rm-then-extract pass replaces the cached vendor directory atomically.',
+    category: 'lifecycle',
+    args: [
+      {
+        name: 'vendor',
+        required: true,
+        description: 'Vendor slug — one of: aws, gcp, azure',
+      },
+    ],
+    flags: [
+      {
+        name: 'accept-terms',
+        description: 'Accept the vendor license terms',
+      },
+      {
+        name: 'pack-url',
+        valuePlaceholder: '<url>',
+        description: "Override the vendor's defaultPackUrl",
+      },
+    ],
+    outputs: {
+      okExample: { installed: 'aws', version: '2026-05-30', iconCount: 2 },
+    },
+    requiresStudio: false,
+    examples: ['seeflow icons update aws'],
+  },
+  {
+    name: 'icons:remove',
+    synopsis: 'seeflow icons remove <vendor>',
+    description:
+      'Remove an installed vendor icon pack from ~/.seeflow/icons. Idempotent — ' +
+      'removing a pack that is not installed is a no-op.',
+    category: 'lifecycle',
+    args: [
+      {
+        name: 'vendor',
+        required: true,
+        description: 'Vendor slug — one of: aws, gcp, azure',
+      },
+    ],
+    flags: [],
+    outputs: {
+      okExample: { removed: 'aws' },
+    },
+    requiresStudio: false,
+    examples: ['seeflow icons remove aws'],
+  },
 ];
 
 function resolveSchemaRef(ref: string): unknown {

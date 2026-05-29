@@ -288,6 +288,12 @@ Commands (work without a running studio):
                        when seeding a flow.json (e.g. 'ids node 10', then
                        'ids connector 12').
 
+Icons (local cache):
+  icons list           List installed and available vendor packs (aws, gcp, azure)
+  icons add <v>        Install a vendor pack (v: aws|gcp|azure) [--accept-terms] [--pack-url <url>]
+  icons update <v>     Re-install a vendor pack — same flags as add
+  icons remove <v>     Remove an installed vendor pack (idempotent)
+
 Commands (require a running studio):
   flows:play <n>       Trigger a play on node <n> (--project <p> --flow <f>)
   emit <id> <n> <st>   Broadcast a status event for node <n> (st: running|done|error)

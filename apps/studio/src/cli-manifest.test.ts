@@ -38,6 +38,10 @@ describe('COMMAND_MANIFEST', () => {
         'ids',
         'e2e',
         'emit',
+        'icons:list',
+        'icons:add',
+        'icons:update',
+        'icons:remove',
       ].sort(),
     );
   });
