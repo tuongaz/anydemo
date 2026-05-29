@@ -10,14 +10,26 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
 } from '@seeflow/canvas';
-import { Settings, Workflow } from 'lucide-react';
+import { ArrowLeft, Settings, Workflow } from 'lucide-react';
 
 export interface HeaderProps {
   projects: ProjectSummary[];
   currentProjectSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
   onUnregisterProject?: (projectSlug: string) => Promise<void>;
+  /**
+   * US-007: when a previous flow is on the navigation stack (linkflow body
+   * click pushed onto it), render a back arrow left of the SeeFlow logo.
+   * `onBack` calls `popBack()` (== `history.back()`) so browser back + the
+   * arrow share one reconciliation path. The button is suppressed when
+   * `previousFlowName` is undefined — stack of length 1 or 0.
+   */
+  onBack?: () => void;
+  previousFlowName?: string;
 }
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
@@ -31,22 +43,43 @@ export function Header({
   currentProjectSlug,
   onProjectCreated,
   onUnregisterProject,
+  onBack,
+  previousFlowName,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
+  const showBack = previousFlowName !== undefined;
 
   return (
     <header className="relative flex h-14 shrink-0 items-center justify-between bg-background/85 px-5 backdrop-blur-md shadow-[0_1px_3px_-1px_rgba(15,23,42,0.06),0_2px_8px_-4px_rgba(15,23,42,0.05)] dark:shadow-[0_4px_12px_-6px_rgba(0,0,0,0.6)]">
-      <button
-        type="button"
-        onClick={() => resetFlow(null)}
-        className="-ml-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-base font-bold tracking-tight transition-colors hover:bg-muted/60"
-      >
-        <Workflow size={18} strokeWidth={2.25} className="text-emerald-400" />
-        SeeFlow
-        <span className="ml-1 text-[10px] font-normal tracking-normal text-muted-foreground/70">
-          v{__APP_VERSION__}
-        </span>
-      </button>
+      <div className="flex items-center gap-2">
+        {showBack ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                type="button"
+                onClick={onBack}
+                aria-label="Back to previous flow"
+                data-testid="flow-back-button"
+                className="flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground"
+              >
+                <ArrowLeft size={16} strokeWidth={2.25} />
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Back to {previousFlowName}</TooltipContent>
+          </Tooltip>
+        ) : null}
+        <button
+          type="button"
+          onClick={() => resetFlow(null)}
+          className="-ml-1.5 flex items-center gap-2 rounded-md px-1.5 py-1 text-base font-bold tracking-tight transition-colors hover:bg-muted/60"
+        >
+          <Workflow size={18} strokeWidth={2.25} className="text-emerald-400" />
+          SeeFlow
+          <span className="ml-1 text-[10px] font-normal tracking-normal text-muted-foreground/70">
+            v{__APP_VERSION__}
+          </span>
+        </button>
+      </div>
       <div className="flex items-center gap-3">
         <ProjectSwitcher
           projects={projects}

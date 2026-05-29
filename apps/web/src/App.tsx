@@ -1,6 +1,11 @@
 import { Header } from '@/components/header';
 import { useDemos } from '@/hooks/use-demos';
-import { ensureFlowNavigation, reset as resetFlow, useFlowStack } from '@/hooks/use-navigate-flow';
+import {
+  ensureFlowNavigation,
+  popBack,
+  reset as resetFlow,
+  useFlowStack,
+} from '@/hooks/use-navigate-flow';
 import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
@@ -34,6 +39,11 @@ export function App() {
   const topEntry = stack.at(-1) ?? null;
   const topProject = topEntry?.project ?? null;
   const topSlug = topEntry?.slug ?? null;
+  // US-007: header back-arrow surfaces iff a previous flow is on the stack
+  // (linkflow body click pushed the current entry on top). We resolve the
+  // previous entry's human-readable name via the demos cache when possible,
+  // falling back to the flow slug so the tooltip never reads "Back to undefined".
+  const prevEntry = stack.length > 1 ? (stack.at(-2) ?? null) : null;
 
   // US-026: when the URL is `/projects/:project` with no flow segment we
   // redirect to the user's last-opened flow (per-project localStorage) or
@@ -132,6 +142,10 @@ export function App() {
     );
   }
 
+  const previousFlowName = prevEntry
+    ? (demos.find((d) => d.slug === prevEntry.slug)?.name ?? prevEntry.flow)
+    : undefined;
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex h-full w-full flex-col bg-background text-foreground">
@@ -140,6 +154,8 @@ export function App() {
           currentProjectSlug={topProject ?? undefined}
           onProjectCreated={onProjectCreated}
           onUnregisterProject={onUnregisterProject}
+          onBack={previousFlowName ? popBack : undefined}
+          previousFlowName={previousFlowName}
         />
         <main className="min-h-0 flex-1">
           {stack.length > 0 ? (

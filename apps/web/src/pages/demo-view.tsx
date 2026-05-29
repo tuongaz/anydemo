@@ -8,7 +8,7 @@ import {
   LinkflowPickerDialog,
   type LinkflowPickerTarget,
 } from '@/components/linkflow-picker-dialog';
-import { reset as resetFlow } from '@/hooks/use-navigate-flow';
+import { pushLink, reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -2307,6 +2307,14 @@ export function DemoView({
   // a runtime-data hook; host injects it here so canvas stays unaware of
   // apps/web state. Identity-stable: the same callback ref is reused across
   // renders, so memoized renderers don't re-render on every parent paint.
+  //
+  // US-007: `onFollow` is the linked-healthy body click handler — pushes the
+  // node's target onto the navigation stack so `popBack()` (browser back +
+  // header back arrow) returns here with viewport + canvas state preserved
+  // (the stacked DemoView for this entry stays mounted, hidden via display:none).
+  // Only injected when the node has a target set; the renderer never fires
+  // onFollow on the unlinked or broken states, so the `target` guard is
+  // belt-and-braces.
   const openLinkflowPicker = useCallback((nodeId: string, mode: 'link' | 'edit') => {
     setLinkflowPicker({ nodeId, mode });
   }, []);
@@ -2316,9 +2324,13 @@ export function DemoView({
     const out = visibleNodes.map((n) => {
       if (n.type !== 'linkflow') return n;
       touched = true;
+      const target = n.data.target;
+      const onFollow = target
+        ? () => pushLink({ project: target.project, flow: target.flow })
+        : undefined;
       return {
         ...n,
-        data: { ...n.data, onOpenPicker: openLinkflowPicker.bind(null, n.id) },
+        data: { ...n.data, onOpenPicker: openLinkflowPicker.bind(null, n.id), onFollow },
       } as FlowNode;
     });
     return touched ? out : visibleNodes;
