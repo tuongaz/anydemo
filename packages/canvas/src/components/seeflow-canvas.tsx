@@ -4895,10 +4895,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onDetailChange={onDetailChange}
                 onIconChange={onIconChange}
                 onClose={() => {
-                  // US-007: the panel is selection-driven, so closing it means
-                  // clearing the selection. Pane-click already routes through xyflow
-                  // and fires the same callback; this path covers the Sheet's X
-                  // button and any Radix-triggered dismissal.
+                  // Dismiss the sidebar (X button, Escape, Radix-triggered) AND
+                  // clear selection so the X/Esc gestures behave like the
+                  // pane-click dismissal: panel closes, nothing stays selected.
+                  setSidebarOpen(false);
                   onSelectionChangeRef.current?.([], []);
                 }}
               />

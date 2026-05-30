@@ -92,7 +92,11 @@ export function DetailPanel({
   // The panel still opens to expose Description / Detail / style fields.
   const isDescriptionLabelShapeNode = node?.type === 'ellipse' || node?.type === 'sticky';
   const inspectableNode = isTextNode ? null : node;
-  const open = inspectableNode !== null || connector !== null;
+  // Parent gates mount via `sidebarOpen` (see seeflow-canvas.tsx
+  // `shouldRenderSidebar`). When DetailPanel is rendered at all, the Sheet
+  // is open — selection state only drives WHICH inner branch renders
+  // (populated node, populated connector, or empty-state placeholder).
+  const open = true;
   const nodeName =
     inspectableNode && 'name' in inspectableNode.data ? (inspectableNode.data.name ?? '') : '';
   const description = inspectableNode?.data.description ?? '';
