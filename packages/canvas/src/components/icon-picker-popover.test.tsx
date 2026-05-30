@@ -1,4 +1,4 @@
-import { describe, expect, it, mock } from 'bun:test';
+import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import type { ChangeEvent } from 'react';
 import * as React from 'react';
 import { ICON_NAMES_BY_VENDOR, applyPackSummaries } from '../lib/icon-registry.ts';
@@ -253,6 +253,19 @@ describe('IconPickerBody', () => {
 });
 
 describe('IconPickerBody tabs (US-016)', () => {
+  // ICON_NAMES_BY_VENDOR is module-level mutable state — icon-registry.test.ts
+  // populates it as part of its own assertions and does not clean up, so the
+  // popover suite starts with whatever the prior test file left behind. Reset
+  // to a known empty state before each tab test so visibility assertions hold
+  // regardless of cross-file run order.
+  beforeEach(() => {
+    applyPackSummaries([
+      { vendor: 'aws', installed: false },
+      { vendor: 'gcp', installed: false },
+      { vendor: 'azure', installed: false },
+    ]);
+  });
+
   it('renders only Bundled + Logos tabs by default (pack vendors hidden until installed)', () => {
     const tree = callBody();
     const tabs = findElement(tree, testIdEquals('icon-picker-tabs'));
