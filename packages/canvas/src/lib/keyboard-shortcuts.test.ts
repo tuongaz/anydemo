@@ -416,6 +416,7 @@ describe('COMMANDS registry (US-002)', () => {
     'tool.cloud',
     'tool.diamond',
     'tool.hexagon',
+    'tool.linkflow',
     'edit.undo',
     'edit.redo',
     'edit.copy',

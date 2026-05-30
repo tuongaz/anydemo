@@ -1,6 +1,6 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { AlertTriangle, Link2, Pencil } from 'lucide-react';
-import { type CSSProperties, memo } from 'react';
+import { type CSSProperties, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { LinkflowNodeData } from '../types.ts';
@@ -19,6 +19,14 @@ import type { LinkflowNodeData } from '../types.ts';
  *    unlinked button, 'edit' from the pencil / broken body click.
  *  - `onFollow` — wired in US-007. Called from the linked-healthy body
  *    click to push the target onto the navigation stack.
+ *  - `_autoOpenPickerOnMount` — runtime-only flag stamped by the toolbar's
+ *    drag-create branch (see seeflow-canvas.tsx). When true, the node fires
+ *    `onOpenPicker('link')` exactly once on mount so a fresh drop lands the
+ *    user directly in the picker. The flag never persists: `NodePatchBodySchema`
+ *    is `strict()` so the studio rejects it at the create-node boundary, and
+ *    the renderer reads it once via a `firedRef` guard so a re-render with the
+ *    flag still set doesn't re-fire (also makes undo/redo of the drop a clean
+ *    delete/recreate without re-opening the picker).
  *
  * At US-002 (this story) the click handlers are no-op placeholders — the
  * renderer still wires the click paths so US-004/US-007 only have to
@@ -26,6 +34,7 @@ import type { LinkflowNodeData } from '../types.ts';
  */
 export type LinkflowNodeRuntimeData = LinkflowNodeData & {
   _resolvedTarget?: { projectName: string; flowName: string } | null;
+  _autoOpenPickerOnMount?: boolean;
   onOpenPicker?: (mode: 'link' | 'edit') => void;
   onFollow?: () => void;
 } & Record<string, unknown>;
@@ -33,6 +42,16 @@ export type LinkflowNodeRuntimeData = LinkflowNodeData & {
 export type LinkflowNodeType = Node<LinkflowNodeRuntimeData, 'linkflow'>;
 
 export const LINKFLOW_DEFAULT_SIZE = { width: 240, height: 100 } as const;
+
+/**
+ * Minimum size enforced when the toolbar's draw-mode commits a sized linkflow
+ * node. A truly tiny rectangle would collapse the unlinked pill and the
+ * linked-healthy card into an unreadable thumbnail; this floor keeps them
+ * legible while still letting users size up. Near-zero drags (tap gestures)
+ * skip the floor entirely and fall back to {@link LINKFLOW_DEFAULT_SIZE} — see
+ * the drag-release branch in `seeflow-canvas.tsx`.
+ */
+export const LINKFLOW_MIN_SIZE = { width: 160, height: 80 } as const;
 
 const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
@@ -52,6 +71,19 @@ function deriveState(data: LinkflowNodeRuntimeData): LinkflowVisualState {
 function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<LinkflowNodeType>) {
   const state = deriveState(data);
   const sized = data.width !== undefined || data.height !== undefined;
+
+  // One-shot auto-open hook for the toolbar's drag-create flow. `firedRef`
+  // ensures a re-render with the flag still set doesn't re-fire the picker,
+  // and the callback gate handles the (test/transitional) case where the host
+  // injects `onOpenPicker` on a later render. Effect deps cover both inputs.
+  const firedRef = useRef(false);
+  useEffect(() => {
+    if (firedRef.current) return;
+    if (!data._autoOpenPickerOnMount) return;
+    if (!data.onOpenPicker) return;
+    firedRef.current = true;
+    data.onOpenPicker('link');
+  }, [data._autoOpenPickerOnMount, data.onOpenPicker]);
 
   const baseChrome: CSSProperties = {
     ...(data.backgroundColor !== undefined

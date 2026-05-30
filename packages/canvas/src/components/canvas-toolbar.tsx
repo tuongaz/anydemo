@@ -6,6 +6,7 @@ import {
   Diamond,
   Hand,
   Hexagon,
+  Link2,
   MousePointer2,
   Server,
   Shapes,
@@ -19,7 +20,7 @@ import { useState } from 'react';
 import type { CanvasIconsAdapter } from '../adapter/types.ts';
 import { cn } from '../lib/cn.ts';
 import { type CommandId, getCommandTooltip } from '../lib/keyboard-shortcuts.ts';
-import type { CanvasMode, GeometricNodeType } from '../types.ts';
+import type { CanvasMode, DrawableNodeType } from '../types.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
 
@@ -92,7 +93,7 @@ export const TOOLBAR_MODES: ToolbarModeEntry[] = [
 ];
 
 export interface ToolbarShapeEntry {
-  shape: GeometricNodeType;
+  shape: DrawableNodeType;
   label: string;
   /**
    * US-008: registry CommandId for the matching tool-switch entry. Drives
@@ -110,11 +111,14 @@ const TOP_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
   { shape: 'ellipse', label: 'Ellipse', commandId: 'tool.ellipse', Icon: Circle },
 ];
 
-// Secondary primary shapes — annotation tiles (Sticky, Text) that live in
-// their own group below the shape/icon cluster.
+// Secondary primary shapes — annotation + structural tiles (Sticky, Text,
+// Linkflow) that live in their own group below the shape/icon cluster.
+// Linkflow is the only non-geometric drawable: drag-create commits a
+// `type: 'linkflow'` node and auto-opens the picker dialog (see seeflow-canvas).
 const SECONDARY_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
   { shape: 'sticky', label: 'Sticky note', commandId: 'tool.sticky', Icon: StickyNote },
   { shape: 'text', label: 'Text', commandId: 'tool.text', Icon: Type },
+  { shape: 'linkflow', label: 'Link node', commandId: 'tool.linkflow', Icon: Link2 },
 ];
 
 // Illustrative shapes live behind a single "Shape" toolbar trigger that
@@ -174,7 +178,7 @@ export function CanvasToolbar({
   // the toolbar since there's no insert/replace mode duality like the icon
   // picker has.
   const [shapePickerOpen, setShapePickerOpen] = useState(false);
-  const activeShape: GeometricNodeType | null = mode.kind === 'draw' ? mode.shape : null;
+  const activeShape: DrawableNodeType | null = mode.kind === 'draw' ? mode.shape : null;
   const illustrativeActive =
     activeShape !== null && ILLUSTRATIVE_SHAPES.some((s) => s.shape === activeShape);
 

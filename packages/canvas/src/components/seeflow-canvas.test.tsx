@@ -1002,6 +1002,176 @@ describe('SeeflowCanvas', () => {
       (wrapper.props.onPointerUp as (e: unknown) => void)(evt);
       expect(captured.length).toBe(0);
     });
+
+    it('linkflow drag commits via onCreateLinkflowNode with min-clamped dims (160x80 floor)', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'linkflow' },
+          onCreateLinkflowNode: (pos, size) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'linkflow';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      // A 50×30 drag is above LINKFLOW_NEAR_ZERO_DRAG=4 but below
+      // LINKFLOW_MIN_SIZE.height=80 — width should pass through (50 is below
+      // the floor too so it clamps to 160), and height clamps to 80.
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(100, 100));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(150, 130));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(150, 130));
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateLinkflowNode was not called');
+      expect(commit.pos).toEqual({ x: 100, y: 100 });
+      expect(commit.size).toEqual({ width: 160, height: 80 });
+    });
+
+    it('linkflow drag larger than floor honors the drag rectangle', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'linkflow' },
+          onCreateLinkflowNode: (pos, size) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'linkflow';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      // 300×200 drag — both dims above the floor, ship as-is.
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(50, 50));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(350, 250));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(350, 250));
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateLinkflowNode was not called');
+      expect(commit.pos).toEqual({ x: 50, y: 50 });
+      expect(commit.size).toEqual({ width: 300, height: 200 });
+    });
+
+    it('linkflow tap (near-zero drag) falls back to LINKFLOW_DEFAULT_SIZE 240x100', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'linkflow' },
+          onCreateLinkflowNode: (pos, size) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'linkflow';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      // Identical down + up → 0×0 drag → near-zero branch → default size.
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(200, 150));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(200, 150));
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateLinkflowNode was not called');
+      expect(commit.pos).toEqual({ x: 200, y: 150 });
+      expect(commit.size).toEqual({ width: 240, height: 100 });
+    });
   });
 
   describe('US-010: database drag-create ghost renders DatabaseShape', () => {

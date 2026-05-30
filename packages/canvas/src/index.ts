@@ -32,6 +32,7 @@ export type {
   ConnectorStyle,
   Flow,
   FlowNode,
+  DrawableNodeType,
   EdgePin,
   EdgePinSide,
   GeometricNodeData,

@@ -307,3 +307,140 @@ describe('LinkflowNode connect handles', () => {
     }
   });
 });
+
+// Shared-ref hook-shim that runs `useEffect` synchronously. The default
+// renderWithHooks above stubs useEffect as a no-op (every other linkflow
+// rendering test only exercises the render path), so the auto-open useEffect
+// can't fire. The shim below persists refs across render calls so a second
+// render reuses the same `firedRef`, exercising the "does NOT re-fire"
+// invariant the toolbar drag-create flow depends on.
+type EffectShim = {
+  hooks: Hooks;
+  reset: () => void;
+};
+function makeEffectShim(): EffectShim {
+  const refs: { current: unknown }[] = [];
+  let refIdx = 0;
+  const hooks: Hooks = {
+    useState: <S,>(initial: S | (() => S)) => {
+      const value = typeof initial === 'function' ? (initial as () => S)() : initial;
+      return [value, () => {}];
+    },
+    useCallback: <T,>(fn: T) => fn,
+    useMemo: <T,>(fn: () => T) => fn(),
+    useRef: <T,>(initial: T) => {
+      if (refIdx < refs.length) {
+        const slot = refs[refIdx++] as { current: T };
+        return slot;
+      }
+      const r = { current: initial };
+      refs.push(r);
+      refIdx++;
+      return r as { current: T };
+    },
+    useEffect: ((fn: () => void) => {
+      fn();
+    }) as Hooks['useEffect'],
+  };
+  return {
+    hooks,
+    reset: () => {
+      refIdx = 0;
+    },
+  };
+}
+
+function renderLinkflowWithEffects(
+  data: Record<string, unknown>,
+  shim: EffectShim = makeEffectShim(),
+): { tree: unknown; shim: EffectShim } {
+  shim.reset();
+  const props = {
+    id: 'lf-1',
+    type: 'linkflow',
+    data,
+    selected: false,
+    isConnectable: true,
+    xPos: 0,
+    yPos: 0,
+    zIndex: 0,
+    dragging: false,
+    deletable: true,
+    draggable: true,
+    selectable: true,
+  } as unknown as NodeProps;
+  const internals = (
+    React as unknown as {
+      __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
+        ReactCurrentDispatcher: { current: Hooks | null };
+      };
+    }
+  ).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+  const prev = internals.ReactCurrentDispatcher.current;
+  internals.ReactCurrentDispatcher.current = shim.hooks;
+  try {
+    const impl = (LinkflowNode as unknown as { type: (p: NodeProps) => unknown }).type;
+    const tree = impl(props);
+    return { tree, shim };
+  } finally {
+    internals.ReactCurrentDispatcher.current = prev;
+  }
+}
+
+describe('LinkflowNode auto-open picker on mount (toolbar drag-create)', () => {
+  it("fires onOpenPicker('link') exactly once when _autoOpenPickerOnMount is set", () => {
+    const calls: string[] = [];
+    renderLinkflowWithEffects({
+      _autoOpenPickerOnMount: true,
+      onOpenPicker: (mode: string) => calls.push(mode),
+    });
+    expect(calls).toEqual(['link']);
+  });
+
+  it('does NOT fire when _autoOpenPickerOnMount is absent', () => {
+    const calls: string[] = [];
+    renderLinkflowWithEffects({
+      onOpenPicker: (mode: string) => calls.push(mode),
+    });
+    expect(calls).toEqual([]);
+  });
+
+  it('does NOT fire while onOpenPicker is missing, then fires once the callback wires in', () => {
+    const calls: string[] = [];
+    const shim = makeEffectShim();
+    // First render: flag is set but the host has not threaded onOpenPicker
+    // yet (linkflowDecoratedNodes loads in a useMemo on the same tick — this
+    // models the transitional render before the decoration lands).
+    renderLinkflowWithEffects({ _autoOpenPickerOnMount: true }, shim);
+    expect(calls).toEqual([]);
+    // Second render with the same ref slots — callback now present, effect
+    // re-evaluates its deps (data.onOpenPicker changed from undefined → fn)
+    // and fires the picker exactly once.
+    renderLinkflowWithEffects(
+      {
+        _autoOpenPickerOnMount: true,
+        onOpenPicker: (mode: string) => calls.push(mode),
+      },
+      shim,
+    );
+    expect(calls).toEqual(['link']);
+  });
+
+  it('does NOT re-fire on a re-render after the initial mount fire', () => {
+    const calls: string[] = [];
+    const shim = makeEffectShim();
+    const data = {
+      _autoOpenPickerOnMount: true,
+      onOpenPicker: (mode: string) => calls.push(mode),
+    };
+    renderLinkflowWithEffects(data, shim);
+    expect(calls).toEqual(['link']);
+    // Same shim → same firedRef. Second render with identical inputs must
+    // bail out before re-firing the picker. The flag may still be set on
+    // disk-shape data (it's a runtime-only flag, but the renderer doesn't
+    // know that) and `onOpenPicker` may still be wired — the guard is in
+    // `firedRef`, not in the data.
+    renderLinkflowWithEffects(data, shim);
+    expect(calls).toEqual(['link']);
+  });
+});

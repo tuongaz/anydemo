@@ -21,6 +21,7 @@ import type {
   FlowNode,
   FlowSummary,
   GeometricNodeType,
+  LinkflowNodeData,
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
@@ -1089,6 +1090,49 @@ export function DemoView({
         dropNodeOverride(id);
         setEditError(err instanceof Error ? err.message : String(err));
         console.error('createNode failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
+  );
+
+  // Toolbar Link-node drop. Mirrors `onCreateShapeNode`: client-side id +
+  // optimistic override so the placed node renders before the SSE echo lands;
+  // server response binds to the same id. The runtime-only
+  // `_autoOpenPickerOnMount` flag rides on the optimistic data so the
+  // freshly-mounted node opens the picker on first paint (see
+  // linkflow-node.tsx). The flag never leaves the client — the studio's
+  // strict create-node schema rejects unknown keys, so the payload sent over
+  // the wire omits it.
+  const onCreateLinkflowNode = useCallback(
+    (position: Position, dims: { width: number; height: number }) => {
+      if (!flowId || !adapter) return;
+      setEditError(null);
+      const id = `node-${shortId()}`;
+      const persistedData = { width: dims.width, height: dims.height };
+      const payload = {
+        id,
+        type: 'linkflow' as const,
+        position,
+        data: persistedData,
+      };
+      // Runtime-only `_autoOpenPickerOnMount` rides on the optimistic data;
+      // the strict cast lands it on `LinkflowNodeRuntimeData` (the renderer's
+      // data shape) without polluting the persisted `LinkflowNodeData` schema.
+      const optimisticData = {
+        ...persistedData,
+        _autoOpenPickerOnMount: true,
+      } as LinkflowNodeData;
+      const optimistic: FlowNode = {
+        id,
+        type: 'linkflow',
+        position,
+        data: optimisticData,
+      };
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createNode (linkflow) failed', err);
       });
     },
     [flowId, adapter, setNodeOverride, dropNodeOverride],
@@ -2537,6 +2581,7 @@ export function DemoView({
           onNodeDescriptionChange={onNodeDescriptionChange}
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
+          onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
           onRetryImageUpload={flowId ? onRetryImageUpload : undefined}
           onCreateHtmlNode={flowId ? onCreateHtmlNode : undefined}

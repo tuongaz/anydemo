@@ -322,6 +322,53 @@ describe('CanvasToolbar', () => {
     });
   });
 
+  describe('Linkflow toolbar tile', () => {
+    it('registers a Link node entry in TOOLBAR_SHAPES with the linkflow command id', () => {
+      const entry = TOOLBAR_SHAPES.find((s) => s.shape === 'linkflow');
+      expect(entry).toBeDefined();
+      expect(entry?.label).toBe('Link node');
+      expect(entry?.commandId).toBe('tool.linkflow');
+      expect(entry?.Icon).toBeDefined();
+    });
+
+    it('orders Link node after Text in TOOLBAR_SHAPES (secondary primary group, append-only)', () => {
+      const shapes = TOOLBAR_SHAPES.map((s) => s.shape);
+      const textIdx = shapes.indexOf('text');
+      const linkIdx = shapes.indexOf('linkflow');
+      expect(textIdx).toBeGreaterThanOrEqual(0);
+      expect(linkIdx).toBeGreaterThan(textIdx);
+    });
+
+    it('renders the linkflow tile inline (secondary primary group, not the Shape picker)', () => {
+      const tree = callToolbar();
+      const inline = findElement(tree, testIdEquals('toolbar-shape-linkflow'));
+      const inPicker = findElement(tree, testIdEquals('shape-picker-linkflow'));
+      expect(inline).not.toBeNull();
+      expect(inPicker).toBeNull();
+    });
+
+    it('clicking Link node from neutral arms draw mode for linkflow', () => {
+      const captured: CanvasMode[] = [];
+      const tree = callToolbar({ onModeChange: (m) => captured.push(m) });
+      const btn = findElement(tree, testIdEquals('toolbar-shape-linkflow'));
+      if (!btn) throw new Error('linkflow tile not found');
+      (btn.props.onClick as () => void)();
+      expect(captured[0]).toEqual({ kind: 'draw', shape: 'linkflow' });
+    });
+
+    it('clicking Link node a second time exits to select', () => {
+      const captured: CanvasMode[] = [];
+      const tree = callToolbar({
+        mode: { kind: 'draw', shape: 'linkflow' },
+        onModeChange: (m) => captured.push(m),
+      });
+      const btn = findElement(tree, testIdEquals('toolbar-shape-linkflow'));
+      if (!btn) throw new Error('linkflow tile not found');
+      (btn.props.onClick as () => void)();
+      expect(captured[0]).toEqual({ kind: 'select' });
+    });
+  });
+
   describe('Select + Hand mode tiles', () => {
     it('registers both modes in TOOLBAR_MODES', () => {
       expect(TOOLBAR_MODES.map((m) => m.kind)).toEqual(['select', 'hand']);

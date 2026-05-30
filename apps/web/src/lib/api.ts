@@ -18,6 +18,8 @@ export type {
   GeometricNodeType,
   HtmlNodeData,
   IconNodeData,
+  LinkflowNodeData,
+  LinkflowTarget,
   NodeCapabilities,
   NodeDescription,
   NodeSemanticBase,

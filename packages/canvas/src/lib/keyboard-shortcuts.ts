@@ -73,6 +73,7 @@ export type CommandId =
   | 'tool.cloud'
   | 'tool.diamond'
   | 'tool.hexagon'
+  | 'tool.linkflow'
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.copy'
@@ -205,6 +206,14 @@ export const COMMANDS: readonly CommandDef[] = [
     id: 'tool.hexagon',
     label: 'Hexagon',
     description: 'Add a hexagon node (microservice)',
+    category: 'Tools',
+  },
+  // Linkflow lives in the secondary primary group with Sticky + Text; the
+  // single-letter shortcut pool is exhausted so it doesn't claim a bare key.
+  {
+    id: 'tool.linkflow',
+    label: 'Link node',
+    description: 'Add a link node and pick a target flow',
     category: 'Tools',
   },
   {

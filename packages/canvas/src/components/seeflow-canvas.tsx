@@ -24,7 +24,7 @@ import {
   useStore,
   useStoreApi,
 } from '@xyflow/react';
-import { LayoutDashboard, type LucideProps, Maximize2 } from 'lucide-react';
+import { LayoutDashboard, Link2, type LucideProps, Maximize2 } from 'lucide-react';
 import {
   type ComponentType,
   type ForwardedRef,
@@ -70,12 +70,13 @@ import {
 import { HtmlNode } from '../nodes/html-node.tsx';
 import { IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
-import { LinkflowNode } from '../nodes/linkflow-node.tsx';
+import { LINKFLOW_DEFAULT_SIZE, LINKFLOW_MIN_SIZE, LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import type {
   CanvasMode,
   Connector,
+  DrawableNodeType,
   EdgePin,
   FlowNode,
   GeometricNodeType,
@@ -512,6 +513,23 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     dims: { width: number; height: number },
   ) => void;
   /**
+   * Commit a new `type:'linkflow'` node from the bottom-toolbar's Link node
+   * tile. The parent owns id allocation, optimistic override, and the
+   * createNode persistence; the canvas hands the final flow-space position
+   * and dimensions (already clamped to {@link LINKFLOW_MIN_SIZE} for
+   * meaningful drags, or {@link LINKFLOW_DEFAULT_SIZE} on a near-zero
+   * tap). The parent is also responsible for surfacing the picker dialog
+   * via the linkflow node's `data._autoOpenPickerOnMount` runtime hook
+   * (see linkflow-node.tsx) — this callback is purely "make the node".
+   *
+   * Absent → the Link node tile in the toolbar still appears (the toolbar
+   * is bound to {@link onCreateShapeNode}) but a commit no-ops.
+   */
+  onCreateLinkflowNode?: (
+    position: { x: number; y: number },
+    dims: { width: number; height: number },
+  ) => void;
+  /**
    * US-008: commit a new type:'image' node from an OS-image file drop. The canvas
    * detects the drop, computes the natural dims (capped at 400px longest side),
    * and projects the drop client-position into flow-space; the parent owns id
@@ -922,6 +940,13 @@ export type SeeflowCanvasProps =
 // nudge and create the shape at SHAPE_DEFAULT_SIZE instead — a single click
 // still produces a usable node rather than a 0×0 ghost.
 const MIN_DRAW_SIZE = 40;
+
+// Linkflow uses a tighter "is this a tap?" threshold than geometric shapes
+// because its minimum legible size is already 160×80 — any drag below 4 screen
+// px on either axis is effectively a click, and below that we drop the floor
+// entirely in favour of LINKFLOW_DEFAULT_SIZE. Above the threshold the user
+// gets the drag rectangle (clamped to LINKFLOW_MIN_SIZE).
+const LINKFLOW_NEAR_ZERO_DRAG = 4;
 
 /**
  * US-008: canonical options for every fitView call originating from inside
@@ -1817,6 +1842,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeDescriptionChange,
     onConnectorLabelChange,
     onCreateShapeNode,
+    onCreateLinkflowNode,
     onCreateImageFromFile,
     onRetryImageUpload,
     onCreateHtmlNode,
@@ -2020,7 +2046,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // legacy `drawShape` view (the armed shape, or null when not drawing) so
   // existing gesture/cursor code keeps reading the same value. `handMode` is
   // the new flag for the four React Flow lock-down props.
-  const drawShape: GeometricNodeType | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
+  const drawShape: DrawableNodeType | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
   const handMode = canvasMode.kind === 'hand';
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
@@ -2201,7 +2227,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // offsets just for paint.
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
-  const drawShapeRef = useRef<GeometricNodeType | null>(null);
+  const drawShapeRef = useRef<DrawableNodeType | null>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const drawCurrentRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
@@ -2421,6 +2447,24 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const flowMax = rfInstance.screenToFlowPosition({ x: maxX, y: maxY });
       const dragFlowWidth = flowMax.x - flowMin.x;
       const dragFlowHeight = flowMax.y - flowMin.y;
+      // Linkflow has its own commit branch: it's not a geometric primitive (no
+      // SHAPE_DEFAULT_SIZE entry) and the readable-floor is larger than the
+      // geometric MIN_DRAW_SIZE — 160×80 keeps the unlinked pill + linked-
+      // healthy card legible. A near-zero drag (< 4×4 screen px) is a "tap"
+      // and falls back to LINKFLOW_DEFAULT_SIZE (240×100) so a single click
+      // still produces a usable node.
+      if (shape === 'linkflow') {
+        const isNearZeroDrag =
+          dragScreenWidth < LINKFLOW_NEAR_ZERO_DRAG && dragScreenHeight < LINKFLOW_NEAR_ZERO_DRAG;
+        const width = isNearZeroDrag
+          ? LINKFLOW_DEFAULT_SIZE.width
+          : Math.max(dragFlowWidth, LINKFLOW_MIN_SIZE.width);
+        const height = isNearZeroDrag
+          ? LINKFLOW_DEFAULT_SIZE.height
+          : Math.max(dragFlowHeight, LINKFLOW_MIN_SIZE.height);
+        onCreateLinkflowNode?.(flowMin, { width, height });
+        return;
+      }
       // MIN_DRAW_SIZE stays in screen pixels — it's a UX threshold for
       // distinguishing "intentional drag" from "accidental click", which the
       // user perceives in screen-space, not flow-space. Below the threshold
@@ -2431,7 +2475,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const height = tooSmall ? SHAPE_DEFAULT_SIZE[shape].height : dragFlowHeight;
       onCreateShapeNode?.(shape, flowMin, { width, height });
     },
-    [exitDrawMode, onCreateShapeNode],
+    [exitDrawMode, onCreateShapeNode, onCreateLinkflowNode],
   );
   // Block upstream sync while a node is mid-drag or mid-resize. NodeResizer
   // dispatches dimension changes into rfNodes during the gesture; if we then
@@ -3937,10 +3981,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const ghostLastUsedNodeStyle = drawShape
     ? getLastUsedStyle(DEFAULT_STORAGE_PREFIX).node
     : undefined;
-  const ghostShapeClass = drawShape ? shapeChromeClass(drawShape) : '';
-  const ghostShapeStyle = drawShape
-    ? shapeChromeStyle(drawShape, ghostLastUsedNodeStyle)
-    : undefined;
+  // Linkflow paints its own chrome (dashed border + Link2 + label) rather
+  // than the geometric shape-chrome helpers — its committed visual matches the
+  // unlinked state from `linkflow-node.tsx`, not any geometric primitive.
+  const isLinkflowGhost = drawShape === 'linkflow';
+  const ghostShapeClass = drawShape && !isLinkflowGhost ? shapeChromeClass(drawShape) : '';
+  const ghostShapeStyle =
+    drawShape && !isLinkflowGhost ? shapeChromeStyle(drawShape, ghostLastUsedNodeStyle) : undefined;
   const ghostTextOutline = drawShape === 'text';
 
   // Space-held pan mode (US-019). React Flow's panActivationKeyCode='Space'
@@ -4663,6 +4710,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     ghostTextOutline
                       ? 'sf:rounded-sm sf:border sf:border-dashed sf:border-muted-foreground/40'
                       : '',
+                    isLinkflowGhost
+                      ? 'sf:flex sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground sf:text-sm'
+                      : '',
                   )}
                   style={{
                     ...ghostShapeStyle,
@@ -4672,6 +4722,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     height: ghostRect.height,
                   }}
                 >
+                  {isLinkflowGhost ? (
+                    // Mirror the unlinked-state pill from linkflow-node.tsx so the
+                    // drag preview matches what the commit will paint until the
+                    // picker auto-opens. No drag-size clamp here — the ghost
+                    // honours the literal cursor rect; the commit step is the
+                    // one that enforces LINKFLOW_MIN_SIZE.
+                    <span className="sf:inline-flex sf:items-center sf:gap-2">
+                      <Link2 size={14} aria-hidden />
+                      <span>Link to a flow</span>
+                    </span>
+                  ) : null}
                   {/* US-010: illustrative shapes have no wrapper chrome — the SVG owns
               the visuals. Render the per-shape SVG directly inside the ghost
               so the drag preview matches the committed visual byte-for-byte.
@@ -4682,8 +4743,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               pull from the same snapshot, falling back to `NEW_NODE_BORDER_WIDTH`
               / the renderer's default when unset. US-022: dispatch through
               `ILLUSTRATIVE_SHAPE_RENDERERS` so adding a new illustrative shape
-              only touches the registry. */}
+              only touches the registry. Linkflow is handled above. */}
                   {(() => {
+                    if (isLinkflowGhost) return null;
+                    // `isLinkflowGhost === false` narrows `drawShape` to the
+                    // geometric union below; no redundant linkflow guard needed.
                     const GhostRenderer = drawShape
                       ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape]
                       : undefined;
@@ -4860,35 +4924,43 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                       aria-label="Create connected node"
                       className="sf:flex sf:flex-col sf:gap-0.5"
                     >
-                      {TOOLBAR_SHAPES.map(({ shape, label, Icon }) => (
-                        <button
-                          key={shape}
-                          type="button"
-                          role="menuitem"
-                          data-testid={`drop-popover-shape-${shape}`}
-                          onClick={() => {
-                            const dp = dropPopover;
-                            if (!dp) return;
-                            onCreateAndConnectFromPane({
-                              sourceNodeId: dp.sourceNodeId,
-                              position: { x: dp.flowX, y: dp.flowY },
-                              shape,
-                            });
-                            setDropPopover(null);
-                          }}
-                          className={cn(
-                            'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
-                            'sf:hover:bg-accent sf:hover:text-accent-foreground',
-                            'sf:focus:bg-accent sf:focus:text-accent-foreground sf:focus:outline-hidden',
-                          )}
-                        >
-                          <Icon
-                            className="sf:h-4 sf:w-4 sf:text-muted-foreground"
-                            aria-hidden="true"
-                          />
-                          <span>{label}</span>
-                        </button>
-                      ))}
+                      {TOOLBAR_SHAPES.map(({ shape, label, Icon }) => {
+                        // Linkflow is omitted from the drop-on-pane popover —
+                        // "create-and-connect-from-source" semantics don't
+                        // compose with the linkflow's pick-a-target step. The
+                        // toolbar tile remains the path for creating linkflow
+                        // nodes.
+                        if (shape === 'linkflow') return null;
+                        return (
+                          <button
+                            key={shape}
+                            type="button"
+                            role="menuitem"
+                            data-testid={`drop-popover-shape-${shape}`}
+                            onClick={() => {
+                              const dp = dropPopover;
+                              if (!dp) return;
+                              onCreateAndConnectFromPane({
+                                sourceNodeId: dp.sourceNodeId,
+                                position: { x: dp.flowX, y: dp.flowY },
+                                shape,
+                              });
+                              setDropPopover(null);
+                            }}
+                            className={cn(
+                              'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
+                              'sf:hover:bg-accent sf:hover:text-accent-foreground',
+                              'sf:focus:bg-accent sf:focus:text-accent-foreground sf:focus:outline-hidden',
+                            )}
+                          >
+                            <Icon
+                              className="sf:h-4 sf:w-4 sf:text-muted-foreground"
+                              aria-hidden="true"
+                            />
+                            <span>{label}</span>
+                          </button>
+                        );
+                      })}
                     </div>
                   </PopoverContent>
                 </Popover>

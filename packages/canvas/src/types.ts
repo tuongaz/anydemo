@@ -114,6 +114,15 @@ export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 
 export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'component' | 'linkflow';
 
+/**
+ * Set of node types creatable via the canvas toolbar's draw-mode (click /
+ * drag-to-place) gesture. Linkflow joins the geometric tiles because it ships
+ * a toolbar affordance that drag-creates it, then auto-opens the picker.
+ * `image`/`html`/`icon`/`component` are NOT drawable — they each need an
+ * upload, picker, or dedicated authoring flow.
+ */
+export type DrawableNodeType = GeometricNodeType | 'linkflow';
+
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
 
@@ -272,13 +281,14 @@ export type FlowNode =
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.
 // `hand` locks node interaction; left-drag pans (cursor: grab/grabbing).
-// `draw` carries the armed geometric node type for click/drag-to-create
+// `draw` carries the armed drawable node type for click/drag-to-create
 // gestures. Image / html / icon are NOT drawable — they need an upload or
-// dedicated authoring flow, not a click-drop on the canvas.
+// dedicated authoring flow, not a click-drop on the canvas. `linkflow` is
+// drawable: it auto-opens the picker dialog on commit.
 export type CanvasMode =
   | { kind: 'select' }
   | { kind: 'hand' }
-  | { kind: 'draw'; shape: GeometricNodeType };
+  | { kind: 'draw'; shape: DrawableNodeType };
 
 export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
 export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';

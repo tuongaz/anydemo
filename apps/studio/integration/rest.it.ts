@@ -758,6 +758,31 @@ describe('integration: REST — per-type create + patch (geometric + image + htm
     expect(node?.data?.icon).toBe('box');
     expect(node?.data?.alt).toBe('a labelled box');
   });
+
+  it('linkflow: create rejects runtime-only _autoOpenPickerOnMount via strict schema', async () => {
+    // The toolbar's drag-create flow stamps `data._autoOpenPickerOnMount`
+    // onto the OPTIMISTIC override so a fresh drop auto-opens the picker
+    // (see apps/web/src/pages/demo-view.tsx). The flag is runtime-only and
+    // must never reach disk: `FlowLinkflowNodeData` is `.strict()`, so any
+    // request that accidentally forwards it is rejected at the post-mutation
+    // re-parse boundary. This test pins that wire-format contract so a
+    // future demo-view refactor can't silently start persisting the flag.
+    const created = await createProject(uniqueFlowId('rest-rt-linkflow-strict'));
+
+    const addRes = await postJson(`${flowApi(created.slug)}/nodes`, {
+      id: 'lf-strict',
+      type: 'linkflow',
+      data: { width: 240, height: 100, _autoOpenPickerOnMount: true },
+    });
+    expect(addRes.status).toBe(400);
+    const body = (await addRes.json()) as { error?: string };
+    expect(body.error).toBe('Flow failed schema validation');
+
+    // Belt-and-braces: the flow.json on disk must not have grown a stranded
+    // node — the strict failure rolls back the write.
+    const onDisk = await readFlowJson(created.slug);
+    expect(onDisk.nodes.find((n) => n.id === 'lf-strict')).toBeUndefined();
+  });
 });
 
 describe('integration: REST — runtime (play / emit / SSE)', () => {
