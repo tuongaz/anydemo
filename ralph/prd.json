@@ -191,8 +191,8 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "MCP parity + CLI smoke landed for linkflow. New tests: (1) apps/studio/src/mcp-parity.test.ts adds a 'linkflow node MCP round-trip parity' describe block with two tests — the primary round-trip (MCP add → MCP get → REST get → MCP delete, with on-disk flow.json assertions before and after delete, plus a notFound-via-MCP confirmation after delete) and an unlinked-variant test (target is optional; round-trip preserves the absence). REST vs MCP get-node response shape comparison strips the envelope's `flowId` field — MCP echoes the `${project}/${flow}` slug while REST echoes the registry's internal short id (see getNodeImpl + the call sites in api.ts vs mcp.ts) — and compares the `id` and `node` payload, which are the meaningful invariants. (2) apps/studio/src/cli.test.ts adds 'nodes:add accepts a linkflow node with target and writes it to flow.json' which exercises the CLI subprocess path (`runCli(['nodes:add', --project, --flow, --json <linkflow node body>])`) and asserts the on-disk flow.json contains the node with `data.target` preserved exactly. AC #4 ('seeflow schema node' output includes the linkflow variant) was already covered by US-001's enumeration bump at cli.test.ts:494 (the alphabetical 16-variant list including 'linkflow'). Quality gates: bun test → 2362 pass / 1 skip / 0 fail (up from 2359, three new tests). Typecheck clean across all workspaces. Biome format + check clean."
     }
   ]
 }
