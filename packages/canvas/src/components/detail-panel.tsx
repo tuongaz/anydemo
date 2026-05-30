@@ -184,12 +184,15 @@ export function DetailPanel({
           // Canvas style strip lives outside the Sheet — keep open while the
           // user adjusts styles for the selected entity.
           if (target?.closest('[data-testid="canvas-style-strip"]')) e.preventDefault();
-          // Clicks inside a React Flow node are part of the inspector's UX —
-          // selecting another node, hitting Play, etc. Don't close on those.
-          if (target?.closest('.react-flow__node')) e.preventDefault();
-          // Same for connectors: another-edge click swaps selection; endpoint
-          // drag starts a reconnect — neither should close the panel.
-          if (target?.closest('.react-flow__edge')) e.preventDefault();
+          // Anything inside the canvas root is part of the inspector's UX —
+          // node/edge clicks swap selection, pane clicks deselect, background
+          // / viewport clicks are pan gestures. None should yank the panel
+          // away. Closing is reserved for the toggle button and the panel's
+          // own X / Escape affordances. We allow-list the React Flow root
+          // wholesale (covers .react-flow__pane, .react-flow__background,
+          // .react-flow__viewport, .react-flow__node, .react-flow__edge,
+          // .react-flow__renderer, controls, minimap, attribution).
+          if (target?.closest('.react-flow')) e.preventDefault();
         }}
       >
         <div

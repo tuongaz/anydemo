@@ -2850,11 +2850,12 @@ describe('SeeflowCanvas', () => {
       expect((panel?.props as { node?: FlowNode | null }).node).toBe(a);
     });
 
-    it('clicking onPaneClick closes the sidebar (setSidebarOpen(false) before host callback)', () => {
-      // The empty-pane click handler MUST close the sidebar AND invoke the
-      // host `onPaneClick`. The setterSink captures slot-13 calls so we can
-      // assert the close intent (the hook-shim's stub setter would otherwise
-      // swallow the update silently).
+    it('clicking onPaneClick leaves the sidebar open (no setSidebarOpen call)', () => {
+      // The empty-pane click handler forwards to the host `onPaneClick` but
+      // must NOT touch sidebarOpen — once the user opens the inspector via
+      // the toggle, clicking around the empty canvas must not yank the panel
+      // away. Closing the panel is only allowed via the toggle button or the
+      // panel's own close affordance.
       let paneClicks = 0;
       const setterCalls: CapturedSetterCall[] = [];
       const tree = callSeeflowCanvas(
@@ -2871,17 +2872,14 @@ describe('SeeflowCanvas', () => {
       if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
       const handler = rf.props.onPaneClick as ((e: unknown) => void) | undefined;
       expect(typeof handler).toBe('function');
-      // Drain any setter calls fired during render itself (effects don't run in
-      // the shim, but we still want a clean baseline for the handler-driven
-      // assertions below).
+      // Drain any setter calls fired during render itself (effects don't run
+      // in the shim) so the handler-driven assertion below is clean.
       setterCalls.length = 0;
       handler?.({} as unknown);
       expect(paneClicks).toBe(1);
-      // The handler closed the sidebar before forwarding to the host: a
-      // setSidebarOpen(false) lands on slot 13.
+      // The handler MUST NOT call setSidebarOpen on slot 13.
       const slot13Calls = setterCalls.filter((c) => c.slot === 13);
-      expect(slot13Calls.length).toBeGreaterThanOrEqual(1);
-      expect(slot13Calls[0]?.next).toBe(false);
+      expect(slot13Calls).toEqual([]);
     });
 
     it('connector-only selection does not mount DetailPanel', () => {

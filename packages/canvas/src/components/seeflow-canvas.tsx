@@ -4159,7 +4159,6 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   );
   const handlePaneClickWithGroupExit = useCallback(
     (e: ReactMouseEvent) => {
-      setSidebarOpen(false);
       onPaneClick?.();
       void e;
     },

@@ -56,7 +56,7 @@ test.describe('inspector toggle — sidebar decoupled from selection', () => {
     await expect(detailPanel).toBeVisible();
   });
 
-  test('clicking the empty pane closes the inspector', async ({ page }) => {
+  test('clicking the empty pane keeps the inspector open', async ({ page }) => {
     const detailPanel = page.locator('[data-testid="detail-panel"]');
 
     // Open the inspector first (no selection needed — the empty-state branch
@@ -74,6 +74,9 @@ test.describe('inspector toggle — sidebar decoupled from selection', () => {
     if (!box) throw new Error('react-flow pane has no bounding box');
     await page.mouse.click(box.x + 20, box.y + 20);
 
-    await expect(detailPanel).toHaveCount(0);
+    // Pane click deselects any selected nodes but MUST NOT close the panel.
+    // The panel falls back to the US-002 empty-state placeholder while
+    // selection is empty; close is only via the toggle / panel close button.
+    await expect(detailPanel).toBeVisible();
   });
 });
