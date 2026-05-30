@@ -68,13 +68,13 @@ export interface DetailPanelProps {
   statusReport?: StatusReport & { ts: number };
   /**
    * Controlled visibility. Parent (SeeflowCanvas) keeps DetailPanel mounted
-   * while the sidebar feature is enabled and toggles `open` to drive the
-   * Radix Sheet's slide-in / slide-out animation. Mounting-and-unmounting
-   * the component would cut the exit animation off because Radix needs to
-   * stay in the tree long enough for `data-[state=closed]:animate-out` to
-   * run before SheetContent unmounts. Defaults to `true` so the long tail
-   * of existing component-level tests that don't care about visibility
-   * keep working without ceremony.
+   * while the sidebar feature is enabled and toggles `open` to drive a CSS
+   * `width` transition on the outer aside (0 ↔ stored width). Mounting and
+   * unmounting on close would cut the exit animation off before its
+   * keyframes finished, so the component stays in the tree and animates
+   * itself. Defaults to `true` so the long tail of existing
+   * component-level tests that don't care about visibility keep working
+   * without ceremony.
    */
   open?: boolean;
   onClose: () => void;
@@ -210,116 +210,120 @@ export function DetailPanel({
           <X className="sf:h-4 sf:w-4" />
           <span className="sf:sr-only">Close</span>
         </button>
-      {inspectableNode ? (
-        <div className="sf:flex sf:flex-col sf:gap-4">
-          <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
-            {showNameField ? (
+        {inspectableNode ? (
+          <div className="sf:flex sf:flex-col sf:gap-4">
+            <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
+              {showNameField ? (
+                <h2
+                  data-testid="detail-panel-title"
+                  className="sf:text-lg sf:font-semibold sf:text-foreground"
+                >
+                  <div className="sf:flex sf:items-center sf:gap-2">
+                    {showIconField && onIconChange ? (
+                      <TitleIconTrigger
+                        nodeId={inspectableNode.id}
+                        icon={currentIcon}
+                        onChange={onIconChange}
+                      />
+                    ) : supportsIconField && currentIcon ? (
+                      <span
+                        data-testid="detail-panel-icon-readonly"
+                        aria-hidden
+                        className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
+                      >
+                        <Icon name={currentIcon} size={16} />
+                      </span>
+                    ) : null}
+                    <div className="sf:min-w-0 sf:flex-1">
+                      <EditableField
+                        nodeId={inspectableNode.id}
+                        value={nodeName}
+                        placeholder="Name"
+                        multiline={false}
+                        ariaLabel="Name"
+                        testIdBase="detail-panel-name"
+                        onSave={onNameChange}
+                        textClassName="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
+                      />
+                    </div>
+                  </div>
+                </h2>
+              ) : (
+                // Keep an sr-only title so screen readers still announce the
+                // entity even when the visual name row is suppressed (ellipse,
+                // sticky — their on-canvas label is the description field).
+                <h2 data-testid="detail-panel-title" className="sf:sr-only">
+                  {inspectableNode.id}
+                </h2>
+              )}
+              {/* Sr-only description so assistive tech still announces what
+                kind of entity the panel describes without visual clutter. */}
+              <p className="sf:sr-only">
+                {inspectableNode.id} · {inspectableNode.type}
+              </p>
+            </div>
+
+            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
+              {statusReport ? <StatusSection report={statusReport} /> : null}
+              <EditableField
+                nodeId={inspectableNode.id}
+                value={description}
+                placeholder="Short description shown on the node body"
+                multiline={true}
+                ariaLabel="Description"
+                testIdBase="detail-panel-description"
+                onSave={onDescriptionChange}
+                // Description is the visual "subtitle" — rendered in the muted
+                // gray token so it sits clearly below the (white-ish) Detail
+                // block in dark mode and below the near-black Detail in light.
+                // The explicit `dark:` override pins a slightly more saturated
+                // gray than `--muted-foreground` so the contrast against
+                // Detail's `text-foreground` holds even under reduced-contrast
+                // settings.
+                textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground sf:dark:text-zinc-400"
+              />
+              <EditableField
+                nodeId={inspectableNode.id}
+                value={detail}
+                placeholder="Long-form notes, context, anything…"
+                multiline={true}
+                ariaLabel="Detail"
+                testIdBase="detail-panel-detail"
+                onSave={onDetailChange}
+                markdown={true}
+                textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground"
+              />
+
+              {inspectableNode.type === 'html' && flowId ? (
+                <HtmlNodeSection
+                  adapter={adapter}
+                  nodeId={inspectableNode.id}
+                  htmlPath="view.html"
+                />
+              ) : null}
+            </div>
+          </div>
+        ) : connector ? (
+          <div className="sf:flex sf:flex-col sf:gap-4">
+            <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
               <h2
                 data-testid="detail-panel-title"
-                className="sf:text-lg sf:font-semibold sf:text-foreground"
+                className="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
               >
-                <div className="sf:flex sf:items-center sf:gap-2">
-                  {showIconField && onIconChange ? (
-                    <TitleIconTrigger
-                      nodeId={inspectableNode.id}
-                      icon={currentIcon}
-                      onChange={onIconChange}
-                    />
-                  ) : supportsIconField && currentIcon ? (
-                    <span
-                      data-testid="detail-panel-icon-readonly"
-                      aria-hidden
-                      className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
-                    >
-                      <Icon name={currentIcon} size={16} />
-                    </span>
-                  ) : null}
-                  <div className="sf:min-w-0 sf:flex-1">
-                    <EditableField
-                      nodeId={inspectableNode.id}
-                      value={nodeName}
-                      placeholder="Name"
-                      multiline={false}
-                      ariaLabel="Name"
-                      testIdBase="detail-panel-name"
-                      onSave={onNameChange}
-                      textClassName="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
-                    />
-                  </div>
-                </div>
+                {connector.label ?? 'Connector'}
               </h2>
-            ) : (
-              // Keep an sr-only title so screen readers still announce the
-              // entity even when the visual name row is suppressed (ellipse,
-              // sticky — their on-canvas label is the description field).
-              <h2 data-testid="detail-panel-title" className="sf:sr-only">
-                {inspectableNode.id}
-              </h2>
-            )}
-            {/* Sr-only description so assistive tech still announces what
-                kind of entity the panel describes without visual clutter. */}
-            <p className="sf:sr-only">
-              {inspectableNode.id} · {inspectableNode.type}
-            </p>
-          </div>
+              <p className="sf:sr-only">{connector.id}</p>
+            </div>
 
-          <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
-            {statusReport ? <StatusSection report={statusReport} /> : null}
-            <EditableField
-              nodeId={inspectableNode.id}
-              value={description}
-              placeholder="Short description shown on the node body"
-              multiline={true}
-              ariaLabel="Description"
-              testIdBase="detail-panel-description"
-              onSave={onDescriptionChange}
-              // Description is the visual "subtitle" — rendered in the muted
-              // gray token so it sits clearly below the (white-ish) Detail
-              // block in dark mode and below the near-black Detail in light.
-              // The explicit `dark:` override pins a slightly more saturated
-              // gray than `--muted-foreground` so the contrast against
-              // Detail's `text-foreground` holds even under reduced-contrast
-              // settings.
-              textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground sf:dark:text-zinc-400"
-            />
-            <EditableField
-              nodeId={inspectableNode.id}
-              value={detail}
-              placeholder="Long-form notes, context, anything…"
-              multiline={true}
-              ariaLabel="Detail"
-              testIdBase="detail-panel-detail"
-              onSave={onDetailChange}
-              markdown={true}
-              textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground"
-            />
-
-            {inspectableNode.type === 'html' && flowId ? (
-              <HtmlNodeSection adapter={adapter} nodeId={inspectableNode.id} htmlPath="view.html" />
-            ) : null}
+            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
+              <ConnectorSummary connector={connector} />
+            </div>
           </div>
-        </div>
-      ) : connector ? (
-        <div className="sf:flex sf:flex-col sf:gap-4">
-          <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
-            <h2
-              data-testid="detail-panel-title"
-              className="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
-            >
-              {connector.label ?? 'Connector'}
-            </h2>
-            <p className="sf:sr-only">{connector.id}</p>
+        ) : (
+          <div data-testid="detail-panel-empty" className="sf:text-muted-foreground sf:text-sm">
+            Select a node to inspect.
           </div>
-
-          <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
-            <ConnectorSummary connector={connector} />
-          </div>
-        </div>
-      ) : (
-        <div data-testid="detail-panel-empty" className="sf:text-muted-foreground sf:text-sm">
-          Select a node to inspect.
-        </div>
-      )}
+        )}
       </div>
     </aside>
   );
