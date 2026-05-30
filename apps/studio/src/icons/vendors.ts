@@ -1,4 +1,5 @@
 import { canonicalAwsName } from './normalize-aws.ts';
+import { canonicalAzureName } from './normalize-azure.ts';
 import { canonicalGcpName } from './normalize-gcp.ts';
 import type { IconVendor } from './paths.ts';
 
@@ -38,10 +39,21 @@ const GCP: VendorDescriptor = {
   canonicalName: canonicalGcpName,
 };
 
+const AZURE: VendorDescriptor = {
+  vendor: 'azure',
+  label: 'Microsoft Azure',
+  defaultPackUrl: 'https://arch-center.azureedge.net/icons/Azure_Public_Service_Icons_V20.zip',
+  licenseSummary:
+    'Microsoft requires explicit acceptance of the Azure architecture icon terms before use. Icons may not be modified and must not be used to imply Microsoft endorsement. See license URL for full terms.',
+  licenseUrl: 'https://learn.microsoft.com/en-us/azure/architecture/icons/',
+  requiresAcceptance: true,
+  canonicalName: canonicalAzureName,
+};
+
 export const VENDOR_DESCRIPTORS: Record<IconVendor, VendorDescriptor> = {
   aws: AWS,
   gcp: GCP,
-  azure: AWS, // placeholder — overwritten in Stage 5.2
+  azure: AZURE,
 };
 
 export function vendorDescriptor(vendor: IconVendor): VendorDescriptor {

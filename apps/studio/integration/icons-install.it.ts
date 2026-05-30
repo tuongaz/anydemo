@@ -32,6 +32,13 @@ function makeGcpZipBuffer(): Buffer {
   return Buffer.from(zip);
 }
 
+function makeAzureZipBuffer(): Buffer {
+  const zip = zipSync({
+    '10841-icon-service-Functions.svg': strToU8('<svg>azure-functions</svg>'),
+  });
+  return Buffer.from(zip);
+}
+
 function startIconStudio(fetcher: IconFetcher): IconTestStudio {
   const cacheRoot = mkdtempSync(join(tmpdir(), 'sf-icons-it-'));
   const app = createApp({
@@ -162,6 +169,91 @@ describe('integration: icons/install pipeline for GCP via HTTP + SSE', () => {
     expect(svgRes.status).toBe(200);
     expect(svgRes.headers.get('content-type')).toBe('image/svg+xml');
     expect(await svgRes.text()).toBe('<svg>cloud-functions</svg>');
+  });
+});
+
+describe('integration: icons/install Azure ToS acceptance gate', () => {
+  let studio: IconTestStudio;
+
+  beforeAll(() => {
+    studio = startIconStudio(async () => makeAzureZipBuffer());
+  });
+
+  afterAll(async () => {
+    await studio.stop();
+  });
+
+  it('POST /install azure without acceptTerms → terms-required + index NOT written', async () => {
+    const postRes = await fetch(`${studio.baseURL}/api/icons/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ vendor: 'azure' }),
+    });
+    expect(postRes.status).toBe(200);
+    const { jobId } = (await postRes.json()) as { jobId: string };
+
+    const sse = await connectSse(studio.baseURL, `/api/icons/jobs/${jobId}/events`);
+    try {
+      await sse.waitFor((e) => {
+        try {
+          return (JSON.parse(e.data) as { type: string }).type === 'terms-required';
+        } catch {
+          return false;
+        }
+      }, 5_000);
+    } finally {
+      sse.close();
+    }
+
+    const eventTypes = sse.events.map((e) => (JSON.parse(e.data) as { type: string }).type);
+    expect(eventTypes).toContain('terms-required');
+    expect(eventTypes).not.toContain('done');
+    expect(eventTypes).not.toContain('download-started');
+
+    const packsRes = await fetch(`${studio.baseURL}/api/icons/packs`);
+    const packsBody = (await packsRes.json()) as {
+      packs: Array<{ vendor: string; installed: boolean }>;
+    };
+    expect(packsBody.packs.find((p) => p.vendor === 'azure')?.installed).toBe(false);
+  });
+
+  it('POST /install azure with acceptTerms:true → proceeds to done and serves SVG', async () => {
+    const postRes = await fetch(`${studio.baseURL}/api/icons/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ vendor: 'azure', acceptTerms: true }),
+    });
+    expect(postRes.status).toBe(200);
+    const { jobId } = (await postRes.json()) as { jobId: string };
+
+    const sse = await connectSse(studio.baseURL, `/api/icons/jobs/${jobId}/events`);
+    try {
+      await sse.waitFor((e) => {
+        try {
+          return (JSON.parse(e.data) as { type: string }).type === 'done';
+        } catch {
+          return false;
+        }
+      }, 5_000);
+    } finally {
+      sse.close();
+    }
+
+    const eventTypes = sse.events.map((e) => (JSON.parse(e.data) as { type: string }).type);
+    expect(eventTypes).toContain('download-started');
+    expect(eventTypes).toContain('done');
+    expect(eventTypes).not.toContain('terms-required');
+
+    const packsRes = await fetch(`${studio.baseURL}/api/icons/packs`);
+    const packsBody = (await packsRes.json()) as {
+      packs: Array<{ vendor: string; installed: boolean }>;
+    };
+    expect(packsBody.packs.find((p) => p.vendor === 'azure')?.installed).toBe(true);
+
+    const svgRes = await fetch(`${studio.baseURL}/api/icons/azure/functions.svg`);
+    expect(svgRes.status).toBe(200);
+    expect(svgRes.headers.get('content-type')).toBe('image/svg+xml');
+    expect(await svgRes.text()).toBe('<svg>azure-functions</svg>');
   });
 });
 
