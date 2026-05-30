@@ -19,8 +19,12 @@ export interface VendorDescriptor {
 const AWS: VendorDescriptor = {
   vendor: 'aws',
   label: 'AWS',
+  // AWS re-issues this asset every release and removes prior versions; the
+  // q1-2025 path now 403s from CloudFront. Keep this in sync with whatever
+  // the Icon-package link at https://aws.amazon.com/architecture/icons/
+  // currently points to.
   defaultPackUrl:
-    'https://d1.awsstatic.com/webteam/architecture-icons/q1-2025/Asset-Package_02072025.7e4c5e.zip',
+    'https://d1.awsstatic.com/onedam/marketing-channels/website/aws/en_US/architecture/approved/architecture-icons/Icon-package_04302026.4705b90f5aa45b019271a2699e9ce9b97b941ee1.zip',
   licenseSummary:
     'Free to use in architecture diagrams. Attribution required for any public publication. See license URL for full terms.',
   licenseUrl: 'https://aws.amazon.com/architecture/icons/',
