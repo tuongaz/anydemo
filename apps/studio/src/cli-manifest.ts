@@ -1052,7 +1052,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     name: 'icons:list',
     synopsis: 'seeflow icons list',
     description:
-      'List installed and available vendor icon packs (aws, gcp, azure) cached under ' +
+      'List installed and available vendor icon packs (aws, azure) cached under ' +
       '~/.seeflow/icons. Reads the on-disk index — no network access, no studio required.',
     category: 'lifecycle',
     args: [],
@@ -1068,7 +1068,6 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
             sizeBytes: 2,
             iconNames: ['lambda', 's3'],
           },
-          { vendor: 'gcp', installed: false },
           { vendor: 'azure', installed: false },
         ],
       },
@@ -1089,7 +1088,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'vendor',
         required: true,
-        description: 'Vendor slug — one of: aws, gcp, azure',
+        description: 'Vendor slug — one of: aws, azure',
       },
     ],
     flags: [
@@ -1125,7 +1124,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'vendor',
         required: true,
-        description: 'Vendor slug — one of: aws, gcp, azure',
+        description: 'Vendor slug — one of: aws, azure',
       },
     ],
     flags: [
@@ -1156,7 +1155,7 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       {
         name: 'vendor',
         required: true,
-        description: 'Vendor slug — one of: aws, gcp, azure',
+        description: 'Vendor slug — one of: aws, azure',
       },
     ],
     flags: [],

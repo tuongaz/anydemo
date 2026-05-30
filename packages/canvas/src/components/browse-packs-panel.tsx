@@ -11,11 +11,10 @@ import { cn } from '../lib/cn.ts';
 
 const VENDOR_LABELS: Record<IconPackVendor, string> = {
   aws: 'AWS',
-  gcp: 'Google Cloud',
   azure: 'Microsoft Azure',
 };
 
-const VENDOR_ORDER: ReadonlyArray<IconPackVendor> = ['aws', 'gcp', 'azure'];
+const VENDOR_ORDER: ReadonlyArray<IconPackVendor> = ['aws', 'azure'];
 
 export interface BrowsePacksPanelProps {
   /** All known packs. Missing vendors are treated as uninstalled. */

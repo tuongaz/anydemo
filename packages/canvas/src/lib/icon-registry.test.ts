@@ -53,7 +53,7 @@ describe('ICON_NAMES_BY_VENDOR seeds', () => {
 });
 
 describe('applyPackSummaries', () => {
-  it('populates aws/gcp/azure entries from installed pack icon names', () => {
+  it('populates aws/azure entries from installed pack icon names', () => {
     const packs: PackSummary[] = [
       {
         vendor: 'aws',
@@ -64,21 +64,19 @@ describe('applyPackSummaries', () => {
         iconNames: ['lambda', 's3'],
       },
       {
-        vendor: 'gcp',
+        vendor: 'azure',
         installed: true,
         version: '2026-05-30',
         iconCount: 1,
         sizeBytes: 50,
-        iconNames: ['cloud-functions'],
+        iconNames: ['functions'],
       },
-      { vendor: 'azure', installed: false },
     ];
 
     applyPackSummaries(packs);
 
     expect(ICON_NAMES_BY_VENDOR.aws).toEqual(['lambda', 's3']);
-    expect(ICON_NAMES_BY_VENDOR.gcp).toEqual(['cloud-functions']);
-    expect(ICON_NAMES_BY_VENDOR.azure).toEqual([]);
+    expect(ICON_NAMES_BY_VENDOR.azure).toEqual(['functions']);
   });
 
   it('leaves lucide and iconify untouched when applying pack summaries', () => {

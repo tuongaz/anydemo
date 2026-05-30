@@ -23,7 +23,6 @@ it('summarizes installed + available vendors', () => {
       sizeBytes: 100,
       iconNames: ['lambda'],
     },
-    { vendor: 'gcp', installed: false },
     { vendor: 'azure', installed: false },
   ]);
 });
@@ -32,7 +31,6 @@ it('returns all-uninstalled when index is empty', () => {
   const summary = summarizePacks({ version: 1, packs: {} });
   expect(summary).toEqual([
     { vendor: 'aws', installed: false },
-    { vendor: 'gcp', installed: false },
     { vendor: 'azure', installed: false },
   ]);
 });
@@ -48,12 +46,12 @@ it('reports iconCount and sizeBytes for every installed vendor', () => {
         sizeBytes: 10,
         icons: { x: 'aws/a/x.svg', y: 'aws/a/y.svg' },
       },
-      gcp: {
-        vendor: 'gcp',
-        version: 'g',
+      azure: {
+        vendor: 'azure',
+        version: 'z',
         installedAt: 2,
         sizeBytes: 20,
-        icons: { z: 'gcp/g/z.svg' },
+        icons: { f: 'azure/z/f.svg' },
       },
     },
   });
@@ -67,13 +65,12 @@ it('reports iconCount and sizeBytes for every installed vendor', () => {
       iconNames: ['x', 'y'],
     },
     {
-      vendor: 'gcp',
+      vendor: 'azure',
       installed: true,
-      version: 'g',
+      version: 'z',
       iconCount: 1,
       sizeBytes: 20,
-      iconNames: ['z'],
+      iconNames: ['f'],
     },
-    { vendor: 'azure', installed: false },
   ]);
 });

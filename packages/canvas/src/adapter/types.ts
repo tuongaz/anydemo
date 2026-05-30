@@ -225,11 +225,16 @@ export interface CanvasRuntime {
 
 /**
  * Adapter-side icon pack vendor. Subset of canvas `IconVendor` — the studio
- * only manages downloadable packs for these three; lucide is bundled and
+ * only manages downloadable packs for these two; lucide is bundled and
  * iconify ships inline. Mirrors the studio's vendor union but stays local to
  * the canvas to keep the adapter seam clean (no cross-package import).
+ *
+ * GCP was previously listed here but Google decommissioned the public
+ * architecture-icons zip download, so we removed the install affordance. The
+ * `gcp` value is still recognized by the canvas-side `IconVendor` in icon-id.ts
+ * so existing flow files with `gcp:foo` icon ids continue to parse.
  */
-export type IconPackVendor = 'aws' | 'gcp' | 'azure';
+export type IconPackVendor = 'aws' | 'azure';
 
 /**
  * Pack summary returned by `adapter.icons.listPacks()` and consumed by the

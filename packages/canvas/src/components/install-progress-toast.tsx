@@ -20,7 +20,6 @@ import { cn } from '../lib/cn.ts';
 
 const VENDOR_LABELS: Record<IconPackVendor, string> = {
   aws: 'AWS',
-  gcp: 'Google Cloud',
   azure: 'Microsoft Azure',
 };
 

@@ -366,7 +366,6 @@ describe('createRestAdapter icons (US-018)', () => {
         sizeBytes: 1024,
         iconNames: ['lambda', 's3'],
       },
-      { vendor: 'gcp' as const, installed: false as const },
       { vendor: 'azure' as const, installed: false as const },
     ];
     const { impl, calls } = stubFetch(() => stubResponse({ packs }));
@@ -414,10 +413,10 @@ describe('createRestAdapter icons (US-018)', () => {
       fetch: impl,
     });
 
-    await adapter.icons?.install('gcp', {});
+    await adapter.icons?.install('azure', {});
 
     expect(JSON.parse(String(calls[0]?.body))).toEqual({
-      vendor: 'gcp',
+      vendor: 'azure',
       acceptTerms: false,
     });
   });

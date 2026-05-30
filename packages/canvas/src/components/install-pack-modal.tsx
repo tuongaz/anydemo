@@ -15,12 +15,11 @@ import {
 // US-017: Install Pack modal. Shown when the author clicks Install on a
 // vendor row in <BrowsePacksPanel>. The Confirm button is disabled until the
 // "I have read the license" checkbox is checked when `requiresAcceptance` is
-// true; for vendors that don't require acceptance (AWS / GCP) the checkbox
+// true; for vendors that don't require acceptance (AWS) the checkbox
 // is hidden and Confirm is enabled immediately.
 
 const VENDOR_LABELS: Record<IconPackVendor, string> = {
   aws: 'AWS',
-  gcp: 'Google Cloud',
   azure: 'Microsoft Azure',
 };
 

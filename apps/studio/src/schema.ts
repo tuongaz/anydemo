@@ -85,7 +85,7 @@ const NodeSemanticBaseShape = {
     .string()
     .optional()
     .describe(
-      "Decorative header glyph. Encoded as `vendor:name` — unprefixed values are Lucide kebab-case (e.g. 'database', 'cloud-upload'); prefixed values target installed icon packs ('aws:lambda', 'gcp:cloud-functions', 'azure:functions') or the iconify catalog ('iconify:logos:google-cloud'). Falls back to a placeholder when unknown. On type:'icon' nodes the icon IS the visual and is required.",
+      "Decorative header glyph. Encoded as `vendor:name` — unprefixed values are Lucide kebab-case (e.g. 'database', 'cloud-upload'); prefixed values target installed icon packs ('aws:lambda', 'azure:functions') or the iconify catalog ('iconify:logos:google-cloud'). Falls back to a placeholder when unknown. On type:'icon' nodes the icon IS the visual and is required.",
     ),
 };
 
@@ -574,7 +574,7 @@ const FlowIconNodeData = z
       .string()
       .min(1)
       .describe(
-        "Required icon. Encoded as `vendor:name` — unprefixed values are Lucide kebab-case (e.g. 'cloud-upload', 'database'); prefixed values target installed icon packs ('aws:lambda', 'gcp:cloud-functions', 'azure:functions') or the iconify catalog ('iconify:logos:google-cloud'). On type:'icon' nodes the icon IS the visual — overrides the optional decorative `icon` from the semantic base.",
+        "Required icon. Encoded as `vendor:name` — unprefixed values are Lucide kebab-case (e.g. 'cloud-upload', 'database'); prefixed values target installed icon packs ('aws:lambda', 'azure:functions') or the iconify catalog ('iconify:logos:google-cloud'). On type:'icon' nodes the icon IS the visual — overrides the optional decorative `icon` from the semantic base.",
       ),
     alt: z.string().optional().describe('Accessibility alt text for the icon glyph.'),
   })

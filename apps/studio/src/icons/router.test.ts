@@ -43,13 +43,13 @@ function waitForJobEnd(
 }
 
 describe('createIconsRouter', () => {
-  it('GET /packs returns three uninstalled vendors on fresh cacheRoot', async () => {
+  it('GET /packs returns the two uninstalled vendors on fresh cacheRoot', async () => {
     const jobs = createJobRegistry();
     const app = createIconsRouter({ jobs, cacheRoot: cache });
     const res = await app.request('/packs');
     expect(res.status).toBe(200);
     const body = (await res.json()) as { packs: Array<{ vendor: string; installed: boolean }> };
-    expect(body.packs.map((p) => p.vendor)).toEqual(['aws', 'gcp', 'azure']);
+    expect(body.packs.map((p) => p.vendor)).toEqual(['aws', 'azure']);
     expect(body.packs.every((p) => p.installed === false)).toBe(true);
   });
 

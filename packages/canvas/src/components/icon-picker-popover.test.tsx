@@ -278,7 +278,6 @@ describe('IconPickerBody tabs (US-016)', () => {
   beforeEach(() => {
     applyPackSummaries([
       { vendor: 'aws', installed: false },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ]);
   });
@@ -291,7 +290,7 @@ describe('IconPickerBody tabs (US-016)', () => {
       const tab = findElement(tree, testIdEquals(`icon-picker-tab-${vendor}`));
       expect(tab).not.toBeNull();
     }
-    for (const vendor of ['aws', 'gcp', 'azure']) {
+    for (const vendor of ['aws', 'azure']) {
       const tab = findElement(tree, testIdEquals(`icon-picker-tab-${vendor}`));
       expect(tab).toBeNull();
     }
@@ -325,21 +324,17 @@ describe('IconPickerBody tabs (US-016)', () => {
         sizeBytes: 0,
         iconNames: ['lambda'],
       },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ]);
     try {
       const tree = callBody();
       const aws = findElement(tree, testIdEquals('icon-picker-tab-aws'));
       expect(aws).not.toBeNull();
-      const gcp = findElement(tree, testIdEquals('icon-picker-tab-gcp'));
-      expect(gcp).toBeNull();
       const azure = findElement(tree, testIdEquals('icon-picker-tab-azure'));
       expect(azure).toBeNull();
     } finally {
       applyPackSummaries([
         { vendor: 'aws', installed: false },
-        { vendor: 'gcp', installed: false },
         { vendor: 'azure', installed: false },
       ]);
     }
@@ -356,7 +351,6 @@ describe('IconPickerBody tabs (US-016)', () => {
         sizeBytes: 0,
         iconNames: ['lambda', 's3'],
       },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ]);
     try {
@@ -381,7 +375,6 @@ describe('IconPickerBody tabs (US-016)', () => {
       // Reset so other tests don't see the stub pack.
       applyPackSummaries([
         { vendor: 'aws', installed: false },
-        { vendor: 'gcp', installed: false },
         { vendor: 'azure', installed: false },
       ]);
     }
@@ -408,7 +401,6 @@ describe('IconPickerBody tabs (US-016)', () => {
         sizeBytes: 0,
         iconNames: ['lambda'],
       },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ]);
     try {
@@ -426,7 +418,6 @@ describe('IconPickerBody tabs (US-016)', () => {
     } finally {
       applyPackSummaries([
         { vendor: 'aws', installed: false },
-        { vendor: 'gcp', installed: false },
         { vendor: 'azure', installed: false },
       ]);
     }
@@ -436,17 +427,17 @@ describe('IconPickerBody tabs (US-016)', () => {
     // Edge case: pack was active when removed mid-session. The tab itself is
     // filtered out of the bar, but the body still falls back to the prompt so
     // the user can re-install it without confusion.
-    expect(ICON_NAMES_BY_VENDOR.gcp.length).toBe(0);
+    expect(ICON_NAMES_BY_VENDOR.azure.length).toBe(0);
     const onBrowsePacks = mock(() => {});
 
-    const treeGcp = callBody({ activeTab: 'gcp', onBrowsePacks });
-    const prompt = findElement(treeGcp, testIdEquals('icon-picker-install-prompt'));
+    const treeAzure = callBody({ activeTab: 'azure', onBrowsePacks });
+    const prompt = findElement(treeAzure, testIdEquals('icon-picker-install-prompt'));
     expect(prompt).not.toBeNull();
-    const cta = findElement(treeGcp, testIdEquals('icon-picker-install-cta-gcp'));
+    const cta = findElement(treeAzure, testIdEquals('icon-picker-install-cta-azure'));
     if (!cta) throw new Error('Browse packs CTA not found');
     (cta.props.onClick as () => void)();
     expect(onBrowsePacks).toHaveBeenCalledTimes(1);
-    expect(findElement(treeGcp, testIdEquals('icon-picker-all'))).toBeNull();
+    expect(findElement(treeAzure, testIdEquals('icon-picker-all'))).toBeNull();
   });
 
   it('hides the Recent section on vendor tabs even when query is empty', () => {

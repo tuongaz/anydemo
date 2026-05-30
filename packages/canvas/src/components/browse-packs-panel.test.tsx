@@ -90,9 +90,9 @@ function callPanel(overrides: Partial<BrowsePacksPanelProps> = {}): unknown {
 }
 
 describe('BrowsePacksPanel', () => {
-  it('renders a row for each vendor (aws/gcp/azure) even when packs is empty', () => {
+  it('renders a row for each vendor (aws/azure) even when packs is empty', () => {
     const tree = callPanel({ packs: [] });
-    for (const vendor of ['aws', 'gcp', 'azure']) {
+    for (const vendor of ['aws', 'azure']) {
       const row = findElement(tree, testIdEquals(`browse-packs-row-${vendor}`));
       expect(row).not.toBeNull();
       expect((row?.props as { 'data-installed'?: string })['data-installed']).toBe('false');
@@ -119,7 +119,6 @@ describe('BrowsePacksPanel', () => {
         sizeBytes: 0,
         iconNames: ['lambda', 's3'],
       },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ];
     const onRemove = mock(() => {});
@@ -149,15 +148,14 @@ describe('BrowsePacksPanel', () => {
         sizeBytes: 0,
         iconNames: ['lambda'],
       },
-      { vendor: 'gcp', installed: false },
       { vendor: 'azure', installed: false },
     ];
     const tree = callPanel({ packs, busyVendor: 'aws' });
     const remove = findElement(tree, testIdEquals('browse-packs-remove-aws'));
     expect((remove?.props as { disabled?: boolean }).disabled).toBe(true);
 
-    const tree2 = callPanel({ packs: [], busyVendor: 'gcp' });
-    const install = findElement(tree2, testIdEquals('browse-packs-install-gcp'));
+    const tree2 = callPanel({ packs: [], busyVendor: 'azure' });
+    const install = findElement(tree2, testIdEquals('browse-packs-install-azure'));
     expect((install?.props as { disabled?: boolean }).disabled).toBe(true);
     // Sibling vendors are NOT disabled.
     const installAws = findElement(tree2, testIdEquals('browse-packs-install-aws'));

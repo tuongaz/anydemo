@@ -25,7 +25,7 @@ export interface IconsRouterDeps {
   installer?: IconInstaller;
 }
 
-const VendorSchema = z.enum(['aws', 'gcp', 'azure']);
+const VendorSchema = z.enum(['aws', 'azure']);
 const InstallBodySchema = z.object({
   vendor: VendorSchema,
   acceptTerms: z.boolean().optional(),

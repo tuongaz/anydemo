@@ -36,17 +36,16 @@ const OVERSCAN = 2;
 
 // Tab bar entries — matches the IconVendor union but ordered for the picker UI
 // (bundled first, vendor packs middle, iconify last). `lucide` and `iconify`
-// are always enabled; `aws`/`gcp`/`azure` flip to a disabled+Install state
+// are always enabled; `aws`/`azure` flip to a disabled+Install state
 // when the corresponding entry in ICON_NAMES_BY_VENDOR is empty.
 const TAB_DEFS: ReadonlyArray<{ id: IconVendor; label: string }> = [
   { id: 'lucide', label: 'Bundled' },
   { id: 'aws', label: 'AWS' },
-  { id: 'gcp', label: 'GCP' },
   { id: 'azure', label: 'Azure' },
   { id: 'iconify', label: 'Logos' },
 ];
 
-const PACK_VENDORS: ReadonlyArray<IconVendor> = ['aws', 'gcp', 'azure'];
+const PACK_VENDORS: ReadonlyArray<IconVendor> = ['aws', 'azure'];
 
 export function filterIcons(names: readonly string[], query: string): string[] {
   const q = query.trim().toLowerCase();

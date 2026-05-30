@@ -1,6 +1,5 @@
 import { canonicalAwsName } from './normalize-aws.ts';
 import { canonicalAzureName } from './normalize-azure.ts';
-import { canonicalGcpName } from './normalize-gcp.ts';
 import type { IconVendor } from './paths.ts';
 
 export interface VendorDescriptor {
@@ -32,17 +31,6 @@ const AWS: VendorDescriptor = {
   canonicalName: canonicalAwsName,
 };
 
-const GCP: VendorDescriptor = {
-  vendor: 'gcp',
-  label: 'Google Cloud',
-  defaultPackUrl: 'https://cloud.google.com/static/architecture/icons/icons.zip',
-  licenseSummary:
-    'Google Cloud architecture icons are provided for use in architecture diagrams. See license URL for full terms.',
-  licenseUrl: 'https://cloud.google.com/architecture/icons',
-  requiresAcceptance: false,
-  canonicalName: canonicalGcpName,
-};
-
 const AZURE: VendorDescriptor = {
   vendor: 'azure',
   label: 'Microsoft Azure',
@@ -56,7 +44,6 @@ const AZURE: VendorDescriptor = {
 
 export const VENDOR_DESCRIPTORS: Record<IconVendor, VendorDescriptor> = {
   aws: AWS,
-  gcp: GCP,
   azure: AZURE,
 };
 

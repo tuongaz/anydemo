@@ -1980,7 +1980,7 @@
     </div>
 
     <p style="margin: 0 0 32px; color: var(--text-mute); font-size: 16px; max-width: 720px; line-height: 1.55;">
-      Cloud icon packs (AWS, GCP, Azure) install on demand from inside the picker. Three surfaces — panel, modal, toast — share the same tokens as the rest of the studio; no new colors, no new type ramp.
+      Cloud icon packs (AWS, Azure) install on demand from inside the picker. Three surfaces — panel, modal, toast — share the same tokens as the rest of the studio; no new colors, no new type ramp.
     </p>
 
     <!-- BROWSE PACKS PANEL -->
@@ -2000,16 +2000,6 @@
             <span style="font-size: 11px; font-family: var(--font-mono); color: var(--emerald-hi); padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--emerald-hi) 30%, transparent); border-radius: 4px;">INSTALLED</span>
             <button class="btn btn-ghost btn-sm">Remove</button>
           </div>
-        </div>
-        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e;">
-          <div style="display: flex; align-items: center; gap: 12px;">
-            <div style="width: 28px; height: 28px; border-radius: 6px; background: #18181b; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">GCP</div>
-            <div style="display: flex; flex-direction: column; gap: 2px;">
-              <span style="font-size: 14px; color: var(--text);">Google Cloud</span>
-              <span style="font-size: 12px; color: var(--text-dim);">Not installed</span>
-            </div>
-          </div>
-          <button class="btn btn-primary btn-sm">Install</button>
         </div>
         <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e;">
           <div style="display: flex; align-items: center; gap: 12px;">
@@ -2055,8 +2045,8 @@
         <div class="label">install-pack-modal · no acceptance required</div>
         <div style="border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
           <div style="display: flex; flex-direction: column; gap: 6px;">
-            <span style="font-size: 16px; font-weight: 600; color: var(--text);">Install Google Cloud icons</span>
-            <span style="font-size: 13px; color: var(--text-dim); line-height: 1.5;">Google Cloud architecture icons are free for use in diagrams and presentations.</span>
+            <span style="font-size: 16px; font-weight: 600; color: var(--text);">Install AWS icons</span>
+            <span style="font-size: 13px; color: var(--text-dim); line-height: 1.5;">AWS architecture icons are free for use in diagrams and presentations.</span>
           </div>
           <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-mute); padding: 12px 14px; background: #18181b; border: 1px solid var(--border); border-radius: var(--r-sm); line-height: 1.6;">
             Free for diagrammatic use. Attribution recommended.
@@ -2116,9 +2106,8 @@
       <div style="display: flex; gap: 4px; padding: 6px; background: #0c0c0e; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 12px;">
         <button class="btn btn-ghost btn-sm" style="flex: 1;">Bundled</button>
         <button class="btn btn-secondary btn-sm" style="flex: 1;">AWS</button>
-        <button class="btn btn-ghost btn-sm" style="flex: 1; opacity: 0.55;">GCP</button>
-        <button class="btn btn-ghost btn-sm" style="flex: 1; opacity: 0.55;">Azure</button>
         <button class="btn btn-ghost btn-sm" style="flex: 1;">Logos</button>
+        <button class="btn btn-ghost btn-sm" style="width: 32px; flex: 0 0 auto;" aria-label="Browse packs">+</button>
       </div>
       <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; padding: 8px; background: #0c0c0e; border: 1px solid var(--border); border-radius: var(--r-md);">
         <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">λ</div>
@@ -2131,7 +2120,7 @@
         <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">dyn</div>
       </div>
     </div>
-    <div class="strip-caption" style="margin-bottom: 40px;">Active tab uses the secondary button background. Uninstalled vendors render at 0.55 opacity and surface an inline Install affordance that opens the Browse Packs panel. Bundled (Lucide) is always available.</div>
+    <div class="strip-caption" style="margin-bottom: 40px;">Active tab uses the secondary button background. Only installed vendor packs surface as tabs — the trailing + opens the Browse Packs panel for install/remove. Bundled (Lucide) and Logos (Iconify) are always available.</div>
 
     <!-- DO / DON'T -->
     <div class="voice">

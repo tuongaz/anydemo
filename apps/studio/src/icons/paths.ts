@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { seeflowHome } from '../paths.ts';
 
-export type IconVendor = 'aws' | 'gcp' | 'azure';
+export type IconVendor = 'aws' | 'azure';
 
 export const iconCacheRoot = (): string => join(seeflowHome(), 'icons');
 

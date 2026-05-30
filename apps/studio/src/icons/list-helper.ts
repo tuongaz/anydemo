@@ -1,7 +1,7 @@
 import type { IconIndex } from './index-store.ts';
 import type { IconVendor } from './paths.ts';
 
-const ALL: IconVendor[] = ['aws', 'gcp', 'azure'];
+const ALL: IconVendor[] = ['aws', 'azure'];
 
 export type PackSummary =
   | {

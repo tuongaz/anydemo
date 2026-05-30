@@ -25,7 +25,7 @@ describe('createJobRegistry', () => {
     expect(reg.inFlightFor('aws')).toBeUndefined();
     const id = reg.create('aws');
     expect(reg.inFlightFor('aws')).toBe(id);
-    expect(reg.inFlightFor('gcp')).toBeUndefined();
+    expect(reg.inFlightFor('azure')).toBeUndefined();
     reg.markComplete(id);
     expect(reg.inFlightFor('aws')).toBeUndefined();
   });

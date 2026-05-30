@@ -289,8 +289,8 @@ Commands (work without a running studio):
                        'ids connector 12').
 
 Icons (local cache):
-  icons list           List installed and available vendor packs (aws, gcp, azure)
-  icons add <v>        Install a vendor pack (v: aws|gcp|azure) [--accept-terms] [--pack-url <url>]
+  icons list           List installed and available vendor packs (aws, azure)
+  icons add <v>        Install a vendor pack (v: aws|azure) [--accept-terms] [--pack-url <url>]
   icons update <v>     Re-install a vendor pack — same flags as add
   icons remove <v>     Remove an installed vendor pack (idempotent)
 
@@ -1258,10 +1258,10 @@ async function runIconsList() {
   printOk({ packs: summarizePacks(idx) });
 }
 
-type IconVendorSlug = 'aws' | 'gcp' | 'azure';
+type IconVendorSlug = 'aws' | 'azure';
 
 function parseIconVendor(action: 'add' | 'remove'): IconVendorSlug {
-  const vendors: readonly IconVendorSlug[] = ['aws', 'gcp', 'azure'];
+  const vendors: readonly IconVendorSlug[] = ['aws', 'azure'];
   const raw = argv[2];
   if (!raw || raw.startsWith('--')) {
     const suffix = action === 'add' ? ' [--accept-terms] [--pack-url <url>]' : '';

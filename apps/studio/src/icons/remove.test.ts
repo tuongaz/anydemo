@@ -35,7 +35,7 @@ describe('removeIconPack', () => {
   });
 
   it('is idempotent — removing an uninstalled vendor is a no-op success', () => {
-    expect(() => removeIconPack('gcp', { cacheRoot: cache })).not.toThrow();
-    expect(readIndex(cache).packs.gcp).toBeUndefined();
+    expect(() => removeIconPack('azure', { cacheRoot: cache })).not.toThrow();
+    expect(readIndex(cache).packs.azure).toBeUndefined();
   });
 });
