@@ -499,6 +499,10 @@ export function wrapAdapterWithHistory(
             inner.computeLayout!(nodes, edges),
         }
       : {}),
+    // US-022: icon-pack installer surface is read/write but never participates
+    // in undo (installs are out-of-band catalog mutations, not flow edits).
+    // Forward the reference so callers reach the underlying REST adapter.
+    ...(inner.icons ? { icons: inner.icons } : {}),
   };
 
   // -----------------------------------------------------------------------

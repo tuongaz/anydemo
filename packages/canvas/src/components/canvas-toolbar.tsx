@@ -16,6 +16,7 @@ import {
   User,
 } from 'lucide-react';
 import { useState } from 'react';
+import type { CanvasIconsAdapter } from '../adapter/types.ts';
 import { cn } from '../lib/cn.ts';
 import { type CommandId, getCommandTooltip } from '../lib/keyboard-shortcuts.ts';
 import type { CanvasMode, GeometricNodeType } from '../types.ts';
@@ -65,6 +66,13 @@ export interface CanvasToolbarProps {
    * consumers keep the full toolbar.
    */
   showShapeTools?: boolean;
+  /**
+   * US-022: forward the host's icon adapter to the Insert-icon `IconPickerPopover`
+   * so the Browse Packs / Install flow is reachable from the toolbar. When
+   * omitted (or when the host adapter has no `icons` block) the picker falls
+   * back to its bundled-only behaviour.
+   */
+  iconsAdapter?: CanvasIconsAdapter;
 }
 
 export interface ToolbarModeEntry {
@@ -160,6 +168,7 @@ export function CanvasToolbar({
   onCloseIconPicker,
   onPickIcon,
   showShapeTools = true,
+  iconsAdapter,
 }: CanvasToolbarProps) {
   // The illustrative-shape picker is self-contained — open state lives in
   // the toolbar since there's no insert/replace mode duality like the icon
@@ -334,6 +343,7 @@ export function CanvasToolbar({
               onPick={(name) => {
                 if (name !== null) onPickIcon(name);
               }}
+              iconsAdapter={iconsAdapter}
             />
           ) : null}
           <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />

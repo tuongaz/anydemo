@@ -4582,6 +4582,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                         // Hand navigation tools always remain so view-mode embeds
                         // get a Miro/Figma-style tool toggle.
                         showShapeTools={isEditMode && !!onCreateShapeNode}
+                        iconsAdapter={iconsAdapter}
                       />
                     ) : null}
                     {flags.showStyleStrip && onStyleNode && onStyleConnector ? (
