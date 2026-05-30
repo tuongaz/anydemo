@@ -1060,7 +1060,14 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     outputs: {
       okExample: {
         packs: [
-          { vendor: 'aws', installed: true, version: '2026-05-30', iconCount: 2, sizeBytes: 2 },
+          {
+            vendor: 'aws',
+            installed: true,
+            version: '2026-05-30',
+            iconCount: 2,
+            sizeBytes: 2,
+            iconNames: ['lambda', 's3'],
+          },
           { vendor: 'gcp', installed: false },
           { vendor: 'azure', installed: false },
         ],

@@ -237,6 +237,13 @@ export type PackSummary =
       version: string;
       iconCount: number;
       sizeBytes: number;
+      /**
+       * Canonical icon names (kebab-case) installed in this pack, sorted
+       * alphabetically. Drives the picker's per-vendor grid via
+       * `applyPackSummaries()` (see `lib/icon-registry.ts`). The studio's
+       * mirror `PackSummary` derives this from `Object.keys(pack.icons)`.
+       */
+      iconNames: string[];
     }
   | { vendor: IconPackVendor; installed: false };
 

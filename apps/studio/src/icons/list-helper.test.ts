@@ -15,7 +15,14 @@ it('summarizes installed + available vendors', () => {
     },
   });
   expect(summary).toEqual([
-    { vendor: 'aws', installed: true, version: '2026-05-30', iconCount: 1, sizeBytes: 100 },
+    {
+      vendor: 'aws',
+      installed: true,
+      version: '2026-05-30',
+      iconCount: 1,
+      sizeBytes: 100,
+      iconNames: ['lambda'],
+    },
     { vendor: 'gcp', installed: false },
     { vendor: 'azure', installed: false },
   ]);
@@ -51,8 +58,22 @@ it('reports iconCount and sizeBytes for every installed vendor', () => {
     },
   });
   expect(summary).toEqual([
-    { vendor: 'aws', installed: true, version: 'a', iconCount: 2, sizeBytes: 10 },
-    { vendor: 'gcp', installed: true, version: 'g', iconCount: 1, sizeBytes: 20 },
+    {
+      vendor: 'aws',
+      installed: true,
+      version: 'a',
+      iconCount: 2,
+      sizeBytes: 10,
+      iconNames: ['x', 'y'],
+    },
+    {
+      vendor: 'gcp',
+      installed: true,
+      version: 'g',
+      iconCount: 1,
+      sizeBytes: 20,
+      iconNames: ['z'],
+    },
     { vendor: 'azure', installed: false },
   ]);
 });

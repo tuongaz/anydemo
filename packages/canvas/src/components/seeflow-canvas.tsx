@@ -55,6 +55,7 @@ import {
   getNodeIntersection,
   projectCursorToPerimeter,
 } from '../lib/floating-edge-geometry.ts';
+import { applyPackSummaries } from '../lib/icon-registry.ts';
 import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
@@ -4202,6 +4203,30 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // <IconRenderer> via <IconNode>) only re-renders when studioBaseUrl
   // actually changes, not on every host render with a fresh prop ref.
   const studioContextValue = useMemo(() => ({ studioBaseUrl }), [studioBaseUrl]);
+
+  // US-015: on mount, ask the host's icon adapter (if wired) for the latest
+  // installed-pack summaries so the picker's vendor tabs (US-016) can populate
+  // their grids. Silent when `adapter.icons` is missing or the call rejects —
+  // the picker falls back to the bundled lucide list either way. Appended at
+  // the END of the body to preserve dispatcher-shim hook ordering (see the
+  // useState-placement rule in packages/canvas/CLAUDE.md).
+  const iconsAdapter = adapter?.icons;
+  useEffect(() => {
+    if (!iconsAdapter) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const packs = await iconsAdapter.listPacks();
+        if (cancelled) return;
+        applyPackSummaries(packs);
+      } catch {
+        // Silent — adapter failures must not break canvas mount.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [iconsAdapter]);
 
   return (
     <IconRegistryProvider value={iconRegistryValue}>

@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import { ICON_NAMES, ICON_REGISTRY } from './icon-registry.ts';
+import type { PackSummary } from '../adapter/types.ts';
+import {
+  ICON_NAMES,
+  ICON_NAMES_BY_VENDOR,
+  ICON_REGISTRY,
+  applyPackSummaries,
+} from './icon-registry.ts';
 
 describe('ICON_REGISTRY', () => {
   it('exposes more than 1000 lucide icons', () => {
@@ -34,5 +40,98 @@ describe('ICON_REGISTRY', () => {
 
   it("converts pascal-case to kebab-case (e.g. 'a-arrow-down')", () => {
     expect(ICON_NAMES).toContain('a-arrow-down');
+  });
+});
+
+describe('ICON_NAMES_BY_VENDOR seeds', () => {
+  it('mirrors the bundled lucide list and seeds iconify with curated brand logos', () => {
+    expect(ICON_NAMES_BY_VENDOR.lucide).toBe(ICON_NAMES);
+    expect(ICON_NAMES_BY_VENDOR.iconify).toContain('logos:aws');
+    expect(ICON_NAMES_BY_VENDOR.iconify).toContain('logos:google-cloud');
+    expect(ICON_NAMES_BY_VENDOR.iconify).toContain('logos:microsoft-azure');
+  });
+});
+
+describe('applyPackSummaries', () => {
+  it('populates aws/gcp/azure entries from installed pack icon names', () => {
+    const packs: PackSummary[] = [
+      {
+        vendor: 'aws',
+        installed: true,
+        version: '2026-05-30',
+        iconCount: 2,
+        sizeBytes: 100,
+        iconNames: ['lambda', 's3'],
+      },
+      {
+        vendor: 'gcp',
+        installed: true,
+        version: '2026-05-30',
+        iconCount: 1,
+        sizeBytes: 50,
+        iconNames: ['cloud-functions'],
+      },
+      { vendor: 'azure', installed: false },
+    ];
+
+    applyPackSummaries(packs);
+
+    expect(ICON_NAMES_BY_VENDOR.aws).toEqual(['lambda', 's3']);
+    expect(ICON_NAMES_BY_VENDOR.gcp).toEqual(['cloud-functions']);
+    expect(ICON_NAMES_BY_VENDOR.azure).toEqual([]);
+  });
+
+  it('leaves lucide and iconify untouched when applying pack summaries', () => {
+    const lucideBefore = ICON_NAMES_BY_VENDOR.lucide;
+    const iconifyBefore = [...ICON_NAMES_BY_VENDOR.iconify];
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: 'v',
+        iconCount: 1,
+        sizeBytes: 1,
+        iconNames: ['lambda'],
+      },
+    ]);
+    expect(ICON_NAMES_BY_VENDOR.lucide).toBe(lucideBefore);
+    expect(ICON_NAMES_BY_VENDOR.iconify).toEqual(iconifyBefore);
+  });
+
+  it('replaces a previously-installed entry on the next summary', () => {
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: 'v1',
+        iconCount: 1,
+        sizeBytes: 1,
+        iconNames: ['lambda'],
+      },
+    ]);
+    expect(ICON_NAMES_BY_VENDOR.aws).toEqual(['lambda']);
+
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: 'v2',
+        iconCount: 2,
+        sizeBytes: 2,
+        iconNames: ['ec2', 's3'],
+      },
+    ]);
+    expect(ICON_NAMES_BY_VENDOR.aws).toEqual(['ec2', 's3']);
+
+    applyPackSummaries([{ vendor: 'aws', installed: false }]);
+    expect(ICON_NAMES_BY_VENDOR.aws).toEqual([]);
+  });
+
+  it('is a no-op on an empty input', () => {
+    const lucideBefore = ICON_NAMES_BY_VENDOR.lucide;
+    const iconifyBefore = [...ICON_NAMES_BY_VENDOR.iconify];
+    applyPackSummaries([]);
+    expect(ICON_NAMES_BY_VENDOR.lucide).toBe(lucideBefore);
+    expect(ICON_NAMES_BY_VENDOR.iconify).toEqual(iconifyBefore);
   });
 });
