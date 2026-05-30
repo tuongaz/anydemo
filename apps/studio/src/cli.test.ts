@@ -478,8 +478,8 @@ describe('seeflow CLI new subcommands', () => {
         jqHints: { examples: string[]; tip?: string };
       };
       expect(parsed.name).toBe('node');
-      // Flat-types refactor: schema-catalog returns 15 variants (11 geometric
-      // + image + html + icon + component) — pinned in alphabetical order.
+      // Flat-types refactor: schema-catalog returns 16 variants (11 geometric
+      // + image + html + icon + component + linkflow) — pinned in alphabetical order.
       expect(Object.keys(parsed.schemas).sort()).toEqual(
         [
           'cloud',
@@ -491,6 +491,7 @@ describe('seeflow CLI new subcommands', () => {
           'html',
           'icon',
           'image',
+          'linkflow',
           'queue',
           'rectangle',
           'server',
@@ -542,9 +543,9 @@ describe('seeflow CLI new subcommands', () => {
       expect(r.code).toBe(0);
       const parsed = JSON.parse(r.stdout) as { ok: boolean; name: string; result: unknown[] };
       expect(parsed.ok).toBe(true);
-      // 15 flat variants iterated.
+      // 16 flat variants iterated.
       expect(Array.isArray(parsed.result)).toBe(true);
-      expect(parsed.result).toHaveLength(15);
+      expect(parsed.result).toHaveLength(16);
     } finally {
       studio.stop();
     }
@@ -722,6 +723,7 @@ describe('seeflow CLI new subcommands', () => {
           'html',
           'icon',
           'image',
+          'linkflow',
           'queue',
           'rectangle',
           'server',
@@ -791,6 +793,65 @@ describe('seeflow CLI new subcommands', () => {
       // ops.getNode echoes the slug it was called with (US-020 cutover).
       expect(parsed.flowId).toBe(`${projectSlug}/main`);
       expect(parsed.node.data.detail).toBe('# inlined body');
+    } finally {
+      studio.stop();
+    }
+  }, 20_000);
+
+  // -- Linkflow node smoke (US-010) ----------------------------------------
+  // Exercises the CLI op path (`nodes:add` → createCliOperations().addNode())
+  // for the linkflow node type added in US-001. Asserts the on-disk flow.json
+  // contains the node with the target slug pair preserved verbatim.
+  it('nodes:add accepts a linkflow node with target and writes it to flow.json', async () => {
+    const studio = startTestStudio();
+    try {
+      const { repoPath, projectSlug } = seedProject(studio, 'linkflow-cli', 'Linkflow CLI', [
+        { id: 'main', name: 'Main' },
+        { id: 'other', name: 'Other' },
+      ]);
+
+      const linkflowNode = {
+        id: 'lf-cli-1',
+        type: 'linkflow',
+        data: {
+          name: 'Go to Other',
+          target: { project: projectSlug, flow: 'other' },
+        },
+      };
+      const r = await runCli(
+        [
+          'nodes:add',
+          '--no-start',
+          '--project',
+          projectSlug,
+          '--flow',
+          'main',
+          '--json',
+          JSON.stringify(linkflowNode),
+        ],
+        studio.env,
+      );
+      expect(r.code).toBe(0);
+      const parsed = JSON.parse(r.stdout) as { ok: boolean; id: string };
+      expect(parsed.ok).toBe(true);
+      expect(parsed.id).toBe('lf-cli-1');
+
+      // The on-disk flow.json must contain the linkflow node with the target
+      // slug pair preserved exactly as supplied. seedProject's manifest layout
+      // puts flow.json at flows/main/flow.json under repoPath.
+      const flowJsonPath = join(repoPath, 'flows', 'main', 'flow.json');
+      const flow = JSON.parse(readFileSync(flowJsonPath, 'utf8')) as {
+        nodes: Array<{
+          id: string;
+          type: string;
+          data: { name?: string; target?: { project: string; flow: string } };
+        }>;
+      };
+      const node = flow.nodes.find((n) => n.id === 'lf-cli-1');
+      expect(node).toBeDefined();
+      expect(node?.type).toBe('linkflow');
+      expect(node?.data.target).toEqual({ project: projectSlug, flow: 'other' });
+      expect(node?.data.name).toBe('Go to Other');
     } finally {
       studio.stop();
     }

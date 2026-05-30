@@ -889,6 +889,7 @@ describe('GET /api/schema', () => {
         'html',
         'icon',
         'image',
+        'linkflow',
         'queue',
         'rectangle',
         'server',

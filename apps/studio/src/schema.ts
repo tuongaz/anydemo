@@ -184,10 +184,17 @@ const NodeCapabilitiesShape = {
     ),
 };
 
-// 15 flat node types. The first 11 are geometric/illustrative and share
-// GeometricNodeData. `image`, `html`, `icon`, `component` carry per-type
-// fields. The renderer picks the SVG / chrome by `type`; the schema treats
-// them (apart from the per-type fields below) as identical.
+// Flow ids are URL-safe and folder-safe: lowercase alphanumerics + dashes,
+// must start with an alphanumeric character. Same pattern enforced by the
+// manifest CRUD endpoints (POST/PATCH /api/projects/:project/flows[/:flow]).
+// Defined early so the linkflow node data shapes below can reference it; the
+// SeeflowManifest schemas at the bottom of the file reuse the same constant.
+export const FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/;
+
+// 16 flat node types. The first 11 are geometric/illustrative and share
+// GeometricNodeData. `image`, `html`, `icon`, `component`, `linkflow` carry
+// per-type fields. The renderer picks the SVG / chrome by `type`; the schema
+// treats them (apart from the per-type fields below) as identical.
 export const GEOMETRIC_NODE_TYPES = [
   'rectangle',
   'ellipse',
@@ -208,6 +215,7 @@ export const NodeTypeSchema = z.enum([
   'html',
   'icon',
   'component',
+  'linkflow',
 ]);
 
 // --- Component node spec/action schemas --------------------------------------
@@ -318,6 +326,29 @@ const ResolvedComponentNodeData = z.object({
   autoSize: z.boolean().optional(),
 });
 
+// Linkflow node — clickable "go to another flow" link. `target` is optional
+// because freshly-dropped nodes start unlinked; once the user picks a flow
+// via the picker dialog, the studio patches both `project` and `flow` (each
+// matching FlowIdPattern). Target existence (does the project + flow still
+// resolve to a known flow?) is a render-time concern, not a parse-time one:
+// renames/deletes still parse cleanly so undo / cross-project picks work
+// without the schema rejecting them.
+export const LinkflowTargetSchema = z.object({
+  project: z.string().regex(FlowIdPattern, {
+    message: 'target.project must match /^[a-z0-9][a-z0-9-]*$/',
+  }),
+  flow: z.string().regex(FlowIdPattern, {
+    message: 'target.flow must match /^[a-z0-9][a-z0-9-]*$/',
+  }),
+});
+
+const ResolvedLinkflowNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  target: LinkflowTargetSchema.optional(),
+});
+
 const NodeBaseShape = {
   id: z.string().min(1),
   position: PositionSchema,
@@ -349,6 +380,11 @@ const NodeSchema = z.discriminatedUnion('type', [
     ...NodeBaseShape,
     type: z.literal('component'),
     data: ResolvedComponentNodeData,
+  }),
+  z.object({
+    ...NodeBaseShape,
+    type: z.literal('linkflow'),
+    data: ResolvedLinkflowNodeData,
   }),
 ]);
 
@@ -561,6 +597,21 @@ const FlowComponentNodeData = z
   })
   .strict();
 
+// Linkflow node, on-disk shape. `target` carries the slug pair that names
+// another flow in the registry; optional because a freshly-dropped link node
+// is unlinked until the picker commits a choice. Target existence is checked
+// at render time (broken-link state), never at parse time, so renames /
+// deletes still parse cleanly.
+const FlowLinkflowNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    target: LinkflowTargetSchema.optional().describe(
+      "Slug pair { project, flow } naming the flow this node links to. Both fields are matched against /^[a-z0-9][a-z0-9-]*$/. Omitted on freshly-dropped nodes — the picker dialog patches it once the user picks a target. Cross-project links are allowed (project may differ from the host flow's project).",
+    ),
+  })
+  .strict();
+
 const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
@@ -618,6 +669,14 @@ export const FlowComponentNodeSchema = z
   })
   .strict();
 
+export const FlowLinkflowNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('linkflow'),
+    data: FlowLinkflowNodeData,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowRectangleNodeSchema,
   FlowEllipseNodeSchema,
@@ -634,6 +693,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,
   FlowComponentNodeSchema,
+  FlowLinkflowNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {
@@ -764,11 +824,6 @@ export type ConnectorStyleEntry = z.infer<typeof ConnectorStyleEntrySchema>;
 // plus the flows/<id>/flow.json files into ScannedFlow entries the registry
 // can consume.
 // =============================================================================
-
-// Flow ids are URL-safe and folder-safe: lowercase alphanumerics + dashes,
-// must start with an alphanumeric character. Same pattern enforced by the
-// manifest CRUD endpoints (POST/PATCH /api/projects/:project/flows[/:flow]).
-export const FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/;
 
 const SeeflowManifestFlowEntrySchema = z.object({
   id: z.string().regex(FlowIdPattern, {

@@ -1,0 +1,198 @@
+{
+  "project": "SeeFlow",
+  "branchName": "ralph/linkflow-node",
+  "description": "Linkflow node type — clickable nodes that navigate to another flow with state-preserving back navigation via an in-memory multi-mount stack. Cross-project picker, broken-link warning state, no detail panel.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Add linkflow node type to schema",
+      "description": "As a developer, I need 'linkflow' recognized by the schema so flow.json files can persist link nodes.",
+      "acceptanceCriteria": [
+        "Add 'linkflow' to NodeTypeSchema enum in apps/studio/src/schema.ts",
+        "Define FlowLinkflowNodeData with optional target { project, flow } both matching FlowIdPattern",
+        "Define ResolvedLinkflowNodeData adding NodeVisualBaseShape on top of the semantic + capabilities + target fields",
+        "Add FlowLinkflowNodeSchema and the resolved variant to their respective discriminatedUnion lists",
+        "No new entry in ResolvedFlowSchema.superRefine — target existence is rendered, not parse-validated",
+        "Schema tests cover: parses with target, parses without target, rejects bad slugs, round-trip preserves node, .strict() rejects unknown keys",
+        "MCP schema catalog auto-regenerates and exposes linkflow in 'seeflow schema node'",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Schema landed on ralph/linkflow-node. NodeTypeSchema gains 'linkflow'; FlowLinkflowNodeSchema + ResolvedLinkflowNodeData wired into both discriminated unions; target { project, flow } optional, both slugs match FlowIdPattern; schema-catalog exposes the variant; operations.SEMANTIC_KEYS_BY_TYPE + layout.DEFAULT_DIMENSIONS extended; subname-enumeration tests across api/cli/mcp/schema-catalog updated to 16 variants."
+    },
+    {
+      "id": "US-002",
+      "title": "Register linkflow renderer with three visual states",
+      "description": "As a user, I need linkflow nodes to render on the canvas so I can see them when added to a flow.",
+      "acceptanceCriteria": [
+        "Add packages/canvas/src/nodes/linkflow-node.tsx with three states: unlinked, linked-healthy, broken",
+        "Register 'linkflow' in packages/canvas/src/nodes/index.ts nodeTypes map",
+        "Unlinked: dashed border, muted background, centered 'Link to a flow' button with link-2 icon",
+        "Linked-healthy: standard chrome (NodeVisualBaseShape applies); flow name large, project name muted; pencil icon top-right on hover",
+        "Broken: dashed border, amber tint, alert-triangle icon, last-known label muted",
+        "Click handlers are no-op placeholders at this story (wiring comes in US-004/US-007)",
+        "Renderer tests cover the visible markup of all three states",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Renderer landed at packages/canvas/src/nodes/linkflow-node.tsx with three states. Registered in seeflow-canvas.tsx nodeTypes map. NodeType + FlowNode unions extended in types.ts. 12 hook-shim tests cover all three states' markup + click wiring. Click handlers are no-op placeholders (US-004 wires onOpenPicker, US-007 wires onFollow). Browser verification deferred to US-004 — no UI path drops a linkflow node yet."
+    },
+    {
+      "id": "US-003",
+      "title": "Build link picker dialog (standalone)",
+      "description": "As a user, I need a search dialog so I can pick a flow to link to.",
+      "acceptanceCriteria": [
+        "Add apps/web/src/components/linkflow-picker-dialog.tsx built on existing canvas dialog primitives",
+        "Header copy: 'Link to a flow' (link mode) or 'Change linked flow' (edit mode, pre-selects current target)",
+        "Single autofocused search input with client-side case-insensitive substring filter on project + flow name",
+        "Source data: useDemos() FlowSummary[] — no new API",
+        "Scrollable result list, ~8 visible rows; each row shows project · flow with icons when available",
+        "Keyboard: arrow up/down moves selection, Enter commits, Escape cancels; aria-activedescendant on the input",
+        "Currently-viewing flow renders a 'Currently viewing' badge but stays selectable (self-link allowed)",
+        "Cancel button plus Link button (disabled until a row is selected)",
+        "Dialog tests cover: filter narrows the list, arrow keys move selection, Enter commits, badge renders, Escape closes without committing",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 3,
+      "passes": true,
+      "notes": "Picker landed at apps/web/src/components/linkflow-picker-dialog.tsx. Standalone component — not yet mounted in the app (US-004 wires it). Props: { open, onOpenChange, mode: 'link'|'edit', demos: readonly FlowSummary[], currentSlug?, initialTarget?, onCommit({project,flow}) }. State slots: 0=query, 1=selectedSlug. Reset on open via useEffect. 16 hook-shim tests cover title copy per mode, full render, project + flow substring filter (case-insensitive), pre-selection in edit mode, Link button disabled-until-selected, Currently-viewing badge + selectable self-row, ArrowDown/ArrowUp wrap, Enter commit + close, Enter no-op when nothing selected, Escape close without commit, aria-activedescendant binding, row click selects without committing. Listbox/option ARIA roles dropped to satisfy biome useSemanticElements + useFocusableInteractive (mirrors command-palette pattern); aria-activedescendant still references button id. Browser verification deferred to US-004 — no UI path mounts the picker yet."
+    },
+    {
+      "id": "US-004",
+      "title": "Wire picker to linkflow renderer",
+      "description": "As a user, I want to drop a linkflow node, click 'Link to a flow', pick a target, and see the node update with the chosen flow's name.",
+      "acceptanceCriteria": [
+        "Renderer accepts an onOpenPicker(mode: 'link' | 'edit') callback prop",
+        "Unlinked button click fires onOpenPicker('link')",
+        "Pencil icon click on linked-healthy state fires onOpenPicker('edit') and calls stopPropagation",
+        "Broken state body click fires onOpenPicker('edit')",
+        "App or DemoView renders the picker dialog and manages its open state plus active-node id",
+        "On commit, picker patches data.target via PATCH /api/projects/:project/flows/:flow/nodes/:id (existing endpoint)",
+        "Patch flows through undo/redo and watcher echo with no special handling",
+        "Renderer body click on linked-healthy state does NOT yet navigate (next story)",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 4,
+      "passes": true,
+      "notes": "Picker wired end-to-end. Renderer already accepts onOpenPicker via runtime data (US-002). DemoView now (a) injects an identity-stable openLinkflowPicker(nodeId, mode) callback onto every linkflow node's data via the linkflowDecoratedNodes memo, (b) mounts a single LinkflowPickerDialog instance keyed off the linkflowPicker state (null|{nodeId,mode}), and (c) commits via adapter.updateNode(nodeId, { target }) so the wrapped-adapter snapshots data.target as the inverse and the patch flows through undo/redo + watcher echo with no special handling. Studio-side: NodePatchBodySchema gains `target: LinkflowTargetSchema.nullable().optional()` and 'target' is appended to NODE_DATA_PATCH_KEYS so mergeNodeUpdates writes data.target on a non-null patch and strips it on null (undo of first-time link). Canvas-side: NodePatch.target is added to types.ts, and 'target' is added to NULL_CLEARS_NODE_KEY in wrap-adapter.ts so the inverse-undo PATCH sends { target: null } instead of { target: undefined } (the latter would JSON-drop and the undo would be a no-op). LinkflowTargetSchema is now exported from schema.ts; vendored skill schema re-synced via `make sync-seeflow-schema`. Browser verification deferred to US-009 — this story has no toolbar tile AC (the existing toolbar has no linkflow entry, and the running 4321 studio is the installed npm package, not the local checkout), and US-009 carries full Playwright e2e for drop→pick→navigate with chromium-linux visual baselines."
+    },
+    {
+      "id": "US-005",
+      "title": "Add useNavigateFlow hook and migrate switchers to reset",
+      "description": "As a developer, I need a single navigation hook that distinguishes push (linkflow) from reset (everything else) so stack semantics live in one place.",
+      "acceptanceCriteria": [
+        "Add apps/web/src/hooks/use-navigate-flow.ts exporting pushLink, popBack, reset",
+        "Lift stack state to App.tsx: FlowStackEntry[] of { project, flow, slug }",
+        "pushLink appends to stack and calls history.pushState({ stackDepth }, '', flowPath(target))",
+        "popBack calls history.back()",
+        "reset clears stack to [target] and calls history.pushState({ stackDepth: 1 }, ...)",
+        "popstate handler reads history.state.stackDepth and truncates the stack; if path doesn't match top of stack, calls reset(matchProjectFlow(pathname))",
+        "All existing navigate(flowPath(...)) call sites migrated to reset(...): ProjectSwitcher, FlowSwitcher, command palette, logo click",
+        "On initial mount, stack initialized from matchProjectFlow(pathname)",
+        "Stack stays at length 1 throughout this story — no visible behavior change",
+        "Hook tests cover pushLink, popBack, reset state transitions",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": true,
+      "notes": "Landed apps/web/src/hooks/use-navigate-flow.ts with FlowStackEntry type, pure helpers (toFlowStackEntry, initialStackFromPath, computePushLink, computeResetStack, computePopState), effectful pushLink/popBack/reset, a reactive useFlowStack hook backed by useSyncExternalStore, and an idempotent ensureFlowNavigation() seed called from App.tsx module load. Module-level reactive store mirrors the stack into history.state.stackDepth so a popstate event reliably truncates without retaining cross-history refs. reset() pushState's a NEW entry when pathname differs from target; replaceState's (no new history entry) when it already matches — keeps depth synced after popstate-driven reconciliation. Popstate handler reads stackDepth + matchProjectFlow(pathname); when the truncated top mismatches, it calls reset(pathMatch) to forward-fix. Migrated call sites: Header logo (navigate('/') → reset(null)), ProjectSwitcher.navigateToProject, FlowSwitcher.onSelect, DemoView FlowCreate/Rename/Delete, StudioHome demo button, App.tsx pickInitialDemo redirect + projectOnly redirect + onUnregisterProject. All targets pass {project, flow} pairs to reset; the splug/flow split for FlowSummary.slug-bearing call sites uses a new splitFlowSlug helper in lib/router.ts. The stack stays at length 1 for now — no rendering changes (matchProjectFlow drives the project/flow that App.tsx threads through). project-switcher.test.tsx rewritten to stub globalThis.window instead of mock.module-ing @/hooks/use-navigate-flow (bun's mock.module is process-global and was clobbering use-navigate-flow.test.ts when both ran in the same process)."
+    },
+    {
+      "id": "US-006",
+      "title": "Render DemoView per stack entry with CSS visibility toggle",
+      "description": "As a developer, I need each stack entry to keep its own mounted DemoView so previous flows' canvas state stays alive while hidden.",
+      "acceptanceCriteria": [
+        "App.tsx maps over stack and renders one DemoView per entry",
+        "Each entry wrapped in a div with style display block when idx === stack.length - 1, none otherwise",
+        "key prop on each wrapper uses entry.slug — duplicate flows (A→B→A) get independent mounts",
+        "Hidden DemoViews keep React state, viewport, SSE connections, undo history alive",
+        "App-level smoke test with a hand-built two-entry stack verifies both DemoViews mount and only the top is visible",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": true,
+      "notes": "FlowStackPane (apps/web/src/pages/flow-stack-pane.tsx) maps useFlowStack() entries to one mounted DemoView each, wrapped in a `<div key={entry.slug} style={{display: isTop ? 'block' : 'none', height: '100%'}}>`. The data hooks (useDemoData, useNodeRuns, useNodeEvents, useNodeStatuses, useStudioEvents, externalReloadSignal, onPlayNode) moved from App.tsx into the per-entry DemoStackEntry sub-component so each stack entry owns its SSE connection + detail + node-events state — hidden entries keep React state, viewport, undo history, AND their own EventSource alive. App.tsx now only owns: useDemos, useProjects, useProjectFlows (for /projects/<p> redirect), registry events, pickInitialDemo redirect, writeLastProjectId/writeLastFlow keyed off stack.at(-1). Render decision flipped from URL-derived (project && flow && slug) to stack.length > 0 → FlowStackPane, else StudioHome. Header.currentProjectSlug sources from stack.at(-1).project. Smoke tests in apps/web/src/pages/flow-stack-pane.test.tsx (8 tests) verify FlowStackList (the presentational split): one wrapper per entry, hidden non-tops, data-flow-stack-top toggle, both entries mounted in a 2-stack, duplicate-slug A→B→A produces three wrappers with the third on top, single-entry stack always block, empty stack → no wrappers. The list is split from FlowStackPane so the test doesn't drag in useFlowStack/useDemoData/EventSource."
+    },
+    {
+      "id": "US-007",
+      "title": "Wire linkflow click to pushLink and add header back arrow",
+      "description": "As a user, clicking a linked flow navigates into it; a back arrow in the header returns me to the previous flow with state preserved.",
+      "acceptanceCriteria": [
+        "Linked-healthy body click calls useNavigateFlow().pushLink({ project, flow })",
+        "Header gets new optional props: onBack and previousFlowName",
+        "Header renders an arrow-left ghost icon button left of the SeeFlow logo iff previousFlowName is set",
+        "Back button tooltip reads 'Back to <previousFlowName>'",
+        "Back button click calls onBack which is bound to popBack() in App",
+        "Browser back button pops the stack via the same popstate handler",
+        "URL always reflects stack.at(-1)",
+        "Visual treatment per design/design.html: 32×32, gap-2 to logo, borderless, hover:bg-muted/60",
+        "aria-label='Back to previous flow' on the button",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 7,
+      "passes": true,
+      "notes": "Linkflow body click → pushLink wired in apps/web/src/pages/demo-view.tsx: linkflowDecoratedNodes memo now injects an `onFollow` callback alongside `onOpenPicker`. The callback closes over the node's current `data.target` and calls `pushLink({project, flow})` from use-navigate-flow; it's only attached when target is set so unlinked/broken renderers can't trigger a navigation. Header gains optional `onBack: () => void` and `previousFlowName?: string` props; renders an arrow-left ghost icon button left of the SeeFlow logo iff previousFlowName is set. Visual treatment per AC: 32×32 (`h-8 w-8`), gap-2 to logo (parent flex container), borderless, `hover:bg-muted/60`. aria-label='Back to previous flow'. Tooltip is a `<Tooltip><TooltipTrigger asChild><TooltipContent side='bottom'>Back to {previousFlowName}</TooltipContent>` using the canvas-exported Radix wrapper (TooltipProvider already mounted at App root). App.tsx computes `previousFlowName` from `stack.at(-2)` via the demos cache (`demos.find(d => d.slug === prevEntry.slug)?.name ?? prevEntry.flow`); passes `popBack` as onBack only when previousFlowName resolves. The browser back button reuses the existing popstate handler from US-005 so URL always reflects stack.at(-1). Header tests: 6 new hook-shim tests (absent/present, aria-label, tooltip copy, onClick wiring, gap-2 wrapper). Browser verification deferred to US-009 — the running 4321 studio is the installed npm package, not the local checkout; without a UI path to drop a linkflow node and link it, we can't smoke the push→back path here. US-009's Playwright drop→link→navigate→back e2e exercises this end-to-end."
+    },
+    {
+      "id": "US-008",
+      "title": "Render broken-link state when target does not resolve",
+      "description": "As a user, when a linkflow's target is renamed, deleted, or its project unregistered, I see a clear warning state and can re-pick.",
+      "acceptanceCriteria": [
+        "Renderer consults useDemos() to check whether data.target.project + data.target.flow resolves to a known flow",
+        "Unresolved target renders the broken state from US-002 (dashed border, amber tint, alert-triangle, last-known label)",
+        "Broken state body click opens picker in edit mode (already wired in US-004)",
+        "Renderer test covers the broken branch with an injected demos list missing the target",
+        "Renames/deletes propagate via registry:reload SSE channel that already triggers refreshFlows() in App.tsx — no new event wiring",
+        "Typecheck passes",
+        "Verify in browser using dev-browser skill"
+      ],
+      "priority": 8,
+      "passes": true,
+      "notes": "Resolver landed at apps/web/src/lib/linkflow-resolve.ts as a pure helper: takes (target, demos) and returns {projectName, flowName} | null. DemoView's linkflowDecoratedNodes memo now injects `_resolvedTarget` alongside the existing `onOpenPicker` + `onFollow` callbacks (single-memo pattern preserved). FlowSummary has no separate project label, so projectName mirrors the target.project slug (same convention as the US-003 picker rows). The renderer's broken-branch markup from US-002 (dashed border, amber tint, AlertTriangle, last-known `${target.project} · ${target.flow}` label) flips on automatically when the resolver returns null. Memo deps updated to include `demos` so registry:reload SSE → refreshFlows() → new demos identity → memo re-runs → broken state resolves to healthy (or vice-versa) without new wiring. 7 new tests in apps/web/src/lib/linkflow-resolve.test.ts cover: target=undefined → null, slug-pair hit, unknown project, unknown flow within known project, empty demos list, projectName mirrors target slug, flowName comes from FlowSummary.name. Renderer-side broken-branch markup tests (US-002) still green. Browser verification deferred to US-009 — the running 4321 studio is the installed npm package, not the local checkout; US-009 carries Playwright drop→link→delete-target→verify-broken-state with chromium-linux visual baseline."
+    },
+    {
+      "id": "US-009",
+      "title": "Playwright e2e plus visual baselines for linkflow",
+      "description": "As a developer, I need end-to-end coverage of drop/link/navigate/back/delete plus visual baselines for the three states.",
+      "acceptanceCriteria": [
+        "New spec apps/studio/e2e/linkflow.spec.ts covers: drop a linkflow node, open picker, link to another flow",
+        "Body click navigates: URL updates to target, header back arrow appears",
+        "Back arrow returns to previous flow; viewport position preserved (getBoundingClientRect on a known node before/after matches within 1px)",
+        "Delete key removes the linkflow node",
+        "Three new visual baselines committed as *-chromium-linux.png: linkflow-unlinked, linkflow-linked, linkflow-broken",
+        "Baselines generated via bun run test:it:update-snapshots (Docker route on darwin)",
+        "bun run test:it passes",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": true,
+      "notes": "Playwright e2e + 3 visual baselines landed at apps/studio/e2e/linkflow.e2e.ts + apps/studio/e2e/linkflow.e2e.ts-snapshots/. Six tests: drop-link-navigate-back-with-viewport-preserved (marker rectangle bbox matches within 1px across pushLink + popBack — confirms US-006's display:none mount preservation), delete-key (Cmd+A → Delete; bypasses the linkflow body button's stopPropagation), broken-state (target points at non-existent slug), unlinked / linked-healthy / broken visual baselines (chromium-linux pixels via Docker on darwin). Three new baseline PNGs committed. Pre-existing canvas.e2e.ts baseline drift on rectangle.png + render-matrix.png (sizes shifted from prior canvas refactors, unrelated to linkflow) regenerated to make `bun run test:it` green — this story is the first to gate on the full integration suite. Pre-existing mcp.it.ts subname assertion (15 → 16 tags) bumped to include linkflow — the same cascade the unit-test enumeration in US-001 already absorbed. Quality gates: bun test 2359 pass / 1 skip / 0 fail; bun run test:it 23 passed / 1 skipped / 0 failed; typecheck + biome check clean. Linkflow renderer's visible flow name comes from FlowSummary.name (the /api/flows/register `name` field) — NOT the on-disk envelope's inline name — and the test assertions reference the registered name accordingly."
+    },
+    {
+      "id": "US-010",
+      "title": "MCP parity test and CLI smoke for linkflow node",
+      "description": "As a CLI/MCP user, I need the linkflow node fully supported through the MCP surface and CLI commands.",
+      "acceptanceCriteria": [
+        "New test case in mcp-parity.test.ts: add a linkflow node via seeflow_add_node with target { project, flow }",
+        "Round-trip: get the node via MCP and assert the REST GET returns the same shape",
+        "Delete via MCP succeeds and the node disappears from flow.json",
+        "'seeflow schema node' output includes the linkflow variant",
+        "CLI smoke: add a linkflow node via the CLI op path and assert flow.json contains it",
+        "Tests pass",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": true,
+      "notes": "MCP parity + CLI smoke landed for linkflow. New tests: (1) apps/studio/src/mcp-parity.test.ts adds a 'linkflow node MCP round-trip parity' describe block with two tests — the primary round-trip (MCP add → MCP get → REST get → MCP delete, with on-disk flow.json assertions before and after delete, plus a notFound-via-MCP confirmation after delete) and an unlinked-variant test (target is optional; round-trip preserves the absence). REST vs MCP get-node response shape comparison strips the envelope's `flowId` field — MCP echoes the `${project}/${flow}` slug while REST echoes the registry's internal short id (see getNodeImpl + the call sites in api.ts vs mcp.ts) — and compares the `id` and `node` payload, which are the meaningful invariants. (2) apps/studio/src/cli.test.ts adds 'nodes:add accepts a linkflow node with target and writes it to flow.json' which exercises the CLI subprocess path (`runCli(['nodes:add', --project, --flow, --json <linkflow node body>])`) and asserts the on-disk flow.json contains the node with `data.target` preserved exactly. AC #4 ('seeflow schema node' output includes the linkflow variant) was already covered by US-001's enumeration bump at cli.test.ts:494 (the alphabetical 16-variant list including 'linkflow'). Quality gates: bun test → 2362 pass / 1 skip / 0 fail (up from 2359, three new tests). Typecheck clean across all workspaces. Biome format + check clean."
+    }
+  ]
+}

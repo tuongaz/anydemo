@@ -23,6 +23,7 @@ import {
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,
   FlowImageNodeSchema,
+  FlowLinkflowNodeSchema,
   FlowQueueNodeSchema,
   FlowRectangleNodeSchema,
   FlowServerNodeSchema,
@@ -144,6 +145,7 @@ const PAYLOADS: Record<string, SchemaPayload> = {
       html: toJsonSchema(FlowHtmlNodeSchema),
       icon: toJsonSchema(FlowIconNodeSchema),
       component: toJsonSchema(FlowComponentNodeSchema),
+      linkflow: toJsonSchema(FlowLinkflowNodeSchema),
     },
     notes: [
       "type:'image' data.path must start with 'nodes/<id>/'.",

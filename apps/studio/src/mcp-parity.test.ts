@@ -964,3 +964,147 @@ describe('canvas _meta attachment rules', () => {
     expect(result._meta).toBeUndefined();
   });
 });
+
+// ---------------------------------------------------------------------------
+// US-010 — linkflow node MCP round-trip parity
+// ---------------------------------------------------------------------------
+// The linkflow node carries an optional `target: { project, flow }` slug pair
+// that the schema gates on (US-001) and the REST/MCP add/get/delete handlers
+// just thread through `data` without special casing. This test proves the
+// whole transport surface — MCP add, MCP get, REST get, MCP delete — handles
+// the target field identically and that the on-disk flow.json reflects the
+// mutation correctly.
+
+describe('linkflow node MCP round-trip parity', () => {
+  it('add (MCP) → get (MCP) → get (REST) → delete (MCP) all agree on the linkflow shape', async () => {
+    const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+    // Self-link is allowed (per US-003 picker AC) and keeps the fixture single-flow.
+    const target = { project: fix.projectSlug, flow: fix.flowSlug };
+    const newNode = {
+      id: 'lf-parity-1',
+      type: 'linkflow',
+      data: { name: 'Go to Main', target },
+    };
+
+    // ── ADD via MCP ──────────────────────────────────────────────────────
+    const addResponse = (await callMcpTool(fix.app, 'seeflow_add_node', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+      node: newNode,
+    })) as { id: string; node: Record<string, unknown> };
+    expect(addResponse.id).toBe('lf-parity-1');
+    const addedNode = addResponse.node;
+    expect(addedNode.type).toBe('linkflow');
+    expect((addedNode.data as { target?: unknown }).target).toEqual(target);
+
+    // On-disk flow.json contains the linkflow node with the target preserved.
+    const onDisk = JSON.parse(readFileSync(fix.demoFile, 'utf8')) as {
+      nodes: Array<{ id: string; type: string; data: { target?: unknown } }>;
+    };
+    const diskNode = onDisk.nodes.find((n) => n.id === 'lf-parity-1');
+    expect(diskNode).toBeDefined();
+    expect(diskNode?.type).toBe('linkflow');
+    expect(diskNode?.data.target).toEqual(target);
+
+    // ── GET via MCP ──────────────────────────────────────────────────────
+    const mcpGet = (await callMcpTool(fix.app, 'seeflow_get_node', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+      nodeId: 'lf-parity-1',
+    })) as { id: string; node: Record<string, unknown> };
+    expect(mcpGet.id).toBe('lf-parity-1');
+    expect(mcpGet.node.type).toBe('linkflow');
+    expect((mcpGet.node.data as { target?: unknown }).target).toEqual(target);
+
+    // ── GET via REST ─────────────────────────────────────────────────────
+    const restGet = (await restJson(fix.app, 'GET', flowApi(fix, '/nodes/lf-parity-1'))) as {
+      id: string;
+      node: Record<string, unknown>;
+      flowId?: string;
+    };
+    // REST and MCP responses must agree on the node shape. The envelope's
+    // `flowId` field differs by transport (MCP echoes the project/flow slug,
+    // REST echoes the registry's internal short id — see getNodeImpl + the
+    // call sites in api.ts vs mcp.ts), so compare id + node payload only.
+    expect(restGet.id).toBe(mcpGet.id);
+    expect(restGet.node).toEqual(mcpGet.node);
+
+    // ── DELETE via MCP ───────────────────────────────────────────────────
+    const deleteResponse = (await callMcpTool(fix.app, 'seeflow_delete_node', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+      nodeId: 'lf-parity-1',
+    })) as Record<string, unknown>;
+    // Whatever the success envelope shape is, it must not be an error.
+    expect(deleteResponse).toBeDefined();
+
+    // The node must disappear from flow.json after the delete.
+    const afterDelete = JSON.parse(readFileSync(fix.demoFile, 'utf8')) as {
+      nodes: Array<{ id: string }>;
+    };
+    expect(afterDelete.nodes.find((n) => n.id === 'lf-parity-1')).toBeUndefined();
+
+    // Subsequent get via MCP returns an error (notFound branch of getNodeImpl
+    // surfaces through the MCP handler as { isError: true } — callMcpTool
+    // asserts isError is falsy, so we go through the raw request here).
+    const getAfterRes = await fix.app.request('/mcp', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        accept: 'application/json, text/event-stream',
+      },
+      body: JSON.stringify({
+        jsonrpc: '2.0',
+        id: rpcId++,
+        method: 'tools/call',
+        params: {
+          name: 'seeflow_get_node',
+          arguments: {
+            project: fix.projectSlug,
+            flow: fix.flowSlug,
+            nodeId: 'lf-parity-1',
+          },
+        },
+      }),
+    });
+    const getAfterEnvelope = (await getAfterRes.json()) as {
+      result?: { isError?: boolean };
+    };
+    expect(getAfterEnvelope.result?.isError).toBe(true);
+  });
+
+  it('linkflow without target round-trips correctly (target is optional)', async () => {
+    // Optional target — schema-level invariant from US-001. The add path must
+    // not require it and the round-trip must not synthesize it.
+    const fix = buildDemoFixture(VALID_DEMO_TWO_NODES);
+    const newNode = {
+      id: 'lf-unlinked',
+      type: 'linkflow',
+      data: { name: 'Unlinked Stub' },
+    };
+
+    const addResponse = (await callMcpTool(fix.app, 'seeflow_add_node', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+      node: newNode,
+    })) as { id: string; node: Record<string, unknown> };
+    expect(addResponse.id).toBe('lf-unlinked');
+    expect((addResponse.node.data as { target?: unknown }).target).toBeUndefined();
+
+    const mcpGet = (await callMcpTool(fix.app, 'seeflow_get_node', {
+      project: fix.projectSlug,
+      flow: fix.flowSlug,
+      nodeId: 'lf-unlinked',
+    })) as { id: string; node: Record<string, unknown> };
+    expect((mcpGet.node.data as { target?: unknown }).target).toBeUndefined();
+
+    const restGet = (await restJson(fix.app, 'GET', flowApi(fix, '/nodes/lf-unlinked'))) as {
+      id: string;
+      node: Record<string, unknown>;
+    };
+    // Same caveat as the round-trip test above — `flowId` differs by transport,
+    // so compare id + node only.
+    expect(restGet.id).toBe(mcpGet.id);
+    expect(restGet.node).toEqual(mcpGet.node);
+  });
+});

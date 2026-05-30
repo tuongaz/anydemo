@@ -1,29 +1,28 @@
 import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
-import { useDemoData } from '@/hooks/use-demo-data';
 import { useDemos } from '@/hooks/use-demos';
-import { useNodeEvents } from '@/hooks/use-node-events';
-import { useNodeRuns } from '@/hooks/use-node-runs';
-import { useNodeStatuses } from '@/hooks/use-node-statuses';
+import {
+  ensureFlowNavigation,
+  popBack,
+  reset as resetFlow,
+  useFlowStack,
+} from '@/hooks/use-navigate-flow';
 import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
-import { type FlowReloadPayload, useStudioEvents } from '@/hooks/use-studio-events';
-import { type CreateProjectResult, type FlowDetail, playFlowNode } from '@/lib/api';
+import type { CreateProjectResult } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
-import {
-  flowPath,
-  flowPathFromSlug,
-  matchProjectAlone,
-  matchProjectFlow,
-  navigate,
-  usePathname,
-} from '@/lib/router';
-import { DemoView } from '@/pages/demo-view';
+import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
+import { FlowStackPane } from '@/pages/flow-stack-pane';
 import { StudioHome } from '@/pages/studio-home';
 import { type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+
+// US-005: seed the flow navigation stack from the initial URL + stamp
+// history.state.stackDepth so the popstate handler has a reliable signal.
+// Idempotent — safe to call from App's module load (App is mounted once).
+if (typeof window !== 'undefined') ensureFlowNavigation();
 
 export function App() {
   const pathname = usePathname();
@@ -33,12 +32,19 @@ export function App() {
   // `demos` list (FlowSummary[]) still backs the canvas page resolution, the
   // `/` landing picker, and SSE-driven detail caches.
   const { projects, refresh: refreshProjects, unregisterProject } = useProjects();
-  // US-010: canvas page now lives at `/projects/:project/flows/:flow`. The
-  // legacy `/d/<slug>` shape is gone — older bookmarks land on StudioHome and
-  // the auto-pick effect rewrites them to the new URL if a demo resolves.
-  const match = matchProjectFlow(pathname);
-  const project = match?.project ?? null;
-  const flow = match?.flow ?? null;
+  // US-006: one entry per mounted flow. The renderer (FlowStackPane) owns
+  // the per-entry data + SSE wiring so a hidden DemoView keeps its state +
+  // viewport + connection alive. App reads only the top entry for
+  // header/last-flow plumbing.
+  const stack = useFlowStack();
+  const topEntry = stack.at(-1) ?? null;
+  const topProject = topEntry?.project ?? null;
+  const topSlug = topEntry?.slug ?? null;
+  // US-007: header back-arrow surfaces iff a previous flow is on the stack
+  // (linkflow body click pushed the current entry on top). We resolve the
+  // previous entry's human-readable name via the demos cache when possible,
+  // falling back to the flow slug so the tooltip never reads "Back to undefined".
+  const prevEntry = stack.length > 1 ? (stack.at(-2) ?? null) : null;
 
   // US-026: when the URL is `/projects/:project` with no flow segment we
   // redirect to the user's last-opened flow (per-project localStorage) or
@@ -58,9 +64,7 @@ export function App() {
     },
   });
 
-  const slug = match ? `${match.project}/${match.flow}` : null;
-  const currentSummary = slug ? (demos ?? []).find((d) => d.slug === slug) : undefined;
-  const flowId = currentSummary?.id ?? null;
+  const currentSummary = topSlug ? (demos ?? []).find((d) => d.slug === topSlug) : undefined;
 
   // US-031: when the URL points to a slug we don't yet have in the cached
   // demos list (e.g. the user just created a flow via the switcher popover
@@ -69,97 +73,11 @@ export function App() {
   // Demos is `null` while loading; only react once it's been resolved at
   // least once and is missing the slug.
   useEffect(() => {
-    if (!slug) return;
+    if (!topSlug) return;
     if (demos === null) return;
     if (currentSummary) return;
     refreshFlows();
-  }, [slug, demos, currentSummary, refreshFlows]);
-
-  const { detail, loading, refresh: refreshDetail, applyDetail } = useDemoData(project, flow);
-  // Monotonic counter bumped ONLY when the watcher reports a real `flow:reload`
-  // (a file-change signal — our own PATCH echo OR an external text-editor/git
-  // edit). Threaded into DemoView so the undo-history stale-clear keys off
-  // genuine reloads instead of every `detail` identity change. Reconnect
-  // catch-ups (`onHello` → `refreshDetail`) deliberately do NOT bump it, so a
-  // routine SSE reconnect can't wipe a populated undo stack.
-  const [externalReloadSignal, setExternalReloadSignal] = useState(0);
-  const { runs, apply: applyRun } = useNodeRuns(flowId);
-  const { events: nodeEvents, apply: applyNodeEvent } = useNodeEvents(flowId);
-  const {
-    statusByNode,
-    apply: applyNodeStatus,
-    reset: resetNodeStatuses,
-  } = useNodeStatuses(flowId);
-
-  // hello fires on initial connect AND every reconnect. Treat it as a
-  // catch-up signal: refetch detail + the demos list, since either could
-  // have drifted during the disconnect window. Also reset the per-node
-  // status map because the studio kills its status batch on reconnect.
-  const onHello = useCallback(() => {
-    resetNodeStatuses();
-    refreshDetail();
-    refreshFlows();
-  }, [refreshDetail, refreshFlows, resetNodeStatuses]);
-
-  // Steady-state: the watcher pushes the new merged snapshot inline with
-  // each flow:reload event, so we apply it directly. No follow-up GET.
-  // The demos list is intentionally NOT refreshed here — a position/edit
-  // mutation can't change name/slug, and metadata changes route through
-  // their own paths (project create/unregister + hello catch-up).
-  //
-  // `detail` is deliberately NOT in the dep array: every applyDetail call
-  // would otherwise re-create this callback, which would re-run
-  // useStudioEvents's effect, close + reopen the EventSource, fire hello,
-  // and trigger refreshDetail in a tight loop. filePath is unused on the
-  // client and the previous-detail flow fallback is only relevant when an
-  // invalid edit lands — rare enough that the closure-snapshot stale-detail
-  // is acceptable.
-  const onFlowReload = useCallback(
-    (payload: FlowReloadPayload) => {
-      if (!flowId || !currentSummary) return;
-      const base = {
-        id: flowId,
-        slug: currentSummary.slug,
-        filePath: '',
-      };
-      const next: FlowDetail = payload.valid
-        ? {
-            ...base,
-            name: payload.flow.name ?? currentSummary.name,
-            flow: payload.flow,
-            valid: true,
-            error: null,
-          }
-        : {
-            ...base,
-            name: currentSummary.name,
-            flow: null,
-            valid: false,
-            error: payload.error,
-          };
-      applyDetail(next);
-      // Signal a genuine file-change reload to DemoView's undo-history
-      // stale-clear. Fires for both our own PATCH echo (recent → kept) and a
-      // true external edit (stale → cleared); the window math lives downstream.
-      setExternalReloadSignal((n) => n + 1);
-    },
-    [flowId, currentSummary, applyDetail],
-  );
-
-  const onEvent = useCallback(
-    (event: Parameters<typeof applyRun>[0]) => {
-      applyRun(event);
-      applyNodeEvent(event);
-      applyNodeStatus(event);
-    },
-    [applyRun, applyNodeEvent, applyNodeStatus],
-  );
-
-  // US-006: `statusByNode` is exposed by the hook so US-007 can render the
-  // per-node badge + sidebar status section. It threads through DemoView →
-  // DemoCanvas / DetailPanel; the renderers in those files are wired in US-007.
-
-  useStudioEvents(flowId, { onHello, onFlowReload, onEvent });
+  }, [topSlug, demos, currentSummary, refreshFlows]);
 
   const onProjectCreated = useCallback(
     (result: CreateProjectResult) => {
@@ -178,9 +96,9 @@ export function App() {
     async (projectSlug: string) => {
       await unregisterProject(projectSlug);
       await refreshFlows();
-      if (project === projectSlug) navigate('/');
+      if (topProject === projectSlug) resetFlow(null);
     },
-    [unregisterProject, refreshFlows, project],
+    [unregisterProject, refreshFlows, topProject],
   );
 
   // On '/', skip the picker when there's nothing to pick: jump straight in if
@@ -190,7 +108,10 @@ export function App() {
     if (pathname !== '/') return;
     if (demos === null) return;
     const target = pickInitialDemo(demos, readLastProjectId());
-    if (target) navigate(flowPathFromSlug(target.slug));
+    if (target) {
+      const split = splitFlowSlug(target.slug);
+      if (split) resetFlow(split);
+    }
   }, [pathname, demos]);
 
   // US-001: persist whichever project is currently open so we can reopen it next visit.
@@ -201,8 +122,8 @@ export function App() {
   // US-026: persist last-opened flow per project, keyed by project slug so
   // each project remembers its own last-visited flow independently.
   useEffect(() => {
-    if (project && flow) writeLastFlow(project, flow);
-  }, [project, flow]);
+    if (topEntry) writeLastFlow(topEntry.project, topEntry.flow);
+  }, [topEntry]);
 
   // US-026: redirect `/projects/<project>` (no flow) to localStorage's
   // last-opened flow if it still resolves, else the project default, else the
@@ -211,32 +132,19 @@ export function App() {
   useEffect(() => {
     if (!projectOnlySlug || !standaloneFlows) return;
     const picked = pickInitialFlow(standaloneFlows, readLastFlow(projectOnlySlug));
-    if (picked) navigate(flowPath(projectOnlySlug, picked));
+    if (picked) resetFlow({ project: projectOnlySlug, flow: picked });
   }, [projectOnlySlug, standaloneFlows]);
 
-  const onPlayNode = useCallback(
-    (nodeId: string) => {
-      if (!project || !flow) return;
-      // Fire and forget — the SSE node:* events drive the UI; the synchronous
-      // response is currently surfaced through the same SSE stream.
-      playFlowNode(project, flow, nodeId).catch((err) => {
-        applyRun({
-          type: 'node:error',
-          nodeId,
-          message: err instanceof Error ? err.message : String(err),
-          ts: Date.now(),
-        });
-      });
-    },
-    [project, flow, applyRun],
-  );
-
-  // US-015: the canvas owns export — `canvasRef` populates once SeeflowCanvas
-  // mounts inside DemoView. Lifted here (from DemoView) so the studio header
-  // and the cloud-export dialog can both reach it without prop-drilling
-  // through portals or context.
+  // US-015 + linkflow merge: canvasRef lives at App so the studio header
+  // (ShareMenu) and the cloud-export dialog can both reach the canvas
+  // imperative handle. FlowStackPane plumbs the ref onto the TOP stack
+  // entry's SeeflowCanvas only — non-top mounts use a throwaway local ref so
+  // a hidden flow can't silently overwrite the visible flow's handle.
+  // `onPlayNode` no longer lives here: post-linkflow it's owned by
+  // DemoStackEntry alongside the rest of the per-entry data wiring.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const flowId = currentSummary?.id ?? null;
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;
@@ -255,43 +163,35 @@ export function App() {
     );
   }
 
+  const previousFlowName = prevEntry
+    ? (demos.find((d) => d.slug === prevEntry.slug)?.name ?? prevEntry.flow)
+    : undefined;
+
   return (
     <TooltipProvider delayDuration={150}>
       <div className="flex h-full w-full flex-col bg-background text-foreground">
         <Header
           projects={projects ?? []}
-          currentProjectSlug={project ?? undefined}
+          currentProjectSlug={topProject ?? undefined}
           onProjectCreated={onProjectCreated}
           onUnregisterProject={onUnregisterProject}
           share={share}
+          onBack={previousFlowName ? popBack : undefined}
+          previousFlowName={previousFlowName}
         />
         <main className="min-h-0 flex-1">
-          {project && flow && slug ? (
-            <DemoView
-              project={project}
-              flow={flow}
-              slug={slug}
-              demos={demos}
-              detail={detail}
-              loading={loading}
-              runs={runs}
-              nodeEvents={nodeEvents}
-              statusByNode={statusByNode}
-              externalReloadSignal={externalReloadSignal}
-              onPlayNode={onPlayNode}
-              refreshFlows={refreshFlows}
-              canvasRef={canvasRef}
-            />
+          {stack.length > 0 ? (
+            <FlowStackPane demos={demos} refreshFlows={refreshFlows} canvasRef={canvasRef} />
           ) : (
             <StudioHome demos={demos} />
           )}
         </main>
-        {flowId && project ? (
+        {flowId && topProject ? (
           <ExportDialog
             open={exportDialogOpen}
             onOpenChange={setExportDialogOpen}
-            project={project}
-            flowName={detail?.name ?? currentSummary?.name}
+            project={topProject}
+            flowName={currentSummary?.name}
             onCapturePreview={() =>
               canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)
             }

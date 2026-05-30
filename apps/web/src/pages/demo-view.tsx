@@ -3,6 +3,11 @@ import { FlowCreateDialog } from '@/components/flow-create-dialog';
 import { FlowDeleteDialog } from '@/components/flow-delete-dialog';
 import { FlowRenameDialog } from '@/components/flow-rename-dialog';
 import { FlowSwitcher } from '@/components/flow-switcher';
+import {
+  LinkflowPickerDialog,
+  type LinkflowPickerTarget,
+} from '@/components/linkflow-picker-dialog';
+import { pushLink, reset as resetFlow } from '@/hooks/use-navigate-flow';
 import type { NodeEventLog } from '@/hooks/use-node-events';
 import type { NodeRuns } from '@/hooks/use-node-runs';
 import type { NodeStatuses } from '@/hooks/use-node-statuses';
@@ -19,7 +24,7 @@ import type {
 } from '@/lib/api';
 import { buildPastePayload } from '@/lib/clipboard';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
-import { flowPath, navigate } from '@/lib/router';
+import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
 import { shortId } from '@/lib/short-id';
 import {
   type CanvasMode,
@@ -245,6 +250,14 @@ export function DemoView({
   // US-006: command-palette open state. The Cmd/Ctrl+P chord flips this true
   // and the (placeholder) dialog renders gated on it. Full UI lands in US-007.
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // US-004: linkflow picker state. `null` means closed. `nodeId` is the
+  // active linkflow node whose `data.target` will be patched on commit;
+  // `mode` drives the dialog title ("Link to a flow" vs. "Change linked flow")
+  // and whether the dialog pre-selects the current target.
+  const [linkflowPicker, setLinkflowPicker] = useState<{
+    nodeId: string;
+    mode: 'link' | 'edit';
+  } | null>(null);
   // Per-tab record of (project, flow) pairs that have already received their
   // one auto-fit. SeeflowCanvas remounts on every flow switch (its `key` is
   // `${project}/${flow}`), so without this gate every switch-back would re-fit
@@ -1019,6 +1032,25 @@ export function DemoView({
       });
     },
     [flowId, adapter, setNodeOverride],
+  );
+
+  // US-004: linkflow target commit. Routes through the wrapped adapter so the
+  // patch flows through undo/redo (the wrap-adapter snapshots `data.target`
+  // before the call and pushes an inverse). Optimistic override paints the
+  // new target on the node immediately; the SSE echo of the file rewrite
+  // eventually drops the override via `pruneAgainst`.
+  const onCommitLinkflowTarget = useCallback(
+    (nodeId: string, target: LinkflowPickerTarget) => {
+      if (!flowId || !adapter) return;
+      setNodeOverride(nodeId, { data: { target } } as Partial<FlowNode>);
+      setEditError(null);
+      adapter.updateNode(nodeId, { target }).catch((err) => {
+        dropNodeOverride(nodeId);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode target failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
   const onCreateShapeNode = useCallback(
@@ -2279,6 +2311,52 @@ export function DemoView({
     );
   }, [demo, deletedConnectorIds, deletedNodeIds]);
 
+  // US-004: inject `onOpenPicker` runtime callback onto every linkflow node so
+  // the renderer's three buttons (unlinked CTA / pencil / broken body) can
+  // raise the picker dialog. The renderer reads `data.onOpenPicker(mode)` as
+  // a runtime-data hook; host injects it here so canvas stays unaware of
+  // apps/web state. Identity-stable: the same callback ref is reused across
+  // renders, so memoized renderers don't re-render on every parent paint.
+  //
+  // US-007: `onFollow` is the linked-healthy body click handler — pushes the
+  // node's target onto the navigation stack so `popBack()` (browser back +
+  // header back arrow) returns here with viewport + canvas state preserved
+  // (the stacked DemoView for this entry stays mounted, hidden via display:none).
+  // Only injected when the node has a target set; the renderer never fires
+  // onFollow on the unlinked or broken states, so the `target` guard is
+  // belt-and-braces.
+  const openLinkflowPicker = useCallback((nodeId: string, mode: 'link' | 'edit') => {
+    setLinkflowPicker({ nodeId, mode });
+  }, []);
+  // US-008: `_resolvedTarget` is injected here so the renderer can flip between
+  // linked-healthy and broken without reaching across the package boundary
+  // into apps/web's `useDemos()`. The lookup runs against the latest `demos`
+  // prop, which App refreshes on the `registry:reload` SSE channel — so
+  // renames / deletes / project unregisters propagate without new wiring.
+  const linkflowDecoratedNodes = useMemo<FlowNode[] | null>(() => {
+    if (!visibleNodes) return null;
+    let touched = false;
+    const out = visibleNodes.map((n) => {
+      if (n.type !== 'linkflow') return n;
+      touched = true;
+      const target = n.data.target;
+      const onFollow = target
+        ? () => pushLink({ project: target.project, flow: target.flow })
+        : undefined;
+      const resolvedTarget = target ? resolveLinkflowTarget(target, demos) : undefined;
+      return {
+        ...n,
+        data: {
+          ...n.data,
+          onOpenPicker: openLinkflowPicker.bind(null, n.id),
+          onFollow,
+          _resolvedTarget: resolvedTarget,
+        },
+      } as FlowNode;
+    });
+    return touched ? out : visibleNodes;
+  }, [visibleNodes, openLinkflowPicker, demos]);
+
   // US-031: when projectFlows is still resolving OR contains the active
   // flow (e.g. just created via the switcher), show the loading state
   // instead of "Unknown demo". The global demos cache is eventually-
@@ -2341,7 +2419,7 @@ export function DemoView({
           // path doesn't fire when the user adds the first node to the empty
           // canvas. (See `fittedFlowsRef` above for the per-tab policy.)
           fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
-          navigate(flowPath(project, result.flowSlug));
+          resetFlow({ project, flow: result.flowSlug });
         }}
       />
       <FlowRenameDialog
@@ -2357,7 +2435,7 @@ export function DemoView({
             // Rename re-keys the canvas (key={`${project}/${flow}`}) so it
             // remounts under the new slug. Same content though — don't re-fit.
             fittedFlowsRef.current.add(`${project}/${result.flowSlug}`);
-            navigate(flowPath(project, result.flowSlug));
+            resetFlow({ project, flow: result.flowSlug });
           }
         }}
       />
@@ -2375,7 +2453,7 @@ export function DemoView({
           const fallback =
             newDefault ??
             projectFlows?.find((f) => f.isDefault && f.flowSlug !== deletedFlowSlug)?.flowSlug;
-          if (fallback) navigate(flowPath(project, fallback));
+          if (fallback) resetFlow({ project, flow: fallback });
         }}
       />
 
@@ -2401,7 +2479,7 @@ export function DemoView({
               flows={projectFlows ?? []}
               onSelect={(nextFlow) => {
                 if (nextFlow === flow) return;
-                navigate(flowPath(project, nextFlow));
+                resetFlow({ project, flow: nextFlow });
               }}
               onCreate={() => setFlowCreateOpen(true)}
               onRename={(flowSlug) => {
@@ -2437,7 +2515,7 @@ export function DemoView({
           // component still exists for embedders consuming @seeflow/canvas
           // directly — we just don't render the in-canvas chrome here.
           showShareMenu={false}
-          nodes={visibleNodes ?? demo.nodes}
+          nodes={linkflowDecoratedNodes ?? demo.nodes}
           connectors={visibleConnectors ?? demo.connectors}
           selectedNodeIds={selectedIds}
           selectedConnectorIds={selectedConnectorIds}
@@ -2537,6 +2615,36 @@ export function DemoView({
           // Export commands need a backing demo. flowId is non-null whenever
           // the canvas can render.
           canExportDemo: Boolean(flowId),
+        }}
+      />
+
+      {/* US-004: linkflow picker dialog. Opens via `data.onOpenPicker(mode)`
+          injected into linkflow nodes (see linkflowDecoratedNodes above). The
+          commit handler PATCHes the active node's target through the wrapped
+          adapter so the change flows through undo/redo + SSE echo. ExportDialog
+          itself was lifted to App.tsx so the studio header can drive it from
+          its Share menu — DemoView no longer renders it locally. */}
+      <LinkflowPickerDialog
+        open={linkflowPicker !== null}
+        onOpenChange={(open) => {
+          if (!open) setLinkflowPicker(null);
+        }}
+        mode={linkflowPicker?.mode ?? 'link'}
+        demos={demos}
+        currentSlug={slug}
+        initialTarget={
+          linkflowPicker?.mode === 'edit'
+            ? (() => {
+                const node = demoNodes?.find((n) => n.id === linkflowPicker.nodeId);
+                if (!node || node.type !== 'linkflow') return null;
+                const t = (node.data as { target?: { project: string; flow: string } }).target;
+                return t ?? null;
+              })()
+            : null
+        }
+        onCommit={(target) => {
+          if (!linkflowPicker) return;
+          onCommitLinkflowTarget(linkflowPicker.nodeId, target);
         }}
       />
     </div>

@@ -32,6 +32,7 @@ import {
   EdgePinSchema,
   type Flow,
   FlowSchema,
+  LinkflowTargetSchema,
   NodeTypeSchema,
   PlayActionSchema,
   type ResolvedFlow,
@@ -156,6 +157,12 @@ export const NodePatchBodySchema = z
     // reparse + SSE broadcast, but splitFlow strips it from flow.json so the
     // sidecar is the source of truth on disk.
     spec: ComponentSpecSchema.optional(),
+    // type:'linkflow'-only: slug pair { project, flow } naming the target flow.
+    // Lands at data.target. Explicit `null` clears the field (mergeNodeUpdates
+    // strips the key from disk), so undo of a link/edit reverts a previously-
+    // unset target back to unlinked. The post-merge ResolvedFlowSchema reparse
+    // gates that this is only valid on type:'linkflow'.
+    target: LinkflowTargetSchema.nullable().optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -189,6 +196,7 @@ const NODE_DATA_PATCH_KEYS = [
   'statusAction',
   'stateSource',
   'spec',
+  'target',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
@@ -261,6 +269,21 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   // semantic-key set covers only the universal capability fields so retype
   // never drags `spec` through `data`. (US-007 wires the sidecar writer.)
   component: GEOMETRIC_SEMANTIC_KEYS,
+  // Linkflow nodes carry an optional `target` slug pair pointing at another
+  // flow. Retype preserves it alongside the universal semantic keys; the
+  // post-merge ResolvedFlowSchema reparse drops it when retyping AWAY from
+  // linkflow.
+  linkflow: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'target',
+  ]),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here

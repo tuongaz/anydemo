@@ -112,7 +112,7 @@ export const GEOMETRIC_NODE_TYPES = [
 ] as const;
 export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 
-export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'component';
+export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'component' | 'linkflow';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}
@@ -235,6 +235,27 @@ export interface ComponentNodeData extends NodeSemanticBase, NodeVisual, NodeCap
   autoSize?: boolean;
 }
 
+/**
+ * Target of a linkflow node — points to another flow by slug pair. Both slugs
+ * match the canonical FlowIdPattern (lowercase, digits, dashes; starts with
+ * alnum). Optional on the parent `LinkflowNodeData` — an unset target is the
+ * "unlinked" visual state.
+ */
+export interface LinkflowTarget {
+  project: string;
+  flow: string;
+}
+
+/**
+ * `type:'linkflow'` node data — a clickable card that navigates to another
+ * flow. `target` is optional (unlinked state). All visual base fields apply
+ * in the linked-healthy state; the unlinked + broken states paint their own
+ * fixed chrome (dashed border + tint).
+ */
+export interface LinkflowNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  target?: LinkflowTarget;
+}
+
 interface NodeBase {
   id: string;
   position: { x: number; y: number };
@@ -245,7 +266,8 @@ export type FlowNode =
   | (NodeBase & { type: 'image'; data: ImageNodeData })
   | (NodeBase & { type: 'html'; data: HtmlNodeData })
   | (NodeBase & { type: 'icon'; data: IconNodeData })
-  | (NodeBase & { type: 'component'; data: ComponentNodeData });
+  | (NodeBase & { type: 'component'; data: ComponentNodeData })
+  | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.

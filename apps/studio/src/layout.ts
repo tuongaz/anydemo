@@ -79,6 +79,7 @@ const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: numb
   html: { width: 320, height: 200 },
   icon: { width: 80, height: 80 },
   component: { width: 320, height: 240 },
+  linkflow: { width: 240, height: 100 },
 };
 
 // Sticky / text variants are floating annotations. They never participate in

@@ -70,6 +70,7 @@ import {
 import { HtmlNode } from '../nodes/html-node.tsx';
 import { IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
+import { LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
 import type {
@@ -1243,6 +1244,10 @@ const nodeTypes = {
   // `<project>/nodes/<id>/spec.json` and render a reactive UI driven by
   // ComponentRuntime (state + set/script actions).
   component: ComponentNode,
+  // Linkflow nodes navigate to another flow by slug pair. Three visual states
+  // (unlinked, linked-healthy, broken) — see linkflow-node.tsx. Click handlers
+  // are no-ops at this story; US-004 wires the picker, US-007 wires navigation.
+  linkflow: LinkflowNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 

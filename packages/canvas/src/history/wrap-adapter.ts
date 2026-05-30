@@ -42,6 +42,10 @@ const NULL_CLEARS_NODE_KEY = new Set<string>([
   'shadow',
   'color',
   'strokeWidth',
+  // type:'linkflow'-only: undo of a first-time link must clear `data.target`
+  // back to unset. mergeNodeUpdates treats null on a nullable patch key as
+  // the clear signal, so the inverse sends `{ target: null }`.
+  'target',
 ]);
 
 /**
