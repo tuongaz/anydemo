@@ -24,16 +24,22 @@ import {
 import { ChevronsUpDown, Plus, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+export interface UnregisterProjectOpts {
+  /** When true, also rm-rf the project's repoPath on disk. */
+  deleteSource?: boolean;
+}
+
 export interface ProjectSwitcherProps {
   projects: ProjectSummary[];
   currentProjectSlug?: string;
   onProjectCreated?: (result: CreateProjectResult) => void;
   /**
-   * US-036: cascade-delete every flow under the project. The switcher kicks
-   * off the call; App.tsx is responsible for refreshing the demos cache and
-   * navigating away if the open flow lived under the removed project.
+   * Unregister the project. When `opts.deleteSource` is true, the studio
+   * also rm-rf's the repoPath after the registry is cleaned. App.tsx is
+   * responsible for refreshing the demos cache and navigating away if the
+   * open flow lived under the removed project.
    */
-  onUnregisterProject?: (projectSlug: string) => Promise<void>;
+  onUnregisterProject?: (projectSlug: string, opts?: UnregisterProjectOpts) => Promise<void>;
 }
 
 export function ProjectSwitcher({
@@ -47,6 +53,7 @@ export function ProjectSwitcher({
   const [unregisterTarget, setUnregisterTarget] = useState<ProjectSummary | null>(null);
   const [unregistering, setUnregistering] = useState(false);
   const [unregisterError, setUnregisterError] = useState<string | null>(null);
+  const [deleteSource, setDeleteSource] = useState(false);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -76,12 +83,14 @@ export function ProjectSwitcher({
   const openUnregisterDialog = (project: ProjectSummary) => {
     setUnregisterTarget(project);
     setUnregisterError(null);
+    setDeleteSource(false);
   };
 
   const closeUnregisterDialog = () => {
     if (unregistering) return;
     setUnregisterTarget(null);
     setUnregisterError(null);
+    setDeleteSource(false);
   };
 
   const handleUnregister = async () => {
@@ -89,8 +98,9 @@ export function ProjectSwitcher({
     setUnregistering(true);
     setUnregisterError(null);
     try {
-      await onUnregisterProject?.(unregisterTarget.projectSlug);
+      await onUnregisterProject?.(unregisterTarget.projectSlug, { deleteSource });
       setUnregisterTarget(null);
+      setDeleteSource(false);
     } catch (err) {
       setUnregisterError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -200,22 +210,35 @@ export function ProjectSwitcher({
       >
         <DialogContent className="sm:max-w-md" data-testid="unregister-project-dialog">
           <DialogHeader>
-            <DialogTitle>Unregister project?</DialogTitle>
+            <DialogTitle>{deleteSource ? 'Delete project?' : 'Unregister project?'}</DialogTitle>
             <DialogDescription>
               This removes <strong>{unregisterTarget?.name}</strong> from SeeFlow.{' '}
               <strong>
                 All {flowCount} {flowCount === 1 ? 'flow' : 'flows'}
               </strong>{' '}
               under this project will be unregistered.
-              {unregisterTarget?.repoPath ? (
-                <>
-                  {' '}
-                  Your files at <code className="text-xs">{unregisterTarget.repoPath}</code> will
-                  not be deleted.
-                </>
-              ) : null}
             </DialogDescription>
           </DialogHeader>
+          {unregisterTarget?.repoPath ? (
+            <label className="flex items-start gap-2 rounded-md border border-border px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                checked={deleteSource}
+                onChange={(e) => setDeleteSource(e.target.checked)}
+                disabled={unregistering}
+                data-testid="unregister-project-delete-source"
+                className="mt-0.5 h-4 w-4 cursor-pointer accent-destructive"
+              />
+              <span className="flex-1">
+                <span className="font-medium">Also delete files from disk</span>
+                <span className="mt-1 block text-xs text-muted-foreground">
+                  Permanently removes{' '}
+                  <code className="break-all text-xs">{unregisterTarget.repoPath}</code> and
+                  everything inside it. This cannot be undone.
+                </span>
+              </span>
+            </label>
+          ) : null}
           {unregisterError ? (
             <div
               role="alert"
@@ -241,7 +264,13 @@ export function ProjectSwitcher({
               disabled={unregistering}
               data-testid="unregister-project-confirm"
             >
-              {unregistering ? 'Unregistering…' : 'Unregister'}
+              {unregistering
+                ? deleteSource
+                  ? 'Deleting…'
+                  : 'Unregistering…'
+                : deleteSource
+                  ? 'Delete project'
+                  : 'Unregister'}
             </Button>
           </DialogFooter>
         </DialogContent>

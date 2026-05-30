@@ -92,13 +92,13 @@ export function App() {
     [refreshFlows, refreshProjects],
   );
 
-  // US-036: cascade-unregister every flow under a project. The hook handles
-  // the per-flow DELETE loop + the projects refresh; here we refetch the
-  // legacy demos list too and navigate away when the open flow lived under
-  // the removed project.
+  // Unregister a project (and optionally rm-rf its repoPath). The hook calls
+  // the atomic project-level DELETE endpoint and refreshes the projects list;
+  // here we refetch the legacy demos list too and navigate away when the open
+  // flow lived under the removed project.
   const onUnregisterProject = useCallback(
-    async (projectSlug: string) => {
-      await unregisterProject(projectSlug);
+    async (projectSlug: string, opts?: { deleteSource?: boolean }) => {
+      await unregisterProject(projectSlug, opts);
       await refreshFlows();
       if (topProject === projectSlug) resetFlow(null);
     },

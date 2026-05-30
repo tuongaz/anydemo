@@ -1435,6 +1435,45 @@ export function createApi(options: ApiOptions): Hono {
     return c.json({ ok: true });
   });
 
+  // DELETE /api/projects/:project — atomic project unregister. The per-flow
+  // DELETE above can't be looped to clear a whole project: its last-flow
+  // and default-flow-no-replacement guards reject the final entry. This
+  // route drops every registry entry for the project in one shot and
+  // leaves files on disk untouched, matching the dialog's "your files
+  // will not be deleted" promise. With `?deleteSource=true` it also
+  // rm-rf's the entire repoPath after the registry is cleaned.
+  api.delete('/projects/:project', (c) => {
+    const projectSlug = c.req.param('project');
+    const deleteSource = c.req.query('deleteSource') === 'true';
+
+    const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
+    const head = entries[0];
+    if (!head) {
+      return c.json({ ok: false as const, error: 'project-not-found' as const }, 404);
+    }
+    const repoPath = head.repoPath;
+
+    for (const entry of entries) {
+      watcher?.unwatch(entry.id);
+      registry.remove(entry.id);
+    }
+
+    if (deleteSource) {
+      try {
+        rmSync(repoPath, { recursive: true, force: true });
+      } catch (err) {
+        events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
+        return c.json(
+          { ok: false as const, error: 'source-delete-failed' as const, detail: String(err) },
+          500,
+        );
+      }
+    }
+
+    events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
+    return c.json({ ok: true });
+  });
+
   // POST /api/projects/:project/flows/:flow/layout — registered-flow ELK
   // layout. Reads flow.json from disk via the registry entry, computes
   // layout, writes style.json atomically next to flow.json, and broadcasts

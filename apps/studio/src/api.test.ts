@@ -4303,6 +4303,106 @@ describe('DELETE /api/projects/:project/flows/:flow', () => {
   });
 });
 
+describe('DELETE /api/projects/:project', () => {
+  // The cascade from `useProjects.unregisterProject` used to loop the per-flow
+  // DELETE, which hit `last-flow`/`default-flow-no-replacement` on the final
+  // entry and stranded the project half-removed. This endpoint clears every
+  // registry entry in one shot and (optionally) rm-rf's the repoPath.
+
+  it('drops every registry entry for the project and leaves files on disk', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(2);
+
+    const res = await app.request('/api/projects/order-pipeline', { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(0);
+    // Without ?deleteSource, files are untouched.
+    expect(existsSync(repoPath)).toBe(true);
+    expect(existsSync(join(repoPath, 'seeflow.json'))).toBe(true);
+    expect(existsSync(join(repoPath, 'flows', 'main', 'flow.json'))).toBe(true);
+    expect(existsSync(join(repoPath, 'flows', 'retry', 'flow.json'))).toBe(true);
+  });
+
+  it('clears a single-flow project that the per-flow DELETE refuses', async () => {
+    // Regression for the cascade bug: the per-flow DELETE returns 409
+    // `last-flow` for a one-flow project, so the old cascade hook could
+    // never finish. This endpoint must succeed.
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Solo',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/solo', { method: 'DELETE' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+    expect(registry.list().filter((e) => e.projectSlug === 'solo')).toHaveLength(0);
+    expect(existsSync(repoPath)).toBe(true);
+  });
+
+  it('rm-rfs the entire repoPath when ?deleteSource=true', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [
+        { id: 'main', name: 'Main' },
+        { id: 'retry', name: 'Retry' },
+      ],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline?deleteSource=true', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ ok: true });
+
+    expect(registry.list().filter((e) => e.projectSlug === 'order-pipeline')).toHaveLength(0);
+    expect(existsSync(repoPath)).toBe(false);
+  });
+
+  it('returns 404 project-not-found when no registry entry matches the slug', async () => {
+    const { app } = buildApp();
+    const res = await app.request('/api/projects/ghost', { method: 'DELETE' });
+    expect(res.status).toBe(404);
+    expect(await res.json()).toEqual({ ok: false, error: 'project-not-found' });
+  });
+
+  it('treats any query value other than literal "true" as deleteSource=false', async () => {
+    const { app, registry } = buildApp();
+    const repoPath = tmpManifestRepo({
+      version: 1,
+      name: 'Order Pipeline',
+      defaultFlow: 'main',
+      flows: [{ id: 'main', name: 'Main' }],
+    });
+    registerProject({ repoPath, registry });
+
+    const res = await app.request('/api/projects/order-pipeline?deleteSource=1', {
+      method: 'DELETE',
+    });
+    expect(res.status).toBe(200);
+    expect(existsSync(repoPath)).toBe(true);
+  });
+});
+
 describe('POST /api/projects', () => {
   it('scaffolds a fresh project (seeflow.json + flows/main/flow.json) at the supplied path', async () => {
     const baseDir = mkdtempSync(join(tmpdir(), 'seeflow-create-fresh-'));

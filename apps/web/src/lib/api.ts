@@ -172,6 +172,30 @@ export const deleteFlow = async (
   return (await res.json()) as { ok: true };
 };
 
+export const deleteProject = async (
+  project: string,
+  opts?: { deleteSource?: boolean },
+): Promise<{ ok: true }> => {
+  const base = `/api/projects/${encodeURIComponent(project)}`;
+  const url = opts?.deleteSource ? `${base}?deleteSource=true` : base;
+  const res = await fetch(url, { method: 'DELETE' });
+  if (!res.ok) {
+    let errorBody: { error?: string; detail?: string } | null = null;
+    try {
+      errorBody = (await res.json()) as { error?: string; detail?: string };
+    } catch {
+      // ignore
+    }
+    const msg = errorBody?.error
+      ? errorBody.detail
+        ? `${errorBody.error}: ${errorBody.detail}`
+        : errorBody.error
+      : `DELETE ${url} → ${res.status}`;
+    throw new Error(msg);
+  }
+  return (await res.json()) as { ok: true };
+};
+
 /**
  * US-025: POST /api/projects/:project/flows — create a new flow within an
  * existing project. The body matches the schema enforced by the studio

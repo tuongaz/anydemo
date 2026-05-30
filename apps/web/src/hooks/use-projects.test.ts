@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
-import type { ProjectFlowSummary, ProjectSummary } from '@/lib/api';
+import type { ProjectSummary } from '@/lib/api';
 
-// US-036: same fetch-mock shape used across apps/web hook tests
+// Same fetch-mock shape used across apps/web hook tests
 // (use-project-flows.test.ts pattern). Tracks every request so we can assert
-// the cascade-DELETE ordering for `unregisterProject`.
+// the URL/method shape `unregisterProject` produces.
 const realFetch = globalThis.fetch;
 
 type MockHandler = (url: string, init?: RequestInit) => { status: number; body: unknown };
@@ -43,11 +43,6 @@ const SAMPLE_PROJECTS: ProjectSummary[] = [
   },
 ];
 
-const SAMPLE_FLOWS: ProjectFlowSummary[] = [
-  { id: 'op-main', flowSlug: 'main', name: 'Main', isDefault: true },
-  { id: 'op-retry', flowSlug: 'retry', name: 'Retry', isDefault: false },
-];
-
 describe('fetchProjects', () => {
   it('GETs /api/projects and unwraps { projects }', async () => {
     const { fetchProjects } = await import('@/lib/api');
@@ -72,48 +67,56 @@ describe('useProjects hook contract', () => {
   });
 });
 
-describe('cascade unregister behavior', () => {
-  // The cascade is driven by `unregisterProject` inside useProjects, which
-  // pulls the flow list + DELETEs each entry. We exercise the same fetch
-  // sequence the hook would: GET /api/projects/:p/flows then a DELETE for
-  // each, with the default flow held back until last so the studio's
-  // last-flow guard never trips during the cascade.
-  it('issues GET flows then DELETE per flow (default last)', async () => {
-    const { useProjects } = await import('@/hooks/use-projects');
-    expect(typeof useProjects).toBe('function');
+describe('deleteProject', () => {
+  // The unregister flow now calls the project-level DELETE endpoint in one
+  // shot. The previous per-flow cascade tripped the studio's last-flow guard
+  // on the final entry, leaving the project half-removed; this single-call
+  // design bypasses that guard entirely.
+  it('issues DELETE /api/projects/:project without deleteSource by default', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    const { calls } = installMock(() => ({ status: 200, body: { ok: true } }));
+    await deleteProject('order-pipeline');
+    expect(calls).toEqual([{ url: '/api/projects/order-pipeline', method: 'DELETE' }]);
+  });
 
-    const { calls } = installMock((url, init) => {
-      const method = init?.method ?? 'GET';
-      if (method === 'GET' && url === '/api/projects/order-pipeline/flows') {
-        return { status: 200, body: { flows: SAMPLE_FLOWS } };
-      }
-      if (method === 'DELETE' && url.startsWith('/api/projects/order-pipeline/flows/')) {
-        return { status: 200, body: { ok: true } };
-      }
-      if (method === 'GET' && url === '/api/projects') {
-        // Cascade refreshes the projects list after the last DELETE.
-        return { status: 200, body: { projects: [] } };
-      }
-      return { status: 500, body: { error: `unhandled ${method} ${url}` } };
-    });
-
-    // Drive the cascade body directly — the hook factory is a thin React
-    // wrapper, the meaningful behavior lives in fetchProjectFlows + deleteFlow
-    // sequencing. Mirror what `unregisterProject` does internally so we can
-    // assert the DELETE order without a React renderer in the dep tree.
-    const { fetchProjectFlows, deleteFlow } = await import('@/lib/api');
-    const flows = await fetchProjectFlows('order-pipeline');
-    const ordered = [...flows].sort((a, b) =>
-      a.isDefault === b.isDefault ? 0 : a.isDefault ? 1 : -1,
-    );
-    for (const flow of ordered) {
-      await deleteFlow('order-pipeline', flow.flowSlug);
-    }
-
-    const deletes = calls.filter((c) => c.method === 'DELETE').map((c) => c.url);
-    expect(deletes).toEqual([
-      '/api/projects/order-pipeline/flows/retry',
-      '/api/projects/order-pipeline/flows/main',
+  it('appends ?deleteSource=true when the caller opts in', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    const { calls } = installMock(() => ({ status: 200, body: { ok: true } }));
+    await deleteProject('order-pipeline', { deleteSource: true });
+    expect(calls).toEqual([
+      { url: '/api/projects/order-pipeline?deleteSource=true', method: 'DELETE' },
     ]);
+  });
+
+  it('omits the query string when deleteSource is explicitly false', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    const { calls } = installMock(() => ({ status: 200, body: { ok: true } }));
+    await deleteProject('order-pipeline', { deleteSource: false });
+    expect(calls).toEqual([{ url: '/api/projects/order-pipeline', method: 'DELETE' }]);
+  });
+
+  it('surfaces the studio error code in the thrown message', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    installMock(() => ({ status: 404, body: { error: 'project-not-found' } }));
+    await expect(deleteProject('ghost')).rejects.toThrow('project-not-found');
+  });
+
+  it('includes the detail when the studio returns one (e.g. source-delete-failed)', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    installMock(() => ({
+      status: 500,
+      body: { error: 'source-delete-failed', detail: 'EACCES: permission denied' },
+    }));
+    await expect(deleteProject('order-pipeline', { deleteSource: true })).rejects.toThrow(
+      'source-delete-failed: EACCES: permission denied',
+    );
+  });
+
+  it('falls back to a status-bearing message when the body has no error field', async () => {
+    const { deleteProject } = await import('@/lib/api');
+    installMock(() => ({ status: 500, body: {} }));
+    await expect(deleteProject('order-pipeline')).rejects.toThrow(
+      'DELETE /api/projects/order-pipeline → 500',
+    );
   });
 });

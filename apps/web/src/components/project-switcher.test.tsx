@@ -79,9 +79,10 @@ afterEach(() => {
 // Same pattern used by flow-switcher.test.tsx + command-palette.test.tsx.
 //
 // `stateOverrides` lets a test seed useState calls in source order — the
-// switcher has five (`open`, `createOpen`, `unregisterTarget`, `unregistering`,
-// `unregisterError`). Override slot 0 to `true` to surface the popover content
-// inline; slot 2 to a ProjectSummary to surface the unregister dialog.
+// switcher has six (`open`, `createOpen`, `unregisterTarget`, `unregistering`,
+// `unregisterError`, `deleteSource`). Override slot 0 to `true` to surface the
+// popover content inline; slot 2 to a ProjectSummary to surface the unregister
+// dialog; slot 5 to `true` to render the dialog with deleteSource checked.
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
@@ -317,9 +318,12 @@ describe('ProjectSwitcher', () => {
   });
 
   it('clicking confirm dispatches onUnregisterProject with the project slug', async () => {
-    const received: string[] = [];
-    const onUnregisterProject = async (projectSlug: string): Promise<void> => {
-      received.push(projectSlug);
+    const received: Array<{ slug: string; opts?: { deleteSource?: boolean } }> = [];
+    const onUnregisterProject = async (
+      projectSlug: string,
+      opts?: { deleteSource?: boolean },
+    ): Promise<void> => {
+      received.push({ slug: projectSlug, opts });
     };
     const tree = renderSwitcher({ onUnregisterProject }, [true, undefined, PROJECTS[0]]);
     const confirm = findByTestId(tree, 'unregister-project-confirm');
@@ -327,7 +331,64 @@ describe('ProjectSwitcher', () => {
     const onClick = (confirm.props as { onClick?: () => void | Promise<void> }).onClick;
     if (!onClick) throw new Error('confirm onClick missing');
     await onClick();
-    expect(received).toEqual(['order-pipeline']);
+    expect(received).toEqual([{ slug: 'order-pipeline', opts: { deleteSource: false } }]);
+  });
+
+  it('forwards deleteSource:true when the "Also delete files" checkbox is checked', async () => {
+    const received: Array<{ slug: string; opts?: { deleteSource?: boolean } }> = [];
+    const onUnregisterProject = async (
+      projectSlug: string,
+      opts?: { deleteSource?: boolean },
+    ): Promise<void> => {
+      received.push({ slug: projectSlug, opts });
+    };
+    // Slot 5 = deleteSource overridden to true (the user clicked the checkbox).
+    const tree = renderSwitcher({ onUnregisterProject }, [
+      true,
+      undefined,
+      PROJECTS[0],
+      undefined,
+      undefined,
+      true,
+    ]);
+
+    const checkbox = findByTestId(tree, 'unregister-project-delete-source');
+    if (!checkbox) throw new Error('delete-source checkbox missing');
+    expect((checkbox.props as { checked?: boolean }).checked).toBe(true);
+
+    const confirm = findByTestId(tree, 'unregister-project-confirm');
+    if (!confirm) throw new Error('confirm button missing');
+    const onClick = (confirm.props as { onClick?: () => void | Promise<void> }).onClick;
+    if (!onClick) throw new Error('confirm onClick missing');
+    await onClick();
+    expect(received).toEqual([{ slug: 'order-pipeline', opts: { deleteSource: true } }]);
+  });
+
+  it('omits the delete-source checkbox when the project has no repoPath', () => {
+    const tree = renderSwitcher(
+      {
+        projects: [
+          {
+            projectSlug: 'sealed',
+            name: 'Sealed',
+            defaultFlow: 'main',
+            flowCount: 1,
+          },
+        ],
+      },
+      [
+        true,
+        undefined,
+        {
+          projectSlug: 'sealed',
+          name: 'Sealed',
+          defaultFlow: 'main',
+          flowCount: 1,
+        },
+      ],
+    );
+    const checkbox = findByTestId(tree, 'unregister-project-delete-source');
+    expect(checkbox).toBeNull();
   });
 
   it('renders an empty list when no projects are registered', () => {
