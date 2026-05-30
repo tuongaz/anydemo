@@ -1,6 +1,7 @@
 import { describe, expect, it, mock } from 'bun:test';
 import type { ChangeEvent } from 'react';
 import * as React from 'react';
+import { ICON_NAMES_BY_VENDOR, applyPackSummaries } from '../lib/icon-registry.ts';
 import { IconPickerBody, type IconPickerBodyProps, filterIcons } from './icon-picker-popover.tsx';
 
 // Same dispatcher-shim trick used by icon-node.test.tsx — apps/web tests run
@@ -8,13 +9,14 @@ import { IconPickerBody, type IconPickerBodyProps, filterIcons } from './icon-pi
 // React's internal hook dispatcher and call IconPickerBody as a function. The
 // returned tree is the first render with sub-components captured as placeholders
 // (their bodies never execute), which is fine because IconPickerBody renders
-// every <input> and tile <button> inline.
+// every <input>, tab <button>, and tile <button> inline.
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: <T>(ctx: { _currentValue?: T }) => T;
 };
 
 function renderWithHooks<T>(fn: () => T): T {
@@ -35,6 +37,7 @@ function renderWithHooks<T>(fn: () => T): T {
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    useContext: <T,>(ctx: { _currentValue?: T }) => ctx._currentValue as T,
   };
   try {
     return fn();
@@ -85,6 +88,14 @@ function findAll(
   const arr = Array.isArray(children) ? children : [children];
   for (const child of arr) findAll(child, predicate, acc);
   return acc;
+}
+
+// Tile <button>s carry a data-icon-name; tab <button>s carry data-testid
+// `icon-picker-tab-<vendor>` and no data-icon-name. Use this predicate to
+// isolate tile buttons in tree walks.
+function isTileButton(el: ReactElementLike): boolean {
+  if (el.type !== 'button') return false;
+  return typeof (el.props as { 'data-icon-name'?: unknown })['data-icon-name'] === 'string';
 }
 
 function callBody(overrides: Partial<IconPickerBodyProps> = {}): unknown {
@@ -140,7 +151,7 @@ describe('IconPickerBody', () => {
     // scrollTop=0 (the test's initial state) renders the first ~80 entries of
     // the filtered list — well within range for a narrow filter.
     const tree = callBody({ query: 'shopping' });
-    const tiles = findAll(tree, (el) => el.type === 'button');
+    const tiles = findAll(tree, isTileButton);
     expect(tiles.length).toBeGreaterThan(0);
     // Every visible tile must include the substring case-insensitively.
     for (const tile of tiles) {
@@ -225,5 +236,156 @@ describe('IconPickerBody', () => {
     const tree = callBody({ query: '', clearable: false });
     const tile = findElement(tree, testIdEquals('icon-picker-tile-none'));
     expect(tile).toBeNull();
+  });
+});
+
+describe('IconPickerBody tabs (US-016)', () => {
+  it('renders the 5 vendor tabs above the search input', () => {
+    const tree = callBody();
+    const tabs = findElement(tree, testIdEquals('icon-picker-tabs'));
+    expect(tabs).not.toBeNull();
+    for (const vendor of ['lucide', 'aws', 'gcp', 'azure', 'iconify']) {
+      const tab = findElement(tree, testIdEquals(`icon-picker-tab-${vendor}`));
+      expect(tab).not.toBeNull();
+    }
+  });
+
+  it('default active tab is `lucide` (bundled)', () => {
+    const tree = callBody();
+    const tab = findElement(tree, testIdEquals('icon-picker-tab-lucide'));
+    if (!tab) throw new Error('lucide tab not found');
+    expect((tab.props as { 'data-active'?: string })['data-active']).toBe('true');
+  });
+
+  it('clicking a tab calls onActiveTabChange with the new vendor id', () => {
+    const onActiveTabChange = mock(() => {});
+    const tree = callBody({ onActiveTabChange });
+    const tab = findElement(tree, testIdEquals('icon-picker-tab-aws'));
+    if (!tab) throw new Error('aws tab not found');
+    const onClick = tab.props.onClick as () => void;
+    onClick();
+    expect(onActiveTabChange).toHaveBeenCalledTimes(1);
+    expect(onActiveTabChange).toHaveBeenCalledWith('aws');
+  });
+
+  it('switching tabs re-filters the grid by vendor pack', () => {
+    // Install a fake AWS pack so the AWS tab has icons to render.
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: '2026-05-31',
+        iconCount: 2,
+        sizeBytes: 0,
+        iconNames: ['lambda', 's3'],
+      },
+      { vendor: 'gcp', installed: false },
+      { vendor: 'azure', installed: false },
+    ]);
+    try {
+      // Use a narrow query so the visible virtualization window is bounded
+      // and we can assert deterministically on which names appear.
+      const lucideTree = callBody({ activeTab: 'lucide', query: 'shopping' });
+      const lucideTiles = findAll(lucideTree, isTileButton);
+      const lucideNames = lucideTiles.map(
+        (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+      );
+      expect(lucideNames).toContain('shopping-cart');
+      // Lucide tab never surfaces vendor-prefixed ids.
+      expect(lucideNames.some((n) => typeof n === 'string' && n?.startsWith('aws:'))).toBe(false);
+
+      const awsTree = callBody({ activeTab: 'aws' });
+      const awsTiles = findAll(awsTree, isTileButton);
+      const awsNames = awsTiles.map(
+        (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+      );
+      expect(awsNames).toEqual(['aws:lambda', 'aws:s3']);
+    } finally {
+      // Reset so other tests don't see the stub pack.
+      applyPackSummaries([
+        { vendor: 'aws', installed: false },
+        { vendor: 'gcp', installed: false },
+        { vendor: 'azure', installed: false },
+      ]);
+    }
+  });
+
+  it('iconify tab surfaces the seeded `iconify:` ids', () => {
+    const tree = callBody({ activeTab: 'iconify' });
+    const tiles = findAll(tree, isTileButton);
+    const names = tiles.map(
+      (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'] as string,
+    );
+    expect(names).toContain('iconify:logos:aws');
+    expect(names).toContain('iconify:logos:google-cloud');
+    expect(names).toContain('iconify:logos:microsoft-azure');
+  });
+
+  it('clicking a vendor tile calls onPick with the full vendor:name id', () => {
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: '2026-05-31',
+        iconCount: 1,
+        sizeBytes: 0,
+        iconNames: ['lambda'],
+      },
+      { vendor: 'gcp', installed: false },
+      { vendor: 'azure', installed: false },
+    ]);
+    try {
+      const onPick = mock(() => {});
+      const tree = callBody({ activeTab: 'aws', onPick });
+      const tile = findElement(
+        tree,
+        (el) =>
+          el.type === 'button' &&
+          (el.props as { 'data-icon-name'?: string })['data-icon-name'] === 'aws:lambda',
+      );
+      if (!tile) throw new Error('aws:lambda tile not found');
+      (tile.props.onClick as () => void)();
+      expect(onPick).toHaveBeenCalledWith('aws:lambda');
+    } finally {
+      applyPackSummaries([
+        { vendor: 'aws', installed: false },
+        { vendor: 'gcp', installed: false },
+        { vendor: 'azure', installed: false },
+      ]);
+    }
+  });
+
+  it('uninstalled vendor tabs render an Install affordance + Browse Packs CTA when active', () => {
+    // No pack stubs — aws/gcp/azure are all empty by default.
+    expect(ICON_NAMES_BY_VENDOR.gcp.length).toBe(0);
+    const onBrowsePacks = mock(() => {});
+
+    // The tab itself carries the disabled marker + inline install icon.
+    const treeLucide = callBody({ activeTab: 'lucide', onBrowsePacks });
+    const gcpTab = findElement(treeLucide, testIdEquals('icon-picker-tab-gcp'));
+    if (!gcpTab) throw new Error('gcp tab not found');
+    expect((gcpTab.props as { 'data-installed'?: string })['data-installed']).toBe('false');
+    const inlineInstall = findElement(treeLucide, testIdEquals('icon-picker-tab-install-gcp'));
+    expect(inlineInstall).not.toBeNull();
+    (inlineInstall?.props.onClick as () => void)();
+    expect(onBrowsePacks).toHaveBeenCalledTimes(1);
+
+    // When the uninstalled tab IS the active tab, the grid is replaced by the
+    // install prompt and its Browse Packs CTA.
+    const treeGcp = callBody({ activeTab: 'gcp', onBrowsePacks });
+    const prompt = findElement(treeGcp, testIdEquals('icon-picker-install-prompt'));
+    expect(prompt).not.toBeNull();
+    const cta = findElement(treeGcp, testIdEquals('icon-picker-install-cta-gcp'));
+    if (!cta) throw new Error('Browse packs CTA not found');
+    (cta.props.onClick as () => void)();
+    expect(onBrowsePacks).toHaveBeenCalledTimes(2);
+    // The all-icons grid is not rendered in the install-prompt state.
+    expect(findElement(treeGcp, testIdEquals('icon-picker-all'))).toBeNull();
+  });
+
+  it('hides the Recent section on vendor tabs even when query is empty', () => {
+    const tree = callBody({ activeTab: 'aws', recents: ['shopping-cart'] });
+    const recents = findElement(tree, testIdEquals('icon-picker-recents'));
+    expect(recents).toBeNull();
   });
 });
