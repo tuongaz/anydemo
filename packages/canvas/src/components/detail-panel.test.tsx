@@ -253,7 +253,7 @@ describe('DetailPanel', () => {
     expect(svgs.length).toBe(0);
   });
 
-  it('omits onSave callbacks → fields render read-only (no <button>)', () => {
+  it('omits onSave callbacks → fields render read-only (no edit <button>)', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
@@ -263,7 +263,13 @@ describe('DetailPanel', () => {
         // No onNameChange/onDescriptionChange/onDetailChange — read-only.
       }),
     );
-    const buttons = findAll(tree, (el) => el.type === 'button');
+    // The panel always renders a close button as chrome — exclude it from the
+    // count. What we're testing is that no EditableField rendered an enter-edit
+    // button.
+    const buttons = findAll(
+      tree,
+      (el) => el.type === 'button' && el.props['data-testid'] !== 'detail-panel-close',
+    );
     expect(buttons.length).toBe(0);
   });
 

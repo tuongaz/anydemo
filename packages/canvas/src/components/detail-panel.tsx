@@ -1,4 +1,4 @@
-import { FolderOpen, ImagePlus, PencilLine } from 'lucide-react';
+import { FolderOpen, ImagePlus, PencilLine, X } from 'lucide-react';
 import {
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
@@ -24,7 +24,6 @@ import { StatusBadge } from '../nodes/status-badge.tsx';
 import type { Connector, FlowNode, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
 import { Icon } from '../ui/icon.tsx';
-import { Sheet, SheetContent, SheetDescription, SheetTitle } from '../ui/sheet.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
 import { MermaidBlock } from './mermaid-block.tsx';
 
@@ -120,8 +119,7 @@ export function DetailPanel({
       : null;
 
   // Panel width is user-resizable above the sm breakpoint via a left-edge
-  // handle; persisted across sessions in localStorage. The CSS variable feeds
-  // the `sm:!w-[var(...)]` override below.
+  // handle; persisted across sessions in localStorage.
   const [width, setWidth] = useState<number>(() => getStoredDetailPanelWidth());
   const onResizeHandlePointerDown = (e: ReactPointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -130,191 +128,167 @@ export function DetailPanel({
       onCommit: setStoredDetailPanelWidth,
     });
   };
+
+  // Escape closes the panel — except while an editable field is in edit mode,
+  // where Escape is reserved for the field's cancel-edit shortcut (its own
+  // onKeyDown stops the keystroke from bubbling to window, so this listener
+  // only sees Escape when no editor is focused).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      const active = document.activeElement as HTMLElement | null;
+      if (active?.getAttribute('data-testid')?.endsWith('-editor')) return;
+      onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
   // Border + shadow are themed via CSS vars on `.seeflow-canvas-root` so the
-  // panel reads no-border + subtle shadow in light and the existing hairline +
-  // heavier shadow in dark. Inline style wins over the Sheet variant's
-  // `sf:border-l` without needing a tailwind-merge prefix shim.
-  const widthStyle = {
-    ['--detail-panel-w' as string]: `${width}px`,
+  // panel reads no-border + subtle shadow in light and a hairline + heavier
+  // shadow in dark. The width is applied inline; below the sm breakpoint the
+  // panel falls back to full width via the responsive style merge.
+  const asideStyle = {
+    width,
     borderLeftWidth: 'var(--detail-panel-border-left)',
     boxShadow: 'var(--detail-panel-shadow)',
   } as CSSProperties;
 
   return (
-    <Sheet
-      open={open}
-      modal={false}
-      onOpenChange={(next) => {
-        if (!next) onClose();
-      }}
+    <aside
+      aria-label="Inspector"
+      data-testid="detail-panel"
+      data-state={open ? 'open' : 'closed'}
+      style={asideStyle}
+      className="sf:relative sf:flex sf:h-full sf:flex-shrink-0 sf:flex-col sf:overflow-y-auto sf:border-border sf:bg-card/94 sf:p-6 sf:backdrop-blur-[14px]"
     >
-      <SheetContent
-        side="right"
-        className="sf:w-full! sf:max-w-full! sf:overflow-y-auto sf:bg-card/94 sf:backdrop-blur-[14px] sf:border-border sf:sm:w-(--detail-panel-w)! sf:sm:max-w-(--detail-panel-w)!"
-        style={widthStyle}
-        data-testid="detail-panel"
-        onEscapeKeyDown={(e) => {
-          // While any of the three editable fields is in edit mode, Escape is
-          // the cancel-edit shortcut — preventDefault stops Radix from also
-          // closing the Sheet. Each field's own onKeyDown handles the cancel.
-          const active = document.activeElement as HTMLElement | null;
-          if (active?.getAttribute('data-testid')?.endsWith('-editor')) {
-            e.preventDefault();
-          }
-        }}
-        onInteractOutside={(e) => {
-          // Radix dismisses on `pointerdown` outside the Sheet, which unmounts
-          // the EditableField before its contentEditable can fire `onBlur` →
-          // `commit()`. Flush any in-flight edit synchronously here so the
-          // typed text is saved even when the user clicks the canvas pane.
-          const active = document.activeElement as HTMLElement | null;
-          if (active?.getAttribute('data-testid')?.endsWith('-editor')) {
-            active.blur();
-          }
-          // Resize gestures (US-031) start with a pointerdown on a
-          // .react-flow__resize-control outside the Sheet. Radix's default is
-          // to close on outside interaction, which would unmount the resize
-          // controls mid-gesture. Suppress the close so the panel stays open.
-          const target = e.target as HTMLElement | null;
-          if (target?.closest('.react-flow__resize-control')) e.preventDefault();
-          // Style-strip color popovers render in a portal outside the
-          // SheetContent. A click inside the popover would otherwise close
-          // the Sheet. Keep it open.
-          if (target?.closest('[data-radix-popper-content-wrapper]')) e.preventDefault();
-          // Canvas style strip lives outside the Sheet — keep open while the
-          // user adjusts styles for the selected entity.
-          if (target?.closest('[data-testid="canvas-style-strip"]')) e.preventDefault();
-          // Anything inside the canvas root is part of the inspector's UX —
-          // node/edge clicks swap selection, pane clicks deselect, background
-          // / viewport clicks are pan gestures. None should yank the panel
-          // away. Closing is reserved for the toggle button and the panel's
-          // own X / Escape affordances. We allow-list the React Flow root
-          // wholesale (covers .react-flow__pane, .react-flow__background,
-          // .react-flow__viewport, .react-flow__node, .react-flow__edge,
-          // .react-flow__renderer, controls, minimap, attribution).
-          if (target?.closest('.react-flow')) e.preventDefault();
-        }}
+      <div
+        aria-label="Resize detail panel"
+        onPointerDown={onResizeHandlePointerDown}
+        data-testid="detail-panel-resize-handle"
+        className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
+      />
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close inspector"
+        data-testid="detail-panel-close"
+        className="sf:absolute sf:right-4 sf:top-4 sf:z-10 sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-sm sf:text-foreground/70 sf:opacity-70 sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2"
       >
-        <div
-          aria-label="Resize detail panel"
-          onPointerDown={onResizeHandlePointerDown}
-          data-testid="detail-panel-resize-handle"
-          className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
-        />
-        {inspectableNode ? (
-          <div className="sf:flex sf:flex-col sf:gap-4">
-            <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
-              {showNameField ? (
-                <SheetTitle data-testid="detail-panel-title">
-                  <div className="sf:flex sf:items-center sf:gap-2">
-                    {showIconField && onIconChange ? (
-                      <TitleIconTrigger
-                        nodeId={inspectableNode.id}
-                        icon={currentIcon}
-                        onChange={onIconChange}
-                      />
-                    ) : supportsIconField && currentIcon ? (
-                      <span
-                        data-testid="detail-panel-icon-readonly"
-                        aria-hidden
-                        className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
-                      >
-                        <Icon name={currentIcon} size={16} />
-                      </span>
-                    ) : null}
-                    <div className="sf:min-w-0 sf:flex-1">
-                      <EditableField
-                        nodeId={inspectableNode.id}
-                        value={nodeName}
-                        placeholder="Name"
-                        multiline={false}
-                        ariaLabel="Name"
-                        testIdBase="detail-panel-name"
-                        onSave={onNameChange}
-                        textClassName="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
-                      />
-                    </div>
-                  </div>
-                </SheetTitle>
-              ) : (
-                // Radix requires a SheetTitle for a11y; keep it sr-only for
-                // ellipse so the panel stops rendering a Name row visually but
-                // still announces the entity to screen readers.
-                <SheetTitle data-testid="detail-panel-title" className="sf:sr-only">
-                  {inspectableNode.id}
-                </SheetTitle>
-              )}
-              {/* Radix requires a Description for a11y; keep one as sr-only
-                  so screen readers still announce what kind of entity the
-                  panel describes without cluttering the visual header. */}
-              <SheetDescription className="sf:sr-only">
-                {inspectableNode.id} · {inspectableNode.type}
-              </SheetDescription>
-            </div>
-
-            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
-              {statusReport ? <StatusSection report={statusReport} /> : null}
-              <EditableField
-                nodeId={inspectableNode.id}
-                value={description}
-                placeholder="Short description shown on the node body"
-                multiline={true}
-                ariaLabel="Description"
-                testIdBase="detail-panel-description"
-                onSave={onDescriptionChange}
-                // Description is the visual "subtitle" — rendered in the muted
-                // gray token so it sits clearly below the (white-ish) Detail
-                // block in dark mode and below the near-black Detail in light.
-                // The explicit `dark:` override pins a slightly more saturated
-                // gray than `--muted-foreground` so the contrast against
-                // Detail's `text-foreground` holds even under reduced-contrast
-                // settings.
-                textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground sf:dark:text-zinc-400"
-              />
-              <EditableField
-                nodeId={inspectableNode.id}
-                value={detail}
-                placeholder="Long-form notes, context, anything…"
-                multiline={true}
-                ariaLabel="Detail"
-                testIdBase="detail-panel-detail"
-                onSave={onDetailChange}
-                markdown={true}
-                textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground"
-              />
-
-              {inspectableNode.type === 'html' && flowId ? (
-                <HtmlNodeSection
-                  adapter={adapter}
-                  nodeId={inspectableNode.id}
-                  htmlPath="view.html"
-                />
-              ) : null}
-            </div>
-          </div>
-        ) : connector ? (
-          <div className="sf:flex sf:flex-col sf:gap-4">
-            <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
-              <SheetTitle
+        <X className="sf:h-4 sf:w-4" />
+        <span className="sf:sr-only">Close</span>
+      </button>
+      {inspectableNode ? (
+        <div className="sf:flex sf:flex-col sf:gap-4">
+          <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
+            {showNameField ? (
+              <h2
                 data-testid="detail-panel-title"
-                className="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
+                className="sf:text-lg sf:font-semibold sf:text-foreground"
               >
-                {connector.label ?? 'Connector'}
-              </SheetTitle>
-              <SheetDescription className="sf:sr-only">{connector.id}</SheetDescription>
-            </div>
+                <div className="sf:flex sf:items-center sf:gap-2">
+                  {showIconField && onIconChange ? (
+                    <TitleIconTrigger
+                      nodeId={inspectableNode.id}
+                      icon={currentIcon}
+                      onChange={onIconChange}
+                    />
+                  ) : supportsIconField && currentIcon ? (
+                    <span
+                      data-testid="detail-panel-icon-readonly"
+                      aria-hidden
+                      className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
+                    >
+                      <Icon name={currentIcon} size={16} />
+                    </span>
+                  ) : null}
+                  <div className="sf:min-w-0 sf:flex-1">
+                    <EditableField
+                      nodeId={inspectableNode.id}
+                      value={nodeName}
+                      placeholder="Name"
+                      multiline={false}
+                      ariaLabel="Name"
+                      testIdBase="detail-panel-name"
+                      onSave={onNameChange}
+                      textClassName="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
+                    />
+                  </div>
+                </div>
+              </h2>
+            ) : (
+              // Keep an sr-only title so screen readers still announce the
+              // entity even when the visual name row is suppressed (ellipse,
+              // sticky — their on-canvas label is the description field).
+              <h2 data-testid="detail-panel-title" className="sf:sr-only">
+                {inspectableNode.id}
+              </h2>
+            )}
+            {/* Sr-only description so assistive tech still announces what
+                kind of entity the panel describes without visual clutter. */}
+            <p className="sf:sr-only">
+              {inspectableNode.id} · {inspectableNode.type}
+            </p>
+          </div>
 
-            <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
-              <ConnectorSummary connector={connector} />
-            </div>
+          <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
+            {statusReport ? <StatusSection report={statusReport} /> : null}
+            <EditableField
+              nodeId={inspectableNode.id}
+              value={description}
+              placeholder="Short description shown on the node body"
+              multiline={true}
+              ariaLabel="Description"
+              testIdBase="detail-panel-description"
+              onSave={onDescriptionChange}
+              // Description is the visual "subtitle" — rendered in the muted
+              // gray token so it sits clearly below the (white-ish) Detail
+              // block in dark mode and below the near-black Detail in light.
+              // The explicit `dark:` override pins a slightly more saturated
+              // gray than `--muted-foreground` so the contrast against
+              // Detail's `text-foreground` holds even under reduced-contrast
+              // settings.
+              textClassName="sf:text-[13px] sf:leading-relaxed sf:text-muted-foreground sf:dark:text-zinc-400"
+            />
+            <EditableField
+              nodeId={inspectableNode.id}
+              value={detail}
+              placeholder="Long-form notes, context, anything…"
+              multiline={true}
+              ariaLabel="Detail"
+              testIdBase="detail-panel-detail"
+              onSave={onDetailChange}
+              markdown={true}
+              textClassName="sf:text-sm sf:leading-relaxed sf:text-foreground"
+            />
+
+            {inspectableNode.type === 'html' && flowId ? (
+              <HtmlNodeSection adapter={adapter} nodeId={inspectableNode.id} htmlPath="view.html" />
+            ) : null}
           </div>
-        ) : (
-          <div data-testid="detail-panel-empty" className="sf:text-muted-foreground sf:text-sm">
-            Select a node to inspect.
+        </div>
+      ) : connector ? (
+        <div className="sf:flex sf:flex-col sf:gap-4">
+          <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
+            <h2
+              data-testid="detail-panel-title"
+              className="sf:text-lg sf:font-semibold sf:tracking-tight sf:text-foreground/95"
+            >
+              {connector.label ?? 'Connector'}
+            </h2>
+            <p className="sf:sr-only">{connector.id}</p>
           </div>
-        )}
-      </SheetContent>
-    </Sheet>
+
+          <div className="sf:mt-0 sf:flex sf:flex-col sf:gap-3">
+            <ConnectorSummary connector={connector} />
+          </div>
+        </div>
+      ) : (
+        <div data-testid="detail-panel-empty" className="sf:text-muted-foreground sf:text-sm">
+          Select a node to inspect.
+        </div>
+      )}
+    </aside>
   );
 }
 
