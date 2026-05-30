@@ -84,6 +84,10 @@ export function App() {
       writeLastProjectId(result.id);
       refreshFlows();
       refreshProjects();
+      // createProjectImpl always scaffolds a 'main' default flow, so the
+      // fresh project is immediately navigable. Without this the dialog
+      // closes but the canvas stays on the previously-open project.
+      resetFlow({ project: result.slug, flow: 'main' });
     },
     [refreshFlows, refreshProjects],
   );
