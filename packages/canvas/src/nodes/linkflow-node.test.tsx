@@ -177,7 +177,7 @@ describe('LinkflowNode unlinked state (US-002)', () => {
 });
 
 describe('LinkflowNode linked-healthy state (US-002)', () => {
-  it('renders flow name + project name from resolved target', () => {
+  it('renders flow name from resolved target (project name suppressed)', () => {
     const tree = callLinkflowNode({
       target: { project: 'demo', flow: 'orders' },
       _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
@@ -190,12 +190,16 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
       const p = el.props as { 'data-testid'?: string };
       return p['data-testid'] === 'linkflow-flow-name';
     });
+    expect(flowName?.props.children).toBe('Orders Flow');
+    // Project name is intentionally NOT displayed — only the flow name reads
+    // on the card so the chrome stays compact and lets the toolbar's color
+    // pick land without competing typography. The resolver still receives
+    // `projectName` for the picker's "Change linked flow" path.
     const projectName = findElement(tree, (el) => {
       const p = el.props as { 'data-testid'?: string };
       return p['data-testid'] === 'linkflow-project-name';
     });
-    expect(flowName?.props.children).toBe('Orders Flow');
-    expect(projectName?.props.children).toBe('Demo Project');
+    expect(projectName).toBeNull();
   });
 
   it('body button has no-op safe onClick when onFollow is absent (US-002 placeholder)', () => {

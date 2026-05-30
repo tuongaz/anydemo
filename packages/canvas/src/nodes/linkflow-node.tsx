@@ -4,6 +4,8 @@ import { type CSSProperties, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { LinkflowNodeData } from '../types.ts';
+import { ResizeControls } from './resize-controls.tsx';
+import { useResizeGesture } from './use-resize-gesture.ts';
 
 /**
  * Runtime data carried on a linkflow node. The on-disk shape is
@@ -37,6 +39,15 @@ export type LinkflowNodeRuntimeData = LinkflowNodeData & {
   _autoOpenPickerOnMount?: boolean;
   onOpenPicker?: (mode: 'link' | 'edit') => void;
   onFollow?: () => void;
+  onResize?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
+  setResizing?: (on: boolean) => void;
 } & Record<string, unknown>;
 
 export type LinkflowNodeType = Node<LinkflowNodeRuntimeData, 'linkflow'>;
@@ -72,6 +83,12 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
   const state = deriveState(data);
   const sized = data.width !== undefined || data.height !== undefined;
 
+  const { onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
+    onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
+    setResizing: data.setResizing,
+  });
+
   // One-shot auto-open hook for the toolbar's drag-create flow. `firedRef`
   // ensures a re-render with the flag still set doesn't re-fire the picker,
   // and the callback gate handles the (test/transitional) case where the host
@@ -103,6 +120,18 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     ...baseChrome,
     ...(sized ? {} : { width: LINKFLOW_DEFAULT_SIZE.width, height: LINKFLOW_DEFAULT_SIZE.height }),
   };
+
+  const resizeControls = (
+    <ResizeControls
+      visible={!!selected && !!data.onResize}
+      cornerVariant="visible"
+      minWidth={LINKFLOW_MIN_SIZE.width}
+      minHeight={LINKFLOW_MIN_SIZE.height}
+      onResizeStart={onResizeStart}
+      onResize={onResizeEvent}
+      onResizeEnd={onResizeEnd}
+    />
+  );
 
   const handles = (
     <>
@@ -143,9 +172,10 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
         data-testid="linkflow-node"
         data-node-type="linkflow"
         data-linkflow-state="unlinked"
-        className="sf:group sf:relative sf:flex sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground"
+        className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground"
         style={containerStyle}
       >
+        {resizeControls}
         {handles}
         <button
           type="button"
@@ -167,6 +197,9 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     // Target is set but the resolver couldn't find it (renamed / deleted /
     // project unregistered). Surface the last-known slug pair as the label —
     // the picker (opened on body click in US-004) lets the user re-pick.
+    // Broken is a transient warning chrome — resize handles aren't useful
+    // here, so we keep the semantic <button> wrapper for keyboard a11y
+    // instead of swapping to a div + role="button".
     const lastKnown = data.target ? `${data.target.project} · ${data.target.flow}` : '';
     return (
       <button
@@ -198,59 +231,52 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
   // selection/drag/connect paths fire on body clicks. Navigation lives in a
   // dedicated Link <button> on the right (US-007); the pencil <button> next to
   // it opens the picker for re-targeting (US-004). Body taps select the node
-  // for color/connection edits without navigating away.
+  // for color/connection edits without navigating away. The chrome background
+  // comes purely from `containerStyle.backgroundColor` (toolbar color picker
+  // writes `data.backgroundColor`) so there's no class fallback to override.
   const resolved = data._resolvedTarget as { projectName: string; flowName: string };
   return (
     <div
       data-testid="linkflow-node"
       data-node-type="linkflow"
       data-linkflow-state="linked-healthy"
-      className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-3 sf:py-2 sf:text-left sf:text-card-foreground"
-      style={containerStyle}
+      className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:gap-3 sf:rounded-md sf:border sf:border-border sf:px-3 sf:py-2 sf:text-left sf:text-card-foreground"
+      style={{ backgroundColor: 'hsl(var(--card))', ...containerStyle }}
     >
+      {resizeControls}
       {handles}
-      <div className="sf:flex sf:min-w-0 sf:flex-1 sf:flex-col sf:gap-1">
-        <span
-          data-testid="linkflow-flow-name"
-          className="sf:truncate sf:font-medium sf:text-base sf:leading-tight"
-        >
-          {resolved.flowName}
-        </span>
-        <span
-          data-testid="linkflow-project-name"
-          className="sf:truncate sf:text-xs sf:text-muted-foreground"
-        >
-          {resolved.projectName}
-        </span>
-      </div>
-      <div className="sf:flex sf:shrink-0 sf:flex-col sf:items-center sf:gap-1">
-        <button
-          type="button"
-          data-testid="linkflow-edit-button"
-          aria-label="Change linked flow"
-          title="Change linked flow"
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onOpenPicker?.('edit');
-          }}
-          className="sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
-        >
-          <Pencil size={12} aria-hidden />
-        </button>
-        <button
-          type="button"
-          data-testid="linkflow-follow-button"
-          aria-label={`Open ${resolved.flowName}`}
-          title={`Open ${resolved.flowName}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onFollow?.();
-          }}
-          className="sf:flex sf:h-7 sf:w-7 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:border sf:border-border sf:bg-background sf:text-muted-foreground sf:transition-colors sf:hover:bg-muted sf:hover:text-foreground"
-        >
-          <Link2 size={14} aria-hidden />
-        </button>
-      </div>
+      <span
+        data-testid="linkflow-flow-name"
+        className="sf:min-w-0 sf:flex-1 sf:truncate sf:font-medium sf:text-base sf:leading-tight"
+      >
+        {resolved.flowName}
+      </span>
+      <button
+        type="button"
+        data-testid="linkflow-edit-button"
+        aria-label="Change linked flow"
+        title="Change linked flow"
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onOpenPicker?.('edit');
+        }}
+        className="sf:absolute sf:top-1 sf:right-1 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
+      >
+        <Pencil size={12} aria-hidden />
+      </button>
+      <button
+        type="button"
+        data-testid="linkflow-follow-button"
+        aria-label={`Open ${resolved.flowName}`}
+        title={`Open ${resolved.flowName}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          data.onFollow?.();
+        }}
+        className="sf:flex sf:h-11 sf:w-11 sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-border sf:bg-background sf:text-foreground sf:transition-colors sf:hover:bg-muted sf:hover:text-foreground"
+      >
+        <Link2 size={22} aria-hidden />
+      </button>
       {/* The wrapped id is referenced in a data attribute so future debugging
           aids and integration tests can pin assertions to a specific node. */}
       <span hidden data-linkflow-node-id={id} />
