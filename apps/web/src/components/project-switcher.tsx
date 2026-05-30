@@ -10,7 +10,6 @@ import {
   CommandInput,
   CommandItem,
   CommandList,
-  CommandSeparator,
   CommandShortcut,
   Dialog,
   DialogContent,
@@ -124,12 +123,12 @@ export function ProjectSwitcher({
         <PopoverContent
           align="end"
           sideOffset={6}
-          className="w-[320px] p-0"
+          className="relative w-[320px] p-0"
           data-testid="project-switcher-popover"
         >
           <Command>
             <CommandInput placeholder="Search projects..." />
-            <CommandList>
+            <CommandList className="pb-12">
               <CommandEmpty>No projects.</CommandEmpty>
               {projects.length > 0 ? (
                 <CommandGroup heading="Projects">
@@ -169,23 +168,21 @@ export function ProjectSwitcher({
                   ))}
                 </CommandGroup>
               ) : null}
-              {projects.length > 0 ? <CommandSeparator /> : null}
-              <CommandGroup>
-                <CommandItem
-                  value="+ create new project"
-                  onSelect={() => {
-                    setOpen(false);
-                    setCreateOpen(true);
-                  }}
-                  data-testid="project-switcher-create"
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <Plus className="h-4 w-4 opacity-70" />
-                  <span className="font-medium">Create new project</span>
-                </CommandItem>
-              </CommandGroup>
             </CommandList>
           </Command>
+          <button
+            type="button"
+            aria-label="Create new project"
+            title="Create new project"
+            data-testid="project-switcher-create"
+            onClick={() => {
+              setOpen(false);
+              setCreateOpen(true);
+            }}
+            className="absolute right-2 bottom-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md transition-colors hover:bg-emerald-400 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
         </PopoverContent>
       </Popover>
 
