@@ -1,12 +1,15 @@
 // US-004: Playwright e2e coverage for the decoupled inspector sidebar.
 //
 // After US-003, the right-hand DetailPanel no longer auto-opens on node
-// selection — it mounts only when the user clicks the new
-// `[data-testid="inspector-toggle"]` button in the top-right chrome row, and
-// unmounts when the pane (empty canvas area) is clicked. Connectors never
-// drive the panel. This spec asserts the three required user-visible
-// scenarios as functional element-presence checks (no visual baselines —
-// baseline regeneration is handled manually after Ralph completes).
+// selection — it opens only when the user clicks the
+// `[data-testid="inspector-toggle"]` button in the top-right chrome row.
+// Empty-pane clicks deselect any active node but leave the panel open;
+// closing is only via the toggle or the panel's own close affordance.
+// Connectors never drive the panel.
+//
+// The panel is ALWAYS mounted while the sidebar feature is enabled — it
+// animates `width: 0 ↔ W` to push / yield canvas space, so visibility
+// (not presence) is the assertion to make.
 //
 // Filename ends in `.e2e.ts` (not `.spec.ts`) so bun test's default
 // discovery can't pick it up — same convention as the other studio e2e
@@ -33,24 +36,26 @@ test.describe('inspector toggle — sidebar decoupled from selection', () => {
     await expect(page.locator('[data-testid="inspector-toggle"]')).toBeVisible();
   });
 
-  test('clicking a node does NOT mount the DetailPanel by default', async ({ page }) => {
+  test('clicking a node does NOT open the DetailPanel by default', async ({ page }) => {
     const detailPanel = page.locator('[data-testid="detail-panel"]');
-    await expect(detailPanel).toHaveCount(0);
+    // Panel is always in the DOM (for the slide-out animation) but starts
+    // with width: 0, so toBeVisible reports false.
+    await expect(detailPanel).not.toBeVisible();
 
     await page.locator('.react-flow__node[data-id="n1"]').click();
     // Selection lands on the clicked node…
     await expect(page.locator('.react-flow__node[data-id="n1"]')).toHaveClass(/selected/);
-    // …but the inspector stays closed.
-    await expect(detailPanel).toHaveCount(0);
+    // …but the inspector stays closed (width: 0).
+    await expect(detailPanel).not.toBeVisible();
   });
 
-  test('clicking the inspector toggle while a node is selected mounts the panel', async ({
+  test('clicking the inspector toggle while a node is selected opens the panel', async ({
     page,
   }) => {
     const detailPanel = page.locator('[data-testid="detail-panel"]');
 
     await page.locator('.react-flow__node[data-id="n1"]').click();
-    await expect(detailPanel).toHaveCount(0);
+    await expect(detailPanel).not.toBeVisible();
 
     await page.locator('[data-testid="inspector-toggle"]').click();
     await expect(detailPanel).toBeVisible();

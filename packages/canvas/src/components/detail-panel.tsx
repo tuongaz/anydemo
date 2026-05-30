@@ -66,6 +66,17 @@ export interface DetailPanelProps {
    * identical to before.
    */
   statusReport?: StatusReport & { ts: number };
+  /**
+   * Controlled visibility. Parent (SeeflowCanvas) keeps DetailPanel mounted
+   * while the sidebar feature is enabled and toggles `open` to drive the
+   * Radix Sheet's slide-in / slide-out animation. Mounting-and-unmounting
+   * the component would cut the exit animation off because Radix needs to
+   * stay in the tree long enough for `data-[state=closed]:animate-out` to
+   * run before SheetContent unmounts. Defaults to `true` so the long tail
+   * of existing component-level tests that don't care about visibility
+   * keep working without ceremony.
+   */
+  open?: boolean;
   onClose: () => void;
 }
 
@@ -79,6 +90,7 @@ export function DetailPanel({
   onDetailChange,
   onIconChange,
   statusReport,
+  open = true,
   onClose,
 }: DetailPanelProps) {
   // Text nodes are pure on-canvas labels — the sidebar would only duplicate
@@ -91,11 +103,16 @@ export function DetailPanel({
   // The panel still opens to expose Description / Detail / style fields.
   const isDescriptionLabelShapeNode = node?.type === 'ellipse' || node?.type === 'sticky';
   const inspectableNode = isTextNode ? null : node;
-  // Parent gates mount via `sidebarOpen` (see seeflow-canvas.tsx
-  // `shouldRenderSidebar`). When DetailPanel is rendered at all, the Sheet
-  // is open — selection state only drives WHICH inner branch renders
-  // (populated node, populated connector, or empty-state placeholder).
-  const open = true;
+  // `open` flows from the parent (sidebarOpen). The parent always renders
+  // DetailPanel while the sidebar feature is enabled; this component handles
+  // the slide-in / slide-out animation itself via a CSS width transition on
+  // the outer aside (driven by `data-state=open|closed`). The inner content
+  // div keeps its full intrinsic `width` so as the aside shrinks toward 0,
+  // the canvas absorbs the freed space and the inner content gets clipped
+  // by the aside's `overflow: hidden` — producing a clean wipe-from-right
+  // effect without the layout jank you'd get from animating padding or
+  // margin on a content-bearing element. Selection state only drives WHICH
+  // inner branch renders (populated node, connector, or empty-state).
   const nodeName =
     inspectableNode && 'name' in inspectableNode.data ? (inspectableNode.data.name ?? '') : '';
   const description = inspectableNode?.data.description ?? '';
@@ -144,13 +161,24 @@ export function DetailPanel({
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  // Border + shadow are themed via CSS vars on `.seeflow-canvas-root` so the
-  // panel reads no-border + subtle shadow in light and a hairline + heavier
-  // shadow in dark. The width is applied inline; below the sm breakpoint the
-  // panel falls back to full width via the responsive style merge.
+  // Outer aside: animates width 0 ↔ `width` and border-left 0 ↔ var to push
+  // / yield canvas space smoothly. overflow-hidden clips the fixed-width
+  // inner content as the aside shrinks during a close. Border + shadow are
+  // themed via CSS vars on `.seeflow-canvas-root` so the panel reads
+  // no-border + subtle shadow in light and a hairline + heavier shadow in
+  // dark. Below the sm breakpoint the panel still falls back to full width
+  // via the responsive style merge on the inner.
   const asideStyle = {
+    width: open ? width : 0,
+    borderLeftWidth: open ? 'var(--detail-panel-border-left)' : 0,
+    transition: 'width 220ms ease-out, border-left-width 220ms ease-out',
+  } as CSSProperties;
+  // Inner content keeps its full intrinsic width so the layout inside the
+  // aside doesn't reflow during the slide; only the aside's visible width
+  // changes. boxShadow lives on the inner so it doesn't bleed across the
+  // canvas while the aside is closed.
+  const innerStyle = {
     width,
-    borderLeftWidth: 'var(--detail-panel-border-left)',
     boxShadow: 'var(--detail-panel-shadow)',
   } as CSSProperties;
 
@@ -160,24 +188,28 @@ export function DetailPanel({
       data-testid="detail-panel"
       data-state={open ? 'open' : 'closed'}
       style={asideStyle}
-      className="sf:relative sf:flex sf:h-full sf:flex-shrink-0 sf:flex-col sf:overflow-y-auto sf:border-border sf:bg-card/94 sf:p-6 sf:backdrop-blur-[14px]"
+      className="sf:relative sf:flex sf:h-full sf:flex-shrink-0 sf:flex-col sf:overflow-hidden sf:border-border"
     >
       <div
-        aria-label="Resize detail panel"
-        onPointerDown={onResizeHandlePointerDown}
-        data-testid="detail-panel-resize-handle"
-        className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
-      />
-      <button
-        type="button"
-        onClick={onClose}
-        aria-label="Close inspector"
-        data-testid="detail-panel-close"
-        className="sf:absolute sf:right-4 sf:top-4 sf:z-10 sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-sm sf:text-foreground/70 sf:opacity-70 sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2"
+        style={innerStyle}
+        className="sf:relative sf:flex sf:h-full sf:flex-shrink-0 sf:flex-col sf:overflow-y-auto sf:bg-card/94 sf:p-6 sf:backdrop-blur-[14px]"
       >
-        <X className="sf:h-4 sf:w-4" />
-        <span className="sf:sr-only">Close</span>
-      </button>
+        <div
+          aria-label="Resize detail panel"
+          onPointerDown={onResizeHandlePointerDown}
+          data-testid="detail-panel-resize-handle"
+          className="sf:absolute sf:inset-y-0 sf:left-0 sf:z-10 sf:hidden sf:w-1.5 sf:cursor-col-resize sf:bg-transparent sf:transition-colors sf:hover:bg-border sf:sm:block"
+        />
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close inspector"
+          data-testid="detail-panel-close"
+          className="sf:absolute sf:right-4 sf:top-4 sf:z-10 sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-sm sf:text-foreground/70 sf:opacity-70 sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2"
+        >
+          <X className="sf:h-4 sf:w-4" />
+          <span className="sf:sr-only">Close</span>
+        </button>
       {inspectableNode ? (
         <div className="sf:flex sf:flex-col sf:gap-4">
           <div className="sf:-mx-6 sf:-mt-6 sf:flex sf:flex-col sf:border-b sf:border-border/60 sf:bg-card/60 sf:px-6 sf:pb-2.5 sf:pt-3 sf:pr-12">
@@ -288,6 +320,7 @@ export function DetailPanel({
           Select a node to inspect.
         </div>
       )}
+      </div>
     </aside>
   );
 }

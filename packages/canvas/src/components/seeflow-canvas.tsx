@@ -4253,7 +4253,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // value, no new wiring at the host).
   const sidebarDemoId = projectId ?? null;
   const sidebarEnabled = flags.showDetailPanel && !disableSidebar;
-  const shouldRenderSidebar = sidebarEnabled && sidebarOpen;
+  // Keep DetailPanel mounted while the sidebar feature is enabled and let
+  // its `open` prop drive the Radix Sheet's slide-in / slide-out animation.
+  // Gating the mount on `sidebarOpen` would cut the exit animation off
+  // because Radix needs the component in the tree until `data-state=closed`
+  // has finished its `animate-out` keyframes.
+  const shouldRenderSidebar = sidebarEnabled;
   // US-004: memoize the icon registry value so the IconRegistryProvider's
   // context object identity is stable across re-renders when the host's
   // `customIcons` reference is stable (or undefined). Prevents every <Icon>
@@ -4977,6 +4982,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onDescriptionChange={onDescriptionChange}
                 onDetailChange={onDetailChange}
                 onIconChange={onIconChange}
+                open={sidebarOpen}
                 onClose={() => {
                   // Dismiss the sidebar (X button, Escape) AND clear selection
                   // so the X/Esc gestures behave like the pane-click dismissal:

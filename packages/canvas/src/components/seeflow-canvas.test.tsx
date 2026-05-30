@@ -2796,9 +2796,16 @@ describe('SeeflowCanvas', () => {
       return findElement(tree, (el) => el.type === DetailPanel);
     }
 
-    it('does NOT render the DetailPanel by default (sidebar closed)', () => {
+    it('DetailPanel mounts with open=false by default so Radix can play the exit animation', () => {
+      // The panel is kept in the tree while `sidebarEnabled` is true; the
+      // Radix Sheet's `open` prop (driven by sidebarOpen) toggles
+      // data-state and triggers the slide-in / slide-out animation. If we
+      // unmounted on close instead, Radix would never get to run
+      // `data-[state=closed]:animate-out` before the DOM disappears.
       const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
-      expect(findDetailPanel(tree)).toBeNull();
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { open?: boolean }).open).toBe(false);
     });
 
     it('passes the sole selected node into DetailPanel.node when the sidebar is open', () => {
@@ -2997,19 +3004,24 @@ describe('SeeflowCanvas', () => {
     function findInspectorToggle(tree: unknown) {
       return findElement(tree, (el) => el.type === InspectorToggle);
     }
-    it('selecting a node does NOT mount DetailPanel by default', () => {
-      // The PRD's headline behavior: clicking (=selecting) a node leaves the
-      // sidebar closed. The user must explicitly open it via the toggle.
+    it('selecting a node leaves DetailPanel.open=false by default', () => {
+      // The PRD's headline behavior: clicking (=selecting) a node does NOT
+      // open the sidebar — the user must explicitly hit the toggle. The
+      // panel stays mounted with open=false so its slide-out animation can
+      // run when the user later closes it.
       const tree = callSeeflowCanvas({
         nodes: [makeShapeNode('a')],
         selectedNodeIds: ['a'],
       });
-      expect(findDetailPanel(tree)).toBeNull();
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { open?: boolean }).open).toBe(false);
     });
 
-    it('clicking the inspector toggle mounts DetailPanel with the selected node', () => {
+    it('clicking the inspector toggle drives DetailPanel.open=true with the selected node', () => {
       // With the toggle "open" (sidebarOpen=true via the slot-13 override) and a
-      // node selected, DetailPanel mounts and receives that node as `node`.
+      // node selected, DetailPanel receives open=true so the Sheet slides in,
+      // and `node` is the selected one.
       const a = makeShapeNode('a');
       const tree = callSeeflowCanvas(
         { nodes: [a], selectedNodeIds: ['a'] },
@@ -3017,6 +3029,7 @@ describe('SeeflowCanvas', () => {
       );
       const panel = findDetailPanel(tree);
       expect(panel).not.toBeNull();
+      expect((panel?.props as { open?: boolean }).open).toBe(true);
       expect((panel?.props as { node?: FlowNode | null }).node).toBe(a);
     });
 
@@ -3052,8 +3065,8 @@ describe('SeeflowCanvas', () => {
       expect(slot13Calls).toEqual([]);
     });
 
-    it('connector-only selection does not mount DetailPanel', () => {
-      // Selecting a connector leaves the sidebar closed (toggle is the sole
+    it('connector-only selection leaves DetailPanel.open=false', () => {
+      // Selecting a connector does NOT open the sidebar (toggle is the sole
       // open path). The PRD's "Connectors never trigger the sidebar" rule.
       const conn: Connector = {
         id: 'c1',
@@ -3067,7 +3080,9 @@ describe('SeeflowCanvas', () => {
         connectors: [conn],
         selectedConnectorIds: ['c1'],
       });
-      expect(findDetailPanel(tree)).toBeNull();
+      const panel = findDetailPanel(tree);
+      expect(panel).not.toBeNull();
+      expect((panel?.props as { open?: boolean }).open).toBe(false);
     });
 
     it('mounts the InspectorToggle in the top-right chrome row in edit mode', () => {
