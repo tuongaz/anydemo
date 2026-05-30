@@ -24,6 +24,14 @@ function makeAwsZipBuffer(): Buffer {
   return Buffer.from(zip);
 }
 
+function makeGcpZipBuffer(): Buffer {
+  const zip = zipSync({
+    'Cloud Functions.svg': strToU8('<svg>cloud-functions</svg>'),
+    'Cloud Run.svg': strToU8('<svg>cloud-run</svg>'),
+  });
+  return Buffer.from(zip);
+}
+
 function startIconStudio(fetcher: IconFetcher): IconTestStudio {
   const cacheRoot = mkdtempSync(join(tmpdir(), 'sf-icons-it-'));
   const app = createApp({
@@ -102,6 +110,58 @@ describe('integration: icons/install pipeline via HTTP + SSE', () => {
     expect(svgRes.status).toBe(200);
     expect(svgRes.headers.get('content-type')).toBe('image/svg+xml');
     expect(await svgRes.text()).toBe('<svg>lambda</svg>');
+  });
+});
+
+describe('integration: icons/install pipeline for GCP via HTTP + SSE', () => {
+  let studio: IconTestStudio;
+
+  beforeAll(() => {
+    studio = startIconStudio(async () => makeGcpZipBuffer());
+  });
+
+  afterAll(async () => {
+    await studio.stop();
+  });
+
+  it('POST /install gcp → SSE done → /packs flips → /gcp/cloud-functions.svg serves the fixture', async () => {
+    const postRes = await fetch(`${studio.baseURL}/api/icons/install`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ vendor: 'gcp' }),
+    });
+    expect(postRes.status).toBe(200);
+    const { jobId } = (await postRes.json()) as { jobId: string };
+    expect(typeof jobId).toBe('string');
+
+    const sse = await connectSse(studio.baseURL, `/api/icons/jobs/${jobId}/events`);
+    try {
+      await sse.waitFor((e) => {
+        try {
+          return (JSON.parse(e.data) as { type: string }).type === 'done';
+        } catch {
+          return false;
+        }
+      }, 5_000);
+    } finally {
+      sse.close();
+    }
+
+    const eventTypes = sse.events.map((e) => (JSON.parse(e.data) as { type: string }).type);
+    expect(eventTypes).toContain('download-started');
+    expect(eventTypes).toContain('done');
+
+    const packsRes = await fetch(`${studio.baseURL}/api/icons/packs`);
+    expect(packsRes.status).toBe(200);
+    const packsBody = (await packsRes.json()) as {
+      packs: Array<{ vendor: string; installed: boolean }>;
+    };
+    expect(packsBody.packs.find((p) => p.vendor === 'gcp')?.installed).toBe(true);
+
+    const svgRes = await fetch(`${studio.baseURL}/api/icons/gcp/cloud-functions.svg`);
+    expect(svgRes.status).toBe(200);
+    expect(svgRes.headers.get('content-type')).toBe('image/svg+xml');
+    expect(await svgRes.text()).toBe('<svg>cloud-functions</svg>');
   });
 });
 
