@@ -27,4 +27,17 @@ describe('extractZipToDir', () => {
     const zip = zipSync({ '../escape.svg': strToU8('<svg/>') });
     await expect(extractZipToDir(Buffer.from(zip), dest)).rejects.toThrow(/escape/);
   });
+
+  // The real AWS zip ships macOS AppleDouble metadata that looks like SVGs to
+  // a naive extension check; the extractor must drop them so they don't end
+  // up in the on-disk pack OR the index as arch-amazon-* duplicates.
+  it('skips macOS AppleDouble metadata (__MACOSX/ + ._-prefixed files)', async () => {
+    const zip = zipSync({
+      'Arch_Amazon-API-Gateway_64.svg': strToU8('<svg>api</svg>'),
+      '._Arch_Amazon-API-Gateway_64.svg': strToU8('\x00binary'),
+      '__MACOSX/._Arch_Amazon-API-Gateway_64.svg': strToU8('\x00binary'),
+    });
+    const written = await extractZipToDir(Buffer.from(zip), dest);
+    expect(written).toEqual(['Arch_Amazon-API-Gateway_64.svg']);
+  });
 });
