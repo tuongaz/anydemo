@@ -60,20 +60,35 @@ function isElement(value: unknown): value is ReactElementLike {
   );
 }
 
+// Walk children, treating nested arrays (from chained `{map(...)}{cond ? ... : null}`
+// expressions) as transparent so the recursion can still reach buttons inside them.
+function walkChildren(value: unknown, visit: (el: ReactElementLike) => boolean): boolean {
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (walkChildren(item, visit)) return true;
+    }
+    return false;
+  }
+  if (!isElement(value)) return false;
+  if (visit(value)) return true;
+  const children = value.props.children;
+  if (children === undefined || children === null) return false;
+  return walkChildren(children, visit);
+}
+
 function findElement(
   tree: unknown,
   predicate: (el: ReactElementLike) => boolean,
 ): ReactElementLike | null {
-  if (!isElement(tree)) return null;
-  if (predicate(tree)) return tree;
-  const children = tree.props.children;
-  if (children === undefined || children === null) return null;
-  const arr = Array.isArray(children) ? children : [children];
-  for (const child of arr) {
-    const found = findElement(child, predicate);
-    if (found) return found;
-  }
-  return null;
+  let match: ReactElementLike | null = null;
+  walkChildren(tree, (el) => {
+    if (predicate(el)) {
+      match = el;
+      return true;
+    }
+    return false;
+  });
+  return match;
 }
 
 function findAll(
@@ -81,12 +96,10 @@ function findAll(
   predicate: (el: ReactElementLike) => boolean,
   acc: ReactElementLike[] = [],
 ): ReactElementLike[] {
-  if (!isElement(tree)) return acc;
-  if (predicate(tree)) acc.push(tree);
-  const children = tree.props.children;
-  if (children === undefined || children === null) return acc;
-  const arr = Array.isArray(children) ? children : [children];
-  for (const child of arr) findAll(child, predicate, acc);
+  walkChildren(tree, (el) => {
+    if (predicate(el)) acc.push(el);
+    return false;
+  });
   return acc;
 }
 
@@ -410,5 +423,26 @@ describe('IconPickerBody tabs (US-016)', () => {
     const tree = callBody({ activeTab: 'aws', recents: ['shopping-cart'] });
     const recents = findElement(tree, testIdEquals('icon-picker-recents'));
     expect(recents).toBeNull();
+  });
+
+  it('renders the + Browse-packs button at the end of the tab bar when showBrowseTab is true', () => {
+    const onBrowsePacks = mock(() => {});
+    const tree = callBody({ showBrowseTab: true, onBrowsePacks });
+    const browse = findElement(tree, testIdEquals('icon-picker-tab-browse'));
+    expect(browse).not.toBeNull();
+    (browse?.props.onClick as () => void)();
+    expect(onBrowsePacks).toHaveBeenCalledTimes(1);
+  });
+
+  it('hides the + Browse-packs button when showBrowseTab is false (default)', () => {
+    const tree = callBody({ onBrowsePacks: () => {} });
+    const browse = findElement(tree, testIdEquals('icon-picker-tab-browse'));
+    expect(browse).toBeNull();
+  });
+
+  it('hides the + Browse-packs button when onBrowsePacks is missing even if showBrowseTab is true', () => {
+    const tree = callBody({ showBrowseTab: true });
+    const browse = findElement(tree, testIdEquals('icon-picker-tab-browse'));
+    expect(browse).toBeNull();
   });
 });

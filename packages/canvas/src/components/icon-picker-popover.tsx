@@ -1,4 +1,4 @@
-import { Ban, Download, Layers } from 'lucide-react';
+import { Ban, Download, Plus } from 'lucide-react';
 import {
   type ChangeEvent,
   Fragment,
@@ -310,7 +310,7 @@ export function IconPickerPopover({
               activeTab={activeTab}
               onActiveTabChange={setActiveTab}
               onBrowsePacks={browseHandler}
-              showBrowseFooter={iconsAdapter !== undefined}
+              showBrowseTab={iconsAdapter !== undefined}
               studioBaseUrl={studioBaseUrl}
             />
           )}
@@ -361,12 +361,12 @@ export interface IconPickerBodyProps {
   // Browse Packs CTA passthrough — see IconPickerPopoverProps.
   onBrowsePacks?: () => void;
   /**
-   * US-017: render the "Browse packs" footer button below the icon grid. The
-   * popover toggles this on when an `iconsAdapter` is wired so the picker
-   * itself drives the install flow. Defaults to `false` — old callers and
-   * tests that exercise only the bundled icons see no footer.
+   * Render the `+` icon-only Browse-packs button at the end of the tab bar.
+   * The popover toggles this on when an `iconsAdapter` is wired so the
+   * picker itself drives the install flow. Defaults to `false` — callers
+   * that exercise only the bundled icons see no Browse button.
    */
-  showBrowseFooter?: boolean;
+  showBrowseTab?: boolean;
   // Threaded by IconPickerPopover from CanvasStudioContext. Tests can omit
   // (default '') because vendor tiles only need it for the SVG URL.
   studioBaseUrl?: string;
@@ -384,7 +384,7 @@ export function IconPickerBody({
   activeTab = 'lucide',
   onActiveTabChange,
   onBrowsePacks,
-  showBrowseFooter = false,
+  showBrowseTab = false,
   studioBaseUrl = '',
 }: IconPickerBodyProps) {
   const vendorNames = ICON_NAMES_BY_VENDOR[activeTab];
@@ -432,6 +432,22 @@ export function IconPickerBody({
             onSelect: () => onActiveTabChange?.(tab.id),
           }),
         )}
+        {showBrowseTab && onBrowsePacks ? (
+          <button
+            key="icon-picker-tab-browse"
+            type="button"
+            aria-label="Browse packs"
+            data-testid="icon-picker-tab-browse"
+            onClick={() => onBrowsePacks()}
+            className={cn(
+              'sf:inline-flex sf:items-center sf:gap-1 sf:rounded-sm sf:px-2 sf:py-1 sf:text-xs sf:font-medium sf:text-muted-foreground sf:transition-colors',
+              'sf:hover:bg-accent/50 sf:hover:text-accent-foreground',
+              'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
+            )}
+          >
+            <Plus className="sf:h-3 sf:w-3" aria-hidden="true" />
+          </button>
+        ) : null}
       </div>
 
       <div className="sf:border-b sf:border-border sf:p-2">
@@ -520,26 +536,6 @@ export function IconPickerBody({
           </div>
         )}
       </div>
-      {showBrowseFooter ? (
-        <div className="sf:flex sf:items-center sf:justify-between sf:border-t sf:border-border sf:p-2">
-          <span className="sf:text-[11px] sf:text-muted-foreground">
-            Add cloud icon packs to expand the picker.
-          </span>
-          <button
-            type="button"
-            data-testid="icon-picker-browse-footer"
-            onClick={() => onBrowsePacks?.()}
-            className={cn(
-              'sf:inline-flex sf:items-center sf:gap-1 sf:rounded-md sf:bg-primary sf:px-3 sf:py-1 sf:text-xs sf:font-medium sf:text-primary-foreground sf:transition-colors',
-              'sf:hover:bg-primary/90',
-              'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
-            )}
-          >
-            <Layers className="sf:h-3 sf:w-3" aria-hidden="true" />
-            Browse packs
-          </button>
-        </div>
-      ) : null}
     </div>
   );
 }
