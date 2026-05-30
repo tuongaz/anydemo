@@ -194,30 +194,22 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     );
   }
 
-  // linked-healthy — outer wrapper holds handles + a body <button> (navigation
-  // target, US-007) + a separately-positioned pencil <button> (picker edit
-  // mode, US-004). Nesting two buttons would be invalid HTML, so the pencil is
-  // a sibling of the body button absolute-positioned on top of it.
+  // linked-healthy — outer wrapper is a plain <div> so React Flow's pointerdown
+  // selection/drag/connect paths fire on body clicks. Navigation lives in a
+  // dedicated Link <button> on the right (US-007); the pencil <button> next to
+  // it opens the picker for re-targeting (US-004). Body taps select the node
+  // for color/connection edits without navigating away.
   const resolved = data._resolvedTarget as { projectName: string; flowName: string };
   return (
     <div
       data-testid="linkflow-node"
       data-node-type="linkflow"
       data-linkflow-state="linked-healthy"
-      className="sf:group sf:relative"
+      className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-3 sf:py-2 sf:text-left sf:text-card-foreground"
       style={containerStyle}
     >
       {handles}
-      <button
-        type="button"
-        data-testid="linkflow-follow-button"
-        aria-label={`Open ${resolved.flowName}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onFollow?.();
-        }}
-        className="sf:flex sf:h-full sf:w-full sf:cursor-pointer sf:flex-col sf:items-start sf:justify-center sf:gap-1 sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-3 sf:py-2 sf:text-left sf:text-card-foreground"
-      >
+      <div className="sf:flex sf:min-w-0 sf:flex-1 sf:flex-col sf:gap-1">
         <span
           data-testid="linkflow-flow-name"
           className="sf:truncate sf:font-medium sf:text-base sf:leading-tight"
@@ -230,20 +222,35 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
         >
           {resolved.projectName}
         </span>
-      </button>
-      <button
-        type="button"
-        data-testid="linkflow-edit-button"
-        aria-label="Change linked flow"
-        title="Change linked flow"
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onOpenPicker?.('edit');
-        }}
-        className="sf:absolute sf:top-1 sf:right-1 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
-      >
-        <Pencil size={12} aria-hidden />
-      </button>
+      </div>
+      <div className="sf:flex sf:shrink-0 sf:flex-col sf:items-center sf:gap-1">
+        <button
+          type="button"
+          data-testid="linkflow-edit-button"
+          aria-label="Change linked flow"
+          title="Change linked flow"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onOpenPicker?.('edit');
+          }}
+          className="sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
+        >
+          <Pencil size={12} aria-hidden />
+        </button>
+        <button
+          type="button"
+          data-testid="linkflow-follow-button"
+          aria-label={`Open ${resolved.flowName}`}
+          title={`Open ${resolved.flowName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onFollow?.();
+          }}
+          className="sf:flex sf:h-7 sf:w-7 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:border sf:border-border sf:bg-background sf:text-muted-foreground sf:transition-colors sf:hover:bg-muted sf:hover:text-foreground"
+        >
+          <Link2 size={14} aria-hidden />
+        </button>
+      </div>
       {/* The wrapped id is referenced in a data attribute so future debugging
           aids and integration tests can pin assertions to a specific node. */}
       <span hidden data-linkflow-node-id={id} />
