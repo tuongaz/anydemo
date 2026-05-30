@@ -72,6 +72,27 @@ Read-only. JSON output. Start cheapest (`list`) and drill in.
 
 The `component` node type turns a canvas node into a json-render-powered reactive UI driven by a small catalog of shadcn-styled primitives (Card, Button, Input, Chart, Markdown, etc.). The spec lives at `<project>/nodes/<id>/spec.json` — declaring an element tree, optional initial state, and a typed action vocabulary — while `flow.json` carries only the `type: 'component'` tag. Two action kinds are supported: `set` actions mutate local state via JSON Pointer paths, and `script` actions POST to `/api/flows/:id/nodes/:nodeId/actions/:name` which spawns the matching script under `nodes/<id>/` (e.g. `nodes/<id>/actions/<name>.ts`) and merges the JSON response back into state.
 
+## Icon packs
+
+Cloud vendor icons (AWS, GCP, Azure) install on demand into a local cache. Icon ids encode the vendor as a prefix — `aws:lambda`, `gcp:cloud-run`, `azure:functions`, `iconify:logos:google-cloud` — while unprefixed names continue to resolve against the bundled Lucide set.
+
+### CLI
+
+```bash
+seeflow icons list                 # JSON summary of installed + available packs
+seeflow icons add aws              # download + extract + index the AWS pack
+seeflow icons add azure --accept-terms   # Microsoft requires explicit acceptance
+seeflow icons add gcp --pack-url <url>   # override the default download URL
+seeflow icons update aws           # re-install (re-downloads from upstream)
+seeflow icons remove aws           # drop the pack from cache + index
+```
+
+Packs install under `~/.seeflow/icons/<vendor>/<version>/` with a shared `index.json`. Installs are serialized per vendor — a second `seeflow icons add aws` while the first is running waits rather than racing.
+
+### In the studio
+
+Open any icon picker on a canvas node, click **Browse packs** in the picker footer, then **Install** on the vendor row. Azure prompts for license acceptance; AWS and GCP proceed directly. A progress toast tracks bytes downloaded, persists across popover close, and refreshes the picker's vendor tabs the moment the pack is indexed. Vendor tabs (Bundled · AWS · GCP · Azure · Logos) appear above the icon grid; uninstalled vendors render disabled with an inline Install affordance.
+
 ## Docker reference
 
 > ⚠️ Docker is the non-preferred path. Play/Status scripts execute inside the container and cannot reach host services or host binaries, so interactive nodes generated against your local app will not work. Prefer `npx -y @tuongaz/seeflow@latest start` for the full experience.

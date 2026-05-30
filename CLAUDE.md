@@ -44,6 +44,15 @@ bun test path/to/foo.test.ts   # single test file
 
 `make help` lists Makefile wrappers (`make dev`, `make register DIR=…`, `make demo`, `make docker.build`, `make sync-seeflow-schema`, etc.).
 
+## Icon packs
+
+- Cloud vendor icons (AWS, GCP, Azure) install into `~/.seeflow/icons/<vendor>/<version>/` with a shared `index.json`. Same root regardless of CLI vs studio entrypoint — both share the registry via `apps/studio/src/icons/jobs.ts`.
+- Vendor-prefixed icon ids (`aws:lambda`, `gcp:cloud-run`, `azure:functions`, `iconify:logos:google-cloud`) round-trip through the schema; unprefixed names default to Lucide.
+- CLI: `seeflow icons list | add <vendor> [--accept-terms] [--pack-url <url>] | update <vendor> | remove <vendor>`. Each subcommand is in `COMMAND_MANIFEST` and surfaces under `seeflow help icons:*`.
+- HTTP: `/api/icons/*` mounted in `apps/studio/src/api.ts`. Install jobs serialize per vendor via an in-process `JobRegistry`; a parallel install of the same vendor returns 409 with the in-flight `jobId`. SSE replays buffered events for late subscribers.
+- Azure carries `requiresAcceptance: true` in `apps/studio/src/icons/vendors.ts` — the installer yields `terms-required` and returns early unless `acceptTerms` is set.
+- Add a new vendor: create `normalize-<vendor>.ts`, register a `VendorDescriptor` entry, extend `IconVendor` in `packages/canvas/src/lib/icon-id.ts` AND `apps/studio/src/icons/paths.ts`, mirror the new vendor in `ICON_NAMES_BY_VENDOR` + `summarizePacks` + the picker's tab list, then add an integration test under `apps/studio/integration/icons-install.it.ts`.
+
 ## Tests
 
 - **Unit:** `foo.ts` + `foo.test.ts` side-by-side throughout each workspace. `bun test` discovers them.

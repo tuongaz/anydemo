@@ -1972,11 +1972,195 @@
     </div>
   </section>
 
+  <!-- ──────────────────── BROWSE PACKS ──────────────────── -->
+  <section>
+    <div class="section-head">
+      <h2>Browse packs</h2>
+      <span class="num">09 / install flow</span>
+    </div>
+
+    <p style="margin: 0 0 32px; color: var(--text-mute); font-size: 16px; max-width: 720px; line-height: 1.55;">
+      Cloud icon packs (AWS, GCP, Azure) install on demand from inside the picker. Three surfaces — panel, modal, toast — share the same tokens as the rest of the studio; no new colors, no new type ramp.
+    </p>
+
+    <!-- BROWSE PACKS PANEL -->
+    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Panel</h3>
+    <div class="comp-card" style="margin-bottom: 40px;">
+      <div class="label">browse-packs-panel · picker footer → swap</div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 28px; height: 28px; border-radius: 6px; background: #18181b; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">AWS</div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 14px; color: var(--text);">Amazon Web Services</span>
+              <span style="font-size: 12px; color: var(--text-dim); font-family: var(--font-mono);">312 icons · 2026-05-30</span>
+            </div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="font-size: 11px; font-family: var(--font-mono); color: var(--emerald-hi); padding: 3px 8px; border: 1px solid color-mix(in oklab, var(--emerald-hi) 30%, transparent); border-radius: 4px;">INSTALLED</span>
+            <button class="btn btn-ghost btn-sm">Remove</button>
+          </div>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 28px; height: 28px; border-radius: 6px; background: #18181b; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">GCP</div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 14px; color: var(--text);">Google Cloud</span>
+              <span style="font-size: 12px; color: var(--text-dim);">Not installed</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm">Install</button>
+        </div>
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e;">
+          <div style="display: flex; align-items: center; gap: 12px;">
+            <div style="width: 28px; height: 28px; border-radius: 6px; background: #18181b; display: grid; place-items: center; font-family: var(--font-mono); font-size: 11px; color: var(--text-dim);">AZ</div>
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <span style="font-size: 14px; color: var(--text);">Microsoft Azure</span>
+              <span style="font-size: 12px; color: var(--text-dim);">Not installed · requires license</span>
+            </div>
+          </div>
+          <button class="btn btn-primary btn-sm">Install</button>
+        </div>
+      </div>
+    </div>
+    <div class="strip-caption" style="margin-bottom: 40px;">One row per vendor · installed badge + Remove on the right · Install primary button for uninstalled · disabled in-place during a running install.</div>
+
+    <!-- INSTALL MODAL -->
+    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">License modal</h3>
+    <div class="grid grid-2" style="gap: 24px; margin-bottom: 40px;">
+      <div class="comp-card">
+        <div class="label">install-pack-modal · requires-acceptance</div>
+        <div style="border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 16px; font-weight: 600; color: var(--text);">Install Microsoft Azure icons</span>
+            <span style="font-size: 13px; color: var(--text-dim); line-height: 1.5;">Microsoft requires explicit acceptance of the Azure icon license before download.</span>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-mute); padding: 12px 14px; background: #18181b; border: 1px solid var(--border); border-radius: var(--r-sm); line-height: 1.6;">
+            For internal architecture diagrams only. Redistribution prohibited.
+            <a href="#" style="color: var(--emerald-hi); text-decoration: none; display: block; margin-top: 6px;">View full license →</a>
+          </div>
+          <label class="check-row" style="font-size: 13px;">
+            <span class="check is-checked">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>
+            </span>
+            I have read the license
+          </label>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-ghost btn-sm">Cancel</button>
+            <button class="btn btn-primary btn-sm">Confirm install</button>
+          </div>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">install-pack-modal · no acceptance required</div>
+        <div style="border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px;">
+          <div style="display: flex; flex-direction: column; gap: 6px;">
+            <span style="font-size: 16px; font-weight: 600; color: var(--text);">Install Google Cloud icons</span>
+            <span style="font-size: 13px; color: var(--text-dim); line-height: 1.5;">Google Cloud architecture icons are free for use in diagrams and presentations.</span>
+          </div>
+          <div style="font-family: var(--font-mono); font-size: 12px; color: var(--text-mute); padding: 12px 14px; background: #18181b; border: 1px solid var(--border); border-radius: var(--r-sm); line-height: 1.6;">
+            Free for diagrammatic use. Attribution recommended.
+            <a href="#" style="color: var(--emerald-hi); text-decoration: none; display: block; margin-top: 6px;">View full license →</a>
+          </div>
+          <div style="display: flex; gap: 10px; justify-content: flex-end;">
+            <button class="btn btn-ghost btn-sm">Cancel</button>
+            <button class="btn btn-primary btn-sm">Confirm install</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="strip-caption" style="margin-bottom: 40px;">Confirm disabled until the checkbox flips when <code style="font-family: var(--font-mono); color: var(--text-mute);">requiresAcceptance</code>. License summary in mono. No second-tier modals — escape closes, no warning.</div>
+
+    <!-- PROGRESS TOAST -->
+    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Progress toast</h3>
+    <div class="grid grid-3" style="gap: 16px; margin-bottom: 32px;">
+      <div class="comp-card">
+        <div class="label">in-progress</div>
+        <div style="border: 1px solid var(--border); border-radius: var(--r-md); background: #0c0c0e; padding: 14px 16px; display: flex; align-items: center; gap: 12px;">
+          <span class="spinner"></span>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+            <span style="font-size: 13px; color: var(--text);">Downloading AWS pack</span>
+            <span style="font-size: 12px; color: var(--text-dim); font-family: var(--font-mono);">4.2 MB</span>
+          </div>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">done</div>
+        <div style="border: 1px solid color-mix(in oklab, var(--emerald-hi) 35%, var(--border)); border-radius: var(--r-md); background: #0c0c0e; padding: 14px 16px; display: flex; align-items: center; gap: 12px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--emerald-hi)" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.8 10A10 10 0 1 1 17 3.3"/><path d="m9 11 3 3L22 4"/></svg>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+            <span style="font-size: 13px; color: var(--text);">AWS pack installed</span>
+            <span style="font-size: 12px; color: var(--text-dim); font-family: var(--font-mono);">312 icons</span>
+          </div>
+          <button class="btn btn-ghost btn-sm">Close</button>
+        </div>
+      </div>
+      <div class="comp-card">
+        <div class="label">error</div>
+        <div style="border: 1px solid #ef4444; border-radius: var(--r-md); background: #0c0c0e; padding: 14px 16px; display: flex; align-items: center; gap: 12px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg>
+          <div style="display: flex; flex-direction: column; gap: 2px; flex: 1;">
+            <span style="font-size: 13px; color: var(--text);">AWS pack failed</span>
+            <span style="font-size: 12px; color: var(--text-dim); font-family: var(--font-mono);">network unavailable</span>
+          </div>
+          <button class="btn btn-secondary btn-sm">Retry</button>
+        </div>
+      </div>
+    </div>
+    <div class="strip-caption" style="margin-bottom: 40px;">Toast persists across popover close — install survives the user switching context. Done auto-dismisses on Close; error stays until Retry or Close. Emerald + red are the only color signals.</div>
+
+    <!-- POST-INSTALL PICKER -->
+    <h3 style="margin: 0 0 16px; font-size: 18px; font-weight: 600; letter-spacing: -0.02em;">Post-install picker tab</h3>
+    <div class="comp-card" style="margin-bottom: 40px;">
+      <div class="label">icon-picker-popover · tab bar · vendor active</div>
+      <div style="display: flex; gap: 4px; padding: 6px; background: #0c0c0e; border: 1px solid var(--border); border-radius: var(--r-md); margin-bottom: 12px;">
+        <button class="btn btn-ghost btn-sm" style="flex: 1;">Bundled</button>
+        <button class="btn btn-secondary btn-sm" style="flex: 1;">AWS</button>
+        <button class="btn btn-ghost btn-sm" style="flex: 1; opacity: 0.55;">GCP</button>
+        <button class="btn btn-ghost btn-sm" style="flex: 1; opacity: 0.55;">Azure</button>
+        <button class="btn btn-ghost btn-sm" style="flex: 1;">Logos</button>
+      </div>
+      <div style="display: grid; grid-template-columns: repeat(8, 1fr); gap: 6px; padding: 8px; background: #0c0c0e; border: 1px solid var(--border); border-radius: var(--r-md);">
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">λ</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">s3</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">ec2</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">rds</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">sqs</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">sns</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">api</div>
+        <div style="aspect-ratio: 1; background: #18181b; border-radius: var(--r-sm); display: grid; place-items: center; font-family: var(--font-mono); font-size: 9px; color: var(--text-dim);">dyn</div>
+      </div>
+    </div>
+    <div class="strip-caption" style="margin-bottom: 40px;">Active tab uses the secondary button background. Uninstalled vendors render at 0.55 opacity and surface an inline Install affordance that opens the Browse Packs panel. Bundled (Lucide) is always available.</div>
+
+    <!-- DO / DON'T -->
+    <div class="voice">
+      <div class="col do">
+        <h4>Do</h4>
+        <ul>
+          <li>Persist the toast across popover close — install runs in the background, the user keeps editing.</li>
+          <li>Use mono for byte counts and icon counts — they're mechanical numbers.</li>
+          <li>Refresh the picker tab automatically when <code style="font-family: var(--font-mono); color: var(--text-mute);">{type:'done'}</code> arrives — no manual reload.</li>
+          <li>Surface the canonical icon id (<code style="font-family: var(--font-mono); color: var(--text-mute);">aws:lambda</code>, <code style="font-family: var(--font-mono); color: var(--text-mute);">azure:functions</code>) in tooltips so users learn the encoding.</li>
+        </ul>
+      </div>
+      <div class="col dont">
+        <h4>Don't</h4>
+        <ul>
+          <li>No second confirmation modal after install completes — the toast IS the confirmation.</li>
+          <li>Don't gate the picker grid behind a loading state for &lt;100ms reads — render last-known names instantly.</li>
+          <li>No progress bar — byte counts in mono are enough; bars imply known total which the registry doesn't always have.</li>
+          <li>Don't drop the install on popover close. The job is server-side; UI state must follow.</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
   <!-- ──────────────────── PRINCIPLES ──────────────────── -->
   <section>
     <div class="section-head">
       <h2>Principles</h2>
-      <span class="num">09 / north stars</span>
+      <span class="num">10 / north stars</span>
     </div>
     <div class="grid grid-2" style="gap: 24px;">
       <div class="token-card" style="padding: 28px;">
