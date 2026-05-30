@@ -240,13 +240,17 @@ describe('IconPickerBody', () => {
 });
 
 describe('IconPickerBody tabs (US-016)', () => {
-  it('renders the 5 vendor tabs above the search input', () => {
+  it('renders only Bundled + Logos tabs by default (pack vendors hidden until installed)', () => {
     const tree = callBody();
     const tabs = findElement(tree, testIdEquals('icon-picker-tabs'));
     expect(tabs).not.toBeNull();
-    for (const vendor of ['lucide', 'aws', 'gcp', 'azure', 'iconify']) {
+    for (const vendor of ['lucide', 'iconify']) {
       const tab = findElement(tree, testIdEquals(`icon-picker-tab-${vendor}`));
       expect(tab).not.toBeNull();
+    }
+    for (const vendor of ['aws', 'gcp', 'azure']) {
+      const tab = findElement(tree, testIdEquals(`icon-picker-tab-${vendor}`));
+      expect(tab).toBeNull();
     }
   });
 
@@ -260,12 +264,42 @@ describe('IconPickerBody tabs (US-016)', () => {
   it('clicking a tab calls onActiveTabChange with the new vendor id', () => {
     const onActiveTabChange = mock(() => {});
     const tree = callBody({ onActiveTabChange });
-    const tab = findElement(tree, testIdEquals('icon-picker-tab-aws'));
-    if (!tab) throw new Error('aws tab not found');
+    const tab = findElement(tree, testIdEquals('icon-picker-tab-iconify'));
+    if (!tab) throw new Error('iconify tab not found');
     const onClick = tab.props.onClick as () => void;
     onClick();
     expect(onActiveTabChange).toHaveBeenCalledTimes(1);
-    expect(onActiveTabChange).toHaveBeenCalledWith('aws');
+    expect(onActiveTabChange).toHaveBeenCalledWith('iconify');
+  });
+
+  it('vendor pack tabs appear in the bar after install', () => {
+    applyPackSummaries([
+      {
+        vendor: 'aws',
+        installed: true,
+        version: '2026-05-31',
+        iconCount: 1,
+        sizeBytes: 0,
+        iconNames: ['lambda'],
+      },
+      { vendor: 'gcp', installed: false },
+      { vendor: 'azure', installed: false },
+    ]);
+    try {
+      const tree = callBody();
+      const aws = findElement(tree, testIdEquals('icon-picker-tab-aws'));
+      expect(aws).not.toBeNull();
+      const gcp = findElement(tree, testIdEquals('icon-picker-tab-gcp'));
+      expect(gcp).toBeNull();
+      const azure = findElement(tree, testIdEquals('icon-picker-tab-azure'));
+      expect(azure).toBeNull();
+    } finally {
+      applyPackSummaries([
+        { vendor: 'aws', installed: false },
+        { vendor: 'gcp', installed: false },
+        { vendor: 'azure', installed: false },
+      ]);
+    }
   });
 
   it('switching tabs re-filters the grid by vendor pack', () => {
@@ -355,31 +389,20 @@ describe('IconPickerBody tabs (US-016)', () => {
     }
   });
 
-  it('uninstalled vendor tabs render an Install affordance + Browse Packs CTA when active', () => {
-    // No pack stubs — aws/gcp/azure are all empty by default.
+  it('defensively shows the install prompt when activeTab points to an uninstalled pack vendor', () => {
+    // Edge case: pack was active when removed mid-session. The tab itself is
+    // filtered out of the bar, but the body still falls back to the prompt so
+    // the user can re-install it without confusion.
     expect(ICON_NAMES_BY_VENDOR.gcp.length).toBe(0);
     const onBrowsePacks = mock(() => {});
 
-    // The tab itself carries the disabled marker + inline install icon.
-    const treeLucide = callBody({ activeTab: 'lucide', onBrowsePacks });
-    const gcpTab = findElement(treeLucide, testIdEquals('icon-picker-tab-gcp'));
-    if (!gcpTab) throw new Error('gcp tab not found');
-    expect((gcpTab.props as { 'data-installed'?: string })['data-installed']).toBe('false');
-    const inlineInstall = findElement(treeLucide, testIdEquals('icon-picker-tab-install-gcp'));
-    expect(inlineInstall).not.toBeNull();
-    (inlineInstall?.props.onClick as () => void)();
-    expect(onBrowsePacks).toHaveBeenCalledTimes(1);
-
-    // When the uninstalled tab IS the active tab, the grid is replaced by the
-    // install prompt and its Browse Packs CTA.
     const treeGcp = callBody({ activeTab: 'gcp', onBrowsePacks });
     const prompt = findElement(treeGcp, testIdEquals('icon-picker-install-prompt'));
     expect(prompt).not.toBeNull();
     const cta = findElement(treeGcp, testIdEquals('icon-picker-install-cta-gcp'));
     if (!cta) throw new Error('Browse packs CTA not found');
     (cta.props.onClick as () => void)();
-    expect(onBrowsePacks).toHaveBeenCalledTimes(2);
-    // The all-icons grid is not rendered in the install-prompt state.
+    expect(onBrowsePacks).toHaveBeenCalledTimes(1);
     expect(findElement(treeGcp, testIdEquals('icon-picker-all'))).toBeNull();
   });
 

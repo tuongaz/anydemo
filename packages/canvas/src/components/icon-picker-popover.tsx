@@ -421,15 +421,15 @@ export function IconPickerBody({
         role="tablist"
         aria-label="Icon source"
       >
-        {TAB_DEFS.map((tab) =>
+        {TAB_DEFS.filter(
+          (tab) =>
+            !(PACK_VENDORS as readonly string[]).includes(tab.id) ||
+            ICON_NAMES_BY_VENDOR[tab.id].length > 0,
+        ).map((tab) =>
           renderTabButton({
             tab,
             active: tab.id === activeTab,
-            installed:
-              !(PACK_VENDORS as readonly string[]).includes(tab.id) ||
-              ICON_NAMES_BY_VENDOR[tab.id].length > 0,
             onSelect: () => onActiveTabChange?.(tab.id),
-            onInstall: onBrowsePacks,
           }),
         )}
       </div>
@@ -547,24 +547,16 @@ export function IconPickerBody({
 interface TabButtonArgs {
   tab: { id: IconVendor; label: string };
   active: boolean;
-  installed: boolean;
   onSelect: () => void;
-  onInstall: (() => void) | undefined;
 }
 
 // Plain `<button>` (not the Radix Tabs primitive) so the dispatcher-shim test
 // pattern picks up the tabs alongside the icon tiles via the same
-// `findAll(tree, el => el.type === 'button')` walk. The install affordance
-// for uninstalled vendor packs is a SIBLING button (not nested) — nested
-// interactive elements break HTML semantics and biome's a11y check.
-function renderTabButton({
-  tab,
-  active,
-  installed,
-  onSelect,
-  onInstall,
-}: TabButtonArgs): ReactNode {
-  const select = (
+// `findAll(tree, el => el.type === 'button')` walk. Pack-vendor tabs are
+// filtered out at the call site when not installed, so this only ever
+// renders the active "installed" branch.
+function renderTabButton({ tab, active, onSelect }: TabButtonArgs): ReactNode {
+  return (
     <button
       key={`icon-picker-tab-${tab.id}`}
       type="button"
@@ -572,7 +564,6 @@ function renderTabButton({
       aria-selected={active}
       data-testid={`icon-picker-tab-${tab.id}`}
       data-active={active ? 'true' : 'false'}
-      data-installed={installed ? 'true' : 'false'}
       onClick={onSelect}
       className={cn(
         'sf:inline-flex sf:items-center sf:gap-1 sf:rounded-sm sf:px-2 sf:py-1 sf:text-xs sf:font-medium sf:transition-colors',
@@ -580,34 +571,10 @@ function renderTabButton({
         active
           ? 'sf:bg-accent sf:text-accent-foreground'
           : 'sf:text-muted-foreground sf:hover:bg-accent/50 sf:hover:text-accent-foreground',
-        !installed && 'sf:opacity-60',
       )}
     >
       {tab.label}
     </button>
-  );
-  if (installed) return select;
-  const install = (
-    <button
-      key={`icon-picker-tab-install-${tab.id}`}
-      type="button"
-      aria-label={`Install ${tab.label} pack`}
-      data-testid={`icon-picker-tab-install-${tab.id}`}
-      onClick={() => onInstall?.()}
-      className={cn(
-        'sf:inline-flex sf:items-center sf:rounded-sm sf:px-1 sf:py-1 sf:text-primary sf:transition-colors',
-        'sf:hover:bg-accent sf:hover:text-accent-foreground',
-        'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
-      )}
-    >
-      <Download className="sf:h-3 sf:w-3" aria-hidden="true" />
-    </button>
-  );
-  return (
-    <span key={`icon-picker-tab-wrap-${tab.id}`} className="sf:inline-flex sf:items-center">
-      {select}
-      {install}
-    </span>
   );
 }
 
