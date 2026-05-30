@@ -249,12 +249,13 @@ describe('integration: MCP — read-only tools', () => {
       nodeResult,
     );
     expect(node.name).toBe('node');
-    // Flat 15-tag set: 11 geometric (rectangle/ellipse/sticky/text/database/
+    // Flat 16-tag set: 11 geometric (rectangle/ellipse/sticky/text/database/
     // server/user/queue/cloud/diamond/hexagon) + image + html + icon +
-    // component. The schema-catalog returns one entry per FlowNodeSchema
-    // variant — visual kind is the type. `component` is the json-render
-    // variant whose spec lives in <project>/nodes/<id>/spec.json (see schema
-    // category `componentSpec`).
+    // component + linkflow. The schema-catalog returns one entry per
+    // FlowNodeSchema variant — visual kind is the type. `component` is the
+    // json-render variant whose spec lives in <project>/nodes/<id>/spec.json
+    // (see schema category `componentSpec`). `linkflow` is the navigation
+    // variant (US-001).
     expect(Object.keys(node.schemas).sort()).toEqual([
       'cloud',
       'component',
@@ -265,6 +266,7 @@ describe('integration: MCP — read-only tools', () => {
       'html',
       'icon',
       'image',
+      'linkflow',
       'queue',
       'rectangle',
       'server',
