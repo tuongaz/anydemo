@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { createPortal } from 'react-dom';
 import type {
   CanvasIconsAdapter,
   IconPackVendor,
@@ -330,19 +331,22 @@ export function IconPickerPopover({
           onCancel={() => setModalState(null)}
         />
       ) : null}
-      {jobState ? (
-        <div
-          data-testid="icon-picker-install-toast-host"
-          className="sf:fixed sf:bottom-4 sf:right-4 sf:z-50 sf:w-[320px]"
-        >
-          <InstallProgressToast
-            vendor={jobState.vendor}
-            event={jobState.event}
-            onRetry={handleRetry}
-            onClose={handleToastClose}
-          />
-        </div>
-      ) : null}
+      {jobState && typeof document !== 'undefined'
+        ? createPortal(
+            <div
+              data-testid="icon-picker-install-toast-host"
+              className="sf:fixed sf:bottom-4 sf:right-4 sf:z-50 sf:w-[320px]"
+            >
+              <InstallProgressToast
+                vendor={jobState.vendor}
+                event={jobState.event}
+                onRetry={handleRetry}
+                onClose={handleToastClose}
+              />
+            </div>,
+            document.body,
+          )
+        : null}
     </Fragment>
   );
 }
