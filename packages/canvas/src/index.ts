@@ -311,6 +311,15 @@ export type {
   IconPickerPopoverProps,
 } from './components/icon-picker-popover.tsx';
 
+export { BrowsePacksPanel } from './components/browse-packs-panel.tsx';
+export type { BrowsePacksPanelProps } from './components/browse-packs-panel.tsx';
+
+export { InstallPackModal } from './components/install-pack-modal.tsx';
+export type { InstallPackModalProps } from './components/install-pack-modal.tsx';
+
+export { InstallProgressToast } from './components/install-progress-toast.tsx';
+export type { InstallProgressToastProps } from './components/install-progress-toast.tsx';
+
 export { InlineEdit } from './components/inline-edit.tsx';
 export type { InlineEditProps } from './components/inline-edit.tsx';
 

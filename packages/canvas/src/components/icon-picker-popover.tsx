@@ -1,12 +1,30 @@
-import { Ban, Download } from 'lucide-react';
-import { type ChangeEvent, type ReactNode, useContext, useEffect, useMemo, useState } from 'react';
+import { Ban, Download, Layers } from 'lucide-react';
+import {
+  type ChangeEvent,
+  Fragment,
+  type ReactNode,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import type {
+  CanvasIconsAdapter,
+  IconPackVendor,
+  InstallEvent,
+  PackSummary,
+} from '../adapter/types.ts';
 import { CanvasStudioContext } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { type IconVendor, formatIconId } from '../lib/icon-id.ts';
 import { getRecents } from '../lib/icon-recents.ts';
-import { ICON_NAMES_BY_VENDOR, ICON_REGISTRY } from '../lib/icon-registry.ts';
+import { ICON_NAMES_BY_VENDOR, ICON_REGISTRY, applyPackSummaries } from '../lib/icon-registry.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
+import { BrowsePacksPanel } from './browse-packs-panel.tsx';
 import { IconRenderer } from './icon-renderer.tsx';
+import { InstallPackModal } from './install-pack-modal.tsx';
+import { InstallProgressToast } from './install-progress-toast.tsx';
 
 // Layout constants. Tile is h-7 w-7 (28px); rows are tile + 4px gap = 32px.
 // LIST_HEIGHT * COLS keeps the all-icons grid roughly square in the popover.
@@ -49,11 +67,50 @@ export interface IconPickerPopoverProps {
   // grid. Defaults to `true` — turn off when the picker is used to insert a
   // new node (where "no icon" is meaningless).
   clearable?: boolean;
-  // Invoked when the user clicks an "Install" affordance on a disabled vendor
-  // tab or the empty-state CTA. US-017 wires this to the Browse Packs panel.
+  // Caller-owned fallback. Fired only when `iconsAdapter` is not provided. The
+  // host may use this to open its own Browse Packs UI. When `iconsAdapter` is
+  // provided the popover manages the Browse / Install flow internally and
+  // ignores this prop.
   onBrowsePacks?: () => void;
+  /**
+   * US-017: Icons-adapter handle for the Browse Packs flow. When provided
+   * the picker:
+   *   - shows a "Browse packs" footer button
+   *   - swaps the popover content to <BrowsePacksPanel> when the user clicks
+   *     either the footer button or an "Install" affordance on a disabled
+   *     vendor tab
+   *   - opens <InstallPackModal> on Install, then runs the install through
+   *     adapter.icons.install + subscribeJob
+   *   - on a `done` event, re-fetches listPacks() and feeds them into
+   *     applyPackSummaries() so the picker's vendor tabs populate live
+   * When omitted, no Browse Packs UI is shown and the only handle is the
+   * existing `onBrowsePacks` fallback.
+   */
+  iconsAdapter?: CanvasIconsAdapter;
 }
 
+interface ModalState {
+  vendor: IconPackVendor;
+  licenseSummary: string;
+  licenseUrl: string;
+  requiresAcceptance: boolean;
+}
+
+interface JobState {
+  vendor: IconPackVendor;
+  event: InstallEvent | null;
+  /** Tracks the `acceptTerms` value used to kick off this job, so Retry can resubmit. */
+  acceptTerms: boolean;
+}
+
+// Append-only state slots (per packages/canvas/CLAUDE.md hook-shim rule):
+//   1. query
+//   2. activeTab
+//   3. view              — picker | browse (US-017)
+//   4. modalState        — InstallPackModal payload | null (US-017)
+//   5. jobState          — install progress { vendor, event, acceptTerms } | null (US-017)
+//   6. packs             — local PackSummary[] for the Browse panel (US-017)
+//   7. busyVendor        — vendor with install/remove in flight (US-017)
 export function IconPickerPopover({
   open,
   onOpenChange,
@@ -61,46 +118,232 @@ export function IconPickerPopover({
   onPick,
   clearable = true,
   onBrowsePacks,
+  iconsAdapter,
 }: IconPickerPopoverProps) {
   const [query, setQuery] = useState('');
   const [activeTab, setActiveTab] = useState<IconVendor>('lucide');
+  const [view, setView] = useState<'picker' | 'browse'>('picker');
+  const [modalState, setModalState] = useState<ModalState | null>(null);
+  const [jobState, setJobState] = useState<JobState | null>(null);
+  const [packs, setPacks] = useState<ReadonlyArray<PackSummary>>([]);
+  const [busyVendor, setBusyVendor] = useState<IconPackVendor | null>(null);
   const { studioBaseUrl } = useContext(CanvasStudioContext);
   // Recents are read at open time so a same-session push elsewhere becomes
   // visible the next time the picker opens. We deliberately do NOT subscribe
   // to storage events — the picker is short-lived and this keeps it simple.
   const recents = useMemo(() => (open ? getRecents() : []), [open]);
 
-  // Reset the search field + tab on close so the next open starts fresh.
+  // Holds the subscribeJob unsubscribe handle for the currently-tracked job.
+  // Replaced on every new install; cleared when the toast is dismissed.
+  const unsubscribeRef = useRef<(() => void) | null>(null);
+
+  // Reset transient UI on close — but DON'T tear down the install job, so the
+  // user can reopen the picker and still see the running toast.
   useEffect(() => {
     if (!open) {
       setQuery('');
       setActiveTab('lucide');
+      setView('picker');
     }
   }, [open]);
 
+  // Refresh pack summaries whenever the user enters the Browse view (or the
+  // adapter swaps under us). Silent on adapter failures.
+  useEffect(() => {
+    if (view !== 'browse' || !iconsAdapter) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const next = await iconsAdapter.listPacks();
+        if (!cancelled) setPacks(next);
+      } catch {
+        // Silent — the panel renders the previous snapshot.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [view, iconsAdapter]);
+
+  // Clean up the install subscription if the picker unmounts mid-install.
+  useEffect(() => {
+    return () => {
+      unsubscribeRef.current?.();
+      unsubscribeRef.current = null;
+    };
+  }, []);
+
+  const browseHandler = iconsAdapter ? () => setView('browse') : onBrowsePacks;
+
+  async function startInstall(vendor: IconPackVendor): Promise<void> {
+    if (!iconsAdapter) return;
+    try {
+      const license = await iconsAdapter.getLicense(vendor);
+      setModalState({
+        vendor,
+        licenseSummary: license.summary,
+        licenseUrl: license.url,
+        requiresAcceptance: license.requiresAcceptance,
+      });
+    } catch {
+      // Silent — without a license, surface a generic toast.
+      setJobState({
+        vendor,
+        event: { type: 'error', vendor, message: 'Failed to load license details' },
+        acceptTerms: false,
+      });
+    }
+  }
+
+  async function runInstall(vendor: IconPackVendor, acceptTerms: boolean): Promise<void> {
+    if (!iconsAdapter) return;
+    // Tear down any previous job's subscription before kicking off a new one.
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    setBusyVendor(vendor);
+    setJobState({ vendor, event: null, acceptTerms });
+    try {
+      const { jobId } = await iconsAdapter.install(vendor, { acceptTerms });
+      const unsub = iconsAdapter.subscribeJob(jobId, (ev) => {
+        setJobState({ vendor, event: ev, acceptTerms });
+        if (ev.type === 'done') {
+          setBusyVendor(null);
+          // Refresh local + global pack summaries so the picker's vendor tabs
+          // pick up the new icons immediately.
+          void iconsAdapter
+            .listPacks()
+            .then((next) => {
+              setPacks(next);
+              applyPackSummaries(next);
+            })
+            .catch(() => undefined);
+        } else if (ev.type === 'error') {
+          setBusyVendor(null);
+        }
+      });
+      unsubscribeRef.current = unsub;
+    } catch (err) {
+      setBusyVendor(null);
+      const message = err instanceof Error ? err.message : 'Install failed';
+      setJobState({
+        vendor,
+        event: { type: 'error', vendor, message },
+        acceptTerms,
+      });
+    }
+  }
+
+  async function handleRemove(vendor: IconPackVendor): Promise<void> {
+    if (!iconsAdapter) return;
+    setBusyVendor(vendor);
+    try {
+      await iconsAdapter.remove(vendor);
+      const next = await iconsAdapter.listPacks();
+      setPacks(next);
+      applyPackSummaries(next);
+    } catch {
+      // Silent — Browse panel will simply not update.
+    } finally {
+      setBusyVendor(null);
+    }
+  }
+
+  function handleConfirm({ acceptTerms }: { acceptTerms: boolean }): void {
+    const vendor = modalState?.vendor;
+    setModalState(null);
+    if (vendor) void runInstall(vendor, acceptTerms);
+  }
+
+  function handleRetry(): void {
+    const job = jobState;
+    if (!job) return;
+    void runInstall(job.vendor, job.acceptTerms);
+  }
+
+  function handleToastClose(): void {
+    unsubscribeRef.current?.();
+    unsubscribeRef.current = null;
+    setJobState(null);
+  }
+
   return (
-    <Popover open={open} onOpenChange={onOpenChange}>
-      <PopoverTrigger asChild>{anchor}</PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side="bottom"
-        sideOffset={6}
-        className="sf:w-[340px] sf:p-0"
-        data-testid="icon-picker-popover"
-      >
-        <IconPickerBody
-          query={query}
-          onQueryChange={setQuery}
-          recents={recents}
-          onPick={onPick}
-          clearable={clearable}
-          activeTab={activeTab}
-          onActiveTabChange={setActiveTab}
-          onBrowsePacks={onBrowsePacks}
-          studioBaseUrl={studioBaseUrl}
+    <Fragment>
+      <Popover open={open} onOpenChange={onOpenChange}>
+        <PopoverTrigger asChild>{anchor}</PopoverTrigger>
+        <PopoverContent
+          align="start"
+          side="bottom"
+          sideOffset={6}
+          className="sf:w-[340px] sf:p-0"
+          data-testid="icon-picker-popover"
+        >
+          {view === 'browse' && iconsAdapter ? (
+            <div data-testid="icon-picker-browse" className="sf:flex sf:flex-col">
+              <BrowsePacksPanel
+                packs={packs}
+                onInstall={(v) => void startInstall(v)}
+                onRemove={(v) => void handleRemove(v)}
+                busyVendor={busyVendor}
+              />
+              <div className="sf:flex sf:justify-end sf:border-t sf:border-border sf:p-2">
+                <button
+                  type="button"
+                  data-testid="icon-picker-browse-back"
+                  onClick={() => setView('picker')}
+                  className={cn(
+                    'sf:inline-flex sf:items-center sf:gap-1 sf:rounded-md sf:px-3 sf:py-1 sf:text-xs sf:font-medium sf:text-muted-foreground sf:transition-colors',
+                    'sf:hover:bg-accent sf:hover:text-accent-foreground',
+                    'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
+                  )}
+                >
+                  Back to icons
+                </button>
+              </div>
+            </div>
+          ) : (
+            <IconPickerBody
+              query={query}
+              onQueryChange={setQuery}
+              recents={recents}
+              onPick={onPick}
+              clearable={clearable}
+              activeTab={activeTab}
+              onActiveTabChange={setActiveTab}
+              onBrowsePacks={browseHandler}
+              showBrowseFooter={iconsAdapter !== undefined}
+              studioBaseUrl={studioBaseUrl}
+            />
+          )}
+        </PopoverContent>
+      </Popover>
+      {modalState ? (
+        <InstallPackModal
+          open={true}
+          onOpenChange={(next) => {
+            if (!next) setModalState(null);
+          }}
+          vendor={modalState.vendor}
+          licenseSummary={modalState.licenseSummary}
+          licenseUrl={modalState.licenseUrl}
+          requiresAcceptance={modalState.requiresAcceptance}
+          onConfirm={handleConfirm}
+          onCancel={() => setModalState(null)}
         />
-      </PopoverContent>
-    </Popover>
+      ) : null}
+      {jobState ? (
+        <div
+          data-testid="icon-picker-install-toast-host"
+          className="sf:fixed sf:bottom-4 sf:right-4 sf:z-50 sf:w-[320px]"
+        >
+          <InstallProgressToast
+            vendor={jobState.vendor}
+            event={jobState.event}
+            onRetry={handleRetry}
+            onClose={handleToastClose}
+          />
+        </div>
+      ) : null}
+    </Fragment>
   );
 }
 
@@ -117,6 +360,13 @@ export interface IconPickerBodyProps {
   onActiveTabChange?: (tab: IconVendor) => void;
   // Browse Packs CTA passthrough — see IconPickerPopoverProps.
   onBrowsePacks?: () => void;
+  /**
+   * US-017: render the "Browse packs" footer button below the icon grid. The
+   * popover toggles this on when an `iconsAdapter` is wired so the picker
+   * itself drives the install flow. Defaults to `false` — old callers and
+   * tests that exercise only the bundled icons see no footer.
+   */
+  showBrowseFooter?: boolean;
   // Threaded by IconPickerPopover from CanvasStudioContext. Tests can omit
   // (default '') because vendor tiles only need it for the SVG URL.
   studioBaseUrl?: string;
@@ -134,6 +384,7 @@ export function IconPickerBody({
   activeTab = 'lucide',
   onActiveTabChange,
   onBrowsePacks,
+  showBrowseFooter = false,
   studioBaseUrl = '',
 }: IconPickerBodyProps) {
   const vendorNames = ICON_NAMES_BY_VENDOR[activeTab];
@@ -269,6 +520,26 @@ export function IconPickerBody({
           </div>
         )}
       </div>
+      {showBrowseFooter ? (
+        <div className="sf:flex sf:items-center sf:justify-between sf:border-t sf:border-border sf:p-2">
+          <span className="sf:text-[11px] sf:text-muted-foreground">
+            Add cloud icon packs to expand the picker.
+          </span>
+          <button
+            type="button"
+            data-testid="icon-picker-browse-footer"
+            onClick={() => onBrowsePacks?.()}
+            className={cn(
+              'sf:inline-flex sf:items-center sf:gap-1 sf:rounded-md sf:bg-primary sf:px-3 sf:py-1 sf:text-xs sf:font-medium sf:text-primary-foreground sf:transition-colors',
+              'sf:hover:bg-primary/90',
+              'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring sf:focus-visible:ring-offset-1',
+            )}
+          >
+            <Layers className="sf:h-3 sf:w-3" aria-hidden="true" />
+            Browse packs
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
