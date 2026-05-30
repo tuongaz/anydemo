@@ -214,6 +214,23 @@ describe('IconPickerBody', () => {
     expect(names).toEqual(['shopping-cart', 'apple']);
   });
 
+  it('routes vendor-prefixed recent ids through renderVendorTile so logos still render', () => {
+    // Pre-fix the recents map called renderTile (lucide-only) for every id, so
+    // an iconify-logo recent like `iconify:logos:aws` would resolve to
+    // ICON_REGISTRY[that string] === undefined and the tile would render blank.
+    const tree = callBody({
+      query: '',
+      recents: ['shopping-cart', 'iconify:logos:aws', 'aws:lambda'],
+    });
+    const recents = findElement(tree, testIdEquals('icon-picker-recents'));
+    expect(recents).not.toBeNull();
+    const recentTiles = findAll(recents, (el) => el.type === 'button');
+    const names = recentTiles.map(
+      (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+    );
+    expect(names).toEqual(['shopping-cart', 'iconify:logos:aws', 'aws:lambda']);
+  });
+
   it('shows an empty-state message when no icons match the query', () => {
     const tree = callBody({ query: 'definitely-not-a-real-icon-name-xyz' });
     const empty = findElement(tree, testIdEquals('icon-picker-empty'));

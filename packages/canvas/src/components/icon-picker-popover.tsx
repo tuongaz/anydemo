@@ -18,7 +18,7 @@ import type {
 } from '../adapter/types.ts';
 import { CanvasStudioContext } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
-import { type IconVendor, formatIconId } from '../lib/icon-id.ts';
+import { type IconVendor, formatIconId, parseIconId } from '../lib/icon-id.ts';
 import { getRecents } from '../lib/icon-recents.ts';
 import { ICON_NAMES_BY_VENDOR, ICON_REGISTRY, applyPackSummaries } from '../lib/icon-registry.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
@@ -479,7 +479,16 @@ export function IconPickerBody({
             className="sf:grid sf:gap-1"
             style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
           >
-            {recents.map((name) => renderTile(name, onPick, `icon-picker-recent-${name}`))}
+            {recents.map((id) => {
+              const parsed = parseIconId(id);
+              if (!parsed) return null;
+              return renderVendorTile({
+                vendor: parsed.vendor,
+                name: parsed.name,
+                studioBaseUrl,
+                onPick,
+              });
+            })}
           </div>
         </div>
       ) : null}
