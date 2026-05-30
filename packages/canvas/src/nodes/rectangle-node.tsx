@@ -78,7 +78,11 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     // class renders light in dark mode and washes out on the pastel body.
     // default/none fills fall through to the (mode-adapting) muted foreground.
     ...colorTokenStyle(data.backgroundColor, 'node-body-text'),
-    ...(data.textAlign !== undefined ? { textAlign: data.textAlign } : {}),
+    // Default body text to centered — matches the vertically-centered flex
+    // container; a fresh double-click-to-edit overtypes into the middle of
+    // the card rather than hugging the left edge. The Align toggle still
+    // overrides via explicit data.textAlign.
+    textAlign: data.textAlign ?? 'center',
   };
 
   // When data.shadow is set, the renderer paints `var(--node-shadow-N)`
@@ -199,7 +203,6 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
             type="button"
             className={cn(
               'sf:block sf:w-full sf:whitespace-normal sf:wrap-break-word sf:bg-transparent sf:p-0 sf:text-[18px] sf:text-muted-foreground',
-              data.textAlign === undefined ? 'sf:text-left' : '',
               descEditable ? 'sf:hover:opacity-80' : '',
             )}
             style={descriptionFontStyle}

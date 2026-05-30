@@ -250,9 +250,10 @@ describe('RectangleNode shadow elevation', () => {
 });
 
 // The Align toggle on the style strip writes data.textAlign; for rectangles
-// it must (a) bake into descriptionFontStyle so the body button reflows and
-// (b) drop the hardcoded `sf:text-left` class once explicit alignment is set
-// (otherwise the class wins regardless of the inline style). The header
+// it must bake into descriptionFontStyle so the body button reflows. The
+// inline style is the single source of truth for alignment — when textAlign
+// is undefined it defaults to 'center' (so a fresh double-click-to-edit
+// drops the caret in the middle of the card, not the left edge). The header
 // title is deliberately NOT aligned — title stays left, play button stays
 // right — so the trailing slot remains anchored. Earlier fix only touched
 // geometric-node.tsx, leaving rectangle bodies unaligned — this fence
@@ -276,21 +277,22 @@ describe('RectangleNode textAlign fan-out', () => {
   });
 
   it('applies data.textAlign to the description button inline style', () => {
-    const tree = callRectangleNode({ name: 's', description: 'body', textAlign: 'center' });
+    const tree = callRectangleNode({ name: 's', description: 'body', textAlign: 'right' });
     const desc = findDescButton(tree);
     const style = (desc.props as { style?: Record<string, string> }).style ?? {};
-    expect(style.textAlign).toBe('center');
+    expect(style.textAlign).toBe('right');
   });
 
-  it('drops the hardcoded sf:text-left class once textAlign is set', () => {
+  it('does not hardcode sf:text-left on the description button', () => {
     const tree = callRectangleNode({ name: 's', description: 'body', textAlign: 'right' });
     const cls = (findDescButton(tree).props as { className?: string }).className ?? '';
     expect(cls).not.toContain('sf:text-left');
   });
 
-  it('keeps sf:text-left when data.textAlign is undefined (back-compat default)', () => {
+  it('defaults description textAlign to center when data.textAlign is undefined', () => {
     const tree = callRectangleNode({ name: 's', description: 'body' });
-    const cls = (findDescButton(tree).props as { className?: string }).className ?? '';
-    expect(cls).toContain('sf:text-left');
+    const desc = findDescButton(tree);
+    const style = (desc.props as { style?: Record<string, string> }).style ?? {};
+    expect(style.textAlign).toBe('center');
   });
 });
