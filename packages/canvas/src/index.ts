@@ -75,6 +75,8 @@ export type {
 export { ICON_FALLBACK_NAME, ICON_NAMES, ICON_REGISTRY } from './lib/icon-registry.ts';
 export { formatIconId, parseIconId } from './lib/icon-id.ts';
 export type { IconId, IconVendor } from './lib/icon-id.ts';
+export { resolveIcon } from './lib/icon-resolve.ts';
+export type { Resolved, ResolveOptions } from './lib/icon-resolve.ts';
 
 // ----------------------------------------------------------------------------
 // 4. Helpers
@@ -204,9 +206,13 @@ export { createRestAdapter } from './adapter/rest.ts';
 export type { RestAdapterOptions } from './adapter/rest.ts';
 export type {
   CanvasAdapter,
+  CanvasIconsAdapter,
   CanvasRuntime,
   ConnectorCreateInput,
   ConnectorPatch,
+  IconLicenseInfo,
+  IconPackVendor,
+  InstallEvent,
   LayoutEdgeInput,
   LayoutNodeInput,
   LayoutResult,
@@ -215,6 +221,7 @@ export type {
   NodeCreateInput,
   NodeKind,
   NodePatch,
+  PackSummary,
   PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,

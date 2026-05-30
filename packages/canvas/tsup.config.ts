@@ -16,6 +16,8 @@ export default defineConfig({
     'recharts',
     'shiki',
     'mermaid',
+    '@iconify/react',
+    '@iconify-json/logos',
   ],
   outDir: 'dist',
 });

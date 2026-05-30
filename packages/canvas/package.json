@@ -30,6 +30,7 @@
   },
   "files": ["dist", "README.md"],
   "peerDependencies": {
+    "@iconify/react": "^5",
     "@xyflow/react": "*",
     "lucide-react": "*",
     "mermaid": "^11",
@@ -41,11 +42,13 @@
     "shiki": "^1.24.0"
   },
   "peerDependenciesMeta": {
+    "@iconify/react": { "optional": true },
     "mermaid": { "optional": true },
     "recharts": { "optional": true },
     "shiki": { "optional": true }
   },
   "dependencies": {
+    "@iconify-json/logos": "^1",
     "@radix-ui/react-context-menu": "^2.2.2",
     "@radix-ui/react-dialog": "^1.1.2",
     "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -63,6 +66,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@iconify/react": "^5",
     "@tailwindcss/cli": "^4.3.0",
     "@tailwindcss/postcss": "^4.3.0",
     "@types/bun": "^1.1.0",

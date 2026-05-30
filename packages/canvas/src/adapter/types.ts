@@ -218,6 +218,65 @@ export interface CanvasRuntime {
 }
 
 /**
+ * Adapter-side icon pack vendor. Subset of canvas `IconVendor` — the studio
+ * only manages downloadable packs for these three; lucide is bundled and
+ * iconify ships inline. Mirrors the studio's vendor union but stays local to
+ * the canvas to keep the adapter seam clean (no cross-package import).
+ */
+export type IconPackVendor = 'aws' | 'gcp' | 'azure';
+
+/**
+ * Pack summary returned by `adapter.icons.listPacks()` and consumed by the
+ * picker's vendor tabs + Browse Packs panel. Discriminated by `installed`.
+ * Owned by the canvas package — do NOT import the studio-side type.
+ */
+export type PackSummary =
+  | {
+      vendor: IconPackVendor;
+      installed: true;
+      version: string;
+      iconCount: number;
+      sizeBytes: number;
+    }
+  | { vendor: IconPackVendor; installed: false };
+
+/**
+ * Streaming install event delivered by `adapter.icons.subscribeJob()`. The
+ * shape mirrors the studio's `InstallEvent` discriminated union but is owned
+ * by the canvas so the adapter seam stays one-way (host → canvas).
+ */
+export type InstallEvent =
+  | { type: 'terms-required'; vendor: IconPackVendor; licenseUrl: string }
+  | { type: 'download-started'; vendor: IconPackVendor; expectedBytes: number | null }
+  | { type: 'download-progress'; vendor: IconPackVendor; receivedBytes: number }
+  | { type: 'extracting'; vendor: IconPackVendor }
+  | { type: 'indexing'; vendor: IconPackVendor; iconCount: number }
+  | { type: 'done'; vendor: IconPackVendor; version: string; iconCount: number }
+  | { type: 'error'; vendor: IconPackVendor; message: string };
+
+/**
+ * License summary returned by `adapter.icons.getLicense()` — used by the
+ * Browse Packs install modal.
+ */
+export interface IconLicenseInfo {
+  summary: string;
+  url: string;
+  requiresAcceptance: boolean;
+}
+
+/**
+ * Adapter contract for the icon-pack pipeline. Optional because view/mini
+ * mode canvases never need it; edit mode adapters wire it to `/api/icons/*`.
+ */
+export interface CanvasIconsAdapter {
+  listPacks(): Promise<PackSummary[]>;
+  install(vendor: IconPackVendor, opts: { acceptTerms?: boolean }): Promise<{ jobId: string }>;
+  subscribeJob(jobId: string, onEvent: (ev: InstallEvent) => void): () => void;
+  remove(vendor: IconPackVendor): Promise<void>;
+  getLicense(vendor: IconPackVendor): Promise<IconLicenseInfo>;
+}
+
+/**
  * CanvasAdapter — the surface @seeflow/canvas calls when it needs to persist a
  * change. One adapter is bound to one demo/project at construction. Embedders
  * (the studio today, library consumers tomorrow) implement this against their
@@ -267,4 +326,11 @@ export interface CanvasAdapter {
     nodes: readonly LayoutNodeInput[],
     edges: readonly LayoutEdgeInput[],
   ): Promise<LayoutResult>;
+  /**
+   * Optional: cloud icon pack pipeline. Hosts that don't manage cloud icon
+   * packs may omit this — the picker hides vendor tabs and the Browse Packs
+   * affordance falls back gracefully. Edit-mode adapters wire to the studio's
+   * `/api/icons/*` REST + SSE surface.
+   */
+  icons?: CanvasIconsAdapter;
 }

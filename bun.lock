@@ -102,6 +102,7 @@
       "name": "@seeflow/canvas",
       "version": "0.1.0",
       "dependencies": {
+        "@iconify-json/logos": "^1",
         "@radix-ui/react-context-menu": "^2.2.2",
         "@radix-ui/react-dialog": "^1.1.2",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -119,6 +120,7 @@
         "zod": "^3.23.8",
       },
       "devDependencies": {
+        "@iconify/react": "^5",
         "@tailwindcss/cli": "^4.3.0",
         "@tailwindcss/postcss": "^4.3.0",
         "@types/bun": "^1.1.0",
@@ -135,6 +137,7 @@
         "typescript": "^5.6.3",
       },
       "peerDependencies": {
+        "@iconify/react": "^5",
         "@xyflow/react": "*",
         "lucide-react": "*",
         "mermaid": "^11",
@@ -146,6 +149,7 @@
         "shiki": "^1.24.0",
       },
       "optionalPeers": [
+        "@iconify/react",
         "mermaid",
         "recharts",
         "shiki",
@@ -280,6 +284,10 @@
     "@floating-ui/utils": ["@floating-ui/utils@0.2.11", "", {}, "sha512-RiB/yIh78pcIxl6lLMG0CgBXAZ2Y0eVHqMPYugu+9U0AeT6YBeiJpf7lbdJNIugFP5SIjwNRgo4DhR1Qxi26Gg=="],
 
     "@hono/node-server": ["@hono/node-server@1.19.14", "", { "peerDependencies": { "hono": "^4" } }, "sha512-GwtvgtXxnWsucXvbQXkRgqksiH2Qed37H9xHZocE5sA3N8O8O8/8FA3uclQXxXVzc9XBZuEOMK7+r02FmSpHtw=="],
+
+    "@iconify-json/logos": ["@iconify-json/logos@1.2.11", "", { "dependencies": { "@iconify/types": "*" } }, "sha512-fOo4pGEatuyuCFNL+cwquYMa2Im0oJHRHV7lt/Qqs5Ode/lPImHCQcfTtPzZj7qYMPb/h8YHN3TG54uEowrjNQ=="],
+
+    "@iconify/react": ["@iconify/react@5.2.1", "", { "dependencies": { "@iconify/types": "^2.0.0" }, "peerDependencies": { "react": ">=16" } }, "sha512-37GDR3fYDZmnmUn9RagyaX+zca24jfVOMY8E1IXTqJuE8pxNtN51KWPQe3VODOWvuUurq7q9uUu3CFrpqj5Iqg=="],
 
     "@iconify/types": ["@iconify/types@2.0.0", "", {}, "sha512-+wluvCrRhXrhyOmRDJ3q8mux9JkKy5SJ/v8ol2tu4FVjyYvtEzkc/3pK15ET6RKg4b4w4BmTk1+gsCUhf21Ykg=="],
 
