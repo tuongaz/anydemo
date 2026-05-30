@@ -925,6 +925,45 @@ describe('ResolvedFlowSchema', () => {
     expect(result.success).toBe(true);
   });
 
+  // Manifest-driven projects store the file under <flowDir>/nodes/<id>/ and
+  // the upload endpoint returns the project-root-relative form (e.g.
+  // 'flows/main/nodes/<id>/foo.png'). The check must accept both the bare and
+  // flow-dir-prefixed forms — otherwise a drop followed by a move trips the
+  // post-mutation ResolvedFlowSchema parse and the new image disappears.
+  it('accepts an image node whose path is under <flowDir>/nodes/<id>/ (manifest project)', () => {
+    const result = ResolvedFlowSchema.safeParse({
+      version: 2 as const,
+      name: 'manifest-folder',
+      nodes: [
+        {
+          id: 'node-abc',
+          type: 'image' as const,
+          position: { x: 0, y: 0 },
+          data: { path: 'flows/main/nodes/node-abc/foo.png' },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects an image node whose path uses a different node id under <flowDir>/nodes/', () => {
+    const result = ResolvedFlowSchema.safeParse({
+      version: 2 as const,
+      name: 'wrong-id-in-manifest-path',
+      nodes: [
+        {
+          id: 'node-abc',
+          type: 'image' as const,
+          position: { x: 0, y: 0 },
+          data: { path: 'flows/main/nodes/node-other/foo.png' },
+        },
+      ],
+      connectors: [],
+    });
+    expect(result.success).toBe(false);
+  });
+
   // US-014: image nodes gain an optional `borderWidth` (1–8). `borderColor`
   // + `borderStyle` already come via NodeVisualBaseShape — these tests pin
   // the new field's accept/reject behavior alongside back-compat for unset fields.

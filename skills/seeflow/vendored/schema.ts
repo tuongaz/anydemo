@@ -463,16 +463,20 @@ export const ResolvedFlowSchema = z
     });
     // type:'image' upload paths must live under the node's own
     // `nodes/<id>/` folder so delete_node's removeNodeDir cascade is the
-    // single source of cleanup.
+    // single source of cleanup. The path is project-root-relative: legacy
+    // single-flow projects (flowDir '.') store the bare `nodes/<id>/<file>`,
+    // and manifest-driven projects prefix the flowDir (e.g.
+    // `flows/main/nodes/<id>/<file>`). Both shapes must pass — accept either
+    // a leading `nodes/<id>/` or an embedded `/nodes/<id>/` segment.
     resolved.nodes.forEach((node, idx) => {
       if (node.type !== 'image') return;
       const path = (node.data as { path?: string }).path;
-      const expected = `nodes/${node.id}/`;
-      if (typeof path === 'string' && !path.startsWith(expected)) {
+      const segment = `nodes/${node.id}/`;
+      if (typeof path === 'string' && !path.startsWith(segment) && !path.includes(`/${segment}`)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
           path: ['nodes', idx, 'data', 'path'],
-          message: `image node path must start with "${expected}"`,
+          message: `image node path must contain "${segment}"`,
         });
       }
     });

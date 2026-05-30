@@ -561,4 +561,58 @@ describe('POST /api/projects/:project/flows/:flow/nodes/:nodeId/files/upload', (
     );
     expect(existsSync(join(repoDir, flowDir, 'nodes', NODE_ID, 'icon.svg'))).toBe(true);
   });
+
+  // Regression: a drop in a manifest-driven project used to land an optimistic
+  // node on the canvas while the underlying createNode silently failed schema
+  // validation (the upload returned `flows/<id>/nodes/<id>/...` but the
+  // ResolvedFlowSchema superRefine still required a bare `nodes/<id>/`
+  // prefix). The next drag fired a PATCH that re-validated the merged flow
+  // and surfaced the bad-schema error, making the image disappear on move.
+  // Pin the full drop → create → patch round-trip so the regression can't
+  // come back.
+  it('manifest project: upload → createNode → patchNode round-trip survives schema validation', async () => {
+    const { app, projectSlug, flowSlug, flowDir, repoDir } = buildUploadFixture();
+    // Seed a valid flow so addNode / patchNode have something to merge into.
+    writeFileSync(
+      join(repoDir, flowDir, 'flow.json'),
+      JSON.stringify({ version: 2, name: 'Round Trip', nodes: [], connectors: [] }),
+    );
+
+    const form = new FormData();
+    form.set('file', new File([PNG_BYTES], 'pic.png', { type: 'image/png' }));
+    const upRes = await app.fetch(formPost(uploadUrl(projectSlug, flowSlug, NODE_ID), form));
+    expect(upRes.status).toBe(200);
+    const { path } = (await upRes.json()) as { path: string };
+    expect(path).toBe(`${flowDir}/nodes/${NODE_ID}/pic.png`);
+
+    const createRes = await app.fetch(
+      new Request(`http://test/api/projects/${projectSlug}/flows/${flowSlug}/nodes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          id: NODE_ID,
+          type: 'image',
+          position: { x: 100, y: 100 },
+          data: { path, alt: 'pic.png', width: 200, height: 150 },
+        }),
+      }),
+    );
+    expect(createRes.status).toBe(200);
+
+    const patchRes = await app.fetch(
+      new Request(`http://test/api/projects/${projectSlug}/flows/${flowSlug}/nodes/${NODE_ID}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ position: { x: 250, y: 320 } }),
+      }),
+    );
+    expect(patchRes.status).toBe(200);
+
+    const flowOnDisk = JSON.parse(readFileSync(join(repoDir, flowDir, 'flow.json'), 'utf8')) as {
+      nodes: Array<{ id: string; type: string; data: { path: string } }>;
+    };
+    const node = flowOnDisk.nodes.find((n) => n.id === NODE_ID);
+    expect(node?.type).toBe('image');
+    expect(node?.data.path).toBe(`${flowDir}/nodes/${NODE_ID}/pic.png`);
+  });
 });
