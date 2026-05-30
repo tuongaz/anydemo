@@ -6,14 +6,13 @@ import * as React from 'react';
 
 // Header calls `useTheme()`; stub it so the hook-shim renderer doesn't have to
 // run the real implementation (which would touch localStorage and matchMedia).
+// NOTE: we deliberately do NOT mock `@/hooks/use-navigate-flow`. Header
+// imports `reset` only for the logo button's onClick — never fires during a
+// hook-shim render walk — and bun's `mock.module(...)` leaks across test
+// files in the same process. Mocking it here would null out `reset` for the
+// real use-navigate-flow.test.ts running later in the suite.
 mock.module('@/hooks/use-theme', () => ({
   useTheme: () => ({ theme: 'light', setTheme: () => {} }),
-}));
-
-// Header's logo button calls `resetFlow(null)` (use-navigate-flow). Stub the
-// module so the test doesn't have to spin up the navigation stack singleton.
-mock.module('@/hooks/use-navigate-flow', () => ({
-  reset: (): void => {},
 }));
 
 beforeEach(() => {
