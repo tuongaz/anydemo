@@ -69,11 +69,26 @@ jobs:
           CI: 'true'
         run: bun run test:it
 
+      - name: Debug — list Playwright artifact dirs on failure
+        if: failure()
+        continue-on-error: true
+        run: |
+          echo "=== apps/studio/integration/.artifacts/ ==="
+          find apps/studio/integration/.artifacts/ -type f 2>/dev/null | head -100 || echo "(missing)"
+          echo "=== apps/studio/e2e/playwright-report/ ==="
+          ls -la apps/studio/e2e/playwright-report/ 2>/dev/null || echo "(missing)"
+          echo "=== visual diff PNGs ==="
+          find apps/studio/e2e -type f \( -name "*-actual.png" -o -name "*-diff.png" \) 2>/dev/null | head -50 || echo "(none)"
+
       - name: Upload integration artifacts on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
           name: integration-artifacts
-          path: apps/studio/integration/.artifacts/
+          path: |
+            apps/studio/integration/.artifacts/
+            apps/studio/e2e/playwright-report/
+            apps/studio/e2e/**/*-actual.png
+            apps/studio/e2e/**/*-diff.png
           retention-days: 7
           if-no-files-found: ignore
