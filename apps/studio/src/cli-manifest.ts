@@ -889,10 +889,12 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
       'and `jqHints.examples` gives ready-to-paste `--jq` paths pointing at ' +
       'each one — drill straight to the field you care about without re-paying ' +
       'for the full schema.\n\n' +
-      "The `node` payload includes all 13 flat variants (including type:'component', " +
+      "The `node` payload includes all 16 flat variants (including type:'component', " +
       'whose `spec` field lives in a sidecar — drill into `componentSpec` for ' +
-      'that shape). The category-level `notes` ride along unchanged on subname ' +
-      'lookups because the cross-variant invariants still apply.\n\n' +
+      "that shape — and type:'linkflow', whose optional `target: { project, flow }` " +
+      'turns the node into a clickable cross-flow link). The category-level ' +
+      '`notes` ride along unchanged on subname lookups because the cross-variant ' +
+      'invariants still apply.\n\n' +
       'Pass `--jq <filter>` to extract a slice of the response with a jq path ' +
       'expression. Supported subset: identity (`.`), field access (`.foo.bar`), ' +
       'bracket access (`.["foo"]`, `.[3]`, negative indices allowed), iteration ' +
@@ -915,8 +917,8 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
         description:
           'Optional named schema within the category — e.g. for `node`: ' +
           'rectangle, ellipse, sticky, text, database, server, user, queue, ' +
-          'cloud, diamond, hexagon, image, html, icon, component. For `action`: playAction, ' +
-          'statusAction, statusReport, componentAction. For ' +
+          'cloud, diamond, hexagon, image, html, icon, component, linkflow. For ' +
+          '`action`: playAction, statusAction, statusReport, componentAction. For ' +
           '`componentSpec`: componentSpec, componentSpecElement.',
       },
     ],

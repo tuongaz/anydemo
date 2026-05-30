@@ -99,7 +99,7 @@ const CATEGORY_META: Array<Omit<SchemaCategory, 'subnames'>> = [
   {
     name: 'node',
     description:
-      'All 13 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, image, html, icon, component). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant.',
+      'All 16 flat node variants (rectangle, ellipse, sticky, text, database, server, user, queue, cloud, diamond, hexagon, image, html, icon, component, linkflow). Visual kind is the type; capabilities (playAction / statusAction / stateSource) are independent optional fields on every variant. The linkflow variant carries an optional `target: { project, flow }` slug pair that turns the node into a clickable cross-flow link.',
   },
   {
     name: 'connector',
