@@ -125,6 +125,19 @@ function getContainerStyle(tree: unknown): CSSProperties {
   return (container.props as { style?: CSSProperties }).style ?? {};
 }
 
+// Chrome (border / bg / radius / shadow) lives on the inner wrapper so its
+// `overflow:hidden` clips the image to the rounded corners without also
+// clipping the connector handles + resize corners that paint outside the
+// node's bounding box on selection.
+function getChromeStyle(tree: unknown): CSSProperties {
+  const chrome = findElement(tree, (el) => {
+    const p = el.props as { 'data-testid'?: string };
+    return p['data-testid'] === 'image-node-chrome';
+  });
+  if (!chrome) throw new Error('image-node-chrome wrapper missing');
+  return (chrome.props as { style?: CSSProperties }).style ?? {};
+}
+
 // US-014: image nodes accept edge connections like shape nodes do — four
 // handles (target Top + Left, source Right + Bottom). Mirrors the shape-node
 // pattern; render-tree assertions are functionally equivalent to checking
@@ -162,20 +175,20 @@ describe('ImageNode connect handles (US-014)', () => {
 // the container style omits border keys entirely so the historical
 // "chromeless image" look is preserved.
 describe('ImageNode border render (US-014)', () => {
-  it('omits border keys from container style when no border fields are set', () => {
-    const style = getContainerStyle(callImageNode());
+  it('omits border keys from chrome style when no border fields are set', () => {
+    const style = getChromeStyle(callImageNode());
     expect(style.borderColor).toBeUndefined();
     expect(style.borderWidth).toBeUndefined();
     expect(style.borderStyle).toBeUndefined();
   });
 
-  it('applies border color / width / style when all fields are set', () => {
+  it('applies border color / width / style to chrome wrapper when all fields are set', () => {
     const tree = callImageNode({
       borderColor: 'blue',
       borderWidth: 3,
       borderStyle: 'dashed',
     });
-    const style = getContainerStyle(tree);
+    const style = getChromeStyle(tree);
     expect(style.borderColor).toBe(COLOR_TOKENS.blue.border);
     expect(style.borderWidth).toBe(3);
     expect(style.borderStyle).toBe('dashed');
@@ -185,27 +198,27 @@ describe('ImageNode border render (US-014)', () => {
     // borderWidth alone shouldn't synthesize a color/style default — the
     // browser's CSS shorthand fallback (medium black solid) is the documented
     // behaviour when the author has only set one axis.
-    const style = getContainerStyle(callImageNode({ borderWidth: 5 }));
+    const style = getChromeStyle(callImageNode({ borderWidth: 5 }));
     expect(style.borderWidth).toBe(5);
     expect(style.borderColor).toBeUndefined();
     expect(style.borderStyle).toBeUndefined();
   });
 
   it('still applies cornerRadius alongside the border fields', () => {
-    const style = getContainerStyle(
+    const style = getChromeStyle(
       callImageNode({ borderWidth: 2, borderColor: 'amber', cornerRadius: 12 }),
     );
     expect(style.borderWidth).toBe(2);
     expect(style.borderRadius).toBe(12);
   });
 
-  it('paints var(--node-shadow-N) when data.shadow is set', () => {
-    const style = getContainerStyle(callImageNode({ shadow: 3 }));
+  it('paints var(--node-shadow-N) on chrome wrapper when data.shadow is set', () => {
+    const style = getChromeStyle(callImageNode({ shadow: 3 }));
     expect((style as { boxShadow?: string }).boxShadow).toBe('var(--node-shadow-3)');
   });
 
   it('omits boxShadow when data.shadow is unset', () => {
-    const style = getContainerStyle(callImageNode());
+    const style = getChromeStyle(callImageNode());
     expect((style as { boxShadow?: string }).boxShadow).toBeUndefined();
   });
 });
@@ -307,13 +320,13 @@ describe('ImageNode upload placeholder (US-008)', () => {
 // on light + dark canvases. Field is never auto-injected on disk; this is a
 // render-time fallback only.
 describe('ImageNode default-white fill (US-021)', () => {
-  it('renders #ffffff when backgroundColor is unset', () => {
-    const style = getContainerStyle(callImageNode());
+  it('renders #ffffff on chrome wrapper when backgroundColor is unset', () => {
+    const style = getChromeStyle(callImageNode());
     expect(style.backgroundColor).toBe(NODE_DEFAULT_BG_WHITE);
   });
 
-  it('uses the explicit token when backgroundColor is set', () => {
-    const style = getContainerStyle(callImageNode({ backgroundColor: 'blue' }));
+  it('uses the explicit token on chrome wrapper when backgroundColor is set', () => {
+    const style = getChromeStyle(callImageNode({ backgroundColor: 'blue' }));
     expect(style.backgroundColor).toBe(COLOR_TOKENS.blue.background);
   });
 
@@ -321,7 +334,31 @@ describe('ImageNode default-white fill (US-021)', () => {
     // The 'default' token is how a user explicitly opts back into the
     // theme-aware --card fill via the property panel. The render-time
     // white fallback only fires when the field is truly unset.
-    const style = getContainerStyle(callImageNode({ backgroundColor: 'default' }));
+    const style = getChromeStyle(callImageNode({ backgroundColor: 'default' }));
     expect(style.backgroundColor).toBe(COLOR_TOKENS.default.background);
+  });
+});
+
+// Regression: previously the OUTER wrapper carried `sf:overflow-hidden`,
+// which clipped the four connector handles and the four resize corners when
+// a selected node's CSS transforms pushed them 8px outward (see
+// styles/index.css). Clipping must live on the INNER chrome wrapper instead.
+describe('ImageNode overflow placement (selection-handle clipping regression)', () => {
+  it('keeps overflow-hidden on the inner chrome wrapper, not the outer', () => {
+    const tree = callImageNode();
+    const outer = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node';
+    });
+    const chrome = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node-chrome';
+    });
+    expect(outer).not.toBeNull();
+    expect(chrome).not.toBeNull();
+    const outerClass = (outer?.props as { className?: string }).className ?? '';
+    const chromeClass = (chrome?.props as { className?: string }).className ?? '';
+    expect(outerClass).not.toContain('sf:overflow-hidden');
+    expect(chromeClass).toContain('sf:overflow-hidden');
   });
 });

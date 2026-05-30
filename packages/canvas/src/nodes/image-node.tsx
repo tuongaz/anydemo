@@ -75,7 +75,17 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
   // unset — so transparent PNGs / partial-alpha screenshots read as a clean
   // framed image on light AND dark canvases. Field stays unset on disk; this
   // is a render-time fallback only. An explicit token wins.
-  const containerStyle: CSSProperties = {
+  //
+  // Chrome (border / bg / radius / shadow) lives on the INNER wrapper so its
+  // `overflow:hidden` clips the image to the rounded corners without also
+  // clipping the connector handles + resize corners, which paint outside the
+  // node's bounding box on selection (see styles/index.css handle/resize
+  // transforms). Sizing stays on the OUTER wrapper so React Flow's positioned
+  // children (Handle, NodeResizeControl) measure against the right box.
+  const outerStyle: CSSProperties = sized
+    ? {}
+    : { width: IMAGE_DEFAULT_SIZE.width, height: IMAGE_DEFAULT_SIZE.height };
+  const chromeStyle: CSSProperties = {
     backgroundColor:
       data.backgroundColor !== undefined
         ? colorTokenStyle(data.backgroundColor, 'node').backgroundColor
@@ -87,13 +97,12 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
     ...(data.borderStyle !== undefined ? { borderStyle: data.borderStyle } : {}),
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
     ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
-    ...(sized ? {} : { width: IMAGE_DEFAULT_SIZE.width, height: IMAGE_DEFAULT_SIZE.height }),
   };
 
   return (
     <div
-      className={cn('sf:group sf:relative sf:overflow-hidden', sized ? 'sf:h-full sf:w-full' : '')}
-      style={containerStyle}
+      className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
+      style={outerStyle}
       data-testid="image-node"
       data-node-type="image"
     >
@@ -120,43 +129,49 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
         isConnectable={isConnectable}
         className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
-      {data._uploading ? (
-        // US-008: optimistic-placement loading state. The <img> is suppressed
-        // because the file hasn't been uploaded yet (data.path is empty), so
-        // we render a flat 'Loading…' tile sized to the dropped image dims.
-        <div
-          data-testid="image-node-placeholder"
-          data-placeholder="loading"
-          className="sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground sf:pointer-events-none"
-        >
-          Loading…
-        </div>
-      ) : data._uploadError ? (
-        // US-008: upload failed — the node stays on the canvas with a click-to-
-        // retry affordance. Never auto-deletes; the user explicitly opts to
-        // retry (or deletes the node themselves).
-        <button
-          type="button"
-          data-testid="image-node-placeholder"
-          data-placeholder="failed"
-          onClick={() => data.onRetryUpload?.(id)}
-          title={data._uploadError}
-          className="sf:flex sf:h-full sf:w-full sf:cursor-pointer sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs sf:text-destructive"
-        >
-          Upload failed (click to retry)
-        </button>
-      ) : (
-        <img
-          src={data.projectId ? fileUrl(data.projectId, data.path, data.fileBaseUrl) : ''}
-          alt={data.alt ?? ''}
-          // `block` strips the inline-element baseline gap that would otherwise
-          // leave a thin strip below the image inside the node container.
-          // `pointer-events-none` ensures the React Flow wrapper still receives
-          // drag/select gestures rather than the browser's native image drag.
-          className="sf:block sf:h-full sf:w-full sf:select-none sf:object-contain sf:pointer-events-none"
-          draggable={false}
-        />
-      )}
+      <div
+        data-testid="image-node-chrome"
+        className="sf:h-full sf:w-full sf:overflow-hidden"
+        style={chromeStyle}
+      >
+        {data._uploading ? (
+          // US-008: optimistic-placement loading state. The <img> is suppressed
+          // because the file hasn't been uploaded yet (data.path is empty), so
+          // we render a flat 'Loading…' tile sized to the dropped image dims.
+          <div
+            data-testid="image-node-placeholder"
+            data-placeholder="loading"
+            className="sf:flex sf:h-full sf:w-full sf:select-none sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground sf:pointer-events-none"
+          >
+            Loading…
+          </div>
+        ) : data._uploadError ? (
+          // US-008: upload failed — the node stays on the canvas with a click-to-
+          // retry affordance. Never auto-deletes; the user explicitly opts to
+          // retry (or deletes the node themselves).
+          <button
+            type="button"
+            data-testid="image-node-placeholder"
+            data-placeholder="failed"
+            onClick={() => data.onRetryUpload?.(id)}
+            title={data._uploadError}
+            className="sf:flex sf:h-full sf:w-full sf:cursor-pointer sf:select-none sf:items-center sf:justify-center sf:px-2 sf:text-center sf:text-xs sf:text-destructive"
+          >
+            Upload failed (click to retry)
+          </button>
+        ) : (
+          <img
+            src={data.projectId ? fileUrl(data.projectId, data.path, data.fileBaseUrl) : ''}
+            alt={data.alt ?? ''}
+            // `block` strips the inline-element baseline gap that would otherwise
+            // leave a thin strip below the image inside the node container.
+            // `pointer-events-none` ensures the React Flow wrapper still receives
+            // drag/select gestures rather than the browser's native image drag.
+            className="sf:block sf:h-full sf:w-full sf:select-none sf:object-contain sf:pointer-events-none"
+            draggable={false}
+          />
+        )}
+      </div>
       <Handle
         type="source"
         position={Position.Right}
