@@ -9,13 +9,18 @@
 
 import type {
   CanvasAdapter,
+  CanvasIconsAdapter,
   ConnectorCreateInput,
   ConnectorPatch,
+  IconLicenseInfo,
+  IconPackVendor,
+  InstallEvent,
   LayoutEdgeInput,
   LayoutNodeInput,
   LayoutResult,
   NodeCreateInput,
   NodePatch,
+  PackSummary,
   PlayActionResult,
   ReorderOp,
   UpdateNodePositionResult,
@@ -32,11 +37,20 @@ export interface RestAdapterOptions {
   /** Optional fetch override — primarily for tests. Defaults to globalThis.fetch. */
   fetch?: typeof fetch;
   /**
+   * Optional EventSource constructor — primarily for tests of `icons.subscribeJob`.
+   * Defaults to `globalThis.EventSource`. The cross-origin `withCredentials`
+   * concern doesn't apply for the studio same-origin case.
+   */
+  EventSource?: typeof EventSource;
+  /**
    * Optional extra headers attached to every request the adapter issues. Used
    * by cross-origin embedders (e.g. the MCP App iframe in Claude Desktop) to
    * forward a per-process auth token via `X-Seeflow-Token`. Merged into both
    * JSON requests (`content-type` set by the adapter) and the multipart
-   * upload (where the browser sets the boundary).
+   * upload (where the browser sets the boundary). NOTE: EventSource (used by
+   * `icons.subscribeJob`) does NOT accept custom headers — hosts that need
+   * authenticated SSE should use a token-in-URL scheme or proxy through their
+   * own backend.
    */
   headers?: Record<string, string>;
 }
@@ -73,9 +87,72 @@ const requestJson = async <T>(
 export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter => {
   const { baseUrl, project, flow } = options;
   const fetchImpl: typeof fetch = options.fetch ?? globalThis.fetch.bind(globalThis);
+  const eventSourceCtor: typeof EventSource = options.EventSource ?? globalThis.EventSource;
   const headers = options.headers;
   const projectBase = `${baseUrl}/api/projects/${encodeURIComponent(project)}`;
   const flowBase = `${projectBase}/flows/${encodeURIComponent(flow)}`;
+  const iconsBase = `${baseUrl}/api/icons`;
+
+  const icons: CanvasIconsAdapter = {
+    async listPacks(): Promise<PackSummary[]> {
+      const data = await requestJson<{ packs: PackSummary[] }>(
+        fetchImpl,
+        'GET',
+        `${iconsBase}/packs`,
+        headers,
+      );
+      return data.packs;
+    },
+
+    async install(
+      vendor: IconPackVendor,
+      opts: { acceptTerms?: boolean },
+    ): Promise<{ jobId: string }> {
+      const data = await requestJson<{ jobId: string }>(
+        fetchImpl,
+        'POST',
+        `${iconsBase}/install`,
+        headers,
+        { vendor, acceptTerms: opts.acceptTerms ?? false },
+      );
+      return { jobId: data.jobId };
+    },
+
+    subscribeJob(jobId: string, onEvent: (ev: InstallEvent) => void): () => void {
+      const url = `${iconsBase}/jobs/${encodeURIComponent(jobId)}/events`;
+      const es = new eventSourceCtor(url);
+      es.onmessage = (event: MessageEvent) => {
+        try {
+          onEvent(JSON.parse(event.data) as InstallEvent);
+        } catch (err) {
+          console.error('icons.subscribeJob: failed to parse SSE payload', err);
+        }
+      };
+      return () => es.close();
+    },
+
+    async remove(vendor: IconPackVendor): Promise<void> {
+      await requestJson<{ removed: IconPackVendor }>(
+        fetchImpl,
+        'DELETE',
+        `${iconsBase}/packs/${encodeURIComponent(vendor)}`,
+        headers,
+      );
+    },
+
+    async getLicense(vendor: IconPackVendor): Promise<IconLicenseInfo> {
+      const data = await requestJson<{
+        summary: string;
+        url: string;
+        requiresAcceptance: boolean;
+      }>(fetchImpl, 'GET', `${iconsBase}/licenses/${encodeURIComponent(vendor)}`, headers);
+      return {
+        summary: data.summary,
+        url: data.url,
+        requiresAcceptance: data.requiresAcceptance,
+      };
+    },
+  };
 
   return {
     async createNode(input: NodeCreateInput) {
@@ -210,5 +287,7 @@ export const createRestAdapter = (options: RestAdapterOptions): CanvasAdapter =>
       }>(fetchImpl, 'POST', `${baseUrl}/api/layout`, headers, { nodes, edges });
       return { nodes: res.nodes, connectors: res.connectors };
     },
+
+    icons,
   };
 };

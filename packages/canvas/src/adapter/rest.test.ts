@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { createRestAdapter } from './rest.ts';
+import type { InstallEvent } from './types.ts';
 
 interface FetchCall {
   url: string;
@@ -350,6 +351,210 @@ describe('createRestAdapter (US-009)', () => {
 
     expect(calls[0]?.url).toBe(
       'https://studio.example.com/api/projects/demo-42/flows/main/nodes/node-a',
+    );
+  });
+});
+
+describe('createRestAdapter icons (US-018)', () => {
+  it('icons.listPacks GETs /api/icons/packs and returns the packs array', async () => {
+    const packs = [
+      {
+        vendor: 'aws' as const,
+        installed: true as const,
+        version: '2026-05-31',
+        iconCount: 2,
+        sizeBytes: 1024,
+        iconNames: ['lambda', 's3'],
+      },
+      { vendor: 'gcp' as const, installed: false as const },
+      { vendor: 'azure' as const, installed: false as const },
+    ];
+    const { impl, calls } = stubFetch(() => stubResponse({ packs }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    const result = await adapter.icons?.listPacks();
+
+    expect(result).toEqual(packs);
+    expect(calls[0]?.url).toBe('/api/icons/packs');
+    expect(calls[0]?.method).toBe('GET');
+  });
+
+  it('icons.install POSTs { vendor, acceptTerms } and returns the jobId', async () => {
+    const { impl, calls } = stubFetch(() => stubResponse({ jobId: 'job-123' }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    const result = await adapter.icons?.install('aws', { acceptTerms: true });
+
+    expect(result).toEqual({ jobId: 'job-123' });
+    expect(calls[0]?.url).toBe('/api/icons/install');
+    expect(calls[0]?.method).toBe('POST');
+    expect(calls[0]?.headers?.['content-type']).toBe('application/json');
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({
+      vendor: 'aws',
+      acceptTerms: true,
+    });
+  });
+
+  it('icons.install defaults acceptTerms to false when omitted', async () => {
+    const { impl, calls } = stubFetch(() => stubResponse({ jobId: 'job-456' }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    await adapter.icons?.install('gcp', {});
+
+    expect(JSON.parse(String(calls[0]?.body))).toEqual({
+      vendor: 'gcp',
+      acceptTerms: false,
+    });
+  });
+
+  it('icons.install surfaces server error message (e.g. 409 with body.error) via thrown Error', async () => {
+    const { impl } = stubFetch(() =>
+      stubResponse({ error: 'install for aws already in flight', jobId: 'job-existing' }, 409),
+    );
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    expect(adapter.icons?.install('aws', { acceptTerms: true })).rejects.toThrow(
+      'install for aws already in flight',
+    );
+  });
+
+  it('icons.remove DELETEs /api/icons/packs/:vendor', async () => {
+    const { impl, calls } = stubFetch(() => stubResponse({ removed: 'aws' }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    await adapter.icons?.remove('aws');
+
+    expect(calls[0]?.url).toBe('/api/icons/packs/aws');
+    expect(calls[0]?.method).toBe('DELETE');
+  });
+
+  it('icons.getLicense GETs /api/icons/licenses/:vendor and returns the canvas-shaped IconLicenseInfo', async () => {
+    const { impl, calls } = stubFetch(() =>
+      stubResponse({
+        vendor: 'aws',
+        label: 'Amazon Web Services',
+        summary: 'AWS Architecture Icons license summary.',
+        url: 'https://aws.amazon.com/architecture/icons/',
+        requiresAcceptance: true,
+      }),
+    );
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+    });
+
+    const result = await adapter.icons?.getLicense('aws');
+
+    expect(result).toEqual({
+      summary: 'AWS Architecture Icons license summary.',
+      url: 'https://aws.amazon.com/architecture/icons/',
+      requiresAcceptance: true,
+    });
+    expect(calls[0]?.url).toBe('/api/icons/licenses/aws');
+    expect(calls[0]?.method).toBe('GET');
+  });
+
+  it('icons.subscribeJob opens an EventSource, parses JSON payloads to onEvent, and disposer closes it', () => {
+    const created: { url: string; closed: boolean }[] = [];
+    const handlers: { onmessage: ((e: MessageEvent) => void) | null }[] = [];
+    class FakeEventSource {
+      url: string;
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      constructor(url: string) {
+        this.url = url;
+        const entry = { url, closed: false };
+        created.push(entry);
+        handlers.push(this);
+      }
+      close() {
+        const entry = created[created.length - 1];
+        if (entry) entry.closed = true;
+      }
+    }
+    const { impl } = stubFetch(() => stubResponse({ ok: true }));
+    const adapter = createRestAdapter({
+      baseUrl: '',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+      EventSource: FakeEventSource as unknown as typeof EventSource,
+    });
+
+    const received: InstallEvent[] = [];
+    const unsubscribe = adapter.icons?.subscribeJob('job-789', (ev) => received.push(ev));
+
+    expect(created[0]?.url).toBe('/api/icons/jobs/job-789/events');
+    const handler = handlers[0];
+    expect(handler?.onmessage).not.toBeNull();
+    handler?.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'download-started', vendor: 'aws', expectedBytes: 100 }),
+      }),
+    );
+    handler?.onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({ type: 'done', vendor: 'aws', version: '2026-05-31', iconCount: 2 }),
+      }),
+    );
+
+    expect(received).toEqual([
+      { type: 'download-started', vendor: 'aws', expectedBytes: 100 },
+      { type: 'done', vendor: 'aws', version: '2026-05-31', iconCount: 2 },
+    ]);
+    expect(created[0]?.closed).toBe(false);
+    unsubscribe?.();
+    expect(created[0]?.closed).toBe(true);
+  });
+
+  it('icons.subscribeJob URL-encodes the jobId', () => {
+    const created: { url: string }[] = [];
+    class FakeEventSource {
+      onmessage: ((e: MessageEvent) => void) | null = null;
+      constructor(url: string) {
+        created.push({ url });
+      }
+      close() {}
+    }
+    const { impl } = stubFetch(() => stubResponse({ ok: true }));
+    const adapter = createRestAdapter({
+      baseUrl: 'https://studio.example.com',
+      project: 'demo-42',
+      flow: 'main',
+      fetch: impl,
+      EventSource: FakeEventSource as unknown as typeof EventSource,
+    });
+
+    adapter.icons?.subscribeJob('job/with slash', () => {});
+
+    expect(created[0]?.url).toBe(
+      'https://studio.example.com/api/icons/jobs/job%2Fwith%20slash/events',
     );
   });
 });
