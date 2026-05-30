@@ -113,7 +113,12 @@ describe('createIconsRouter', () => {
     const svgRes = await app.request('/aws/lambda.svg');
     expect(svgRes.status).toBe(200);
     expect(svgRes.headers.get('content-type')).toBe('image/svg+xml');
-    expect(svgRes.headers.get('cache-control') ?? '').toContain('immutable');
+    // Deliberately NOT immutable — pack reinstalls can change the bytes
+    // served at the same URL (extractor bugfix etc.), so the browser must be
+    // free to revalidate on hard refresh.
+    const cacheControl = svgRes.headers.get('cache-control') ?? '';
+    expect(cacheControl).toContain('max-age');
+    expect(cacheControl).not.toContain('immutable');
     expect(await svgRes.text()).toBe('<svg>lambda</svg>');
 
     const missingSvgRes = await app.request('/aws/no-such-icon.svg');

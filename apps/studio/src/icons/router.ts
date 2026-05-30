@@ -83,7 +83,12 @@ export function createIconsRouter(deps: IconsRouterDeps): Hono {
     return new Response(file.stream(), {
       headers: {
         'content-type': 'image/svg+xml',
-        'cache-control': 'public, max-age=31536000, immutable',
+        // No `immutable` — pack reinstalls (e.g. after an extractor bugfix)
+        // can change the bytes served at the same /api/icons/<vendor>/<name>.svg
+        // URL. `immutable` would tell the browser to skip revalidation even on
+        // hard refresh, locking users on bad cached content. A 1-day max-age
+        // keeps the picker fast without trapping fixed icons behind cache.
+        'cache-control': 'public, max-age=86400',
       },
     });
   });
