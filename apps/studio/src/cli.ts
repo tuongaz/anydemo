@@ -1277,9 +1277,6 @@ function parseIconVendor(action: 'add' | 'remove'): IconVendorSlug {
 
 async function runIconsAdd() {
   const vendor = parseIconVendor('add');
-  if (vendor === 'azure') {
-    printError(`Vendor '${vendor}' is not yet supported (Stage 5).`);
-  }
   const acceptTerms = hasFlag('accept-terms');
   const packUrl = flagValue('pack-url');
 
