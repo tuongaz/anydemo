@@ -77,6 +77,14 @@ export { formatIconId, parseIconId } from './lib/icon-id.ts';
 export type { IconId, IconVendor } from './lib/icon-id.ts';
 export { resolveIcon } from './lib/icon-resolve.ts';
 export type { Resolved, ResolveOptions } from './lib/icon-resolve.ts';
+export { IconRenderer } from './components/icon-renderer.tsx';
+export type { IconRendererProps } from './components/icon-renderer.tsx';
+export {
+  CanvasStudioContext,
+  CanvasStudioProvider,
+  useCanvasStudio,
+} from './lib/canvas-studio-context.tsx';
+export type { CanvasStudioValue } from './lib/canvas-studio-context.tsx';
 
 // ----------------------------------------------------------------------------
 // 4. Helpers

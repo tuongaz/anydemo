@@ -1,9 +1,9 @@
 import { beforeEach, describe, expect, it, mock } from 'bun:test';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
+import { IconRenderer } from '../components/icon-renderer.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
-import { ICON_REGISTRY } from '../lib/icon-registry.ts';
-import { ICON_FALLBACK_NAME, IconNode } from './icon-node.tsx';
+import { IconNode } from './icon-node.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 
 // Bun runs apps/web tests without a DOM, and React Flow's `<Handle>` reads
@@ -21,6 +21,7 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: <T>(ctx: unknown) => T;
 };
 
 /**
@@ -51,6 +52,10 @@ function renderWithHooks<T>(fn: () => T, useStateOverrides?: ReadonlyArray<unkno
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    // CanvasStudioContext is the only context icon-node consumes; return the
+    // default shape (empty studioBaseUrl ⇒ same-origin) so the dispatcher
+    // doesn't try to walk a non-existent Provider chain.
+    useContext: <T,>() => ({ studioBaseUrl: '' }) as T,
   };
   try {
     return fn();
@@ -136,10 +141,13 @@ describe('IconNode', () => {
     mock.restore();
   });
 
-  it('renders the correct Lucide component for a known name', () => {
+  it('delegates rendering to IconRenderer with the data.icon id', () => {
     const tree = callIconNode({ icon: 'shopping-cart' });
-    const lucide = findElement(tree, (type) => type === ICON_REGISTRY['shopping-cart']);
-    expect(lucide).not.toBeNull();
+    const renderer = findElement(tree, (type) => type === IconRenderer);
+    if (!renderer) throw new Error('IconRenderer not found in IconNode tree');
+    expect(renderer.props.iconId).toBe('shopping-cart');
+    // studioBaseUrl is threaded from the CanvasStudioContext default.
+    expect(renderer.props.studioBaseUrl).toBe('');
   });
 
   it('renders no caption element when data.name is absent or empty (US-002)', () => {
@@ -174,39 +182,26 @@ describe('IconNode', () => {
     expect(className).toContain('text-xs');
   });
 
-  it('falls back to help-circle on an unknown name and warns once', () => {
-    const warnSpy = mock(() => {});
-    const originalWarn = console.warn;
-    console.warn = warnSpy as unknown as typeof console.warn;
-    try {
-      const tree = callIconNode({ icon: 'definitely-not-a-real-icon' });
-      // The fallback component is identity-equal to ICON_REGISTRY['help-circle'].
-      const fallback = ICON_REGISTRY[ICON_FALLBACK_NAME];
-      expect(fallback).toBeDefined();
-      const lucide = findElement(tree, (type) => type === fallback);
-      expect(lucide).not.toBeNull();
-      // The original (unknown) icon name must NOT be in the registry.
-      expect(ICON_REGISTRY['definitely-not-a-real-icon']).toBeUndefined();
-      // Warn-once: a second render with the same unknown name must not warn again.
-      callIconNode({ icon: 'definitely-not-a-real-icon' });
-      expect(warnSpy).toHaveBeenCalledTimes(1);
-    } finally {
-      console.warn = originalWarn;
-    }
+  it('passes an unknown icon id through to IconRenderer (placeholder is rendered downstream)', () => {
+    // US-013: the fallback decision moved into IconRenderer — IconNode just
+    // hands over `data.icon` verbatim. The placeholder + observability are
+    // verified in icon-renderer.test.tsx.
+    const tree = callIconNode({ icon: 'definitely-not-a-real-icon' });
+    const renderer = findElement(tree, (type) => type === IconRenderer);
+    if (!renderer) throw new Error('IconRenderer not found in IconNode tree');
+    expect(renderer.props.iconId).toBe('definitely-not-a-real-icon');
   });
 
-  it('data.color overrides default (currentColor)', () => {
-    const lucideType = ICON_REGISTRY['shopping-cart'];
-
+  it('data.color overrides default (currentColor) via the IconRenderer color prop', () => {
     const defaultTree = callIconNode({ icon: 'shopping-cart' });
-    const defaultLucide = findElement(defaultTree, (type) => type === lucideType);
-    expect(defaultLucide?.props.color).toBe('currentColor');
+    const defaultRenderer = findElement(defaultTree, (type) => type === IconRenderer);
+    expect(defaultRenderer?.props.color).toBe('currentColor');
 
     const coloredTree = callIconNode({ icon: 'shopping-cart', color: 'blue' });
-    const coloredLucide = findElement(coloredTree, (type) => type === lucideType);
+    const coloredRenderer = findElement(coloredTree, (type) => type === IconRenderer);
     // 'blue' token's edge equals its border HSL in the curated palette — see
     // THEMES.blue.border in color-tokens.ts.
-    expect(coloredLucide?.props.color).toBe('hsl(217, 85%, 45%)');
+    expect(coloredRenderer?.props.color).toBe('hsl(217, 85%, 45%)');
   });
 
   it('ResizeControls fires data.onResize on resize end with width/height/x/y', () => {

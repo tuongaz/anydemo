@@ -1,9 +1,16 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState } from 'react';
+import {
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  memo,
+  useContext,
+  useState,
+} from 'react';
+import { IconRenderer } from '../components/icon-renderer.tsx';
 import { InlineEdit } from '../components/inline-edit.tsx';
+import { CanvasStudioContext } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
-import { ICON_REGISTRY } from '../lib/icon-registry.ts';
 import type { IconNodeData } from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { useResizeGesture } from './use-resize-gesture.ts';
@@ -46,9 +53,6 @@ function resolveIconColor(token: IconNodeData['color']): string {
   return colorTokenStyle(token, 'text').color ?? 'currentColor';
 }
 
-// Console-warn once per unknown icon name so a broken demo doesn't spam logs.
-const WARNED_NAMES = new Set<string>();
-
 function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeType>) {
   const { isResizing, onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -60,15 +64,10 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
   const sized = data.width !== undefined || data.height !== undefined;
   const nameEditable = !!data.onNameChange;
   const [isEditing, setIsEditing] = useState(false);
-
-  const requested = ICON_REGISTRY[data.icon];
-  if (!requested && !WARNED_NAMES.has(data.icon)) {
-    WARNED_NAMES.add(data.icon);
-    console.warn(
-      `[iconNode] Unknown icon "${data.icon}"; falling back to "${ICON_FALLBACK_NAME}".`,
-    );
-  }
-  const IconComponent = requested ?? ICON_REGISTRY[ICON_FALLBACK_NAME];
+  // US-013: studio base URL is needed by IconRenderer's svg-url branch for
+  // vendor-prefixed icon ids (e.g. `aws:lambda`). Bundled Lucide names paint
+  // synchronously so the value is ignored for the common case.
+  const { studioBaseUrl } = useContext(CanvasStudioContext);
 
   const iconColor = resolveIconColor(data.color);
   const strokeWidth = data.strokeWidth ?? 2;
@@ -119,15 +118,15 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
         isConnectable={isConnectable}
         className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
       />
-      {IconComponent ? (
-        <IconComponent
-          color={iconColor}
-          strokeWidth={strokeWidth}
-          absoluteStrokeWidth
-          aria-label={data.alt}
-          className="sf:block sf:h-full sf:w-full sf:pointer-events-none sf:select-none"
-        />
-      ) : null}
+      <IconRenderer
+        iconId={data.icon}
+        studioBaseUrl={studioBaseUrl}
+        color={iconColor}
+        strokeWidth={strokeWidth}
+        absoluteStrokeWidth
+        ariaLabel={data.alt}
+        className="sf:block sf:h-full sf:w-full sf:pointer-events-none sf:select-none"
+      />
       {isEditing && nameEditable ? (
         // US-004: positioned where the read-mode caption would render (below
         // the icon, full node width, centered). Wrapped in an absolutely
