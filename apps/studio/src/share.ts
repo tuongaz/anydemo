@@ -5,10 +5,12 @@
  * This module is the local-API surface that the studio HTTP routes and toolbar
  * UI delegate to. start() drives the relay handshake (POST /api/share/sessions)
  * and boots a WebSocket transport; transport state events drive the controller
- * state machine. stop/kick/rotateUrl are stubbed until US-018.
+ * state machine. stop() tears the session down cleanly (and aborts a mid-boot
+ * start), kick() sends a kick envelope to a peer, rotateUrl() stops + restarts
+ * so an abused share link can be invalidated.
  */
 
-import type { Envelope } from './share-envelope.ts';
+import { type Envelope, makeEnvelope } from './share-envelope.ts';
 import {
   type ShareTransport,
   type ShareTransportOpts,
@@ -59,13 +61,19 @@ interface RelaySessionResponse {
   wsUrl: string;
 }
 
+interface BootHandle {
+  settled: boolean;
+  cancelTimer: () => void;
+  rejectStart: (err: Error) => void;
+}
+
 const BOOT_TIMEOUT_MS = 10_000;
 
 export function createShareController(deps: ShareDeps): ShareController {
   // current is mutated through setState() so subscribers fan-out on every
   // transition. hostKey + transport live in closure scope — hostKey is never
-  // returned by state() or logged; future stories (stop/kick/rotate) read it
-  // directly from here.
+  // returned by state() or logged. bootHandle is non-null only while start()
+  // is in flight; stop() consults it to abort a mid-boot start.
   let current: ShareState = { status: 'idle' };
   const subscribers = new Set<(s: ShareState) => void>();
   const fetchFn = deps.fetch ?? fetch;
@@ -73,6 +81,7 @@ export function createShareController(deps: ShareDeps): ShareController {
 
   let hostKey: string | null = null;
   let transport: ShareTransport | null = null;
+  let bootHandle: BootHandle | null = null;
 
   const setState = (next: ShareState) => {
     current = next;
@@ -85,7 +94,20 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
-  return {
+  const teardown = () => {
+    const t = transport;
+    transport = null;
+    hostKey = null;
+    if (t) {
+      try {
+        t.close('user');
+      } catch (err) {
+        console.warn('[share] close failed during teardown:', err);
+      }
+    }
+  };
+
+  const controller: ShareController = {
     async start() {
       if (current.status !== 'idle') {
         throw new Error('share-already-active');
@@ -99,37 +121,43 @@ export function createShareController(deps: ShareDeps): ShareController {
       hostKey = body.hostKey;
 
       return await new Promise<{ url: string; sessionId: string }>((resolve, reject) => {
-        let settled = false;
-        let timeoutHandle: ReturnType<typeof setTimeout> | null = setTimeout(() => {
-          if (settled) return;
-          settled = true;
-          timeoutHandle = null;
-          const t = transport;
-          transport = null;
-          hostKey = null;
-          if (t) {
-            try {
-              t.close('boot-timeout');
-            } catch (err) {
-              console.warn('[share] close failed during boot timeout:', err);
+        let timeoutHandle: ReturnType<typeof setTimeout> | null = null;
+
+        const handle: BootHandle = {
+          settled: false,
+          cancelTimer: () => {
+            if (timeoutHandle !== null) {
+              clearTimeout(timeoutHandle);
+              timeoutHandle = null;
             }
-          }
+          },
+          rejectStart: (err) => {
+            handle.settled = true;
+            reject(err);
+          },
+        };
+        bootHandle = handle;
+
+        timeoutHandle = setTimeout(() => {
+          if (handle.settled) return;
+          handle.settled = true;
+          timeoutHandle = null;
+          bootHandle = null;
+          teardown();
           setState({ status: 'idle' });
           reject(new Error('share-boot-timeout'));
         }, BOOT_TIMEOUT_MS);
 
         const onTransportState = (s: ShareTransportState) => {
-          if (settled) return;
+          if (handle.settled) return;
           if (s === 'connecting' || s === 'reconnecting') {
             if (current.status !== 'starting') setState({ status: 'starting' });
             return;
           }
           if (s === 'open') {
-            settled = true;
-            if (timeoutHandle !== null) {
-              clearTimeout(timeoutHandle);
-              timeoutHandle = null;
-            }
+            handle.settled = true;
+            handle.cancelTimer();
+            bootHandle = null;
             const url = `${deps.shareUrlBase}/${body.token}`;
             setState({
               status: 'active',
@@ -143,11 +171,9 @@ export function createShareController(deps: ShareDeps): ShareController {
             return;
           }
           // s === 'closed' before reaching 'open' => boot failed.
-          settled = true;
-          if (timeoutHandle !== null) {
-            clearTimeout(timeoutHandle);
-            timeoutHandle = null;
-          }
+          handle.settled = true;
+          handle.cancelTimer();
+          bootHandle = null;
           transport = null;
           hostKey = null;
           setState({ status: 'idle' });
@@ -169,13 +195,48 @@ export function createShareController(deps: ShareDeps): ShareController {
       });
     },
     async stop() {
-      throw new Error('not-implemented');
+      if (current.status === 'idle') return;
+
+      if (current.status === 'starting') {
+        // Abort the in-flight start: mark its boot settled BEFORE closing the
+        // transport so a synchronous 'closed' emit can't double-reject with
+        // 'share-transport-closed-during-boot'.
+        const handle = bootHandle;
+        bootHandle = null;
+        if (handle) {
+          handle.settled = true;
+          handle.cancelTimer();
+        }
+        setState({ status: 'stopping' });
+        teardown();
+        setState({ status: 'idle' });
+        if (handle) handle.rejectStart(new Error('share-stopped-during-start'));
+        return;
+      }
+
+      if (current.status === 'active') {
+        setState({ status: 'stopping' });
+        teardown();
+        setState({ status: 'idle' });
+        return;
+      }
+
+      // status === 'stopping' or 'error' — treat as no-op; the in-flight
+      // stop will complete on its own and a fresh start() can follow.
     },
-    async kick(_peerId: string) {
-      throw new Error('not-implemented');
+    async kick(peerId: string) {
+      if (current.status !== 'active' || !transport) {
+        throw new Error('share-not-active');
+      }
+      transport.send(makeEnvelope('kick', { peerId }, { to: peerId }));
     },
     async rotateUrl() {
-      throw new Error('not-implemented');
+      if (current.status !== 'active') {
+        throw new Error('share-not-active');
+      }
+      await controller.stop();
+      const { url } = await controller.start();
+      return { url };
     },
     state() {
       return current;
@@ -192,4 +253,6 @@ export function createShareController(deps: ShareDeps): ShareController {
       };
     },
   };
+
+  return controller;
 }

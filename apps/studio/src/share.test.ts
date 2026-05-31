@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import type { Envelope } from './share-envelope.ts';
 import type { ShareTransport, ShareTransportOpts, ShareTransportState } from './share-transport.ts';
 import { type ShareState, createShareController } from './share.ts';
 
@@ -12,17 +13,27 @@ interface FakeTransportHandle {
   emit: (s: ShareTransportState) => void;
   capturedOpts: () => ShareTransportOpts | null;
   wasClosed: () => boolean;
+  closeCount: () => number;
+  sends: () => Envelope[];
+  instanceCount: () => number;
 }
 
 function makeFakeTransport(autoEmit: ShareTransportState[] = []): FakeTransportHandle {
   let lastOpts: ShareTransportOpts | null = null;
   let closed = false;
+  let closeCount = 0;
+  let instanceCount = 0;
+  const sends: Envelope[] = [];
   const factory = (opts: ShareTransportOpts): ShareTransport => {
     lastOpts = opts;
+    instanceCount += 1;
     const t: ShareTransport = {
-      send() {},
+      send(frame) {
+        sends.push(frame);
+      },
       close() {
         closed = true;
+        closeCount += 1;
       },
       isOpen() {
         return true;
@@ -36,6 +47,9 @@ function makeFakeTransport(autoEmit: ShareTransportState[] = []): FakeTransportH
     emit: (s) => lastOpts?.onStateChange(s),
     capturedOpts: () => lastOpts,
     wasClosed: () => closed,
+    closeCount: () => closeCount,
+    sends: () => sends,
+    instanceCount: () => instanceCount,
   };
 }
 
@@ -47,6 +61,21 @@ function mockFetch(response: { status?: number; body?: unknown }): typeof fetch 
       status,
       json: async () => response.body ?? {},
     }) as unknown as Response;
+  return fake as unknown as typeof fetch;
+}
+
+function mockFetchSequence(responses: { status?: number; body?: unknown }[]): typeof fetch {
+  let i = 0;
+  const fake = async () => {
+    const r = responses[i] ?? responses[responses.length - 1];
+    i += 1;
+    const status = r?.status ?? 200;
+    return {
+      ok: status >= 200 && status < 300,
+      status,
+      json: async () => r?.body ?? {},
+    } as unknown as Response;
+  };
   return fake as unknown as typeof fetch;
 }
 
@@ -75,13 +104,6 @@ describe('createShareController', () => {
     // Calling unsubscribe again must be a no-op.
     off();
     expect(count).toBe(1);
-  });
-
-  it('stub kick/rotateUrl throw not-implemented without mutating state', async () => {
-    const ctrl = createShareController(baseDeps);
-    await expect(ctrl.kick('peer-1')).rejects.toThrow('not-implemented');
-    await expect(ctrl.rotateUrl()).rejects.toThrow('not-implemented');
-    expect(ctrl.state()).toEqual({ status: 'idle' });
   });
 
   it('state() never exposes a hostKey field', () => {
@@ -162,5 +184,138 @@ describe('createShareController.start()', () => {
     await ctrl.start();
     await expect(ctrl.start()).rejects.toThrow('share-already-active');
     expect(ctrl.state().status).toBe('active');
+  });
+});
+
+describe('createShareController.stop()', () => {
+  it('from active: transitions stopping -> idle, closes transport, clears session', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+    });
+    await ctrl.start();
+    expect(ctrl.state().status).toBe('active');
+
+    const seen: ShareState[] = [];
+    ctrl.subscribe((s) => seen.push(s));
+
+    await ctrl.stop();
+
+    expect(ctrl.state()).toEqual({ status: 'idle' });
+    expect(fake.wasClosed()).toBe(true);
+    // Subscribers observed active (initial deliver) -> stopping -> idle.
+    expect(seen.map((s) => s.status)).toEqual(['active', 'stopping', 'idle']);
+  });
+
+  it('from idle is a no-op and does not throw', async () => {
+    const ctrl = createShareController(baseDeps);
+    const seen: ShareState[] = [];
+    ctrl.subscribe((s) => seen.push(s));
+    await expect(ctrl.stop()).resolves.toBeUndefined();
+    expect(ctrl.state()).toEqual({ status: 'idle' });
+    // No transitions beyond the initial-deliver.
+    expect(seen.map((s) => s.status)).toEqual(['idle']);
+  });
+
+  it('during starting: rejects the original start with share-stopped-during-start', async () => {
+    // autoEmit only goes through 'connecting' — boot stalls in starting until
+    // stop() drives it back.
+    const fake = makeFakeTransport(['connecting']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 's', token: 't', hostKey: 'h', wsUrl: 'wss://r' },
+      }),
+      transportFactory: fake.factory,
+    });
+
+    const startPromise = ctrl.start();
+    // Wait for state to reach 'starting' before stopping.
+    await new Promise<void>((resolve) => {
+      const off = ctrl.subscribe((s) => {
+        if (s.status === 'starting') {
+          off();
+          resolve();
+        }
+      });
+    });
+
+    const stopPromise = ctrl.stop();
+    await expect(startPromise).rejects.toThrow('share-stopped-during-start');
+    await stopPromise;
+
+    expect(ctrl.state()).toEqual({ status: 'idle' });
+    expect(fake.wasClosed()).toBe(true);
+  });
+});
+
+describe('createShareController.kick()', () => {
+  it('from idle rejects with share-not-active', async () => {
+    const ctrl = createShareController(baseDeps);
+    await expect(ctrl.kick('peer-1')).rejects.toThrow('share-not-active');
+    expect(ctrl.state()).toEqual({ status: 'idle' });
+  });
+
+  it('from active sends a kick envelope addressed to peerId', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+    });
+    await ctrl.start();
+    await ctrl.kick('peer-42');
+
+    expect(fake.sends()).toHaveLength(1);
+    const frame = fake.sends()[0];
+    expect(frame).toBeDefined();
+    if (!frame) throw new Error('expected kick frame');
+    expect(frame.v).toBe(1);
+    expect(frame.type).toBe('kick');
+    expect(frame.from).toBe('host');
+    expect(frame.to).toBe('peer-42');
+    expect(frame.payload).toEqual({ peerId: 'peer-42' });
+  });
+});
+
+describe('createShareController.rotateUrl()', () => {
+  it('from idle rejects with share-not-active', async () => {
+    const ctrl = createShareController(baseDeps);
+    await expect(ctrl.rotateUrl()).rejects.toThrow('share-not-active');
+    expect(ctrl.state()).toEqual({ status: 'idle' });
+  });
+
+  it('from active returns a new url and the old token is no longer in state', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetchSequence([
+        { body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' } },
+        { body: { sessionId: 'sess-2', token: 'tok-2', hostKey: 'hk-2', wsUrl: 'wss://relay/ws' } },
+      ]),
+      transportFactory: fake.factory,
+    });
+
+    const first = await ctrl.start();
+    expect(first.url).toBe('https://share.example/tok-1');
+
+    const { url } = await ctrl.rotateUrl();
+    expect(url).toBe('https://share.example/tok-2');
+
+    const s = ctrl.state();
+    if (s.status !== 'active') throw new Error('expected active after rotate');
+    expect(s.token).toBe('tok-2');
+    expect(s.url).toBe('https://share.example/tok-2');
+    expect(s.sessionId).toBe('sess-2');
+
+    // Two transport instances created (one per start), and the first was closed.
+    expect(fake.instanceCount()).toBe(2);
+    expect(fake.closeCount()).toBe(1);
   });
 });
