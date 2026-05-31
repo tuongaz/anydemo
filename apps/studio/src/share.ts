@@ -986,6 +986,40 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
+  // Emit a `flow-snapshot` envelope to a freshly-joined peer so its canvas can
+  // render the host's flow graph. Reads each registered flow's on-disk JSON
+  // and packages them as `{ flows: { [flowId]: Flow }, activeFlowId }`. Without
+  // this the peer is stuck on "CONNECTING…" forever (the viewer's
+  // share-session.tsx blocks until `snapshot` is populated). Errors only warn
+  // — the peer can refresh / rotate to retry.
+  const emitFlowSnapshotForPeer = (peerConnId: string): void => {
+    const registry = deps.operationsDeps?.registry;
+    if (!registry) return;
+    const entries = registry.list();
+    if (entries.length === 0) return;
+    const flows: Record<string, unknown> = {};
+    let activeFlowId: string | null = null;
+    for (const entry of entries) {
+      const path = join(entry.repoPath, entry.flowPath);
+      try {
+        const raw = JSON.parse(readFileSync(path, 'utf8'));
+        flows[entry.id] = raw;
+        if (activeFlowId === null) activeFlowId = entry.id;
+        if (entry.isDefault) activeFlowId = entry.id;
+      } catch (err) {
+        console.warn(`[share] flow-snapshot read failed for ${entry.id}:`, err);
+      }
+    }
+    if (!activeFlowId) return;
+    try {
+      broadcast(
+        makeEnvelope('flow-snapshot', { flows, activeFlowId }, { to: peerConnId, from: 'host' }),
+      );
+    } catch (err) {
+      console.warn('[share] flow-snapshot broadcast failed:', err);
+    }
+  };
+
   const handleFrame = (env: Envelope) => {
     if (env.type === 'presence') {
       const base = PresenceBaseSchema.safeParse(env.payload);
@@ -1020,6 +1054,10 @@ export function createShareController(deps: ShareDeps): ShareController {
           ...current,
           peers: [...current.peers, { peerId, displayName, joinedAt: Date.now() }],
         });
+        // Prime the new peer with the host's flow graph first — without this
+        // the peer is stuck on "CONNECTING…" forever (viewer waits on
+        // snapshot before rendering the canvas).
+        emitFlowSnapshotForPeer(env.from);
         // Prime the new peer with a one-shot files-manifest snapshot so its
         // canvas can render placeholder sizing before any file-request fires.
         // Fire-and-forget; emit failures are warned, never propagated.

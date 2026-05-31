@@ -23,6 +23,7 @@ export const ENVELOPE_TYPES = [
   'sse',
   'sse-snapshot',
   'presence',
+  'cursor',
   'file-request',
   'file-bytes',
   'file-redirect',
@@ -31,6 +32,8 @@ export const ENVELOPE_TYPES = [
   'node-patched',
   'files-manifest',
   'kick',
+  'flow-snapshot',
+  'auth-refresh-required',
 ] as const;
 
 export const EnvelopeTypeSchema = z.enum(ENVELOPE_TYPES);
