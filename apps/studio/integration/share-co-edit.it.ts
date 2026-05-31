@@ -438,12 +438,14 @@ describe('integration: two-peer co-edit through host serialization (US-044)', ()
       op: 'moveNode',
       diff: expectedDiff,
       version: 1,
+      attributedTo: { peerId: 'peer-a', displayName: 'Peer A' },
     });
     expect(peerBBroadcast.payload).toEqual({
       flowId: fx.flowId,
       op: 'moveNode',
       diff: expectedDiff,
       version: 1,
+      attributedTo: { peerId: 'peer-a', displayName: 'Peer A' },
     });
 
     // Style.json on disk should reflect the canonical position write.
