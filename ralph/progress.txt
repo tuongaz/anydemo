@@ -13,6 +13,31 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 
 ---
 
+## 2026-06-01 - US-067
+- Wired the SSE tap from US-066 into the live share controller. `apps/studio/src/share.ts` now owns a single per-session `SseTap` instance: on idle->active, it builds the tap with `flowIds: () => deps.flowIdsForBroadcast()` + `onEvent: payload => broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }))`, then subscribes to the sentinel `__registry__` flowId on the EventBus so a `registry:reload` event triggers `tap.refreshFlows()`. Teardown stops the tap and drops the registry listener cleanly. The old per-flow eventBus subscription loop was removed.
+- The outbound payload is now the SsePayloadSchema-shaped object (`{ t, flowId, ts, data, seq }`) instead of the legacy unwrapped StudioEvent. Old tests in `share.test.ts` that asserted the legacy `{type, flowId, payload, ts}` shape were removed; a dedicated `apps/studio/src/share.sse-bridge.test.ts` covers the new behavior.
+- Files changed:
+  - apps/studio/src/share.ts — added `SseTap` import; replaced `eventUnsubscribes: (() => void)[]` field with `sseTap: SseTap | null` + `registryUnsubscribe: (() => void) | null`; rewrote `subscribeToEventBus()` to instantiate the tap and listen on `__registry__`; rewrote `unsubscribeFromEventBus()` to stop the tap + drop the registry listener.
+  - apps/studio/src/share.test.ts — deleted the `createShareController eventBus -> sse bridge` describe block (3 tests with legacy payload shape) + the now-unused `createEventBus` import.
+  - apps/studio/src/share.sse-bridge.test.ts (new) — 6 tests: SsePayloadSchema-valid forwarding of node:running with `from:'host'`, `to:'all'`; drop for flowIds outside `flowIdsForBroadcast()`; monotonic seq across multiple events; `registry:reload` triggers refresh (verified add AND remove); teardown unsubscribes from both flow and `__registry__` channels; WS reconnect cycle does NOT re-emit the buffered ring (asserts no double-emit and seq continuity).
+
+- Verification:
+  - `bun test ./apps/studio/src/share.sse-bridge.test.ts` → 6/6 pass
+  - `bun test apps/studio/src/share-*.test.ts apps/studio/src/share.*.test.ts apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share/ apps/studio/src/events.test.ts` → 222/222 pass
+  - `bun run typecheck` → 4 workspaces clean
+  - `bun run format && bun run lint` → clean
+  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK
+  - Other studio-src failures observed (watcher.* + 2 createApp `/health` timeouts) are pre-existing flakies documented in the Codebase Patterns section; unrelated to the SSE bridge.
+
+- Learnings for future iterations:
+  - `registry:reload` events are broadcast on the sentinel flowId `__registry__` (see apps/studio/src/api.ts:296 and several other mutator sites). To listen for registry changes via the EventBus, subscribe to that key — there is no broadcast-to-all channel.
+  - When the SSE tap's `onEvent` callback fires, the `transport.isOpen()` / `transport == null` guard already lives inside the default `broadcast` helper at the top of `createShareController`, so the per-event subscriber does NOT need to re-check transport state. Tests that inject `broadcast` directly bypass that guard, which is what `share.sse-bridge.test.ts` relies on.
+  - Old share.test.ts assumed the SSE bridge sent the StudioEvent verbatim as the envelope payload (`{type, flowId, payload, ts}`). The new contract sends the `SsePayload` shape (`{t, flowId, ts, data, seq}`) so peers can Zod-parse against `SsePayloadSchema`. When migrating any consumer code that expected the old shape, switch to `SsePayloadSchema.parse(env.payload)` and read `.t` / `.data` instead of `.type` / `.payload`.
+  - The tap's ring buffer is internal snapshot state, never replayed at the broadcast layer — so on transport reconnect, peers see only events that fire after the WS comes back. The reconnect test in share.sse-bridge.test.ts asserts this explicitly (no double-emit; seq stays monotonic across the reconnect cycle).
+  - Biome's `organizeImports` sorts imports alphabetically, so `./share/sse-frame.ts` must come AFTER `./share.ts` (because '.' < '/'). Run `bun run format && bun run lint` together to catch the sort before commit.
+
+---
+
 ## 2026-06-01 - US-066
 - Added the SSE-tap module that subscribes to the local EventBus per active flow, mirrors bridged events into a per-flow ring buffer, and exposes a snapshot of last-seen status per node for late-joining peers.
 - Files changed:

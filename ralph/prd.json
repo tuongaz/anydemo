@@ -56,8 +56,8 @@
         "Tests pass"
       ],
       "priority": 3,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "share.ts now owns a single SseTap per active session. subscribeToEventBus() builds the tap with `flowIds: () => deps.flowIdsForBroadcast()`, `onEvent: payload => broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }))`, then also subscribes to the `__registry__` flowId to call tap.refreshFlows() on `registry:reload`. Teardown stops the tap and drops the registry listener. Old eventBus->sse tests in share.test.ts (which expected the legacy unwrapped StudioEvent payload) were removed; new dedicated share.sse-bridge.test.ts covers: SsePayloadSchema-valid forwarding, drops for unregistered flows, monotonic seq, registry:reload triggers refresh (add + remove), teardown clears bus subscriptions, and reconnect does NOT replay the ring buffer."
     },
     {
       "id": "US-068",

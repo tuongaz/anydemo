@@ -63,6 +63,7 @@ import {
   type ShareTransportState,
   createShareTransport,
 } from './share-transport.ts';
+import { type SseTap, createSseTap } from './share/sse-tap.ts';
 
 // Presence frame payloads. We validate `kind` against the base shape, then
 // re-validate join/leave with their strict required fields so malformed
@@ -395,8 +396,15 @@ export function createShareController(deps: ShareDeps): ShareController {
   let transport: ShareTransport | null = null;
   let bootHandle: BootHandle | null = null;
   let auditLog: AuditLog | null = null;
-  // EventBus unsubscribe closures captured at active-time, drained in teardown.
-  let eventUnsubscribes: (() => void)[] = [];
+  // SSE tap (US-066/US-067): single per-controller instance owning the
+  // EventBus -> outbound `sse` envelope bridge. Created on idle -> active,
+  // torn down on stop()/teardown(). Null when inactive or when no eventBus
+  // dep was provided.
+  let sseTap: SseTap | null = null;
+  // Unsubscribe handle for the `__registry__` listener that drives
+  // `sseTap.refreshFlows()` on registry:reload events. Captured at active
+  // time so teardown can drop the subscription cleanly.
+  let registryUnsubscribe: (() => void) | null = null;
   // peerId -> connId. Populated by presence/join frames; consulted by kick()
   // so a host can address a peer by stable peerId while the relay routes on
   // the per-connection connId. Cleared on teardown.
@@ -476,31 +484,57 @@ export function createShareController(deps: ShareDeps): ShareController {
 
   const subscribeToEventBus = () => {
     if (!deps.eventBus || !deps.flowIdsForBroadcast) return;
-    const flowIds = deps.flowIdsForBroadcast();
-    for (const flowId of flowIds) {
-      const off = deps.eventBus.subscribe(flowId, (event) => {
+    const flowIdsForBroadcast = deps.flowIdsForBroadcast;
+    // Build the SSE tap with a fresh per-session monotonic seq counter (owned
+    // by createSseTap). onEvent forwards the validated SsePayload as the
+    // `payload` of an outbound `sse` envelope; the buffer + snapshot are
+    // private to the tap and used by US-069 / US-070 for join replay.
+    const tap = createSseTap(deps.eventBus, {
+      flowIds: () => flowIdsForBroadcast(),
+      onEvent: (payload) => {
         // Best-effort fan-out: if the transport is gone or not open, drop the
-        // event (no buffering for v1). Wrap send in try/catch so a throwing
-        // transport doesn't poison the EventBus subscriber list.
-        if (!transport || !transport.isOpen()) return;
+        // event (no buffering at the broadcast layer — the tap's ring buffer
+        // is for snapshot priming, NOT relay-side replay; reconnect handled
+        // peer-side via sse-snapshot in US-069).
         try {
-          transport.send(makeEnvelope('sse', event, { to: 'all', from: 'host' }));
+          broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }));
         } catch (err) {
-          console.warn('[share] sse fan-out send failed:', err);
+          console.warn('[share] sse fan-out broadcast failed:', err);
         }
-      });
-      eventUnsubscribes.push(off);
-    }
+      },
+    });
+    sseTap = tap;
+    tap.start();
+    // Watch the registry channel so adds/removes flow through to the tap's
+    // subscription set without restarting the share session. Listens on the
+    // sentinel flowId used by `apps/studio/src/api.ts` registry mutators.
+    registryUnsubscribe = deps.eventBus.subscribe('__registry__', (event) => {
+      if (event.type !== 'registry:reload') return;
+      try {
+        tap.refreshFlows();
+      } catch (err) {
+        console.warn('[share] sse tap refreshFlows failed:', err);
+      }
+    });
   };
 
   const unsubscribeFromEventBus = () => {
-    const offs = eventUnsubscribes;
-    eventUnsubscribes = [];
-    for (const off of offs) {
+    const off = registryUnsubscribe;
+    registryUnsubscribe = null;
+    if (off) {
       try {
         off();
       } catch (err) {
-        console.warn('[share] eventBus unsubscribe failed:', err);
+        console.warn('[share] registry unsubscribe failed:', err);
+      }
+    }
+    const tap = sseTap;
+    sseTap = null;
+    if (tap) {
+      try {
+        tap.stop();
+      } catch (err) {
+        console.warn('[share] sse tap stop failed:', err);
       }
     }
   };
