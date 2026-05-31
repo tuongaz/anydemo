@@ -81,13 +81,31 @@ import { type SseTap, createSseTap } from './share/sse-tap.ts';
 // re-validate join/leave with their strict required fields so malformed
 // join/leave frames are dropped rather than treated as sideband. Cursor,
 // viewport, and any other future `kind` no-op in v1 per the design doc.
-const PresenceBaseSchema = z.object({ kind: z.string() }).passthrough();
-const PresenceJoinSchema = z.object({
-  kind: z.literal('join'),
-  peerId: z.string(),
-  displayName: z.string(),
-});
-const PresenceLeaveSchema = z.object({ kind: z.literal('leave'), peerId: z.string() });
+// Presence payload shapes accepted on the wire. The cloud relay uses
+// `state: 'joined' | 'left' | 'active' | 'idle' | 'host-offline'`; older host
+// builds emitted `kind: 'join' | 'leave'`. We accept either to stay
+// forward/backward compatible.
+const PresenceBaseSchema = z
+  .object({
+    kind: z.string().optional(),
+    state: z.string().optional(),
+  })
+  .passthrough();
+const PresenceJoinSchema = z
+  .object({
+    peerId: z.string(),
+    displayName: z.string(),
+    kind: z.literal('join').optional(),
+    state: z.literal('joined').optional(),
+  })
+  .passthrough();
+const PresenceLeaveSchema = z
+  .object({
+    peerId: z.string(),
+    kind: z.literal('leave').optional(),
+    state: z.literal('left').optional(),
+  })
+  .passthrough();
 
 export interface PeerSummary {
   peerId: string;
@@ -1027,7 +1045,15 @@ export function createShareController(deps: ShareDeps): ShareController {
         console.warn('[share] dropped presence frame: invalid payload');
         return;
       }
-      const kind = base.data.kind;
+      // Relay uses `state: 'joined'/'left'/...`; older host builds emitted
+      // `kind: 'join'/'leave'`. Map either onto our internal verbs.
+      const kind =
+        base.data.kind ??
+        (base.data.state === 'joined'
+          ? 'join'
+          : base.data.state === 'left'
+            ? 'leave'
+            : base.data.state);
       if (kind === 'join') {
         const parsed = PresenceJoinSchema.safeParse(env.payload);
         if (!parsed.success) {
