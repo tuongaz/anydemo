@@ -1,0 +1,64 @@
+# Ralph Progress Log
+Started: Sun 31 May 2026 13:26:10 AEST
+---
+
+## Codebase Patterns
+- All Live Share work happens in `/Users/tuongaz/dev/seeflow-viewer/cloud/` on branch `ralph/live-share-phase-1` (separate repo from the seeflow monorepo).
+- Reference plan: `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc/docs/plans/2026-05-31-live-share-phase-1-relay.md` (path within this worktree; PRD mentions a different path but the worktree copy is canonical here).
+- Test runner: Bun (`bun test path/to/x.test.ts`). Typecheck: `bun run typecheck` (`tsc --noEmit`).
+- Lambdas live under `cloud/lambda/<area>/`; CDK stack is `cloud/lib/seeflow-stack.ts`.
+- AWS SDK deps pinned at 3.1048.0 (client-dynamodb, lib-dynamodb, client-apigatewaymanagementapi). Zod pinned at 3.23.8.
+- CDK assertion tests under `cloud/lib/*.share.test.ts` MUST set `env: { account: '000000000000', region: 'us-east-1' }` on the stack — `route53.HostedZone.fromLookup` in `SeeflowStack` errors with `StackAccountRegionNotSpecified` otherwise. Pure region-only env (which the plan suggests) fails synth.
+- `cloud/tsconfig.json` does NOT enable `noUnusedLocals`/`noUnusedParameters`, so declared-but-unused locals are fine for typecheck. Don't add `void x;` noise to silence them.
+
+## 2026-05-31 13:35 - US-001
+- Added `test`: `bun test` script and AWS SDK + Zod deps to `cloud/package.json`.
+- Ran `bun install`; lockfile updated.
+- Verified regression: `bun test lambda/uploader/index.test.ts` (5/5 pass) and `bun run typecheck` (clean).
+- Files changed: `cloud/package.json`, `cloud/bun.lock`.
+- **Learnings for future iterations:**
+  - The PRD references `/Users/tuongaz/dev/seeflow/docs/plans/...` but in this worktree the plan file lives at `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc/docs/plans/2026-05-31-live-share-phase-1-relay.md`. Read from there.
+  - Branch `ralph/live-share-phase-1` was created from main in the seeflow-viewer repo; all subsequent commits go there.
+  - `bun install` automatically alphabetizes dependency order in package.json; do not be surprised when bun.lock changes order.
+  - Existing uploader test at `cloud/lambda/uploader/index.test.ts` is the canonical baseline regression check.
+---
+
+## 2026-05-31 13:55 - US-002
+- Added Live Share DDB table + GSI + WebSocket API skeleton with `$connect`/`$disconnect`/`$default` placeholder routes inside `SeeflowStack`.
+- New imports: `aws-cdk-lib/aws-dynamodb`, `aws-cdk-lib/aws-apigatewayv2-integrations` (namespace) on top of existing `HttpLambdaIntegration` named import.
+- DDB table `seeflow-share-sessions`: `sessionId` HASH, PAY_PER_REQUEST, `ttl` TTL attr, `RemovalPolicy.DESTROY`, GSI `token-index` on `token` (PROJECTION_ALL).
+- WebSocket API uses `$request.body.action` route selection expression; stage name `prod` with autoDeploy; `CfnOutput` `ShareWebSocketUrl` emits the stage URL.
+- All three WS routes wired through a single placeholder lambda `cloud/lambda/share/_placeholder.ts` (returns 200) — to be replaced in US-009..US-011.
+- Created `cloud/lib/seeflow-stack.share.test.ts` with the three CDK assertion tests (table+TTL, GSI, WS API+routes). All 3 pass.
+- Regression: `bun test lambda/uploader/index.test.ts` still 5/5; `bun run typecheck` clean.
+- Files changed: `cloud/lib/seeflow-stack.ts`, `cloud/lib/seeflow-stack.share.test.ts`, `cloud/lambda/share/_placeholder.ts`.
+- **Learnings for future iterations:**
+  - `route53.HostedZone.fromLookup` in `SeeflowStack` requires both account AND region on the stack env; the plan's `env: { region: 'us-east-1' }` is insufficient. Tests MUST pass `env: { account: '000000000000', region: 'us-east-1' }`.
+  - The existing CDK stack already had a `HttpLambdaIntegration` named import from `aws-cdk-lib/aws-apigatewayv2-integrations`; for the WebSocket integration the plan uses a namespace import (`apigwv2Integrations.WebSocketLambdaIntegration`). Both imports from the same module are fine to keep — don't try to consolidate or rename.
+  - `apigwv2.WebSocketApi`/`WebSocketStage` are stable in `aws-cdk-lib` 2.254 (no `alpha` package needed).
+  - The CDK assertion test `resourceCountIs('AWS::ApiGatewayV2::Api', 2)` is the right count once the share WS API is added (existing HTTP API + new WS API).
+---
+
+## 2026-05-31 13:35 - US-003
+- Implemented share id generators per plan Task 2.
+- Created `cloud/lambda/share/shared/ids.ts` (urlSafe + newSessionId 8ch + newToken 43ch + newPeerId).
+- Created `cloud/lambda/share/shared/ids.test.ts` (4 tests, all pass).
+- `bun test lambda/share/shared/ids.test.ts`: 4/4 pass. `bun run typecheck`: clean.
+- Files changed: `cloud/lambda/share/shared/ids.ts`, `cloud/lambda/share/shared/ids.test.ts`.
+- **Learnings for future iterations:**
+  - The `shared/` subdir under `lambda/share/` is the canonical home for cross-handler helpers (ids, jwt, envelope, ddb, sessions). Co-located tests use `bun:test`.
+  - `randomBytes(6)` → base64url → exactly 8 chars; `randomBytes(32)` → base64url → exactly 43 chars (no `=` padding). These length invariants are asserted by the tests; do not change byte counts.
+---
+
+## 2026-05-31 14:05 - US-004
+- Implemented HMAC-SHA256 peer token (compact custom signed token — not a full JWT) per plan Task 3.
+- Created `cloud/lambda/share/shared/jwt.ts` exporting `PeerPayload`, `mintPeerToken`, `verifyPeerToken`, `VerifyResult` (discriminated union with reason: malformed | bad-signature | expired). Uses `node:crypto` only — no external dep.
+- Created `cloud/lambda/share/shared/jwt.test.ts` (4 tests: round-trip, tampered body, expired, wrong-secret). All pass.
+- `bun test lambda/share/shared/jwt.test.ts`: 4/4 pass. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/shared/jwt.ts`, `cloud/lambda/share/shared/jwt.test.ts`.
+- **Learnings for future iterations:**
+  - The token format is `head.body.sig`, all three parts url-safe-base64. Reuses `urlSafe(buf)` from `shared/ids.ts` — keep that helper as the single base64url encoder for the share module.
+  - `verifyPeerToken` decodes the body with `Buffer.from(body, 'base64')` (Node's base64 decoder tolerates `-`/`_` in practice, so the url-safe body round-trips). Don't switch to `'base64url'` unless future Node tightens this.
+  - Signature comparison uses `timingSafeEqual` with explicit length check — required because `timingSafeEqual` throws on length mismatch.
+  - Tests use `'a'.repeat(32)` as the secret (32-byte string is ample for HS256). TTL of `-1` cleanly produces an already-expired token.
+---
