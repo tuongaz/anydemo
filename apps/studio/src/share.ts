@@ -10,8 +10,17 @@
  * so an abused share link can be invalidated.
  */
 
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { z } from 'zod';
+import {
+  type AuditEntry,
+  type AuditLog,
+  type AuditLogOpts,
+  createAuditLog,
+} from './share-audit.ts';
 import { type Envelope, makeEnvelope } from './share-envelope.ts';
+import { type RateLimiter, createRateLimiter } from './share-ratelimit.ts';
 import {
   type ShareTransport,
   type ShareTransportOpts,
@@ -65,6 +74,14 @@ export interface ShareDeps {
   shareUrlBase: string;
   fetch?: typeof fetch;
   transportFactory?: (opts: ShareTransportOpts) => ShareTransport;
+  // Rate-limiter is shared across the controller's lifetime so per-peer
+  // buckets survive across kick/rejoin within a single session. Defaults to
+  // 30 ops/sec / burst 30 per the design doc.
+  rateLimiter?: RateLimiter;
+  // Audit log lives one-per-session: created on transition to active, closed
+  // by stop(). Path defaults to ~/.seeflow/share-history.
+  auditDir?: string;
+  auditLogFactory?: (opts: AuditLogOpts) => AuditLog;
 }
 
 interface RelaySessionResponse {
@@ -91,14 +108,21 @@ export function createShareController(deps: ShareDeps): ShareController {
   const subscribers = new Set<(s: ShareState) => void>();
   const fetchFn = deps.fetch ?? fetch;
   const transportFactory = deps.transportFactory ?? createShareTransport;
+  const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
+  const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
+  const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
 
   let hostKey: string | null = null;
   let transport: ShareTransport | null = null;
   let bootHandle: BootHandle | null = null;
+  let auditLog: AuditLog | null = null;
   // peerId -> connId. Populated by presence/join frames; consulted by kick()
   // so a host can address a peer by stable peerId while the relay routes on
   // the per-connection connId. Cleared on teardown.
   const peerConnIds = new Map<string, string>();
+  // connId -> peer info. Inverse of peerConnIds, kept in lockstep. Used by
+  // handleFrame to resolve env.from -> peerId before rate-limiting/auditing.
+  const connPeers = new Map<string, { peerId: string; displayName: string }>();
 
   const setState = (next: ShareState) => {
     current = next;
@@ -113,15 +137,32 @@ export function createShareController(deps: ShareDeps): ShareController {
 
   const teardown = () => {
     const t = transport;
+    const log = auditLog;
     transport = null;
     hostKey = null;
+    auditLog = null;
     peerConnIds.clear();
+    connPeers.clear();
     if (t) {
       try {
         t.close('user');
       } catch (err) {
         console.warn('[share] close failed during teardown:', err);
       }
+    }
+    if (log) {
+      log.close().catch((err) => {
+        console.warn('[share] audit log close failed:', err);
+      });
+    }
+  };
+
+  const audit = (entry: AuditEntry) => {
+    if (!auditLog) return;
+    try {
+      auditLog.append(entry);
+    } catch (err) {
+      console.warn('[share] audit append failed:', err);
     }
   };
 
@@ -141,6 +182,11 @@ export function createShareController(deps: ShareDeps): ShareController {
         }
         const { peerId, displayName } = parsed.data;
         peerConnIds.set(peerId, env.from);
+        connPeers.set(env.from, { peerId, displayName });
+        // Join itself is always accepted — the peer becomes "known" only as
+        // a result of this frame, so rate-limiting it would be a chicken-and-
+        // egg problem. Audit it as accept so the trail shows who joined when.
+        audit({ ts: Date.now(), peerId, displayName, type: 'presence', verdict: 'accept' });
         if (current.status !== 'active') return;
         if (current.peers.some((peer) => peer.peerId === peerId)) return;
         setState({
@@ -156,7 +202,18 @@ export function createShareController(deps: ShareDeps): ShareController {
           return;
         }
         const { peerId } = parsed.data;
+        const known = connPeers.get(env.from);
         peerConnIds.delete(peerId);
+        connPeers.delete(env.from);
+        if (known) {
+          audit({
+            ts: Date.now(),
+            peerId: known.peerId,
+            displayName: known.displayName,
+            type: 'presence',
+            verdict: 'accept',
+          });
+        }
         if (current.status !== 'active') return;
         if (!current.peers.some((peer) => peer.peerId === peerId)) return;
         setState({
@@ -168,6 +225,40 @@ export function createShareController(deps: ShareDeps): ShareController {
       // Other presence kinds (cursor, viewport, etc.) are sideband-only in v1.
       return;
     }
+
+    // Non-presence frames must come from a known peer (introduced earlier via
+    // presence/join). Frames from an unknown connId are dropped silently — we
+    // have no peerId/displayName to attribute the audit entry to.
+    const peer = connPeers.get(env.from);
+    if (!peer) {
+      console.debug('[share] dropped frame from unknown peer:', {
+        type: env.type,
+        from: env.from,
+      });
+      return;
+    }
+
+    const verdict = rateLimiter.check(peer.peerId);
+    if (!verdict.ok) {
+      audit({
+        ts: Date.now(),
+        peerId: peer.peerId,
+        displayName: peer.displayName,
+        type: env.type,
+        verdict: 'reject',
+        reason: 'rate-limited',
+      });
+      return;
+    }
+
+    audit({
+      ts: Date.now(),
+      peerId: peer.peerId,
+      displayName: peer.displayName,
+      type: env.type,
+      verdict: 'accept',
+    });
+
     // All other envelope types are accepted-and-dropped in v1; real handling
     // (rpc dispatch into operations.ts, file streaming, sse fan-out) lands in
     // phase 4+. Log type+from only — never the payload.
@@ -226,6 +317,15 @@ export function createShareController(deps: ShareDeps): ShareController {
             handle.cancelTimer();
             bootHandle = null;
             const url = `${deps.shareUrlBase}/${body.token}`;
+            // Open the per-session audit log before transitioning state so
+            // any frame that races in (e.g. immediate presence/join from a
+            // pre-connected peer) is captured.
+            try {
+              auditLog = auditLogFactory({ dir: auditDir, sessionId: body.sessionId });
+            } catch (err) {
+              console.warn('[share] audit log open failed:', err);
+              auditLog = null;
+            }
             setState({
               status: 'active',
               sessionId: body.sessionId,

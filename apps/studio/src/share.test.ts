@@ -1,12 +1,67 @@
 import { describe, expect, it } from 'bun:test';
+import type { AuditEntry, AuditLog, AuditLogOpts } from './share-audit.ts';
 import type { Envelope } from './share-envelope.ts';
+import type { RateLimitResult, RateLimiter } from './share-ratelimit.ts';
 import type { ShareTransport, ShareTransportOpts, ShareTransportState } from './share-transport.ts';
 import { type ShareState, createShareController } from './share.ts';
+
+// Default audit factory for tests: returns a no-op log so the real audit dir
+// (`~/.seeflow/share-history`) is never touched by unit tests. Tests that want
+// to observe audit writes inject their own via `auditLogFactory`.
+const noopAuditFactory = (_opts: AuditLogOpts): AuditLog => ({
+  append: () => {},
+  close: async () => {},
+});
 
 const baseDeps = {
   relayHttpUrl: 'https://relay.example',
   shareUrlBase: 'https://share.example',
+  auditLogFactory: noopAuditFactory,
 };
+
+interface AuditCapture {
+  entries: AuditEntry[];
+  closed: boolean;
+  factory: (opts: AuditLogOpts) => AuditLog;
+  capturedDir: () => string | null;
+  capturedSessionId: () => string | null;
+}
+
+function makeAuditCapture(): AuditCapture {
+  const entries: AuditEntry[] = [];
+  let dir: string | null = null;
+  let sessionId: string | null = null;
+  const cap: AuditCapture = {
+    entries,
+    closed: false,
+    factory: (opts) => {
+      dir = opts.dir;
+      sessionId = opts.sessionId;
+      return {
+        append: (e) => {
+          entries.push(e);
+        },
+        close: async () => {
+          cap.closed = true;
+        },
+      };
+    },
+    capturedDir: () => dir,
+    capturedSessionId: () => sessionId,
+  };
+  return cap;
+}
+
+function makeRateLimiter(results: RateLimitResult[]): RateLimiter {
+  let i = 0;
+  return {
+    check() {
+      const r = results[i] ?? results[results.length - 1] ?? { ok: true };
+      i += 1;
+      return r;
+    },
+  };
+}
 
 interface FakeTransportHandle {
   factory: (opts: ShareTransportOpts) => ShareTransport;
@@ -474,5 +529,126 @@ describe('createShareController.rotateUrl()', () => {
     // Two transport instances created (one per start), and the first was closed.
     expect(fake.instanceCount()).toBe(2);
     expect(fake.closeCount()).toBe(1);
+  });
+});
+
+describe('createShareController rate-limit + audit', () => {
+  it('rate-limited frame is dropped and audited as reject', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const audit = makeAuditCapture();
+    // Allow the join (1st check) then deny every subsequent check.
+    const limiter = makeRateLimiter([{ ok: false, retryAfterMs: 100 }]);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      auditLogFactory: audit.factory,
+      rateLimiter: limiter,
+    });
+    await ctrl.start();
+
+    // Introduce the peer first (presence/join bypasses the rate limiter).
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+
+    const stateBeforeRpc = ctrl.state();
+    const seen: ShareState[] = [];
+    ctrl.subscribe((s) => seen.push(s));
+
+    // RPC frame from the known peer — rate limiter denies it.
+    fake.emitFrame({ v: 1, type: 'rpc', from: 'conn-7', payload: { method: 'patchNode' } });
+
+    // No state change beyond the one initial-deliver tick.
+    expect(seen).toHaveLength(1);
+    expect(ctrl.state()).toEqual(stateBeforeRpc);
+
+    // Audit captured the join (accept) AND the denied rpc (reject).
+    const rpcRejects = audit.entries.filter((e) => e.type === 'rpc' && e.verdict === 'reject');
+    expect(rpcRejects).toHaveLength(1);
+    expect(rpcRejects[0]?.peerId).toBe('peer-42');
+    expect(rpcRejects[0]?.displayName).toBe('Ada');
+    expect(rpcRejects[0]?.reason).toBe('rate-limited');
+  });
+
+  it('audit log records accept entries for allowed frames', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const audit = makeAuditCapture();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      auditLogFactory: audit.factory,
+      // Default rate limiter — generous enough for these few calls.
+    });
+    await ctrl.start();
+    expect(audit.capturedSessionId()).toBe('sess-1');
+
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+    fake.emitFrame({ v: 1, type: 'rpc', from: 'conn-7', payload: { method: 'patchNode' } });
+    fake.emitFrame({ v: 1, type: 'sse', from: 'conn-7', payload: { evt: 'x' } });
+
+    const accepts = audit.entries.filter((e) => e.verdict === 'accept');
+    // 1 presence/join + 1 rpc + 1 sse = 3 accept entries.
+    expect(accepts).toHaveLength(3);
+    expect(accepts.map((e) => e.type)).toEqual(['presence', 'rpc', 'sse']);
+    for (const entry of accepts) {
+      expect(entry.peerId).toBe('peer-42');
+      expect(entry.displayName).toBe('Ada');
+      expect(typeof entry.ts).toBe('number');
+    }
+  });
+
+  it('frames from an unknown connId are dropped without an audit entry', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const audit = makeAuditCapture();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      auditLogFactory: audit.factory,
+    });
+    await ctrl.start();
+
+    // No prior join from conn-99 — we have no peerId/displayName to attribute.
+    fake.emitFrame({ v: 1, type: 'rpc', from: 'conn-99', payload: { method: 'x' } });
+
+    expect(audit.entries).toHaveLength(0);
+    expect(ctrl.state().status).toBe('active');
+  });
+
+  it('audit log is closed on stop()', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const audit = makeAuditCapture();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      auditLogFactory: audit.factory,
+    });
+    await ctrl.start();
+    expect(audit.closed).toBe(false);
+
+    await ctrl.stop();
+    // close() runs asynchronously inside teardown — flush microtasks.
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(audit.closed).toBe(true);
   });
 });
