@@ -1,277 +1,106 @@
 # Ralph Progress Log
-Started: Sun 31 May 2026 18:44:56 AEST
+Started: Sun 31 May 2026 20:53:58 AEST
+---
 
 ## Codebase Patterns
-- `packages/canvas/src/index.ts` is the only public barrel — add new exports under the matching numbered section and keep it sorted (5 → 5b → 5c → 6 …).
-- Biome's `organizeImports` enforces alphabetical order on import groups; sort sibling type-only imports by source path or the lint fails. Value imports come BEFORE type imports from the same path family.
-- `bun test <path>` only works from the repo root (the bun-test cwd-filter trips up nested paths in `apps/*` / `packages/*`).
-- Adapter-layer types live in `packages/canvas/src/adapter/`. The canonical adapter shape is `CanvasAdapter` (throw-on-error); a non-throwing twin (`IoAdapter`) sits in a sibling file and is wrapped at the SeeflowCanvas prop boundary — never imported from the rendering layer.
-- `bun run format` MUST run before `bun run lint` — Biome only emits fixes when `--write` runs, and `lint` is the gate.
-- `apps/studio/src/server.test.ts` and `apps/studio/src/watcher.test.ts` have pre-existing flakiness (timeouts under parallel load and timing-sensitive fs-watcher assertions) that is independent of canvas-side work. Canvas-only changes only need canvas-suite green.
-- `Partial<SeeflowCanvasProps>` cannot be spread into a typed `SeeflowCanvasProps` literal once the union has overlapping mode arms — the test helper casts via `as unknown as SeeflowCanvasProps` to bypass arm-by-arm narrowing.
-- Files that are byte-for-byte mirrored across the seeflow + seeflow-viewer repos MUST be self-contained — no imports from sibling modules that don't exist on both sides (e.g. operations.ts is studio-only; schema.ts likewise). The wire schema for live-share is intentionally loose (`z.record(z.unknown())`) for complex bodies and defers strict re-validation to the impl layer.
-- Bun's directory discovery STILL skips `*.it.ts` from `bun test apps/.../foo.it.ts` (the basename test), but `bun test ./apps/.../foo.it.ts` with a leading `./` treats it as an explicit path and runs it. The repo-level `test:it:bun` script globs `./apps/studio/integration/*.it.ts` and doesn't accept a name filter — run individual `.it.ts` files via `bun test ./path/to/file.it.ts` from the repo root instead.
-- The repo-level `test:it:bun` script is at the ROOT package.json (`./apps/studio/integration/*.it.ts`), NOT under `apps/studio/`. Don't `cd apps/studio && bun run test:it:bun` — it will fail with "Script not found".
-- Cross-repo dev for live-share work: `seeflow-viewer`'s `@seeflow/canvas` dependency points at the MAIN seeflow checkout (`file:../seeflow/packages/canvas`), not the worktree. When a story extends the canvas public API in the worktree AND consumes it from the viewer, `rm -rf <viewer>/node_modules/@seeflow/canvas && ln -s <worktree-canvas-path> <viewer>/node_modules/@seeflow/canvas` makes viewer typecheck see the in-flight types (the symlink lives in gitignored node_modules; CI gets a real install when both repos catch up). Rebuild the worktree's canvas (`bun run --filter @seeflow/canvas build`) after editing its src/ — viewer reads `dist/index.d.ts`, not src.
-- Peer-side `IoAdapter` settlement contract is **never-reject**: every failure path resolves with a structured `{ ok: false, reason }` (`'timeout'`, `'disconnected'`, `'send_failed: <msg>'`, `'malformed rpc-result payload: <msg>'`, host-supplied reasons verbatim). The throwing `CanvasAdapter` contract is re-imposed by `wrapIoAdapterAsCanvasAdapter` at the SeeflowCanvas prop boundary; the wire layer itself stays exception-free for clean async flow control.
-- Optimistic store revert ordering on disconnect: the `OptimisticStore`'s state listener MUST be installed BEFORE `ensureRpcRouterInstalled`'s state listener so that `revertAll(LIFO)` fires first and the per-id revert calls fired from each pending dispatch's `disconnected` settlement become harmless no-ops. Listener insertion order is the only knob — ShareClient uses a `Set` for stateListeners which preserves insertion order. `createIoAdapter` calls `getOptimisticStore()` (which installs the disconnect listener) BEFORE `ensureRpcRouterInstalled()` for exactly this reason.
-- For US-041's "restore snapshot" inverse: every pending optimistic entry caches a shallow-cloned `Flow` taken right before the mutation. Reverting restores that frame verbatim. Works correctly for sequential ops (commit-then-reject leaves snapshot at the committed state because the rejected op's inverse points at the post-commit snapshot) AND for concurrent ops reverted in LIFO order. The host's `node-patched` broadcast (US-039 / US-042) is the canonical reconciliation for ok-path drift — the inverse only covers ok-false / timeout / disconnect.
-- Peer client-level events (non-wire) are separate from frame listeners. `on('edit-reverted', listener)` is the first non-frame typed event — added a `editRevertedListeners: Set` parallel to the existing `stateListeners` + `frameListeners` rather than reusing the `typedListeners` map (which is keyed by wire frame `type`). Future client-emitted events (`flow-changed` in US-042) should follow the same pattern.
-- `OptimisticStore.applyOptimistic` for `addNode` / `addConnector` synthesizes a `temp:<uuid>` id when the wire body lacks one. The host's `node-patched` broadcast (US-042) will reconcile the temp id against the canonical server-assigned id. Snapshot uniqueness is preserved because the temp prefix is namespaced and the canvas component (US-043) keys on the snapshot's array index after reconciliation, not on the temp id.
-- The `node-patched` wire schema (US-042) is intentionally loose: the inner `diff` is `z.record(z.unknown())`. Peers switch on the outer `op` field PLUS `diff.kind` to drive apply — strict diff shapes live host-side in `computeNodePatchedDiff`. Peer-side `applyHostDiff` returns the input snapshot unchanged on any shape mismatch (best-effort, idempotent).
-- Originator-suppression for `node-patched`: only ops where the local optimistic state already carries the canonical id (`moveNode`, `patchNode`, `deleteNode`, `reorderNode`, `patchConnector`, `deleteConnector`) suppress double-apply. Add ops are NOT suppressed because the local snapshot has a `temp:<uuid>` id that needs swapping for the host's canonical id — the apply path handles dedupe-by-id with overwrite.
-- Version tie-break for `node-patched`: per-flow `lastAppliedVersion: Map<flowId, number>` on the `ShareClient`. Incoming `version <= last` drops with a console.warn (no apply, no `flow-changed` event). Strictly increasing — equal versions also drop.
-- `flow-changed` is the second client-emitted (non-wire) event, paralleling `edit-reverted`. Same pattern: dedicated `flowChangedListeners: Set<FlowChangedListener>` field, an `on('flow-changed', ...)` overload arm, and an internal `for listener of bucket { try/catch }` dispatch. The subscription side-effect also lazy-installs the node-patched router so watch-only peers converge without ever calling `getOptimisticStore()`.
-- The `OptimisticStore` is NOT auto-seeded from `flow-snapshot` — the share-client deliberately keeps wire ↔ state separation. Page-level consumers (e.g. `seeflow-viewer`'s share-session) must call `client.getOptimisticStore().setSnapshot(flowId, flow)` for every flow in the incoming snapshot, otherwise `applyHostDiff` no-ops on the empty store (share-client.ts:1168) and `flow-changed` events never visibly mutate state.
-- `seeflow-viewer` has NO React Testing Library / jsdom / happy-dom. Test page wiring by extracting a logic-only helper (e.g. `bindShareEditAdapter` returns `{ adapter, dispose }`) that the page's React effect calls — then exercise the helper with the existing `FakeWebSocket` pattern. `.tsx` extension on the test file is fine even when JSX isn't used; preserves filename conventions without forcing a DOM dependency.
-- `client.completeAuth()` fires on the FIRST incoming frame while `state.kind === 'connecting'`. Test harnesses should send a structurally valid frame (e.g. `presence`) instead of a synthetic `ack` to avoid noisy envelope-validator warns in test output.
-- Peer-side edit canvases (e.g. viewer's `EditCanvas`) do NOT need the studio's full callback surface. Drag persistence works with just `onNodePositionChange` + `onNodePositionsChange` because the DetailPanel + sidebar edits route through `ioAdapter` internally via the canvas's `wrapIoAdapterAsCanvasAdapter` from US-036.
+- Phase 5 spans two repos: seeflow (this worktree) and seeflow-viewer (separate clone at /Users/tuongaz/dev/seeflow-viewer). Each story's `Working dir:` line in the acceptance criteria dictates which repo to edit. Commit in the repo you edited.
+- Cloud relay code lives at /Users/tuongaz/dev/seeflow-viewer/cloud on branch `ralph/live-share-phase-5` (created from phase-3 for this phase).
+- Envelope frame types are gated by a Zod string-enum in cloud/lambda/share/shared/envelope.ts; payload Zod schemas live in the same module and are imported by per-route handlers.
+- Use `bun test <relative path>` from the package root (not `bun test packages/...`); each repo uses Bun's native test runner.
+- Cloud relay tests mock both DynamoDB (`(ddbMod.doc as any).send = fakeDocSend`) and ApiGatewayManagement (`(ApiGatewayManagementApiClient.prototype as any).send = fakeApiSend`). Reuse the pattern from `ws-default.test.ts` whenever a handler now needs to broadcast.
+- Shared lambda helpers belong under `cloud/lambda/share/shared/` — `ws-api.ts` (apiClient + post with GoneException handling) is reusable across any handler that fans out frames.
+
 ---
 
-## 2026-05-31 — US-035
-- Implemented `IoAdapter` interface, `IoAdapterResult<T>` discriminated result type, and `IoAdapterDispatchEnvelope` (8-op union) in new file `packages/canvas/src/adapter/io-adapter.ts`.
-- Re-exported the three types from the public barrel under a new `5c. IoAdapter` section (after `5b. History`).
-- Added `packages/canvas/src/adapter/io-adapter.test.ts` with 14 tests across three describe blocks (result narrowing, op discriminator coverage including one per op, and a type-level CanvasAdapter-wrapping compatibility check).
-- Quality gates: `bun run typecheck` (all workspaces), `bun run format` + `bun run lint`, `bun test packages/canvas/` (1252 pass).
+## 2026-05-31 - US-045
+- Added 'cursor' to EnvelopeSchema type enum alongside existing 'presence' literal.
+- Added PresencePayloadSchema (peerId, displayName<=40, hex color, state enum, optional flowId) and CursorPayloadSchema (peerId, flowId, finite x/y, optional viewport, non-negative int ts), plus their inferred types.
+- Extended envelope.test.ts with valid-cursor, displayName-overflow, malformed-hex, and NaN-coord cases. 11 tests pass; `bun run typecheck` clean.
 - Files changed:
-  - `packages/canvas/src/adapter/io-adapter.ts` (new)
-  - `packages/canvas/src/adapter/io-adapter.test.ts` (new)
-  - `packages/canvas/src/index.ts` (added `5c. IoAdapter` section + re-export)
-  - `ralph/prd.json` (US-035 passes → true)
+  - cloud/lambda/share/shared/envelope.ts
+  - cloud/lambda/share/shared/envelope.test.ts
 - **Learnings for future iterations:**
-  - The IoAdapter seam intentionally has only 8 ops on the envelope — `uploadImage` uses a separate `file-bytes` binary frame in the live-share protocol per the design doc, not the RPC envelope.
-  - When mirroring `CanvasAdapter` method shapes, the result `T` for `updateNode`/`deleteNode`/etc is `void` (not absent) — the IoAdapter result envelope still wraps it as `{ ok: true, value: undefined }`.
-  - The Biome `organizeImports` rule sorts type-only imports by source path, so put `./io-adapter.ts` before `./types.ts` even when CanvasAdapter is referenced first in code.
-  - Tests for type-level invariants (e.g. "wrapping IoAdapter into CanvasAdapter still compiles") are best expressed as a real runtime wrapper function — any future drift breaks both compile and test in the same commit.
+  - The cloud repo had no phase-5 branch yet — I branched from `ralph/live-share-phase-3` (the latest in-flight branch) rather than `main`, since phase 5 depends on prior phases' relay/handler scaffolding.
+  - `parseEnvelope` validates only the envelope shape; payload schemas (Presence/Cursor) must be applied separately by route handlers via `.safeParse`.
+  - Zod's `z.number().finite()` rejects NaN/Infinity — preferred over manual checks.
+  - Test imports must come from the same module that exports the schemas; both `PresencePayloadSchema` and `CursorPayloadSchema` are now top-level exports.
 ---
 
-## 2026-05-31 — US-036
-- Added `wrapIoAdapterAsCanvasAdapter` helper at `packages/canvas/src/adapter/io-adapter-wrap.ts` — wraps the 9 IoAdapter methods into the throw-on-error CanvasAdapter contract; intentionally drops the optional CanvasAdapter fields (`playAction`, `openFile`, `revealFile`, `computeLayout`, `icons`) since peers don't expose them.
-- Added `ioAdapter?: IoAdapter` to `SeeflowCanvasBaseProps` with full JSDoc; expanded `SeeflowCanvasProps` discriminated union so edit mode now has two arms — `{ adapter: CanvasAdapter; ioAdapter?: IoAdapter }` and `{ adapter?: CanvasAdapter; ioAdapter: IoAdapter }` — enforcing "at least one required".
-- Computed `effectiveAdapter` via `useMemo` inside `SeeflowCanvasImpl` (right after the `flags` memo) — wraps ioAdapter when present, otherwise returns adapter. NO new useState slots (per the canvas's hook-shim placement rule).
-- Module-level `hasWarnedDualAdapter` flag emits a one-shot `console.warn` when BOTH `adapter` and `ioAdapter` are passed; `ioAdapter` wins.
-- Swapped the three internal `adapter`/`props.adapter` reads to `effectiveAdapter`: tidy fallback (`adapterMaybe`), `iconsAdapter`, and the DetailPanel's `adapter` prop. The wrapped adapter has no `icons`/`computeLayout`, so peer-mode tidy + icon pack tabs remain disabled — design intent.
-- Added 8 tests in `io-adapter-wrap.test.ts` covering: success path round-trip per method (createNode value, updateNodePosition value, void-returning methods, createConnector, uploadImage with File arg unchanged), failure path (rejected with Error(reason) on `{ ok: false }`), and a 9-method dispatch round-trip ordering test.
-- Added a new `US-036` describe block in `seeflow-canvas.test.tsx` with a tripwire-adapter test: when both `adapter` and `ioAdapter` are passed, the DetailPanel's `adapter` prop routes through `ioAdapter.updateNodePosition` and the tripwire proxy NEVER fires — proves the wrap routing is load-bearing and that ioAdapter wins precedence.
+## 2026-05-31 - US-046
+- Server-side deterministic peer color (sha256 → HSL hue → hex) added in `cloud/lambda/share/shared/peer-color.ts`; persisted on `PeerInfo` via `addPeer`.
+- ws-default `handleAuthPeer`: after successful `addPeer`, fans out a `state:'joined'` presence envelope to host + existing peers (sender excluded) with peerId/displayName/color triple. GoneException recipients are cleaned up.
+- ws-disconnect: broadcasts `state:'left'` to host + remaining peers on peer disconnect; broadcasts `state:'host-offline'` (fixed gray) to remaining peers on host disconnect.
+- `PresencePayloadSchema` state enum extended with `'host-offline'`.
+- Factored `apiClient` + `post` into `cloud/lambda/share/shared/ws-api.ts` so ws-default and ws-disconnect share identical fan-out + GoneException semantics.
+- New `ws-default.presence.test.ts` (2 tests) covers happy-path fan-out and gone-recipient continuation. `ws-disconnect.test.ts` rewritten to mock the API client and assert left/host-offline broadcasts.
+- Full cloud suite: 90 tests / 0 fail / typecheck clean.
 - Files changed:
-  - `packages/canvas/src/adapter/io-adapter-wrap.ts` (new)
-  - `packages/canvas/src/adapter/io-adapter-wrap.test.ts` (new)
-  - `packages/canvas/src/components/seeflow-canvas.tsx` (added prop, useMemo, swapped adapter reads, expanded union)
-  - `packages/canvas/src/components/seeflow-canvas.test.tsx` (added US-036 describe, cast `props` literal via `as unknown as` to dodge union-arm narrowing)
-  - `ralph/prd.json` (US-036 passes → true)
-- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all workspaces clean, `bun test packages/canvas/` 1261 pass / 0 fail. apps/studio's `server.test.ts` + `watcher.test.ts` failures are pre-existing on the clean tree (timing-flaky).
+  - cloud/lambda/share/shared/envelope.ts
+  - cloud/lambda/share/shared/sessions.ts
+  - cloud/lambda/share/shared/sessions.test.ts
+  - cloud/lambda/share/shared/peer-color.ts (new)
+  - cloud/lambda/share/shared/ws-api.ts (new)
+  - cloud/lambda/share/ws-default.ts
+  - cloud/lambda/share/ws-default.test.ts
+  - cloud/lambda/share/ws-default.presence.test.ts (new)
+  - cloud/lambda/share/ws-disconnect.ts
+  - cloud/lambda/share/ws-disconnect.test.ts
 - **Learnings for future iterations:**
-  - The hook-shim test pattern's `useMemo: (fn) => fn()` means new `useMemo` calls execute every render in tests — no slot ordering to worry about, unlike `useState` which is index-sensitive. Free to add new `useMemo` anywhere.
-  - When you extend the `SeeflowCanvasProps` discriminated union with overlapping arms (e.g. two `mode: 'edit'` arms), the `callSeeflowCanvas` test helper's `Partial<SeeflowCanvasProps>` spread loses arm-by-arm narrowing — solve with `as unknown as SeeflowCanvasProps` on the props literal instead of rewriting `LegacyOverrides`.
-  - The "at-least-one-of" constraint pattern in a discriminated union: two arms with the SAME discriminator but different "required" fields — `{ adapter: T; ioAdapter?: U }` and `{ adapter?: T; ioAdapter: U }`. Cleaner than a single arm + runtime validation.
-  - `console.warn` in a hook-shim test prints to the test output but doesn't fail the assertion — useful for the "warn once" gate; the noise is acceptable.
-  - `wrapIoAdapterAsCanvasAdapter` does NOT carry the optional CanvasAdapter fields (`playAction`, `openFile`, `revealFile`, `computeLayout`, `icons`). Don't add them with no-op stubs — letting them be undefined drives feature-detection elsewhere (e.g. peer-mode tidy stays disabled, peer-mode icon pack tabs stay collapsed).
-  - The "module-level guard for one-shot warn" pattern (`let hasWarnedDualAdapter = false`) is the right shape: per-process not per-instance, so dev-mode HMR remounts don't spam the console.
+  - `addPeer` already accepts `PeerInfo`; extending the interface with a new field auto-propagates through DDB writes — but every existing test row literal must be updated or TS will flag missing `color`.
+  - `routeFrame`'s `findConnRole` happens via Scan; ws-default `handleAuthPeer` now does a `getBySessionId` so it has the session row needed to know who to fan out to.
+  - The ws-disconnect handler must build the presence envelope BEFORE the DDB write removes the peer entry (we capture `peer = found.peer` from the pre-write snapshot).
+  - For `host-offline` broadcasts there's no real PeerInfo to draw from; use peerId/displayName='host' and a fixed gray color that still matches the `#[0-9a-fA-F]{6}` regex.
+  - `ApiGatewayManagementApiClient.prototype.send` mocking from one test file leaks across files if not reset in `beforeEach` — each new test file must reinstall its own mock to be safe.
 ---
 
-## 2026-05-31 — US-037
-- Created `apps/studio/src/share-rpc-schema.ts` — self-contained Zod envelope schema for live-share `rpc` + `rpc-result` frames. 9 op schemas (addNode, patchNode, moveNode, reorderNode, deleteNode, addConnector, patchConnector, deleteConnector, addBulk) glued by `z.discriminatedUnion('op', […])`. Each op uses `.strict()` so cross-op shape mixing (e.g. `{ op: 'addNode', nodeId, position }`) rejects loud. `addBulk` reuses operations.ts's 100-item cap inline.
-- `RpcFrameSchema` = `{ v: 1, type: 'rpc', id, payload: RpcOp }`. `RpcResultFrameSchema` payload is a discriminated union on `ok` with strict variants for both branches.
-- Inline strict shapes for `position` (`{ x: number().finite(), y: number().finite() }`) and `reorder` (5-arm discriminated union mirroring operations.ts). Patch + add bodies are loose `z.record(z.unknown())` because the strict NodePatchBodySchema / ConnectorPatchBodySchema can't be mirrored into the viewer repo (they pull in schema.ts). Strict re-validation happens at impl-dispatch time per the file header.
-- Exported types: `RpcOp`, `RpcFrame`, `RpcResultFrame`.
-- Mirrored the file byte-for-byte to `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (`diff -q` confirms BYTE MATCH).
-- Added `apps/studio/src/share-rpc-schema.test.ts` — 28 tests across 4 describe blocks: per-op valid+invalid (18 tests across 9 ops), cross-op pairing (3 tests including unknown-op rejection + addBulk empty-arrays accepted at schema layer), RpcFrame envelope (3 tests: full frame, v!=1 rejected, empty id rejected), RpcResultFrame (4 tests: ok:true ±result, ok:false +reason, ok:false missing reason rejected).
-- Added `apps/studio/integration/share-rpc-schema-sync.it.ts` — reads both copies via `fs.readFileSync` and asserts `Buffer.equals`. Soft-skips with a console.warn when the viewer repo isn't on disk (SEEFLOW_VIEWER_PATH env override + sibling fallback + hardcoded dev fallback). 1 pass locally.
-- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all workspaces clean, viewer's `bun run typecheck` clean, viewer's `bun test src/lib/` 19 pass / 0 fail. Studio's `bun test apps/studio/src/` had 7 pre-existing failures all in server.test.ts + watcher.test.ts (known-flaky per Codebase Patterns).
+## 2026-05-31 - US-047
+- `routeFrame` in cloud/lambda/share/ws-default.ts now special-cases `cursor` frames:
+  oversize (>512 B body) → drop with `dropped:'oversize'`; payload re-validated via
+  `CursorPayloadSchema.safeParse` → drop with `dropped:'invalid'`; `to` is forced to
+  `'all'` so cursors are public to the session regardless of what the client sent.
+- Added a module-scope token-bucket rate limiter (`Map<connId, {tokens, ts}>`,
+  60 token bucket, 45 tokens/sec refill) that applies ONLY to `cursor` + `presence`
+  types — RPC paths untouched. Drops log `dropped:'rate'` with no error reply.
+- Exported `_resetRateLimiter()` for test isolation across files.
+- New ws-default.cursor.test.ts covers fan-out, unauthed reject, 200-frame burst
+  yielding exactly 60 broadcasts (with Date.now pinned), oversize drop, invalid
+  payload drop, plus a bonus test that a peer-supplied `to:'host'` cursor is
+  rewritten to `to:'all'` on the broadcast envelope.
+- Full cloud suite: 96 tests / 0 fail / typecheck clean.
 - Files changed:
-  - `apps/studio/src/share-rpc-schema.ts` (new)
-  - `apps/studio/src/share-rpc-schema.test.ts` (new)
-  - `apps/studio/integration/share-rpc-schema-sync.it.ts` (new)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (new — byte-for-byte mirror)
-  - `ralph/prd.json` (US-037 passes → true)
+  - cloud/lambda/share/ws-default.ts
+  - cloud/lambda/share/ws-default.cursor.test.ts (new)
 - **Learnings for future iterations:**
-  - The AC's "reuses the existing body schemas" wording conflicts with the byte-for-byte mirror requirement (operations.ts imports don't resolve in the viewer repo). Resolution: self-contained schemas with `z.record(z.unknown())` for complex bodies, inline strict shapes for the small ones (position, reorder). The header comment documents the trade-off.
-  - `z.discriminatedUnion` ONLY accepts `ZodObject` members, not `ZodEffects` (refined schemas). So `FlowBulkBodyShape.extend(...).refine(nonEmpty)` can't be a union member — the non-empty check has to be deferred to the dispatch handler (US-038).
-  - Bun's test path resolution: `bun test apps/.../foo.it.ts` (no leading dot) fails with "filter had no matches" because `.it.ts` doesn't match `.test|.spec`. Use `bun test ./apps/.../foo.it.ts` (leading dot = explicit path) to run a single integration file from repo root.
-  - The viewer file path resolves differently in a worktree vs the canonical seeflow checkout. The integration test uses an env-var-with-fallbacks pattern (SEEFLOW_VIEWER_PATH → sibling → hardcoded dev path → soft-skip with warn). Never hardcode an assumption — the worktree breaks "../../../../seeflow-viewer".
-  - `.strict()` on each op schema in a discriminatedUnion catches cross-op shape mixing (e.g. `{ op: 'addNode', nodeId: 'x', position }` is rejected as an unknown-key violation on AddNodeOpSchema). Without `.strict()`, the union would silently accept the wrong wrapper shape so long as the required fields were present.
-  - Biome's organizeImports puts `bun:test` BEFORE `node:fs`/`node:path` alphabetically — sort by full source string, not by category.
+  - Module-scope mutable state (the rate-limit Map) leaks across tests *within the
+    same file* and *across files in the same `bun test` invocation* — export a
+    `_resetX()` helper and call it in `beforeEach` of every file that touches it.
+  - For deterministic burst tests, pin `Date.now` to a constant value during the
+    loop, then restore in `afterEach`. Token-bucket refill is time-driven so any
+    real elapsed millis would leak ~0.045 tokens and change the count.
+  - The envelope's `payload` is `z.unknown()`; per-type payload schemas
+    (`CursorPayloadSchema` here) must be applied at the route handler — never
+    assume envelope parsing has validated the inner payload.
+  - When mutating an envelope before fan-out (e.g. forcing `to:'all'` for cursor),
+    use a `routed = {...env, to:'all'}` copy and forward `routed`, never the
+    original `env`, to both the broadcast loop and the audit log.
+  - `(event.body ?? '').length` is the byte-cap check the PRD prescribes (counts
+    JSON characters as bytes — fine for ASCII JSON, and matches the size logged
+    in the existing audit line).
 ---
 
-## 2026-05-31 — US-038
-- Added `handleRpcFrame(frame: unknown, fromPeerId): Promise<RpcResultFrame>` to `ShareController` in `apps/studio/src/share.ts`. Validates with `RpcFrameSchema.safeParse`, double-checks against the `ALLOWED_RPC_OPS` allowlist (defense-in-depth), guards on `current.status === 'active'`, then dispatches via `rpcDispatcher`.
-- Exported a new `RpcDispatchOutcome` + `RpcDispatcher` type and `createDefaultRpcDispatcher(opsDeps)` factory — the default switches on `op.op` and maps to the 9 operations.ts impls (re-parses loose patch bodies via `NodePatchBodySchema` / `ConnectorPatchBodySchema` since the wire schema is intentionally loose). `addBulk` runs `flowBulkNonEmpty` before dispatching (the wire union can't carry the ZodEffects refine).
-- Extended `ShareDeps` with three new optional fields: `operationsDeps`, `rpcDispatcher` (defaults to wrapping operationsDeps via the factory), `appendShareAuditFn` (defaults to writing to `auditDir`).
-- Outcome translation: `kind === 'ok'` → `{ ok: true, result?: outcome.data }` (omit `result` when data is undefined). Otherwise → `{ ok: false, reason: outcome.kind + (message ? ': ' + message : '') }`. notFound → `'notFound'`; writeFailed with message → `'writeFailed: EBUSY'`.
-- Module-level helpers: `extractFrameId` falls back to `'invalid'` when the unparsed frame has no string id (the result-frame schema requires `id.min(1)`); `makeRpcResultFrame` is a tiny constructor.
-- Added `RpcAuditEntry` + `appendShareAudit(sessionId, entry, opts?)` helper in `apps/studio/src/share-audit.ts`. Rejects sessionId path-traversal: empty, `.`, `..`, `/`, `\\`, `\0`. Writes one `JSON.stringify(entry)+'\n'` line to `<auditDir>/<sessionId>.jsonl`, mkdir-ing the dir on first call. Two-entry-shape union now coexists in the same JSONL file (legacy `AuditEntry` from `createAuditLog`, plus the new `RpcAuditEntry`).
-- Added 9 new tests in `share-audit.test.ts` (under a new `describe('appendShareAudit')` block): file creation, append, json round-trip, recursive mkdir, injected appender, then path-traversal rejection across 4 specific cases (`../../etc/passwd`, embedded `/`, embedded `\\`, empty/`.`/`..`).
-- Added 15 tests in new `apps/studio/src/share.rpc.test.ts` across 4 describe blocks: per-op happy path (9 tests, one per allowlisted op — each asserts dispatch occurred + audit captured op/flowId/ok/sessionId), envelope validation (3 tests: missing payload → invalid_envelope, unknown op string → invalid_envelope via Zod, garbage object falls back to invalid frame id), outcome translation (notFound → reason 'notFound', writeFailed:EBUSY → 'writeFailed: EBUSY'), state guard (not_active before start()).
-- Touched `apps/studio/src/api.test.ts` to add a no-op `handleRpcFrame` stub to the `FakeShare` shim — required to satisfy the new ShareController method.
-- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all 4 workspaces clean, `bun test apps/studio/src/share.test.ts apps/studio/src/share-audit.test.ts apps/studio/src/share.rpc.test.ts apps/studio/src/share-rpc-schema.test.ts` = 83 pass / 0 fail. `bun test apps/studio/src/api.test.ts` = 216 pass / 1 skip / 0 fail.
+## 2026-05-31 - US-048
+- Added `presenceLayer?: ReactNode` and `onCursorMove?: (coords, viewport) => void` to `SeeflowCanvasBaseProps` in `packages/canvas/src/components/seeflow-canvas.tsx`.
+- `presenceLayer`, when provided, is rendered inside `<ViewportPortal>` between `<Background>` and `<GlowOverlay>`/`<Controls>` so it transforms with pan/zoom. Wrapper div carries `pointer-events:none` (per the AC) so the layer never eats pane clicks; individual cursors opt back in.
+- `onPointerMove` handler now (when `onCursorMove` is wired) calls `rfInstance.screenToFlowPosition` + `getViewport`, forwarding `{ x, y, flowId: flowSlug ?? null }` and the viewport. Legacy path (no callback) does zero extra work — guarded on the function presence.
+- Added `packages/canvas/src/components/seeflow-canvas.presence.test.tsx` (5 tests, all pass): asserts the slot lands inside `<ViewportPortal>` inside `<ReactFlow>`, that `ViewportPortal` is NOT mounted when the prop is absent, that the rfInstance ref is not touched when `onCursorMove` is absent, that the callback fires with finite x/y + viewport, and that `flowId` is `null` when `flowSlug` is omitted.
+- Public types: `presenceLayer` and `onCursorMove` are part of `SeeflowCanvasBaseProps` which is unioned into the already-exported `SeeflowCanvasProps` — no new index.ts entries needed (the AC mention of "already re-exports SeeflowCanvasProps" is satisfied).
+- Full canvas suite: 1266 tests / 0 fail / `bun run typecheck` clean across all workspaces / Biome format + lint clean.
 - Files changed:
-  - `apps/studio/src/share.ts` (added handleRpcFrame, RpcDispatcher seam, ALLOWED_RPC_OPS, createDefaultRpcDispatcher, helper fns)
-  - `apps/studio/src/share-audit.ts` (added appendShareAudit + RpcAuditEntry; left createAuditLog untouched)
-  - `apps/studio/src/share-audit.test.ts` (new describe block for appendShareAudit, 9 tests)
-  - `apps/studio/src/share.rpc.test.ts` (new — 15 tests)
-  - `apps/studio/src/api.test.ts` (added handleRpcFrame stub to FakeShare)
-  - `ralph/prd.json` (US-038 passes → true)
+  - packages/canvas/src/components/seeflow-canvas.tsx (props, JSX, pointer handler)
+  - packages/canvas/src/components/seeflow-canvas.presence.test.tsx (new)
 - **Learnings for future iterations:**
-  - The `ShareController` interface is implemented as an object literal returned by `createShareController`. Adding a method = extending the interface (which any FakeShare in `api.test.ts` must mirror). Don't forget the test shim — typescript flags it as a missing-prop on the FakeShare literal, NOT on createShareController.
-  - The wire-side `RpcOp` discriminated union is exhaustive in TS — a `default:` branch in the dispatcher switch is dead code and unnecessary. The `ALLOWED_RPC_OPS` runtime allowlist exists purely as defense-in-depth for a future code path that bypasses Zod, not for current control flow.
-  - Outcome → reason string contract: `outcome.kind + (message ? ': ' + message : '')` — so `{ kind: 'notFound' }` becomes `'notFound'` and `{ kind: 'writeFailed', message: 'EBUSY' }` becomes `'writeFailed: EBUSY'`. The result-frame's `reason` field is just `z.string()`, so callers parse the kind by splitting on the first `: `.
-  - The RpcResultFrame schema requires `id.min(1)`. When the inbound envelope failed parse hard enough to lose its id, we MUST substitute a non-empty fallback (`'invalid'`). Otherwise the result-frame itself fails its own schema and the protocol breaks.
-  - Two audit-entry shapes live in the same per-session JSONL file (legacy `AuditEntry` from `createAuditLog`, plus `RpcAuditEntry` from `appendShareAudit`). Future readers MUST treat each line as the union — sniff `'verdict' in entry` vs `'op' in entry` to discriminate.
-  - sessionId validation: a string is only safe if it has no `/`, no `\\`, no `\0`, and isn't `''`/`.`/`..`. Anything else is a potential path traversal. The check is cheap; do it on every audit write, not just at session start.
-  - `bun run format` MUST come before `bun run lint` — biome's organizeImports rearranges import order during format, and lint will fail on the unformatted order even though it's semantically equivalent.
-  - When extending `ShareDeps` with new optional fields, ordering of resolution matters: `rpcDispatcher` falls back to `operationsDeps`-based default. If both are absent, handleRpcFrame returns `no_dispatcher` rather than throwing — a tampered config shouldn't crash the controller.
----
-
-## 2026-05-31 — US-039
-- Extended `handleRpcFrame` in `apps/studio/src/share.ts` so every accepted op broadcasts a `node-patched` envelope BEFORE returning the `rpc-result`. Failed ops (notFound, invalid_envelope, op_not_allowed, not_active, no_dispatcher, dispatcher throw) do NOT broadcast and do NOT bump the version counter.
-- Added a closure-scoped per-flow version counter `flowVersions: Map<string, number>`. Bumped immediately before each broadcast; included in payload as `version`. Different flowIds track independent counters.
-- Added `broadcast?: (envelope) => void` to `ShareDeps` as a test seam; default forwards to `transport.send(...)` only when transport is open (matches the existing EventBus bridge pattern).
-- New `computeNodePatchedDiff(op, outcome)` helper: switch over the 9 wire ops produces the AC-specified diff shapes — `move` / `patch` / `add` / `delete` / `reorder` for nodes, mirror with `connectorId` for connectors, plus a `{ kind: 'bulk', result }` carrier for addBulk (AC didn't enumerate; chose the most peer-friendly shape).
-- For `addNode`, the diff carries `outcome.data.node` (the impl returns the full normalized new node). For `addConnector`, the diff merges `op.connector` with the impl-assigned `id` from `outcome.data.id`.
-- Added a top-of-file note: "node-patched broadcasts include the originator — peer SPAs reconcile their optimistic state against the canonical diff; suppress reconcile-only re-renders via the rpc-result `id` correlation in US-041."
-- Created `apps/studio/src/share.broadcast.test.ts` (14 tests across 4 describe blocks): broadcast-ordering (broadcast fires before rpc-result resolves), per-op diff shape coverage (9 ops), version monotonicity (flow-a 1→2 across consecutive ops + per-flow isolation across flow-a and flow-b), and failure-no-broadcast (notFound + invalid_envelope; subsequent ok op still starts at version 1).
-- Files changed:
-  - `apps/studio/src/share.ts` (added flowVersions, broadcast seam, computeNodePatchedDiff helper, top-of-file note, broadcast call in handleRpcFrame)
-  - `apps/studio/src/share.broadcast.test.ts` (new — 14 tests)
-  - `ralph/prd.json` (US-039 passes → true)
-- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all 4 workspaces clean, `bun test apps/studio/src/share*.ts` = 97 pass / 0 fail across 5 files.
-- **Learnings for future iterations:**
-  - The broadcast seam pattern (optional `broadcast` in ShareDeps, default → transport.send) mirrors the eventBus-bridge pattern already in this file. Tests swap in a spy; production code never touches transport.send for node-patched directly. Future co-edit phases (US-041, US-042) can reuse the same seam.
-  - The per-flow version counter is `Map<flowId, number>` not `number`. Two flows mutating concurrently in the same session don't fight over a single counter — each flow has its own monotonic stream. Out-of-order delivery is a per-flow problem, not session-global.
-  - The `addBulk` op isn't enumerated in the AC's diff-shape list. Chose `{ kind: 'bulk', result: outcome.data }` because: (a) bulk applies multiple changes atomically — no single nodeId/connectorId to identify, (b) the impl returns the full enriched node + connector lists which the peer can apply directly without round-tripping back to the original request.
-  - For `addConnector`, the impl only returns `{ id }` not the full connector. The diff synthesizes `{ ...op.connector, id: outcome.data.id }` — clients reading the diff get the full connector with its server-assigned id. Same pattern would work for `addNode` if the impl ever shrinks to just `{ id }`, but for now it returns `{ id, node }` and we read `data.node` directly.
-  - Closure-captured `let transport` references inside a closure assigned BEFORE the `let transport` declaration trigger TDZ at call time even though declarations hoist. Solution: declare the closure AFTER `let transport`. Pattern matches the existing `subscribeToEventBus` placement.
-  - "broadcast BEFORE rpc-result resolves" is enforced by control flow: broadcast() runs synchronously inside the ok branch of handleRpcFrame; the rpc-result is returned from the same function via `return makeRpcResultFrame(...)`. Tests assert this via a shared `order: string[]` array pushed inside the spy and right after `await ctrl.handleRpcFrame(...)`.
-  - `makeEnvelope('node-patched', payload, { to: 'all' })` is the canonical way to build the envelope — `from: 'host'` is the default; `to: 'all'` is the fan-out hint the relay routes by.
----
-
-## 2026-05-31 — US-040
-- Added `send(envelope: Envelope)` and `createIoAdapter(opts)` to `ShareClient` in `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.ts`. The factory dispatches each canvas mutation as an `rpc` envelope, registers a one-shot resolver in `pendingRpc: Map<id, PendingRpc>`, and resolves on the matching `rpc-result`.
-- Timer seam: `setTimeoutImpl` / `clearTimeoutImpl` are optional injection points on `IoAdapterFactoryOptions` so tests drive the 5s timeout via a fake timer. Production omits them; default falls back to `globalThis.setTimeout` / `clearTimeout`.
-- Routing: `ensureRpcRouterInstalled()` is a one-shot installer that subscribes to `frame` events (filters `type === 'rpc-result'`, validates `payload` via `RpcResultPayloadSchema`, looks up by `envelope.id`) and to `state` events (settles every pending entry with `disconnected` on `closed` or `kicked`).
-- 8 in-scope methods route to wire ops per the canonical map (`createNode → addNode`, `updateNode → patchNode`, `updateNodePosition → moveNode`, `deleteNode → deleteNode`, `reorderNode → reorderNode`, `createConnector → addConnector`, `updateConnector → patchConnector`, `deleteConnector → deleteConnector`). `uploadImage` short-circuits with `{ ok: false, reason: 'phase_6_file_transfer' }` and never touches the WebSocket (file transfer rides a separate `file-bytes` binary frame; documented inline with a phase-6 TODO).
-- Settlement contract is exhaustive and never rejects: ok-true → `{ ok: true, value }`, ok-false → `{ ok: false, reason: <verbatim> }`, timer fires → `{ ok: false, reason: 'timeout' }`, socket close → `{ ok: false, reason: 'disconnected' }`, malformed result payload → `{ ok: false, reason: 'malformed rpc-result payload: ...' }`, send throws → `{ ok: false, reason: 'send_failed: ...' }`. Unknown `id` on inbound `rpc-result` is silently ignored (no false settlements).
-- New file `src/lib/share-client.io-adapter.test.ts` — 17 tests across 5 describe blocks:
-  - **outgoing envelope shape** (8 tests): one per in-scope method, asserts the exact payload object and that `from: 'peer'`, `type: 'rpc'`, `id: <uuid>` framing wraps it.
-  - **rpc-result resolution** (4 tests): ok with result, ok with no result (void ops), failure reason verbatim, unknown id is ignored.
-  - **timeout** (3 tests): default 5000ms, `timeoutMs` override, successful result cancels the timer.
-  - **disconnect** (1 test): three pending settle to `disconnected` on `fireClose`.
-  - **uploadImage** (1 test): returns phase-6 marker, sends nothing, registers no timer.
-- Files changed:
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.ts` (modified — `send()`, `createIoAdapter()`, router + cleanup helpers)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.io-adapter.test.ts` (new — 17 tests)
-  - `ralph/prd.json` (US-040 passes → true)
-- Quality gates: viewer `bun run typecheck` clean; viewer `bun test` 118 pass / 0 fail (was 101 before; +17 new). seeflow worktree `bun run format` + `bun run lint` + `bun run typecheck` all clean (no changes to seeflow source — only the local symlink for development).
-- **Learnings for future iterations:**
-  - The viewer's `@seeflow/canvas` is `file:../seeflow/packages/canvas` — that resolves to the MAIN seeflow checkout, NOT the worktree. For cross-repo work where the canvas is mid-evolution in the worktree, `rm -rf node_modules/@seeflow/canvas && ln -s <worktree-canvas-path> node_modules/@seeflow/canvas` makes typecheck see the in-flight types without touching package.json. The symlink lives in node_modules (gitignored); CI gets the real install when both repos merge.
-  - Rebuilding the worktree canvas (`bun run --filter @seeflow/canvas build`) is required after editing src/adapter/* — `dist/index.d.ts` is what `viewer/tsconfig` actually reads. Without the rebuild, type errors appear even when src/ is correct.
-  - `createIoAdapter` is a method on `ShareClient` (not a free function) so the routing map + state-listener lives on the client, not per-adapter. Multiple flow adapters can share one client without duplicating the rpc-result router (`ensureRpcRouterInstalled` is one-shot via a boolean guard).
-  - Outgoing `rpc` envelopes use `from: 'peer'` (matches the auth-peer convention). The host resolves the actual peerId from the socket session, so the literal 'peer' is sufficient on the wire.
-  - The pending-rpc settlement contract is **never reject** — every failure path resolves with a structured `{ ok: false, reason }`. This matches the IoAdapter envelope contract (the wrapping helper in @seeflow/canvas converts `{ ok: false }` to a thrown Error on the CanvasAdapter side; the IoAdapter side itself stays exception-free for clean async/await flow control).
-  - `RpcResultPayloadSchema` is exported from `share-rpc-schema.ts` precisely for this use case (router validates envelope.payload before resolving). Strict on each branch — extra fields would reject and surface as a malformed result rather than a silent type cast.
-  - For Bun test fake timers, an injected `setTimeoutImpl` / `clearTimeoutImpl` pair (with a local `FakeTimer` class that captures handle/cb/ms entries in an array) is simpler than `bun:test`'s mock features. The tests call `timer.fireAllActive()` to deterministically advance time without sleeping on a real clock.
-  - **DON'T** add the disconnect cleanup as a `frame` listener — `closed` / `kicked` transitions emit on `state`, not as a frame. The router needs both subscriptions (one for inbound results, one for state-edge cleanup).
----
-
-## 2026-05-31 — US-041
-- Added `OptimisticStore` class to `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.ts` — tracks per-flow snapshots and a pending-edits map keyed by RPC id; on revert restores the pre-op `Flow` clone and emits `edit-reverted` via the owning `ShareClient`. Pending entries maintain a parallel insertion-order list (`order: string[]`) so `revertAll` walks LIFO.
-- Added module-private `applyOpOptimistically(snapshot, op)` covering all 9 wire ops (move, patch, add, delete, reorder; connector add/patch/delete; addBulk). For `addNode` / `addConnector` / `addBulk`, missing ids on the wire body get a `temp:<uuid>` prefix so the local snapshot has a stable handle until the host's `node-patched` broadcast reconciles (US-042). Deleting a node also strips connectors referencing it (mirrors `deleteNodeImpl`).
-- Added `on('edit-reverted', listener)` overload to `ShareClient`. Parallel `editRevertedListeners: Set<EditRevertedListener>` lives alongside the existing `stateListeners` / `frameListeners` — not in the frame-typed `typedListeners` map, because edit-reverted is a client-emitted event, not a wire frame type.
-- Added `getOptimisticStore()` lazy accessor on `ShareClient`. First call constructs the store AND installs the disconnect state listener (`closed | kicked → revertAll('disconnected')`). Crucially this runs BEFORE `ensureRpcRouterInstalled()` inside `createIoAdapter`, so on socket close the store's LIFO revertAll fires first and clears all pending entries; the rpc router's own state listener then settles each dispatch promise with `disconnected`, but the per-id `store.revert(id, 'disconnected')` calls become harmless no-ops.
-- Wired `createIoAdapter`'s `dispatch` function: registers the pending RPC entry first, then calls `store.applyOptimistic(id, op)` BEFORE `send()` so the local snapshot reflects the change before any host broadcast can arrive. The `settle` callback now also calls `store.commit(id)` on ok or `store.revert(id, reason)` on failure, so every code path that resolves the promise also reconciles the optimistic state.
-- Created `src/lib/share-client.optimistic.test.ts` with 5 tests across 5 describe blocks (one per AC scenario):
-  - **single move accepted** — mid-flight snapshot at new pos, post-commit snapshot unchanged, pendingCount → 0, no toast.
-  - **single move rejected** — snapshot reverts to original {10,20}, pendingCount → 0, one toast with `reason: 'notFound'` and `op.op === 'moveNode'`.
-  - **two moves on same node, second rejected** — first commits, second rejected; snapshot ends at first move's result {100,100}, only one toast.
-  - **rejected addNode** — mid-flight snapshot has 3 nodes (last is `temp:...`); post-reject snapshot is back to 2 nodes with original ids `['n-1', 'n-2']`.
-  - **disconnect with two pending edits** — LIFO order verified: toasts[0] is the most-recent edit (n-2), toasts[1] is the earlier edit (n-1); both adapter promises still resolve to `{ ok: false, reason: 'disconnected' }`; snapshot fully restored.
-- Files changed:
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.ts` (modified — added `EditRevertedEvent`, `OptimisticStoreOptions`, `OptimisticStore` class, `applyOpOptimistically` helper, `cloneFlow` helper, `on('edit-reverted')` overload, `getOptimisticStore()`, wired `dispatch` with apply/commit/revert)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.optimistic.test.ts` (new — 5 tests)
-  - `ralph/prd.json` (US-041 passes → true)
-- Quality gates: viewer `bun run typecheck` clean; viewer `bun test` 123 pass / 0 fail (was 118; +5 new). Seeflow worktree `bun run typecheck` clean (no source changes on the seeflow side — only viewer code touched).
-- **Learnings for future iterations:**
-  - State-listener ordering for disconnect cleanup is load-bearing. `Set` preserves insertion order in JS, so as long as the optimistic store's listener is installed BEFORE the rpc router's, LIFO revertAll runs first and the per-id revert calls fired from settled dispatch promises become idempotent no-ops. Future stories that add more state-driven cleanup should slot in BEFORE `ensureRpcRouterInstalled()` if they need to act on pending entries before they get individually settled.
-  - The "restore-snapshot" inverse pattern (vs per-op inverse patches) is simpler and bulletproof for sequential ops and LIFO disconnect, because the host's `node-patched` broadcast is the canonical reconciler for the ok-path. The trade-off: each pending entry holds a full `Flow` clone — for typical canvas sizes (<200 nodes), the memory cost is trivial.
-  - `addNode` optimistic apply MUST synthesize an id because the wire body doesn't carry one. `temp:<uuid>` is the chosen prefix. The host's `node-patched` broadcast carries the real id, and US-042's reconciliation walks the pending stack to swap the temp id for the real one.
-  - `client.emit('edit-reverted', ...)` is the FIRST non-frame typed event on `ShareClient`. The pattern: a parallel `Set<Listener>` field, a new `on()` overload branch, and an internal `for listener of bucket { try/catch }` dispatch loop. `flow-changed` in US-042 will follow the exact same shape — copy-paste-able.
-  - When seeding test snapshots, the harness must clone the seed Flow into the store (`store.setSnapshot(flowId, { ...SEED, nodes: SEED.nodes.map(n => ({...n})) })`) otherwise tests share mutable state across runs and the second test sees mutated positions from the first. Bun's `beforeEach` rebuilds the harness so this is contained per-describe, but the inline `nodes: SEED.nodes.map(n => ({...n}))` defensive clone protects against any future `beforeAll` refactor.
-  - `Flow['nodes'][number]` is the way to express the union element type when satisfying typed assignments to a `FlowNode`-typed array slot. The cast-via-`as unknown as Flow['nodes'][number]` pattern avoids fighting the discriminated union when patching loose `{ ...record, id }` shapes.
-  - Bun's typecheck step (`bun run typecheck` in the viewer) runs `tsc --noEmit`. The viewer has no Biome configuration, so format/lint are not part of the gate — only `tsc` + `bun test`.
----
-
-## 2026-05-31 — US-042
-- Extended `apps/studio/src/share-rpc-schema.ts` with `NodePatchedFrameSchema` + `NodePatchedFramePayloadSchema` (plus `NodePatchedFrame` / `NodePatchedFramePayload` types). Payload shape: `{ flowId, op, version: int >= 0, diff: z.record(z.unknown()) }`. Mirrored byte-for-byte to `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (`diff -q` confirms BYTE_MATCH; the existing schema-sync integration test still passes 1/1).
-- Used `NodePatchedFramePayloadSchema` (not `NodePatchedPayloadSchema`) to dodge a naming collision with the legacy phase-3 `NodePatchedPayload` type still exported from viewer's `share-client.ts` (consumed by `share-session.tsx` until US-043 rewires it).
-- `applyHostDiff(snapshot, op, diff)` in viewer's `share-client.ts` handles 6 diff kinds (move, patch, add, delete, reorder, bulk) for nodes + connectors. Idempotent: dedupe-by-id on add (overwrite), filter-on-delete (no-op if gone), patch shallow-merge. Node delete also strips dangling connectors (mirrors host `deleteNodeImpl`). Bulk applies node + connector lists from the addBulk outcome.
-- `OptimisticStore.findCorrelatedPending(flowId, op, nodeId?, connectorId?)` walks pending entries and returns true only for ops listed in `isOriginatorSuppressibleOp` (the 6 suppressible ops; add* and addBulk excluded so temp ids get reconciled via apply).
-- New `FlowChangedEvent` type + `flowChangedListeners` set + `on('flow-changed', listener)` overload arm. Subscribing lazy-installs the `node-patched` router so watch-only peers converge without ever calling `getOptimisticStore()`. Edit-side peers install via `getOptimisticStore()` (now also calls `ensureNodePatchedRouterInstalled`).
-- `ensureNodePatchedRouterInstalled()` + `handleNodePatched(envelope)`: zod-validate payload → version tie-break (drop & log if `version <= lastAppliedVersion[flowId]`) → set `lastAppliedVersion[flowId] = version` → correlate with pending → apply diff to snapshot via `applyHostDiff` (skip when correlated) → emit `flow-changed` once per accepted frame.
-- New `src/lib/share-client.broadcast.test.ts` — 11 tests across 6 describe blocks: remote moveNode (no prior state); remote add/patch/delete/reorder (4 tests); remote connector add/patch/delete (3 tests); own-RPC suppression with identity-check on the unchanged node entry; stale version dropped (3 stale variants + 1 fresher); per-flow version isolation (flow-a + flow-b with interleaved versions).
-- Files changed:
-  - `apps/studio/src/share-rpc-schema.ts` (added NodePatchedFrameSchema + 2 type exports)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (byte-for-byte mirror)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.ts` (added FlowChangedEvent + listener set + on('flow-changed') overload, lastAppliedVersion map, ensureNodePatchedRouterInstalled, handleNodePatched, applyHostDiff helper, isOriginatorSuppressibleOp, OptimisticStore.findCorrelatedPending)
-  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-client.broadcast.test.ts` (new — 11 tests)
-  - `ralph/prd.json` (US-042 passes → true)
-- Quality gates: worktree `bun run format` + `bun run lint` clean, `bun run typecheck` all 4 workspaces clean; viewer `bun run typecheck` clean, `bun test` 134 pass / 0 fail (was 123 before; +11 new); studio `bun test apps/studio/src/share*.ts` 85 pass / 0 fail across 4 files; schema-sync integration `bun test ./apps/studio/integration/share-rpc-schema-sync.it.ts` 1 pass / 0 fail.
-- **Learnings for future iterations:**
-  - When extending a byte-for-byte mirrored file, run `cp <src> <dst> && diff -q` immediately after editing. The seeflow-viewer schema-sync integration test gates on byte equality — drift catches it but you want to know during dev, not in CI.
-  - The `NodePatchedFrameSchema` payload is intentionally loose (`diff: z.record(z.unknown())`) for the same reason as US-037's rpc body schemas: strict diff shapes can't be mirrored because they reference studio-only types. Defer strict-ish checks to `applyHostDiff` at the apply site.
-  - Two distinct "node-patched" payload shapes exist on the viewer right now: the legacy phase-3 one in `share-client.ts` (`{ flowId, nodeId, node }`) and the new US-042 one in `share-rpc-schema.ts` (`{ flowId, op, version, diff }`). The legacy parser will silently warn-and-no-op when the new shape arrives — share-session.tsx's legacy handler is dead-but-harmless until US-043 rewires it. Don't delete the legacy export yet; US-043 owns that.
-  - The dedupe-by-id-with-overwrite pattern for `addNode`/`addConnector` apply is what enables idempotency *and* originator reconciliation. Once US-043 wires the SPA to read `getOptimisticStore().getSnapshot(flowId)`, the temp-id swap on add ops will follow up by walking the pending stack to swap `temp:<uuid>` for the canonical id from the host's diff. For now the test surface only exercises the dedupe path (host's diff carries the canonical id; no pending temp to swap).
-  - Lazy router install on `on('flow-changed', ...)` subscription means watch-only peers don't need to know about the optimistic store API. They subscribe to `flow-changed` and read snapshots from the client. Peers that also edit get the router installed via `getOptimisticStore()` (the edit path always grabs the store first). Either entry point lights the router exactly once.
-  - The version tie-break is STRICTLY-INCREASING (drops on `<=`), not `<`. Equal versions from the host should never happen (per-flow monotonic counter on the host), but if they do — drop. This means a frame applied multiple times (test simulation) drops the second time without any apply, which is the right behavior for idempotency under replay.
----
-
-## 2026-05-31 — US-043
-- Wired the peer SPA's `/share/:token` page (`seeflow-viewer`) into edit mode against a `share-client`-vended `IoAdapter`. Drags now round-trip through the host's operations.ts allowlist (US-038) → broadcast back via `node-patched` (US-039) → converge into every peer's optimistic store (US-042).
-- Added `src/pages/share-session-edit.ts` with `bindShareEditAdapter({ client, flowId, onSnapshotChange, onEditReverted })` returning `{ adapter, getCurrentSnapshot, dispose }`. Logic-only module, no React imports — testable end-to-end against a `FakeWebSocket`-backed real `ShareClient` instance.
-- Added `src/components/edit-canvas.tsx` mirroring `view-canvas.tsx`'s shape but mounting `<SeeflowCanvas mode="edit" ioAdapter={...} />`. `onNodePositionChange` / `onNodePositionsChange` fire-and-forget through `ioAdapter.updateNodePosition` — the adapter's optimistic store already handles the snap-back on reject.
-- Added `src/components/toast.tsx` with `useToast()` returning `{ toasts, push, dismiss }` + a `<Toaster />` component. Per-instance state (no provider) since the only consumer is the share-session page.
-- Refactored `src/pages/share-session.tsx`:
-  - Hoisted `client` into state so a second effect can bind the adapter on `(client, activeFlowId)`.
-  - On `flow-snapshot` arrival, also seed every flow into `client.getOptimisticStore().setSnapshot(id, flow)` so dispatches + host broadcasts have a base to mutate (without seeding, `applyHostDiff` no-ops on empty stores — see share-client.ts line 1168).
-  - Replaced the manual `node-patched` reducer with a `storeVersion` bump driven by the binding's `onSnapshotChange` callback; the render path reads from the store (`getOptimisticStore().getSnapshot(activeFlowId)`).
-  - Canvas remounts on flow switch via `key={effectiveActiveFlowId}` — the binding effect also reruns and creates a fresh `createIoAdapter` for the new flowId.
-- Added `src/pages/share-session.io.test.tsx` with 7 tests in one describe block: createIoAdapter called once with current flowId, flow-changed for active flow fires onSnapshotChange (with store snapshot), flow-changed for OTHER flow is filtered out, edit-reverted surfaces toast string via `formatEditRevertedToast`, flow-switch creates two adapters with different flowIds, dispose is idempotent + unsubscribes, getCurrentSnapshot reads from store.
-- Files changed (in `/Users/tuongaz/dev/seeflow-viewer`):
-  - `src/pages/share-session-edit.ts` (new)
-  - `src/pages/share-session.io.test.tsx` (new)
-  - `src/components/edit-canvas.tsx` (new)
-  - `src/components/toast.tsx` (new)
-  - `src/pages/share-session.tsx` (refactored)
-- Studio worktree: `ralph/prd.json` (US-043 passes → true).
-- Quality gates: viewer `bun run typecheck` clean, viewer `bun test` 141 pass / 0 fail (7 new + 134 prior).
-- **Learnings for future iterations:**
-  - The optimistic store is NOT auto-populated from `flow-snapshot` — the page is responsible for seeding `setSnapshot(id, flow)` for each flow after parsing the host's snapshot frame. Without the seed, `applyHostDiff` returns the empty store unchanged (share-client.ts line 1168 guard) and `flow-changed` events never visibly mutate state. This is intentional separation of concerns (the wire layer doesn't know flow shapes) but easy to miss.
-  - The viewer repo has NO React Testing Library + NO jsdom + NO happy-dom. The path of least resistance for testing page wiring is to extract a logic-only helper (`bindShareEditAdapter`) and test it with the existing `FakeWebSocket` pattern. `.tsx` extension on the test file is fine even when JSX isn't used — preserves the AC's filename convention without forcing a DOM dependency.
-  - `share-client.ts` already exposes `getOptimisticStore()` (returns a singleton per client) — that's the right seam to seed snapshots from outside the client. Don't add a convenience `client.getSnapshot(flowId)` proxy — the store IS the API.
-  - The `client.completeAuth()` transition is driven by ANY incoming frame in the `connecting` state. Test harnesses should send a structurally valid frame (e.g. `presence`) instead of a synthetic `ack` to avoid noisy envelope-validator warns in test output.
-  - The peer-mode edit canvas does NOT need the studio's full callback surface (`onPlayNode`, `onMultiResize`, `onComponentNodeFitToContent`, runtime, etc.). Drag persistence works with just `onNodePositionChange` + `onNodePositionsChange` because the DetailPanel + sidebar edits route through `ioAdapter` internally via the canvas's `wrapIoAdapterAsCanvasAdapter` from US-036.
-  - The `bindShareEditAdapter` filter on `event.flowId === flowId` for `flow-changed` is load-bearing — multiple flows in the same session emit independent broadcasts but the active-flow canvas only re-renders on its own. Tests confirm both paths (active flow → callback fires; other flow → callback silent).
-  - For peer-side testing of "host rejects an rpc → revert fires", drive a real adapter call (`adapter.updateNodePosition(...)`), read the sent envelope's `id` from `ws.sent`, then fire a matching `{ ok: false, reason }` `rpc-result` back. The share-client routes the rejection through OptimisticStore.revert → onEditReverted listeners → bind's callback. No need to manually call OptimisticStore methods.
-  - The `currentFlow` rendered to `<EditCanvas>` comes from `store.getSnapshot(activeFlowId)` with a `snapshot.flows[activeFlowId]` fallback. The `storeVersion` integer is bumped on every flow-changed event AND on initial seed — its only purpose is to trigger React re-renders against a mutable Map; the actual data lives in the store, not in React state.
----
-
-## 2026-05-31 — US-044
-- Wired `rpc` envelopes into `handleFrame` in `apps/studio/src/share.ts` — extracted the dispatch body into a private `dispatchRpcFrame(frame, fromPeerId): Promise<RpcResultFrame>` (lives between the broadcast bridge and `handleFrame` so it can close over `current`, `flowVersions`, `broadcast`, `rpcDispatcher`, `appendShareAuditFn`). `controller.handleRpcFrame` is now a thin pass-through. The `handleFrame` rpc branch strips envelope-only fields (`from`, `to`) before dispatch (the wire `RpcFrameSchema` is `.strict()`), then sends the `rpc-result` back via `transport.send(makeEnvelope('rpc-result', result.payload, { to: env.from, id: result.id }))` — fire-and-forget after dispatch so concurrent rpc frames don't head-of-line block each other.
-- Created `apps/studio/integration/share-co-edit.it.ts` — phase-4 exit-criterion integration test. Reuses the FakeRelay pattern from `share-host-peer.it.ts` (route-by-`to`, `from`-rewriting, fan-out for `to:'all'`). Wires a real `createShareController` with `operationsDeps: { registry }` against a tmp project (flow.json + style.json split per `merge.ts` rules — positions live in style.json, not flow.json on disk). Three describe-it tests:
-  - **happy path** — PeerA `moveNode` → PeerA receives rpc-result `ok: true`, PeerA + PeerB both receive identical `node-patched` broadcast (kind `move`, version 1), style.json's `n-a.position` is `{500,500}` on disk.
-  - **invalid op** — PeerA sends `patchNode` against `flow-that-does-not-exist` → PeerA receives `rpc-result.ok=false, reason=~flowNotFound~` (matches /notFound/i), no `node-patched` broadcast fires on either peer, style.json `n-a.position` unchanged.
-  - **concurrent moves** — PeerA + PeerB both fire `moveNode` on the same node in the same tick. Both peers observe `node-patched` versions `[1, 2]` in arrival order; both rpc-results round-trip; final disk position matches the last broadcast's diff.
-- Files changed:
-  - `apps/studio/src/share.ts` (extracted `dispatchRpcFrame`, routed rpc envelopes through `handleFrame`, sent `rpc-result` back via transport, slimmed `controller.handleRpcFrame` to a one-liner)
-  - `apps/studio/integration/share-co-edit.it.ts` (new — 3 tests)
-  - `ralph/prd.json` (US-044 passes → true)
-- Quality gates: `bun run format` + `bun run lint` clean; `bun run typecheck` all 4 workspaces clean; new test 3 pass / 0 fail; existing share unit tests 97 pass / 0 fail across 5 files; existing share integration tests 5 pass / 0 fail across 2 files; `apps/studio/src/api.test.ts` 216 pass / 1 skip / 0 fail.
-- **Learnings for future iterations:**
-  - **The on-disk flow shape is SPLIT into two files.** `flow.json` (`FlowSchema.strict()`) carries only semantic data — `{ version, name, nodes: [{ id, type, data: {semantic-only} }], connectors }`. NO `position`. NO visual fields. `style.json` (keyed map) carries `position` + every visual override per id. `mergeFlowAndStyle` (apps/studio/src/merge.ts) inlines position from style.json with default `{x: 0, y: 0}` when the entry is missing. Seeding either file with the merged ResolvedFlow shape triggers `badSchema` on the next mutateMergedFlow write because `FlowSchema.strict()` rejects unknown keys.
-  - **handleRpcFrame was a public method but the wire layer did NOT route to it** until US-044. Phase 2 / 3 / 4-prior stories built up the dispatch surface; phase 4's exit story (this one) is what actually wires inbound `rpc` envelopes through `handleFrame` → `dispatchRpcFrame` → `transport.send(rpc-result)`. The `controller.handleRpcFrame` public method is now a thin pass-through preserved purely for direct (non-wire) test access.
-  - **`RpcFrameSchema.strict()` rejects envelope-only fields.** When `handleFrame` dispatches a wire `rpc`, it must build a fresh object `{ v: env.v, type: env.type, id: env.id, payload: env.payload }` — passing the raw envelope (with `from`, `to`) fails parse as "unrecognized_keys" and the peer gets back `invalid_envelope`. The cleanest place to strip is the boundary, not the schema.
-  - **The reason string format `outcome.kind + (message ? ': ' + message : '')` means operations.ts impls control half the result wire.** `flowNotFound` (no message) becomes `'flowNotFound'`; `unknownNode` (no message) becomes `'unknownNode'`; `writeFailed` with a message becomes `'writeFailed: EBUSY'`. Integration tests that target the "not-found" semantic should use a non-existent FLOW id (gives `flowNotFound`, matches `/notFound/i`) rather than a non-existent NODE id (gives `unknownNode`, which doesn't match `/notFound/i`).
-  - **Peer wire envelopes use `to: 'host'` to address the host's rpc dispatcher.** The FakeRelay's `route()` function (and the production lambda) treats `'host'` as a routing shortcut. `to: 'all'` from a peer would also reach the host (fan-out includes the host), but `'host'` is more explicit and excludes other peers from seeing the rpc-side of the protocol.
-  - **`fire-and-forget` `dispatchRpcFrame(...).then(...)` inside `handleFrame` is required to keep the frame router non-blocking.** Awaiting would head-of-line block the relay's WebSocket message queue: a slow rpc (large addBulk, slow disk) would stall presence frames + other peers' rpcs for the same host. The .catch handler logs dispatcher throws — the dispatcher's own internal try/catch handles operations.ts throws.
-  - **`bun test` with explicit `./path/to/file.it.ts` runs integration files** even though `bun run test:it:bun` (the package script) globs `apps/studio/integration/*.it.ts`. The AC's `bun run test:it:bun -- share-co-edit` form works because the script accepts a file-name filter when passed as a positional after `--`. Bare `bun test apps/studio/integration/foo.it.ts` (no leading `./`) won't match because Bun's directory discovery skips `.it.ts`.
-  - **`mutateMergedFlowAndBroadcast` serializes per-flowId via `withFlowWriteLock`.** Concurrent moveNode rpc frames on the same flow execute one-at-a-time on the host side; the per-flow version counter increments in lock-step with the writes. This is what makes the "concurrent moves" test deterministic — `[1, 2]` versions on each peer correspond to the host-determined ordering even when both peer `send()` calls land in the same tick.
+  - The hook-shim test pattern in `packages/canvas/src/components/seeflow-canvas.test.tsx` is reusable for any new prop that needs DOM-less assertions on the rendered tree — copy `callSeeflowCanvas` + `renderWithHooks` and pin the ref slot by useRef declaration order. `RF_INSTANCE_REF_SLOT = 2` matches `flagsRef (0)`, `wrapperRef (1)`, `rfInstanceRef (2)` at the top of the SeeflowCanvas body — adding a new useRef before slot 2 would shift the constant.
+  - `<ViewportPortal>` from `@xyflow/react` is the canvas-correct portal for content that must transform with pan/zoom; mounting cursor overlays in a plain absolutely-positioned wrapper would NOT track the viewport.
+  - The `onPointerMove` guard pattern (`if (onCursorMove) { ... }` outside the existing `if (!drawingRef.current) return`) lets the same handler serve both presence emission AND the existing draw-mode rubber band — keep the new branch BEFORE the early-return so cursor emission works when the user isn't drawing.
+  - Adding new SeeflowCanvas props: append fields to `SeeflowCanvasBaseProps` (NOT a per-mode union arm) — the discriminated `SeeflowCanvasProps` union already extends the base, so anything added there is reachable in every mode without duplicating the field across the union arms.
 ---

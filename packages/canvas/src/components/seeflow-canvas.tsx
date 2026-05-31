@@ -17,6 +17,7 @@ import {
   ReactFlow,
   type ReactFlowInstance,
   SelectionMode,
+  ViewportPortal,
   applyEdgeChanges,
   applyNodeChanges,
   getBezierPath,
@@ -31,6 +32,7 @@ import {
   type PointerEvent,
   type DragEvent as ReactDragEvent,
   type MouseEvent as ReactMouseEvent,
+  type ReactNode,
   forwardRef,
   useCallback,
   useEffect,
@@ -906,6 +908,29 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * the host or browser. There is no host-owned fallback path.
    */
   history?: HistoryHandle;
+  /**
+   * US-048: optional React node rendered inside the React Flow viewport via
+   * {@link ViewportPortal} — so pan/zoom move it with the nodes. Lives between
+   * `<Background>` and `<Controls>` in the JSX. The wrapping div carries
+   * `pointer-events: none` so the layer cannot eat pane clicks; individual
+   * cursors / labels inside opt back in by setting their own `pointer-events`.
+   * Used by peer SPAs and the host studio to mount `<PeerCursorsLayer>` for
+   * remote cursor rendering without forking the canvas.
+   */
+  presenceLayer?: ReactNode;
+  /**
+   * US-048: optional callback fired on every pointer move over the canvas
+   * pane. Receives the flow-space coordinates (and the current flow id taken
+   * from {@link flowSlug}, or `null` when the host hasn't passed one) plus the
+   * current React Flow viewport. When absent the pointer handler skips all
+   * cursor work — wiring this is what enables the peer share-client to emit a
+   * `cursor` envelope at ~30 fps. The conversion goes through
+   * `rfInstance.screenToFlowPosition` so the coords are zoom-stable.
+   */
+  onCursorMove?: (
+    coords: { x: number; y: number; flowId: string | null },
+    viewport: { x: number; y: number; zoom: number },
+  ) => void;
 }
 
 /**
@@ -1921,6 +1946,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeDragStop,
     onViewportChange,
     history,
+    presenceLayer,
+    onCursorMove,
     showToolbar,
     showStyleStrip,
     showDetailPanel,
@@ -2448,12 +2475,30 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     e.stopPropagation();
   }, []);
 
-  const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if (!drawingRef.current) return;
-    const client = { x: e.clientX, y: e.clientY };
-    drawCurrentRef.current = client;
-    setDrawCurrent(client);
-  }, []);
+  const onPointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      // US-048: when the host wires `onCursorMove`, project clientX/Y into
+      // flow coords through the live rfInstance and forward alongside the
+      // current viewport. Guarded on the callback so the legacy path (no
+      // presence) does zero extra work in the pointer handler.
+      if (onCursorMove) {
+        const rfInstance = rfInstanceRef.current;
+        if (rfInstance) {
+          const flowPos = rfInstance.screenToFlowPosition({ x: e.clientX, y: e.clientY });
+          const viewport = rfInstance.getViewport();
+          onCursorMove(
+            { x: flowPos.x, y: flowPos.y, flowId: flowSlug ?? null },
+            { x: viewport.x, y: viewport.y, zoom: viewport.zoom },
+          );
+        }
+      }
+      if (!drawingRef.current) return;
+      const client = { x: e.clientX, y: e.clientY };
+      drawCurrentRef.current = client;
+      setDrawCurrent(client);
+    },
+    [onCursorMove, flowSlug],
+  );
 
   const onPointerUp = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
@@ -4625,6 +4670,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 <StoreApiBridge storeApiRef={storeApiRef} />
                 <ZoomBridge wrapperRef={wrapperRef} />
                 <Background gap={12} size={0.6} />
+                {/* US-048: optional presence layer (peer cursors, etc.) lives
+                inside <ViewportPortal> so it transforms with pan/zoom. The
+                wrapper is `pointer-events:none` so it never eats pane clicks;
+                individual cursor nodes opt back in via their own styling. */}
+                {presenceLayer ? (
+                  <ViewportPortal>
+                    <div
+                      data-testid="presence-layer"
+                      style={{ pointerEvents: 'none', position: 'absolute', inset: 0 }}
+                    >
+                      {presenceLayer}
+                    </div>
+                  </ViewportPortal>
+                ) : null}
                 {mode !== 'mini' && <GlowOverlay />}
                 {/* US-020: bottom-left canvas-view cluster. xyflow's default Fit View
             is hidden so we can render a Lucide-styled button that calls
