@@ -1005,28 +1005,38 @@ export function createShareController(deps: ShareDeps): ShareController {
   };
 
   // Emit a `flow-snapshot` envelope to a freshly-joined peer so its canvas can
-  // render the host's flow graph. Reads each registered flow's on-disk JSON
-  // and packages them as `{ flows: { [flowId]: Flow }, activeFlowId }`. Without
-  // this the peer is stuck on "CONNECTING…" forever (the viewer's
-  // share-session.tsx blocks until `snapshot` is populated). Errors only warn
-  // — the peer can refresh / rotate to retry.
+  // render the host's flow graph. Prefers the watcher's resolved snapshot
+  // (file refs inlined, style merged, schema-validated) so component / icon
+  // / image nodes render without the peer needing to walk the host's
+  // filesystem. Falls back to raw on-disk JSON for setups that boot without
+  // a watcher (CLI smoke tests, integration). Without this the peer is stuck
+  // on "CONNECTING…" forever (viewer's share-session.tsx blocks until
+  // `snapshot` is populated). Errors only warn — the peer can refresh /
+  // rotate to retry.
   const emitFlowSnapshotForPeer = (peerConnId: string): void => {
     const registry = deps.operationsDeps?.registry;
+    const watcher = deps.operationsDeps?.watcher;
     if (!registry) return;
     const entries = registry.list();
     if (entries.length === 0) return;
     const flows: Record<string, unknown> = {};
     let activeFlowId: string | null = null;
     for (const entry of entries) {
-      const path = join(entry.repoPath, entry.flowPath);
-      try {
-        const raw = JSON.parse(readFileSync(path, 'utf8'));
-        flows[entry.id] = raw;
-        if (activeFlowId === null) activeFlowId = entry.id;
-        if (entry.isDefault) activeFlowId = entry.id;
-      } catch (err) {
-        console.warn(`[share] flow-snapshot read failed for ${entry.id}:`, err);
+      let flow: unknown = null;
+      const snap = watcher?.snapshot(entry.id) ?? watcher?.reparse(entry.id) ?? null;
+      if (snap?.valid && snap.flow) {
+        flow = snap.flow;
+      } else {
+        try {
+          flow = JSON.parse(readFileSync(join(entry.repoPath, entry.flowPath), 'utf8'));
+        } catch (err) {
+          console.warn(`[share] flow-snapshot read failed for ${entry.id}:`, err);
+          continue;
+        }
       }
+      flows[entry.id] = flow;
+      if (activeFlowId === null) activeFlowId = entry.id;
+      if (entry.isDefault) activeFlowId = entry.id;
     }
     if (!activeFlowId) return;
     try {
