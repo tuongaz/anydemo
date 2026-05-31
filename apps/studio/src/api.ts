@@ -47,6 +47,7 @@ import {
 } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
+import type { ShareController, ShareState } from './share.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -236,7 +237,13 @@ export interface ApiOptions {
   /** Override the icon installer fetcher. Production uses fetchWithProgress;
    *  integration tests inject a fixture-returning closure. */
   iconFetcher?: IconFetcher;
+  /** Live Share controller. The studio bootstrap instantiates one per process
+   *  (see server.ts); tests inject a fake to drive the /api/share/* routes
+   *  without touching the relay or a real WebSocket. */
+  share?: ShareController;
 }
+
+const KickBodySchema = z.object({ peerId: z.string().min(1) });
 
 /**
  * Thin call-through wrapper around the proxy.ts module exports. Lets tests
@@ -2073,6 +2080,139 @@ export function createApi(options: ApiOptions): Hono {
           // Wait for the next event OR a heartbeat tick — whichever comes
           // first. On a heartbeat we emit an SSE comment line (invisible to
           // EventSource) so the idle connection isn't reaped mid-session.
+          let heartbeat: ReturnType<typeof setTimeout> | null = null;
+          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
+            resume = () => r('event');
+            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
+          });
+          if (heartbeat) clearTimeout(heartbeat);
+          resume = null;
+          if (reason === 'heartbeat' && active) {
+            await stream.write(': ping\n\n');
+          }
+        }
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
+  // Live Share local API. Five routes that delegate to the injected
+  // ShareController. The controller is optional — when absent (e.g. tests
+  // that don't exercise share) every endpoint returns 503 so misconfigured
+  // deployments fail visibly instead of silently 404ing.
+  const share = options.share;
+
+  // Map a controller rejection to an HTTP status + error body. share-not-active
+  // and share-peer-not-found are the two domain-specific reasons; everything
+  // else surfaces as 500 with the raw message so misconfigurations (bad relay
+  // URL, network failures, etc.) are debuggable from the response.
+  const shareErrorStatus = (err: unknown): { status: 400 | 404 | 409 | 500; error: string } => {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'share-not-active') return { status: 409, error: msg };
+    if (msg === 'share-peer-not-found') return { status: 404, error: msg };
+    if (msg === 'share-already-active') return { status: 409, error: msg };
+    return { status: 500, error: msg };
+  };
+
+  api.post('/share/start', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    try {
+      const result = await share.start();
+      return c.json(result);
+    } catch (err) {
+      const mapped = shareErrorStatus(err);
+      return c.json({ error: mapped.error }, mapped.status);
+    }
+  });
+
+  api.post('/share/stop', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    try {
+      await share.stop();
+      return c.body(null, 204);
+    } catch (err) {
+      const mapped = shareErrorStatus(err);
+      return c.json({ error: mapped.error }, mapped.status);
+    }
+  });
+
+  api.post('/share/kick', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ error: 'Body must be valid JSON' }, 400);
+    }
+    const parsed = KickBodySchema.safeParse(body);
+    if (!parsed.success) {
+      return c.json({ error: 'Invalid kick body', issues: parsed.error.issues }, 400);
+    }
+    try {
+      await share.kick(parsed.data.peerId);
+      return c.body(null, 204);
+    } catch (err) {
+      const mapped = shareErrorStatus(err);
+      return c.json({ error: mapped.error }, mapped.status);
+    }
+  });
+
+  api.post('/share/rotate', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    try {
+      const result = await share.rotateUrl();
+      return c.json(result);
+    } catch (err) {
+      const mapped = shareErrorStatus(err);
+      return c.json({ error: mapped.error }, mapped.status);
+    }
+  });
+
+  // GET /api/share/state — SSE stream of ShareState transitions. Initial frame
+  // is the current state; subsequent frames are pushed on each controller
+  // subscribe callback. Mirrors the /api/events shape (queue + wake + heartbeat)
+  // so the UI can use the same EventSource handling.
+  api.get('/share/state', (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    const controller = share;
+
+    return streamSSE(c, async (stream) => {
+      let active = true;
+      const queue: Array<{ event: string; data: string }> = [];
+      let resume: (() => void) | null = null;
+
+      const wake = () => {
+        if (resume) {
+          const r = resume;
+          resume = null;
+          r();
+        }
+      };
+
+      const enqueue = (s: ShareState) => {
+        queue.push({ event: 'state', data: JSON.stringify(s) });
+        wake();
+      };
+
+      // subscribe() invokes fn synchronously with the current state, so the
+      // initial frame lands in the queue automatically — no explicit prologue.
+      const unsubscribe = controller.subscribe(enqueue);
+
+      stream.onAbort(() => {
+        active = false;
+        unsubscribe();
+        wake();
+      });
+
+      try {
+        while (active) {
+          while (queue.length > 0) {
+            const next = queue.shift();
+            if (!next) break;
+            await stream.writeSSE(next);
+          }
+          if (!active) break;
           let heartbeat: ReturnType<typeof setTimeout> | null = null;
           const reason = await new Promise<'event' | 'heartbeat'>((r) => {
             resume = () => r('event');

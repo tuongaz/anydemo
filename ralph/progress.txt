@@ -150,3 +150,35 @@ Started: Sun 31 May 2026 16:17:07 AEST
   - `EventBus.broadcast` uses synchronous Set iteration; subscribers added or removed mid-iteration are NOT observed by that broadcast. That means if a subscriber side-effectfully calls `subscribeToEventBus()` again, the new subscriber won't fire on the same broadcast. Today this never happens (we only subscribe in start()), but document it before adding mid-session subscription rotation.
   - `let eventUnsubscribes: (() => void)[] = []` (not `const`) because `unsubscribeFromEventBus()` reassigns the array — capturing the old array locally, replacing with a fresh `[]`, then iterating. Avoids the "what if a subscriber unsubscribed itself" foot-gun by snapshotting before iterating.
 ---
+
+## 2026-05-31 - US-022
+- Wired five `/api/share/*` routes into `apps/studio/src/api.ts`:
+  - `POST /api/share/start` → `share.start()`; 200 `{url, sessionId}` or 500 generic / 409 `share-already-active`.
+  - `POST /api/share/stop` → `share.stop()`; 204 on success, 500 on generic rejection.
+  - `POST /api/share/kick` → Zod `{peerId: string.min(1)}`; 204 / 400 invalid body / 409 `share-not-active` / 404 `share-peer-not-found`.
+  - `POST /api/share/rotate` → `share.rotateUrl()`; 200 `{url}` / 409 `share-not-active`.
+  - `GET /api/share/state` → `streamSSE` mirroring the `/api/events` queue + wake + heartbeat pattern. Initial frame is emitted because `controller.subscribe(fn)` synchronously delivers the current state. Subsequent frames push on every transition. `event: state`, `data: JSON.stringify(state)`.
+- Added a shared `shareErrorStatus(err)` helper that maps `share-not-active` → 409, `share-peer-not-found` → 404, `share-already-active` → 409, anything else → 500. Centralizes the wire-contract translation so each route just calls into it.
+- Made `share?: ShareController` optional on `ApiOptions` so existing tests / non-share studios don't have to wire it; missing → 503 from every share endpoint. Real studio always provides one.
+- Wired share into `apps/studio/src/server.ts`:
+  - Added `share?: ShareController` to `CreateAppOptions` (tests inject a fake).
+  - Default `share = createShareController({ relayHttpUrl: process.env.SEEFLOW_SHARE_RELAY_URL ?? 'https://seeflow.dev', shareUrlBase: process.env.SEEFLOW_SHARE_URL_BASE ?? 'https://share.seeflow.dev', eventBus: events, flowIdsForBroadcast: () => registry.list().map(e => e.id) })`. Env overrides land for integration tests / dev relays.
+  - `eventBus` + `flowIdsForBroadcast` close the US-021 loop — every registered flow's events fan-out to peers automatically once a session is active.
+- Tests added in `apps/studio/src/api.test.ts` (12 new cases, all using a `createFakeShare()` helper that holds an internal `current` ShareState and a subscriber Set so a `setState(next)` call fans out to the SSE stream subscriber):
+  - start: 200 happy, 500 generic, 409 share-already-active.
+  - stop: 204, 500 generic.
+  - kick: 204, 400 missing peerId, 409 share-not-active, 404 share-peer-not-found.
+  - rotate: 200, 409 share-not-active.
+  - state SSE: initial `event: state` frame contains `"status":"idle"`; after a `setTimeout(() => fake.setState({status:'active', ...}), 10)`, the SSE body grows to include `"status":"active"` + the right sessionId within a 2s deadline.
+- Added a tiny `readUntil(body, until, timeoutMs)` helper for SSE — reads chunks until `until(buf)` is true OR the deadline expires, then cancels the reader. Needed because `app.request(...)` returns a `Response` whose body is a streaming `ReadableStream`; one `read()` won't necessarily cover a heartbeat-interleaved frame.
+- Files changed: `apps/studio/src/api.ts` (route mounts + `KickBodySchema` + `shareErrorStatus`), `apps/studio/src/server.ts` (defaults + wire-up), `apps/studio/src/api.test.ts` (FakeShare + 12 cases), `ralph/prd.json` (US-022 passes=true), `ralph/progress.txt`.
+- Quality: `bun test apps/studio/src/api.test.ts` 216 pass / 1 skip (12 new + no regressions); `bun test apps/studio/src/share*.test.ts` 53/53 unchanged; `bun run format`, `bun run lint`, `bun run typecheck` all clean.
+- **Learnings for future iterations:**
+  - The `controller.subscribe(fn)` contract from US-014 — "fn is called synchronously once with current state, then on every transition" — IS the SSE initial-frame mechanism. Don't write a separate prologue (e.g. `stream.writeSSE({event:'hello',...})` followed by a subscribe) — that doubles initial state on every reconnect AND ties two semantically-equivalent frames together. One subscribe == one initial + N transitions.
+  - For SSE reads in Hono unit tests, `app.request(path)` returns a streaming `Response`. A single `reader.read()` will often return only the headers' initial flush; the actual event frame comes in a subsequent chunk. Need a small read-loop with a deadline, or the test will pass intermittently. Pattern: `readUntil(body, (buf) => buf.includes('"status":"active"'), 2000)`.
+  - The fake controller's `setState(next)` MUST flush to subscribers synchronously to match real controller semantics. If you `await Promise.resolve()` inside `setState`, tests asserting "transition arrives after timeout" race against the SSE reader's chunk boundary. Keep it sync; the SSE machinery's own queue is what introduces the async hop.
+  - Mapping error messages → HTTP status via a single `shareErrorStatus(err)` helper is far cleaner than per-route switch statements when 3-4 routes share the same 2-3 domain rejections. Add new mappings centrally and every route picks them up.
+  - `eventBus` + `flowIdsForBroadcast: () => registry.list().map(e => e.id)` is the studio-side wiring of US-021's bridge. Pass a CALLBACK (not a snapshot) so flows registered after share start propagate on the next stop/start cycle — though for v1 the snapshot is taken at subscribe-time inside share.ts, so mid-session flow additions won't auto-bridge. Future story: registry-watch in share.ts.
+  - `share?: ShareController` (optional in ApiOptions) lets existing tests skip wiring; the route guard returns 503 if missing. Pattern matches `events?` / `watcher?` elsewhere. Real bootstrap always provides one. Avoids ripple-changes to dozens of buildApp() callers.
+  - `KickBodySchema = z.object({ peerId: z.string().min(1) })` enforces non-empty at the body layer so the route never calls `share.kick('')`. Zod validation failures return 400 with `issues: parsed.error.issues` matching every other route's shape.
+---
