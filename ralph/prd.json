@@ -217,8 +217,8 @@
         "Tests pass"
       ],
       "priority": 9,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "File router installed eagerly in constructor so files-manifest frames arriving immediately after auth are routed even before the first requestFile/uploadFile call. Two rpc-results land per upload (intent decision with result.via, then final ack); peer tracks state via a small state machine. readFile is exposed on createIoAdapter via the new ShareClientIoAdapter interface (extends IoAdapter)."
     },
     {
       "id": "US-064",
@@ -244,8 +244,8 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Single-file integration test apps/studio/integration/share-files.it.ts. FakeRelay + fake S3 colocated on one Bun.serve (port-randomized). All 7 scenarios pass in 435 ms. Pre-existing harness flakes in share-co-edit + share-rpc-schema-sync reproduce on a clean HEAD without this change."
     }
   ]
 }
