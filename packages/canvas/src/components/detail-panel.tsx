@@ -1,4 +1,4 @@
-import { FolderOpen, ImagePlus, PencilLine, X } from 'lucide-react';
+import { FolderOpen, ImagePlus, PanelRightClose, PencilLine } from 'lucide-react';
 import {
   type CSSProperties,
   type ClipboardEvent as ReactClipboardEvent,
@@ -207,7 +207,7 @@ export function DetailPanel({
           data-testid="detail-panel-close"
           className="sf:absolute sf:right-4 sf:top-4 sf:z-10 sf:inline-flex sf:h-7 sf:w-7 sf:items-center sf:justify-center sf:rounded-sm sf:text-foreground/70 sf:opacity-70 sf:transition-opacity sf:hover:opacity-100 sf:focus:outline-hidden sf:focus:ring-2 sf:focus:ring-ring sf:focus:ring-offset-2"
         >
-          <X className="sf:h-4 sf:w-4" />
+          <PanelRightClose className="sf:h-4 sf:w-4" />
           <span className="sf:sr-only">Close</span>
         </button>
         {inspectableNode ? (
