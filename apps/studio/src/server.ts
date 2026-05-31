@@ -82,13 +82,13 @@ export interface CreateAppOptions {
   iconFetcher?: IconFetcher;
   /** Inject a Live Share controller. Defaults to one pointed at
    *  https://seeflow.dev (SEEFLOW_SHARE_RELAY_URL) with share URLs rooted at
-   *  https://share.seeflow.dev (SEEFLOW_SHARE_URL_BASE). Tests inject a fake
+   *  https://seeflow.dev/share (SEEFLOW_SHARE_URL_BASE). Tests inject a fake
    *  to exercise the /api/share/* routes without a real relay. */
   share?: ShareController;
 }
 
 const DEFAULT_SHARE_RELAY_URL = 'https://seeflow.dev';
-const DEFAULT_SHARE_URL_BASE = 'https://share.seeflow.dev';
+const DEFAULT_SHARE_URL_BASE = 'https://seeflow.dev/share';
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
 const DEFAULT_STATIC_ROOT = resolvePath(import.meta.dir, '../dist/web');
