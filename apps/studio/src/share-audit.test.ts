@@ -2,7 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type RpcAuditEntry, appendShareAudit, createAuditLog } from './share-audit.ts';
+import {
+  type RpcAuditEntry,
+  appendShareAudit,
+  createAuditLog,
+  createAuditLogger,
+} from './share-audit.ts';
 
 describe('createAuditLog', () => {
   let dir: string;
@@ -190,5 +195,142 @@ describe('appendShareAudit', () => {
     expect(() => appendShareAudit('', sample, { dir })).toThrow(/invalid sessionId/);
     expect(() => appendShareAudit('.', sample, { dir })).toThrow(/invalid sessionId/);
     expect(() => appendShareAudit('..', sample, { dir })).toThrow(/invalid sessionId/);
+  });
+});
+
+describe('createAuditLogger', () => {
+  let dir: string;
+
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), 'share-audit-logger-'));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('append writes one JSON line per call with ts auto-stamped', async () => {
+    const log = createAuditLogger('sess-a', dir);
+    const before = Date.now();
+    await log.append({ peerId: 'p1', displayName: 'Ada', kind: 'rpc-accept', op: 'moveNode' });
+    await log.append({
+      peerId: 'p1',
+      displayName: 'Ada',
+      kind: 'rpc-reject',
+      op: 'moveNode',
+      reason: 'rate-limited',
+    });
+    const after = Date.now();
+    await log.close();
+
+    const raw = readFileSync(join(dir, 'sess-a.jsonl'), 'utf8');
+    const lines = raw.split('\n').filter(Boolean);
+    expect(lines).toHaveLength(2);
+    const parsed0 = JSON.parse(lines[0] ?? '');
+    const parsed1 = JSON.parse(lines[1] ?? '');
+    expect(parsed0.kind).toBe('rpc-accept');
+    expect(parsed1.kind).toBe('rpc-reject');
+    expect(parsed1.reason).toBe('rate-limited');
+    expect(parsed0.ts).toBeGreaterThanOrEqual(before);
+    expect(parsed0.ts).toBeLessThanOrEqual(after);
+  });
+
+  it('creates the audit directory recursively on first append', async () => {
+    const nested = join(dir, 'a', 'b', 'c');
+    expect(existsSync(nested)).toBe(false);
+    const log = createAuditLogger('sess-b', nested);
+    await log.append({ peerId: null, displayName: null, kind: 'host-start' });
+    await log.close();
+    expect(existsSync(join(nested, 'sess-b.jsonl'))).toBe(true);
+  });
+
+  it('list returns empty + nextCursor:null when file is missing', async () => {
+    const log = createAuditLogger('sess-missing', dir);
+    const result = await log.list();
+    expect(result).toEqual({ entries: [], nextCursor: null });
+  });
+
+  it('list paginates 1000 appends by byte offset', async () => {
+    const log = createAuditLogger('sess-page', dir);
+    for (let i = 0; i < 1000; i++) {
+      await log.append({
+        peerId: `p${i}`,
+        displayName: `Peer ${i}`,
+        kind: 'rpc-accept',
+        op: 'moveNode',
+        details: { i },
+      });
+    }
+    await log.close();
+
+    const collected: number[] = [];
+    let cursor: number | null = 0;
+    let pages = 0;
+    while (cursor !== null) {
+      const page: { entries: Array<{ details?: { i?: number } }>; nextCursor: number | null } =
+        await log.list({ limit: 200, cursor });
+      pages++;
+      for (const entry of page.entries) {
+        const i = entry.details?.i;
+        if (typeof i === 'number') collected.push(i);
+      }
+      cursor = page.nextCursor;
+      if (pages > 10) break;
+    }
+    expect(collected).toHaveLength(1000);
+    expect(collected[0]).toBe(0);
+    expect(collected[999]).toBe(999);
+    expect(pages).toBe(5);
+  });
+
+  it('list defaults limit to 200', async () => {
+    const log = createAuditLogger('sess-limit', dir);
+    for (let i = 0; i < 250; i++) {
+      await log.append({ peerId: null, displayName: null, kind: 'host-start' });
+    }
+    await log.close();
+    const first = await log.list();
+    expect(first.entries).toHaveLength(200);
+    expect(first.nextCursor).not.toBeNull();
+  });
+
+  it('concurrent appends from 10 parallel promises preserve all entries', async () => {
+    const log = createAuditLogger('sess-concur', dir);
+    const tasks: Array<Promise<void>> = [];
+    for (let i = 0; i < 10; i++) {
+      tasks.push(
+        (async () => {
+          for (let j = 0; j < 20; j++) {
+            await log.append({
+              peerId: `p${i}`,
+              displayName: `Peer ${i}`,
+              kind: 'rpc-accept',
+              op: 'moveNode',
+              details: { worker: i, n: j },
+            });
+          }
+        })(),
+      );
+    }
+    await Promise.all(tasks);
+    await log.close();
+
+    const raw = readFileSync(join(dir, 'sess-concur.jsonl'), 'utf8');
+    const lines = raw.split('\n').filter(Boolean);
+    expect(lines).toHaveLength(200);
+    // Every line must be valid JSON with no partial-line corruption.
+    const counts = new Map<string, number>();
+    for (const line of lines) {
+      const parsed = JSON.parse(line);
+      const key = `${parsed.details.worker}:${parsed.details.n}`;
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+    }
+    expect(counts.size).toBe(200);
+    for (const c of counts.values()) expect(c).toBe(1);
+  });
+
+  it('rejects unsafe sessionIds', () => {
+    expect(() => createAuditLogger('../etc', dir)).toThrow(/invalid sessionId/);
+    expect(() => createAuditLogger('sub/leaf', dir)).toThrow(/invalid sessionId/);
+    expect(() => createAuditLogger('', dir)).toThrow(/invalid sessionId/);
   });
 });

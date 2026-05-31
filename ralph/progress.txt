@@ -1,298 +1,82 @@
 # Ralph Progress Log
-Started: Mon  1 Jun 2026 00:58:33 AEST
+Started: Mon  1 Jun 2026 03:11:50 AEST
 ---
 
 ## Codebase Patterns
-- `apps/studio/src/share-*.ts` is the existing flat convention for live-share modules. Phase-7 SSE work introduces a `src/share/` subdirectory for new files — both styles coexist.
-- StudioEvent + EventBus live at `apps/studio/src/events.ts`. Bridged SSE event types are the 5 starting with `flow:` or `node:` (NOT `file:changed` / `registry:reload`, which stay host-local).
-- Envelope wire shape is centralized in `apps/studio/src/share-envelope.ts` (host) and `seeflow-viewer/src/lib/share-envelope.ts` (peer). Adding a new envelope `type` requires updating BOTH.
-- Cross-repo schema parity is enforced with SYNC-WITH-PEER markers + a `scripts/check-*-sync.ts` script that normalizes whitespace+comments. The peer mirror lives in the sibling repo at `/Users/tuongaz/dev/seeflow-viewer/`; sync scripts must walk parent dirs to locate it and soft-pass when absent.
-- Per-peer addressed broadcast pattern: peer-targeted frames use `broadcast(makeEnvelope(type, payload, { to: peerConnId }))` where peerConnId is `env.from` captured during presence/join (NOT the peerId — the relay routes on conn id). `to: 'all'` is reserved for fan-outs.
-- Per-frame size cap pattern: when a wire frame must fit a byte cap, write a generic `chunk<T>(...): T[][]` over the natural partitioning unit (here per-flow), measure with `JSON.stringify({ wrapperShape }).length`, and stamp `{ chunk: 0..N-1, total: N }` only when N>1. Single-chunk frames omit the headers so the common path stays small.
-- Bun directory test discovery skips `*.it.ts`. Use `bun test src/...` for unit + share tests; `bun run test:it:bun` for integration.
-- `bun run format` must run BEFORE `bun run lint` (Biome).
-- `apps/studio/src/watcher.test.ts` has pre-existing flaky fs-watching failures unrelated to share work — ignore in CI gating unless you touched watcher code.
-- TypeScript narrows `let x: T | null = null` to `null` for the surrounding scope even when later writes happen inside injected callbacks. When testing schedule/cancel injection, capture the value via an object box (`const ref: { value: T | null } = { value: null }`) instead of a bare `let`.
-- Canvas package consumes a built `dist/` (tsup): after editing public types under `packages/canvas/src/`, run `bun run --filter @seeflow/canvas build` before the seeflow-viewer can import the new symbol — the viewer's `@seeflow/canvas` resolves to `dist/index.d.ts` even though node_modules is symlinked.
-- Canvas public API extension pattern: declare new types in their owning module (e.g. `adapter/io-adapter.ts`), then add them to the matching numbered section of `packages/canvas/src/index.ts`. Forgetting the barrel export silently keeps the type internal to the package.
-- Cross-repo Playwright e2e pattern: when a test needs the seeflow-viewer SPA, use the resolve-or-skip pattern (env var → sibling → maintainer dev path). The viewer hardcodes `https://seeflow.dev` as its API base; intercept at `context.route('**/seeflow.dev/api/share/**', …)` and forward to the local fake relay. The viewer's `auth-peer` envelope sends `{ peerJwt, displayName }` — relays shared with `share-host-peer.it.ts`'s legacy `{ token }` shape must accept both.
-- `apps/studio/src/demo.ts` emits node events with HARDCODED ids (`post-orders`, `inventory-service`, `payment-service`, `fulfillment-service`). The seeded `order-pipeline` example's flow.json uses opaque `node-XKIyds0TDg`-style ids, so its PlayButton produces NO visual canvas update. Tests that want visual feedback from the demo must register a custom flow whose node IDs match the demo's emit literals.
-- Manually-written `style.json` (no `splitFlow` helper) MUST omit the root `version` field — the style schema is intentionally version-less. Shape: `{ nodes: { <id>: { position: ... } } }`.
+- Phase-8 stories alternate between two repos: `/Users/tuongaz/dev/seeflow` (studio + viewer UI) and `/Users/tuongaz/dev/seeflow-viewer/cloud` (AWS CDK + lambdas). Always cd into the right one before running tests/typecheck. PRD branchName `ralph/live-share-phase-8` applies to BOTH repos — create the branch in each on first touch.
+- `SessionRow` in `cloud/lambda/share/shared/sessions.ts` is the DDB row contract. When you add a required field, EVERY local `row()`/`Partial<SessionRow>` fixture in the test files needs the new default OR typecheck fails (currently: files-proxy.test.ts, ws-disconnect.test.ts, ws-default.test.ts, ws-default.cursor.test.ts, ws-default.presence.test.ts).
+- DDB UpdateExpression composition: `ADD tokenVersion :one SET lastActivity = :l, #ttl = :ttl` is valid — keywords (SET/ADD/REMOVE/DELETE) each start their own clause. Use `ReturnValues: 'UPDATED_NEW'` + read `Attributes.<field>` to get the post-increment value.
+- The `fakeDocSend` mock in cloud tests is hand-rolled — it inspects `UpdateExpression` strings to apply mutations. When you add a new UpdateCommand shape (e.g., `list_append(if_not_exists(...))`), extend the mock's branch list in sessions.test.ts AND keep ws-default.test.ts in sync if it routes the same expression.
+- Peer JWT payload (`PeerPayload` in jwt.ts) round-trips through `mintPeerToken` / `verifyPeerToken`. Every test that mints a token (jwt.test.ts, ws-default.test.ts, ws-default.presence.test.ts) needs the new fields in its payload literal.
+- HTTP-API share lambdas register via `mkShareLambda(id, file)` + an `httpApi.addRoutes(...)` call in `cloud/lib/seeflow-stack.ts`. Add the fn to the `for (const fn of [...])` loop to get `shareSessions.grantReadWriteData`. Anything that calls back into WebSocket (PostToConnection / DeleteConnection) also needs `shareWsApi.grantManageConnections(fn)`.
+- HTTP-API share lambdas (non-WS) DON'T receive `event.requestContext.domainName/stage` for the WebSocket API — they must construct the ApiGatewayManagementApiClient endpoint themselves. Easiest: read `process.env.SHARE_WS_URL` (set by `sharedShareEnv`) and convert `wss://` → `https://`.
+- Lambda deps-injection pattern: export `_setDepsForTest(d)` so tests can stub `postToConnection`/`deleteConnection` without touching `ApiGatewayManagementApiClient.prototype.send`. Pattern matches files-proxy + ws-default.
+- The seeflow-viewer git root is `/Users/tuongaz/dev/seeflow-viewer`, NOT `cloud/`. `git add -A` from inside cloud will pick up unrelated `.seeflow/` scaffolding sitting in the parent. Always check `git status` and unstage non-cloud files before committing.
 
 ---
 
-## 2026-06-01 - US-071
-- Added the optional `subscribeEvents(flowId, listener)` slot to the canvas `IoAdapter` and wired the viewer's `ShareClient` to fill it, so peer browsers route SSE through the live-share WebSocket relay instead of opening their own `EventSource('/api/events')`. The slot is OPTIONAL on `IoAdapter` — embedders that don't supply it fall back to their default EventSource path.
-
-- Files changed (studio repo, this worktree):
-  - packages/canvas/src/adapter/io-adapter.ts — added `CanvasSseEvent` type (`{ type: string; ts: number; flowId: string; [key: string]: unknown }`) so payload fields land at the top level for `deriveVisualStatus` consumers; added `subscribeEvents?(flowId, listener) => () => void` to the `IoAdapter` interface with doc-comment explaining the EventSource-fallback semantics.
-  - packages/canvas/src/index.ts — exported `CanvasSseEvent` alongside `IoAdapter` / `IoAdapterDispatchEnvelope` / `IoAdapterResult` in the 5c barrel section.
-  - packages/canvas/src/adapter/io-adapter.test.ts — 4 new tests under a `subscribeEvents optional slot (US-071)` describe block: (1) absent on a minimal IoAdapter so consumers fall back to EventSource, (2) when present, listener fires with the right shape AND filters by flowId, (3) disposer detaches the listener, (4) CanvasSseEvent allows arbitrary payload fields at the top level.
-  - packages/canvas/dist/* — rebuilt via `bun run --filter @seeflow/canvas build` so the seeflow-viewer's `import type { CanvasSseEvent } from '@seeflow/canvas'` resolves through the published `.d.ts`.
-
-- Files changed (seeflow-viewer repo, at /Users/tuongaz/dev/seeflow-viewer):
-  - src/lib/share-client.ts — imported `CanvasSseEvent` from `@seeflow/canvas`; added `subscribeEvents(flowId, listener)` (REQUIRED, not optional) to the `ShareClientIoAdapter` extension; wired it inside `createIoAdapter` via a new private method `subscribeEventsForAdapter` that subscribes via `this.on('studio-event', …)`, filters by flowId, and reshapes the internal `StudioEvent` ({ type, flowId, ts, payload }) into the canvas's `CanvasSseEvent` ({ type, ts, flowId, ...payload }). Plain-object payloads spread to the top level; non-object payloads are preserved under `payload` so consumers don't lose the raw shape. The envelope's type/ts/flowId always win over conflicting payload keys (authoritative routing fields).
-  - src/pages/share-session.sse-wiring.test.tsx (new) — 4 tests using the existing FakeWebSocket pattern from share-session.io.test.tsx: (1) a `node:done` `sse` envelope dispatches exactly one `CanvasSseEvent` with the right spread shape, (2) subscribeEvents filters by flowId so events for other flows don't reach the listener, (3) the returned disposer detaches the listener, (4) the returned IoAdapter exposes `subscribeEvents` as a function (canvas-side slot is filled).
-  - share-session.tsx is unchanged — it already passes `adapterBinding.adapter` as `ioAdapter` to `<EditCanvas>` (US-043). With `subscribeEvents` now living on that adapter, a future canvas consumer that branches on `ioAdapter.subscribeEvents` (replacing its EventSource fallback) automatically picks up the live-share-bridged stream without further wiring.
-
-- Verification:
-  - `bun test packages/canvas/src/adapter/io-adapter.test.ts` → 18/18 pass (existing 14 + 4 new)
-  - `bun test packages/canvas/src/adapter/` → 50/50 pass
-  - `bun run typecheck` (4 studio workspaces) → clean
-  - `bun run format && bun run lint` → clean
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/pages/share-session.sse-wiring.test.tsx)` → 4/4 pass
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test)` → 283/283 pass (one transient flake on a cursor-related test reproduced clean on retry)
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun run typecheck)` → clean
-  - Viewer commit will land alongside this studio commit per the cross-repo bundle pattern documented in US-070.
-
-- Learnings for future iterations:
-  - The canvas package consumes a built `dist/` (tsup). After editing public types under `packages/canvas/src/`, you MUST run `bun run --filter @seeflow/canvas build` before the seeflow-viewer's `import type ... from '@seeflow/canvas'` resolves to the new symbol. The viewer's node_modules/@seeflow/canvas IS a symlink to the source package, but `package.json:exports['.'].types` points at `./dist/index.d.ts`, not at source. This silently bit the in-flight typecheck before the rebuild.
-  - The internal `StudioEvent` shape on the share-client (`{ type, flowId, ts, payload }`) is intentionally DIFFERENT from the wire-equivalent `CanvasSseEvent` the canvas consumes (`{ type, ts, flowId, ...payload }`). The reshape lives in `subscribeEventsForAdapter`: plain-object payloads spread, non-object payloads stash under `payload`. Keep the two shapes distinct — the share-client's internal one is opaque-payload-friendly for general consumers, the canvas-facing one is flat-keyed so existing `deriveVisualStatus` code reads `event.nodeId` / `event.progress` directly.
-  - `ShareClientIoAdapter` declares `subscribeEvents` as REQUIRED (not optional) even though the upstream `IoAdapter` slot is optional. Rationale: the live-share peer can always supply it, and downstream binding code in `share-session-edit.ts` calls it unconditionally. If a future binding wants to opt out, narrow at the call site rather than relaxing the interface.
-  - The AC mentioned `rest.test.ts` as the test location, but `rest.test.ts` actually tests `createRestAdapter` (a `CanvasAdapter`, not `IoAdapter`). The IoAdapter optional-slot tests went into `io-adapter.test.ts` where they fit the existing test taxonomy. Future AC-vs-actual-test-file mismatches: trust the codebase's organization over the AC's literal paths.
-  - The "stub canvas" in `share-session.sse-wiring.test.tsx` is a function (not a rendered React component) because the existing share-session test pattern doesn't use React Testing Library — just bun:test + a FakeWebSocket. The AC's "vitest+RTL or equivalent" phrasing meant "any integration-style harness" — not literally JSX rendering. Match the existing pattern unless you genuinely need DOM.
-  - Cross-repo coordination: edits to the viewer's `share-client.ts` need a matching commit IN the viewer repo. The seeflow-viewer is on branch `ralph/live-share-phase-6` (US-070 left it there), so commit US-071 changes onto the same branch in the viewer repo when wiring lands.
-
+## 2026-06-01 - US-075
+- Implemented kicked-peer set + tokenVersion on ShareSessions schema.
+- Files changed in /Users/tuongaz/dev/seeflow-viewer/cloud:
+  - lambda/share/shared/sessions.ts: SessionRow gains `kickedPeerIds: string[]` and `tokenVersion: number`; `createSession` defaults to `[]` + `1`; added `markPeerKicked` (list_append with if_not_exists) and `bumpTokenVersion` (`ADD tokenVersion :one`, returns `UPDATED_NEW.tokenVersion`).
+  - lambda/share/shared/jwt.ts: `PeerPayload.tv: number` field added; `mintPeerToken` and `verifyPeerToken` round-trip it inside the JWT body.
+  - lambda/share/session-join.ts: reads `session.tokenVersion ?? 1` and passes it as `tv` when minting peer JWTs.
+  - lambda/share/ws-default.ts: `handleAuthPeer` rejects with 401 body `'kicked'` if peerId is in `session.kickedPeerIds`, and 401 body `'token-rotated'` if `verify.payload.tv !== session.tokenVersion`. Both checks run before `addPeer`.
+  - Test files updated: shared/sessions.test.ts (new markPeerKicked + bumpTokenVersion cases, mock handles list_append + ADD tokenVersion), shared/jwt.test.ts (tv assertion), ws-default.test.ts (kicked/token-rotated 401 cases + row() defaults), ws-default.cursor.test.ts, ws-default.presence.test.ts, files-proxy.test.ts, ws-disconnect.test.ts (row() defaults).
+- bun test (cloud): 147 pass / 0 fail. bun run typecheck (cloud): clean.
+- **Learnings for future iterations:**
+  - When adding fields to SessionRow, 5 test files have local `row()` helpers — search for `Partial<SessionRow>` to find them all.
+  - The DDB fakeDocSend mock pattern in tests is fragile: extend the if/else branches on `UpdateExpression` string matches when adding new mutations.
+  - `mintPeerToken` is called in 4 places (3 test files + session-join.ts). Adding fields to `PeerPayload` requires updating all call sites; jwt.ts uses `Omit<PeerPayload, 'exp'>` so non-exp fields must all be supplied.
+  - The cwd resets across Bash calls in this harness — every shell command targeting the cloud repo needs an explicit `cd /Users/tuongaz/dev/seeflow-viewer/cloud`.
+  - The seeflow-viewer branch `ralph/live-share-phase-8` was created on first use (from `ralph/live-share-phase-6`).
 ---
 
-## 2026-06-01 - US-068
-- Added the token-bucket rate limiter + per-(flowId, nodeId) coalescer that protects the SSE bridge from `node:status` storms saturating peer browsers.
+## 2026-06-01 - US-076
+- Implemented POST /api/share/kick relay endpoint.
+- Files added/changed in /Users/tuongaz/dev/seeflow-viewer:
+  - cloud/lambda/share/session-kick.ts: handler validates `{sessionId, hostKey, peerId}`, timingSafeEqual on hostKey (401 mismatch), 404 on missing session, 400 on missing fields / invalid JSON; finds every connId in `session.peers` whose `peerId === body.peerId`, posts `{v:1,type:'kick',from:'host',to:connId,payload:{reason:'kicked-by-host'}}` then DeleteConnection on each; calls `markPeerKicked` once + `removePeer` per connId; returns `{ok:true, kicked:<count>}` (0 when no match, no DDB mutation in that case). Uses deps-injection (`_setDepsForTest`) so tests stub postToConnection/deleteConnection. wsEndpoint built by converting `SHARE_WS_URL` (wss://) → https://. Logs `{type, from, to, sizeBytes}` per kick frame (no payload).
+  - cloud/lambda/share/session-kick.test.ts: 6 cases — happy path (2 matching connIds + 1 unrelated peer stays), wrong hostKey 401, unknown session 404, peer not found 200/0, missing fields 400, invalid JSON 400.
+  - cloud/lib/seeflow-stack.ts: new `ShareSessionKickFn` via `mkShareLambda`, added to DDB `grantReadWriteData` loop, granted `shareWsApi.grantManageConnections`, registered HTTP route `POST /share/kick`.
+  - cloud/lib/seeflow-stack.share.test.ts: asserts `POST /share/kick` route exists + kick lambda has ShareSessionsTable + ManageConnections grants.
+- bun test (cloud): 155 pass / 0 fail. bun run typecheck (cloud): clean.
+- **Learnings for future iterations:**
+  - When the `cloud/` directory is NOT the git root, `git add -A` from cloud will pick up `.seeflow/` scaffolding sitting in the seeflow-viewer parent. Reset those before commit.
+  - HTTP-API lambdas calling WebSocket need their own ApiGatewayManagementApiClient endpoint — construct via `wsUrl.replace(/^wss:\/\//, 'https://')` from `SHARE_WS_URL` env (sharedShareEnv already provides it).
+  - `markPeerKicked` (DDB UpdateExpression with `list_append(if_not_exists(...))`) is correctly handled by the existing test-mock branch (`expr.includes('kickedPeerIds = list_append')`). When adding a new test file, copy the relevant branches from `shared/sessions.test.ts`.
+  - The `findResources` + `JSON.stringify(p.Properties.Roles).includes('ShareSessionKickFn')` pattern is how share infra tests assert per-lambda grants — `Roles` references the role logical id, which CDK derives from the function logical id.
+  - HTTP-API event in tests is just `{ body: '...' }`; no need to mock requestContext.
+---
+
+## 2026-06-01 - US-077
+- Implemented POST /api/share/rotate relay endpoint.
+- Files added/changed in /Users/tuongaz/dev/seeflow-viewer:
+  - cloud/lambda/share/session-rotate.ts: handler validates `{sessionId, hostKey}`, timingSafeEqual on hostKey (401), 404 on missing, 400 on missing fields / invalid JSON. Mints new token via `newToken()` (injected for tests), bumps `tokenVersion` via `bumpTokenVersion`, then `rotateToken` writes the new `token` while refreshing lastActivity/ttl. Iterates every connId in `session.peers`, posts `{v:1,type:'kick',from:'host',to:connId,payload:{reason:'token-rotated'}}` + DeleteConnection + removePeer per conn. Returns `{ok:true, token, url:'https://share.seeflow.dev/<token>'}`. Uses deps-injection (`_setDepsForTest`) for post/delete/newToken stubs. Logs `{type, from, to, sizeBytes}` per kick frame (no payload).
+- cloud/lambda/share/shared/sessions.ts: new `rotateToken(sessionId, newToken)` doing `SET #tk = :t, lastActivity = :l, #ttl = :ttl`.
+- cloud/lambda/share/shared/sessions.test.ts: rotate-token round-trip case; mock UpdateCommand handler now recognizes `#tk = :t`.
+- cloud/lambda/share/session-rotate.test.ts: 6 cases — happy path (token swap, both peers booted with token-rotated reason, tokenVersion 1→2, peers map cleared), wrong hostKey 401, unknown session 404, missing fields 400, invalid JSON 400, mintedAt-version-fails-after-rotate semantic check, empty-peers-map still rotates.
+- cloud/lib/seeflow-stack.ts: new `ShareSessionRotateFn` via `mkShareLambda`, added to DDB `grantReadWriteData` loop, granted `shareWsApi.grantManageConnections`, registered HTTP route `POST /share/rotate`.
+- cloud/lib/seeflow-stack.share.test.ts: asserts `POST /share/rotate` route + lambda has ShareSessionsTable + ManageConnections grants.
+- bun test (cloud): 165 pass / 0 fail. bun run typecheck (cloud): clean.
+- **Learnings for future iterations:**
+  - `rotateToken` updates `token` via `#tk` (same name used by the `token-index` GSI). DDB allows UpdateCommand on GSI partition-key fields; the GSI re-indexes asynchronously off the new value.
+  - When extending sessions.test.ts mock branches for a new UpdateExpression shape, the `#tk = :t` check must run alongside the other branches so the same `:l`/`:ttl` updates still apply.
+  - Deps-injection pattern extends cleanly: include `newToken: () => string` in the deps shape so tests can pin the minted token without mocking `crypto.randomBytes`.
+  - Pattern for two-step DDB mutation: call `bumpTokenVersion` THEN `rotateToken` — separate atomic updates keep the version + token writes independently observable in tests.
+---
+
+## 2026-06-01 - US-078
+- Implemented host-side audit log writer (createAuditLogger) in /Users/tuongaz/dev/seeflow.
 - Files changed:
-  - apps/studio/src/share/sse-rate-limit.ts (new) — `createRateLimiter({ tokensPerSecond=60, burst=120, maxQueueDepth=burst, onEmit, now?, schedule? })` returning `{ submit, metrics, flush, dispose }`. Continuous refill via `(now-lastRefill)/1000 * rate`, bucket capped at burst. Terminal frames (`node:done`/`node:error`) bypass the bucket and emit immediately. Non-terminals enqueue when no tokens; same-key node:status replace the queued payload (last-wins) and increment `droppedFrames`. Queue overflow drops oldest non-terminal. Drains via an injected `schedule(ms, fn) => cancel` (defaults to setTimeout).
-  - apps/studio/src/share/sse-rate-limit.test.ts (new) — 9 tests covering the PRD acceptance scenarios: burst pass-through, 200-same-key burst → 120 outbound + droppedFrames=80, terminal bypass, last-wins coalescing keeps latest seq, non-status frames do NOT coalesce, queue overflow drops oldest, deferred drain via timer, dispose clears state, flush ignores tokens.
-  - apps/studio/src/share/sse-tap.ts — added optional `opts.rateLimit?: false | Omit<RateLimitOptions, 'onEmit'>` (default-on with PRD values; `false` keeps the legacy synchronous pass-through). Per-event subscriber routes through `limiter.submit(payload)` instead of calling `opts.onEvent` directly; `tap.metrics()` proxies to the limiter; `tap.stop()` disposes it.
-  - apps/studio/src/share/sse-tap.test.ts — two new tap-level tests: `metrics() returns zeros when rate limiting is disabled` and `metrics() proxies to the internal rate limiter when enabled`.
-
-- Verification:
-  - `bun test ./apps/studio/src/share/sse-rate-limit.test.ts` → 9/9 pass
-  - `bun test ./apps/studio/src/share/` → 31/31 pass
-  - `bun test apps/studio/src/share/ apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share-envelope.test.ts apps/studio/src/share-file-*.test.ts apps/studio/src/share-files-manifest.test.ts apps/studio/src/events.test.ts` → 148/148 pass
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK (no schema changes)
-  - Broader `bun test apps/studio/src/` run: 1206/1215 pass with pre-existing watcher.test.ts flakies + 1 `createApp /health` timeout (documented in Codebase Patterns); none introduced by this story.
-
-- Learnings for future iterations:
-  - The rate limiter assumes `now()` is monotonic. Tests freeze `now: () => 0` and inject a synchronous `schedule` (no-op cancel) to make burst behavior deterministic — letting wall-clock drift in even ~50ms refills 3 tokens and lifts the outbound count above the bucket ceiling.
-  - The PRD test "200 frames in 50ms → ≤120 outbound" reads as "submitted within a 50ms window, measure within the window" — I freeze the clock during the burst so refills don't disguise saturation. Don't try to assert ≤burst across an interval that's long enough for the refill to add tokens.
-  - `maxQueueDepth` defaults to `burst`. For tests that rely on multiple distinct queued non-terminal frames (e.g. asserting they DON'T coalesce), set `maxQueueDepth` explicitly above the expected queue length — otherwise the overflow rule drops them before you can observe queueDepth.
-  - The tap defaults rate-limiting ON. Existing share.sse-bridge tests pass because the test setups never exceed burst within a single tick — but if you write a test that submits more than 120 events synchronously and asserts each emits, you must pass `rateLimit: false` or expect a queue.
-  - Wiring is local to the tap; share.ts is untouched in this story. Backpressure (per-peer queues) and snapshot-on-resync are scheduled for US-072 and US-069 respectively.
-  - When testing schedule/cancel injection, capture the callback via an object box (`const ref: { value: ... | null } = { value: null }`) — TS narrows `let pending: T | null = null` to `null` for the outer scope even when writes occur inside the closure.
-
----
-
-## 2026-06-01 - US-067
-- Wired the SSE tap from US-066 into the live share controller. `apps/studio/src/share.ts` now owns a single per-session `SseTap` instance: on idle->active, it builds the tap with `flowIds: () => deps.flowIdsForBroadcast()` + `onEvent: payload => broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }))`, then subscribes to the sentinel `__registry__` flowId on the EventBus so a `registry:reload` event triggers `tap.refreshFlows()`. Teardown stops the tap and drops the registry listener cleanly. The old per-flow eventBus subscription loop was removed.
-- The outbound payload is now the SsePayloadSchema-shaped object (`{ t, flowId, ts, data, seq }`) instead of the legacy unwrapped StudioEvent. Old tests in `share.test.ts` that asserted the legacy `{type, flowId, payload, ts}` shape were removed; a dedicated `apps/studio/src/share.sse-bridge.test.ts` covers the new behavior.
-- Files changed:
-  - apps/studio/src/share.ts — added `SseTap` import; replaced `eventUnsubscribes: (() => void)[]` field with `sseTap: SseTap | null` + `registryUnsubscribe: (() => void) | null`; rewrote `subscribeToEventBus()` to instantiate the tap and listen on `__registry__`; rewrote `unsubscribeFromEventBus()` to stop the tap + drop the registry listener.
-  - apps/studio/src/share.test.ts — deleted the `createShareController eventBus -> sse bridge` describe block (3 tests with legacy payload shape) + the now-unused `createEventBus` import.
-  - apps/studio/src/share.sse-bridge.test.ts (new) — 6 tests: SsePayloadSchema-valid forwarding of node:running with `from:'host'`, `to:'all'`; drop for flowIds outside `flowIdsForBroadcast()`; monotonic seq across multiple events; `registry:reload` triggers refresh (verified add AND remove); teardown unsubscribes from both flow and `__registry__` channels; WS reconnect cycle does NOT re-emit the buffered ring (asserts no double-emit and seq continuity).
-
-- Verification:
-  - `bun test ./apps/studio/src/share.sse-bridge.test.ts` → 6/6 pass
-  - `bun test apps/studio/src/share-*.test.ts apps/studio/src/share.*.test.ts apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share/ apps/studio/src/events.test.ts` → 222/222 pass
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK
-  - Other studio-src failures observed (watcher.* + 2 createApp `/health` timeouts) are pre-existing flakies documented in the Codebase Patterns section; unrelated to the SSE bridge.
-
-- Learnings for future iterations:
-  - `registry:reload` events are broadcast on the sentinel flowId `__registry__` (see apps/studio/src/api.ts:296 and several other mutator sites). To listen for registry changes via the EventBus, subscribe to that key — there is no broadcast-to-all channel.
-  - When the SSE tap's `onEvent` callback fires, the `transport.isOpen()` / `transport == null` guard already lives inside the default `broadcast` helper at the top of `createShareController`, so the per-event subscriber does NOT need to re-check transport state. Tests that inject `broadcast` directly bypass that guard, which is what `share.sse-bridge.test.ts` relies on.
-  - Old share.test.ts assumed the SSE bridge sent the StudioEvent verbatim as the envelope payload (`{type, flowId, payload, ts}`). The new contract sends the `SsePayload` shape (`{t, flowId, ts, data, seq}`) so peers can Zod-parse against `SsePayloadSchema`. When migrating any consumer code that expected the old shape, switch to `SsePayloadSchema.parse(env.payload)` and read `.t` / `.data` instead of `.type` / `.payload`.
-  - The tap's ring buffer is internal snapshot state, never replayed at the broadcast layer — so on transport reconnect, peers see only events that fire after the WS comes back. The reconnect test in share.sse-bridge.test.ts asserts this explicitly (no double-emit; seq stays monotonic across the reconnect cycle).
-  - Biome's `organizeImports` sorts imports alphabetically, so `./share/sse-frame.ts` must come AFTER `./share.ts` (because '.' < '/'). Run `bun run format && bun run lint` together to catch the sort before commit.
-
----
-
-## 2026-06-01 - US-066
-- Added the SSE-tap module that subscribes to the local EventBus per active flow, mirrors bridged events into a per-flow ring buffer, and exposes a snapshot of last-seen status per node for late-joining peers.
-- Files changed:
-  - apps/studio/src/share/sse-tap.ts (new) — `createSseTap(events, opts)` returning `{ start, stop, refreshFlows, snapshot }`. Per-flow ring buffer (default 50), closure-scoped monotonic `seq`, add/remove subscription diff against `opts.flowIds()` snapshot. Only `node:running`/`node:done`/`node:error`/`node:status` payloads with a string `nodeId` populate the snapshot; `flow:reload` is forwarded but not snapshotted.
-  - apps/studio/src/share/sse-tap.test.ts (new) — 12 tests: initial subscribe, refreshFlows add, refreshFlows remove, idempotent refresh, monotonic seq across flows/types, non-bridged events filtered, ring-buffer cap (observable via snapshot), snapshot last-status-per-node-per-flow, no-nodeId events ignored in snapshot, stop() cleanup, refreshFlows pre-start no-op, idempotent start.
-
-- Verification:
-  - `bun test apps/studio/src/share/sse-tap.test.ts` → 12/12 pass
-  - `bun test apps/studio/src/share/` → 22/22 pass
-  - `bun test apps/studio/src/share-envelope.test.ts apps/studio/src/share*.test.ts` → 193/193 pass
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-
-- Learnings for future iterations:
-  - Biome flags `obj['identifier']` as `useLiteralKeys` even when the OUTER key is bracket-style (e.g. `snap['flow-a']?.['n1']`). Use `snap['flow-a']?.n1` for mixed cases.
-  - With `noUncheckedIndexedAccess`, optional chaining is required between the outer map index and the inner key. `snap['flow-a']?.n1?.t` is the right pattern.
-  - The PRD says the buffer is "keyed by (flowId, t)" — I interpreted this as per-flow ring buffer entries carrying the event type as part of their payload, not a Map keyed by tuple. The cap-at-bufferSize behavior is what matters and is now observable indirectly via snapshot (the LAST event for a node wins regardless of buffer churn).
-  - The seq counter is per-tap-instance, not literally process-wide. That's fine for US-066 because share.ts (US-067) will own a SINGLE tap for the whole studio. If we ever instantiate >1 tap concurrently we'd need to hoist the counter — flagged for the bridge wiring story.
-  - EventBus delivery is synchronous; `bus.broadcast` invokes subscribers in the same tick. Tests can assert on `onEvent` results immediately after `broadcast` without awaiting microtasks.
-
----
-
-## 2026-06-01 - US-065
-- Added the shared SSE envelope payload schema for the live-share bridge.
-- Files changed:
-  - apps/studio/src/share/sse-frame.ts (new) — `SsePayloadSchema`, `SsePayload`, `SseEnvelope`, `SSE_EVENT_TYPES`, `isSseEventType`, `wrapAsSseFrame(event, seq)`. Wrap helper returns `null` for non-bridged StudioEvent types so callers can `.filter()` without try/catch.
-  - apps/studio/src/share/sse-frame.test.ts (new) — 10 tests covering: parse-per-supported-type, unknown-type reject, missing-seq reject, negative ts/seq reject, empty flowId reject, opaque data pass-through, wrap envelope shape, wrap+parse round-trip, null for non-bridged types, isSseEventType narrowing.
-  - seeflow-viewer/src/lib/share-sse-frame.ts (new) — mirror of the studio source-of-truth schema region; comments reference `apps/studio/src/share/sse-frame.ts`.
-  - seeflow-viewer/src/lib/share-sse-frame.test.ts (new) — sibling unit test for the peer-side mirror.
-  - apps/studio/scripts/check-sse-frame-sync.ts (new) — extracts the `// SYNC-WITH-PEER:BEGIN`/`END` region from both files, normalizes whitespace + // and /* */ comments, byte-compares. Walks up to 8 parent dirs to find the sibling repo; soft-passes when absent.
-
-- Verification:
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK
-  - `bun run typecheck` → all 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-  - `bun test apps/studio/src/share/` → 10/10 pass
-  - `bun test apps/studio/src/share-envelope.test.ts apps/studio/src/share*.test.ts` (all share-* suites) → 88/88 pass
-  - Pre-existing watcher.test.ts failures confirmed on HEAD without my changes; unrelated to US-065.
-
-- Learnings for future iterations:
-  - The PRD path spec is `apps/studio/src/share/sse-frame.ts` (subdirectory), not the existing flat `apps/studio/src/share-sse-frame.ts` convention. Followed the PRD path explicitly; both styles now coexist.
-  - `tsconfig` `include` covers `src/`, `test/`, `integration/`, `e2e/` only — scripts/ files run via `bun` directly and are NOT typechecked, so be conservative with types there.
-  - For cross-repo schema sync, use marker-delimited regions (`// SYNC-WITH-PEER:BEGIN`/`END`) so the studio side can carry runtime helpers (here: `StudioEvent` import + `wrapAsSseFrame`) without breaking the comparison.
-  - The seeflow-viewer mirror file LIVES in a separate git repo at `/Users/tuongaz/dev/seeflow-viewer/`. Writes to it don't appear in this worktree's git diff and won't be committed here. The operator must commit + push that repo separately. Future US that "mirrors" anything in seeflow-viewer should plan for the two-repo handoff.
-  - StudioEventType has 7 values; only 5 are bridged to peers. `wrapAsSseFrame` returns `null` for `file:changed` and `registry:reload` rather than throwing, so the bridge loop in US-067 can filter cleanly.
-  - The envelope's `to` for broadcast SSE is `'all'` (string literal), matching the existing peer envelope schema that already allowed `z.union([z.string(), z.literal('host'), z.literal('all')])`.
----
-
-## 2026-06-01 - US-070
-- Added the peer-side SSE-frame handler to `ShareClient` in the sibling seeflow-viewer repo so the WebSocket client recognizes `sse` and `sse-snapshot` envelopes and routes them to a generic studio-event sink. Subsequent stories (US-071) will wire that sink into the canvas `ioAdapter`.
-- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
-  - src/lib/share-client.ts — new public `dispatchSseFrame(envelope)` method; new `on('studio-event', listener)` overload; new `StudioEvent` exported type (peer-side reconstruction of the host's apps/studio/src/events.ts StudioEvent); module-level `extractNodeIdFromSsePayload(data)` helper. Internal state: `sseRouterInstalled` flag (idempotent lazy install on first studio-event subscribe), `studioEventListeners` Set, `lastSseSeq` Map<`${flowId}:${nodeId}`, number>, `gateLiveSseUntilSnapshot` boolean.
-  - src/lib/share-client.sse.test.ts (new) — 11 tests: snapshot replay seeds the sink (3 entries → 3 events); subsequent live node:status with increasing seq updates and emits; stale node:status seq dropped; terminal node:error/node:done with stale seq still apply (terminal wins); per-(flowId, nodeId) seq isolation (same seq across nodes/flows all pass); flow:reload bypasses seq tracking (no nodeId); reconnect drops live frames until sse-snapshot clears gate AND re-seeds seq map; malformed sse/sse-snapshot payloads drop silently.
-  - src/lib/share-sse-frame.ts (US-065 mirror, previously uncommitted) — included in the same commit so the peer mirror lands with its consumer.
-  - src/lib/share-envelope.ts (US-069 mirror, previously uncommitted) — `'sse-snapshot'` enum value, included in the same commit.
-
-- Behavior:
-  - `dispatchSseFrame(env)` is the public entry point. For `sse-snapshot`: validates against `SseSnapshotPayloadSchema`, clears the reconnect gate, walks `flows[flowId][nodeId]`, seeds (or bumps) `lastSseSeq[flowId:nodeId]` to the entry's seq, and emits each entry through `emitStudioEvent`. For `sse`: validates against `SsePayloadSchema`; if `gateLiveSseUntilSnapshot` is true, drops the frame; extracts `data.nodeId` (if string + non-empty); if a non-terminal frame has `seq <= lastSeenSeq[key]`, drops it; otherwise emits and bumps the seq.
-  - Reconnect gate: lazy-installed state listener flips `gateLiveSseUntilSnapshot = true` AND clears `lastSseSeq` on every `closed`/`kicked` state transition. Subsequent live `sse` frames are dropped; the next `sse-snapshot` clears the gate.
-  - StudioEvent shape: `{ type: SseEventType, flowId: string, ts: number, payload: unknown }` — drops the `seq` field used internally for ordering, exposes only the canonical wire-equivalent the canvas's `deriveVisualStatus` path consumes.
-
-- Verification:
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/lib/share-client.sse.test.ts)` → 11/11 pass
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test)` → 279/279 pass
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun run typecheck)` → clean
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK (peer mirror in sync with studio source of truth)
-  - `bun run typecheck` (4 studio workspaces) → clean
-  - Viewer commit landed on `ralph/live-share-phase-6` (seeflow-viewer's existing branch — separate from this repo's worktree branch). Push of that repo is the operator's responsibility.
-
-- Learnings for future iterations:
-  - The seeflow-viewer repo is on `ralph/live-share-phase-6` even though this repo's PRD says phase 7 — the prior US-067..US-069 mirror writes left their files uncommitted in the viewer. US-070 commits all three sets together (US-065 + US-069 + US-070) because they are interdependent — the test file can't compile without the schema files. Future viewer-touching stories should plan to commit the viewer changes alongside the studio commit, or accept the bundled-commit pattern.
-  - The SSE router is installed lazily on the first `on('studio-event', ...)` subscription (matches the node-patched router pattern). If a future story wants the router to be eager (e.g. to count metrics before the first listener attaches), call `ensureSseRouterInstalled()` from the constructor.
-  - `on('frame', ...)` dispatch is invoked for every envelope type, so the SSE router checks `envelope.type === 'sse' || envelope.type === 'sse-snapshot'` and early-returns otherwise. Don't add `'sse'` to `TYPED_FRAME_EVENTS` — those buckets are keyed by `envelope.type`, but the dispatch happens via the generic frame channel inside `dispatchSseFrame` (which is also the public API for tests that need to inject frames synchronously without crossing the WebSocket).
-  - `StudioEvent` (the viewer-side type) deliberately omits `seq` — `seq` is internal sequencing metadata, and exposing it through the sink would let canvas consumers branch on host-internal counters. Keep it `{ type, flowId, ts, payload }` to match the host's existing StudioEvent contract.
-  - Terminal-wins seq override: even when a stale `node:done`/`node:error` arrives, it MUST settle the visual state. Otherwise a reordered terminal could leave the canvas stuck in a running state forever. The implementation does NOT bump `lastSseSeq` for the stale terminal — it just emits — so a later non-terminal with a higher seq would still re-take ownership of seq tracking (very rare in practice but the semantics are precise).
-  - Reconnect detection lives in the state listener. There's no "previously connected" check — on every `closed`/`kicked`, the gate flips on. First connect (`idle` → `connecting` → `authed`) never trips the listener, so the gate stays off until the first disconnect. Live events are processed normally during the initial session — the snapshot just primes badges to match the host's current per-node status.
-  - `extractNodeIdFromSsePayload(data)` is a module-level helper (not a class method) because it's pure and reusable. If a future story needs to extract more SSE payload fields (e.g. `progress` for node:status visualization), keep them as separate module-level helpers rather than methods.
-
----
-
-## 2026-06-01 - US-069
-- Added the `sse-snapshot` replay path so a peer joining mid-session sees the host's current per-node status without waiting for the next live tick. On `presence/join`, the host emits one or more `sse-snapshot` frames addressed to that joiner's connId, carrying a 2-level `flows[flowId][nodeId] = SsePayload` map drawn from the existing `SseTap.snapshot()`. The frame's serialized payload is capped at 256 KB by splitting per-flow into chunks (`chunk: 0..N-1`, `total: N`); single-chunk emits omit the headers.
-- Files changed:
-  - apps/studio/src/share-envelope.ts — added `'sse-snapshot'` to `ENVELOPE_TYPES` (positioned next to `'sse'`).
-  - apps/studio/src/share-envelope.test.ts — new test case validating an `sse-snapshot` envelope with a sample chunked payload.
-  - apps/studio/src/share/sse-frame.ts — added `SseSnapshotPayloadSchema` + `SseSnapshotPayload` inside the SYNC-WITH-PEER region so the peer mirror stays in lockstep.
-  - apps/studio/src/share/sse-frame.test.ts — new describe('SseSnapshotPayloadSchema') covering single + chunked variants, nested SsePayload validation, and negative-bound rejection on `chunk`/`total`.
-  - apps/studio/src/share.ts — exported `SSE_SNAPSHOT_CHUNK_BYTES` + generic `chunkSnapshotByFlow<T>()` helper. Added internal `emitSseSnapshotForPeer(peerConnId)` that reads `sseTap.snapshot()`, chunks it, and broadcasts each chunk addressed to the joiner. Wired it into the presence/join handler after the existing `emitFilesManifestForPeer` call (and AFTER the idempotency guard, so duplicate joins don't re-snapshot).
-  - apps/studio/src/share.sse-snapshot.test.ts (new) — 11 tests: (1) single snapshot frame on join carries valid payload + chunk headers absent for small snapshots, (2) two joiners each get their own addressed frame (never `to: 'all'`), (3) empty tap snapshot emits zero frames, (4) large multi-flow snapshot is chunked with continuous chunk indices + consistent `total` + every flow appears exactly once + each chunk respects the 256 KB cap, (5) per-node entries match SsePayloadSchema, (6) snapshot is suppressed entirely when the eventBus dep is omitted (bridge disabled), (7) duplicate presence/join is idempotent at the snapshot path. Plus 4 direct unit tests on `chunkSnapshotByFlow`: small input, empty input, multi-flow split, oversize single-flow becomes its own chunk.
-  - seeflow-viewer/src/lib/share-envelope.ts — mirror enum addition (`'sse-snapshot'`).
-  - seeflow-viewer/src/lib/share-envelope.test.ts — sibling test for the mirror.
-  - seeflow-viewer/src/lib/share-sse-frame.ts — mirror of `SseSnapshotPayloadSchema` in the SYNC-WITH-PEER region.
-  - seeflow-viewer/src/lib/share-sse-frame.test.ts — sibling tests for the mirror schema.
-
-- Verification:
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK
-  - `bun test apps/studio/src/share.sse-snapshot.test.ts` → 11/11 pass
-  - `bun test apps/studio/src/share/ apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share.sse-snapshot.test.ts apps/studio/src/share.broadcast.test.ts apps/studio/src/share.host-identity.test.ts apps/studio/src/share.rpc.test.ts apps/studio/src/share-envelope.test.ts apps/studio/src/share-audit.test.ts apps/studio/src/share-ratelimit.test.ts apps/studio/src/share-transport.test.ts apps/studio/src/share-rpc-schema.test.ts apps/studio/src/share-files-manifest.test.ts apps/studio/src/share-file-resolver.test.ts apps/studio/src/share-file-request.test.ts apps/studio/src/share-file-upload.test.ts apps/studio/src/events.test.ts` → 249/249 pass
-  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/lib/share-envelope.test.ts src/lib/share-sse-frame.test.ts)` → 14/14 pass
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-
-- Learnings for future iterations:
-  - The PRD references `cloud/lambda/share/shared/envelope.ts` for the relay-side enum literal. There is no `cloud/` directory in this repo — the equivalent is `apps/studio/src/share-envelope.ts` (host) + `seeflow-viewer/src/lib/share-envelope.ts` (peer). The cloud lambda lives in a separate repo not present in this worktree. Future relay-touching stories should update the cloud copy by hand in that other repo.
-  - `chunkSnapshotByFlow` is generic over the node value type. Keeping the generic param lets it accept both the runtime `Record<string, Record<string, SsePayload>>` from the tap AND the loose `Record<string, Record<string, unknown>>` used in the chunking unit tests, without a cast at the call site. Without `<T>` typescript widens the spread `{ ...current, [flowId]: nodes }` to `unknown` and the assignment to `SseSnapshotPayload.flows` (which is typed to `SsePayload`) fails.
-  - Per-frame size cap measurement: I serialize `JSON.stringify({ flows: candidate }).length` rather than just `JSON.stringify(candidate).length` so the chunk/total wrapper overhead is included. The `chunk` and `total` fields themselves cost ~20 bytes — a rounding error against the 256 KB cap, so I don't subtract that overhead. If a future contributor tightens the cap to <1 KB, recompute.
-  - Snapshot emit is positioned AFTER the existing `if (current.peers.some(p => p.peerId === peerId)) return` idempotency guard in `handleFrame`. That means duplicate presence/join (same peerId, same connId) does NOT re-send a snapshot. If a relay ever swaps connIds for the same peerId (e.g. peer reconnects with a new conn), the existing `current.peers.some` check would still suppress — flagged as a possible US-072/US-070 follow-up: re-snapshot on connId churn.
-  - The snapshot frame is suppressed entirely (zero frames emitted) when `sseTap` is null — i.e. the host was started without `eventBus`/`flowIdsForBroadcast`. This matches the existing bridge behavior (no live SSE either) and keeps tests that don't care about the bridge dep-free.
-  - When emitting frames addressed to a specific peer, use `env.from` (the conn id) NOT `peerId`. The relay routes on conn id; `peerId` is the application-layer identity. The existing `emitFilesManifestForPeer` follows the same pattern.
-  - The check-sse-frame-sync script normalizes whitespace + comments inside the SYNC-WITH-PEER region. The added `SseSnapshotPayloadSchema` block (and its surrounding doc comment) passes the check because both files received an identical copy. Future schema additions inside that region MUST land in both files in the same change to keep the check green.
-
----
-
-## 2026-06-01 - US-072
-- Added per-peer outbound SSE queue with drop-on-slow-consumer to the host share controller. Slow peers can no longer back-pressure the host event loop or stall other peers — each connected peer gets a bounded async queue (default 256 frames) that decouples the synchronous SSE-tap producer from the per-peer WebSocket send path.
-- Files changed:
-  - apps/studio/src/share/sse-outbound-queue.ts (new) — `createPeerSseQueue({ peerConnId, send, maxFrames=256, onResyncTriggered, dropResyncThreshold=100, dropResyncWindowMs=60000, now })`. Synchronous `enqueue(payload)`, single-concurrent async drain loop, FIFO eviction. Eviction policy: non-terminal new evicts oldest non-terminal (or drops the new one if queue is all-terminal); terminal new evicts oldest regardless. Metrics: `queueDepth` / `droppedFrames` / `lastSendMs` (duration in ms of the last awaited send). Rolling-window drop counter pruned via timestamp shift; `onResyncTriggered` fires when window count > threshold (counter reset after firing).
-  - apps/studio/src/share/sse-outbound-queue.test.ts (new) — 10 tests: synchronous enqueue under slow send, cap + oldest-non-terminal eviction, terminal-on-full evicts oldest regardless, full-of-terminals drops new non-terminal, FIFO send order, lastSendMs measurement, onResyncTriggered fires past threshold, rolling-window timestamp prune, dispose stops drain, post-dispose enqueue is no-op.
-  - apps/studio/src/share.ts — added `outboundSseSend` / `outboundSseMaxFrames` / `outboundSseDropResyncWindowMs` / `outboundSseDropResyncThreshold` / `sseTapRateLimit` deps. Extended `PeerSummary` with optional `outboundSse: PeerSseQueueMetrics`. New `peerSseQueues: Map<connId, PeerSseQueue>` lifecycle-managed alongside `connPeers` (created on presence/join, disposed on presence/leave + teardown). Rewrote the SSE tap's `onEvent` to fan out per-peer through the queues when at least one peer is known, falling back to the legacy `to: 'all'` broadcast when `peerSseQueues.size === 0` (so the existing share.sse-bridge tests keep passing). `state()` + `subscribe()` enrich active state's peers via `enrichWithSseMetrics(s)` so metrics surface on the `/api/share/state` SSE stream. On per-peer drop threshold the queue fires `emitSseSnapshotForPeer(connId)` to resync that peer's canvas.
-  - apps/studio/src/share.backpressure.test.ts (new) — 3 tests: 500-frame burst on a slow (5ms-per-frame) stub against a 32-frame cap finishes the producer in <50ms, `droppedFrames > 0`, terminal `node:done` is delivered, oldest queued frames (steps 100/200) are evicted while the tail (step 498) survives; per-peer queue is created on presence/join AND disposed on presence/leave (events fall back to `to: 'all'` broadcast post-leave); drop-threshold trigger emits a fresh `sse-snapshot` addressed to the slow peer's connId.
-
-- Verification:
-  - `bun test apps/studio/src/share/sse-outbound-queue.test.ts` → 10/10 pass
-  - `bun test apps/studio/src/share.backpressure.test.ts` → 3/3 pass
-  - `bun test apps/studio/src/share*.test.ts apps/studio/src/share/ apps/studio/src/events.test.ts` → 262/262 pass (legacy `to: 'all'` SSE bridge tests still green because the fallback fires when no peers are known)
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK (no schema changes)
-
-- Learnings for future iterations:
-  - The drain loop runs `void drain()` after every enqueue, but drain is idempotent (`if (draining) return`) so the active loop just keeps draining the new tail. Crucially, the FIRST enqueue starts drain synchronously and drain SHIFTS the first frame BEFORE awaiting `opts.send` — so by the time the caller's next statement runs, the head of the queue is already "in-flight" (not counted in `queueDepth`). Test expectations must account for this: with maxFrames=4 and 10 burst enqueues, `queueDepth=4`, `droppedFrames=5` (10 - 1 in-flight - 4 in queue = 5 dropped), NOT 6.
-  - The legacy `to: 'all'` SSE broadcast remains the fan-out path when `peerSseQueues.size === 0`. This keeps the existing US-067 share.sse-bridge tests passing without modification — those tests broadcast SSE events with no peers registered. The trade-off is a small dual-path branch in the tap's `onEvent`. Don't remove it without first migrating all such tests to register a peer via presence/join first.
-  - The US-068 SSE tap rate limiter (60/sec burst 120 default) is UPSTREAM of the per-peer queues. Bursts > 120 within the bucket window are absorbed by the tap before reaching the queue. For backpressure tests that need to flood the queue, pass `sseTapRateLimit: false` to disable the tap-level coalescer. Production traffic still benefits from BOTH layers — the tap protects against `node:status` storms across all peers, the queue protects each peer's specific consumer speed.
-  - `lastSendMs` is the DURATION of the last awaited send in ms (not a timestamp). The "slow peer" warning in the UI can flag this rising above some threshold (e.g. ~250ms+) as a signal of network saturation on the peer end. Don't confuse with "ts since last send" naming patterns elsewhere.
-  - On rolling-window drop pruning: each drop pushes `now()` into `dropTimestamps`; pruning shifts entries older than `now - dropWindowMs`. The threshold check is strict-greater-than (`> dropThreshold`), so threshold=5 fires on the 6th drop within the window. After firing, the array is cleared so the next firing requires another full window of drops — prevents thrash.
-  - `enrichWithSseMetrics` is invoked on EVERY state() call AND every subscriber dispatch in setState — that's intentional. Metrics are live (queueDepth/droppedFrames update on every enqueue), so a subscriber reading via /api/share/state's initial subscribe callback gets a fresh snapshot, not a stale one frozen at the last transition.
-  - When testing FIFO drop policy, the very first frame (step 0) often appears in the sent list because drain locked it in-flight before any drops occurred. Assert on the ABSENCE of early-queued frames (e.g. step 100, step 200) NOT the presence of "first sent step > 0". The in-flight slot is outside the eviction policy's reach.
-  - `Map<connId, PeerSseQueue>` is keyed by connId (not peerId) to stay in lockstep with `connPeers` — the relay routes on connId. `peerConnIds` (peerId -> connId) is the inverse for kick() / metric enrichment paths that start from peerId.
----
-
-## 2026-06-01 - US-073
-- Added the end-to-end integration test that boots the studio with the SSE share bridge enabled, points it at an in-process FakeRelay WebSocket, and asserts: (1) `events.broadcast({type:'node:running'|'node:done'|'node:error', flowId, payload:{nodeId}})` reaches the peer in order as three `sse` envelopes with payloads parseable by `SsePayloadSchema` and monotonic `seq`; (2) on a late join (peer connects + presence/join AFTER several events fire), the very next outbound frame the peer receives is `sse-snapshot` addressed to that peer's connId, carrying the latest-status-per-node entries (`n1 → node:done`, `n2 → node:running`).
-- Files changed:
-  - apps/studio/integration/share-sse-bridge.it.ts (new) — 2 tests (~330 lines). FakeRelay reuses the pattern from `share-host-peer.it.ts`: a `Bun.serve` WebSocket that issues sessions via `POST /api/share/sessions`, authenticates `auth-host` + `auth-peer`, and routes envelopes by `to` with `'all'`/`'host'`/connId targeting. Studio fixture runs `createApp` + `Bun.serve({ port: 0 })` with `disableWatcher: true` and an injected `staticRoot: '__nosuch_static__'` so the SPA bundle requirement is skipped. Test 1 connects a peer that auths but does NOT presence/join — events flow via the legacy `to: 'all'` broadcast path which the relay still fans out to authed peers. Test 2 fires events BEFORE the peer joins to seed the SseTap snapshot, then connects + joins, then awaits the `sse-snapshot` frame on the peer.
-- Verification:
-  - `bun test ./apps/studio/integration/share-sse-bridge.it.ts` → 2/2 pass
-  - `bun run test:it:bun` glob already covers `./apps/studio/integration/*.it.ts`, so no script edit was needed (confirmed file picks up under the orchestrator).
-  - `bun run typecheck` → 4 workspaces clean
-  - `bun run format && bun run lint` → clean
-  - Pre-existing integration failures (`share-host-peer.it.ts` test 3 still asserts the old `payload.type` shape from before US-067; `share-rpc-schema-sync.it.ts` shows cross-repo schema drift; `share-co-edit.it.ts` US-044 test) are unchanged by this story.
-
-- Learnings for future iterations:
-  - The outbound `sse` envelope's payload is the `SsePayload` shape (`{t, flowId, ts, data, seq}`) — NOT the legacy unwrapped `StudioEvent` (`{type, flowId, payload, ts}`). The existing `share-host-peer.it.ts` test 3 still asserts the legacy shape and has been failing since US-067 (pre-existing). Any new SSE-bridge integration test must use `SsePayloadSchema.parse(env.payload)` and read `.t`/`.data`.
-  - The bridge falls back to `{to: 'all'}` broadcast when `peerSseQueues` is empty (i.e., no presence/join'd peer yet). The relay still fans `'all'` out to every authed peer in the session — that's how test 1 sees the events without ever sending presence/join. Useful when you want to test the bridge wire shape without the per-peer queue surface.
-  - On presence/join, the host's handleFrame synchronously calls `emitSseSnapshotForPeer(env.from)` AFTER (in source order) `void emitFilesManifestForPeer(env.from)`. But the latter is `async` and yields at its first `await filesManifestReady`, so the `sse-snapshot` frame is broadcast SYNCHRONOUSLY first; `files-manifest` lands in a subsequent microtask. The "very next outbound frame" requirement of the AC is satisfied.
-  - The FakeRelay rewrites `env.from` to the sender's server-assigned connId at the route step. So the snapshot's `to` field will match the peer's relay-assigned connId (e.g. `conn-N`), NOT the value the peer passed in its `auth-peer` frame's `from`. Tests should assert `to !== 'all' && to !== 'host'` + `typeof to === 'string'` rather than pinning a specific connId.
-  - The `test:it:bun` script at the repo root globs `./apps/studio/integration/*.it.ts` — new integration tests are discovered automatically. No package.json edit needed for new files.
-  - The integration test bypasses the SPA bundle freshness check that the orchestrator (`apps/studio/scripts/test-integration.ts`) enforces, because it goes through `bun run test:it:bun` directly. When wired into the full orchestrator run, ensure `apps/studio/dist/web/index.html` is fresh against canvas sources, or the orchestrator will rebuild before the suite starts.
-  - During this run, an accidental `git stash pop` (run as part of a "verify failure pre-existence" check) brought down an unrelated prior-supervisor stash (`stash@{0}: pre-phase-4 dirt`) with merge conflicts on `apps/web/src/App.tsx` + `packages/canvas/src/index.ts`. Recovery was `git reset --hard HEAD` (preserves untracked) + the stash remained in `stash@{0}` for the supervisor to revisit. Lesson: never `git stash pop` inside the Ralph loop unless you stashed in the same session — Ralph supervisors keep "to-revisit" entries at the top of the stash list and an inadvertent pop will look like local edits to be cleaned up.
-
----
-
-## 2026-06-01 - US-074
-- Added apps/studio/e2e/share-sse-live.e2e.ts — Playwright e2e for the live-share SSE bridge end-to-end against a real peer SPA. Two browser contexts (host studio + viewer dist) talk through an in-process FakeRelay; the host clicks the PlayButton on a custom-registered `order-pipeline`-shaped flow whose node IDs match the demo router's emit IDs, the demo router emits `node:running` → `node:done`, the SSE bridge wraps as `sse` envelopes, the relay fans out, and the peer canvas's PlayButton flips `[data-status]` from `active` → `success`. A second case opens a fresh peer AFTER the host's play has completed and asserts the first render shows `success` directly via the sse-snapshot replay path (US-069).
-
-- Files added (studio repo):
-  - apps/studio/e2e/share-sse-live.e2e.ts — single file containing the FakeRelay (Bun.serve HTTP + WS implementing POST /api/share/sessions, POST /api/share/join, and envelope routing), PeerSpaServer (Bun.serve static for the viewer dist with SPA fallback so /share/<token> resolves to index.html), the per-test flow registration helper, the viewer-API → relay redirect via `context.route('**/seeflow.dev/api/share/**', …)`, two `test()` cases, and a single suite-level `test.beforeAll` skip-gate.
-
-- Soft-skip semantics (matches `share-rpc-schema-sync.it.ts`):
-  - Resolves the viewer dist via SEEFLOW_VIEWER_DIST → sibling `seeflow-viewer/dist` → `/Users/tuongaz/dev/seeflow-viewer/dist`.
-  - Skips when viewer dist is missing (Docker / CI without viewer mounted).
-  - Skips when `apps/studio/dist/web/index.html` is missing (running playwright directly without rebuilding the SPA). `bun run test:it:e2e` always builds it first via the integration orchestrator.
-  - Playwright `test.skip(condition, reason)` from inside `beforeAll` cascades to every test in the describe, and skipped tests count as passing for suite exit status.
-
-- Verification:
-  - `bun run typecheck` — 4 workspaces clean.
-  - `bun run format && bun run lint` — clean.
-  - `bun test` (root) — 2852 pass / 1 skip / 0 fail.
-  - `bun apps/studio/node_modules/.bin/playwright test --config=apps/studio/e2e/playwright.config.ts apps/studio/e2e/share-sse-live.e2e.ts` with SEEFLOW_VIEWER_DIST=/nonexistent → 2 skipped (skip-gate fires as expected).
-  - Under maintainer-local run (`bun run --filter @seeflow/web build && bun run test:it:e2e`) the tests actually execute; runtime validation of the chained DOM assertion is left to the maintainer because (a) the studio web bundle build takes minutes and the Ralph iteration shouldn't gate on it, and (b) the test exercises 6 long-lived servers + 2 browser contexts in concert which is unreliable to dry-run from a Ralph harness.
-
-- Learnings for future iterations:
-  - The studio's `order-pipeline` seeded example does NOT emit visual updates from its PlayButton because the example's flow.json uses opaque `node-XKIyds0TDg`-style IDs while `apps/studio/src/demo.ts` emits status events for hardcoded IDs `post-orders` / `inventory-service` / `payment-service` / `fulfillment-service`. Tests that want to observe demo.ts events on the canvas MUST register a custom flow whose node IDs match those literals. Don't rely on `seedExamples`-installed order-pipeline for visual-status work.
-  - The viewer SPA (sibling repo) hardcodes `https://seeflow.dev` as its share API base URL in `src/lib/share-api.ts`. No env override exists. Tests must intercept at the Playwright layer via `context.route('**/seeflow.dev/api/share/**', …)` and forward to the local fake relay. `page.route` works too but context-level scopes to every page in the context, which is what we want here.
-  - Production peer auth sends `{ peerJwt, displayName }` in the `auth-peer` envelope. The existing in-process test relay in `share-host-peer.it.ts` only handles the legacy `{ token, displayName }` shape. A FakeRelay shared by both audiences needs to accept BOTH shapes: resolve peerJwt → sessionId via an in-memory map populated in `/api/share/join`, or fall back to token lookup. Future test relays should converge on this dual-acceptance pattern.
-  - Style schemas reject `version` in their root. When manually writing `style.json` for a custom flow (no `splitFlow` helper), use `{ nodes: { <id>: { position: ... } } }` — no version field. The on-disk style schema is intentionally version-less.
-  - `apps/studio/scripts/test-integration.ts` rebuilds `apps/studio/dist/web/index.html` when stale, but running `playwright test` directly does not. Tests that depend on the SPA being served should skip-gate on `existsSync(STUDIO_DIR/dist/web/index.html)` so they fail-soft when invoked outside the orchestrator.
-  - The Playwright runner here is invoked as `bun playwright …` because the project's Bun-based imports rely on `import.meta.dir` (Bun-only). Invoking the playwright CLI directly with Node (the bare bin shebang) throws at module load on `studio-harness.ts:16`.
+  - apps/studio/src/share-audit.ts: renamed existing `AuditEntry` -> `FrameAuditEntry` (callers in share.ts / share.test.ts updated). Added new US-078 `AuditEntry` interface (`{ts, peerId, displayName, kind, op?, reason?, details?}`) plus `AuditKind` union (`rpc-accept|rpc-reject|kick|rotate|kill-switch|host-start|host-stop|peer-join|peer-leave`). Added `createAuditLogger(sessionId, root?)` returning `{append, list, close}`. `append`: auto-stamps `ts`, writes one JSON line via `fs/promises.appendFile` (kernel O_APPEND), with an in-process per-file Promise chain so concurrent callers can't interleave. `list({limit=200, cursor=0})` reads file via `readFile`, walks newline-delimited lines from the byte offset, returns up to `limit` entries plus `nextCursor` (byte offset to resume, null on EOF). `close()` waits for the in-flight append chain. `~/.seeflow/share-history/` default root via `homedir()`; per-call validation reuses existing `isSafeSessionId`.
+  - apps/studio/src/share-audit.test.ts: new `createAuditLogger` describe block — 7 cases: append+ts auto-stamp; recursive mkdir; list returns empty on missing file; 1000 appends -> 5 pages of 200 (cursor pagination); default limit 200; 10x20 concurrent appends preserve all 200 entries with no partial-line corruption; rejects unsafe sessionIds.
+  - apps/studio/src/share.ts: import + `audit(entry)` signature switched from `AuditEntry` to `FrameAuditEntry`.
+  - apps/studio/src/share.test.ts: same rename for fixtures.
+- bun test: 2859 pass / 1 skip / 0 fail across 167 files. bun run typecheck clean. bun run lint clean.
+- **Learnings for future iterations:**
+  - The existing `share-audit.ts` already housed THREE entry shapes (frame, rpc, file-upload). US-078 introduces a FOURTH on the same JSONL file (kind-based). Readers must treat each line as the union — there is no per-file schema discriminator beyond the field shape.
+  - To avoid the name clash, rename existing `AuditEntry` -> `FrameAuditEntry` (3 callers: share.ts import, share.ts `audit` fn arg, share.test.ts `AuditCapture` type + entries arrays). Don't rename `AuditLog/AuditLogOpts/createAuditLog` since they don't conflict.
+  - Pattern for atomic per-file append serialization in Bun: `const prev = map.get(key) ?? Promise.resolve(); const task = prev.then(() => appendFile(...)); map.set(key, task.then(()=>undefined, ()=>undefined)); await task;` — the lock-map promise must NEVER reject (subsequent appenders chain off it) but the inner `task` does propagate errors to the caller. Stay away from a single chain that rejects — one bad write would poison every subsequent append.
+  - Biome's import-sorting rule fires on type-only imports too; keep `import type { A, B, C }` alphabetical within the brace group (same as value imports).
+  - `bun test` (default) runs all `*.test.ts` across the workspace from repo root — useful for cross-package safety net. Integration `.it.ts` files are NOT picked up (need `bun run test:it:bun`).
 ---

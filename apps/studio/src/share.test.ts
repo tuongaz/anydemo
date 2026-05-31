@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import type { AuditEntry, AuditLog, AuditLogOpts } from './share-audit.ts';
+import type { AuditLog, AuditLogOpts, FrameAuditEntry } from './share-audit.ts';
 import type { Envelope } from './share-envelope.ts';
 import type { RateLimitResult, RateLimiter } from './share-ratelimit.ts';
 import type { ShareTransport, ShareTransportOpts, ShareTransportState } from './share-transport.ts';
@@ -20,7 +20,7 @@ const baseDeps = {
 };
 
 interface AuditCapture {
-  entries: AuditEntry[];
+  entries: FrameAuditEntry[];
   closed: boolean;
   factory: (opts: AuditLogOpts) => AuditLog;
   capturedDir: () => string | null;
@@ -28,7 +28,7 @@ interface AuditCapture {
 }
 
 function makeAuditCapture(): AuditCapture {
-  const entries: AuditEntry[] = [];
+  const entries: FrameAuditEntry[] = [];
   let dir: string | null = null;
   let sessionId: string | null = null;
   const cap: AuditCapture = {

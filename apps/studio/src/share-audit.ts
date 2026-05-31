@@ -8,13 +8,19 @@
  */
 
 import { appendFileSync, mkdirSync } from 'node:fs';
+import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { Envelope } from './share-envelope.ts';
 
 export type AuditVerdict = 'accept' | 'reject';
 
-export interface AuditEntry {
+/**
+ * Per-frame audit entry written by the WS message dispatcher. Coexists with
+ * `RpcAuditEntry`, `FileUploadAuditEntry`, and `AuditEntry` (the US-078 shape)
+ * on the same JSONL file; readers should treat each line as the union.
+ */
+export interface FrameAuditEntry {
   ts: number;
   peerId: string;
   displayName: string;
@@ -24,7 +30,7 @@ export interface AuditEntry {
 }
 
 export interface AuditLog {
-  append(entry: AuditEntry): void;
+  append(entry: FrameAuditEntry): void;
   close(): Promise<void>;
 }
 
@@ -142,4 +148,120 @@ export function createAuditLog(opts: AuditLogOpts): AuditLog {
       // future flush logic.
     },
   };
+}
+
+/**
+ * Phase-8 audit shape covering RPCs, kicks, rotations, the kill-switch, plus
+ * host start/stop and peer join/leave. Coexists on disk with `FrameAuditEntry`,
+ * `RpcAuditEntry`, and `FileUploadAuditEntry` — readers should tolerate the
+ * union per-line.
+ */
+export type AuditKind =
+  | 'rpc-accept'
+  | 'rpc-reject'
+  | 'kick'
+  | 'rotate'
+  | 'kill-switch'
+  | 'host-start'
+  | 'host-stop'
+  | 'peer-join'
+  | 'peer-leave';
+
+export interface AuditEntry {
+  ts: number;
+  peerId: string | null;
+  displayName: string | null;
+  kind: AuditKind;
+  op?: string;
+  reason?: string;
+  details?: Record<string, unknown>;
+}
+
+export interface AuditLogger {
+  append(entry: Omit<AuditEntry, 'ts'>): Promise<void>;
+  list(opts?: {
+    limit?: number;
+    cursor?: number;
+  }): Promise<{ entries: AuditEntry[]; nextCursor: number | null }>;
+  close(): Promise<void>;
+}
+
+const auditLockChains = new Map<string, Promise<void>>();
+
+const defaultRoot = (): string => join(homedir(), '.seeflow', 'share-history');
+
+/**
+ * Build a per-session audit logger backed by `${root}/${sessionId}.jsonl`.
+ * `append` serializes inside-process per file so 10+ concurrent callers can't
+ * interleave partial lines; the kernel-level O_APPEND on `fs.appendFile` keeps
+ * cross-process writes safe up to PIPE_BUF. `list` paginates by byte offset so
+ * callers can resume from `nextCursor` without re-parsing what they've seen.
+ */
+export function createAuditLogger(sessionId: string, root?: string): AuditLogger {
+  if (!isSafeSessionId(sessionId)) {
+    throw new Error(`invalid sessionId: ${JSON.stringify(sessionId)}`);
+  }
+  const dir = root ?? defaultRoot();
+  const filePath = join(dir, `${sessionId}.jsonl`);
+  let dirReady = false;
+
+  const ensureDir = async (): Promise<void> => {
+    if (dirReady) return;
+    await mkdir(dir, { recursive: true });
+    dirReady = true;
+  };
+
+  const append = async (entry: Omit<AuditEntry, 'ts'>): Promise<void> => {
+    await ensureDir();
+    const full: AuditEntry = { ...entry, ts: Date.now() };
+    const line = `${JSON.stringify(full)}\n`;
+    const prev = auditLockChains.get(filePath) ?? Promise.resolve();
+    const task = prev.then(() => appendFile(filePath, line));
+    auditLockChains.set(
+      filePath,
+      task.then(
+        () => undefined,
+        () => undefined,
+      ),
+    );
+    await task;
+  };
+
+  const list = async (
+    opts: { limit?: number; cursor?: number } = {},
+  ): Promise<{ entries: AuditEntry[]; nextCursor: number | null }> => {
+    const limit = opts.limit ?? 200;
+    const cursor = opts.cursor ?? 0;
+    let buf: Buffer;
+    try {
+      buf = await readFile(filePath);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code;
+      if (code === 'ENOENT') return { entries: [], nextCursor: null };
+      throw err;
+    }
+    const entries: AuditEntry[] = [];
+    let offset = cursor < 0 ? 0 : cursor;
+    while (offset < buf.length && entries.length < limit) {
+      const nl = buf.indexOf(0x0a, offset);
+      if (nl === -1) break;
+      const line = buf.subarray(offset, nl).toString('utf8');
+      offset = nl + 1;
+      if (line.length === 0) continue;
+      try {
+        entries.push(JSON.parse(line) as AuditEntry);
+      } catch {
+        // Skip corrupted line; advance past it so list() stays monotonic.
+      }
+    }
+    const nextCursor = offset >= buf.length ? null : offset;
+    return { entries, nextCursor };
+  };
+
+  const close = async (): Promise<void> => {
+    const chain = auditLockChains.get(filePath);
+    if (chain) await chain;
+  };
+
+  return { append, list, close };
 }

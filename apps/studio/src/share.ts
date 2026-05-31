@@ -35,9 +35,9 @@ import {
   reorderNodeImpl,
 } from './operations.ts';
 import {
-  type AuditEntry,
   type AuditLog,
   type AuditLogOpts,
+  type FrameAuditEntry,
   type RpcAuditEntry,
   appendShareAudit,
   createAuditLog,
@@ -723,7 +723,7 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
-  const audit = (entry: AuditEntry) => {
+  const audit = (entry: FrameAuditEntry) => {
     if (!auditLog) return;
     try {
       auditLog.append(entry);
