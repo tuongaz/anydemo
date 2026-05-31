@@ -75,8 +75,8 @@
         "Tests pass"
       ],
       "priority": 4,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added apps/studio/src/share/sse-rate-limit.ts with createRateLimiter({ tokensPerSecond=60, burst=120, maxQueueDepth=burst, onEmit, now?, schedule? }) returning { submit, metrics, flush, dispose }. Token bucket refills continuously; non-terminal frames consume one token, terminal events (node:done/error) bypass the bucket. Coalescing on same (flowId,nodeId,'node:status'): the queued payload is replaced and droppedFrames++. Queue-overflow drops oldest non-terminal and droppedFrames++. Wired into sse-tap.ts via opts.rateLimit (default-on with PRD values; pass false to disable); tap.metrics() proxies to the limiter and returns zeros when disabled. tap.stop() disposes the limiter. Tests in apps/studio/src/share/sse-rate-limit.test.ts (9 cases): burst pass-through, 200 same-key frames in instant -> exactly 120 outbound + droppedFrames=80, terminal-frames bypass, last-wins coalescing keeps seq=3 latest, non-status frames do NOT coalesce, queue overflow drops oldest, queued frames drain when scheduled timer fires, dispose clears state, flush drains regardless of tokens. sse-tap.test.ts gained two integration tests (metrics() returns zeros when disabled; metrics() proxies to the internal limiter). All 148 share-related + events tests pass."
     },
     {
       "id": "US-069",

@@ -10,6 +10,34 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 - Bun directory test discovery skips `*.it.ts`. Use `bun test src/...` for unit + share tests; `bun run test:it:bun` for integration.
 - `bun run format` must run BEFORE `bun run lint` (Biome).
 - `apps/studio/src/watcher.test.ts` has pre-existing flaky fs-watching failures unrelated to share work — ignore in CI gating unless you touched watcher code.
+- TypeScript narrows `let x: T | null = null` to `null` for the surrounding scope even when later writes happen inside injected callbacks. When testing schedule/cancel injection, capture the value via an object box (`const ref: { value: T | null } = { value: null }`) instead of a bare `let`.
+
+---
+
+## 2026-06-01 - US-068
+- Added the token-bucket rate limiter + per-(flowId, nodeId) coalescer that protects the SSE bridge from `node:status` storms saturating peer browsers.
+- Files changed:
+  - apps/studio/src/share/sse-rate-limit.ts (new) — `createRateLimiter({ tokensPerSecond=60, burst=120, maxQueueDepth=burst, onEmit, now?, schedule? })` returning `{ submit, metrics, flush, dispose }`. Continuous refill via `(now-lastRefill)/1000 * rate`, bucket capped at burst. Terminal frames (`node:done`/`node:error`) bypass the bucket and emit immediately. Non-terminals enqueue when no tokens; same-key node:status replace the queued payload (last-wins) and increment `droppedFrames`. Queue overflow drops oldest non-terminal. Drains via an injected `schedule(ms, fn) => cancel` (defaults to setTimeout).
+  - apps/studio/src/share/sse-rate-limit.test.ts (new) — 9 tests covering the PRD acceptance scenarios: burst pass-through, 200-same-key burst → 120 outbound + droppedFrames=80, terminal bypass, last-wins coalescing keeps latest seq, non-status frames do NOT coalesce, queue overflow drops oldest, deferred drain via timer, dispose clears state, flush ignores tokens.
+  - apps/studio/src/share/sse-tap.ts — added optional `opts.rateLimit?: false | Omit<RateLimitOptions, 'onEmit'>` (default-on with PRD values; `false` keeps the legacy synchronous pass-through). Per-event subscriber routes through `limiter.submit(payload)` instead of calling `opts.onEvent` directly; `tap.metrics()` proxies to the limiter; `tap.stop()` disposes it.
+  - apps/studio/src/share/sse-tap.test.ts — two new tap-level tests: `metrics() returns zeros when rate limiting is disabled` and `metrics() proxies to the internal rate limiter when enabled`.
+
+- Verification:
+  - `bun test ./apps/studio/src/share/sse-rate-limit.test.ts` → 9/9 pass
+  - `bun test ./apps/studio/src/share/` → 31/31 pass
+  - `bun test apps/studio/src/share/ apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share-envelope.test.ts apps/studio/src/share-file-*.test.ts apps/studio/src/share-files-manifest.test.ts apps/studio/src/events.test.ts` → 148/148 pass
+  - `bun run typecheck` → 4 workspaces clean
+  - `bun run format && bun run lint` → clean
+  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK (no schema changes)
+  - Broader `bun test apps/studio/src/` run: 1206/1215 pass with pre-existing watcher.test.ts flakies + 1 `createApp /health` timeout (documented in Codebase Patterns); none introduced by this story.
+
+- Learnings for future iterations:
+  - The rate limiter assumes `now()` is monotonic. Tests freeze `now: () => 0` and inject a synchronous `schedule` (no-op cancel) to make burst behavior deterministic — letting wall-clock drift in even ~50ms refills 3 tokens and lifts the outbound count above the bucket ceiling.
+  - The PRD test "200 frames in 50ms → ≤120 outbound" reads as "submitted within a 50ms window, measure within the window" — I freeze the clock during the burst so refills don't disguise saturation. Don't try to assert ≤burst across an interval that's long enough for the refill to add tokens.
+  - `maxQueueDepth` defaults to `burst`. For tests that rely on multiple distinct queued non-terminal frames (e.g. asserting they DON'T coalesce), set `maxQueueDepth` explicitly above the expected queue length — otherwise the overflow rule drops them before you can observe queueDepth.
+  - The tap defaults rate-limiting ON. Existing share.sse-bridge tests pass because the test setups never exceed burst within a single tick — but if you write a test that submits more than 120 events synchronously and asserts each emits, you must pass `rateLimit: false` or expect a queue.
+  - Wiring is local to the tap; share.ts is untouched in this story. Backpressure (per-peer queues) and snapshot-on-resync are scheduled for US-072 and US-069 respectively.
+  - When testing schedule/cancel injection, capture the callback via an object box (`const ref: { value: ... | null } = { value: null }`) — TS narrows `let pending: T | null = null` to `null` for the outer scope even when writes occur inside the closure.
 
 ---
 

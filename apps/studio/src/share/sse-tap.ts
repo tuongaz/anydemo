@@ -12,14 +12,26 @@
 
 import type { EventBus, StudioEvent } from '../events.ts';
 import { type SsePayload, isSseEventType } from './sse-frame.ts';
+import {
+  type RateLimitMetrics,
+  type RateLimitOptions,
+  type RateLimiter,
+  createRateLimiter,
+} from './sse-rate-limit.ts';
 
 export interface SseTapOptions {
   /** Called on every refresh to compute the desired subscription set. */
   flowIds: () => string[];
-  /** Invoked synchronously with each bridged event's payload. */
+  /** Invoked synchronously with each bridged event's payload (post-rate-limit). */
   onEvent: (frame: SsePayload) => void;
   /** Per-flow ring-buffer cap; defaults to 50. */
   bufferSize?: number;
+  /**
+   * Token-bucket rate limit + coalescing applied between the EventBus and
+   * `onEvent`. Pass `false` to disable (frames forwarded synchronously).
+   * Defaults to PRD-spec values: 60 frames/sec sustained, burst 120.
+   */
+  rateLimit?: false | Omit<RateLimitOptions, 'onEmit'>;
 }
 
 export interface SseTap {
@@ -32,6 +44,8 @@ export interface SseTap {
    * event types (`node:running`/`node:done`/`node:error`/`node:status`).
    */
   snapshot(): Record<string, Record<string, SsePayload>>;
+  /** Rate-limit metrics; zeros when rate limiting is disabled. */
+  metrics(): RateLimitMetrics;
 }
 
 const DEFAULT_BUFFER_SIZE = 50;
@@ -57,6 +71,11 @@ export function createSseTap(events: EventBus, opts: SseTapOptions): SseTap {
   const unsubs = new Map<string, () => void>();
   const buffers = new Map<string, SsePayload[]>();
   const latestByNode = new Map<string, Map<string, SsePayload>>();
+
+  const limiter: RateLimiter | null =
+    opts.rateLimit === false
+      ? null
+      : createRateLimiter({ ...(opts.rateLimit ?? {}), onEmit: opts.onEvent });
 
   function pushToBuffer(flowId: string, payload: SsePayload): void {
     let buf = buffers.get(flowId);
@@ -92,10 +111,14 @@ export function createSseTap(events: EventBus, opts: SseTapOptions): SseTap {
       };
       pushToBuffer(flowId, payload);
       recordLatestStatus(flowId, payload);
-      try {
-        opts.onEvent(payload);
-      } catch (err) {
-        console.error('[sse-tap] onEvent listener threw:', err);
+      if (limiter) {
+        limiter.submit(payload);
+      } else {
+        try {
+          opts.onEvent(payload);
+        } catch (err) {
+          console.error('[sse-tap] onEvent listener threw:', err);
+        }
       }
     };
   }
@@ -136,6 +159,7 @@ export function createSseTap(events: EventBus, opts: SseTapOptions): SseTap {
       unsubs.clear();
       buffers.clear();
       latestByNode.clear();
+      limiter?.dispose();
     },
     refreshFlows(): void {
       if (!started) return;
@@ -151,6 +175,9 @@ export function createSseTap(events: EventBus, opts: SseTapOptions): SseTap {
         out[flowId] = nodes;
       }
       return out;
+    },
+    metrics(): RateLimitMetrics {
+      return limiter ? limiter.metrics() : { droppedFrames: 0, queueDepth: 0 };
     },
   };
 }

@@ -231,6 +231,52 @@ describe('createSseTap', () => {
     tap.stop();
   });
 
+  test('metrics() returns zeros when rate limiting is disabled', () => {
+    const bus = createEventBus();
+    const { onEvent } = collector();
+    const tap = createSseTap(bus, {
+      flowIds: () => ['flow-a'],
+      onEvent,
+      rateLimit: false,
+    });
+
+    tap.start();
+    expect(tap.metrics()).toEqual({ droppedFrames: 0, queueDepth: 0 });
+    bus.broadcast({ type: 'node:status', flowId: 'flow-a', payload: { nodeId: 'n1' } });
+    expect(tap.metrics()).toEqual({ droppedFrames: 0, queueDepth: 0 });
+    tap.stop();
+  });
+
+  test('metrics() proxies to the internal rate limiter when enabled', () => {
+    const bus = createEventBus();
+    const { seen, onEvent } = collector();
+    const tap = createSseTap(bus, {
+      flowIds: () => ['flow-a'],
+      onEvent,
+      rateLimit: { tokensPerSecond: 60, burst: 2, maxQueueDepth: 5, now: () => 0 },
+    });
+
+    tap.start();
+
+    // First 2 emit immediately (burst). Subsequent same-key node:status coalesce.
+    bus.broadcast({ type: 'node:status', flowId: 'flow-a', payload: { nodeId: 'n1', i: 0 } });
+    bus.broadcast({ type: 'node:status', flowId: 'flow-a', payload: { nodeId: 'n1', i: 1 } });
+    bus.broadcast({ type: 'node:status', flowId: 'flow-a', payload: { nodeId: 'n1', i: 2 } });
+    bus.broadcast({ type: 'node:status', flowId: 'flow-a', payload: { nodeId: 'n1', i: 3 } });
+
+    expect(seen).toHaveLength(2);
+    const metrics = tap.metrics();
+    expect(metrics.queueDepth).toBe(1);
+    expect(metrics.droppedFrames).toBe(1);
+
+    // Terminal events bypass the bucket and always pass through.
+    bus.broadcast({ type: 'node:done', flowId: 'flow-a', payload: { nodeId: 'n1' } });
+    expect(seen).toHaveLength(3);
+    expect(seen[2]?.t).toBe('node:done');
+
+    tap.stop();
+  });
+
   test('start is idempotent — calling twice does not double-subscribe', () => {
     const bus = createEventBus();
     const { seen, onEvent } = collector();
