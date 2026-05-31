@@ -80,6 +80,11 @@ export type ShareState =
       url: string;
       peers: PeerSummary[];
       startedAt: number;
+      // Display label used as `attributedTo.displayName` for host-originated
+      // node-patched broadcasts. Derived from `ShareDeps.hostDisplayName`
+      // (defaults to 'Host') and exposed on state so the SSE bridge and local
+      // studio UI can render the host's own suppressed self-attribution.
+      hostDisplayName: string;
     }
   | { status: 'stopping' }
   | { status: 'error'; reason: string };
@@ -91,7 +96,22 @@ export interface ShareController {
   rotateUrl(): Promise<{ url: string }>;
   state(): ShareState;
   subscribe(fn: (s: ShareState) => void): () => void;
-  handleRpcFrame(frame: unknown, fromPeerId: string): Promise<RpcResultFrame>;
+  /**
+   * Dispatch an inbound `rpc` envelope as if it came from `fromPeerId`. Tests
+   * call this directly without driving the transport. When the originator is
+   * a known peer (registered via presence/join), pass `displayName` so the
+   * outgoing `node-patched` broadcast's `attributedTo` field carries the
+   * human-readable label; if omitted, `fromPeerId` is used as the fallback.
+   */
+  handleRpcFrame(frame: unknown, fromPeerId: string, displayName?: string): Promise<RpcResultFrame>;
+  /**
+   * Broadcast a `node-patched` frame for an edit applied by the host's own UI
+   * (no peer rpc). `attributedTo.peerId` is the literal `'host'` and
+   * `displayName` is the active state's `hostDisplayName`. No-ops when the
+   * controller is not active or the outcome was not `kind: 'ok'`. Returns the
+   * monotonic per-flow version assigned (or `null` when no broadcast fired).
+   */
+  broadcastHostEdit(op: RpcOp, outcome: RpcDispatchOutcome): number | null;
 }
 
 // Generic outcome shape returned by a dispatcher entry. Each operations.ts
@@ -197,6 +217,10 @@ export interface ShareDeps {
   // active transport when open. Tests inject a spy to assert the
   // node-patched fan-out without standing up a relay.
   broadcast?: (envelope: Envelope) => void;
+  // Display label used as `attributedTo.displayName` for host-originated
+  // node-patched broadcasts (and surfaced on `state().hostDisplayName` while
+  // active). Defaults to `'Host'`. US-054 supplies the real OS username.
+  hostDisplayName?: string;
 }
 
 interface RelaySessionResponse {
@@ -285,6 +309,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
   const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
   const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
+  const hostDisplayName = deps.hostDisplayName ?? 'Host';
   const rpcDispatcher: RpcDispatcher | null =
     deps.rpcDispatcher ??
     (deps.operationsDeps ? createDefaultRpcDispatcher(deps.operationsDeps) : null);
@@ -395,7 +420,36 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
-  const dispatchRpcFrame = async (frame: unknown, fromPeerId: string): Promise<RpcResultFrame> => {
+  // Build + emit a `node-patched` envelope for an accepted op. Centralized so
+  // peer-rpc and host-local edits assemble the wire payload identically (only
+  // the `attributedTo` value differs). Returns the version assigned so callers
+  // can echo it back into rpc-result if needed.
+  const broadcastNodePatched = (
+    op: RpcOp,
+    outcome: RpcDispatchOutcome,
+    attributedTo: { peerId: string; displayName: string },
+  ): number => {
+    const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
+    flowVersions.set(op.flowId, nextVersion);
+    const diff = computeNodePatchedDiff(op, outcome);
+    try {
+      broadcast(
+        makeEnvelope(
+          'node-patched',
+          { flowId: op.flowId, op: op.op, diff, version: nextVersion, attributedTo },
+          { to: 'all' },
+        ),
+      );
+    } catch (err) {
+      console.warn('[share] node-patched broadcast failed:', err);
+    }
+    return nextVersion;
+  };
+
+  const dispatchRpcFrame = async (
+    frame: unknown,
+    actor: { peerId: string; displayName: string },
+  ): Promise<RpcResultFrame> => {
     const fallbackId = extractFrameId(frame);
     const parsed = RpcFrameSchema.safeParse(frame);
     if (!parsed.success) {
@@ -403,7 +457,7 @@ export function createShareController(deps: ShareDeps): ShareController {
       // assumption.
       console.warn('[share] rpc frame rejected:', {
         type: 'rpc',
-        from: fromPeerId,
+        from: actor.peerId,
         reason: 'invalid_envelope',
       });
       return makeRpcResultFrame(fallbackId, { ok: false, reason: 'invalid_envelope' });
@@ -414,7 +468,7 @@ export function createShareController(deps: ShareDeps): ShareController {
       // path that bypasses validation.
       console.warn('[share] rpc frame rejected:', {
         type: 'rpc',
-        from: fromPeerId,
+        from: actor.peerId,
         reason: 'op_not_allowed',
       });
       return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'op_not_allowed' });
@@ -435,14 +489,16 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
     const ok = outcome.kind === 'ok';
     const reason = ok ? undefined : outcome.kind + (outcome.message ? `: ${outcome.message}` : '');
+    const attributedTo = { peerId: actor.peerId, displayName: actor.displayName };
     try {
       const entry: RpcAuditEntry = {
         ts: Date.now(),
-        peerId: fromPeerId,
+        peerId: actor.peerId,
         op: op.op,
         flowId: op.flowId,
         ok,
         ...(reason ? { reason } : {}),
+        attributedTo,
       };
       appendShareAuditFn(sessionId, entry);
     } catch (err) {
@@ -452,23 +508,11 @@ export function createShareController(deps: ShareDeps): ShareController {
       // Broadcast the canonical diff BEFORE resolving rpc-result so peers
       // (including the originator) see the patch first; the originator's
       // optimistic reconcile then folds into a no-op.
-      const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
-      flowVersions.set(op.flowId, nextVersion);
-      const diff = computeNodePatchedDiff(op, outcome);
-      try {
-        broadcast(
-          makeEnvelope(
-            'node-patched',
-            { flowId: op.flowId, op: op.op, diff, version: nextVersion },
-            { to: 'all' },
-          ),
-        );
-      } catch (err) {
-        console.warn('[share] node-patched broadcast failed:', err);
-      }
+      broadcastNodePatched(op, outcome, attributedTo);
       return makeRpcResultFrame(parsed.data.id, {
         ok: true,
         ...(outcome.data !== undefined ? { result: outcome.data } : {}),
+        attributedTo,
       });
     }
     return makeRpcResultFrame(parsed.data.id, {
@@ -581,7 +625,7 @@ export function createShareController(deps: ShareDeps): ShareController {
         payload: env.payload,
       };
       const replyTo = env.from;
-      dispatchRpcFrame(wireFrame, peer.peerId)
+      dispatchRpcFrame(wireFrame, { peerId: peer.peerId, displayName: peer.displayName })
         .then((result) => {
           if (!transport || !transport.isOpen()) return;
           try {
@@ -676,6 +720,7 @@ export function createShareController(deps: ShareDeps): ShareController {
               url,
               peers: [],
               startedAt: Date.now(),
+              hostDisplayName,
             });
             resolve({ url, sessionId: body.sessionId });
             return;
@@ -729,7 +774,41 @@ export function createShareController(deps: ShareDeps): ShareController {
       // status === 'stopping' or 'error' — treat as no-op; the in-flight
       // stop will complete on its own and a fresh start() can follow.
     },
-    handleRpcFrame: (frame, fromPeerId) => dispatchRpcFrame(frame, fromPeerId),
+    handleRpcFrame: (frame, fromPeerId, displayName) =>
+      dispatchRpcFrame(frame, {
+        peerId: fromPeerId,
+        // Prefer the controller's known peer record so test/UI callers that
+        // only pass a peerId still attribute correctly when the peer is
+        // already known via presence/join. Falls back to the passed
+        // displayName, then the peerId itself, so attribution is always
+        // non-empty (AttributionSchema requires `displayName.min(1)`).
+        displayName:
+          [...connPeers.values()].find((p) => p.peerId === fromPeerId)?.displayName ??
+          displayName ??
+          fromPeerId,
+      }),
+    broadcastHostEdit(op, outcome) {
+      if (current.status !== 'active') return null;
+      if (outcome.kind !== 'ok') return null;
+      const attributedTo = { peerId: 'host', displayName: current.hostDisplayName };
+      // Audit the host-local edit so the JSONL file reflects every accepted
+      // mutation regardless of origin. peerId mirrors `attributedTo.peerId`
+      // ('host') so consumers can filter by attribution without a join.
+      try {
+        const entry: RpcAuditEntry = {
+          ts: Date.now(),
+          peerId: 'host',
+          op: op.op,
+          flowId: op.flowId,
+          ok: true,
+          attributedTo,
+        };
+        appendShareAuditFn(current.sessionId, entry);
+      } catch (err) {
+        console.warn('[share] host-edit audit append failed:', err);
+      }
+      return broadcastNodePatched(op, outcome, attributedTo);
+    },
     async kick(peerId: string) {
       if (current.status !== 'active' || !transport) {
         throw new Error('share-not-active');

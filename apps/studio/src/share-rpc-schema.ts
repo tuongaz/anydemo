@@ -162,8 +162,34 @@ export const RpcFrameSchema = z
   })
   .strict();
 
+/**
+ * Attribution metadata attached to every accepted edit. `peerId` is either the
+ * literal `'host'` (when the studio owner originates the edit) or matches a
+ * known remote peer's id. `displayName` is the human label rendered by the
+ * peer SPA's toast / cursor label.
+ *
+ * Cross-validation (peerId === 'host' OR peerId ∈ knownPeers) is enforced at
+ * runtime by the share controller — the wire schema can't reach the peer set,
+ * so it accepts any non-empty string and the controller drops broadcasts with
+ * peerIds that don't match.
+ */
+export const AttributionSchema = z
+  .object({
+    peerId: z.string().min(1),
+    displayName: z.string().min(1),
+  })
+  .strict();
+
+export type Attribution = z.infer<typeof AttributionSchema>;
+
 export const RpcResultPayloadSchema = z.discriminatedUnion('ok', [
-  z.object({ ok: z.literal(true), result: z.unknown().optional() }).strict(),
+  z
+    .object({
+      ok: z.literal(true),
+      result: z.unknown().optional(),
+      attributedTo: AttributionSchema.optional(),
+    })
+    .strict(),
   z.object({ ok: z.literal(false), reason: z.string() }).strict(),
 ]);
 
@@ -207,6 +233,7 @@ export const NodePatchedFramePayloadSchema = z
     op: z.string().min(1),
     version: z.number().int().nonnegative(),
     diff: NodePatchedDiffSchema,
+    attributedTo: AttributionSchema,
   })
   .passthrough();
 

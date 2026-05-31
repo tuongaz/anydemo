@@ -731,3 +731,177 @@ describe('createShareController eventBus -> sse bridge', () => {
     expect(fake.sends()).toHaveLength(0);
   });
 });
+
+describe('createShareController attribution (US-052)', () => {
+  // Peer-originated rpc: `node-patched` broadcast + rpc-result reply must
+  // both carry the originating peer's `{ peerId, displayName }`. We capture
+  // the broadcast via the explicit `broadcast` seam (clearer separation
+  // than re-using `fake.sends()`, which mixes rpc-result + broadcast).
+  it('peer-originated rpc broadcasts node-patched with attribution + audits + replies attribution', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const audit = makeAuditCapture();
+    const broadcasts: Envelope[] = [];
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      auditLogFactory: audit.factory,
+      rpcDispatcher: async () => ({ kind: 'ok' }),
+      appendShareAuditFn: () => {},
+      broadcast: (env) => broadcasts.push(env),
+    });
+    await ctrl.start();
+    // Peer must be registered first so handleFrame -> dispatchRpcFrame
+    // resolves the displayName from connPeers.
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Alice' },
+    });
+    fake.emitFrame({
+      v: 1,
+      type: 'rpc',
+      from: 'conn-7',
+      id: 'r-1',
+      payload: {
+        op: 'moveNode',
+        flowId: 'flow-a',
+        nodeId: 'n-1',
+        position: { x: 1, y: 2 },
+      },
+    });
+    // dispatchRpcFrame inside handleFrame is async via a promise chain — flush.
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(broadcasts).toHaveLength(1);
+    const env = broadcasts[0];
+    if (!env) throw new Error('expected broadcast');
+    expect(env.type).toBe('node-patched');
+    const payload = env.payload as {
+      flowId: string;
+      op: string;
+      attributedTo: { peerId: string; displayName: string };
+    };
+    expect(payload.attributedTo).toEqual({ peerId: 'peer-42', displayName: 'Alice' });
+
+    // rpc-result reply: handleFrame forwards via transport.send.
+    const rpcResult = fake.sends().find((e) => e.type === 'rpc-result');
+    if (!rpcResult) throw new Error('expected rpc-result');
+    const replyPayload = rpcResult.payload as {
+      ok: boolean;
+      attributedTo?: { peerId: string; displayName: string };
+    };
+    expect(replyPayload.ok).toBe(true);
+    expect(replyPayload.attributedTo).toEqual({ peerId: 'peer-42', displayName: 'Alice' });
+  });
+
+  // Host-originated edit: `broadcastHostEdit` attributes `'host'` with the
+  // configured `hostDisplayName` and surfaces the same on the audit entry.
+  it('host-originated edit broadcasts node-patched attributed to host', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const broadcasts: Envelope[] = [];
+    const auditEntries: {
+      peerId: string;
+      attributedTo?: { peerId: string; displayName: string };
+    }[] = [];
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      hostDisplayName: 'tuong',
+      broadcast: (env) => broadcasts.push(env),
+      appendShareAuditFn: (_sid, entry) => {
+        auditEntries.push(entry);
+      },
+    });
+    await ctrl.start();
+
+    // active state exposes hostDisplayName so the local studio UI can render
+    // its own (suppressed) self-attribution consistently.
+    const s = ctrl.state();
+    if (s.status !== 'active') throw new Error('expected active');
+    expect(s.hostDisplayName).toBe('tuong');
+
+    const version = ctrl.broadcastHostEdit(
+      { op: 'moveNode', flowId: 'flow-host', nodeId: 'n-1', position: { x: 9, y: 9 } },
+      { kind: 'ok' },
+    );
+    expect(version).toBe(1);
+    expect(broadcasts).toHaveLength(1);
+    const env = broadcasts[0];
+    if (!env) throw new Error('expected broadcast');
+    const payload = env.payload as {
+      flowId: string;
+      op: string;
+      version: number;
+      attributedTo: { peerId: string; displayName: string };
+    };
+    expect(payload.flowId).toBe('flow-host');
+    expect(payload.op).toBe('moveNode');
+    expect(payload.version).toBe(1);
+    expect(payload.attributedTo).toEqual({ peerId: 'host', displayName: 'tuong' });
+
+    // Host edit was audited with the same attribution.
+    const hostAudits = auditEntries.filter((e) => e.peerId === 'host');
+    expect(hostAudits).toHaveLength(1);
+    expect(hostAudits[0]?.attributedTo).toEqual({ peerId: 'host', displayName: 'tuong' });
+  });
+
+  // Unknown sender connId: rpc must be dropped at the relay-frame layer
+  // (handleFrame already drops it for lack of a peer record) and NO
+  // node-patched broadcast may fire.
+  it('rpc from unknown connId is rejected and produces no broadcast', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const broadcasts: Envelope[] = [];
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      rpcDispatcher: async () => ({ kind: 'ok' }),
+      appendShareAuditFn: () => {},
+      broadcast: (env) => broadcasts.push(env),
+    });
+    await ctrl.start();
+    // No prior presence/join — conn-99 is unknown.
+    fake.emitFrame({
+      v: 1,
+      type: 'rpc',
+      from: 'conn-99',
+      id: 'r-z',
+      payload: {
+        op: 'moveNode',
+        flowId: 'flow-a',
+        nodeId: 'n-1',
+        position: { x: 0, y: 0 },
+      },
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    expect(broadcasts).toHaveLength(0);
+    // No rpc-result either: the frame never reached dispatchRpcFrame.
+    expect(fake.sends().filter((e) => e.type === 'rpc-result')).toHaveLength(0);
+  });
+});
+
+describe('ShareState hostDisplayName default', () => {
+  it("defaults to 'Host' when not supplied via deps", async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+    });
+    await ctrl.start();
+    const s = ctrl.state();
+    if (s.status !== 'active') throw new Error('expected active');
+    expect(s.hostDisplayName).toBe('Host');
+  });
+});

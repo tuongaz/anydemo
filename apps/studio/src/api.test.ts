@@ -5047,6 +5047,7 @@ const createFakeShare = (init?: {
       id: 'fake',
       payload: { ok: true },
     }),
+    broadcastHostEdit: () => null,
   };
 };
 
@@ -5240,6 +5241,7 @@ describe('GET /api/share/state', () => {
         url: 'https://share.seeflow.dev/tok-2',
         peers: [],
         startedAt: 12345,
+        hostDisplayName: 'Host',
       });
     }, 10);
 

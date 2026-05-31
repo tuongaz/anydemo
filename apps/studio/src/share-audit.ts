@@ -59,6 +59,12 @@ export interface RpcAuditEntry {
   flowId: string;
   ok: boolean;
   reason?: string;
+  // Mirrors the `attributedTo` field on the outgoing `node-patched` broadcast
+  // so the audit trail records the same originator label peers will see. For
+  // peer-originated rpcs this is `{ peerId, displayName }` from the share
+  // controller's peer map; for host-local edits it is
+  // `{ peerId: 'host', displayName: hostDisplayName }`.
+  attributedTo?: { peerId: string; displayName: string };
 }
 
 export interface AppendShareAuditOpts {
