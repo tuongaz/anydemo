@@ -43,6 +43,12 @@ import {
   createAuditLog,
 } from './share-audit.ts';
 import { type Envelope, makeEnvelope } from './share-envelope.ts';
+import {
+  type FileRequestHandler,
+  type PutToS3,
+  type RequestUploadIntent,
+  createFileRequestHandler,
+} from './share-file-request.ts';
 import { type RateLimiter, createRateLimiter } from './share-ratelimit.ts';
 import { RpcFrameSchema, type RpcOp, type RpcResultFrame } from './share-rpc-schema.ts';
 import {
@@ -237,6 +243,15 @@ export interface ShareDeps {
   // node-patched broadcasts (and surfaced on `state().hostDisplayName` while
   // active). Defaults to `'Host'`. US-054 supplies the real OS username.
   hostDisplayName?: string;
+  // Optional S3 staging deps for the oversize file-request path (US-060).
+  // Both must be present to enable >256 KB file serving; otherwise the
+  // handler replies `too-large` for big files. Tests can wire stubs.
+  requestUploadIntent?: RequestUploadIntent;
+  putToS3?: PutToS3;
+  // Test seam: swap the entire file-request handler. Production callers
+  // leave this undefined and the controller builds one from registry +
+  // broadcast + the S3 deps above.
+  fileRequestHandler?: FileRequestHandler;
 }
 
 interface RelaySessionResponse {
@@ -383,6 +398,21 @@ export function createShareController(deps: ShareDeps): ShareController {
         console.warn('[share] broadcast send failed:', err);
       }
     });
+
+  // File-request handler (US-060). Instantiated lazily so test deps that pass
+  // an explicit `fileRequestHandler` win; otherwise we build one from the
+  // registry on `operationsDeps`. Without a registry there is no resolver
+  // surface and file-request envelopes are dropped with a warn.
+  const fileRequestHandler: FileRequestHandler | null =
+    deps.fileRequestHandler ??
+    (deps.operationsDeps
+      ? createFileRequestHandler({
+          registry: deps.operationsDeps.registry,
+          broadcast: (env) => broadcast(env),
+          requestUploadIntent: deps.requestUploadIntent,
+          putToS3: deps.putToS3,
+        })
+      : null);
 
   const setState = (next: ShareState) => {
     current = next;
@@ -666,6 +696,17 @@ export function createShareController(deps: ShareDeps): ShareController {
       type: env.type,
       verdict: 'accept',
     });
+
+    if (env.type === 'file-request') {
+      if (!fileRequestHandler) {
+        console.warn('[share] dropped file-request: no handler configured');
+        return;
+      }
+      fileRequestHandler.handle(env).catch((err) => {
+        console.warn('[share] file-request handler threw:', err);
+      });
+      return;
+    }
 
     if (env.type === 'rpc') {
       // The wire-side `RpcFrameSchema` is strict, so strip envelope-only fields

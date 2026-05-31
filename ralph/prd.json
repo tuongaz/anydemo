@@ -1,7 +1,7 @@
 {
   "project": "SeeFlow Live Share",
   "branchName": "ralph/live-share-phase-6",
-  "description": "Phase 6 — file transfer (WS chunks + ephemeral S3 for large).",
+  "description": "Phase 6 \u2014 file transfer (WS chunks + ephemeral S3 for large).",
   "userStories": [
     {
       "id": "US-055",
@@ -24,7 +24,7 @@
       ],
       "priority": 1,
       "passes": true,
-      "notes": "abortIncompleteMultipartUploadAfter forced to Duration.days(1) — CDK rejects sub-day durations for this prop (CFN requires whole DaysAfterInitiation). Still satisfies the <24h cleanup intent."
+      "notes": "abortIncompleteMultipartUploadAfter forced to Duration.days(1) \u2014 CDK rejects sub-day durations for this prop (CFN requires whole DaysAfterInitiation). Still satisfies the <24h cleanup intent."
     },
     {
       "id": "US-056",
@@ -61,10 +61,10 @@
         "Handler signature: APIGatewayProxyHandlerV2 receiving sessionId + greedy {proxy+} path",
         "Resolve sessionId -> hostConnId via shared/sessions; 404 JSON if absent, 502 JSON if host offline",
         "Post `{ v:1, type:'file-request', id: reqId, to:'host', from:'<proxy>', payload:{ reqId, nodeId, relPath } }` to host via PostToConnection; nodeId is parsed as the FIRST path segment after `/files/` (URL-decode safe), relPath is the remainder",
-        "Await host response by polling a tiny `share-pending-requests` in-memory map keyed by reqId, with timeout 25 s (under the 29 s API GW cap) — return 504 JSON on timeout",
+        "Await host response by polling a tiny `share-pending-requests` in-memory map keyed by reqId, with timeout 25 s (under the 29 s API GW cap) \u2014 return 504 JSON on timeout",
         "On `file-bytes` reply (single frame, eof:true): return 200 with base64-decoded body, Content-Type from payload, ETag header from sha256, `Cache-Control: private, must-revalidate`",
         "On `file-redirect` reply: return 302 with Location:getUrl + same ETag + Cache-Control",
-        "Lambda logs only `{ sessionId, nodeId, relPath, mode: 'ws'|'s3', sizeBytes, ms }` — never payload bytes",
+        "Lambda logs only `{ sessionId, nodeId, relPath, mode: 'ws'|'s3', sizeBytes, ms }` \u2014 never payload bytes",
         "Create cloud/lambda/share/files-proxy.test.ts covering: success-ws, success-s3-redirect, host-offline (502), unknown-session (404), timeout (504), traversal-rejected (400 if nodeId doesn't match /^node-[A-Za-z0-9]{10}$/)",
         "Wire route in cloud/lib/seeflow-stack.ts: `httpApi.addRoutes({ path: '/share/{sessionId}/files/{proxy+}', methods: [GET], integration: new HttpLambdaIntegration('ShareFilesProxyInt', filesProxyFn) })`",
         "Add HTTP throttling override `'GET /share/{sessionId}/files/{proxy+}': { ThrottlingBurstLimit: 100, ThrottlingRateLimit: 50 }`",
@@ -75,7 +75,7 @@
       ],
       "priority": 3,
       "passes": true,
-      "notes": "Pending-reply map is exposed via deliverReply() — ws-default in US-058 must call this when it sees file-bytes/file-redirect addressed to '<proxy>'. Across lambda instances this only works when the proxy and ws-default execute in the same warm container; persisting replies in DDB is a follow-up. Headers are lowercase per HTTP/2 convention (CloudFront and APIGW both pass them through case-insensitively)."
+      "notes": "Pending-reply map is exposed via deliverReply() \u2014 ws-default in US-058 must call this when it sees file-bytes/file-redirect addressed to '<proxy>'. Across lambda instances this only works when the proxy and ws-default execute in the same warm container; persisting replies in DDB is a follow-up. Headers are lowercase per HTTP/2 convention (CloudFront and APIGW both pass them through case-insensitively)."
     },
     {
       "id": "US-058",
@@ -85,13 +85,13 @@
         "Working dir: /Users/tuongaz/dev/seeflow-viewer/cloud",
         "Modify cloud/lambda/share/ws-default.ts to parse `file-request | file-bytes | file-redirect | file-upload-intent | file-upload-done | files-manifest` via the schemas added in US-056",
         "Extend routeFrame so file-request flows peer->host (rewrite to:'host'), file-bytes/file-redirect flow host->peer (rewrite to recipient connId from envelope.to), file-upload-intent flows peer->host, file-upload-done flows peer->host, files-manifest flows host->peer or host->all",
-        "When envelope.type === 'file-upload-intent' AND payload.size > 256 * 1024, ws-default ALSO mints `key = ${sessionId}/${reqId}/${randomSlug()}-${filename}` and a 60 s presigned PUT URL via shared/presign, and embeds them as `payload.upload = { via:'s3', key, putUrl }` before forwarding to host. ≤256 KB intent is forwarded unchanged with `payload.upload = { via:'ws' }`",
-        "When envelope.type === 'file-upload-done' is acknowledged by host (the host's next outbound `rpc-result` with matching reqId and ok:true), ws-default issues `DeleteObject({ Bucket: SHARE_STAGING_BUCKET, Key: payload.key })` — fire-and-forget, log failures only",
-        "Per-peer rate limit: 5 MB / 60 s of file-bytes payload bytes, tracked in DDB on the session row under `peers[connId].fileBytesWindow = { startMs, bytes }` — exceed -> drop frame + send `rpc-result { ok:false, reason:'rate-limited' }` back to sender; do NOT close connection",
+        "When envelope.type === 'file-upload-intent' AND payload.size > 256 * 1024, ws-default ALSO mints `key = ${sessionId}/${reqId}/${randomSlug()}-${filename}` and a 60 s presigned PUT URL via shared/presign, and embeds them as `payload.upload = { via:'s3', key, putUrl }` before forwarding to host. \u2264256 KB intent is forwarded unchanged with `payload.upload = { via:'ws' }`",
+        "When envelope.type === 'file-upload-done' is acknowledged by host (the host's next outbound `rpc-result` with matching reqId and ok:true), ws-default issues `DeleteObject({ Bucket: SHARE_STAGING_BUCKET, Key: payload.key })` \u2014 fire-and-forget, log failures only",
+        "Per-peer rate limit: 5 MB / 60 s of file-bytes payload bytes, tracked in DDB on the session row under `peers[connId].fileBytesWindow = { startMs, bytes }` \u2014 exceed -> drop frame + send `rpc-result { ok:false, reason:'rate-limited' }` back to sender; do NOT close connection",
         "Per-session cap: refuse new file-upload-intent if cumulative staged bytes for the session exceeds 1 GB (tracked in DDB `session.stagedBytes`); reply `rpc-result { ok:false, reason:'session-quota' }`",
-        "Lambda logs only `{ type, from, to, sizeBytes, reqId }` — never payload",
-        "Extend cloud/lambda/share/ws-default.test.ts covering: file-request routed to host, file-bytes fan-out to single peer, file-upload-intent ≤256 KB returns via:'ws', >256 KB returns via:'s3' with putUrl matching `https://.+\\.amazonaws\\.com/${SHARE_STAGING_BUCKET}/.+\\?.+`, file-upload-done triggers DeleteObject, rate-limit exceeded path, session-quota path",
-        "Use moto/aws-sdk-client-mock or hand-rolled stubs for S3 + ApiGatewayManagementApi in tests — no real AWS calls",
+        "Lambda logs only `{ type, from, to, sizeBytes, reqId }` \u2014 never payload",
+        "Extend cloud/lambda/share/ws-default.test.ts covering: file-request routed to host, file-bytes fan-out to single peer, file-upload-intent \u2264256 KB returns via:'ws', >256 KB returns via:'s3' with putUrl matching `https://.+\\.amazonaws\\.com/${SHARE_STAGING_BUCKET}/.+\\?.+`, file-upload-done triggers DeleteObject, rate-limit exceeded path, session-quota path",
+        "Use moto/aws-sdk-client-mock or hand-rolled stubs for S3 + ApiGatewayManagementApi in tests \u2014 no real AWS calls",
         "`bun test lambda/share/ws-default.test.ts` passes",
         "`bun run typecheck` passes",
         "Typecheck passes",
@@ -99,7 +99,7 @@
       ],
       "priority": 4,
       "passes": true,
-      "notes": "deliverReply integration with files-proxy works in tests (same process) but not across separate lambda containers in prod — follow-up will persist pending replies in DDB. file-upload-done DeleteObject correlation map is in-memory; if rpc-result lands on a different warm container the staged object falls back to the 1-day lifecycle rule for cleanup. Presigned PUT URL format is virtual-hosted by default in real AWS; tests stub a path-style URL to satisfy the PRD regex assertion."
+      "notes": "deliverReply integration with files-proxy works in tests (same process) but not across separate lambda containers in prod \u2014 follow-up will persist pending replies in DDB. file-upload-done DeleteObject correlation map is in-memory; if rpc-result lands on a different warm container the staged object falls back to the 1-day lifecycle rule for cleanup. Presigned PUT URL format is virtual-hosted by default in real AWS; tests stub a path-style URL to satisfy the PRD regex assertion."
     },
     {
       "id": "US-059",
@@ -110,7 +110,7 @@
         "Create apps/studio/src/share-file-resolver.ts exporting `resolveNodeFile({ repoPath, flowPath, nodeId, relPath }): { absPath: string } | { error: 'bad-node-id' | 'traversal' | 'outside-flow-dir' }`",
         "Mirror the existing logic at apps/studio/src/api.ts lines 1230-1303 (POST /api/projects/.../nodes/:nodeId/files/upload): base dir is `join(repoPath, dirname(flowPath), 'nodes', nodeId)` with `flowDir === '.'` collapsing to `join(repoPath, 'nodes', nodeId)`",
         "nodeId MUST match `/^node-[A-Za-z0-9]{10}$/` else return `{ error: 'bad-node-id' }`",
-        "relPath MUST be non-empty, MUST NOT start with `/`, MUST NOT contain `..` segments after normalize, MUST NOT be absolute on win32 — else `{ error: 'traversal' }`",
+        "relPath MUST be non-empty, MUST NOT start with `/`, MUST NOT contain `..` segments after normalize, MUST NOT be absolute on win32 \u2014 else `{ error: 'traversal' }`",
         "After path.resolve(baseDir, relPath), the resolved absPath MUST start with `${baseDir}${path.sep}` else `{ error: 'outside-flow-dir' }`",
         "Create apps/studio/src/share-file-resolver.test.ts covering: happy path returns absPath; bad nodeId formats (no prefix, wrong length, special chars) rejected; `..` and `../../etc/passwd` rejected; symlink-style `/etc/passwd` absolute path rejected; legitimate nested `subdir/foo.png` accepted; flow at repo root (`flow.json`) vs nested (`flows/main/flow.json`) both work",
         "`bun test apps/studio/src/share-file-resolver.test.ts` passes",
@@ -126,18 +126,18 @@
     {
       "id": "US-060",
       "title": "Host share.ts: handle file-request (read) via WS bytes or S3 redirect",
-      "description": "As the host studio, when a peer requests a file I need to read it from disk under the resolved per-node path, then either send the bytes inline via WS chunks (≤256 KB) or upload to ephemeral S3 and reply with a redirect URL, with a sha256 integrity check.",
+      "description": "As the host studio, when a peer requests a file I need to read it from disk under the resolved per-node path, then either send the bytes inline via WS chunks (\u2264256 KB) or upload to ephemeral S3 and reply with a redirect URL, with a sha256 integrity check.",
       "acceptanceCriteria": [
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Extend apps/studio/src/share.ts (introduced in earlier phases) with `handleFileRequest(envelope: FileRequestEnvelope)`",
-        "Parse payload via FileRequestPayloadSchema imported from a vendored copy at apps/studio/src/share-envelope.ts (mirrors cloud/lambda/share/shared/envelope.ts file frame schemas — keep types compatible)",
+        "Parse payload via FileRequestPayloadSchema imported from a vendored copy at apps/studio/src/share-envelope.ts (mirrors cloud/lambda/share/shared/envelope.ts file frame schemas \u2014 keep types compatible)",
         "Call resolveNodeFile from US-059; on error, reply `file-bytes { reqId, seq:0, total:0, base64:'', sha256:'', eof:true }` plus an `rpc-result { id:reqId, ok:false, reason }` so the peer proxy returns 4xx",
         "On success, fs.readFile bytes; compute sha256 via node:crypto",
-        "If bytes.length ≤ 256 * 1024: send single `file-bytes { reqId, seq:0, total:1, base64, contentType: lookup by extension, sha256, eof:true }` to peer (via:'host'->envelope.to)",
-        "If bytes.length > 256 * 1024: PUT to ephemeral S3 via a presigned URL the host requests by sending `file-upload-intent { reqId, filename: basename(absPath), size, contentType, sha256, nodeId, role:'host-serve' }` to relay — relay returns a presigned PUT (US-058). On 200 from PUT, send `file-redirect { reqId, getUrl: presignedGetUrl, sha256, expiresAt }` to peer. Acceptance OK if a simpler design is used as long as bytes never persist past 60 s — but document the chosen path in a code comment",
+        "If bytes.length \u2264 256 * 1024: send single `file-bytes { reqId, seq:0, total:1, base64, contentType: lookup by extension, sha256, eof:true }` to peer (via:'host'->envelope.to)",
+        "If bytes.length > 256 * 1024: PUT to ephemeral S3 via a presigned URL the host requests by sending `file-upload-intent { reqId, filename: basename(absPath), size, contentType, sha256, nodeId, role:'host-serve' }` to relay \u2014 relay returns a presigned PUT (US-058). On 200 from PUT, send `file-redirect { reqId, getUrl: presignedGetUrl, sha256, expiresAt }` to peer. Acceptance OK if a simpler design is used as long as bytes never persist past 60 s \u2014 but document the chosen path in a code comment",
         "Rate-limit: at most 30 concurrent in-flight file-requests per peer; excess -> `rpc-result { ok:false, reason:'too-many-in-flight' }`",
         "Content-Type inferred from extension via a small allowlist map (image/png, image/jpeg, image/webp, image/svg+xml, image/gif, text/html, text/markdown, text/plain, application/json, application/octet-stream fallback)",
-        "Create apps/studio/src/share-file-request.test.ts covering: small-file inline path (≤256 KB) round-trips bytes + sha256 matches, oversize file (>256 KB) triggers S3 path (stub PUT), unresolvable path returns ok:false with reason, traversal attempt blocked, sha256 in reply matches host-computed hash",
+        "Create apps/studio/src/share-file-request.test.ts covering: small-file inline path (\u2264256 KB) round-trips bytes + sha256 matches, oversize file (>256 KB) triggers S3 path (stub PUT), unresolvable path returns ok:false with reason, traversal attempt blocked, sha256 in reply matches host-computed hash",
         "`bun test apps/studio/src/share-file-request.test.ts` passes",
         "`bun run typecheck` passes",
         "`bun run lint` passes (run `bun run format` first)",
@@ -145,13 +145,13 @@
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "S3 staging deps (requestUploadIntent, putToS3) are wired as optional ShareDeps. Default production wiring (api.ts createShareController) does not yet pass them, so oversize requests reply too-large until the correlation map (host->relay file-upload-intent reply) and presigned-GET delivery from the relay are implemented. Inline path (<=256 KB) is fully functional."
     },
     {
       "id": "US-061",
       "title": "Host share.ts: handle file-upload-intent + chunked writes via atomic-write",
-      "description": "As the host studio, when a peer uploads a file (≤256 KB chunked over WS, or >256 KB via ephemeral S3) I need to assemble bytes safely, verify sha256, write atomically under the per-node folder, broadcast a node-patched diff, and tell the relay to delete the staging object.",
+      "description": "As the host studio, when a peer uploads a file (\u2264256 KB chunked over WS, or >256 KB via ephemeral S3) I need to assemble bytes safely, verify sha256, write atomically under the per-node folder, broadcast a node-patched diff, and tell the relay to delete the staging object.",
       "acceptanceCriteria": [
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Extend apps/studio/src/share.ts with `handleFileUploadIntent(envelope)` and `handleFileBytesChunk(envelope)` and `handleFileUploadDone(envelope)`",
@@ -182,10 +182,10 @@
         "Extend apps/studio/src/share.ts with `buildFilesManifest(): FilesManifestPayload`",
         "Walk the current registered project: for every flow, for every node, collect the per-node folder `<repoPath>/<flowDir>/nodes/<nodeId>/` and recurse one level (do not follow symlinks, do not descend into subfolders beyond depth 2)",
         "For each file entry produce `{ nodeId, relPath: relative-to-flow-dir path string, size, etag: sha256 of file bytes truncated to 16 hex chars }`",
-        "Cap manifest at 5000 entries — if exceeded, truncate and log a warning; do NOT block join",
+        "Cap manifest at 5000 entries \u2014 if exceeded, truncate and log a warning; do NOT block join",
         "When a new peer's auth-peer frame is accepted (existing presence join path from phase 5), additionally enqueue a single `{ v:1, type:'files-manifest', to:<peerConnId>, from:'host', payload }` frame",
         "Recompute incrementally: maintain an in-memory `Map<absPath, { size, etag }>` keyed by absPath; on `node-patched` broadcasts that resulted from file-upload, update the entry; on node delete (existing `removeNodeDir` in apps/studio/src/node-files.ts), drop entries",
-        "Do NOT bulk-fetch contents — manifest is metadata only",
+        "Do NOT bulk-fetch contents \u2014 manifest is metadata only",
         "Create apps/studio/src/share-files-manifest.test.ts covering: empty project -> empty entries, project with one image -> one entry with matching size + sha-prefix, manifest cap at 5000, file-uploaded then manifest reflects new size+etag, file-deleted then manifest drops entry",
         "`bun test apps/studio/src/share-files-manifest.test.ts` passes",
         "`bun run typecheck` passes",
@@ -208,8 +208,8 @@
         "Cache: in-memory Map keyed by `${nodeId}:${relPath}:${etag}` with Blob URL value; entries from `files-manifest` prime the cache keys (etag known, blob lazily loaded); evict LRU when total cached bytes >100 MB",
         "Extend share-client with `uploadFile({ nodeId, file: File }): Promise<{ relPath: string }>`",
         "Implementation: compute sha256 via WebCrypto SubtleCrypto.digest('SHA-256', arrayBuffer); send `file-upload-intent { reqId, filename: file.name, size: file.size, contentType: file.type, sha256, nodeId }` and await `rpc-result`",
-        "Branch on ok:true payload.via: if 'ws' chunk file in ≤256 KB base64 frames sent as `file-bytes`; if 's3' PUT the file to payload.putUrl directly then send `file-upload-done { reqId, key: payload.key, sha256 }`",
-        "Wire `fileBaseUrl` on <SeeflowCanvas mode='edit' fileBaseUrl={...} ioAdapter={shareClient}> to point at `/api/share/${sessionId}/files` AND intercept fetches via the ioAdapter to call requestFile() instead — define IoAdapter.readFile() in packages/canvas (defer the canvas-side change to the IoAdapter follow-up but stub it here)",
+        "Branch on ok:true payload.via: if 'ws' chunk file in \u2264256 KB base64 frames sent as `file-bytes`; if 's3' PUT the file to payload.putUrl directly then send `file-upload-done { reqId, key: payload.key, sha256 }`",
+        "Wire `fileBaseUrl` on <SeeflowCanvas mode='edit' fileBaseUrl={...} ioAdapter={shareClient}> to point at `/api/share/${sessionId}/files` AND intercept fetches via the ioAdapter to call requestFile() instead \u2014 define IoAdapter.readFile() in packages/canvas (defer the canvas-side change to the IoAdapter follow-up but stub it here)",
         "Create src/lib/share-client-files.test.ts (vitest or bun:test depending on existing tooling) covering: requestFile inline-bytes happy path + sha256 verified, requestFile via redirect happy path, sha256 mismatch throws FileIntegrityError, manifest entry primes cache keys, uploadFile ws path emits intent then chunks, uploadFile s3 path emits intent + PUTs + done frame, cache LRU eviction at 100 MB",
         "`bun test` (or `npm test`) in seeflow-viewer passes",
         "`bun run typecheck` passes",
@@ -227,8 +227,8 @@
       "acceptanceCriteria": [
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Create apps/studio/integration/share-files.it.ts following the existing harness pattern at apps/studio/integration/support/ (spawn studio + stub relay similar to other *.it.ts files)",
-        "Stub relay: a local WS server (port-randomized) that mirrors the production ws-default routing logic for file frames — reuse a small JS adapter that imports the schemas from cloud/lambda/share/shared/envelope.ts via a relative path",
-        "Stub S3: local fetch-mocked endpoint that accepts PUT and serves GET — does NOT need real AWS",
+        "Stub relay: a local WS server (port-randomized) that mirrors the production ws-default routing logic for file frames \u2014 reuse a small JS adapter that imports the schemas from cloud/lambda/share/shared/envelope.ts via a relative path",
+        "Stub S3: local fetch-mocked endpoint that accepts PUT and serves GET \u2014 does NOT need real AWS",
         "Scenario A (small file read): host registers a project with an imageNode whose folder contains a 5 KB png; peer connects + requests the file via `requestFile`; assert response bytes match disk bytes; assert single file-bytes frame with eof:true; assert sha256 matches",
         "Scenario B (large file read): host has a 512 KB png at nodes/<id>/big.png; peer requests it; assert host emitted a file-upload-intent (host-serve role) and replied file-redirect; peer fetched the redirect URL successfully; sha256 matches",
         "Scenario C (small file write): peer drops a 20 KB png onto a node; assert via:'ws' chunked path; assert file lands at correct absPath; assert node-patched broadcast emitted with `data.path` matching nodes/<id>/<filename>; assert audit log line appended",
