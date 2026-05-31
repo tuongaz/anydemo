@@ -47,7 +47,8 @@ import {
 } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
-import type { AttributionEvent, ShareController, ShareState } from './share.ts';
+import type { RpcOp } from './share-rpc-schema.ts';
+import type { AttributionEvent, RpcDispatchOutcome, ShareController, ShareState } from './share.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -267,6 +268,23 @@ export function createApi(options: ApiOptions): Hono {
   const proxy = options.proxy ?? defaultProxyFacade;
   const ops = createOperations({ registry, watcher });
   const api = new Hono();
+
+  // Fan-out helper for host-originated edits (US-039). Every node/connector
+  // mutation endpoint below funnels through this after a successful op so the
+  // live-share peers receive a `node-patched` envelope and can apply the diff
+  // to their local snapshot. No-op when the share controller is absent or the
+  // session is not active. Wrapped in try/catch defensively — broadcast
+  // failures must NEVER fail the local HTTP request.
+  const share = options.share;
+  const broadcastEdit = (op: RpcOp, result: { kind: string; data?: unknown }): void => {
+    if (!share) return;
+    if (result.kind !== 'ok') return;
+    try {
+      share.broadcastHostEdit(op, result as RpcDispatchOutcome);
+    } catch (err) {
+      console.warn('[api] share broadcastHostEdit failed:', err);
+    }
+  };
 
   const iconJobs = options.iconJobs ?? createJobRegistry();
   api.route(
@@ -1670,6 +1688,7 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.moveNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit({ op: 'moveNode', flowId: id, nodeId, position: parsed.data }, result);
         return c.json({ ok: true, position: result.data.position });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1713,6 +1732,7 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.reorderNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit({ op: 'reorderNode', flowId: id, nodeId, reorder: parsed.data }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1756,6 +1776,7 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.patchNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit({ op: 'patchNode', flowId: id, nodeId, patch: parsed.data }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1793,6 +1814,10 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addNode(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit(
+          { op: 'addNode', flowId: id, node: result.data.node as Record<string, unknown> },
+          result,
+        );
         return c.json({ ok: true, id: result.data.id, node: result.data.node });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1833,6 +1858,15 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addBulk(id, parsed.data);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit(
+          {
+            op: 'addBulk',
+            flowId: id,
+            ...(parsed.data.nodes ? { nodes: parsed.data.nodes } : {}),
+            ...(parsed.data.connectors ? { connectors: parsed.data.connectors } : {}),
+          },
+          result,
+        );
         return c.json({
           ok: true,
           nodes: result.data.nodes,
@@ -1874,6 +1908,7 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.deleteNode(id, nodeId);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit({ op: 'deleteNode', flowId: id, nodeId }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1917,6 +1952,10 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.patchConnector(id, connId, parsed.data);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit(
+          { op: 'patchConnector', flowId: id, connectorId: connId, patch: parsed.data },
+          result,
+        );
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1955,6 +1994,14 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addConnector(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit(
+          {
+            op: 'addConnector',
+            flowId: id,
+            connector: { ...(body as Record<string, unknown>), id: result.data.id },
+          },
+          result,
+        );
         return c.json({ ok: true, id: result.data.id });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1980,6 +2027,7 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.deleteConnector(id, connId);
     switch (result.kind) {
       case 'ok':
+        broadcastEdit({ op: 'deleteConnector', flowId: id, connectorId: connId }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -2100,8 +2148,8 @@ export function createApi(options: ApiOptions): Hono {
   // Live Share local API. Five routes that delegate to the injected
   // ShareController. The controller is optional — when absent (e.g. tests
   // that don't exercise share) every endpoint returns 503 so misconfigured
-  // deployments fail visibly instead of silently 404ing.
-  const share = options.share;
+  // deployments fail visibly instead of silently 404ing. `share` is defined
+  // at the top of createApi together with `broadcastEdit`.
 
   // Map a controller rejection to an HTTP status + error body. share-not-active
   // and share-peer-not-found are the two domain-specific reasons; everything
