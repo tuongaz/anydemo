@@ -1000,10 +1000,11 @@ describe('ShareController.subscribeAttributions (US-053)', () => {
 });
 
 describe('ShareState hostDisplayName default', () => {
-  it("defaults to 'Host' when not supplied via deps", async () => {
+  it("falls back to literal 'Host' when explicitly passed", async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
     const ctrl = createShareController({
       ...baseDeps,
+      hostDisplayName: 'Host',
       fetch: mockFetch({
         body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
       }),

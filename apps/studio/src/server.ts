@@ -14,7 +14,7 @@ import { seeflowHome } from './paths.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
-import { type ShareController, createShareController } from './share.ts';
+import { type ShareController, createShareController, resolveHostDisplayName } from './share.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
@@ -124,6 +124,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       shareUrlBase: process.env.SEEFLOW_SHARE_URL_BASE ?? DEFAULT_SHARE_URL_BASE,
       eventBus: events,
       flowIdsForBroadcast: () => registry.list().map((e) => e.id),
+      hostDisplayName: resolveHostDisplayName(),
     });
 
   if (watcher && (options.watchAllOnBoot ?? true)) {

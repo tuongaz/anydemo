@@ -14,7 +14,7 @@
  * re-renders via the rpc-result `id` correlation in US-041.
  */
 
-import { homedir } from 'node:os';
+import { homedir, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
 import type { EventBus } from './events.ts';
@@ -254,6 +254,27 @@ interface BootHandle {
 
 const BOOT_TIMEOUT_MS = 10_000;
 
+/**
+ * Resolve the host's display label for `attributedTo.displayName` on
+ * host-originated `node-patched` broadcasts (US-054). Tries the running OS
+ * user's `username` first; falls back to literal `'Host'` if the syscall
+ * throws (sandboxed envs) or returns a blank value. Trimmed so a username
+ * with whitespace doesn't propagate through to UI.
+ */
+export function resolveHostDisplayName(): string {
+  try {
+    const name = userInfo().username;
+    if (typeof name === 'string') {
+      const trimmed = name.trim();
+      if (trimmed.length > 0) return trimmed;
+    }
+  } catch {
+    // userInfo() throws on some sandboxed runtimes (e.g. Bun in a sealed
+    // container with no /etc/passwd). Fall through to the literal default.
+  }
+  return 'Host';
+}
+
 // Fallback frame id surfaced when the inbound envelope failed validation
 // hard enough that we can't recover `frame.id`. Anything is fine as long as
 // it satisfies the wire schema's `min(1)` constraint on the `id` field.
@@ -326,7 +347,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
   const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
   const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
-  const hostDisplayName = deps.hostDisplayName ?? 'Host';
+  const hostDisplayName = deps.hostDisplayName ?? resolveHostDisplayName();
   const rpcDispatcher: RpcDispatcher | null =
     deps.rpcDispatcher ??
     (deps.operationsDeps ? createDefaultRpcDispatcher(deps.operationsDeps) : null);

@@ -322,3 +322,220 @@ Started: Sun 31 May 2026 20:53:58 AEST
     consumers reading older lines see the field as `undefined`. Don't make
     new audit fields required without a version bump.
 ---
+
+## 2026-05-31 - US-053
+- Built attribution toast renderer + helper in @seeflow/canvas:
+  - `packages/canvas/src/lib/format-attribution.ts` maps op → verb (moveNode→
+    'moved', patchNode→'updated', addNode→'added', deleteNode→'deleted',
+    addConnector→'connected', patchConnector→'updated', deleteConnector→
+    'disconnected', addBulk→'created', reorderNode→'reordered', fallback =
+    op name). nodeLabel falls back through {name, label, text, title} on
+    diff/diff.patch/diff.node, then {nodeId, connectorId, id}, then 'Node'.
+    8 tests.
+  - `packages/canvas/src/components/attribution-toast.tsx` — fixed-position
+    bottom-left stack, capped at 3 visible (newest-on-top via
+    `column-reverse`), per-item setTimeout schedules onExpire(id) at
+    `createdAt + 2500ms`. 3px peer-color left border, dark surface, JetBrains
+    Mono 12px, pointer-events:none. setTimeout/clearTimeout/now are
+    injectable so tests can drive expiry deterministically. 7 tests cover
+    cap, custom maxVisible, rendered fields, border style, timer scheduling
+    (incl. createdAt-aware remaining), and cleanup.
+- Studio side (host studio attribution stream):
+  - `ShareController` gained `subscribeAttributions(fn) -> () => void` and a
+    new exported `AttributionEvent` type. `broadcastNodePatched()` emits
+    `{flowId, op, diff, version, attributedTo, ts}` to subscribers right
+    after the wire send — fires for peer rpc AND `broadcastHostEdit` ok
+    paths, suppressed when broadcastHostEdit short-circuits on non-ok
+    outcome (matches the broadcast suppression).
+  - New SSE channel `GET /api/share/attributions` mirrors the
+    `/api/share/state` event-loop pattern (queue+wake+heartbeat). FakeShare
+    in api.test.ts got the new method as a no-op stub. 4 new tests in
+    share.test.ts (US-053 describe block) cover peer attribution, host
+    attribution, unsubscribe, and non-ok suppression.
+- apps/web side:
+  - New `useShareState()` (SSE consumer for `/api/share/state`) and
+    `useAttributionToasts({active, selfPeerId})` (SSE consumer for
+    `/api/share/attributions`). The latter dedupes within 200ms on
+    {peerId,nodeId,op}, suppresses self-attributed frames
+    (selfPeerId='host' for the studio), and exposes `{items, onExpire}`.
+  - `App.tsx` mounts `<AttributionToastStack>` gated on
+    `shareState.status === 'active'`.
+- Peer SPA (seeflow-viewer):
+  - `src/hooks/use-attribution-toasts.ts` — React-glue wrapper around a
+    pure reducer (`ingestAttributionFrame` + `dropToast`) so the dedupe
+    logic is unit-testable without a React renderer. Peer color resolved
+    via the live presence-store snapshot so toast borders match sidebar +
+    cursor colors. 11 tests cover append, self-suppression, missing
+    attribution, dedupe coalesce within window, dedupe re-fires after
+    window, no cross-key bleed, peer-color resolver, dropToast removal +
+    no-op for unknown id.
+  - share-session.tsx renders `<AttributionToastStack>` alongside the
+    existing Toaster.
+- Test totals: canvas 1287 pass / 0 fail (15 new for US-053). Studio share
+  + api + rpc-schema 280 pass / 0 fail / 1 skip (4 new). Viewer 191 pass /
+  0 fail (11 new). Biome format + lint clean. `bun run typecheck` clean
+  across all workspaces.
+- Files changed (seeflow worktree):
+  - packages/canvas/src/lib/format-attribution.ts (new)
+  - packages/canvas/src/lib/format-attribution.test.ts (new)
+  - packages/canvas/src/components/attribution-toast.tsx (new)
+  - packages/canvas/src/components/attribution-toast.test.tsx (new)
+  - packages/canvas/src/index.ts (Helpers + Chrome exports)
+  - apps/studio/src/share.ts (AttributionEvent type, subscribers set,
+    emit in broadcastNodePatched, subscribeAttributions method)
+  - apps/studio/src/share.test.ts (4 new tests, US-053 describe block)
+  - apps/studio/src/api.ts (GET /api/share/attributions SSE)
+  - apps/studio/src/api.test.ts (FakeShare stub)
+  - apps/web/src/hooks/use-share-state.ts (new)
+  - apps/web/src/hooks/use-attribution-toasts.ts (new)
+  - apps/web/src/App.tsx (mount + gating)
+- Files changed (seeflow-viewer):
+  - src/hooks/use-attribution-toasts.ts (new)
+  - src/hooks/use-attribution-toasts.test.tsx (new)
+  - src/pages/share-session.tsx (mount + peerColor resolver from presence)
+- **Learnings for future iterations:**
+  - **Cross-repo SSE bridges:** the host studio's apps/web side has NO
+    existing share-state consumer. Adding any UI gated on shareState
+    requires the SSE consumer pair (`useShareState` reads
+    `/api/share/state`) — copy the registry-events hook shape exactly
+    (`new EventSource(...)` + `addEventListener('event', handler)` +
+    cleanup `source.close()`).
+  - **`broadcastNodePatched` is the single emission point** for every
+    accepted op (peer rpc AND `broadcastHostEdit`). To add a side-effect
+    that fires per accepted op (audit, attribution, metrics, etc.), hook
+    it INSIDE this helper — not at the call sites — so peer + host paths
+    can never diverge. The helper takes attribution as an arg, so the
+    side-effect has full attribution context for free.
+  - **Hook-shim `useEffect` typing:** Biome's `noConfusingVoidType` flags
+    `() => void | (() => void)` because `void` in a union is confusing
+    next to a callable. Use `() => undefined | (() => void)` instead.
+    Required for any future renderWithHooks-shim test that captures
+    useEffect callbacks for manual invocation.
+  - **For testing hooks that own React state**, factor the dispatch /
+    reducer logic into a pure function (`ingestAttributionFrame`,
+    `dropToast`) and unit-test that. The hook becomes a thin React-glue
+    wrapper (useState + useEffect bridging the reducer to a subscription)
+    that doesn't need a renderer to verify correctness. Mirrors the
+    `presence-store` factoring already used in the viewer codebase.
+  - **AttributionToastStack uses `flexDirection: 'column-reverse'`** so
+    new toasts appear at the TOP of the visual stack (which is anchored
+    at the bottom of the viewport via `bottom: 16`). Capping with
+    `items.slice(-maxVisible)` keeps the newest N items — the column-
+    reverse renders them with the newest at top, which matches the
+    "latest activity first" UX expectation.
+  - **Pure-reducer dedupe pattern:** the reducer takes `state` + `frame` +
+    `deps {now,...}` so tests can pass synthetic timestamps without
+    mocking `Date.now()`. The hook's React wrapper resolves
+    `now = nowFn() ?? Date.now()` ONCE per frame and passes it in. This
+    is cleaner than threading a clock through every helper.
+---
+
+## 2026-05-31 - US-054
+- End-to-end displayName + self-color propagation + identity persistence.
+- **seeflow worktree (studio side):**
+  - Added `resolveHostDisplayName()` export in `apps/studio/src/share.ts` — wraps
+    `os.userInfo().username` with try/catch + `'Host'` fallback, trims blanks.
+  - Default for `ShareDeps.hostDisplayName` is now `resolveHostDisplayName()`
+    so unsupplied callers get the OS username automatically.
+  - `apps/studio/src/server.ts` explicitly passes
+    `hostDisplayName: resolveHostDisplayName()` to `createShareController`
+    so the intent is visible at the call site (matches the convention of
+    explicit deps in createApp).
+  - Updated the existing 'Host default' test in `share.test.ts` to pass an
+    explicit `hostDisplayName: 'Host'` so it still asserts the literal —
+    the auto-derive default would now be the OS username.
+  - New `apps/studio/src/share.host-identity.test.ts` covers (a) the
+    resolver returns `os.userInfo().username` when available, (b) it never
+    returns an empty string, (c) auto-derive default flows through to
+    `state().hostDisplayName`, (d) explicit dep overrides the auto-derive.
+- **seeflow-viewer:**
+  - New `src/lib/share-identity.ts` — sessionStorage-backed
+    `{displayName, peerId, color}` cache keyed by `seeflow.share.identity.<token>`,
+    24h TTL, malformed/expired entries auto-cleared. Test-injectable `now` so
+    expiry can be driven deterministically.
+  - New `src/lib/peer-color.ts` — async `derivePeerColor(peerId)` mirrors the
+    relay's `colorForPeerId` (sha256 → first 32 bits BE mod 360 → HSL(h,70,55))
+    so the cached self color matches what other peers see for us. Falls back
+    to FNV-1a hash when `crypto.subtle` is missing.
+  - `share-client.ts`: new optional `color` opt; stamped onto outgoing cursor
+    payloads as `payload.color`. Cloud relay's CursorPayloadSchema is
+    `.strict()`-free Zod so extra `color` field passes through and the
+    relay forwards the original envelope body unchanged.
+  - `presence-store.ts`: extended viewer-side `CursorPayloadSchema` with
+    optional `color`; placeholder branch uses `payload.color ?? '#888888'` so
+    a cursor-before-presence frame paints the right color from frame 1.
+  - `presence-sidebar.tsx`: added optional `selfPeerId` prop and filters
+    matching entries out of the rendered peer list (defense-in-depth: the
+    presence store already excludes self via its `selfPeerId` option, but
+    the sidebar now stands alone too).
+  - `share-session.tsx`: loads cached identity on mount via
+    `useMemo(loadIdentity(token))`, seeds `displayName` from the cache so
+    the modal is skipped on reload, passes `color: cachedIdentity?.color`
+    into the `ShareClient`, persists the identity after join (computing
+    color via `derivePeerColor` if not cached or peerId mismatched),
+    forwards `selfPeerId={joinedData.peerId}` to `<PresenceSidebar>`.
+  - New `src/pages/share-session.identity.test.tsx` (8 tests): installs an
+    in-memory Storage stub on `globalThis.window` (Bun's test runtime
+    doesn't expose DOM by default), covers persist/reload/24h-expiry,
+    per-token isolation, clear, malformed JSON rejection, missing-field
+    rejection, empty-token no-op.
+- Test totals: studio share + api 285 pass / 1 skip / 0 fail. Viewer 199 pass
+  / 0 fail (8 new). `bun run typecheck` clean on both repos. Biome
+  format + lint clean.
+- Files changed (seeflow worktree):
+  - apps/studio/src/share.ts (resolveHostDisplayName + node:os userInfo import)
+  - apps/studio/src/server.ts (explicit hostDisplayName at call site)
+  - apps/studio/src/share.test.ts (existing 'Host default' test passes explicit dep)
+  - apps/studio/src/share.host-identity.test.ts (new)
+- Files changed (seeflow-viewer):
+  - src/lib/share-identity.ts (new)
+  - src/lib/peer-color.ts (new)
+  - src/lib/share-client.ts (color opt + cursor payload)
+  - src/lib/presence-store.ts (optional color in CursorPayloadSchema +
+    placeholder branch uses it)
+  - src/components/presence-sidebar.tsx (selfPeerId filter)
+  - src/pages/share-session.tsx (identity load/save + color wiring)
+  - src/pages/share-session.identity.test.tsx (new)
+- **Learnings for future iterations:**
+  - **Bun's test runtime does NOT expose `window` / `sessionStorage` even
+    for `.tsx` test files** — there's no DOM shim in seeflow-viewer's
+    bunfig.toml (file doesn't exist). For a test that exercises a
+    sessionStorage-backed module, install an in-memory `Storage` stub on
+    `globalThis.window` at the top of the test file and restore in
+    `afterAll`. The pattern: `class MemoryStorage implements Storage { ... }`
+    plus `(globalThis as { window: { sessionStorage: Storage } }).window =
+    { sessionStorage: storage }`. This is cheaper than adding a real
+    happy-dom preload.
+  - **Cloud `CursorPayloadSchema` permits extra fields** — Zod's default
+    `strip` mode silently drops unknown keys at the parse boundary, but the
+    relay's `routeFrame` forwards `event.body` unchanged on broadcast (not
+    the parsed payload). So adding `color?: string` to outgoing cursor
+    payloads requires no cloud schema edit — the field rides through to
+    remote peers as-is. The viewer-side `CursorPayloadSchema` in
+    presence-store DOES need the field added so re-validation on receipt
+    doesn't drop it from the typed result. Tests confirm: 199 pass on the
+    viewer suite with the color field, cloud suite untouched.
+  - **Self color matches relay color via SHA-256 mirror.** Cloud relay's
+    `colorForPeerId` reads `digest.readUInt32BE(0) % 360` for hue.
+    `derivePeerColor` in viewer must use `view.getUint32(0, false)` (false =
+    big-endian) for byte-for-byte parity. Mixing this up produces a hue
+    that differs by exactly the byte-swap, which is visible as a noticeable
+    color shift when the placeholder gets overwritten by the relay-derived
+    presence frame. Always verify the byte order against the server when
+    mirroring crypto-derived values client-side.
+  - **`hostDisplayName` default change cascades to existing tests.** The
+    pre-existing `'ShareState hostDisplayName default'` test in
+    `share.test.ts` asserted `'Host'` — once the default flipped to
+    `resolveHostDisplayName()`, that test needed an explicit dep override
+    to keep asserting the literal. Pattern: when changing a `??`-style
+    default in a controller factory, grep `*.test.ts` for the old default
+    string and update the assertions.
+  - **`useEffect` deps and stale closure capture:** `share-session.tsx`'s
+    main effect captures `cachedIdentity` + `token` from useMemo/useParams,
+    but its dep array is `[joinedData]`. Biome doesn't enforce
+    exhaustive-deps so this passes lint, and in practice `cachedIdentity`
+    is stable per-token (useMemo with `[token]`), so the closure capture is
+    OK. A token change triggers a re-mount via the router, which resets
+    everything. If a future change splits these dependencies, audit the
+    effect for stale `cachedIdentity` reads.
+---
