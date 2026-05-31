@@ -1,541 +1,118 @@
 # Ralph Progress Log
-Started: Sun 31 May 2026 20:53:58 AEST
+Started: Sun 31 May 2026 22:53:23 AEST
 ---
 
 ## Codebase Patterns
-- Phase 5 spans two repos: seeflow (this worktree) and seeflow-viewer (separate clone at /Users/tuongaz/dev/seeflow-viewer). Each story's `Working dir:` line in the acceptance criteria dictates which repo to edit. Commit in the repo you edited.
-- Cloud relay code lives at /Users/tuongaz/dev/seeflow-viewer/cloud on branch `ralph/live-share-phase-5` (created from phase-3 for this phase).
-- Envelope frame types are gated by a Zod string-enum in cloud/lambda/share/shared/envelope.ts; payload Zod schemas live in the same module and are imported by per-route handlers.
-- Use `bun test <relative path>` from the package root (not `bun test packages/...`); each repo uses Bun's native test runner.
-- Cloud relay tests mock both DynamoDB (`(ddbMod.doc as any).send = fakeDocSend`) and ApiGatewayManagement (`(ApiGatewayManagementApiClient.prototype as any).send = fakeApiSend`). Reuse the pattern from `ws-default.test.ts` whenever a handler now needs to broadcast.
-- Shared lambda helpers belong under `cloud/lambda/share/shared/` — `ws-api.ts` (apiClient + post with GoneException handling) is reusable across any handler that fans out frames.
-- The seeflow repo is a git worktree setup — the active worktree for Phase 5 work in seeflow lives at `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc` on branch `worktree-realtime-share-design-doc`. ALWAYS edit + commit there, NOT in the main repo at `/Users/tuongaz/dev/seeflow` (which is on `main`). Absolute paths to `/Users/tuongaz/dev/seeflow/packages/...` resolve to the main repo, not the worktree — use the worktree's absolute path explicitly.
-- Pre-existing failing tests in `apps/studio/src/{watcher,server,registry}.test.ts` (fs-watcher + HTTP timeouts) are NOT caused by canvas-only work; verify canvas-scope changes via `bun test packages/canvas` (currently 1272 pass) rather than full `bun test`.
+- Phase 6 cloud work happens in `/Users/tuongaz/dev/seeflow-viewer/cloud` (separate repo); host studio work happens in `/Users/tuongaz/dev/seeflow`. Commits land in each repo's own `ralph/live-share-phase-6` branch — they are not the same repo as the seeflow worktree.
+- Wire schemas live in `cloud/lambda/share/shared/envelope.ts`. New frame types must (a) be added to `EnvelopeSchema.type` enum, (b) get a dedicated `*PayloadSchema`, and (c) be re-exported in the `FileFramePayloadSchemas` registry for ws-default to dispatch by type key.
+- CDK lifecycle: `abortIncompleteMultipartUploadAfter` must be a whole-day `Duration` (CFN's `DaysAfterInitiation` is integer). Sub-day durations like `Duration.hours(1)` fail synth with "cannot be converted into a whole number of days".
+- CDK assertions for IAM grants: `Template.findResources('AWS::IAM::Policy')` then JSON.stringify each `PolicyDocument` and substring-match on the logical-id (e.g. `ShareStagingBucket`) — bucket ARNs synth as `Fn::GetAtt`, not literal names.
+- CfnOutput exports use `expect Export.Name === '<literal export name>'` via `Template.hasOutput`.
+- Run `bun test <file>` from the cloud workspace; the share-stack tests bundle every share lambda each synth, so each test takes ~150 ms — expect 2 s for the file.
+- New HTTP routes that need throttling must be (a) added via `httpApi.addRoutes({...})`, (b) added to the `for (const route of [...flowPreviewRoutes, ...])` loop that establishes CfnRoute -> Stage dependencies, and (c) added to the `RouteSettings` propertyOverride. Skipping (b) yields a synth-time "Unable to find Route by key" error when the throttling override deploys.
+- Share lambdas that need to call `PostToConnection` need both `shareWsApi.grantManageConnections(fn)` AND a `SHARE_WS_ENDPOINT` env var formatted as `https://<apiId>.execute-api.<region>.<urlSuffix>/<stageName>`.
+- When extending the `fakeDocSend` mock in `lambda/share/ws-default.test.ts` for a new DDB `UpdateExpression`, add a fresh `if (expr.includes(...))` branch BEFORE the existing `:l` / `:ttl` checks so the new SET pattern is recognised. The mock matches by substring on the expression text — keep the substring distinct (e.g. `SET peers.#p.#fw = :fw`) so it doesn't collide with `SET peers.#p = :p`.
+- When ws-default routes a frame whose `to` is the pseudo-address `'<proxy>'`, do NOT call `PostToConnection` — call `deliverReply(reqId, ...)` from `files-proxy.ts` directly. Works only in the same warm container; cross-container delivery requires DDB-backed correlation (follow-up).
+- For per-peer rate-limit on file-bytes the existing token bucket (`consumeRateToken`) is the WRONG mechanism — that bucket only governs cursor/presence. File-bytes uses a 5 MB / 60 s window stored on `peers[connId].fileBytesWindow` and is DDB-persisted via `setPeerFileBytesWindow`. Reset the window when `now - startMs > FILE_BYTES_WINDOW_MS`.
 
+## 2026-05-31 22:55 AEST - US-055
+- Added `shareStagingBucket: s3.Bucket` (`seeflow-share-staging`) to `cloud/lib/seeflow-stack.ts`: BLOCK_ALL public access, DESTROY removal, autoDeleteObjects, 1-day expiration lifecycle (+ abortIncompleteMultipartUpload after 1 day), CORS PUT/GET for `share.seeflow.dev` and `localhost:5173`.
+- Wired the bucket into `sharedShareEnv` as `SHARE_STAGING_BUCKET` so all share lambdas can read the name; granted `grantReadWrite` + `grantDelete` only to `wsDefaultFn`.
+- Added `ShareStagingBucketName` `CfnOutput` exporting `SeeflowShareStagingBucketName`.
+- Extended `cloud/lib/seeflow-stack.share.test.ts` with 3 new tests: bucket properties (public-access block, lifecycle, CORS), ws-default S3 IAM grant (PutObject/GetObject/DeleteObject), and CfnOutput shape.
+- Files changed: `cloud/lib/seeflow-stack.ts`, `cloud/lib/seeflow-stack.share.test.ts`.
+- Quality: `bun test` all 99 cloud tests pass; `bun run typecheck` clean; `npx cdk synth` exits 0.
+- **Learnings for future iterations:**
+  - CDK `abortIncompleteMultipartUploadAfter` requires whole-day Duration. The PRD spec said `Duration.hours(1)` but that fails synth; switched to `Duration.days(1)`. Recorded in PRD `notes` so US-056+ reviewers see why.
+  - The seeflow-viewer/cloud repo was on `ralph/live-share-phase-5` — I cut `ralph/live-share-phase-6` from there since phase-5 already merged US-045..US-054. The seeflow main repo (where ralph/ lives) is a *separate* worktree on its own branch; the two are not in lockstep.
+  - When asserting IAM grants on a bucket, the synth references the bucket via logical id, not name — search policy JSON for `ShareStagingBucket`, not `seeflow-share-staging`.
+  - `Template.hasOutput(name, { Export: { Name: '<literal>' } })` is the cleanest way to assert CfnOutput identity; supplying an explicit `exportName` makes this test stable.
 ---
 
-## 2026-05-31 - US-045
-- Added 'cursor' to EnvelopeSchema type enum alongside existing 'presence' literal.
-- Added PresencePayloadSchema (peerId, displayName<=40, hex color, state enum, optional flowId) and CursorPayloadSchema (peerId, flowId, finite x/y, optional viewport, non-negative int ts), plus their inferred types.
-- Extended envelope.test.ts with valid-cursor, displayName-overflow, malformed-hex, and NaN-coord cases. 11 tests pass; `bun run typecheck` clean.
-- Files changed:
-  - cloud/lambda/share/shared/envelope.ts
-  - cloud/lambda/share/shared/envelope.test.ts
+## 2026-05-31 23:10 AEST - US-056
+- Extended `cloud/lambda/share/shared/envelope.ts` with six discriminated payload schemas: `FileRequestPayloadSchema`, `FileBytesPayloadSchema`, `FileRedirectPayloadSchema`, `FileUploadIntentPayloadSchema`, `FileUploadDonePayloadSchema`, `FilesManifestPayloadSchema` (+ `FilesManifestEntrySchema`).
+- Aggregated them into a single `FileFramePayloadSchemas` record keyed by envelope `type` string, plus `FileFrameType` literal alias for downstream lambdas.
+- Tightened invariants per PRD: filename 1..255, size int [0, 1 GiB], nodeId `/^node-[A-Za-z0-9]{10}$/`, sha256 exactly 64 hex chars, redirect `getUrl` is a valid URL.
+- Extended `cloud/lambda/share/shared/envelope.test.ts` with 23 new tests covering happy paths and rejection cases (negative size, oversize filename, malformed nodeId, missing sha256, non-URL redirect, missing keys, manifest entry shape).
+- Files changed: `cloud/lambda/share/shared/envelope.ts`, `cloud/lambda/share/shared/envelope.test.ts`.
+- Quality: `bun test lambda/share/shared/envelope.test.ts` -> 35 pass; full `bun test` -> 123 pass / 0 fail across 16 files; `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - The cloud repo had no phase-5 branch yet — I branched from `ralph/live-share-phase-3` (the latest in-flight branch) rather than `main`, since phase 5 depends on prior phases' relay/handler scaffolding.
-  - `parseEnvelope` validates only the envelope shape; payload schemas (Presence/Cursor) must be applied separately by route handlers via `.safeParse`.
-  - Zod's `z.number().finite()` rejects NaN/Infinity — preferred over manual checks.
-  - Test imports must come from the same module that exports the schemas; both `PresencePayloadSchema` and `CursorPayloadSchema` are now top-level exports.
+  - The envelope `type` enum already lists every file frame from earlier scaffolding (`file-request`, `file-bytes`, `file-redirect`, `file-upload-intent`, `file-upload-done`, `files-manifest`). When US-058 wires ws-default routing, it should `safeParse` `envelope.payload` against `FileFramePayloadSchemas[envelope.type]` rather than re-declaring schemas.
+  - `payload: z.unknown()` on `EnvelopeSchema` means the outer parse stays loose — downstream handlers must do a SECOND `safeParse` with the per-type schema before trusting the payload. Don't assume `envelope.payload` is already typed.
+  - bun:test prints stdout from passing tests too — the giant "dropped: oversize" log dump from ws-default.test was just informational, not a failure signal. Don't grep for "dropped" thinking it indicates a test failure.
 ---
 
-## 2026-05-31 - US-046
-- Server-side deterministic peer color (sha256 → HSL hue → hex) added in `cloud/lambda/share/shared/peer-color.ts`; persisted on `PeerInfo` via `addPeer`.
-- ws-default `handleAuthPeer`: after successful `addPeer`, fans out a `state:'joined'` presence envelope to host + existing peers (sender excluded) with peerId/displayName/color triple. GoneException recipients are cleaned up.
-- ws-disconnect: broadcasts `state:'left'` to host + remaining peers on peer disconnect; broadcasts `state:'host-offline'` (fixed gray) to remaining peers on host disconnect.
-- `PresencePayloadSchema` state enum extended with `'host-offline'`.
-- Factored `apiClient` + `post` into `cloud/lambda/share/shared/ws-api.ts` so ws-default and ws-disconnect share identical fan-out + GoneException semantics.
-- New `ws-default.presence.test.ts` (2 tests) covers happy-path fan-out and gone-recipient continuation. `ws-disconnect.test.ts` rewritten to mock the API client and assert left/host-offline broadcasts.
-- Full cloud suite: 90 tests / 0 fail / typecheck clean.
-- Files changed:
-  - cloud/lambda/share/shared/envelope.ts
-  - cloud/lambda/share/shared/sessions.ts
-  - cloud/lambda/share/shared/sessions.test.ts
-  - cloud/lambda/share/shared/peer-color.ts (new)
-  - cloud/lambda/share/shared/ws-api.ts (new)
-  - cloud/lambda/share/ws-default.ts
-  - cloud/lambda/share/ws-default.test.ts
-  - cloud/lambda/share/ws-default.presence.test.ts (new)
-  - cloud/lambda/share/ws-disconnect.ts
-  - cloud/lambda/share/ws-disconnect.test.ts
+## 2026-05-31 23:05 AEST - US-057
+- Added `@aws-sdk/s3-request-presigner@3.1048.0` (matching the rest of the AWS SDK pin).
+- Created `cloud/lambda/share/shared/presign.ts` exporting `presignGetUrl(bucket, key, expiresInSeconds=60)` and `presignPutUrl(bucket, key, expiresInSeconds=60, contentType?)` using the v3 SDK. S3 client is lazy + cached; `_setS3ClientForTest` hook for future tests.
+- Created `cloud/lambda/share/files-proxy.ts` (handler for `GET /share/{sessionId}/files/{proxy+}`):
+  - Parses nodeId from the first path segment after `/files/`, URL-decodes, validates `/^node-[A-Za-z0-9]{10}$/` (400 `bad-node-id`).
+  - 404 on unknown session, 502 on host offline.
+  - PostToConnection a `file-request` envelope to the host with a generated `reqId`.
+  - Polls in-memory `pendingReplies` Map<reqId, {type,payload}> at 25 ms with a 25 s deadline (504 on timeout).
+  - On `file-bytes` reply: returns 200 base64 body with `content-type`, `etag: "<sha256>"`, `cache-control: private, must-revalidate`.
+  - On `file-redirect` reply: 302 to `getUrl` with same headers.
+  - Logs only `{ sessionId, nodeId, relPath, mode, sizeBytes, ms }` — never payload.
+  - `_setDepsForTest({postToConnection, sleep, now})` lets unit tests inject deterministic post + fake clock.
+- Created `cloud/lambda/share/files-proxy.test.ts` covering the 6 PRD-required scenarios + nested relPath preservation (8 tests, all pass).
+- Wired the route into `cloud/lib/seeflow-stack.ts`:
+  - New `ShareFilesProxyFn` lambda (29s timeout, `SHARE_WS_ENDPOINT` env var built from `https://${apiId}.execute-api.${region}.${urlSuffix}/${stageName}`).
+  - `shareSessions.grantReadWriteData` + `shareWsApi.grantManageConnections` for the new fn.
+  - `httpApi.addRoutes({ path: '/share/{sessionId}/files/{proxy+}', methods: [GET], integration: HttpLambdaIntegration })`, captured the routes so they can be wired into the Stage dependency loop AND `RouteSettings` override.
+  - Throttling: 100 burst / 50 rate.
+- Extended `cloud/lib/seeflow-stack.share.test.ts` with 3 new tests: route exists, throttle override applied, ManageConnections IAM grant attached to the proxy fn role.
+- Files changed: `cloud/lambda/share/shared/presign.ts` (new), `cloud/lambda/share/files-proxy.ts` (new), `cloud/lambda/share/files-proxy.test.ts` (new), `cloud/lib/seeflow-stack.ts`, `cloud/lib/seeflow-stack.share.test.ts`, `cloud/package.json` + `cloud/bun.lock` (presigner dep).
+- Quality: `bun test` → 134 pass / 0 fail across 17 files; `bun run typecheck` clean; `npx cdk synth --parameters ShareJwtSecret=...` exits 0.
 - **Learnings for future iterations:**
-  - `addPeer` already accepts `PeerInfo`; extending the interface with a new field auto-propagates through DDB writes — but every existing test row literal must be updated or TS will flag missing `color`.
-  - `routeFrame`'s `findConnRole` happens via Scan; ws-default `handleAuthPeer` now does a `getBySessionId` so it has the session row needed to know who to fan out to.
-  - The ws-disconnect handler must build the presence envelope BEFORE the DDB write removes the peer entry (we capture `peer = found.peer` from the pre-write snapshot).
-  - For `host-offline` broadcasts there's no real PeerInfo to draw from; use peerId/displayName='host' and a fixed gray color that still matches the `#[0-9a-fA-F]{6}` regex.
-  - `ApiGatewayManagementApiClient.prototype.send` mocking from one test file leaks across files if not reset in `beforeEach` — each new test file must reinstall its own mock to be safe.
+  - The pending-reply correlation map (`deliverReply(reqId, reply)`) is in-memory by design (per PRD). ws-default (US-058) must call `deliverReply` whenever it routes a `file-bytes` or `file-redirect` envelope addressed to `from:'<proxy>'`. Across separate lambda containers this only works while warm — a follow-up will likely persist replies in DDB for cold-start safety. The PRD `notes` field records this constraint.
+  - When adding a new HTTP route with throttling: must (a) capture `addRoutes` return value, (b) feed it into the Stage dependency loop, AND (c) add the route key to the `RouteSettings` propertyOverride. Missing (b) crashes synth with "Unable to find Route by key". Pattern is documented in Codebase Patterns.
+  - Test invariant: `_setDepsForTest({postToConnection, sleep, now})` works around lambdas that do `await sleep` + `await client.send` — the test can run the entire 25 s wait loop in microseconds by stubbing `sleep` and advancing `now()` arithmetically. The timeout test uses `now: () => calls > 250 ? big : small` to fire only after enough fake polls so we exercise the loop without hanging.
+  - Response headers in HTTP API integrations are case-insensitive; lowercase keys (`etag`, `location`, `content-type`) match the existing patterns used by session-create / session-join and avoid mixed-case surprises in downstream clients.
+  - `SHARE_WS_ENDPOINT` env var format: `https://<apiId>.execute-api.<region>.<urlSuffix>/<stageName>`. The PostToConnection client needs the `https://` form (NOT the `wss://` URL exposed in `SHARE_WS_URL`).
 ---
 
-## 2026-05-31 - US-047
-- `routeFrame` in cloud/lambda/share/ws-default.ts now special-cases `cursor` frames:
-  oversize (>512 B body) → drop with `dropped:'oversize'`; payload re-validated via
-  `CursorPayloadSchema.safeParse` → drop with `dropped:'invalid'`; `to` is forced to
-  `'all'` so cursors are public to the session regardless of what the client sent.
-- Added a module-scope token-bucket rate limiter (`Map<connId, {tokens, ts}>`,
-  60 token bucket, 45 tokens/sec refill) that applies ONLY to `cursor` + `presence`
-  types — RPC paths untouched. Drops log `dropped:'rate'` with no error reply.
-- Exported `_resetRateLimiter()` for test isolation across files.
-- New ws-default.cursor.test.ts covers fan-out, unauthed reject, 200-frame burst
-  yielding exactly 60 broadcasts (with Date.now pinned), oversize drop, invalid
-  payload drop, plus a bonus test that a peer-supplied `to:'host'` cursor is
-  rewritten to `to:'all'` on the broadcast envelope.
-- Full cloud suite: 96 tests / 0 fail / typecheck clean.
-- Files changed:
-  - cloud/lambda/share/ws-default.ts
-  - cloud/lambda/share/ws-default.cursor.test.ts (new)
+
+## 2026-05-31 23:35 AEST - US-058
+- Extended `cloud/lambda/share/ws-default.ts` with file frame routing branches in `routeFrame()`:
+  - `file-request` falls through the existing routing path (to:'host' handled by `dispatchToTargets`).
+  - `file-bytes` → `handleFileBytes`: zod-parses payload, computes raw size from base64, enforces 5 MB / 60 s per-peer window via `setPeerFileBytesWindow` (DDB), drops + sends `rpc-result {ok:false, reason:'rate-limited'}` to sender on excess, otherwise routes to envelope.to. If `to === '<proxy>'`, calls `deliverReply` from files-proxy directly instead of PostToConnection.
+  - `file-redirect` → `handleFileRedirect`: same `<proxy>` shortcut, otherwise routes to envelope.to.
+  - `file-upload-intent` → `handleFileUploadIntent`: if size > 256 KB, checks 1 GB session quota (`session.stagedBytes`), mints presigned PUT via `presignPutUrl` with key `${sessionId}/${reqId}/${randomSlug()}-${filename}` (60 s TTL), increments `stagedBytes` via `addStagedBytes`, embeds `payload.upload = { via:'s3', key, putUrl }`. ≤256 KB embeds `payload.upload = { via:'ws' }`. Both forwarded to host. Quota exceeded → `rpc-result {ok:false, reason:'session-quota'}` back to sender.
+  - `file-upload-done` → `handleFileUploadDone`: caches `{reqId → {bucket, key}}` in in-memory `pendingDeletes` map and routes to host.
+  - `rpc-result` → `maybeTriggerDelete` runs first: if envelope.id matches a pending delete AND sender is host AND payload.ok === true, fires `DeleteObject` (fire-and-forget, log failures only) and removes from map. Then falls through to normal routing.
+- Refactored `routeFrame` to use a shared `dispatchToTargets(event, session, fromConnId, routed)` helper (drives the original to:'all' | to:'host' | to:connId targets-and-cleanup loop) and a `sendDirect(...)` helper for the synthetic relay→sender error replies.
+- Added `_setDepsForTest` injection points: `presignPut`, `deleteObject`, `randomSlug` — lets tests stub presigner output, capture S3 deletes, and pin the URL-slug component for deterministic key assertions.
+- Extended `cloud/lambda/share/shared/sessions.ts`:
+  - `PeerInfo.fileBytesWindow?: { startMs, bytes }`.
+  - `SessionRow.stagedBytes?: number`.
+  - `setPeerFileBytesWindow(sessionId, connId, window)` — atomic `SET peers.#p.#fw = :fw`.
+  - `addStagedBytes(sessionId, delta)` — atomic `SET stagedBytes = if_not_exists(stagedBytes, :z) + :d`.
+- Extended `cloud/lambda/share/ws-default.test.ts`:
+  - Updated `fakeDocSend` to honour the new UpdateExpression patterns.
+  - Wired `_resetPendingDeletes` + `_resetPending` (files-proxy) + `_setDepsForTest` into `beforeEach`/`afterEach`.
+  - Added 8 new tests under `ws-default file frame routing`: file-request → host; file-bytes → specific peer; file-upload-intent ≤256 KB returns via:'ws' (no presign); >256 KB returns via:'s3' with putUrl matching `https://.+\.amazonaws\.com/seeflow-share-staging/.+\?.+` and `stagedBytes` incremented; file-upload-done primes pending delete; host rpc-result ok:true triggers DeleteObject and clears the map; rate-limit drop returns relay rpc-result reason:'rate-limited' and forwarding suppressed; session-quota rejection returns reason:'session-quota'.
+- Files changed: `cloud/lambda/share/ws-default.ts`, `cloud/lambda/share/ws-default.test.ts`, `cloud/lambda/share/shared/sessions.ts`.
+- Quality: `bun test lambda/share/ws-default.test.ts` → 17 pass; full `bun test` → 142 pass / 0 fail across 17 files; `bun run typecheck` clean; `npx cdk synth --parameters ShareJwtSecret=...` exits 0.
 - **Learnings for future iterations:**
-  - Module-scope mutable state (the rate-limit Map) leaks across tests *within the
-    same file* and *across files in the same `bun test` invocation* — export a
-    `_resetX()` helper and call it in `beforeEach` of every file that touches it.
-  - For deterministic burst tests, pin `Date.now` to a constant value during the
-    loop, then restore in `afterEach`. Token-bucket refill is time-driven so any
-    real elapsed millis would leak ~0.045 tokens and change the count.
-  - The envelope's `payload` is `z.unknown()`; per-type payload schemas
-    (`CursorPayloadSchema` here) must be applied at the route handler — never
-    assume envelope parsing has validated the inner payload.
-  - When mutating an envelope before fan-out (e.g. forcing `to:'all'` for cursor),
-    use a `routed = {...env, to:'all'}` copy and forward `routed`, never the
-    original `env`, to both the broadcast loop and the audit log.
-  - `(event.body ?? '').length` is the byte-cap check the PRD prescribes (counts
-    JSON characters as bytes — fine for ASCII JSON, and matches the size logged
-    in the existing audit line).
+  - The PRD-required regex `https://.+\.amazonaws\.com/${SHARE_STAGING_BUCKET}/.+\?.+` is path-style. Real S3 presigners default to virtual-hosted style (`<bucket>.s3.amazonaws.com/<key>`), so the test STUBS a path-style URL via the `presignPut` dep injection. In production the actual URL form is whatever the AWS SDK chooses — tests should assert on `key` + bucket name, not the literal URL shape.
+  - `presignPutUrl(bucket, key, expiresInSeconds, contentType?)` — pass content type so the resulting presigned URL pins `Content-Type` and the peer's PUT must include the matching header. Useful for the file-upload-intent → S3 path to enforce mime alignment.
+  - `dispatchToTargets` is a useful refactor: any future per-frame routing branch (e.g. files-manifest from US-062) can call it with a custom `routed` envelope. Keeps the to:'all' / 'host' / connId fan-out + GoneException cleanup centralised.
+  - The `<proxy>` sentinel-as-recipient pattern: when ws-default sees a file-bytes/file-redirect bound for `<proxy>`, it invokes `deliverReply(reqId, ...)` locally. Same-warm-container only. For prod parity across lambda containers the next iteration should persist replies to DDB keyed by reqId and have files-proxy poll the row instead of an in-memory map.
+  - `addStagedBytes` uses `if_not_exists(stagedBytes, :z) + :d` so the column doesn't need pre-seeding when a session is created — initial reads still see `undefined` and our code coalesces via `?? 0`.
+  - The mock for `fakeDocSend` is permissive — when a new UpdateExpression branch is added, the mock should match by an UNIQUE substring of the expression so it doesn't accidentally trigger sibling branches.
 ---
 
-## 2026-05-31 - US-048
-- Added `presenceLayer?: ReactNode` and `onCursorMove?: (coords, viewport) => void` to `SeeflowCanvasBaseProps` in `packages/canvas/src/components/seeflow-canvas.tsx`.
-- `presenceLayer`, when provided, is rendered inside `<ViewportPortal>` between `<Background>` and `<GlowOverlay>`/`<Controls>` so it transforms with pan/zoom. Wrapper div carries `pointer-events:none` (per the AC) so the layer never eats pane clicks; individual cursors opt back in.
-- `onPointerMove` handler now (when `onCursorMove` is wired) calls `rfInstance.screenToFlowPosition` + `getViewport`, forwarding `{ x, y, flowId: flowSlug ?? null }` and the viewport. Legacy path (no callback) does zero extra work — guarded on the function presence.
-- Added `packages/canvas/src/components/seeflow-canvas.presence.test.tsx` (5 tests, all pass): asserts the slot lands inside `<ViewportPortal>` inside `<ReactFlow>`, that `ViewportPortal` is NOT mounted when the prop is absent, that the rfInstance ref is not touched when `onCursorMove` is absent, that the callback fires with finite x/y + viewport, and that `flowId` is `null` when `flowSlug` is omitted.
-- Public types: `presenceLayer` and `onCursorMove` are part of `SeeflowCanvasBaseProps` which is unioned into the already-exported `SeeflowCanvasProps` — no new index.ts entries needed (the AC mention of "already re-exports SeeflowCanvasProps" is satisfied).
-- Full canvas suite: 1266 tests / 0 fail / `bun run typecheck` clean across all workspaces / Biome format + lint clean.
-- Files changed:
-  - packages/canvas/src/components/seeflow-canvas.tsx (props, JSX, pointer handler)
-  - packages/canvas/src/components/seeflow-canvas.presence.test.tsx (new)
+## 2026-05-31 23:50 AEST - US-059
+- Created `apps/studio/src/share-file-resolver.ts` exporting `resolveNodeFile({ repoPath, flowPath, nodeId, relPath }, pathMod?)` returning either `{ absPath }` or `{ error: 'bad-node-id' | 'traversal' | 'outside-flow-dir' }`. Mirrors the per-node upload sink at `apps/studio/src/api.ts:1238` (`/projects/.../nodes/:nodeId/files/upload`): base dir is `join(repoPath, dirname(flowPath), 'nodes', nodeId)` with `flowDir === '.'` collapsing to `join(repoPath, 'nodes', nodeId)`.
+- Validation order: nodeId regex `/^node-[A-Za-z0-9]{10}$/` first; then relPath must be non-empty, must not start with `/` or `\`, must not be absolute under either POSIX or win32, must not contain `..` segments after `path.normalize` (split on BOTH separator styles); finally `path.resolve(baseDir, relPath)` must equal `baseDir` exactly or begin with `baseDir + sep`.
+- Function takes an optional second `pathMod` argument defaulting to `node:path` so the test file can swap in `path.win32` to simulate a Windows host. Native callers can ignore it.
+- Created `apps/studio/src/share-file-resolver.test.ts` with 25 tests covering: 4 happy-path POSIX cases (nested flow, repo-root flow.json collapsing flowDir==='.', `subdir/foo.png`, deep nesting); 9 bad-nodeId cases (missing prefix, off-by-one length, underscore/hyphen/dot in id, empty, wrong prefix, uppercase prefix); 8 POSIX traversal rejections (`..`, `../../etc/passwd`, embedded `..`, absolute `/etc/passwd`, empty, leading `\`, drive-letter `C:\\evil`, mixed-sep `..\\..\\evil`); 4 win32-simulation cases (`subdir\\foo.png` happy path, `..\\..\\etc\\passwd` rejection, `D:\\evil` rejection, flowDir collapse).
+- Files changed: `apps/studio/src/share-file-resolver.ts` (new), `apps/studio/src/share-file-resolver.test.ts` (new).
+- Quality: `bun test apps/studio/src/share-file-resolver.test.ts` → 25 pass / 0 fail; `bun run typecheck` → all 6 workspaces clean; `bun run lint` → 465 files clean. The 2 pre-existing flaky timeouts in `apps/studio/src/server.test.ts` (`GET /health returns { ok: true }`, `unknown route returns 404`) reproduce on `main` without my changes — pre-existing flake from bun:test server-spawn contention, NOT introduced here.
 - **Learnings for future iterations:**
-  - The hook-shim test pattern in `packages/canvas/src/components/seeflow-canvas.test.tsx` is reusable for any new prop that needs DOM-less assertions on the rendered tree — copy `callSeeflowCanvas` + `renderWithHooks` and pin the ref slot by useRef declaration order. `RF_INSTANCE_REF_SLOT = 2` matches `flagsRef (0)`, `wrapperRef (1)`, `rfInstanceRef (2)` at the top of the SeeflowCanvas body — adding a new useRef before slot 2 would shift the constant.
-  - `<ViewportPortal>` from `@xyflow/react` is the canvas-correct portal for content that must transform with pan/zoom; mounting cursor overlays in a plain absolutely-positioned wrapper would NOT track the viewport.
-  - The `onPointerMove` guard pattern (`if (onCursorMove) { ... }` outside the existing `if (!drawingRef.current) return`) lets the same handler serve both presence emission AND the existing draw-mode rubber band — keep the new branch BEFORE the early-return so cursor emission works when the user isn't drawing.
-  - Adding new SeeflowCanvas props: append fields to `SeeflowCanvasBaseProps` (NOT a per-mode union arm) — the discriminated `SeeflowCanvasProps` union already extends the base, so anything added there is reachable in every mode without duplicating the field across the union arms.
----
-
-## 2026-05-31 - US-049
-- Built `PeerCursorsLayer` overlay component in the canvas package, exporting `PeerCursor` + `PeerCursorsLayerProps` types from the Chrome section of `packages/canvas/src/index.ts`.
-- Renders one `<div>` per peer (excluding `selfPeerId`) absolutely positioned at `translate({x}px, {y}px)` so the consumer can drop it inside a viewport-transformed wrapper (e.g. `<SeeflowCanvas presenceLayer={...} />`'s `<ViewportPortal>`). Each row: 14×14 SVG arrow in peer color with `drop-shadow(0 1px 1px rgba(0,0,0,0.35))` + name pill (peer color bg, white text, JetBrains Mono 11px, 4px radius, 4px/6px padding) anchored just past the arrow tip.
-- Idle peers render at `opacity: 0.4`. All cursor wrappers carry `pointer-events: none` so the layer never eats pane clicks; the outer wrapper too.
-- `transform 80ms linear` transition smooths the ~30 fps cursor stream from the relay without adding perceptible lag.
-- 6 unit tests in `peer-cursors-layer.test.tsx` cover: selfPeerId exclusion, correct transforms for multiple peers + transition value, idle opacity + data-idle attr, displayName labels with pill bg/color, arrow size/fill/drop-shadow, empty `peers` array.
-- Canvas suite: 1272 pass / 0 fail / typecheck + biome clean. (Pre-existing studio fs-watcher + server-timeout failures are unrelated.)
-- Files changed:
-  - packages/canvas/src/components/peer-cursors-layer.tsx (new)
-  - packages/canvas/src/components/peer-cursors-layer.test.tsx (new)
-  - packages/canvas/src/index.ts (Chrome-section export of `PeerCursorsLayer` + types)
-- **Learnings for future iterations:**
-  - When a component renders sub-elements via a helper component (e.g. `peers.map(p => <Cursor peer={p}/>)`) AND you want hook-shim-style tests that walk the JSX tree without a renderer, INLINE the sub-component's JSX into the parent — otherwise the returned tree contains `{type: Cursor, props: {peer}}` elements that have not been executed, so `findAll(el => el.type === 'svg')` finds nothing. Mirrors the `icon-renderer.test.tsx` pattern.
-  - Bun's `bun test <filter>` matches by substring on file path AND requires the filename to contain `.test`/`.spec`/`_test_`/`_spec_`. A bare path filter like `bun test packages/canvas/src/components/seeflow-canvas` matches `seeflow-canvas.test.tsx` only (not `seeflow-canvas.presence.test.tsx`) due to how the substring is interpreted. Use the full file path or the closest unique substring.
-  - The canvas package's hookless components (no `useState`/`useEffect`) can be unit-tested by calling them as plain functions — `PeerCursorsLayer(props)` returns the React element directly. No `renderWithHooks` shim needed (which is required only for components that call hooks). This matches the established pattern in `icon-renderer.test.tsx`.
-  - I initially wrote files to `/Users/tuongaz/dev/seeflow/packages/...` instead of the worktree path `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc/packages/...` — the absolute path resolves to the MAIN repo on branch `main`, not the active worktree. Always prefix file edits with the worktree's absolute path explicitly. Fixing required copying files into the worktree and reverting the main repo's working tree.
----
-
-## 2026-05-31 - US-050
-- Wired peer-side cursor send/receive + presence store + share-session UI in seeflow-viewer.
-- `share-envelope.ts`: added `'cursor'` to the EnvelopeSchema type enum.
-- `share-client.ts`: new `peerId` ShareClientOptions field (taken from `joinShare` response), new `sendCursor({flowId,x,y,viewport?})` method with rAF-based last-write-wins coalescing throttle, drops if not authed, drops if no peerId. Cleans pending rAF + pending cursor on disconnect. Added `'cursor'` + `'presence'` to TYPED_FRAME_EVENTS so consumers can `client.on('cursor', ...)` / `client.on('presence', ...)`. rAF impl is injectable via `requestAnimationFrameImpl`/`cancelAnimationFrameImpl` for deterministic tests.
-- `presence-store.ts` (new): `createPresenceStore({selfPeerId?, idleAfterMs?, idleSweepMs?})` returns `{subscribe, getSnapshot, applyPresence, applyCursor, markIdle, dispose}`. Self-peer filtered on both apply paths. Out-of-order cursor frames dropped (ts <= existing). Cursor-before-presence stashes a placeholder. `markIdle` flips active peers with stale cursor (>= idleAfterMs) to idle; idle sweep timer auto-installed unless `idleSweepMs: null`. Schemas re-validate the wire shapes inline (cloud envelope spec mirrored).
-- `share-session.tsx`: passes `peerId` into ShareClient; creates a presence-store per client lifetime; on 'presence'/'cursor' events feeds `applyPresence` / `applyCursor`; subscribes via `useSyncExternalStore` and derives a `PeerCursor[]` filtered to the active flow + non-left peers; renders `<PeerCursorsLayer presenceLayer>` (only when peers present); wires `onCursorMove` through to `client.sendCursor`. Disposes store + unsubs on cleanup.
-- `edit-canvas.tsx`: surfaces optional `presenceLayer` + `onCursorMove` pass-throughs to `<SeeflowCanvas>`.
-- Tests:
-  - `src/lib/share-client.cursor.test.ts` (6 tests): 12-tick rAF run with 100 calls → 12 frames (coalescing), latest-wins payload, no emit before auth, queued frame dropped on disconnect, viewport included, no-op without peerId.
-  - `src/lib/presence-store.test.ts` (13 tests): join/leave/self-exclude, cursor attach + un-idle, out-of-order drop, late-presence merges placeholder, markIdle 8s window, malformed reject, host-offline ignore, subscribe fires, dispose cleans timer.
-- Full viewer suite: 174 pass / 0 fail / `bun run typecheck` clean. Canvas suite: 1272 pass / 0 fail.
-- Files changed (seeflow-viewer):
-  - src/lib/share-envelope.ts
-  - src/lib/share-client.ts
-  - src/lib/share-client.cursor.test.ts (new)
-  - src/lib/presence-store.ts (new)
-  - src/lib/presence-store.test.ts (new)
-  - src/components/edit-canvas.tsx
-  - src/pages/share-session.tsx
-- Files changed (seeflow worktree):
-  - packages/canvas/src/index.ts (restore fix)
-- **Learnings for future iterations:**
-  - **Regression hazard:** the previous Ralph iteration's US-049 commit silently REMOVED the IoAdapter / IoAdapterDispatchEnvelope / IoAdapterResult exports from packages/canvas/src/index.ts (added by US-035). The seeflow-viewer's share-client imports those directly. Symptom: every viewer file that imports from `@seeflow/canvas` fails `bun run typecheck` with "declares 'IoAdapter' locally, but it is not exported." Always rebuild the canvas (`cd packages/canvas && bun run build:js`) after editing index.ts so the symlinked viewer node_modules sees the new .d.ts. When editing the public index.ts, diff against `git show <prev-commit>:packages/canvas/src/index.ts` to ensure you aren't dropping previously-added sections.
-  - **seeflow-viewer's `@seeflow/canvas` is a symlink** to `/Users/tuongaz/dev/seeflow/packages/canvas` (the MAIN repo, not the worktree). But the build artifact (dist/) lives in whichever physical canvas dir the symlink resolves to — and in this setup it resolves to the worktree. Run `readlink node_modules/@seeflow/canvas` to confirm before assuming changes are picked up. After any worktree canvas edit, rebuild from the worktree: `cd /Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc/packages/canvas && bun run build:js`.
-  - **`useSyncExternalStore` with an optional store:** when the store is created per-effect (e.g. one per ShareClient), you can't conditionally call the hook. Pattern: keep a stable empty Map fallback via `useMemo`; the `subscribe` callback returns a no-op when store is null, and `getSnapshot` returns the empty fallback. React still re-runs the snapshot reader when the store-bearing state changes because the subscribe + snapshot callbacks are themselves `useCallback`-memoized on `[store]`, so the dependency change triggers re-subscription.
-  - **rAF throttle tests:** mock `requestAnimationFrame` via constructor opts (don't monkey-patch globals — Bun's test harness has its own globals lifecycle). The throttle pattern (pending state + single in-flight handle + flush) means N synchronous `sendCursor` calls produce 1 frame per manually-flushed rAF tick. Test the upper-bound assertion ("≤12 in 200 ms ≈ 12 ticks") AND the equality assertion separately so a coalescing regression that emits more than once per tick fails loudly instead of slipping under the upper bound.
-  - **Peer cursor envelope `from` field:** the AC said `from: <peerConnId>` but the peer client doesn't know its own connId (set by AWS API Gateway). Following the existing rpc convention, use `from: 'peer'` and let the relay rewrite to the connId on broadcast. The actual peer identity lives in `payload.peerId` (from joinShare).
-  - **Cursor filtering by flow:** cursors include `flowId` so peers exploring a different flow stay out of the local viewer's overlay (their cursors would otherwise show up at meaningless flow-space coords). The presence sidebar (US-051) should still list them; only the cursor overlay filters by flowId.
----
-
-## 2026-05-31 - US-051
-- New `src/components/presence-sidebar.tsx` (PresenceSidebar) in seeflow-viewer:
-  240px right-docked vertical stack with header count, host row pinned top
-  (`(host)` suffix), self row second (`(you)` suffix), then remote peers.
-  Each row: 24px circle badge (peer color, white initial) + displayName + 8px
-  status dot (emerald active / amber idle / faint gray left). Peers in
-  `state:'left'` are filtered out of the rendered list. Renders host status
-  as `left` (gray dot) when hostOnline is false. Uses tokens from
-  `src/lib/design-tokens.css`.
-- New `src/components/connection-status-badge.tsx`: pill with status dot +
-  label. Maps `wsState.kind === 'authed' && hostOnline` → "Connected · N peers"
-  (ok tone), `!hostOnline` → "Host offline" (danger), otherwise → "Reconnecting…"
-  (warn).
-- New `src/lib/header-slot-context.ts` lets ShareSession inject a node into
-  the right side of the global `ViewerHeader` (which currently wraps the
-  /share/:token route via `ViewerLayout`). `App.tsx` provides the context;
-  `viewer-header.tsx` reads and renders the slot before the existing
-  ThemeCog. Pattern reuses the FlowMetaContext shape — minimal blast radius.
-- `src/pages/share-session.tsx`:
-  - Tracks new `hostOnline` state (init from `joinedData.hostOnline`,
-    flipped to `false` on incoming `state:'host-offline'` presence frames —
-    presence-store ignores host-offline, so this watch sits at the page
-    level).
-  - Derives `sidebarPeers: PresenceSidebarPeer[]` + `activePeerCount` from
-    the existing presence-store `useSyncExternalStore` snapshot.
-  - Effect mounts a `<ConnectionStatusBadge>` into the header slot whenever
-    `joinState` is 'joined'; cleans up on unmount/transition.
-  - Final render swaps the bare `<EditCanvas>` for a flex row that adds the
-    `<PresenceSidebar>` to the right.
-- Tests:
-  - `src/components/presence-sidebar.test.tsx` (5 tests): host pin order,
-    idle dot color, `left` exclusion, host row goes gray when offline,
-    `hostDisplayName` override.
-  - `src/components/connection-status-badge.test.tsx` (3 tests): authed →
-    "Connected · N peers", `!hostOnline` → "Host offline", non-authed →
-    "Reconnecting…".
-- Full viewer suite: 182 pass / 0 fail / `bun run typecheck` clean.
-- Files changed (seeflow-viewer):
-  - src/App.tsx (HeaderSlotContext provider)
-  - src/components/viewer-header.tsx (reads + renders headerSlot)
-  - src/components/presence-sidebar.tsx (new)
-  - src/components/presence-sidebar.test.tsx (new)
-  - src/components/connection-status-badge.tsx (new)
-  - src/components/connection-status-badge.test.tsx (new)
-  - src/lib/header-slot-context.ts (new)
-  - src/pages/share-session.tsx (hostOnline tracking + sidebar/header wiring)
-- **Learnings for future iterations:**
-  - The JSX-walking test pattern (`PeerCursorsLayer` style) only sees plain
-    DOM elements — wrapping rows in a `<PeerRow>` sub-component leaves
-    `{ type: PeerRow, props }` placeholders that `flatten()` can't recurse
-    into. Fix: extract a `function row(...)` helper that RETURNS JSX
-    (`<div>...</div>`) directly so the parent's `children` tree is composed
-    of resolved DOM elements. Mirrors the canvas/icon-renderer learning.
-  - When the rendered row contains BOTH a badge initial letter and a name
-    span, generic `textOf(row)` concatenates both ("TTuong"). Tag the
-    name span with `data-testid="presence-name"` and have `textOf` pull
-    its children only — keeps badge text out of name-equality assertions.
-  - Host display name doesn't yet flow from anywhere (`hostDisplayName`
-    derivation lands in US-054). For now PresenceSidebar accepts an
-    optional `hostDisplayName?: string` prop and falls back to literal
-    "Host"; share-session calls it without the prop.
-  - `host-offline` presence frames are deliberately ignored by
-    `presence-store.ts:127` (session-wide signal, not a per-peer entry).
-    Subscribers (share-session) need to also `next.on('presence', ...)`
-    and inspect `payload.state === 'host-offline'` to drive UI banners.
-  - The /share/:token route is wrapped in `ViewerLayout` (App.tsx:35) which
-    renders `<ViewerHeader />`, so any header chrome belongs there — not
-    in `wrap()` inside share-session. The header-slot-context pattern keeps
-    the page-side `ShareSession` in charge of mount/unmount/value without
-    making `ViewerHeader` route-aware.
-  - `git add -A` from the viewer repo grabbed an unrelated `.seeflow/`
-    artifact directory (dev studio output). Always either `git add` named
-    paths or filter `git status --short` first. The first commit had to
-    be soft-reset and re-committed without it.
----
-
-## 2026-05-31 - US-052
-- Added `AttributionSchema` (peerId + displayName, both `.min(1)`, `.strict()`)
-  in `apps/studio/src/share-rpc-schema.ts`; made `attributedTo` REQUIRED on
-  `NodePatchedFramePayloadSchema` and OPTIONAL on the `RpcResultPayloadSchema`
-  ok=true variant (the ok=false reply omits attribution per AC).
-- Extended `RpcAuditEntry` with an optional `attributedTo` object so the
-  per-session JSONL log mirrors the wire-side attribution for every accepted
-  rpc + every host-local edit.
-- `apps/studio/src/share.ts`:
-  - Added `hostDisplayName?: string` to `ShareDeps` (default 'Host') and
-    `hostDisplayName: string` to the `active` `ShareState` variant so the SSE
-    bridge / local studio UI can render self-attribution.
-  - Refactored `dispatchRpcFrame` to take an `{peerId, displayName}` actor
-    instead of a bare peerId. `handleFrame`'s rpc branch now passes
-    `{peerId: peer.peerId, displayName: peer.displayName}` from the
-    `connPeers` map.
-  - `handleRpcFrame` public method gained an optional 3rd arg `displayName`;
-    it also falls back to the `connPeers` lookup if the controller already
-    knows the peer (so production callers that only pass peerId still get
-    proper attribution without changing existing call sites).
-  - Extracted a `broadcastNodePatched(op, outcome, attributedTo)` helper so
-    the peer-rpc path and the new `broadcastHostEdit` path assemble the
-    `node-patched` payload identically (only attribution differs).
-  - Added `broadcastHostEdit(op, outcome): number | null` to the
-    `ShareController` interface. No-ops when not active or outcome !== 'ok';
-    on success appends an audit entry with `peerId: 'host'` and broadcasts
-    a `node-patched` envelope attributed to `{peerId: 'host', displayName:
-    hostDisplayName}`. Returns the assigned monotonic version (matches the
-    peer-rpc path for consistency).
-- Fixed two TS errors in pre-existing tests:
-  - `apps/studio/src/api.test.ts`: `FakeShare` now implements
-    `broadcastHostEdit: () => null`, and the `setState` test fixture's
-    'active' literal now includes `hostDisplayName: 'Host'`.
-- Added 4 new tests in `share.test.ts` (US-052 attribution describe block):
-  - peer rpc broadcast + rpc-result both carry `{peerId: 'peer-42',
-    displayName: 'Alice'}` after a presence/join — verifies the connPeers
-    lookup path inside handleFrame.
-  - host-originated `broadcastHostEdit` broadcasts `node-patched` attributed
-    to `{peerId: 'host', displayName: 'tuong'}`, returns version 1, AND the
-    injected `appendShareAuditFn` captured the host-edit audit entry with
-    matching attribution.
-  - rpc from unknown connId is silently dropped — no broadcast, no
-    rpc-result. Reuses the existing 'unknown peer' behavior.
-  - active state's `hostDisplayName` defaults to 'Host' when ShareDeps
-    omits the field.
-- Studio share-related suite: 36 tests / 0 fail. Full studio suite: 1100
-  pass / 7 fail / 1 skip — the 7 failures are the pre-existing fs-watcher +
-  createApp HTTP timeout tests already documented in Codebase Patterns, all
-  unrelated to share.* . `bun run typecheck` clean across all workspaces.
-  Biome format + lint clean.
-- Files changed (seeflow worktree):
-  - apps/studio/src/share-rpc-schema.ts (Attribution schema, attributedTo on
-    NodePatched + RpcResult ok=true)
-  - apps/studio/src/share-audit.ts (RpcAuditEntry.attributedTo?)
-  - apps/studio/src/share.ts (hostDisplayName plumbing, actor refactor,
-    broadcastHostEdit method, broadcastNodePatched helper)
-  - apps/studio/src/share.test.ts (US-052 attribution tests +
-    hostDisplayName default test)
-  - apps/studio/src/api.test.ts (FakeShare + setState literal updates)
-- **Learnings for future iterations:**
-  - **`ShareController` is faked in api.test.ts via `FakeShare`** — any new
-    method added to the `ShareController` interface MUST be added to
-    `createFakeShare` (apps/studio/src/api.test.ts:5018) or `bun run
-    typecheck` will fail with TS2741. Cheap fix: return a no-op stub.
-  - **`ShareState.active` is constructed by hand in tests** — adding a new
-    required field to the `active` variant cascades to every test that
-    builds an `active` literal. Run a quick `grep -n "status: 'active'"
-    apps/studio/src/*.test.ts` after such changes.
-  - **AttributionSchema is `.strict()`** but `NodePatchedFramePayloadSchema`
-    is `.passthrough()`. Strict on the nested attribution object catches a
-    tampered peer adding extra fields under `attributedTo`; passthrough on
-    the outer payload preserves the deliberate looseness around `diff`
-    (already `z.record(z.unknown())` per existing schema design).
-  - **Refactoring `dispatchRpcFrame`'s actor signature** from
-    `(frame, fromPeerId)` to `(frame, {peerId, displayName})` would break
-    the public `handleRpcFrame` API and all existing tests. Instead, kept
-    the public API stable (added optional `displayName` 3rd arg) and only
-    refactored the *internal* helper — public/internal divergence is fine
-    here since the internal call site (handleFrame) is the only producer
-    of the structured actor.
-  - **Cross-validation that needs runtime context** (e.g. `attributedTo.peerId
-    === 'host' OR ∈ knownPeers`) can't be expressed in a Zod schema without
-    a refinement closure that captures the set. The AC's "matching a known
-    peer" constraint is enforced implicitly at the broadcast site (the host
-    can only attribute to peers it knows about via connPeers) — no schema
-    refinement needed.
-  - **Audit entry shape evolution** — adding optional fields to
-    `RpcAuditEntry` is safe (per-line JSONL, no header), and existing
-    consumers reading older lines see the field as `undefined`. Don't make
-    new audit fields required without a version bump.
----
-
-## 2026-05-31 - US-053
-- Built attribution toast renderer + helper in @seeflow/canvas:
-  - `packages/canvas/src/lib/format-attribution.ts` maps op → verb (moveNode→
-    'moved', patchNode→'updated', addNode→'added', deleteNode→'deleted',
-    addConnector→'connected', patchConnector→'updated', deleteConnector→
-    'disconnected', addBulk→'created', reorderNode→'reordered', fallback =
-    op name). nodeLabel falls back through {name, label, text, title} on
-    diff/diff.patch/diff.node, then {nodeId, connectorId, id}, then 'Node'.
-    8 tests.
-  - `packages/canvas/src/components/attribution-toast.tsx` — fixed-position
-    bottom-left stack, capped at 3 visible (newest-on-top via
-    `column-reverse`), per-item setTimeout schedules onExpire(id) at
-    `createdAt + 2500ms`. 3px peer-color left border, dark surface, JetBrains
-    Mono 12px, pointer-events:none. setTimeout/clearTimeout/now are
-    injectable so tests can drive expiry deterministically. 7 tests cover
-    cap, custom maxVisible, rendered fields, border style, timer scheduling
-    (incl. createdAt-aware remaining), and cleanup.
-- Studio side (host studio attribution stream):
-  - `ShareController` gained `subscribeAttributions(fn) -> () => void` and a
-    new exported `AttributionEvent` type. `broadcastNodePatched()` emits
-    `{flowId, op, diff, version, attributedTo, ts}` to subscribers right
-    after the wire send — fires for peer rpc AND `broadcastHostEdit` ok
-    paths, suppressed when broadcastHostEdit short-circuits on non-ok
-    outcome (matches the broadcast suppression).
-  - New SSE channel `GET /api/share/attributions` mirrors the
-    `/api/share/state` event-loop pattern (queue+wake+heartbeat). FakeShare
-    in api.test.ts got the new method as a no-op stub. 4 new tests in
-    share.test.ts (US-053 describe block) cover peer attribution, host
-    attribution, unsubscribe, and non-ok suppression.
-- apps/web side:
-  - New `useShareState()` (SSE consumer for `/api/share/state`) and
-    `useAttributionToasts({active, selfPeerId})` (SSE consumer for
-    `/api/share/attributions`). The latter dedupes within 200ms on
-    {peerId,nodeId,op}, suppresses self-attributed frames
-    (selfPeerId='host' for the studio), and exposes `{items, onExpire}`.
-  - `App.tsx` mounts `<AttributionToastStack>` gated on
-    `shareState.status === 'active'`.
-- Peer SPA (seeflow-viewer):
-  - `src/hooks/use-attribution-toasts.ts` — React-glue wrapper around a
-    pure reducer (`ingestAttributionFrame` + `dropToast`) so the dedupe
-    logic is unit-testable without a React renderer. Peer color resolved
-    via the live presence-store snapshot so toast borders match sidebar +
-    cursor colors. 11 tests cover append, self-suppression, missing
-    attribution, dedupe coalesce within window, dedupe re-fires after
-    window, no cross-key bleed, peer-color resolver, dropToast removal +
-    no-op for unknown id.
-  - share-session.tsx renders `<AttributionToastStack>` alongside the
-    existing Toaster.
-- Test totals: canvas 1287 pass / 0 fail (15 new for US-053). Studio share
-  + api + rpc-schema 280 pass / 0 fail / 1 skip (4 new). Viewer 191 pass /
-  0 fail (11 new). Biome format + lint clean. `bun run typecheck` clean
-  across all workspaces.
-- Files changed (seeflow worktree):
-  - packages/canvas/src/lib/format-attribution.ts (new)
-  - packages/canvas/src/lib/format-attribution.test.ts (new)
-  - packages/canvas/src/components/attribution-toast.tsx (new)
-  - packages/canvas/src/components/attribution-toast.test.tsx (new)
-  - packages/canvas/src/index.ts (Helpers + Chrome exports)
-  - apps/studio/src/share.ts (AttributionEvent type, subscribers set,
-    emit in broadcastNodePatched, subscribeAttributions method)
-  - apps/studio/src/share.test.ts (4 new tests, US-053 describe block)
-  - apps/studio/src/api.ts (GET /api/share/attributions SSE)
-  - apps/studio/src/api.test.ts (FakeShare stub)
-  - apps/web/src/hooks/use-share-state.ts (new)
-  - apps/web/src/hooks/use-attribution-toasts.ts (new)
-  - apps/web/src/App.tsx (mount + gating)
-- Files changed (seeflow-viewer):
-  - src/hooks/use-attribution-toasts.ts (new)
-  - src/hooks/use-attribution-toasts.test.tsx (new)
-  - src/pages/share-session.tsx (mount + peerColor resolver from presence)
-- **Learnings for future iterations:**
-  - **Cross-repo SSE bridges:** the host studio's apps/web side has NO
-    existing share-state consumer. Adding any UI gated on shareState
-    requires the SSE consumer pair (`useShareState` reads
-    `/api/share/state`) — copy the registry-events hook shape exactly
-    (`new EventSource(...)` + `addEventListener('event', handler)` +
-    cleanup `source.close()`).
-  - **`broadcastNodePatched` is the single emission point** for every
-    accepted op (peer rpc AND `broadcastHostEdit`). To add a side-effect
-    that fires per accepted op (audit, attribution, metrics, etc.), hook
-    it INSIDE this helper — not at the call sites — so peer + host paths
-    can never diverge. The helper takes attribution as an arg, so the
-    side-effect has full attribution context for free.
-  - **Hook-shim `useEffect` typing:** Biome's `noConfusingVoidType` flags
-    `() => void | (() => void)` because `void` in a union is confusing
-    next to a callable. Use `() => undefined | (() => void)` instead.
-    Required for any future renderWithHooks-shim test that captures
-    useEffect callbacks for manual invocation.
-  - **For testing hooks that own React state**, factor the dispatch /
-    reducer logic into a pure function (`ingestAttributionFrame`,
-    `dropToast`) and unit-test that. The hook becomes a thin React-glue
-    wrapper (useState + useEffect bridging the reducer to a subscription)
-    that doesn't need a renderer to verify correctness. Mirrors the
-    `presence-store` factoring already used in the viewer codebase.
-  - **AttributionToastStack uses `flexDirection: 'column-reverse'`** so
-    new toasts appear at the TOP of the visual stack (which is anchored
-    at the bottom of the viewport via `bottom: 16`). Capping with
-    `items.slice(-maxVisible)` keeps the newest N items — the column-
-    reverse renders them with the newest at top, which matches the
-    "latest activity first" UX expectation.
-  - **Pure-reducer dedupe pattern:** the reducer takes `state` + `frame` +
-    `deps {now,...}` so tests can pass synthetic timestamps without
-    mocking `Date.now()`. The hook's React wrapper resolves
-    `now = nowFn() ?? Date.now()` ONCE per frame and passes it in. This
-    is cleaner than threading a clock through every helper.
----
-
-## 2026-05-31 - US-054
-- End-to-end displayName + self-color propagation + identity persistence.
-- **seeflow worktree (studio side):**
-  - Added `resolveHostDisplayName()` export in `apps/studio/src/share.ts` — wraps
-    `os.userInfo().username` with try/catch + `'Host'` fallback, trims blanks.
-  - Default for `ShareDeps.hostDisplayName` is now `resolveHostDisplayName()`
-    so unsupplied callers get the OS username automatically.
-  - `apps/studio/src/server.ts` explicitly passes
-    `hostDisplayName: resolveHostDisplayName()` to `createShareController`
-    so the intent is visible at the call site (matches the convention of
-    explicit deps in createApp).
-  - Updated the existing 'Host default' test in `share.test.ts` to pass an
-    explicit `hostDisplayName: 'Host'` so it still asserts the literal —
-    the auto-derive default would now be the OS username.
-  - New `apps/studio/src/share.host-identity.test.ts` covers (a) the
-    resolver returns `os.userInfo().username` when available, (b) it never
-    returns an empty string, (c) auto-derive default flows through to
-    `state().hostDisplayName`, (d) explicit dep overrides the auto-derive.
-- **seeflow-viewer:**
-  - New `src/lib/share-identity.ts` — sessionStorage-backed
-    `{displayName, peerId, color}` cache keyed by `seeflow.share.identity.<token>`,
-    24h TTL, malformed/expired entries auto-cleared. Test-injectable `now` so
-    expiry can be driven deterministically.
-  - New `src/lib/peer-color.ts` — async `derivePeerColor(peerId)` mirrors the
-    relay's `colorForPeerId` (sha256 → first 32 bits BE mod 360 → HSL(h,70,55))
-    so the cached self color matches what other peers see for us. Falls back
-    to FNV-1a hash when `crypto.subtle` is missing.
-  - `share-client.ts`: new optional `color` opt; stamped onto outgoing cursor
-    payloads as `payload.color`. Cloud relay's CursorPayloadSchema is
-    `.strict()`-free Zod so extra `color` field passes through and the
-    relay forwards the original envelope body unchanged.
-  - `presence-store.ts`: extended viewer-side `CursorPayloadSchema` with
-    optional `color`; placeholder branch uses `payload.color ?? '#888888'` so
-    a cursor-before-presence frame paints the right color from frame 1.
-  - `presence-sidebar.tsx`: added optional `selfPeerId` prop and filters
-    matching entries out of the rendered peer list (defense-in-depth: the
-    presence store already excludes self via its `selfPeerId` option, but
-    the sidebar now stands alone too).
-  - `share-session.tsx`: loads cached identity on mount via
-    `useMemo(loadIdentity(token))`, seeds `displayName` from the cache so
-    the modal is skipped on reload, passes `color: cachedIdentity?.color`
-    into the `ShareClient`, persists the identity after join (computing
-    color via `derivePeerColor` if not cached or peerId mismatched),
-    forwards `selfPeerId={joinedData.peerId}` to `<PresenceSidebar>`.
-  - New `src/pages/share-session.identity.test.tsx` (8 tests): installs an
-    in-memory Storage stub on `globalThis.window` (Bun's test runtime
-    doesn't expose DOM by default), covers persist/reload/24h-expiry,
-    per-token isolation, clear, malformed JSON rejection, missing-field
-    rejection, empty-token no-op.
-- Test totals: studio share + api 285 pass / 1 skip / 0 fail. Viewer 199 pass
-  / 0 fail (8 new). `bun run typecheck` clean on both repos. Biome
-  format + lint clean.
-- Files changed (seeflow worktree):
-  - apps/studio/src/share.ts (resolveHostDisplayName + node:os userInfo import)
-  - apps/studio/src/server.ts (explicit hostDisplayName at call site)
-  - apps/studio/src/share.test.ts (existing 'Host default' test passes explicit dep)
-  - apps/studio/src/share.host-identity.test.ts (new)
-- Files changed (seeflow-viewer):
-  - src/lib/share-identity.ts (new)
-  - src/lib/peer-color.ts (new)
-  - src/lib/share-client.ts (color opt + cursor payload)
-  - src/lib/presence-store.ts (optional color in CursorPayloadSchema +
-    placeholder branch uses it)
-  - src/components/presence-sidebar.tsx (selfPeerId filter)
-  - src/pages/share-session.tsx (identity load/save + color wiring)
-  - src/pages/share-session.identity.test.tsx (new)
-- **Learnings for future iterations:**
-  - **Bun's test runtime does NOT expose `window` / `sessionStorage` even
-    for `.tsx` test files** — there's no DOM shim in seeflow-viewer's
-    bunfig.toml (file doesn't exist). For a test that exercises a
-    sessionStorage-backed module, install an in-memory `Storage` stub on
-    `globalThis.window` at the top of the test file and restore in
-    `afterAll`. The pattern: `class MemoryStorage implements Storage { ... }`
-    plus `(globalThis as { window: { sessionStorage: Storage } }).window =
-    { sessionStorage: storage }`. This is cheaper than adding a real
-    happy-dom preload.
-  - **Cloud `CursorPayloadSchema` permits extra fields** — Zod's default
-    `strip` mode silently drops unknown keys at the parse boundary, but the
-    relay's `routeFrame` forwards `event.body` unchanged on broadcast (not
-    the parsed payload). So adding `color?: string` to outgoing cursor
-    payloads requires no cloud schema edit — the field rides through to
-    remote peers as-is. The viewer-side `CursorPayloadSchema` in
-    presence-store DOES need the field added so re-validation on receipt
-    doesn't drop it from the typed result. Tests confirm: 199 pass on the
-    viewer suite with the color field, cloud suite untouched.
-  - **Self color matches relay color via SHA-256 mirror.** Cloud relay's
-    `colorForPeerId` reads `digest.readUInt32BE(0) % 360` for hue.
-    `derivePeerColor` in viewer must use `view.getUint32(0, false)` (false =
-    big-endian) for byte-for-byte parity. Mixing this up produces a hue
-    that differs by exactly the byte-swap, which is visible as a noticeable
-    color shift when the placeholder gets overwritten by the relay-derived
-    presence frame. Always verify the byte order against the server when
-    mirroring crypto-derived values client-side.
-  - **`hostDisplayName` default change cascades to existing tests.** The
-    pre-existing `'ShareState hostDisplayName default'` test in
-    `share.test.ts` asserted `'Host'` — once the default flipped to
-    `resolveHostDisplayName()`, that test needed an explicit dep override
-    to keep asserting the literal. Pattern: when changing a `??`-style
-    default in a controller factory, grep `*.test.ts` for the old default
-    string and update the assertions.
-  - **`useEffect` deps and stale closure capture:** `share-session.tsx`'s
-    main effect captures `cachedIdentity` + `token` from useMemo/useParams,
-    but its dep array is `[joinedData]`. Biome doesn't enforce
-    exhaustive-deps so this passes lint, and in practice `cachedIdentity`
-    is stable per-token (useMemo with `[token]`), so the closure capture is
-    OK. A token change triggers a re-mount via the router, which resets
-    everything. If a future change splits these dependencies, audit the
-    effect for stale `cachedIdentity` reads.
+  - Working directory gotcha: this Ralph ralph/ dir lives in the worktree at `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc`. Writing host studio code via absolute path `/Users/tuongaz/dev/seeflow/apps/studio/src/...` targets the SEPARATE seeflow main repo (currently on `main`), NOT this worktree. Always write apps/studio paths relative (`apps/studio/src/...`) or with the worktree absolute prefix. Verify with `git status -s` after `Write` — if your new files don't show up as untracked here, you wrote into the wrong worktree.
+  - For path-safety functions: inject the `path` module as a defaulted parameter (`pathMod: typeof nodePath = nodePath`). Then tests can pass `path.win32` to exercise the Windows code path on a POSIX host without spinning up a VM. Works because Node's path module exposes both `posix` and `win32` namespaces with identical signatures.
+  - `path.win32.isAbsolute('C:\\evil')` → true even on a POSIX host. Pair it with the native `pathMod.isAbsolute(...)` to refuse drive-letter / UNC payloads regardless of which OS the host is running on. A POSIX host MUST still refuse a `C:\\…` payload from a malicious win32 peer.
+  - `path.normalize` resolves `subdir/../../escape` down to `../escape`, which the `..` segment check then rejects. Splitting the normalized string on `/[/\\]/` catches mixed-separator escape attempts (`..\\..\\evil` on POSIX, `../../evil` on win32).
+  - The relPath safety contract has subtle ordering: check absoluteness BEFORE normalize. Calling `normalize('/etc/passwd')` returns `/etc/passwd` and the segments contain `''` and `etc`, `passwd` — the `..` check would PASS, but the leading `/` check correctly fails first. Don't reorder these checks without rewriting the absolute-path guard.
 ---
