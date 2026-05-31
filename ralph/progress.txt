@@ -62,3 +62,29 @@ Started: Sun 31 May 2026 13:26:10 AEST
   - Signature comparison uses `timingSafeEqual` with explicit length check — required because `timingSafeEqual` throws on length mismatch.
   - Tests use `'a'.repeat(32)` as the secret (32-byte string is ample for HS256). TTL of `-1` cleanly produces an already-expired token.
 ---
+
+## 2026-05-31 - US-005
+- Implemented envelope Zod schema + parser per plan Task 4.
+- Created `cloud/lambda/share/shared/envelope.ts` exporting `EnvelopeSchema` (v=literal(1), 14-type enum, optional id, required from, optional to as string|'host'|'all', unknown payload), `Envelope` type, and `parseEnvelope` returning a discriminated union `{ok:true, envelope}` | `{ok:false, reason}`.
+- Created `cloud/lambda/share/shared/envelope.test.ts` (5 tests: rpc happy path, wrong version, unknown type, auth-host, auth-peer). All pass.
+- `bun test lambda/share/shared/envelope.test.ts`: 5/5. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/shared/envelope.ts`, `cloud/lambda/share/shared/envelope.test.ts`.
+- **Learnings for future iterations:**
+  - `safeParse` from zod yields `{success, data}` / `{success, error}`; the envelope module reshapes that into the project's `{ok, envelope/reason}` shape. Future handlers should import `parseEnvelope` (not `EnvelopeSchema` directly) so error reporting stays consistent.
+  - The 14-value `type` enum is the authoritative list of envelope frame types for Phase 1 — extend here when adding new frame types in later phases.
+  - `to` accepts arbitrary string OR the literals `'host'` / `'all'`. Routing in ws-default (US-011) keys off these three cases.
+---
+
+## 2026-05-31 - US-006
+- Implemented DDB session helpers per plan Task 5.
+- Created `cloud/lambda/share/shared/ddb.ts` exporting `doc` (DocumentClient with removeUndefinedValues) and `TABLE` (env SHARE_TABLE, defaults to `seeflow-share-sessions`).
+- Created `cloud/lambda/share/shared/sessions.ts` exporting `PeerInfo`, `SessionRow`, `createSession`, `getBySessionId`, `getByToken`, `setHostConnId`, `addPeer`, `removePeer`, `touch`. All mutations refresh `lastActivity` + `ttl` (`now + 30min`).
+- Created `cloud/lambda/share/shared/sessions.test.ts` with in-memory fake of `doc.send` covering Put/Get/Query/Update; 4 tests pass.
+- `bun test lambda/share/shared/sessions.test.ts`: 4/4. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/shared/ddb.ts`, `cloud/lambda/share/shared/sessions.ts`, `cloud/lambda/share/shared/sessions.test.ts`.
+- **Learnings for future iterations:**
+  - The in-memory fake injects `(ddbMod.doc as any).send = fakeSend` in `beforeEach`. This relies on `ddb.ts` exporting `doc` as a re-assignable property — works because `DynamoDBDocumentClient` is a class instance whose `send` is mutable. Future handler tests should mock the same way (replace `send` on the singleton) rather than mocking `@aws-sdk/lib-dynamodb` imports.
+  - `IDLE_TTL_SECONDS = 30 * 60`. All write operations (`createSession`, `setHostConnId`, `addPeer`, `removePeer`, `touch`) bump both `lastActivity` (now in seconds) AND `ttl` (now+30min) — DDB TTL attribute is `ttl`, configured in CDK as the table TTL attribute.
+  - `PeerInfo.joinedAt` is server-set inside `addPeer` (callers omit it); type marks it optional. `role` is locked to the literal `'editor'` for Phase 1.
+  - `getByToken` uses the `token-index` GSI (created in US-002) with `KeyConditionExpression` + ExpressionAttribute names because `token` is a reserved-ish keyword in some DDB contexts; the `#tk` alias avoids any ambiguity.
+---
