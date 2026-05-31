@@ -1,171 +1,27 @@
 # Ralph Progress Log
-Started: Sun 31 May 2026 17:43:46 AEST
----
+Started: Sun 31 May 2026 18:44:56 AEST
 
 ## Codebase Patterns
-- Phase 3 work happens in a sibling repo at `/Users/tuongaz/dev/seeflow-viewer` on branch `ralph/live-share-phase-3` — NOT in the seeflow monorepo. cd there before running bun/git commands.
-- `seeflow-viewer` uses Bun + Vite + TypeScript strict. Tests live beside sources as `*.test.ts` and run via `bun test`.
-- `tsconfig.json` has `noUncheckedIndexedAccess` enabled; add `"bun"` to compilerOptions.types to pick up `bun:test` types when adding @types/bun.
-- Vite only entry-points `index.html`, so `*.test.ts` files are never bundled into `dist/` automatically — no need for explicit excludes.
-- Match `@types/bun` version to the installed bun runtime (`bun --version`) to avoid type drift.
-- The canonical envelope schema for the relay WebSocket lives at `cloud/lambda/share/shared/envelope.ts` (server-side). The peer-side mirror is `src/lib/share-envelope.ts` and MUST stay aligned — when the relay adds a new `type`, mirror it here. Phase 3 adds `flow-snapshot` and `auth-refresh-required` that are NOT yet in the cloud-side enum.
-- The relay (`cloud/lambda/share/ws-default.ts`) does NOT emit an explicit auth-ack frame — it returns 200 over HTTP. Peer-side `ShareClient.connect()` uses a 250ms quiet-window after sending `auth-peer` to treat auth as acknowledged. Any inbound frame within that window also counts as ack. Do not wait on a frame that never arrives.
-- For WebSocket-driven unit tests, inject a fake constructor via `webSocketImpl` (defaults to `globalThis.WebSocket`) — keeps tests offline and deterministic. Pattern lives in `src/lib/share-client.test.ts`.
-- For `globalThis.fetch` mocks in bun:test, swap `globalThis.fetch` in `beforeEach`/restore in `afterEach`. Use `Response(JSON.stringify(...), { status })` to construct realistic responses without pulling in any test helper. Pattern lives in `src/lib/share-api.test.ts`.
-- Share peer-side error contract: `ShareTokenError('unknown-token')` on HTTP 404, `ShareTokenError(body.error ?? 'bad-request')` on HTTP 400, plain `Error` with status code on other failures. The cloud-side handler at `cloud/lambda/share/session-join.ts` is the source of truth for the `body.error` strings (`missing-token`, `missing-displayName`, `unknown-token`, `invalid-json`).
-- `ShareSession`'s WS lifecycle: a second `useEffect` keyed on the join response object (NOT on individual fields) instantiates `ShareClient`, subscribes via `on('state', ...)`, calls `.connect()` (catching to swallow rejections — the state listener is the source of truth for UI), and cleans up with `unsubscribe()` + `client.disconnect('unmount')`. A `retryNonce` state value bumps the join-effect's dep array so Retry re-runs `joinShare` cleanly without nuking the displayName.
-
-## 2026-05-31 17:55 - US-025
-- Branched seeflow-viewer from main to `ralph/live-share-phase-3`.
-- Added `"test": "bun test"` script and `@types/bun@1.3.5` devDependency (matches `bun --version` = 1.3.5).
-- Added `"bun"` to `tsconfig.json` compilerOptions.types so `bun:test` imports typecheck.
-- Created smoke test `src/lib/share-test-harness.test.ts` asserting `1 + 1 === 2`.
-- Verified: `bun test src/lib/share-test-harness.test.ts` → 1 pass, `bun run typecheck` clean, `bun run build` succeeds, dist/ does NOT contain the test file.
-- Files changed: package.json, tsconfig.json, bun.lock, src/lib/share-test-harness.test.ts (in seeflow-viewer repo).
-- **Learnings for future iterations:**
-  - The PRD's `working dir` line is load-bearing — all phase-3 stories target `/Users/tuongaz/dev/seeflow-viewer`, not the seeflow monorepo where this prompt runs.
-  - `bun pm view @types/bun versions` lists available versions; pin the one matching `bun --version`.
-  - `src/lib/` already exists in seeflow-viewer (alongside `viewer-api.ts`); reuse it for new share-* modules per upcoming stories.
-  - No lint tooling is configured in seeflow-viewer — only typecheck + (now) bun test are quality gates.
+- `packages/canvas/src/index.ts` is the only public barrel — add new exports under the matching numbered section and keep it sorted (5 → 5b → 5c → 6 …).
+- Biome's `organizeImports` enforces alphabetical order on import groups; sort sibling type-only imports by source path or the lint fails.
+- `bun test <path>` only works from the repo root (the bun-test cwd-filter trips up nested paths in `apps/*` / `packages/*`).
+- Adapter-layer types live in `packages/canvas/src/adapter/`. The canonical adapter shape is `CanvasAdapter` (throw-on-error); a non-throwing twin (`IoAdapter`) sits in a sibling file and is wrapped at the SeeflowCanvas prop boundary — never imported from the rendering layer.
+- `bun run format` MUST run before `bun run lint` — Biome only emits fixes when `--write` runs, and `lint` is the gate.
 ---
 
-## 2026-05-31 - US-026
-- Added Zod envelope schema + parser at `seeflow-viewer/src/lib/share-envelope.ts` mirroring `cloud/lambda/share/shared/envelope.ts` with two phase-3 additions: `flow-snapshot` and `auth-refresh-required`.
-- Added 6 test cases in `share-envelope.test.ts` (valid rpc-result, valid flow-snapshot, valid node-patched, wrong v rejected, unknown type rejected, valid auth-refresh-required).
-- Verified: `bun test src/lib/share-envelope.test.ts` → 6 pass, `bun run typecheck` clean.
-- Files changed: src/lib/share-envelope.ts (new), src/lib/share-envelope.test.ts (new) in seeflow-viewer repo.
+## 2026-05-31 — US-035
+- Implemented `IoAdapter` interface, `IoAdapterResult<T>` discriminated result type, and `IoAdapterDispatchEnvelope` (8-op union) in new file `packages/canvas/src/adapter/io-adapter.ts`.
+- Re-exported the three types from the public barrel under a new `5c. IoAdapter` section (after `5b. History`).
+- Added `packages/canvas/src/adapter/io-adapter.test.ts` with 14 tests across three describe blocks (result narrowing, op discriminator coverage including one per op, and a type-level CanvasAdapter-wrapping compatibility check).
+- Quality gates: `bun run typecheck` (all workspaces), `bun run format` + `bun run lint`, `bun test packages/canvas/` (1252 pass).
+- Files changed:
+  - `packages/canvas/src/adapter/io-adapter.ts` (new)
+  - `packages/canvas/src/adapter/io-adapter.test.ts` (new)
+  - `packages/canvas/src/index.ts` (added `5c. IoAdapter` section + re-export)
+  - `ralph/prd.json` (US-035 passes → true)
 - **Learnings for future iterations:**
-  - The cloud-side envelope at `cloud/lambda/share/shared/envelope.ts` is the seed; the peer-side `src/lib/share-envelope.ts` is the mirror with extra phase-3 types. Future relay PRs that add types must update BOTH files.
-  - `z.union([z.string(), z.literal('host'), z.literal('all')])` for the `to` field accepts both string-typed peer ids and the special routing literals — keep this exact shape when extending.
-  - `parseEnvelope` returns a discriminated `{ ok: true | false }` result rather than throwing, so callers can `console.warn` invalid frames without try/catch — mirror this pattern in upcoming share-client.ts message dispatch (US-028).
----
-
-## 2026-05-31 - US-027
-- Implemented `ShareClient` class in seeflow-viewer at `src/lib/share-client.ts` with `connect()`, `disconnect(reason?)`, `on('state', listener)` (returns unsubscribe), and a `state` getter over the `ConnectionState` discriminated union (idle | connecting | authed | closed).
-- On `ws.onopen` the client sends a single `{ v: 1, type: 'auth-peer', from: 'peer', payload: { peerJwt, displayName } }` frame and starts a 250ms quiet-window timer that flips state to `authed` and resolves `connect()`. Any inbound message during the connecting state also short-circuits to `authed`.
-- Pre-auth close rejects the in-flight `connect()` with an Error whose message includes `code` and `reason`.
-- `webSocketImpl` constructor option lets tests inject a fake WebSocket (defaults to `globalThis.WebSocket`).
-- Added 3 unit tests in `src/lib/share-client.test.ts` using a hand-rolled `FakeWebSocket` (no real network): auth-peer frame shape, state-transition order, reject-on-close-before-open.
-- Verified: `bun test src/lib/share-client.test.ts` → 3 pass; full `bun test` → 92 pass; `bun run typecheck` clean.
-- Files changed: `src/lib/share-client.ts` (new), `src/lib/share-client.test.ts` (new) in seeflow-viewer repo.
-- **Learnings for future iterations:**
-  - Bun's TypeScript treats the global `WebSocket` constructor as the value type for the `webSocketImpl` option — `typeof WebSocket` works without an extra DOM lib import.
-  - When using `FakeWebSocket` in tests, cast to `unknown as typeof WebSocket` to silence the `static OPEN/CONNECTING/...` constants mismatch; only the methods the client actually calls (`send`, `close`, `onopen`, `onclose`, `onmessage`) need to be faithful.
-  - The next story (US-028) extends `share-client.ts` with `on('frame', ...)` and per-type listeners (`flow-snapshot`, `node-patched`, `files-manifest`, `kick`, `auth-refresh-required`). The current `ws.onmessage` is a no-op stub that just trips auth — wire `parseEnvelope` from `share-envelope.ts` there, dispatch to listeners, and add a `{ kind: 'kicked' }` state variant when a `kick` frame addressed to this peer arrives.
-  - `pendingConnect` is set to null inside `failConnect`/`completeAuth` BEFORE invoking the resolver/rejecter — without this, a synchronous reconnect inside a listener could double-resolve. Preserve that ordering when extending.
----
-
-## 2026-05-31 - US-028
-- Extended `ShareClient` (seeflow-viewer src/lib/share-client.ts) with frame dispatch.
-  - New `on()` overloads: `'frame'`, `'flow-snapshot'`, `'node-patched'`, `'files-manifest'`, `'kick'`, `'auth-refresh-required'`. All return unsubscribe.
-  - `ws.onmessage` now JSON-parses, runs `parseEnvelope`, drops invalid frames with `console.warn('share: invalid envelope', reason)`, then dispatches to generic + typed listeners. Listener throws are caught + `console.error`'d.
-  - Added `{ kind: 'kicked'; peerId: string; reason?: string }` variant. On a `kick` frame the client transitions state, extracts `peerId` (payload.peerId → envelope.to fallback if not `'all'`/`'host'`) and `reason`, then closes the socket with code 1000. The follow-on `onclose` short-circuits so the kicked state isn't overwritten by `closed`.
-  - Inbound auth-ack short-circuit preserved (any onmessage while connecting flips to authed before dispatch).
-- Added 3 new tests in `src/lib/share-client.test.ts`: malformed-JSON drop, flow-snapshot dispatch to both generic + typed listener (and not to node-patched), kick frame transitions to kicked + closes socket.
-- Verified: `bun test src/lib/share-client.test.ts` → 6 pass; full `bun test` → 95 pass; `bun run typecheck` clean; `bun run build` succeeds.
-- Files changed: `src/lib/share-client.ts`, `src/lib/share-client.test.ts` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - The cloud-side relay encodes kick frames as `makeEnvelope('kick', { peerId }, { to: connId })` in `apps/studio/src/share.ts` — `payload.peerId` carries the kicked peer's id, `to` carries the connection id. Mirror that read order if extending: payload first, then `to`.
-  - Bun's `MessageEvent` typing is fine without a DOM lib import; just type the param as `MessageEvent` and read `event.data`.
-  - When a kick frame arrives the client closes the socket which fires its OWN `onclose` — guard against overwriting the kicked state by checking `_state.kind !== 'kicked'` in the onclose handler.
-  - Typed listener API uses a `Map<TypedFrameEvent, Set<FrameListener>>` seeded in the constructor — keeps the `on()` overload set lookups branch-free.
-  - For the next story (US-029, route + page shell) the relevant files are `seeflow-viewer/src/app.tsx` (router) and `seeflow-viewer/src/pages/flow-view.tsx` (centred-flex + 404 patterns to reuse).
----
-
-## 2026-05-31 - US-029
-- Added `/share/:token` route inside the `ViewerLayout` block in `seeflow-viewer/src/app.tsx` so the route inherits `ViewerHeader`.
-- Created `src/pages/share-session.tsx` exporting `ShareSession()` that reads `token` from `useParams`, renders a centred "Live Share" shell with SESSION eyebrow + truncated-token status line, and falls back to the same 404 block (body "Invalid share link") when `token` is missing/empty.
-- Reused the `centred` flex pattern + `wrap()` helper shape from `flow-view.tsx` (kept locally — the helper isn't yet exported).
-- Verified: `bun run typecheck` clean, `bun run build` succeeds with the new chunk, full `bun test` → 95 pass (no new tests added for this story, per acceptance criteria).
-- Manual browser verification deferred — dev server not started in this loop iteration; visit `http://localhost:5173/share/test-token-1234567` to confirm shell renders.
-- Files changed: `src/app.tsx`, `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - `ViewerHeader` reads `useMatch('/flow/:uuid')` and `useMatch('/project/:uuid')` to decide whether to show the theme cog and Flow chip — the `/share/:token` route renders ONLY the SeeFlow logo. If US-031/032 needs the theme cog (or a "Live Share" chip) on the share route, extend `viewer-header.tsx` with a `useMatch('/share/:token')` branch.
-  - The `centred` constant is duplicated in `flow-view.tsx` and now `share-session.tsx`. If a third page needs it, lift to `src/lib/layout.ts` rather than re-duplicating.
-  - For US-030's `DisplayNameModal`, gate rendering on a local `displayName` state and only mount the connection logic (US-031/032) once the user submits. The current `ShareSession` is pure-presentation, so wrap its render in a guard like `if (!displayName) return <DisplayNameModal onSubmit={setDisplayName} />`.
-  - Truncation rule used here: `token.length > 8 ? token.slice(0,8) + '…' : token`. Reuse the same predicate when surfacing the token elsewhere to keep visuals consistent.
----
-
-## 2026-05-31 - US-030
-- Added `DisplayNameModal` component at `seeflow-viewer/src/components/display-name-modal.tsx` — fixed-position overlay backed by `color-mix(in srgb, var(--bg) 60%, transparent)`, a `--surface` card with `--shadow-window`, JetBrains Mono eyebrow "DISPLAY NAME", text input with emerald focus ring, and a disabled-when-empty emerald "Continue" submit button. Submits on Enter (form submit) or button click.
-- Input value is trimmed and capped at 40 chars before submission (matches `cloud/lambda/share/session-join.ts` server validation). On submit the trimmed value is written to `localStorage['seeflow.share.displayName']` and read back as the initial value on mount — the peer can edit and resubmit, no auto-submit.
-- Wired into `share-session.tsx`: added `displayName: string | null` state; when null, render `<DisplayNameModal onSubmit={setDisplayName} />` (wrapped to fill the viewport). Once set, the existing centred "Live Share" shell renders with the display name added below the truncated token.
-- Verified: `bun run typecheck` clean, `bun run build` succeeds, full `bun test` → 95 pass (no new tests required by the acceptance criteria for this story).
-- Files changed: `src/components/display-name-modal.tsx` (new), `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - The viewer has no DOM testing setup (no jsdom / @testing-library), only Bun's bare `bun:test` runner — that's why this story (and US-029) gate purely on typecheck + build. If a future story needs component-level tests, add `@testing-library/react` + a jsdom-style preload before writing the test.
-  - Reusable inline-style pattern for modals: build CSS-variable-backed `CSSProperties` constants at module scope rather than Tailwind classes — keeps parity with `share-session.tsx` and `flow-view.tsx`, both of which use inline styles. The viewer's `index.css` defines all the design tokens (`--surface`, `--border`, `--emerald`, `--r-md`, `--r-lg`, `--shadow-window`, etc.) used here.
-  - For emerald focus rings, prefer `boxShadow: '0 0 0 3px color-mix(in srgb, var(--emerald) 25%, transparent)'` inline (or use the `--ring-selected` token) — there is no `:focus-visible` selector available for inline styles, so toggle on `onFocus` / `onBlur`.
-  - `localStorage` access must be guarded for SSR-safety (`typeof window === 'undefined'`) AND wrapped in try/catch for private-mode quota errors. The viewer is currently SPA-only, but the guard costs nothing and matches the pattern from `use-theme.ts`.
-  - The next story (US-031) wires `joinShare()` and a `joinState` state machine into `share-session.tsx` — the modal's `onSubmit` should kick off the join, not directly render the snapshot. The display-name local state stays as the trigger, but downstream the join response becomes the source of truth for `displayName` (the relay may shape/echo it back).
----
-
-## 2026-05-31 - US-031
-- Added `joinShare()` helper in seeflow-viewer at `src/lib/share-api.ts` with `ShareJoinResponse`, `ShareFlowListItem`, and `ShareTokenError` exports. Posts JSON `{ token, displayName }` to `${baseUrl ?? 'https://seeflow.dev'}/api/share/join`; throws `ShareTokenError('unknown-token')` on 404, `ShareTokenError(body.error ?? 'bad-request')` on 400, plain `Error` with status code otherwise.
-- Wired into `src/pages/share-session.tsx` via a `joinState` discriminated union (idle | joining | joined | error); on displayName set, the page transitions to `joining` and calls `joinShare` with an `AbortController` for unmount-safe cleanup.
-- On `joined`, render the existing centred shell plus a small flow-list preview (peer id snippet + flowList names, or a "Waiting for host snapshot…" placeholder when empty) — full canvas mount lands in US-033.
-- On `ShareTokenError('unknown-token')`, render the 404 block with "This share link is no longer active" (matches design doc line 215). Other errors render a centred status line.
-- Added 6 unit tests in `src/lib/share-api.test.ts` using a `globalThis.fetch` swap pattern: happy path (verifies URL + method + JSON body + parsed response), 404 → ShareTokenError('unknown-token'), 400 with body.error, 400 with non-JSON body falling back to 'bad-request', 500 → plain Error containing status, baseUrl override.
-- Verified: `bun test src/lib/share-api.test.ts` → 6 pass, full `bun test` → 101 pass, `bun run typecheck` clean, `bun run build` succeeds with the new module bundled.
-- Files changed: `src/lib/share-api.ts` (new), `src/lib/share-api.test.ts` (new), `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - The session-join lambda response carries `flowList: []` today (server-side `cloud/lambda/share/session-join.ts` line 57). Phase-2 work on the host will populate it; the peer-side schema already accepts arbitrary `{ id, name, icon? }` entries so no further peer changes are needed when the host starts returning them.
-  - For US-032: instantiate `ShareClient` inside a `useEffect` keyed on `joinState.data` (NOT on `displayName`) so a Retry path that re-runs `joinShare` rebuilds the client; capture the client in a `useRef` to call `.disconnect('unmount')` from the cleanup. Mirror the join-response's `wsUrl`, `sessionId`, `peerJwt`, `displayName` into the constructor.
-  - The state-machine shape `{ status: 'idle' | 'joining' | 'joined' | 'error' }` (rather than nullable fields) is the pattern to extend — US-032 will probably overlay a `wsState: ConnectionState` mirror via the `on('state', ...)` subscription, kept separate from `joinState` because the connection can close even after a successful join.
-  - The 404 block is now an internal `NotFoundBlock` component in `share-session.tsx` — reuse it for the kicked / disconnected dead-end states in US-032 (the design doc treats "removed from session" and "share link revoked" as the same visual treatment).
-  - `joinShare`'s default base URL is the prod studio (`https://seeflow.dev`); `vite.config.ts` does NOT proxy `/api/share/*` today, so dev iteration against a local AWS-SAM stack will need `baseUrl` plumbing — likely an env-driven helper in US-032 or US-033.
----
-
-## 2026-05-31 - US-032
-- Wired `ShareClient` lifecycle into `seeflow-viewer/src/pages/share-session.tsx`. A new `useEffect` keyed on the join-response object instantiates `ShareClient`, mirrors `on('state', ...)` updates into a local `wsState: ConnectionState` React state, calls `.connect()` (catching the rejection — the state listener already surfaces failures), and cleans up via `unsubscribe()` + `client.disconnect('unmount')`.
-- Added a `retryNonce` counter; `retry()` resets `joinState` + `wsState` and bumps the nonce so the join-effect re-runs `joinShare` cleanly. Retry is rendered on the `hostOnline === false`, generic-error, and post-auth `closed` branches.
-- New `StatusCard` component renders the design-doc messaging:
-  - `hostOnline === false` → eyebrow OFFLINE, title "Host stopped sharing", body "The host is no longer connected. Try again in a moment.", emerald Retry button.
-  - `wsState.kind === 'kicked'` → eyebrow REMOVED, title "You were removed from this session", body uses kick reason if present, NO Retry button.
-  - `wsState.kind === 'closed'` (post-auth) → eyebrow DISCONNECTED, title "Disconnected from host", body uses close reason or `Connection closed (code N).`, Retry button.
-- `ConnectingShell` renders the existing `.spinner` class + "Joining…" / "Connecting…" label per acceptance criterion.
-- Verified: `bun run typecheck` clean, `bun run build` succeeds, `bun test` → 101 pass (no new unit tests required by the AC; the ShareClient itself is already covered).
-- Files changed: `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - The state-listener-as-source-of-truth pattern means `client.connect()`'s returned promise can be `catch(() => {})` — the UI driver is `on('state', ...)`. Don't surface the rejection again; it would race with the listener's `closed` state and double-render.
-  - When wiring Retry, keep `displayName` set and reset only `joinState` + `wsState` + nonce. Resetting `displayName` would re-show the modal, which is not the design intent.
-  - The `joinedData` value passed to the effect dep array is derived inside the component body (`joinState.status === 'joined' ? joinState.data : null`). Keying the effect on the discriminated `joinState` directly would re-fire for unrelated transitions; deriving the joined slice gates re-renders to actual data changes.
-  - For US-033, hook the `flow-snapshot` listener inside the same `useEffect` as the state subscription — both lifecycles are tied to the same `client` instance, so co-locating subscriptions keeps the cleanup symmetric. Store the unsubscribe functions in a local array and run them all in the cleanup function.
-  - The `StatusCard` component is the natural home for any future dead-end states (rate limited, host-paused, etc.); each variant is just `eyebrow + title + body + onRetry?`. Reuse rather than re-style.
----
-
-## 2026-05-31 - US-033
-- Added `FlowSnapshotPayload`, `NodePatchedPayload` interfaces + Zod schemas (`FlowSnapshotSchema`, `NodePatchedSchema`) and `parseFlowSnapshot`/`parseNodePatched` helpers to seeflow-viewer `src/lib/share-client.ts`. Inner node/connector arrays are validated as `unknown[]` and cast through — the canvas owns the deep schema.
-- Exported `withNodePositions` from `src/lib/viewer-api.ts` (was previously file-private).
-- Rewired `src/pages/share-session.tsx`:
-  - Added `snapshot: FlowSnapshotPayload | null` state, reset to null on each new join/disconnect.
-  - WS effect now subscribes to `'flow-snapshot'` (validate → run `withNodePositions` over each flow → store) and `'node-patched'` (validate → wholesale node replace/delete via `applyNodePatch` + `patchNodes` helpers, re-running `withNodePositions` after the patch).
-  - Render flow: after `wsState.kind === 'authed'`, if `snapshot` (or `snapshot.flows[activeFlowId]`) is still missing render the `Connecting…` spinner from US-032; otherwise render `<ViewCanvas flow={activeFlow} uuid={sessionId} enableShare={false} canvasProjectId={sessionId} fileBaseUrl={`/api/share/${sessionId}/files`} />`.
-  - Removed the now-dead `JoinedShell` + `FlowListPreview` helpers and the unused `ShareFlowListItem` import; `StatusCard`/`ConnectingShell` remain for non-authed paths.
-- Verified: `bun run typecheck` clean, `bun test` → 101 pass, `bun run build` succeeds, `grep -l 'flow-snapshot' dist/assets/*.js` matches `index-*.js`.
-- Files changed: `src/lib/share-client.ts`, `src/lib/viewer-api.ts`, `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - `Flow` from `@seeflow/canvas` is `{ version: 2, name, nodes: FlowNode[], connectors: Connector[] }` — keep the literal `2` when writing snapshot schemas, future bumps will need a peer-side migration.
-  - `noUncheckedIndexedAccess` makes `snapshot.flows[activeFlowId]` typed `Flow | undefined`. Always destructure into a local `const activeFlow = ...; if (!activeFlow) return …;` before passing to `ViewCanvas` (which requires non-nullable Flow). US-034 will need the same guard on `localActiveFlowId`.
-  - For US-034: the FlowSwitcher slot goes via `ViewCanvas`'s `topRightSlot` prop, and `canvasProjectId` should switch to `localActiveFlowId` (not `sessionId`) once switching is supported — that affects the `fileBaseUrl` per-flow scoping later.
-  - `applyNodePatch` re-runs `withNodePositions` on every patch — fine for phase 3 but if patches arrive in tight bursts this can re-layout the whole graph each tick. Phase 4's deep diff path should preserve existing positions instead.
-  - `node-patched` and `flow-snapshot` payloads are NOT yet in the cloud-side envelope enum (`cloud/lambda/share/shared/envelope.ts`); only the peer-side mirror at `src/lib/share-envelope.ts` knows about them. Phase 2 host work will need to add them to the cloud schema before the relay will route them.
----
-
-## 2026-05-31 - US-034
-- Wired FlowSwitcher into `seeflow-viewer/src/pages/share-session.tsx` via `ViewCanvas`'s `topRightSlot` prop.
-- Added `localActiveFlowId: string | null` state + `userPickedFlowRef` boolean ref. A new `useEffect` keyed on `snapshot` syncs `localActiveFlowId` to `snapshot.activeFlowId` only when the user has not explicitly switched (ref is false). New joins reset both (`setLocalActiveFlowId(null)`, `userPickedFlowRef.current = false`) inside the WS effect so reconnect snapshots reapply the host's default.
-- `handleFlowSwitch` callback sets the ref to true and writes `localActiveFlowId` — the URL stays `/share/:token`.
-- Render-time fallback: if `snapshot.flows[localActiveFlowId]` is undefined, fall back to `snapshot.activeFlowId` and `console.warn`. Final undefined check still routes through `ConnectingShell`.
-- `canvasProjectId` now passes `localActiveFlowId` (the effective flow id) so per-flow file scoping aligns with how the project page already uses `ViewCanvas`.
-- `topRightSlot` is omitted entirely (returns `undefined` to `ViewCanvas`) when `flowList.length <= 1` — avoids handing the empty React node to the canvas at all.
-- Verified: `bun run typecheck` clean, `bun test` → 101 pass, `bun run build` succeeds.
-- Manual stub verification deferred — requires a hand-crafted joinShare mock returning a 2-flow flowList per AC; flagged for browser dogfood once phase-2 host lands.
-- Files changed: `src/pages/share-session.tsx` (seeflow-viewer).
-- **Learnings for future iterations:**
-  - `noUncheckedIndexedAccess` makes `snapshot.flows[id]` typed `Flow | undefined`; even after the fallback assignment a second `if (!activeFlow) return …;` guard is needed to satisfy TS, since both lookups can technically miss.
-  - When two effects both reset state on the same trigger (new join in the WS effect AND snapshot-sync useEffect), put the user-intent ref reset alongside the snapshot setter — co-locating prevents a race where the sync effect fires before the ref is cleared and lands the wrong active id.
-  - The FlowSwitcher's `flows` prop accepts the join response's `ShareFlowListItem[]` directly — same shape `{ id, name, icon? }`. No mapping layer needed.
-  - The `topRightSlot` prop on `ViewCanvas` accepts `ReactNode`; pass `undefined` (not `null`) when omitting so React doesn't allocate an empty slot — keeps parity with the project page's existing usage.
-  - Phase 4 (host-side flow-switch broadcast) will likely add an envelope type for "host changed active flow" — when wiring that, decide whether peer-side respects it unconditionally or only when `userPickedFlowRef.current === false` (current snapshot-sync behaviour). Document the chosen policy here.
+  - The IoAdapter seam intentionally has only 8 ops on the envelope — `uploadImage` uses a separate `file-bytes` binary frame in the live-share protocol per the design doc, not the RPC envelope.
+  - When mirroring `CanvasAdapter` method shapes, the result `T` for `updateNode`/`deleteNode`/etc is `void` (not absent) — the IoAdapter result envelope still wraps it as `{ ok: true, value: undefined }`.
+  - The Biome `organizeImports` rule sorts type-only imports by source path, so put `./io-adapter.ts` before `./types.ts` even when CanvasAdapter is referenced first in code.
+  - Tests for type-level invariants (e.g. "wrapping IoAdapter into CanvasAdapter still compiles") are best expressed as a real runtime wrapper function — any future drift breaks both compile and test in the same commit.
 ---

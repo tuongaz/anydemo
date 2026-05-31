@@ -8,6 +8,7 @@
 //   4. Helpers               — pure functions / browser utilities
 //   5. Adapter               — REST adapter + adapter contract types
 //  5b. History               — undo/redo wrapper + handle types
+//  5c. IoAdapter             — non-throwing adapter seam for peer transports (US-035)
 //   6. Nodes                 — React Flow node components
 //   7. Edges                 — React Flow edge components
 //   8. UI primitives         — buttons, dialogs, popovers, etc.
@@ -261,6 +262,15 @@ export type {
   HistoryHandle,
   HistoryState,
 } from './history/types.ts';
+
+// ----------------------------------------------------------------------------
+// 5c. IoAdapter
+// ----------------------------------------------------------------------------
+export type {
+  IoAdapter,
+  IoAdapterDispatchEnvelope,
+  IoAdapterResult,
+} from './adapter/io-adapter.ts';
 
 // ----------------------------------------------------------------------------
 // 6. Nodes (re-exports from ./nodes/index.ts)
