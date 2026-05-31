@@ -401,13 +401,13 @@ describe('integration: share host ↔ peer round-trip via FakeRelay', () => {
     expect(sseFrame).toBeDefined();
     if (!sseFrame) throw new Error('unreachable');
     const payload = sseFrame.payload as {
-      type: string;
+      t: string;
       flowId: string;
-      payload: { nodeId: string };
+      data: { nodeId: string };
     };
-    expect(payload.type).toBe('node:running');
+    expect(payload.t).toBe('node:running');
     expect(payload.flowId).toBe(flowId);
-    expect(payload.payload.nodeId).toBe('n1');
+    expect(payload.data.nodeId).toBe('n1');
 
     peer.close();
   });
