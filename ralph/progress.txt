@@ -10,6 +10,8 @@ Started: Sun 31 May 2026 13:26:10 AEST
 - AWS SDK deps pinned at 3.1048.0 (client-dynamodb, lib-dynamodb, client-apigatewaymanagementapi). Zod pinned at 3.23.8.
 - CDK assertion tests under `cloud/lib/*.share.test.ts` MUST set `env: { account: '000000000000', region: 'us-east-1' }` on the stack — `route53.HostedZone.fromLookup` in `SeeflowStack` errors with `StackAccountRegionNotSpecified` otherwise. Pure region-only env (which the plan suggests) fails synth.
 - `cloud/tsconfig.json` does NOT enable `noUnusedLocals`/`noUnusedParameters`, so declared-but-unused locals are fine for typecheck. Don't add `void x;` noise to silence them.
+- CDK assertion tests that look for a table grant must search for the table's logical id prefix (`ShareSessionsTable`) in `PolicyDocument` — NOT the literal table name `seeflow-share-sessions`. Synthesized policies reference the table via `Fn::GetAtt` on the logical id, so the literal string never appears.
+- `cdk synth` for parameterized stacks: pass `--parameters ShareJwtSecret=...` (NOT `--context ...`). The plan's `--context @aws-cdk/share-jwt-secret=...` is wrong — `ShareJwtSecret` is a `CfnParameter`, not a context value.
 
 ## 2026-05-31 13:35 - US-001
 - Added `test`: `bun test` script and AWS SDK + Zod deps to `cloud/package.json`.
@@ -158,4 +160,22 @@ Started: Sun 31 May 2026 13:26:10 AEST
   - Acceptance criteria "Delete _placeholder.ts" was deferred to US-012: deleting it now breaks the CDK NodejsFunction synth because the stack still references the placeholder file path. The principle "ALL commits must pass quality checks" takes precedence over a literal file deletion that creates a temporary broken state. US-012 will remove the placeholder as part of swapping integrations.
   - The routing branch for an explicit connId target now guards `env.to !== connId` so the sender can't address themselves; the plan didn't spell this out but it preserves the "sender never receives its own frame" invariant the acceptance criteria called out.
   - Envelope `payload` is typed `z.unknown()` — handlers cast via `env.payload as {...}` and then null-check fields. Don't try to extend the EnvelopeSchema with per-frame payload shapes for v1; keep payload typing inside each handler.
+---
+
+## 2026-05-31 - US-012
+- Wired all five share lambdas + IAM grants + HTTP routes into the CDK stack per plan Task 9.
+- Added `ShareJwtSecret` CfnParameter (noEcho) and `sharedShareEnv` ({SHARE_TABLE, SHARE_WS_URL, SHARE_JWT_SECRET}) consumed by every share lambda.
+- Defined 5 NodejsFunctions via `mkShareLambda` helper: `ShareSessionCreateFn`, `ShareSessionJoinFn`, `ShareWsConnectFn`, `ShareWsDisconnectFn`, `ShareWsDefaultFn`.
+- Replaced placeholder WS route integrations with real `WebSocketLambdaIntegration`s pointing at the per-route lambdas; `shareSessions.grantReadWriteData` on all 5; `shareWsApi.grantManageConnections` on `wsDefaultFn`.
+- Added HTTP routes `POST /api/share/sessions` and `POST /api/share/join` on the existing `httpApi` (CloudFront's existing `/api/*` behavior already proxies them to API Gateway via the path-rewrite function).
+- Deleted `cloud/lambda/share/_placeholder.ts` — no longer referenced after route swap.
+- Extended `seeflow-stack.share.test.ts` with three new assertions: HTTP routes present, ≥5 DDB grants, ManageConnections grant present. All 6 share tests pass.
+- `bun test`: 82/82 across 14 files. `bun run typecheck`: clean. `npx cdk synth --parameters ShareJwtSecret=$(openssl rand -base64 32)`: succeeds.
+- Files changed: `cloud/lib/seeflow-stack.ts`, `cloud/lib/seeflow-stack.share.test.ts`, deleted `cloud/lambda/share/_placeholder.ts`.
+- **Learnings for future iterations:**
+  - The plan's IAM grant assertion (`includes('seeflow-share-sessions')`) is wrong: CDK synthesizes grants as `Fn::GetAtt: [ShareSessionsTable<HASH>, Arn]`, so the literal table-name string never appears in the policy doc. Search for the table's logical id prefix `ShareSessionsTable` instead.
+  - The plan also documents `npx cdk synth --context @aws-cdk/share-jwt-secret=...` but the actual parameter is a `CfnParameter`, so the right invocation is `--parameters ShareJwtSecret=...` (matches the acceptance criterion).
+  - `mkShareLambda` is defined as an arrow on the constructor so `this` binds correctly without the plan's `Function.prototype.call(this, ...)` workaround. Use the arrow form for any future per-lambda factory inside a stack constructor.
+  - The placeholder file deletion (US-011 acceptance criterion deferred from prior story) is now done — done atomically with the route swap to avoid a broken intermediate state.
+  - The two new HTTP routes ride on the existing `/api/*` CloudFront behavior (path-rewrite strips `/api` before forwarding to API Gateway); no new CloudFront behavior needed.
 ---
