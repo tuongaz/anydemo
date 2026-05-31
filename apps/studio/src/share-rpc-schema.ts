@@ -179,3 +179,44 @@ export const RpcResultFrameSchema = z
 export type RpcOp = z.infer<typeof RpcOpSchema>;
 export type RpcFrame = z.infer<typeof RpcFrameSchema>;
 export type RpcResultFrame = z.infer<typeof RpcResultFrameSchema>;
+
+/**
+ * `node-patched` broadcast frame (US-039 host → US-042 peer apply).
+ *
+ * Host emits this after every accepted `rpc` op so all peers (including the
+ * originator) converge on the canonical post-op snapshot. Payload shape mirrors
+ * `computeNodePatchedDiff` in `apps/studio/src/share.ts`:
+ *
+ *   { flowId, op, version, diff: { kind, ...fields } }
+ *
+ * where `op` is one of the 9 RpcOp strings and `diff.kind` is one of
+ *   'move' | 'patch' | 'add' | 'delete' | 'reorder' | 'bulk'
+ * (the latter only for `addBulk`). The diff body is intentionally loose at
+ * the wire layer — peers switch on `op` + `diff.kind` to drive the apply.
+ * Strict diff shapes live host-side in `computeNodePatchedDiff`.
+ *
+ * `version` is a per-flow monotonic counter. Peers track
+ * `lastAppliedVersion[flowId]` and drop frames where `version <=` the last
+ * applied — guards against out-of-order delivery on reconnect.
+ */
+const NodePatchedDiffSchema = z.record(z.unknown());
+
+export const NodePatchedFramePayloadSchema = z
+  .object({
+    flowId: FlowIdSchema,
+    op: z.string().min(1),
+    version: z.number().int().nonnegative(),
+    diff: NodePatchedDiffSchema,
+  })
+  .passthrough();
+
+export const NodePatchedFrameSchema = z
+  .object({
+    v: z.literal(1),
+    type: z.literal('node-patched'),
+    payload: NodePatchedFramePayloadSchema,
+  })
+  .passthrough();
+
+export type NodePatchedFramePayload = z.infer<typeof NodePatchedFramePayloadSchema>;
+export type NodePatchedFrame = z.infer<typeof NodePatchedFrameSchema>;
