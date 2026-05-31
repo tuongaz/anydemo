@@ -107,3 +107,26 @@ Started: Sun 31 May 2026 18:44:56 AEST
   - `bun run format` MUST come before `bun run lint` — biome's organizeImports rearranges import order during format, and lint will fail on the unformatted order even though it's semantically equivalent.
   - When extending `ShareDeps` with new optional fields, ordering of resolution matters: `rpcDispatcher` falls back to `operationsDeps`-based default. If both are absent, handleRpcFrame returns `no_dispatcher` rather than throwing — a tampered config shouldn't crash the controller.
 ---
+
+## 2026-05-31 — US-039
+- Extended `handleRpcFrame` in `apps/studio/src/share.ts` so every accepted op broadcasts a `node-patched` envelope BEFORE returning the `rpc-result`. Failed ops (notFound, invalid_envelope, op_not_allowed, not_active, no_dispatcher, dispatcher throw) do NOT broadcast and do NOT bump the version counter.
+- Added a closure-scoped per-flow version counter `flowVersions: Map<string, number>`. Bumped immediately before each broadcast; included in payload as `version`. Different flowIds track independent counters.
+- Added `broadcast?: (envelope) => void` to `ShareDeps` as a test seam; default forwards to `transport.send(...)` only when transport is open (matches the existing EventBus bridge pattern).
+- New `computeNodePatchedDiff(op, outcome)` helper: switch over the 9 wire ops produces the AC-specified diff shapes — `move` / `patch` / `add` / `delete` / `reorder` for nodes, mirror with `connectorId` for connectors, plus a `{ kind: 'bulk', result }` carrier for addBulk (AC didn't enumerate; chose the most peer-friendly shape).
+- For `addNode`, the diff carries `outcome.data.node` (the impl returns the full normalized new node). For `addConnector`, the diff merges `op.connector` with the impl-assigned `id` from `outcome.data.id`.
+- Added a top-of-file note: "node-patched broadcasts include the originator — peer SPAs reconcile their optimistic state against the canonical diff; suppress reconcile-only re-renders via the rpc-result `id` correlation in US-041."
+- Created `apps/studio/src/share.broadcast.test.ts` (14 tests across 4 describe blocks): broadcast-ordering (broadcast fires before rpc-result resolves), per-op diff shape coverage (9 ops), version monotonicity (flow-a 1→2 across consecutive ops + per-flow isolation across flow-a and flow-b), and failure-no-broadcast (notFound + invalid_envelope; subsequent ok op still starts at version 1).
+- Files changed:
+  - `apps/studio/src/share.ts` (added flowVersions, broadcast seam, computeNodePatchedDiff helper, top-of-file note, broadcast call in handleRpcFrame)
+  - `apps/studio/src/share.broadcast.test.ts` (new — 14 tests)
+  - `ralph/prd.json` (US-039 passes → true)
+- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all 4 workspaces clean, `bun test apps/studio/src/share*.ts` = 97 pass / 0 fail across 5 files.
+- **Learnings for future iterations:**
+  - The broadcast seam pattern (optional `broadcast` in ShareDeps, default → transport.send) mirrors the eventBus-bridge pattern already in this file. Tests swap in a spy; production code never touches transport.send for node-patched directly. Future co-edit phases (US-041, US-042) can reuse the same seam.
+  - The per-flow version counter is `Map<flowId, number>` not `number`. Two flows mutating concurrently in the same session don't fight over a single counter — each flow has its own monotonic stream. Out-of-order delivery is a per-flow problem, not session-global.
+  - The `addBulk` op isn't enumerated in the AC's diff-shape list. Chose `{ kind: 'bulk', result: outcome.data }` because: (a) bulk applies multiple changes atomically — no single nodeId/connectorId to identify, (b) the impl returns the full enriched node + connector lists which the peer can apply directly without round-tripping back to the original request.
+  - For `addConnector`, the impl only returns `{ id }` not the full connector. The diff synthesizes `{ ...op.connector, id: outcome.data.id }` — clients reading the diff get the full connector with its server-assigned id. Same pattern would work for `addNode` if the impl ever shrinks to just `{ id }`, but for now it returns `{ id, node }` and we read `data.node` directly.
+  - Closure-captured `let transport` references inside a closure assigned BEFORE the `let transport` declaration trigger TDZ at call time even though declarations hoist. Solution: declare the closure AFTER `let transport`. Pattern matches the existing `subscribeToEventBus` placement.
+  - "broadcast BEFORE rpc-result resolves" is enforced by control flow: broadcast() runs synchronously inside the ok branch of handleRpcFrame; the rpc-result is returned from the same function via `return makeRpcResultFrame(...)`. Tests assert this via a shared `order: string[]` array pushed inside the spy and right after `await ctrl.handleRpcFrame(...)`.
+  - `makeEnvelope('node-patched', payload, { to: 'all' })` is the canonical way to build the envelope — `from: 'host'` is the default; `to: 'all'` is the fan-out hint the relay routes by.
+---

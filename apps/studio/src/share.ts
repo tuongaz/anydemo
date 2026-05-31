@@ -8,6 +8,10 @@
  * state machine. stop() tears the session down cleanly (and aborts a mid-boot
  * start), kick() sends a kick envelope to a peer, rotateUrl() stops + restarts
  * so an abused share link can be invalidated.
+ *
+ * `node-patched` broadcasts include the originator — peer SPAs reconcile their
+ * optimistic state against the canonical diff; suppress reconcile-only
+ * re-renders via the rpc-result `id` correlation in US-041.
  */
 
 import { homedir } from 'node:os';
@@ -189,6 +193,10 @@ export interface ShareDeps {
   // Injected for tests so they can capture audit writes without hitting disk.
   // Defaults to the real `appendShareAudit` writing to `auditDir`.
   appendShareAuditFn?: (sessionId: string, entry: RpcAuditEntry) => void;
+  // Outbound broadcast seam. Defaults to forwarding the envelope through the
+  // active transport when open. Tests inject a spy to assert the
+  // node-patched fan-out without standing up a relay.
+  broadcast?: (envelope: Envelope) => void;
 }
 
 interface RelaySessionResponse {
@@ -226,6 +234,45 @@ const makeRpcResultFrame = (id: string, payload: RpcResultFrame['payload']): Rpc
   payload,
 });
 
+// Build the diff payload broadcast as `node-patched` after a successful op.
+// Each branch follows the contract documented on US-039:
+//   moveNode      -> { kind: 'move', nodeId, position }
+//   patchNode     -> { kind: 'patch', nodeId, patch }
+//   addNode       -> { kind: 'add', node }         (full new node from outcome)
+//   deleteNode    -> { kind: 'delete', nodeId }
+//   reorderNode   -> { kind: 'reorder', nodeId, op }
+// Connector variants mirror the same kinds with `connectorId` instead of
+// `nodeId`. `addBulk` reports `{ kind: 'bulk', result }` so peers can decide
+// whether to refetch or apply incrementally.
+function computeNodePatchedDiff(op: RpcOp, outcome: RpcDispatchOutcome): unknown {
+  switch (op.op) {
+    case 'moveNode':
+      return { kind: 'move', nodeId: op.nodeId, position: op.position };
+    case 'patchNode':
+      return { kind: 'patch', nodeId: op.nodeId, patch: op.patch };
+    case 'addNode': {
+      const data = outcome.data as { node?: unknown } | undefined;
+      return { kind: 'add', node: data?.node };
+    }
+    case 'deleteNode':
+      return { kind: 'delete', nodeId: op.nodeId };
+    case 'reorderNode':
+      return { kind: 'reorder', nodeId: op.nodeId, op: op.reorder };
+    case 'addConnector': {
+      const data = outcome.data as { id?: string } | undefined;
+      const connector =
+        data?.id !== undefined ? { ...op.connector, id: data.id } : { ...op.connector };
+      return { kind: 'add', connector };
+    }
+    case 'patchConnector':
+      return { kind: 'patch', connectorId: op.connectorId, patch: op.patch };
+    case 'deleteConnector':
+      return { kind: 'delete', connectorId: op.connectorId };
+    case 'addBulk':
+      return { kind: 'bulk', result: outcome.data };
+  }
+}
+
 export function createShareController(deps: ShareDeps): ShareController {
   // current is mutated through setState() so subscribers fan-out on every
   // transition. hostKey + transport live in closure scope — hostKey is never
@@ -244,6 +291,10 @@ export function createShareController(deps: ShareDeps): ShareController {
   const appendShareAuditFn =
     deps.appendShareAuditFn ??
     ((sessionId, entry) => appendShareAudit(sessionId, entry, { dir: auditDir }));
+  // Per-flow monotonic counter bumped just before every accepted node-patched
+  // broadcast. Peers use this only for tie-breaking out-of-order frames in a
+  // future story; for now we only assert monotonic-increasing in tests.
+  const flowVersions = new Map<string, number>();
 
   let hostKey: string | null = null;
   let transport: ShareTransport | null = null;
@@ -258,6 +309,17 @@ export function createShareController(deps: ShareDeps): ShareController {
   // connId -> peer info. Inverse of peerConnIds, kept in lockstep. Used by
   // handleFrame to resolve env.from -> peerId before rate-limiting/auditing.
   const connPeers = new Map<string, { peerId: string; displayName: string }>();
+
+  const broadcast =
+    deps.broadcast ??
+    ((envelope: Envelope) => {
+      if (!transport || !transport.isOpen()) return;
+      try {
+        transport.send(envelope);
+      } catch (err) {
+        console.warn('[share] broadcast send failed:', err);
+      }
+    });
 
   const setState = (next: ShareState) => {
     current = next;
@@ -613,6 +675,23 @@ export function createShareController(deps: ShareDeps): ShareController {
         console.warn('[share] rpc audit append failed:', err);
       }
       if (ok) {
+        // Broadcast the canonical diff BEFORE resolving rpc-result so peers
+        // (including the originator) see the patch first; the originator's
+        // optimistic reconcile then folds into a no-op.
+        const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
+        flowVersions.set(op.flowId, nextVersion);
+        const diff = computeNodePatchedDiff(op, outcome);
+        try {
+          broadcast(
+            makeEnvelope(
+              'node-patched',
+              { flowId: op.flowId, op: op.op, diff, version: nextVersion },
+              { to: 'all' },
+            ),
+          );
+        } catch (err) {
+          console.warn('[share] node-patched broadcast failed:', err);
+        }
         return makeRpcResultFrame(parsed.data.id, {
           ok: true,
           ...(outcome.data !== undefined ? { result: outcome.data } : {}),
