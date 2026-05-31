@@ -11,6 +11,20 @@ Started: Sun 31 May 2026 16:17:07 AEST
 
 ---
 
+## 2026-05-31 - US-016
+- Added `apps/studio/src/share-transport.ts`: `createShareTransport(opts)` returning `{ send, close, isOpen }`. Connects synchronously via injectable `wsFactory` (defaulting to Bun's global `WebSocket`), emits state through `onStateChange` ('connecting' | 'open' | 'reconnecting' | 'closed'), sends the `auth-host` envelope as the first frame after `open`, parses inbound text frames via `parseEnvelope` (drops invalid + logs only the reason), reconnects on non-1000 close with exponential backoff (500ms → 30s cap, +/- 20% jitter), and suppresses reconnects after `close('user')` (1000).
+- Injected `setTimeoutFn`/`clearTimeoutFn`/`random` so tests can drive the scheduler synchronously without real time.
+- Added `apps/studio/src/share-transport.test.ts` with 7 cases using an in-memory `FakeWebSocket`: auth-host first-frame contract, valid frame dispatch, three flavors of invalid frame dropped, reconnect after abnormal close (initial 500ms with zero-jitter random=0.5), user-close suppresses reconnect, send() throws when not open, backoff doubles to 1000ms on repeated reconnects.
+- Files changed: `apps/studio/src/share-transport.ts` (new), `apps/studio/src/share-transport.test.ts` (new), `ralph/prd.json` (US-016 passes=true), `ralph/progress.txt`.
+- Quality: `bun test` across the three share files → 22/22 pass; `bun run format`, `bun run lint`, `bun run typecheck` all clean.
+- **Learnings for future iterations:**
+  - `WebSocketLike` is a deliberately narrow shape (addEventListener/removeEventListener/send/close/readyState only) so tests can swap in a `FakeWebSocket` without inheriting from the global. Bun's `WebSocket` satisfies it via a single `as unknown as WebSocketLike` cast in `defaultWsFactory` — no DOM lib needed.
+  - State equality check pattern: initialize `currentState` to `null` (not the first real state) so the inaugural `setState('connecting')` actually fires; otherwise the first listener push gets swallowed and tests of the initial state see `[]`.
+  - For deterministic backoff tests, inject `random: () => 0.5` — the formula `base + base*0.2*(rand*2-1)` collapses jitter to zero at 0.5 so you can assert exact ms values.
+  - Bun's `bun:test` doesn't ship fake timers; the `setTimeoutFn`/`clearTimeoutFn` injection pattern (with a cancellable `{ fn, ms, cancelled }` queue in the harness) gives you full synchronous control over reconnect scheduling. Reusable for any timer-driven module.
+  - After abnormal close, the reconnect helper sets state to `'reconnecting'` BEFORE the timer fires, then `connect()` checks `currentState === 'reconnecting'` to avoid bouncing back to `'connecting'`. That means the listener sequence on a single reconnect is `open → reconnecting` (not `open → reconnecting → connecting`).
+---
+
 ## 2026-05-31 - US-015
 - Added `apps/studio/src/share-envelope.ts`: `EnvelopeSchema` (Zod) with `v: literal(1)`, 14-variant `EnvelopeTypeSchema` matching the relay contract, `parseEnvelope` returning a discriminated `{ ok }` result with a path:message reason on failure, and `makeEnvelope<T>(type, payload, opts)` that defaults `from='host'` and only includes `id`/`to` when supplied (so `bun:test`'s `toEqual` round-trips cleanly).
 - Added `apps/studio/src/share-envelope.test.ts` with 9 cases: valid rpc parse, wrong-v rejected, unknown-type rejected, auth-host parse, auth-peer parse, non-object rejected, makeEnvelope defaults, makeEnvelope overrides, round-trip through parseEnvelope.
