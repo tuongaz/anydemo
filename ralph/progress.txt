@@ -88,3 +88,15 @@ Started: Sun 31 May 2026 13:26:10 AEST
   - `PeerInfo.joinedAt` is server-set inside `addPeer` (callers omit it); type marks it optional. `role` is locked to the literal `'editor'` for Phase 1.
   - `getByToken` uses the `token-index` GSI (created in US-002) with `KeyConditionExpression` + ExpressionAttribute names because `token` is a reserved-ish keyword in some DDB contexts; the `#tk` alias avoids any ambiguity.
 ---
+
+## 2026-05-31 - US-007
+- Implemented POST /api/share/sessions handler per plan Task 6.
+- Created `cloud/lambda/share/session-create.ts` exporting `handler` that reads `SHARE_WS_URL` from env, generates `sessionId` (8 ch) + `token` (43 ch) + `hostKey` (43 ch) via `shared/ids`, calls `createSession`, returns JSON with CORS headers.
+- Created `cloud/lambda/share/session-create.test.ts` (2 tests: happy path verifying all 4 response fields + CORS headers + DDB row written, and 500 when SHARE_WS_URL missing). All pass.
+- `bun test lambda/share/session-create.test.ts`: 2/2. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/session-create.ts`, `cloud/lambda/share/session-create.test.ts`.
+- **Learnings for future iterations:**
+  - For HTTP-handler tests, mock `doc.send` (same pattern as `sessions.test.ts`) rather than trying to reassign named exports like the plan suggests (`(sessions as any).createSession = mock(...)`). ESM bindings are immutable in Bun; the doc.send approach is proven to work and tests the full handler→DDB path end-to-end.
+  - The CORS object lives inline in each handler module (Task 6 + 7 both repeat it). For now don't extract to shared/cors.ts — only 2 handlers use CORS and the plan keeps them isolated. Reconsider if more HTTP handlers land.
+  - Lambda return type `APIGatewayProxyResultV2` accepts the `{statusCode, headers, body}` shape directly — no `isBase64Encoded` needed.
+---
