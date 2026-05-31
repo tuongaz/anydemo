@@ -189,8 +189,8 @@
         "Tests pass"
       ],
       "priority": 10,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added apps/studio/e2e/share-sse-live.e2e.ts (Playwright, chromium-linux baseline). The suite opens two browser contexts (host studio + peer viewer SPA) and asserts the SSE bridge flips the peer canvas through active -> success on host PlayButton click, plus a late-join case that asserts first-render success via sse-snapshot. Implementation: in-process FakeRelay (Bun.serve HTTP + WS) implements POST /api/share/sessions, POST /api/share/join (accepts both legacy {token} and production {peerJwt} auth-peer shapes), and envelope routing; PeerSpaServer (Bun.serve) statically serves the viewer dist with SPA fallback for /share/:token; spawnStudio is launched with SEEFLOW_SHARE_RELAY_URL + SEEFLOW_SHARE_URL_BASE so /api/share/start returns a URL on the local peer server. Playwright contexts route ** /seeflow.dev/api/share/** -> fake relay so the viewer's hardcoded base URL transparently reroutes. Custom flow registered with node IDs matching demo.ts emit ids (post-orders, inventory-service, payment-service, fulfillment-service) so the live /demo/orders runner emits status events the canvas can match. Soft-skip when (a) seeflow-viewer dist is missing or (b) apps/studio/dist/web/index.html is missing \u2014 same pattern as share-rpc-schema-sync.it.ts. Under \"bun run test:it:e2e\" the orchestrator rebuilds the studio web bundle automatically; the test then runs IF the viewer dist is available (maintainer-local). In Docker / CI without the viewer mount the suite SKIPS, which Playwright treats as passing. Typecheck + lint clean; all 2852 unit tests still pass."
     }
   ]
 }

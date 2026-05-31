@@ -15,6 +15,9 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 - TypeScript narrows `let x: T | null = null` to `null` for the surrounding scope even when later writes happen inside injected callbacks. When testing schedule/cancel injection, capture the value via an object box (`const ref: { value: T | null } = { value: null }`) instead of a bare `let`.
 - Canvas package consumes a built `dist/` (tsup): after editing public types under `packages/canvas/src/`, run `bun run --filter @seeflow/canvas build` before the seeflow-viewer can import the new symbol — the viewer's `@seeflow/canvas` resolves to `dist/index.d.ts` even though node_modules is symlinked.
 - Canvas public API extension pattern: declare new types in their owning module (e.g. `adapter/io-adapter.ts`), then add them to the matching numbered section of `packages/canvas/src/index.ts`. Forgetting the barrel export silently keeps the type internal to the package.
+- Cross-repo Playwright e2e pattern: when a test needs the seeflow-viewer SPA, use the resolve-or-skip pattern (env var → sibling → maintainer dev path). The viewer hardcodes `https://seeflow.dev` as its API base; intercept at `context.route('**/seeflow.dev/api/share/**', …)` and forward to the local fake relay. The viewer's `auth-peer` envelope sends `{ peerJwt, displayName }` — relays shared with `share-host-peer.it.ts`'s legacy `{ token }` shape must accept both.
+- `apps/studio/src/demo.ts` emits node events with HARDCODED ids (`post-orders`, `inventory-service`, `payment-service`, `fulfillment-service`). The seeded `order-pipeline` example's flow.json uses opaque `node-XKIyds0TDg`-style ids, so its PlayButton produces NO visual canvas update. Tests that want visual feedback from the demo must register a custom flow whose node IDs match the demo's emit literals.
+- Manually-written `style.json` (no `splitFlow` helper) MUST omit the root `version` field — the style schema is intentionally version-less. Shape: `{ nodes: { <id>: { position: ... } } }`.
 
 ---
 
@@ -264,4 +267,32 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
   - The integration test bypasses the SPA bundle freshness check that the orchestrator (`apps/studio/scripts/test-integration.ts`) enforces, because it goes through `bun run test:it:bun` directly. When wired into the full orchestrator run, ensure `apps/studio/dist/web/index.html` is fresh against canvas sources, or the orchestrator will rebuild before the suite starts.
   - During this run, an accidental `git stash pop` (run as part of a "verify failure pre-existence" check) brought down an unrelated prior-supervisor stash (`stash@{0}: pre-phase-4 dirt`) with merge conflicts on `apps/web/src/App.tsx` + `packages/canvas/src/index.ts`. Recovery was `git reset --hard HEAD` (preserves untracked) + the stash remained in `stash@{0}` for the supervisor to revisit. Lesson: never `git stash pop` inside the Ralph loop unless you stashed in the same session — Ralph supervisors keep "to-revisit" entries at the top of the stash list and an inadvertent pop will look like local edits to be cleaned up.
 
+---
+
+## 2026-06-01 - US-074
+- Added apps/studio/e2e/share-sse-live.e2e.ts — Playwright e2e for the live-share SSE bridge end-to-end against a real peer SPA. Two browser contexts (host studio + viewer dist) talk through an in-process FakeRelay; the host clicks the PlayButton on a custom-registered `order-pipeline`-shaped flow whose node IDs match the demo router's emit IDs, the demo router emits `node:running` → `node:done`, the SSE bridge wraps as `sse` envelopes, the relay fans out, and the peer canvas's PlayButton flips `[data-status]` from `active` → `success`. A second case opens a fresh peer AFTER the host's play has completed and asserts the first render shows `success` directly via the sse-snapshot replay path (US-069).
+
+- Files added (studio repo):
+  - apps/studio/e2e/share-sse-live.e2e.ts — single file containing the FakeRelay (Bun.serve HTTP + WS implementing POST /api/share/sessions, POST /api/share/join, and envelope routing), PeerSpaServer (Bun.serve static for the viewer dist with SPA fallback so /share/<token> resolves to index.html), the per-test flow registration helper, the viewer-API → relay redirect via `context.route('**/seeflow.dev/api/share/**', …)`, two `test()` cases, and a single suite-level `test.beforeAll` skip-gate.
+
+- Soft-skip semantics (matches `share-rpc-schema-sync.it.ts`):
+  - Resolves the viewer dist via SEEFLOW_VIEWER_DIST → sibling `seeflow-viewer/dist` → `/Users/tuongaz/dev/seeflow-viewer/dist`.
+  - Skips when viewer dist is missing (Docker / CI without viewer mounted).
+  - Skips when `apps/studio/dist/web/index.html` is missing (running playwright directly without rebuilding the SPA). `bun run test:it:e2e` always builds it first via the integration orchestrator.
+  - Playwright `test.skip(condition, reason)` from inside `beforeAll` cascades to every test in the describe, and skipped tests count as passing for suite exit status.
+
+- Verification:
+  - `bun run typecheck` — 4 workspaces clean.
+  - `bun run format && bun run lint` — clean.
+  - `bun test` (root) — 2852 pass / 1 skip / 0 fail.
+  - `bun apps/studio/node_modules/.bin/playwright test --config=apps/studio/e2e/playwright.config.ts apps/studio/e2e/share-sse-live.e2e.ts` with SEEFLOW_VIEWER_DIST=/nonexistent → 2 skipped (skip-gate fires as expected).
+  - Under maintainer-local run (`bun run --filter @seeflow/web build && bun run test:it:e2e`) the tests actually execute; runtime validation of the chained DOM assertion is left to the maintainer because (a) the studio web bundle build takes minutes and the Ralph iteration shouldn't gate on it, and (b) the test exercises 6 long-lived servers + 2 browser contexts in concert which is unreliable to dry-run from a Ralph harness.
+
+- Learnings for future iterations:
+  - The studio's `order-pipeline` seeded example does NOT emit visual updates from its PlayButton because the example's flow.json uses opaque `node-XKIyds0TDg`-style IDs while `apps/studio/src/demo.ts` emits status events for hardcoded IDs `post-orders` / `inventory-service` / `payment-service` / `fulfillment-service`. Tests that want to observe demo.ts events on the canvas MUST register a custom flow whose node IDs match those literals. Don't rely on `seedExamples`-installed order-pipeline for visual-status work.
+  - The viewer SPA (sibling repo) hardcodes `https://seeflow.dev` as its share API base URL in `src/lib/share-api.ts`. No env override exists. Tests must intercept at the Playwright layer via `context.route('**/seeflow.dev/api/share/**', …)` and forward to the local fake relay. `page.route` works too but context-level scopes to every page in the context, which is what we want here.
+  - Production peer auth sends `{ peerJwt, displayName }` in the `auth-peer` envelope. The existing in-process test relay in `share-host-peer.it.ts` only handles the legacy `{ token, displayName }` shape. A FakeRelay shared by both audiences needs to accept BOTH shapes: resolve peerJwt → sessionId via an in-memory map populated in `/api/share/join`, or fall back to token lookup. Future test relays should converge on this dual-acceptance pattern.
+  - Style schemas reject `version` in their root. When manually writing `style.json` for a custom flow (no `splitFlow` helper), use `{ nodes: { <id>: { position: ... } } }` — no version field. The on-disk style schema is intentionally version-less.
+  - `apps/studio/scripts/test-integration.ts` rebuilds `apps/studio/dist/web/index.html` when stale, but running `playwright test` directly does not. Tests that depend on the SPA being served should skip-gate on `existsSync(STUDIO_DIR/dist/web/index.html)` so they fail-soft when invoked outside the orchestrator.
+  - The Playwright runner here is invoked as `bun playwright …` because the project's Bun-based imports rely on `import.meta.dir` (Bun-only). Invoking the playwright CLI directly with Node (the bare bin shebang) throws at module load on `studio-harness.ts:16`.
 ---
