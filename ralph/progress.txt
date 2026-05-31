@@ -100,3 +100,62 @@ Started: Sun 31 May 2026 13:26:10 AEST
   - The CORS object lives inline in each handler module (Task 6 + 7 both repeat it). For now don't extract to shared/cors.ts — only 2 handlers use CORS and the plan keeps them isolated. Reconsider if more HTTP handlers land.
   - Lambda return type `APIGatewayProxyResultV2` accepts the `{statusCode, headers, body}` shape directly — no `isBase64Encoded` needed.
 ---
+
+## 2026-05-31 - US-008
+- Implemented POST /api/share/join handler per plan Task 7.
+- Created `cloud/lambda/share/session-join.ts` exporting `handler` that reads SHARE_WS_URL + SHARE_JWT_SECRET from env, validates body (token + displayName), trims displayName + caps at 40 chars, calls `getByToken`, mints 5-min peer JWT via `mintPeerToken`, returns JSON with CORS headers and `{sessionId, peerId, displayName, wsUrl, peerJwt, hostOnline, flowList:[]}`.
+- Created `cloud/lambda/share/session-join.test.ts` (5 tests: happy path with all response fields, 404 unknown token, 400 missing displayName, displayName trim+cap, 500 missing SHARE_JWT_SECRET). All pass.
+- `bun test lambda/share/session-join.test.ts`: 5/5. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/session-join.ts`, `cloud/lambda/share/session-join.test.ts`.
+- **Learnings for future iterations:**
+  - Test mocks `doc.send` via the `ddbMod.doc as any` pattern (same as session-create.test.ts) and dispatches on `cmd.constructor.name === 'QueryCommand'`, reading `cmd.input.ExpressionAttributeValues[':t']` for the token. This matches how `getByToken` issues its QueryCommand against the `token-index` GSI — do NOT try the plan's `(sessions as any).getByToken = mock(...)` approach (ESM bindings are immutable in Bun).
+  - `hostOnline: Boolean(session.hostConnId)` — null vs string. The fake row uses `'host-conn'` so happy path asserts true; future tests for offline host should set `hostConnId: null`.
+  - displayName trim + 40-char cap is done in the handler before the JWT mint; the cap was added as an explicit test to guard the acceptance criterion.
+---
+
+## 2026-05-31 - US-009
+- Implemented WebSocket $connect handler per plan Task 8a.
+- Created `cloud/lambda/share/ws-connect.ts` exporting `handler` that returns `{statusCode: 200, body: 'ok'}` — auth happens in the first frame on $default (US-011) so secrets never appear in connect URL/headers.
+- Created `cloud/lambda/share/ws-connect.test.ts` (1 test: returns 200). Passes.
+- `bun test lambda/share/ws-connect.test.ts`: 1/1. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/ws-connect.ts`, `cloud/lambda/share/ws-connect.test.ts`.
+- **Learnings for future iterations:**
+  - $connect intentionally has no DDB calls — keeps it cheap and avoids gating connections on a token in the URL (which would be logged). The disconnect lambda (US-010) and default lambda (US-011) carry all the real work.
+  - The handler signature uses `APIGatewayProxyWebsocketEventV2` + `APIGatewayProxyResultV2` from `aws-lambda`, same shape the disconnect/default lambdas will use.
+---
+
+## 2026-05-31 - US-010
+- Implemented WebSocket $disconnect handler per plan Task 8b.
+- Created `cloud/lambda/share/ws-disconnect.ts`: handler `Scan`s `ShareSessions`, finds the row containing `connId` (as `hostConnId` or key in `peers`), calls `setHostConnId(sessionId, null)` for host or `removePeer(sessionId, connId)` for peer, returns 200. Unknown connection ⇒ 200 no-op.
+- `findByConnId` lives inside the same file (small helper) per plan; not extracted to `shared/` because the equivalent helper in ws-default returns extra `peerId` data and we don't want to over-share.
+- Created `cloud/lambda/share/ws-disconnect.test.ts` (3 tests: host-disconnect clears `hostConnId`, peer-disconnect removes peer entry, unknown-conn is no-op). All pass.
+- Same `doc.send` swap pattern as `sessions.test.ts` / `session-create.test.ts` — fake handles ScanCommand and UpdateCommand (host clear + peer remove).
+- `bun test lambda/share/ws-disconnect.test.ts`: 3/3. `bun run typecheck`: clean. Uploader regression: 5/5.
+- Files changed: `cloud/lambda/share/ws-disconnect.ts`, `cloud/lambda/share/ws-disconnect.test.ts`.
+- **Learnings for future iterations:**
+  - The disconnect lambda scans the whole table — plan calls this out as acceptable because session count stays small (TTL 30 min). Don't try to optimize with a connId GSI yet; ws-default already does the same scan-by-connId pattern (US-011 will reuse it as `findConnRole` returning the extra `peerId`).
+  - Tests stub the `ScanCommand` branch by returning `Array.from(store.values())` — handy boilerplate to copy when writing the ws-default test in US-011 (which also needs PostToConnection mocked).
+  - For typed test row builders, build via a `row(over: Partial<SessionRow>): SessionRow` factory that spreads defaults — easier than crafting full rows inline and keeps tests focused on the field that matters per case.
+---
+
+## 2026-05-31 - US-011
+- Implemented WebSocket `$default` handler per plan Task 8c.
+- Created `cloud/lambda/share/ws-default.ts`: `handler` JSON-parses `event.body`, runs `parseEnvelope`, dispatches `auth-host` / `auth-peer` / `routeFrame`.
+  - `handleAuthHost`: 401 on wrong hostKey or missing session; calls `setHostConnId` on success.
+  - `handleAuthPeer`: reads `SHARE_JWT_SECRET`, 401 on invalid/expired JWT, calls `addPeer` on success (displayName trimmed at 40 chars).
+  - `routeFrame`: 401 if `findConnRole` returns undefined; touches the session; builds `targets[]` excluding sender; `to:'all'|undefined` fans out to host+peers, `to:'host'` to hostConnId, otherwise direct PostToConnection to the given connId; `GoneException` triggers `setHostConnId(null)` (host) or `removePeer` (peer).
+  - Only logs `{type, from, to, sizeBytes}` — never the payload.
+- Created `cloud/lambda/share/ws-default.test.ts` (9 tests): auth-host wrong/right key, auth-peer expired/valid, route-from-unauthed, route-to-host (single Post), route-to-all (fan-out to host + other peers, sender excluded), GoneException → host cleanup, GoneException → peer cleanup.
+- Mocking pattern: swap `(ddbMod.doc as any).send = fakeDocSend` (same as prior tests) AND swap `(ApiGatewayManagementApiClient.prototype as any).send = fakeApiSend`. `GoneException` from `@aws-sdk/client-apigatewaymanagementapi` constructor takes `{$metadata, message}`.
+- `_placeholder.ts` was NOT deleted (acceptance criterion deferred to US-012). Deleting it now breaks the existing CDK assertion tests from US-002 because `seeflow-stack.ts` still references its file path in the three placeholder route integrations. US-012 replaces those integrations with the real lambdas; that is the right moment to remove the placeholder file.
+- `bun test lambda/share/ws-default.test.ts`: 9/9 pass.
+- `bun test lib/seeflow-stack.share.test.ts lambda/share/ws-default.test.ts lambda/uploader/index.test.ts`: 17/17 pass.
+- `bun run typecheck`: clean.
+- Files changed: `cloud/lambda/share/ws-default.ts`, `cloud/lambda/share/ws-default.test.ts`.
+- **Learnings for future iterations:**
+  - To mock `ApiGatewayManagementApiClient` in Bun tests, swap `ApiGatewayManagementApiClient.prototype.send = mockFn` in `beforeEach`. The handler constructs a fresh client per invocation, so prototype mutation catches all of them. To simulate `GoneException`, throw `new GoneException({$metadata: {}, message: 'gone'})` (constructor signature from `@aws-sdk/client-apigatewaymanagementapi`).
+  - The `findConnRole` Scan returns full `SessionRow` items — reuse the existing in-memory `store` Map and have the fake's `ScanCommand` branch return `{Items: Array.from(store.values())}` (mirrors the `ws-disconnect.test.ts` setup).
+  - Acceptance criteria "Delete _placeholder.ts" was deferred to US-012: deleting it now breaks the CDK NodejsFunction synth because the stack still references the placeholder file path. The principle "ALL commits must pass quality checks" takes precedence over a literal file deletion that creates a temporary broken state. US-012 will remove the placeholder as part of swapping integrations.
+  - The routing branch for an explicit connId target now guards `env.to !== connId` so the sender can't address themselves; the plan didn't spell this out but it preserves the "sender never receives its own frame" invariant the acceptance criteria called out.
+  - Envelope `payload` is typed `z.unknown()` — handlers cast via `env.payload as {...}` and then null-check fields. Don't try to extend the EnvelopeSchema with per-frame payload shapes for v1; keep payload typing inside each handler.
+---
