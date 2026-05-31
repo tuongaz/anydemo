@@ -1,6 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import type { StudioEvent } from '../events.ts';
-import { SSE_EVENT_TYPES, SsePayloadSchema, isSseEventType, wrapAsSseFrame } from './sse-frame.ts';
+import {
+  SSE_EVENT_TYPES,
+  SsePayloadSchema,
+  SseSnapshotPayloadSchema,
+  isSseEventType,
+  wrapAsSseFrame,
+} from './sse-frame.ts';
 
 describe('SsePayloadSchema', () => {
   test('parses one valid payload per supported event type', () => {
@@ -144,6 +150,44 @@ describe('wrapAsSseFrame', () => {
     };
     expect(wrapAsSseFrame(fileEvt, 1)).toBeNull();
     expect(wrapAsSseFrame(regEvt, 2)).toBeNull();
+  });
+});
+
+describe('SseSnapshotPayloadSchema', () => {
+  test('parses a payload with flows + no chunk headers', () => {
+    const got = SseSnapshotPayloadSchema.safeParse({
+      flows: {
+        'flow-a': { n1: { t: 'node:running', flowId: 'flow-a', ts: 1, data: {}, seq: 0 } },
+      },
+    });
+    expect(got.success).toBe(true);
+  });
+
+  test('parses a chunked payload with chunk + total', () => {
+    const got = SseSnapshotPayloadSchema.safeParse({
+      flows: {
+        'flow-a': { n1: { t: 'node:done', flowId: 'flow-a', ts: 2, data: {}, seq: 1 } },
+      },
+      chunk: 0,
+      total: 3,
+    });
+    expect(got.success).toBe(true);
+  });
+
+  test('rejects when a nested entry fails SsePayloadSchema', () => {
+    const got = SseSnapshotPayloadSchema.safeParse({
+      flows: { 'flow-a': { n1: { t: 'node:rumored', flowId: 'flow-a', ts: 1, data: {}, seq: 0 } } },
+    });
+    expect(got.success).toBe(false);
+  });
+
+  test('rejects negative chunk or zero total', () => {
+    expect(SseSnapshotPayloadSchema.safeParse({ flows: {}, chunk: -1, total: 1 }).success).toBe(
+      false,
+    );
+    expect(SseSnapshotPayloadSchema.safeParse({ flows: {}, chunk: 0, total: 0 }).success).toBe(
+      false,
+    );
   });
 });
 

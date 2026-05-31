@@ -44,6 +44,22 @@ export interface SseEnvelope {
 export function isSseEventType(t: string): t is SseEventType {
   return (SSE_EVENT_TYPES as readonly string[]).includes(t);
 }
+
+/**
+ * Snapshot replay payload sent to a freshly-joined peer so its canvas badges
+ * match the host without waiting for the next live tick. `flows` is a 2-level
+ * map of flowId -> nodeId -> latest SsePayload observed by the host's tap.
+ * When the serialized snapshot exceeds the 256 KB per-frame cap, the host
+ * splits per-flow and stamps each frame with `chunk` (zero-based) + `total`
+ * so the peer can reassemble before applying.
+ */
+export const SseSnapshotPayloadSchema = z.object({
+  flows: z.record(z.string(), z.record(z.string(), SsePayloadSchema)),
+  chunk: z.number().int().nonnegative().optional(),
+  total: z.number().int().positive().optional(),
+});
+
+export type SseSnapshotPayload = z.infer<typeof SseSnapshotPayloadSchema>;
 // SYNC-WITH-PEER:END
 
 /**

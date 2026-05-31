@@ -21,6 +21,7 @@ export const ENVELOPE_TYPES = [
   'rpc',
   'rpc-result',
   'sse',
+  'sse-snapshot',
   'presence',
   'file-request',
   'file-bytes',

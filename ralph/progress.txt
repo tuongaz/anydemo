@@ -7,6 +7,8 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 - StudioEvent + EventBus live at `apps/studio/src/events.ts`. Bridged SSE event types are the 5 starting with `flow:` or `node:` (NOT `file:changed` / `registry:reload`, which stay host-local).
 - Envelope wire shape is centralized in `apps/studio/src/share-envelope.ts` (host) and `seeflow-viewer/src/lib/share-envelope.ts` (peer). Adding a new envelope `type` requires updating BOTH.
 - Cross-repo schema parity is enforced with SYNC-WITH-PEER markers + a `scripts/check-*-sync.ts` script that normalizes whitespace+comments. The peer mirror lives in the sibling repo at `/Users/tuongaz/dev/seeflow-viewer/`; sync scripts must walk parent dirs to locate it and soft-pass when absent.
+- Per-peer addressed broadcast pattern: peer-targeted frames use `broadcast(makeEnvelope(type, payload, { to: peerConnId }))` where peerConnId is `env.from` captured during presence/join (NOT the peerId — the relay routes on conn id). `to: 'all'` is reserved for fan-outs.
+- Per-frame size cap pattern: when a wire frame must fit a byte cap, write a generic `chunk<T>(...): T[][]` over the natural partitioning unit (here per-flow), measure with `JSON.stringify({ wrapperShape }).length`, and stamp `{ chunk: 0..N-1, total: N }` only when N>1. Single-chunk frames omit the headers so the common path stays small.
 - Bun directory test discovery skips `*.it.ts`. Use `bun test src/...` for unit + share tests; `bun run test:it:bun` for integration.
 - `bun run format` must run BEFORE `bun run lint` (Biome).
 - `apps/studio/src/watcher.test.ts` has pre-existing flaky fs-watching failures unrelated to share work — ignore in CI gating unless you touched watcher code.
@@ -112,4 +114,37 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
   - The seeflow-viewer mirror file LIVES in a separate git repo at `/Users/tuongaz/dev/seeflow-viewer/`. Writes to it don't appear in this worktree's git diff and won't be committed here. The operator must commit + push that repo separately. Future US that "mirrors" anything in seeflow-viewer should plan for the two-repo handoff.
   - StudioEventType has 7 values; only 5 are bridged to peers. `wrapAsSseFrame` returns `null` for `file:changed` and `registry:reload` rather than throwing, so the bridge loop in US-067 can filter cleanly.
   - The envelope's `to` for broadcast SSE is `'all'` (string literal), matching the existing peer envelope schema that already allowed `z.union([z.string(), z.literal('host'), z.literal('all')])`.
+---
+
+## 2026-06-01 - US-069
+- Added the `sse-snapshot` replay path so a peer joining mid-session sees the host's current per-node status without waiting for the next live tick. On `presence/join`, the host emits one or more `sse-snapshot` frames addressed to that joiner's connId, carrying a 2-level `flows[flowId][nodeId] = SsePayload` map drawn from the existing `SseTap.snapshot()`. The frame's serialized payload is capped at 256 KB by splitting per-flow into chunks (`chunk: 0..N-1`, `total: N`); single-chunk emits omit the headers.
+- Files changed:
+  - apps/studio/src/share-envelope.ts — added `'sse-snapshot'` to `ENVELOPE_TYPES` (positioned next to `'sse'`).
+  - apps/studio/src/share-envelope.test.ts — new test case validating an `sse-snapshot` envelope with a sample chunked payload.
+  - apps/studio/src/share/sse-frame.ts — added `SseSnapshotPayloadSchema` + `SseSnapshotPayload` inside the SYNC-WITH-PEER region so the peer mirror stays in lockstep.
+  - apps/studio/src/share/sse-frame.test.ts — new describe('SseSnapshotPayloadSchema') covering single + chunked variants, nested SsePayload validation, and negative-bound rejection on `chunk`/`total`.
+  - apps/studio/src/share.ts — exported `SSE_SNAPSHOT_CHUNK_BYTES` + generic `chunkSnapshotByFlow<T>()` helper. Added internal `emitSseSnapshotForPeer(peerConnId)` that reads `sseTap.snapshot()`, chunks it, and broadcasts each chunk addressed to the joiner. Wired it into the presence/join handler after the existing `emitFilesManifestForPeer` call (and AFTER the idempotency guard, so duplicate joins don't re-snapshot).
+  - apps/studio/src/share.sse-snapshot.test.ts (new) — 11 tests: (1) single snapshot frame on join carries valid payload + chunk headers absent for small snapshots, (2) two joiners each get their own addressed frame (never `to: 'all'`), (3) empty tap snapshot emits zero frames, (4) large multi-flow snapshot is chunked with continuous chunk indices + consistent `total` + every flow appears exactly once + each chunk respects the 256 KB cap, (5) per-node entries match SsePayloadSchema, (6) snapshot is suppressed entirely when the eventBus dep is omitted (bridge disabled), (7) duplicate presence/join is idempotent at the snapshot path. Plus 4 direct unit tests on `chunkSnapshotByFlow`: small input, empty input, multi-flow split, oversize single-flow becomes its own chunk.
+  - seeflow-viewer/src/lib/share-envelope.ts — mirror enum addition (`'sse-snapshot'`).
+  - seeflow-viewer/src/lib/share-envelope.test.ts — sibling test for the mirror.
+  - seeflow-viewer/src/lib/share-sse-frame.ts — mirror of `SseSnapshotPayloadSchema` in the SYNC-WITH-PEER region.
+  - seeflow-viewer/src/lib/share-sse-frame.test.ts — sibling tests for the mirror schema.
+
+- Verification:
+  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK
+  - `bun test apps/studio/src/share.sse-snapshot.test.ts` → 11/11 pass
+  - `bun test apps/studio/src/share/ apps/studio/src/share.test.ts apps/studio/src/share.sse-bridge.test.ts apps/studio/src/share.sse-snapshot.test.ts apps/studio/src/share.broadcast.test.ts apps/studio/src/share.host-identity.test.ts apps/studio/src/share.rpc.test.ts apps/studio/src/share-envelope.test.ts apps/studio/src/share-audit.test.ts apps/studio/src/share-ratelimit.test.ts apps/studio/src/share-transport.test.ts apps/studio/src/share-rpc-schema.test.ts apps/studio/src/share-files-manifest.test.ts apps/studio/src/share-file-resolver.test.ts apps/studio/src/share-file-request.test.ts apps/studio/src/share-file-upload.test.ts apps/studio/src/events.test.ts` → 249/249 pass
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/lib/share-envelope.test.ts src/lib/share-sse-frame.test.ts)` → 14/14 pass
+  - `bun run typecheck` → 4 workspaces clean
+  - `bun run format && bun run lint` → clean
+
+- Learnings for future iterations:
+  - The PRD references `cloud/lambda/share/shared/envelope.ts` for the relay-side enum literal. There is no `cloud/` directory in this repo — the equivalent is `apps/studio/src/share-envelope.ts` (host) + `seeflow-viewer/src/lib/share-envelope.ts` (peer). The cloud lambda lives in a separate repo not present in this worktree. Future relay-touching stories should update the cloud copy by hand in that other repo.
+  - `chunkSnapshotByFlow` is generic over the node value type. Keeping the generic param lets it accept both the runtime `Record<string, Record<string, SsePayload>>` from the tap AND the loose `Record<string, Record<string, unknown>>` used in the chunking unit tests, without a cast at the call site. Without `<T>` typescript widens the spread `{ ...current, [flowId]: nodes }` to `unknown` and the assignment to `SseSnapshotPayload.flows` (which is typed to `SsePayload`) fails.
+  - Per-frame size cap measurement: I serialize `JSON.stringify({ flows: candidate }).length` rather than just `JSON.stringify(candidate).length` so the chunk/total wrapper overhead is included. The `chunk` and `total` fields themselves cost ~20 bytes — a rounding error against the 256 KB cap, so I don't subtract that overhead. If a future contributor tightens the cap to <1 KB, recompute.
+  - Snapshot emit is positioned AFTER the existing `if (current.peers.some(p => p.peerId === peerId)) return` idempotency guard in `handleFrame`. That means duplicate presence/join (same peerId, same connId) does NOT re-send a snapshot. If a relay ever swaps connIds for the same peerId (e.g. peer reconnects with a new conn), the existing `current.peers.some` check would still suppress — flagged as a possible US-072/US-070 follow-up: re-snapshot on connId churn.
+  - The snapshot frame is suppressed entirely (zero frames emitted) when `sseTap` is null — i.e. the host was started without `eventBus`/`flowIdsForBroadcast`. This matches the existing bridge behavior (no live SSE either) and keeps tests that don't care about the bridge dep-free.
+  - When emitting frames addressed to a specific peer, use `env.from` (the conn id) NOT `peerId`. The relay routes on conn id; `peerId` is the application-layer identity. The existing `emitFilesManifestForPeer` follows the same pattern.
+  - The check-sse-frame-sync script normalizes whitespace + comments inside the SYNC-WITH-PEER region. The added `SseSnapshotPayloadSchema` block (and its surrounding doc comment) passes the check because both files received an identical copy. Future schema additions inside that region MUST land in both files in the same change to keep the check green.
+
 ---

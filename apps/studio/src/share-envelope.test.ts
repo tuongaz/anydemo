@@ -51,6 +51,26 @@ describe('parseEnvelope', () => {
     }
   });
 
+  it('accepts an sse-snapshot frame addressed to a specific peer', () => {
+    const raw = {
+      v: 1,
+      type: 'sse-snapshot',
+      from: 'host',
+      to: 'conn-7',
+      payload: {
+        flows: {
+          'flow-a': { n1: { t: 'node:running', flowId: 'flow-a', ts: 1, data: {}, seq: 0 } },
+        },
+      },
+    };
+    const result = parseEnvelope(raw);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.envelope.type).toBe('sse-snapshot');
+      expect(result.envelope.to).toBe('conn-7');
+    }
+  });
+
   it('accepts an auth-peer frame', () => {
     const raw = {
       v: 1,

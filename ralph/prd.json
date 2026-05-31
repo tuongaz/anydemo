@@ -94,8 +94,8 @@
         "Tests pass"
       ],
       "priority": 5,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Added envelope type 'sse-snapshot' to apps/studio/src/share-envelope.ts ENVELOPE_TYPES + the viewer mirror at seeflow-viewer/src/lib/share-envelope.ts. Added SseSnapshotPayloadSchema + SseSnapshotPayload to the SYNC-WITH-PEER region of apps/studio/src/share/sse-frame.ts and the viewer mirror; sync check passes. share.ts now emits an sse-snapshot frame (or N chunked frames) addressed to the joiner's connId from the presence/join handler. Snapshot serialization is capped at 256 KB per frame via `chunkSnapshotByFlow<T>()` (exported, generic): single chunk -> no chunk/total headers, multi-chunk -> { chunk: 0..N-1, total: N } stamped on each frame. A flow whose own snapshot exceeds the cap is emitted as its own (oversize) chunk — per-flow is the indivisible unit per the PRD. Snapshot is suppressed entirely when the eventBus dep is omitted (no tap to read) or when snapshot() is empty. Idempotent join: duplicate presence/join from the same peerId hits the existing guard before the snapshot emit path, so only one snapshot frame goes out. Tests in apps/studio/src/share.sse-snapshot.test.ts (11 cases, including chunkSnapshotByFlow unit cases). Also added envelope-level acceptance tests in both share-envelope.test.ts and sse-frame.test.ts mirrors. All 249 share-related + 14 viewer tests pass; typecheck across 4 workspaces clean."
     },
     {
       "id": "US-070",

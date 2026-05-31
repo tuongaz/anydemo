@@ -63,6 +63,7 @@ import {
   type ShareTransportState,
   createShareTransport,
 } from './share-transport.ts';
+import type { SsePayload, SseSnapshotPayload } from './share/sse-frame.ts';
 import { type SseTap, createSseTap } from './share/sse-tap.ts';
 
 // Presence frame payloads. We validate `kind` against the base shape, then
@@ -286,6 +287,43 @@ interface BootHandle {
 }
 
 const BOOT_TIMEOUT_MS = 10_000;
+
+// Per-frame snapshot payload size cap. The host splits the snapshot into
+// per-flow chunks so no single `sse-snapshot` frame's serialized JSON exceeds
+// this size. A flow whose own snapshot is larger than the cap is still
+// emitted as one chunk — per-flow is the indivisible unit per the PRD.
+export const SSE_SNAPSHOT_CHUNK_BYTES = 256 * 1024;
+
+/**
+ * Split a per-flow snapshot map into chunks so each chunk's serialized JSON
+ * fits within `SSE_SNAPSHOT_CHUNK_BYTES`. Returns at least one chunk even
+ * when the input is empty (callers gate on that separately). Always preserves
+ * full flows — a single flow that overflows the cap occupies its own chunk
+ * regardless of size.
+ */
+export function chunkSnapshotByFlow<T>(
+  snap: Record<string, Record<string, T>>,
+): Record<string, Record<string, T>>[] {
+  const entries = Object.entries(snap);
+  if (entries.length === 0) return [];
+
+  const chunks: Record<string, Record<string, T>>[] = [];
+  let current: Record<string, Record<string, T>> = {};
+
+  for (const [flowId, nodes] of entries) {
+    const candidate: Record<string, Record<string, T>> = { ...current, [flowId]: nodes };
+    const candidateSize = JSON.stringify({ flows: candidate }).length;
+    const isCurrentEmpty = Object.keys(current).length === 0;
+    if (!isCurrentEmpty && candidateSize > SSE_SNAPSHOT_CHUNK_BYTES) {
+      chunks.push(current);
+      current = { [flowId]: nodes };
+      continue;
+    }
+    current = candidate;
+  }
+  if (Object.keys(current).length > 0) chunks.push(current);
+  return chunks;
+}
 
 /**
  * Resolve the host's display label for `attributedTo.displayName` on
@@ -688,6 +726,39 @@ export function createShareController(deps: ShareDeps): ShareController {
     });
   };
 
+  // Emit one or more `sse-snapshot` frames to a freshly-joined peer so its
+  // canvas badges / play-button rings match the host's live state without
+  // waiting for the next tick. Caps each frame's serialized payload at 256 KB
+  // by splitting per-flow into chunks (chunk + total stamped on each frame).
+  // A single flow whose own snapshot exceeds the cap is still emitted as one
+  // chunk — per the PRD, per-flow is the indivisible unit.
+  const emitSseSnapshotForPeer = (peerConnId: string): void => {
+    if (!sseTap) return;
+    let snap: Record<string, Record<string, SsePayload>>;
+    try {
+      snap = sseTap.snapshot();
+    } catch (err) {
+      console.warn('[share] sse-snapshot read failed:', err);
+      return;
+    }
+    const entries = Object.entries(snap);
+    if (entries.length === 0) return;
+
+    const chunks = chunkSnapshotByFlow(snap);
+    const total = chunks.length;
+    for (let i = 0; i < chunks.length; i += 1) {
+      const chunkFlows = chunks[i];
+      if (!chunkFlows) continue;
+      const payload: SseSnapshotPayload =
+        total === 1 ? { flows: chunkFlows } : { flows: chunkFlows, chunk: i, total };
+      try {
+        broadcast(makeEnvelope('sse-snapshot', payload, { to: peerConnId }));
+      } catch (err) {
+        console.warn('[share] sse-snapshot broadcast failed:', err);
+      }
+    }
+  };
+
   // Emit the files-manifest frame to a freshly-joined peer. Awaits init() so a
   // racing join (e.g. peer auth-peer'd before the walk completed) still gets a
   // populated manifest. Errors only warn — the manifest is a hint, not a
@@ -734,6 +805,11 @@ export function createShareController(deps: ShareDeps): ShareController {
         // canvas can render placeholder sizing before any file-request fires.
         // Fire-and-forget; emit failures are warned, never propagated.
         void emitFilesManifestForPeer(env.from);
+        // Replay the SSE tap's last-seen per-node status so the joiner's
+        // canvas badges + play-button rings match the host within one render.
+        // Addressed to the joiner's connId only (not broadcast). Chunked
+        // per-flow when the serialized payload exceeds 256 KB.
+        emitSseSnapshotForPeer(env.from);
         return;
       }
       if (kind === 'leave') {
