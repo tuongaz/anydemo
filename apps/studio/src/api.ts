@@ -2169,6 +2169,32 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
+  // GET /api/share/audit — page through the per-session AuditEntry JSONL log.
+  // Local-only by virtue of the cors.ts middleware. Requires an active session
+  // — when the controller is idle there is no logger to read from, so respond
+  // 400 rather than silently returning an empty page (consumers can use the
+  // status code to distinguish "no entries yet" from "no session").
+  api.get('/share/audit', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    if (share.state().status !== 'active') {
+      return c.json({ error: 'share-not-active' }, 400);
+    }
+    const limitRaw = c.req.query('limit');
+    const cursorRaw = c.req.query('cursor');
+    const limit = limitRaw !== undefined ? Number.parseInt(limitRaw, 10) : undefined;
+    const cursor = cursorRaw !== undefined ? Number.parseInt(cursorRaw, 10) : undefined;
+    const opts: { limit?: number; cursor?: number } = {};
+    if (typeof limit === 'number' && Number.isFinite(limit)) opts.limit = limit;
+    if (typeof cursor === 'number' && Number.isFinite(cursor)) opts.cursor = cursor;
+    try {
+      const page = await share.audit.list(opts);
+      return c.json(page);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return c.json({ error: message }, 500);
+    }
+  });
+
   // GET /api/share/state — SSE stream of ShareState transitions. Initial frame
   // is the current state; subsequent frames are pushed on each controller
   // subscribe callback. Mirrors the /api/events shape (queue + wake + heartbeat)

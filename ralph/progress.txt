@@ -80,3 +80,35 @@ Started: Mon  1 Jun 2026 03:11:50 AEST
   - Biome's import-sorting rule fires on type-only imports too; keep `import type { A, B, C }` alphabetical within the brace group (same as value imports).
   - `bun test` (default) runs all `*.test.ts` across the workspace from repo root — useful for cross-package safety net. Integration `.it.ts` files are NOT picked up (need `bun run test:it:bun`).
 ---
+
+## 2026-06-01 - US-079
+- Wired Phase-8 kick/rotate/audit through host-side ShareController + local API.
+- Files changed in /Users/tuongaz/dev/seeflow:
+  - apps/studio/src/share.ts:
+    - ShareDeps gains `auditLoggerFactory?: (sessionId, root?) => AuditLogger`; closure owns `auditLogger: AuditLogger | null` alongside the existing FrameAuditEntry log. Created on transport-open (idle->active) right next to `auditLog`; closed in `teardown`.
+    - `auditKind(entry)` helper: fire-and-forget `auditLogger.append(...)` swallowing rejections with console.warn — never blocks RPC dispatch on disk I/O.
+    - host-start written immediately after the audit logger opens; host-stop written at the top of the active->stop branch (BEFORE teardown so the logger is still open).
+    - presence/join + presence/leave handlers also write `peer-join` / `peer-leave` AuditEntries (in addition to the existing FrameAuditEntry accept lines).
+    - dispatchRpcFrame: on outcome.ok appends `{kind:'rpc-accept', peerId, displayName, op, details:{flowId, nodeId?}}`; on reject appends `{kind:'rpc-reject', peerId, displayName, op, reason}` — coexists with the existing RpcAuditEntry line so consumers can filter either schema.
+    - `kick(peerId)`: now requires `hostKey`; throws `share-peer-not-found` locally (with `rpc-reject` audit) when peer not in connPeers; otherwise POSTs `${relayHttpUrl}/api/share/kick` with `{sessionId, hostKey, peerId}`. On HTTP failure logs `rpc-reject` and rethrows; on success logs `{kind:'kick', peerId, displayName}`.
+    - `rotateUrl()`: POSTs `${relayHttpUrl}/api/share/rotate` with `{sessionId, hostKey}`; reads `body.token`; rebuilds url via `${shareUrlBase}/${token}`; updates `current.token` + `current.url` in place via setState (preserves sessionId — relay rotates the same session). Local peers/connPeers/peerSseQueues all cleared because the relay kicks every peer as part of the rotation. Logs `{kind:'rotate', peerId:null, displayName:null}`.
+    - Exposes new `audit: { list(opts) }` on the ShareController interface — wraps the AuditLogger; returns empty page when no session is active.
+  - apps/studio/src/api.ts: added `GET /api/share/audit?cursor=&limit=`. Returns 503 when no controller, 400 when state != active, otherwise delegates to `share.audit.list({limit?, cursor?})` and echoes `{entries, nextCursor}`. limit/cursor are parsed as integers — non-numeric input is silently treated as undefined so the logger picks its own default (200 / 0).
+  - apps/studio/src/share.test.ts:
+    - `noopAuditLoggerFactory` added to baseDeps so existing tests don't accidentally write to `~/.seeflow/share-history`.
+    - `makeAuditLoggerCapture()` helper mirrors the existing `makeAuditCapture` pattern but for the kind-shaped log.
+    - Existing kick tests rewritten to assert the relay HTTP POST + audit instead of a WS envelope. New "relay rejection rethrows and records rpc-reject audit entry" case added (502 path).
+    - rotateUrl test rewritten: same controller instance, only one transport, token+url swap in place, peers cleared, rotate audit recorded.
+    - Removed unused `mockFetchSequence` helper.
+  - apps/studio/src/api.test.ts:
+    - `FakeShare` + `createFakeShare(init?)` extended to accept an `audit` override and default to a no-op list.
+    - New describe('GET /api/share/audit') with 200 (active session returns `{entries,nextCursor}`) and 400 (idle session) cases.
+- bun test (apps/studio + workspace): 2862 pass / 1 skip / 0 fail. bun run typecheck clean. bun run format clean. bun run lint clean.
+- **Learnings for future iterations:**
+  - The legacy `auditLog` (FrameAuditEntry, sync `appendFileSync`) and the new US-078 `auditLogger` (AuditEntry, async `appendFile`) BOTH write to `<auditDir>/<sessionId>.jsonl`. Each accepted RPC therefore writes TWO lines (one of each shape). Readers must treat each line as a union; the audit-drawer UI in US-080 will need to filter by `kind` field presence.
+  - `createApp(...)` (server.ts) auto-builds a default `ShareController` when no `share` is passed — so the 503-when-no-controller path in `/api/share/*` is UNREACHABLE via `createApp`. Test 503 by calling `createApi(...)` directly if needed; otherwise omit the case (the AC for US-079 only requires 200/400).
+  - When mocking `fetch` in share tests, route by URL substring (`url.endsWith('/api/share/sessions')` vs `/api/share/kick`) so a single mock handles both the session-bootstrap call AND the new endpoints. The previous `mockFetchSequence` pattern relied on call order, which couples tests to internal call sequencing.
+  - `ShareController.rotateUrl()` no longer restarts the transport — the relay rotates the token on the same session. Anything in `current.peers` becomes stale because the relay sends DeleteConnection to each peer (no leave frames reach the host). Clear `peerConnIds`/`connPeers`/`peerSseQueues` to keep the local state honest.
+  - `audit-on-failure` for kick: BOTH the local pre-check (`share-peer-not-found`) AND the HTTP failure write an `rpc-reject` entry. The Phase-8 schema doesn't distinguish — the `reason` field is what consumers branch on.
+  - `auditKind` swallows append errors with `console.warn` rather than letting them propagate. This is deliberate: a transient disk failure shouldn't take down the dispatch path. If you change this, update `dispatchRpcFrame` + `kick` + `rotateUrl` paths in lockstep.
+---

@@ -5021,6 +5021,7 @@ const createFakeShare = (init?: {
   kick?: (peerId: string) => Promise<void>;
   rotateUrl?: () => Promise<{ url: string }>;
   initialState?: ShareState;
+  audit?: ShareController['audit'];
 }): FakeShare => {
   let current: ShareState = init?.initialState ?? { status: 'idle' };
   const subscribers = new Set<(s: ShareState) => void>();
@@ -5049,6 +5050,9 @@ const createFakeShare = (init?: {
     }),
     broadcastHostEdit: () => null,
     subscribeAttributions: () => () => {},
+    audit: init?.audit ?? {
+      list: async () => ({ entries: [], nextCursor: null }),
+    },
   };
 };
 
@@ -5185,6 +5189,49 @@ describe('POST /api/share/rotate', () => {
     const { app } = buildAppWithShare(share);
     const res = await app.request('/api/share/rotate', { method: 'POST' });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('GET /api/share/audit', () => {
+  it('returns 200 { entries, nextCursor } when controller has entries and state is active', async () => {
+    const sample = {
+      ts: 1,
+      peerId: 'p1',
+      displayName: 'Ada',
+      kind: 'rpc-accept' as const,
+      op: 'moveNode',
+      details: { flowId: 'flow-a', nodeId: 'n-1' },
+    };
+    const share = createFakeShare({
+      initialState: {
+        status: 'active',
+        sessionId: 'sess-1',
+        token: 'tok-1',
+        url: 'https://share/x',
+        peers: [],
+        startedAt: 0,
+        hostDisplayName: 'Host',
+      },
+      audit: {
+        list: async () => ({ entries: [sample], nextCursor: 42 }),
+      },
+    });
+    const { app } = buildAppWithShare(share);
+    const res = await app.request('/api/share/audit?limit=10&cursor=0');
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { entries: unknown[]; nextCursor: number | null };
+    expect(body.entries).toHaveLength(1);
+    expect(body.entries[0]).toEqual(sample);
+    expect(body.nextCursor).toBe(42);
+  });
+
+  it('returns 400 when no active session', async () => {
+    const share = createFakeShare({ initialState: { status: 'idle' } });
+    const { app } = buildAppWithShare(share);
+    const res = await app.request('/api/share/audit');
+    expect(res.status).toBe(400);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe('share-not-active');
   });
 });
 

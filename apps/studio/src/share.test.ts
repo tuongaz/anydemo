@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'bun:test';
-import type { AuditLog, AuditLogOpts, FrameAuditEntry } from './share-audit.ts';
+import type {
+  AuditEntry,
+  AuditLog,
+  AuditLogOpts,
+  AuditLogger,
+  FrameAuditEntry,
+} from './share-audit.ts';
 import type { Envelope } from './share-envelope.ts';
 import type { RateLimitResult, RateLimiter } from './share-ratelimit.ts';
 import type { ShareTransport, ShareTransportOpts, ShareTransportState } from './share-transport.ts';
@@ -13,11 +19,47 @@ const noopAuditFactory = (_opts: AuditLogOpts): AuditLog => ({
   close: async () => {},
 });
 
+const noopAuditLoggerFactory = (_sessionId: string, _root?: string): AuditLogger => ({
+  append: async () => {},
+  list: async () => ({ entries: [], nextCursor: null }),
+  close: async () => {},
+});
+
 const baseDeps = {
   relayHttpUrl: 'https://relay.example',
   shareUrlBase: 'https://share.example',
   auditLogFactory: noopAuditFactory,
+  auditLoggerFactory: noopAuditLoggerFactory,
 };
+
+interface AuditLoggerCapture {
+  entries: AuditEntry[];
+  factory: (sessionId: string, root?: string) => AuditLogger;
+  capturedSessionId: () => string | null;
+  capturedRoot: () => string | null;
+}
+
+function makeAuditLoggerCapture(): AuditLoggerCapture {
+  const entries: AuditEntry[] = [];
+  let sessionId: string | null = null;
+  let root: string | null = null;
+  return {
+    entries,
+    factory: (sid, r) => {
+      sessionId = sid;
+      root = r ?? null;
+      return {
+        append: async (entry) => {
+          entries.push({ ...entry, ts: Date.now() });
+        },
+        list: async () => ({ entries: [...entries], nextCursor: null }),
+        close: async () => {},
+      };
+    },
+    capturedSessionId: () => sessionId,
+    capturedRoot: () => root,
+  };
+}
 
 interface AuditCapture {
   entries: FrameAuditEntry[];
@@ -118,21 +160,6 @@ function mockFetch(response: { status?: number; body?: unknown }): typeof fetch 
       status,
       json: async () => response.body ?? {},
     }) as unknown as Response;
-  return fake as unknown as typeof fetch;
-}
-
-function mockFetchSequence(responses: { status?: number; body?: unknown }[]): typeof fetch {
-  let i = 0;
-  const fake = async () => {
-    const r = responses[i] ?? responses[responses.length - 1];
-    i += 1;
-    const status = r?.status ?? 200;
-    return {
-      ok: status >= 200 && status < 300,
-      status,
-      json: async () => r?.body ?? {},
-    } as unknown as Response;
-  };
   return fake as unknown as typeof fetch;
 }
 
@@ -317,29 +344,67 @@ describe('createShareController.kick()', () => {
     expect(ctrl.state()).toEqual({ status: 'idle' });
   });
 
-  it('from active without prior join rejects with share-peer-not-found', async () => {
+  it('from active without prior join rejects with share-peer-not-found and audits rpc-reject', async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
+    const klogger = makeAuditLoggerCapture();
+    const fetchCalls: { url: string; init?: RequestInit }[] = [];
+    const fetchSpy: typeof fetch = (async (url: string, init?: RequestInit) => {
+      fetchCalls.push({ url, init });
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          sessionId: 'sess-1',
+          token: 'tok-1',
+          hostKey: 'hk-1',
+          wsUrl: 'wss://relay/ws',
+        }),
+      } as Response;
+    }) as unknown as typeof fetch;
     const ctrl = createShareController({
       ...baseDeps,
-      fetch: mockFetch({
-        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
-      }),
+      fetch: fetchSpy,
       transportFactory: fake.factory,
+      auditLoggerFactory: klogger.factory,
     });
     await ctrl.start();
     await expect(ctrl.kick('peer-42')).rejects.toThrow('share-peer-not-found');
-    // No frame sent — the kick never crossed the wire.
-    expect(fake.sends()).toHaveLength(0);
+    // No relay call was issued — the local map already proved the peer is unknown.
+    const kickCalls = fetchCalls.filter((c) => c.url.endsWith('/api/share/kick'));
+    expect(kickCalls).toHaveLength(0);
+    const rejects = klogger.entries.filter((e) => e.kind === 'rpc-reject');
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0]?.op).toBe('kick');
+    expect(rejects[0]?.peerId).toBe('peer-42');
+    expect(rejects[0]?.reason).toBe('share-peer-not-found');
   });
 
-  it('from active after presence/join sends a kick envelope addressed to the recorded connId', async () => {
+  it('from active after presence/join POSTs to relay /api/share/kick with hostKey and audits the kick', async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
+    const klogger = makeAuditLoggerCapture();
+    const fetchCalls: { url: string; body?: string }[] = [];
+    const fetchSpy: typeof fetch = (async (url: string, init?: RequestInit) => {
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      fetchCalls.push({ url, body });
+      if (url.endsWith('/api/share/sessions')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            sessionId: 'sess-1',
+            token: 'tok-1',
+            hostKey: 'hk-1',
+            wsUrl: 'wss://relay/ws',
+          }),
+        } as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true, kicked: 1 }) } as Response;
+    }) as unknown as typeof fetch;
     const ctrl = createShareController({
       ...baseDeps,
-      fetch: mockFetch({
-        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
-      }),
+      fetch: fetchSpy,
       transportFactory: fake.factory,
+      auditLoggerFactory: klogger.factory,
     });
     await ctrl.start();
     fake.emitFrame({
@@ -348,18 +413,64 @@ describe('createShareController.kick()', () => {
       from: 'conn-7',
       payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
     });
+    klogger.entries.length = 0; // ignore host-start + peer-join for this assert.
 
     await ctrl.kick('peer-42');
 
-    expect(fake.sends()).toHaveLength(1);
-    const frame = fake.sends()[0];
-    if (!frame) throw new Error('expected kick frame');
-    expect(frame.v).toBe(1);
-    expect(frame.type).toBe('kick');
-    expect(frame.from).toBe('host');
-    // Routed to connId, not peerId — relay only knows connections.
-    expect(frame.to).toBe('conn-7');
-    expect(frame.payload).toEqual({ peerId: 'peer-42' });
+    const kickCalls = fetchCalls.filter((c) => c.url.endsWith('/api/share/kick'));
+    expect(kickCalls).toHaveLength(1);
+    expect(kickCalls[0]?.url).toBe('https://relay.example/api/share/kick');
+    const parsed = JSON.parse(kickCalls[0]?.body ?? '{}');
+    expect(parsed).toEqual({ sessionId: 'sess-1', hostKey: 'hk-1', peerId: 'peer-42' });
+    const kickAudits = klogger.entries.filter((e) => e.kind === 'kick');
+    expect(kickAudits).toHaveLength(1);
+    expect(kickAudits[0]?.peerId).toBe('peer-42');
+    expect(kickAudits[0]?.displayName).toBe('Ada');
+  });
+
+  it('relay rejection rethrows and records an rpc-reject audit entry', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const klogger = makeAuditLoggerCapture();
+    const fetchSpy: typeof fetch = (async (url: string) => {
+      if (url.endsWith('/api/share/sessions')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            sessionId: 'sess-1',
+            token: 'tok-1',
+            hostKey: 'hk-1',
+            wsUrl: 'wss://relay/ws',
+          }),
+        } as Response;
+      }
+      return { ok: false, status: 502, json: async () => ({}) } as Response;
+    }) as unknown as typeof fetch;
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: fetchSpy,
+      transportFactory: fake.factory,
+      auditLoggerFactory: klogger.factory,
+    });
+    await ctrl.start();
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+    klogger.entries.length = 0;
+
+    await expect(ctrl.kick('peer-42')).rejects.toThrow('share-relay-http-502');
+
+    const kickAudits = klogger.entries.filter((e) => e.kind === 'kick');
+    expect(kickAudits).toHaveLength(0);
+    const rejects = klogger.entries.filter((e) => e.kind === 'rpc-reject');
+    expect(rejects).toHaveLength(1);
+    expect(rejects[0]?.op).toBe('kick');
+    expect(rejects[0]?.peerId).toBe('peer-42');
+    expect(rejects[0]?.displayName).toBe('Ada');
+    expect(rejects[0]?.reason).toBe('share-relay-http-502');
   });
 });
 
@@ -503,32 +614,81 @@ describe('createShareController.rotateUrl()', () => {
     expect(ctrl.state()).toEqual({ status: 'idle' });
   });
 
-  it('from active returns a new url and the old token is no longer in state', async () => {
+  it('from active POSTs to relay /api/share/rotate, updates token state in place, and audits rotate', async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
+    const klogger = makeAuditLoggerCapture();
+    const fetchCalls: { url: string; body?: string }[] = [];
+    const fetchSpy: typeof fetch = (async (url: string, init?: RequestInit) => {
+      const body = typeof init?.body === 'string' ? init.body : undefined;
+      fetchCalls.push({ url, body });
+      if (url.endsWith('/api/share/sessions')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            sessionId: 'sess-1',
+            token: 'tok-1',
+            hostKey: 'hk-1',
+            wsUrl: 'wss://relay/ws',
+          }),
+        } as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true, token: 'tok-2', url: 'https://share.seeflow.dev/tok-2' }),
+      } as Response;
+    }) as unknown as typeof fetch;
     const ctrl = createShareController({
       ...baseDeps,
-      fetch: mockFetchSequence([
-        { body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' } },
-        { body: { sessionId: 'sess-2', token: 'tok-2', hostKey: 'hk-2', wsUrl: 'wss://relay/ws' } },
-      ]),
+      fetch: fetchSpy,
       transportFactory: fake.factory,
+      auditLoggerFactory: klogger.factory,
     });
-
-    const first = await ctrl.start();
-    expect(first.url).toBe('https://share.example/tok-1');
+    const states: ShareState[] = [];
+    ctrl.subscribe((s) => states.push(s));
+    await ctrl.start();
+    // Register a peer so we can verify rotate also clears the local peer roster.
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+    klogger.entries.length = 0;
 
     const { url } = await ctrl.rotateUrl();
     expect(url).toBe('https://share.example/tok-2');
 
+    const rotateCalls = fetchCalls.filter((c) => c.url.endsWith('/api/share/rotate'));
+    expect(rotateCalls).toHaveLength(1);
+    expect(rotateCalls[0]?.url).toBe('https://relay.example/api/share/rotate');
+    expect(JSON.parse(rotateCalls[0]?.body ?? '{}')).toEqual({
+      sessionId: 'sess-1',
+      hostKey: 'hk-1',
+    });
+
+    // Token + url updated in place — sessionId stays the same (no restart).
     const s = ctrl.state();
     if (s.status !== 'active') throw new Error('expected active after rotate');
+    expect(s.sessionId).toBe('sess-1');
     expect(s.token).toBe('tok-2');
     expect(s.url).toBe('https://share.example/tok-2');
-    expect(s.sessionId).toBe('sess-2');
+    expect(s.peers).toEqual([]);
 
-    // Two transport instances created (one per start), and the first was closed.
-    expect(fake.instanceCount()).toBe(2);
-    expect(fake.closeCount()).toBe(1);
+    // Transport not torn down — only one instance was ever created.
+    expect(fake.instanceCount()).toBe(1);
+    expect(fake.closeCount()).toBe(0);
+
+    const rotateAudits = klogger.entries.filter((e) => e.kind === 'rotate');
+    expect(rotateAudits).toHaveLength(1);
+    expect(rotateAudits[0]?.peerId).toBeNull();
+
+    // setState fired with the new token so SSE consumers see the change.
+    const lastActive = [...states].reverse().find((st) => st.status === 'active');
+    if (!lastActive || lastActive.status !== 'active') throw new Error('expected active state');
+    expect(lastActive.token).toBe('tok-2');
+    expect(lastActive.url).toBe('https://share.example/tok-2');
   });
 });
 

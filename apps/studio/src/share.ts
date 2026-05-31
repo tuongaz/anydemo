@@ -35,12 +35,15 @@ import {
   reorderNodeImpl,
 } from './operations.ts';
 import {
+  type AuditEntry,
   type AuditLog,
   type AuditLogOpts,
+  type AuditLogger,
   type FrameAuditEntry,
   type RpcAuditEntry,
   appendShareAudit,
   createAuditLog,
+  createAuditLogger,
 } from './share-audit.ts';
 import { type Envelope, makeEnvelope } from './share-envelope.ts';
 import {
@@ -146,6 +149,18 @@ export interface ShareController {
    * bridge in `apps/studio/src/api.ts` fans these out to /api/share/attributions.
    */
   subscribeAttributions(fn: (event: AttributionEvent) => void): () => void;
+  /**
+   * Read access to the per-session `AuditEntry` JSONL stream (US-079). The
+   * /api/share/audit endpoint delegates to this; when no session is active
+   * `list()` returns an empty page so the endpoint can still answer 200
+   * (the endpoint itself gates on state before calling).
+   */
+  audit: {
+    list(opts?: {
+      limit?: number;
+      cursor?: number;
+    }): Promise<{ entries: AuditEntry[]; nextCursor: number | null }>;
+  };
 }
 
 export interface AttributionEvent {
@@ -237,6 +252,11 @@ export interface ShareDeps {
   // by stop(). Path defaults to ~/.seeflow/share-history.
   auditDir?: string;
   auditLogFactory?: (opts: AuditLogOpts) => AuditLog;
+  // Phase-8 audit logger (US-078 shape: AuditEntry with kind). Created on
+  // idle -> active alongside the legacy per-frame `auditLog`. Tests inject a
+  // capturing factory; production callers leave it undefined and the real
+  // `createAuditLogger` writes to `auditDir`.
+  auditLoggerFactory?: (sessionId: string, root?: string) => AuditLogger;
   // Local EventBus to bridge onto outbound 'sse' envelopes so peers see live
   // runtime events (node:running, node:done, etc.) the same way the studio's
   // own SSE listeners do. On transition idle -> active we subscribe to each
@@ -454,6 +474,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
   const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
   const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
+  const auditLoggerFactory = deps.auditLoggerFactory ?? createAuditLogger;
   const hostDisplayName = deps.hostDisplayName ?? resolveHostDisplayName();
   const rpcDispatcher: RpcDispatcher | null =
     deps.rpcDispatcher ??
@@ -470,6 +491,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   let transport: ShareTransport | null = null;
   let bootHandle: BootHandle | null = null;
   let auditLog: AuditLog | null = null;
+  let auditLogger: AuditLogger | null = null;
   // SSE tap (US-066/US-067): single per-controller instance owning the
   // EventBus -> outbound `sse` envelope bridge. Created on idle -> active,
   // torn down on stop()/teardown(). Null when inactive or when no eventBus
@@ -694,9 +716,11 @@ export function createShareController(deps: ShareDeps): ShareController {
   const teardown = () => {
     const t = transport;
     const log = auditLog;
+    const klogger = auditLogger;
     transport = null;
     hostKey = null;
     auditLog = null;
+    auditLogger = null;
     filesManifestReady = null;
     unsubscribeFromEventBus();
     for (const q of peerSseQueues.values()) {
@@ -721,6 +745,11 @@ export function createShareController(deps: ShareDeps): ShareController {
         console.warn('[share] audit log close failed:', err);
       });
     }
+    if (klogger) {
+      klogger.close().catch((err) => {
+        console.warn('[share] audit kind log close failed:', err);
+      });
+    }
   };
 
   const audit = (entry: FrameAuditEntry) => {
@@ -730,6 +759,17 @@ export function createShareController(deps: ShareDeps): ShareController {
     } catch (err) {
       console.warn('[share] audit append failed:', err);
     }
+  };
+
+  // Fire-and-forget append of a Phase-8 `AuditEntry` to the per-session JSONL
+  // log. Errors only warn — auditing is best-effort; never block hot paths
+  // (RPC dispatch, kick, rotate) on disk I/O.
+  const auditKind = (entry: Omit<AuditEntry, 'ts'>): void => {
+    const logger = auditLogger;
+    if (!logger) return;
+    logger.append(entry).catch((err) => {
+      console.warn('[share] audit kind append failed:', err);
+    });
   };
 
   // Build + emit a `node-patched` envelope for an accepted op. Centralized so
@@ -832,6 +872,21 @@ export function createShareController(deps: ShareDeps): ShareController {
       console.warn('[share] rpc audit append failed:', err);
     }
     if (ok) {
+      // Phase-8 kind-shaped audit (US-079). Coexists with the RpcAuditEntry
+      // line written above so consumers can filter by either schema.
+      // `details` carries flowId + (for node-targeted ops) the nodeId so the
+      // audit drawer can render the target without re-reading the op union.
+      const rpcDetails: Record<string, unknown> = { flowId: op.flowId };
+      if ('nodeId' in op && typeof op.nodeId === 'string') {
+        rpcDetails.nodeId = op.nodeId;
+      }
+      auditKind({
+        kind: 'rpc-accept',
+        peerId: actor.peerId,
+        displayName: actor.displayName,
+        op: op.op,
+        details: rpcDetails,
+      });
       // Broadcast the canonical diff BEFORE resolving rpc-result so peers
       // (including the originator) see the patch first; the originator's
       // optimistic reconcile then folds into a no-op.
@@ -842,6 +897,13 @@ export function createShareController(deps: ShareDeps): ShareController {
         attributedTo,
       });
     }
+    auditKind({
+      kind: 'rpc-reject',
+      peerId: actor.peerId,
+      displayName: actor.displayName,
+      op: op.op,
+      reason: reason ?? outcome.kind,
+    });
     return makeRpcResultFrame(parsed.data.id, {
       ok: false,
       reason: reason ?? outcome.kind,
@@ -923,6 +985,7 @@ export function createShareController(deps: ShareDeps): ShareController {
         // a result of this frame, so rate-limiting it would be a chicken-and-
         // egg problem. Audit it as accept so the trail shows who joined when.
         audit({ ts: Date.now(), peerId, displayName, type: 'presence', verdict: 'accept' });
+        auditKind({ kind: 'peer-join', peerId, displayName });
         if (current.status !== 'active') return;
         if (current.peers.some((peer) => peer.peerId === peerId)) return;
         setState({
@@ -958,6 +1021,11 @@ export function createShareController(deps: ShareDeps): ShareController {
             displayName: known.displayName,
             type: 'presence',
             verdict: 'accept',
+          });
+          auditKind({
+            kind: 'peer-leave',
+            peerId: known.peerId,
+            displayName: known.displayName,
           });
         }
         if (current.status !== 'active') return;
@@ -1133,6 +1201,15 @@ export function createShareController(deps: ShareDeps): ShareController {
               console.warn('[share] audit log open failed:', err);
               auditLog = null;
             }
+            try {
+              auditLogger = auditLoggerFactory(body.sessionId, auditDir);
+            } catch (err) {
+              console.warn('[share] audit kind log open failed:', err);
+              auditLogger = null;
+            }
+            // host-start is the first kind-shaped entry written to the file
+            // so a consumer reading from cursor:0 sees the session boundary.
+            auditKind({ kind: 'host-start', peerId: null, displayName: null });
             // Subscribe to local runtime events BEFORE transitioning state so
             // any event that fires synchronously from a state subscriber finds
             // the bridge wired up.
@@ -1197,6 +1274,9 @@ export function createShareController(deps: ShareDeps): ShareController {
       }
 
       if (current.status === 'active') {
+        // host-stop fires BEFORE teardown so the audit append lands on the
+        // still-open logger; teardown closes it after.
+        auditKind({ kind: 'host-stop', peerId: null, displayName: null });
         setState({ status: 'stopping' });
         teardown();
         setState({ status: 'idle' });
@@ -1242,22 +1322,86 @@ export function createShareController(deps: ShareDeps): ShareController {
       return broadcastNodePatched(op, outcome, attributedTo);
     },
     async kick(peerId: string) {
-      if (current.status !== 'active' || !transport) {
+      if (current.status !== 'active' || !hostKey) {
         throw new Error('share-not-active');
       }
-      const connId = peerConnIds.get(peerId);
-      if (!connId) {
-        throw new Error('share-peer-not-found');
+      // Look up displayName from connPeers so the audit entry records the
+      // human-readable label even though the relay endpoint only takes a
+      // peerId. Falls back to null when the peer is unknown — but in that
+      // case we throw share-peer-not-found before issuing the RPC.
+      const known = [...connPeers.values()].find((p) => p.peerId === peerId);
+      if (!known) {
+        const reason = 'share-peer-not-found';
+        auditKind({
+          kind: 'rpc-reject',
+          peerId,
+          displayName: null,
+          op: 'kick',
+          reason,
+        });
+        throw new Error(reason);
       }
-      transport.send(makeEnvelope('kick', { peerId }, { to: connId }));
+      const sessionId = current.sessionId;
+      try {
+        const res = await fetchFn(`${deps.relayHttpUrl}/api/share/kick`, {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ sessionId, hostKey, peerId }),
+        });
+        if (!res.ok) {
+          throw new Error(`share-relay-http-${res.status}`);
+        }
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : String(err);
+        auditKind({
+          kind: 'rpc-reject',
+          peerId,
+          displayName: known.displayName,
+          op: 'kick',
+          reason,
+        });
+        throw err;
+      }
+      auditKind({
+        kind: 'kick',
+        peerId,
+        displayName: known.displayName,
+      });
     },
     async rotateUrl() {
-      if (current.status !== 'active') {
+      if (current.status !== 'active' || !hostKey) {
         throw new Error('share-not-active');
       }
-      await controller.stop();
-      const { url } = await controller.start();
-      return { url };
+      const sessionId = current.sessionId;
+      const res = await fetchFn(`${deps.relayHttpUrl}/api/share/rotate`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ sessionId, hostKey }),
+      });
+      if (!res.ok) {
+        throw new Error(`share-relay-http-${res.status}`);
+      }
+      const body = (await res.json()) as { token: string };
+      const newUrl = `${deps.shareUrlBase}/${body.token}`;
+      // The relay's rotate endpoint kicks every peer connection as part of
+      // the rotation — none of them will reconnect with the old token. Clear
+      // our local peer book-keeping so state() reflects the empty roster the
+      // next subscriber tick will read.
+      for (const q of peerSseQueues.values()) {
+        try {
+          q.dispose();
+        } catch (err) {
+          console.warn('[share] sse queue dispose failed during rotate:', err);
+        }
+      }
+      peerSseQueues.clear();
+      peerConnIds.clear();
+      connPeers.clear();
+      if (current.status === 'active') {
+        setState({ ...current, token: body.token, url: newUrl, peers: [] });
+      }
+      auditKind({ kind: 'rotate', peerId: null, displayName: null });
+      return { url: newUrl };
     },
     state() {
       return enrichWithSseMetrics(current);
@@ -1278,6 +1422,17 @@ export function createShareController(deps: ShareDeps): ShareController {
       return () => {
         attributionSubscribers.delete(fn);
       };
+    },
+    audit: {
+      // Delegates to the per-session AuditLogger. Returns an empty page
+      // when no session is active so the endpoint can answer without a
+      // file-read; the endpoint itself returns 400 in that case before
+      // calling in, but stay safe-by-default here too.
+      async list(opts) {
+        const logger = auditLogger;
+        if (!logger) return { entries: [], nextCursor: null };
+        return logger.list(opts);
+      },
     },
   };
 
