@@ -9,6 +9,8 @@ Started: Sun 31 May 2026 20:53:58 AEST
 - Use `bun test <relative path>` from the package root (not `bun test packages/...`); each repo uses Bun's native test runner.
 - Cloud relay tests mock both DynamoDB (`(ddbMod.doc as any).send = fakeDocSend`) and ApiGatewayManagement (`(ApiGatewayManagementApiClient.prototype as any).send = fakeApiSend`). Reuse the pattern from `ws-default.test.ts` whenever a handler now needs to broadcast.
 - Shared lambda helpers belong under `cloud/lambda/share/shared/` — `ws-api.ts` (apiClient + post with GoneException handling) is reusable across any handler that fans out frames.
+- The seeflow repo is a git worktree setup — the active worktree for Phase 5 work in seeflow lives at `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc` on branch `worktree-realtime-share-design-doc`. ALWAYS edit + commit there, NOT in the main repo at `/Users/tuongaz/dev/seeflow` (which is on `main`). Absolute paths to `/Users/tuongaz/dev/seeflow/packages/...` resolve to the main repo, not the worktree — use the worktree's absolute path explicitly.
+- Pre-existing failing tests in `apps/studio/src/{watcher,server,registry}.test.ts` (fs-watcher + HTTP timeouts) are NOT caused by canvas-only work; verify canvas-scope changes via `bun test packages/canvas` (currently 1272 pass) rather than full `bun test`.
 
 ---
 
@@ -103,4 +105,22 @@ Started: Sun 31 May 2026 20:53:58 AEST
   - `<ViewportPortal>` from `@xyflow/react` is the canvas-correct portal for content that must transform with pan/zoom; mounting cursor overlays in a plain absolutely-positioned wrapper would NOT track the viewport.
   - The `onPointerMove` guard pattern (`if (onCursorMove) { ... }` outside the existing `if (!drawingRef.current) return`) lets the same handler serve both presence emission AND the existing draw-mode rubber band — keep the new branch BEFORE the early-return so cursor emission works when the user isn't drawing.
   - Adding new SeeflowCanvas props: append fields to `SeeflowCanvasBaseProps` (NOT a per-mode union arm) — the discriminated `SeeflowCanvasProps` union already extends the base, so anything added there is reachable in every mode without duplicating the field across the union arms.
+---
+
+## 2026-05-31 - US-049
+- Built `PeerCursorsLayer` overlay component in the canvas package, exporting `PeerCursor` + `PeerCursorsLayerProps` types from the Chrome section of `packages/canvas/src/index.ts`.
+- Renders one `<div>` per peer (excluding `selfPeerId`) absolutely positioned at `translate({x}px, {y}px)` so the consumer can drop it inside a viewport-transformed wrapper (e.g. `<SeeflowCanvas presenceLayer={...} />`'s `<ViewportPortal>`). Each row: 14×14 SVG arrow in peer color with `drop-shadow(0 1px 1px rgba(0,0,0,0.35))` + name pill (peer color bg, white text, JetBrains Mono 11px, 4px radius, 4px/6px padding) anchored just past the arrow tip.
+- Idle peers render at `opacity: 0.4`. All cursor wrappers carry `pointer-events: none` so the layer never eats pane clicks; the outer wrapper too.
+- `transform 80ms linear` transition smooths the ~30 fps cursor stream from the relay without adding perceptible lag.
+- 6 unit tests in `peer-cursors-layer.test.tsx` cover: selfPeerId exclusion, correct transforms for multiple peers + transition value, idle opacity + data-idle attr, displayName labels with pill bg/color, arrow size/fill/drop-shadow, empty `peers` array.
+- Canvas suite: 1272 pass / 0 fail / typecheck + biome clean. (Pre-existing studio fs-watcher + server-timeout failures are unrelated.)
+- Files changed:
+  - packages/canvas/src/components/peer-cursors-layer.tsx (new)
+  - packages/canvas/src/components/peer-cursors-layer.test.tsx (new)
+  - packages/canvas/src/index.ts (Chrome-section export of `PeerCursorsLayer` + types)
+- **Learnings for future iterations:**
+  - When a component renders sub-elements via a helper component (e.g. `peers.map(p => <Cursor peer={p}/>)`) AND you want hook-shim-style tests that walk the JSX tree without a renderer, INLINE the sub-component's JSX into the parent — otherwise the returned tree contains `{type: Cursor, props: {peer}}` elements that have not been executed, so `findAll(el => el.type === 'svg')` finds nothing. Mirrors the `icon-renderer.test.tsx` pattern.
+  - Bun's `bun test <filter>` matches by substring on file path AND requires the filename to contain `.test`/`.spec`/`_test_`/`_spec_`. A bare path filter like `bun test packages/canvas/src/components/seeflow-canvas` matches `seeflow-canvas.test.tsx` only (not `seeflow-canvas.presence.test.tsx`) due to how the substring is interpreted. Use the full file path or the closest unique substring.
+  - The canvas package's hookless components (no `useState`/`useEffect`) can be unit-tested by calling them as plain functions — `PeerCursorsLayer(props)` returns the React element directly. No `renderWithHooks` shim needed (which is required only for components that call hooks). This matches the established pattern in `icon-renderer.test.tsx`.
+  - I initially wrote files to `/Users/tuongaz/dev/seeflow/packages/...` instead of the worktree path `/Users/tuongaz/dev/seeflow/.claude/worktrees/realtime-share-design-doc/packages/...` — the absolute path resolves to the MAIN repo on branch `main`, not the active worktree. Always prefix file edits with the worktree's absolute path explicitly. Fixing required copying files into the worktree and reverting the main repo's working tree.
 ---
