@@ -47,7 +47,7 @@ import {
 } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
-import type { ShareController, ShareState } from './share.ts';
+import type { AttributionEvent, ShareController, ShareState } from './share.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -2198,6 +2198,66 @@ export function createApi(options: ApiOptions): Hono {
       // subscribe() invokes fn synchronously with the current state, so the
       // initial frame lands in the queue automatically — no explicit prologue.
       const unsubscribe = controller.subscribe(enqueue);
+
+      stream.onAbort(() => {
+        active = false;
+        unsubscribe();
+        wake();
+      });
+
+      try {
+        while (active) {
+          while (queue.length > 0) {
+            const next = queue.shift();
+            if (!next) break;
+            await stream.writeSSE(next);
+          }
+          if (!active) break;
+          let heartbeat: ReturnType<typeof setTimeout> | null = null;
+          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
+            resume = () => r('event');
+            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
+          });
+          if (heartbeat) clearTimeout(heartbeat);
+          resume = null;
+          if (reason === 'heartbeat' && active) {
+            await stream.write(': ping\n\n');
+          }
+        }
+      } finally {
+        unsubscribe();
+      }
+    });
+  });
+
+  // GET /api/share/attributions — SSE stream of `node-patched` attribution
+  // events for the host studio's apps/web UI (US-053). Fires once per accepted
+  // op (peer-originated AND host-originated), carrying `{flowId, op, diff,
+  // version, attributedTo, ts}`. No initial replay — the toast stack is for
+  // live activity only.
+  api.get('/share/attributions', (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    const controller = share;
+
+    return streamSSE(c, async (stream) => {
+      let active = true;
+      const queue: Array<{ event: string; data: string }> = [];
+      let resume: (() => void) | null = null;
+
+      const wake = () => {
+        if (resume) {
+          const r = resume;
+          resume = null;
+          r();
+        }
+      };
+
+      const enqueue = (event: AttributionEvent) => {
+        queue.push({ event: 'attribution', data: JSON.stringify(event) });
+        wake();
+      };
+
+      const unsubscribe = controller.subscribeAttributions(enqueue);
 
       stream.onAbort(() => {
         active = false;

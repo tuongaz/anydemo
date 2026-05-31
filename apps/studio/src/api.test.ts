@@ -5048,6 +5048,7 @@ const createFakeShare = (init?: {
       payload: { ok: true },
     }),
     broadcastHostEdit: () => null,
+    subscribeAttributions: () => () => {},
   };
 };
 

@@ -889,6 +889,116 @@ describe('createShareController attribution (US-052)', () => {
   });
 });
 
+describe('ShareController.subscribeAttributions (US-053)', () => {
+  it('fires once per accepted peer rpc with full attribution metadata', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      rpcDispatcher: async () => ({ kind: 'ok' }),
+      appendShareAuditFn: () => {},
+    });
+    await ctrl.start();
+    const events: import('./share.ts').AttributionEvent[] = [];
+    const off = ctrl.subscribeAttributions((e) => events.push(e));
+
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-42',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Alice' },
+    });
+    fake.emitFrame({
+      v: 1,
+      type: 'rpc',
+      from: 'conn-42',
+      id: 'r-1',
+      payload: { op: 'moveNode', flowId: 'flow-a', nodeId: 'n-1', position: { x: 1, y: 2 } },
+    });
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(events).toHaveLength(1);
+    const ev = events[0];
+    if (!ev) throw new Error('expected attribution event');
+    expect(ev.flowId).toBe('flow-a');
+    expect(ev.op).toBe('moveNode');
+    expect(ev.version).toBe(1);
+    expect(ev.attributedTo).toEqual({ peerId: 'peer-42', displayName: 'Alice' });
+    expect(typeof ev.ts).toBe('number');
+    off();
+  });
+
+  it('fires for host-originated broadcastHostEdit with peerId=host', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      hostDisplayName: 'tuong',
+      appendShareAuditFn: () => {},
+    });
+    await ctrl.start();
+    const events: import('./share.ts').AttributionEvent[] = [];
+    ctrl.subscribeAttributions((e) => events.push(e));
+
+    ctrl.broadcastHostEdit(
+      { op: 'moveNode', flowId: 'flow-host', nodeId: 'n-1', position: { x: 0, y: 0 } },
+      { kind: 'ok' },
+    );
+    expect(events).toHaveLength(1);
+    expect(events[0]?.attributedTo).toEqual({ peerId: 'host', displayName: 'tuong' });
+  });
+
+  it('returns an unsubscribe that stops further events', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      hostDisplayName: 'tuong',
+      appendShareAuditFn: () => {},
+    });
+    await ctrl.start();
+    const events: import('./share.ts').AttributionEvent[] = [];
+    const off = ctrl.subscribeAttributions((e) => events.push(e));
+    off();
+    ctrl.broadcastHostEdit(
+      { op: 'moveNode', flowId: 'flow-host', nodeId: 'n-1', position: { x: 0, y: 0 } },
+      { kind: 'ok' },
+    );
+    expect(events).toHaveLength(0);
+  });
+
+  it('does not fire when broadcastNodePatched is suppressed (non-ok outcome via broadcastHostEdit)', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      hostDisplayName: 'tuong',
+      appendShareAuditFn: () => {},
+    });
+    await ctrl.start();
+    const events: import('./share.ts').AttributionEvent[] = [];
+    ctrl.subscribeAttributions((e) => events.push(e));
+    const v = ctrl.broadcastHostEdit(
+      { op: 'moveNode', flowId: 'flow-host', nodeId: 'n-1', position: { x: 0, y: 0 } },
+      { kind: 'invalid' },
+    );
+    expect(v).toBeNull();
+    expect(events).toHaveLength(0);
+  });
+});
+
 describe('ShareState hostDisplayName default', () => {
   it("defaults to 'Host' when not supplied via deps", async () => {
     const fake = makeFakeTransport(['connecting', 'open']);

@@ -1,5 +1,6 @@
 import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
+import { useAttributionToasts } from '@/hooks/use-attribution-toasts';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
@@ -10,13 +11,14 @@ import {
 import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
+import { useShareState } from '@/hooks/use-share-state';
 import type { CreateProjectResult } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
 import { FlowStackPane } from '@/pages/flow-stack-pane';
 import { StudioHome } from '@/pages/studio-home';
-import { type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
+import { AttributionToastStack, type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // US-005: seed the flow navigation stack from the initial URL + stamp
@@ -150,6 +152,17 @@ export function App() {
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
 
+  // US-053: surface attribution toasts for every accepted remote edit while
+  // share is active. Host-originated edits (peerId === 'host') are suppressed
+  // by the hook, so the host sees their own edits silently — peer edits flash
+  // a small toast bottom-left.
+  const shareState = useShareState();
+  const shareActive = shareState.status === 'active';
+  const { items: attributionItems, onExpire: onAttributionExpire } = useAttributionToasts({
+    active: shareActive,
+    selfPeerId: 'host',
+  });
+
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;
     return {
@@ -190,6 +203,9 @@ export function App() {
             <StudioHome demos={demos} />
           )}
         </main>
+        {shareActive ? (
+          <AttributionToastStack items={attributionItems} onExpire={onAttributionExpire} />
+        ) : null}
         {flowId && topProject ? (
           <ExportDialog
             open={exportDialogOpen}

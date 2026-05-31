@@ -143,6 +143,9 @@ export type { ResizeGestureCallbacks } from './lib/detail-panel-width.ts';
 
 export { fileUrl } from './lib/file-url.ts';
 
+export { formatAttribution } from './lib/format-attribution.ts';
+export type { FormatAttributionResult } from './lib/format-attribution.ts';
+
 export {
   endpointFromPin,
   endpointToPin,
@@ -341,6 +344,12 @@ export type { ShareMenuMode, ShareMenuProps } from './components/share-menu.tsx'
 
 export { PeerCursorsLayer } from './components/peer-cursors-layer.tsx';
 export type { PeerCursor, PeerCursorsLayerProps } from './components/peer-cursors-layer.tsx';
+
+export { AttributionToastStack } from './components/attribution-toast.tsx';
+export type {
+  AttributionToastItem,
+  AttributionToastStackProps,
+} from './components/attribution-toast.tsx';
 
 export {
   computeNewRectFromAnchorDrag,

@@ -112,6 +112,22 @@ export interface ShareController {
    * monotonic per-flow version assigned (or `null` when no broadcast fired).
    */
   broadcastHostEdit(op: RpcOp, outcome: RpcDispatchOutcome): number | null;
+  /**
+   * Subscribe to attribution events fired for every accepted op the host
+   * broadcasts (peer-originated AND host-originated). Used by the host
+   * studio's apps/web UI to render attribution toasts (US-053); the SSE
+   * bridge in `apps/studio/src/api.ts` fans these out to /api/share/attributions.
+   */
+  subscribeAttributions(fn: (event: AttributionEvent) => void): () => void;
+}
+
+export interface AttributionEvent {
+  flowId: string;
+  op: string;
+  diff: unknown;
+  version: number;
+  attributedTo: { peerId: string; displayName: string };
+  ts: number;
 }
 
 // Generic outcome shape returned by a dispatcher entry. Each operations.ts
@@ -304,6 +320,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   // is in flight; stop() consults it to abort a mid-boot start.
   let current: ShareState = { status: 'idle' };
   const subscribers = new Set<(s: ShareState) => void>();
+  const attributionSubscribers = new Set<(event: AttributionEvent) => void>();
   const fetchFn = deps.fetch ?? fetch;
   const transportFactory = deps.transportFactory ?? createShareTransport;
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
@@ -442,6 +459,21 @@ export function createShareController(deps: ShareDeps): ShareController {
       );
     } catch (err) {
       console.warn('[share] node-patched broadcast failed:', err);
+    }
+    const event: AttributionEvent = {
+      flowId: op.flowId,
+      op: op.op,
+      diff,
+      version: nextVersion,
+      attributedTo,
+      ts: Date.now(),
+    };
+    for (const fn of attributionSubscribers) {
+      try {
+        fn(event);
+      } catch (err) {
+        console.error('[share] attribution subscriber threw:', err);
+      }
     }
     return nextVersion;
   };
@@ -839,6 +871,12 @@ export function createShareController(deps: ShareDeps): ShareController {
       }
       return () => {
         subscribers.delete(fn);
+      };
+    },
+    subscribeAttributions(fn) {
+      attributionSubscribers.add(fn);
+      return () => {
+        attributionSubscribers.delete(fn);
       };
     },
   };
