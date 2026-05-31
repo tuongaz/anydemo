@@ -78,3 +78,32 @@ Started: Sun 31 May 2026 18:44:56 AEST
   - `.strict()` on each op schema in a discriminatedUnion catches cross-op shape mixing (e.g. `{ op: 'addNode', nodeId: 'x', position }` is rejected as an unknown-key violation on AddNodeOpSchema). Without `.strict()`, the union would silently accept the wrong wrapper shape so long as the required fields were present.
   - Biome's organizeImports puts `bun:test` BEFORE `node:fs`/`node:path` alphabetically — sort by full source string, not by category.
 ---
+
+## 2026-05-31 — US-038
+- Added `handleRpcFrame(frame: unknown, fromPeerId): Promise<RpcResultFrame>` to `ShareController` in `apps/studio/src/share.ts`. Validates with `RpcFrameSchema.safeParse`, double-checks against the `ALLOWED_RPC_OPS` allowlist (defense-in-depth), guards on `current.status === 'active'`, then dispatches via `rpcDispatcher`.
+- Exported a new `RpcDispatchOutcome` + `RpcDispatcher` type and `createDefaultRpcDispatcher(opsDeps)` factory — the default switches on `op.op` and maps to the 9 operations.ts impls (re-parses loose patch bodies via `NodePatchBodySchema` / `ConnectorPatchBodySchema` since the wire schema is intentionally loose). `addBulk` runs `flowBulkNonEmpty` before dispatching (the wire union can't carry the ZodEffects refine).
+- Extended `ShareDeps` with three new optional fields: `operationsDeps`, `rpcDispatcher` (defaults to wrapping operationsDeps via the factory), `appendShareAuditFn` (defaults to writing to `auditDir`).
+- Outcome translation: `kind === 'ok'` → `{ ok: true, result?: outcome.data }` (omit `result` when data is undefined). Otherwise → `{ ok: false, reason: outcome.kind + (message ? ': ' + message : '') }`. notFound → `'notFound'`; writeFailed with message → `'writeFailed: EBUSY'`.
+- Module-level helpers: `extractFrameId` falls back to `'invalid'` when the unparsed frame has no string id (the result-frame schema requires `id.min(1)`); `makeRpcResultFrame` is a tiny constructor.
+- Added `RpcAuditEntry` + `appendShareAudit(sessionId, entry, opts?)` helper in `apps/studio/src/share-audit.ts`. Rejects sessionId path-traversal: empty, `.`, `..`, `/`, `\\`, `\0`. Writes one `JSON.stringify(entry)+'\n'` line to `<auditDir>/<sessionId>.jsonl`, mkdir-ing the dir on first call. Two-entry-shape union now coexists in the same JSONL file (legacy `AuditEntry` from `createAuditLog`, plus the new `RpcAuditEntry`).
+- Added 9 new tests in `share-audit.test.ts` (under a new `describe('appendShareAudit')` block): file creation, append, json round-trip, recursive mkdir, injected appender, then path-traversal rejection across 4 specific cases (`../../etc/passwd`, embedded `/`, embedded `\\`, empty/`.`/`..`).
+- Added 15 tests in new `apps/studio/src/share.rpc.test.ts` across 4 describe blocks: per-op happy path (9 tests, one per allowlisted op — each asserts dispatch occurred + audit captured op/flowId/ok/sessionId), envelope validation (3 tests: missing payload → invalid_envelope, unknown op string → invalid_envelope via Zod, garbage object falls back to invalid frame id), outcome translation (notFound → reason 'notFound', writeFailed:EBUSY → 'writeFailed: EBUSY'), state guard (not_active before start()).
+- Touched `apps/studio/src/api.test.ts` to add a no-op `handleRpcFrame` stub to the `FakeShare` shim — required to satisfy the new ShareController method.
+- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all 4 workspaces clean, `bun test apps/studio/src/share.test.ts apps/studio/src/share-audit.test.ts apps/studio/src/share.rpc.test.ts apps/studio/src/share-rpc-schema.test.ts` = 83 pass / 0 fail. `bun test apps/studio/src/api.test.ts` = 216 pass / 1 skip / 0 fail.
+- Files changed:
+  - `apps/studio/src/share.ts` (added handleRpcFrame, RpcDispatcher seam, ALLOWED_RPC_OPS, createDefaultRpcDispatcher, helper fns)
+  - `apps/studio/src/share-audit.ts` (added appendShareAudit + RpcAuditEntry; left createAuditLog untouched)
+  - `apps/studio/src/share-audit.test.ts` (new describe block for appendShareAudit, 9 tests)
+  - `apps/studio/src/share.rpc.test.ts` (new — 15 tests)
+  - `apps/studio/src/api.test.ts` (added handleRpcFrame stub to FakeShare)
+  - `ralph/prd.json` (US-038 passes → true)
+- **Learnings for future iterations:**
+  - The `ShareController` interface is implemented as an object literal returned by `createShareController`. Adding a method = extending the interface (which any FakeShare in `api.test.ts` must mirror). Don't forget the test shim — typescript flags it as a missing-prop on the FakeShare literal, NOT on createShareController.
+  - The wire-side `RpcOp` discriminated union is exhaustive in TS — a `default:` branch in the dispatcher switch is dead code and unnecessary. The `ALLOWED_RPC_OPS` runtime allowlist exists purely as defense-in-depth for a future code path that bypasses Zod, not for current control flow.
+  - Outcome → reason string contract: `outcome.kind + (message ? ': ' + message : '')` — so `{ kind: 'notFound' }` becomes `'notFound'` and `{ kind: 'writeFailed', message: 'EBUSY' }` becomes `'writeFailed: EBUSY'`. The result-frame's `reason` field is just `z.string()`, so callers parse the kind by splitting on the first `: `.
+  - The RpcResultFrame schema requires `id.min(1)`. When the inbound envelope failed parse hard enough to lose its id, we MUST substitute a non-empty fallback (`'invalid'`). Otherwise the result-frame itself fails its own schema and the protocol breaks.
+  - Two audit-entry shapes live in the same per-session JSONL file (legacy `AuditEntry` from `createAuditLog`, plus `RpcAuditEntry` from `appendShareAudit`). Future readers MUST treat each line as the union — sniff `'verdict' in entry` vs `'op' in entry` to discriminate.
+  - sessionId validation: a string is only safe if it has no `/`, no `\\`, no `\0`, and isn't `''`/`.`/`..`. Anything else is a potential path traversal. The check is cheap; do it on every audit write, not just at session start.
+  - `bun run format` MUST come before `bun run lint` — biome's organizeImports rearranges import order during format, and lint will fail on the unformatted order even though it's semantically equivalent.
+  - When extending `ShareDeps` with new optional fields, ordering of resolution matters: `rpcDispatcher` falls back to `operationsDeps`-based default. If both are absent, handleRpcFrame returns `no_dispatcher` rather than throwing — a tampered config shouldn't crash the controller.
+---

@@ -15,13 +15,32 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import type { EventBus } from './events.ts';
 import {
+  ConnectorPatchBodySchema,
+  FLOW_BULK_NON_EMPTY_MESSAGE,
+  NodePatchBodySchema,
+  type OperationsDeps,
+  addConnectorImpl,
+  addFlowBulkImpl,
+  addNodeImpl,
+  deleteConnectorImpl,
+  deleteNodeImpl,
+  flowBulkNonEmpty,
+  moveNodeImpl,
+  patchConnectorImpl,
+  patchNodeImpl,
+  reorderNodeImpl,
+} from './operations.ts';
+import {
   type AuditEntry,
   type AuditLog,
   type AuditLogOpts,
+  type RpcAuditEntry,
+  appendShareAudit,
   createAuditLog,
 } from './share-audit.ts';
 import { type Envelope, makeEnvelope } from './share-envelope.ts';
 import { type RateLimiter, createRateLimiter } from './share-ratelimit.ts';
+import { RpcFrameSchema, type RpcOp, type RpcResultFrame } from './share-rpc-schema.ts';
 import {
   type ShareTransport,
   type ShareTransportOpts,
@@ -68,6 +87,74 @@ export interface ShareController {
   rotateUrl(): Promise<{ url: string }>;
   state(): ShareState;
   subscribe(fn: (s: ShareState) => void): () => void;
+  handleRpcFrame(frame: unknown, fromPeerId: string): Promise<RpcResultFrame>;
+}
+
+// Generic outcome shape returned by a dispatcher entry. Each operations.ts
+// impl already conforms (`{ kind: 'ok'; data?: ... } | { kind: ...; message?: ... }`),
+// so the default dispatcher passes them through. Tests inject custom
+// dispatchers that return whatever they want for the per-op happy paths.
+export interface RpcDispatchOutcome {
+  kind: string;
+  data?: unknown;
+  message?: string;
+}
+
+export type RpcDispatcher = (op: RpcOp) => Promise<RpcDispatchOutcome>;
+
+// Op allowlist — duplicated from `RpcOpSchema`'s discriminator literals as a
+// runtime defense-in-depth. The Zod schema rejects unknown ops up front; this
+// secondary gate catches a tampered runtime injection (e.g. a future code path
+// that skips the schema parse) before it reaches the impl.
+const ALLOWED_RPC_OPS = new Set<RpcOp['op']>([
+  'addNode',
+  'patchNode',
+  'moveNode',
+  'reorderNode',
+  'deleteNode',
+  'addConnector',
+  'patchConnector',
+  'deleteConnector',
+  'addBulk',
+]);
+
+export function createDefaultRpcDispatcher(deps: OperationsDeps): RpcDispatcher {
+  return async (op) => {
+    switch (op.op) {
+      case 'addNode':
+        return addNodeImpl(deps, op.flowId, op.node);
+      case 'patchNode': {
+        const parsed = NodePatchBodySchema.safeParse(op.patch);
+        if (!parsed.success) return { kind: 'badSchema', message: parsed.error.message };
+        return patchNodeImpl(deps, op.flowId, op.nodeId, parsed.data);
+      }
+      case 'moveNode':
+        return moveNodeImpl(deps, op.flowId, op.nodeId, op.position);
+      case 'reorderNode':
+        return reorderNodeImpl(deps, op.flowId, op.nodeId, op.reorder);
+      case 'deleteNode':
+        return deleteNodeImpl(deps, op.flowId, op.nodeId);
+      case 'addConnector':
+        return addConnectorImpl(deps, op.flowId, op.connector);
+      case 'patchConnector': {
+        const parsed = ConnectorPatchBodySchema.safeParse(op.patch);
+        if (!parsed.success) return { kind: 'badSchema', message: parsed.error.message };
+        return patchConnectorImpl(deps, op.flowId, op.connectorId, parsed.data);
+      }
+      case 'deleteConnector':
+        return deleteConnectorImpl(deps, op.flowId, op.connectorId);
+      case 'addBulk': {
+        const body = { nodes: op.nodes, connectors: op.connectors };
+        // The non-empty refine couldn't be expressed in the wire schema (a
+        // ZodEffects member can't participate in a discriminatedUnion). It's
+        // enforced here before dispatch so the wire stays loose.
+        if (!flowBulkNonEmpty(body)) {
+          return { kind: 'invalid', message: FLOW_BULK_NON_EMPTY_MESSAGE };
+        }
+        return addFlowBulkImpl(deps, op.flowId, body);
+      }
+    }
+  };
 }
 
 export interface ShareDeps {
@@ -91,6 +178,17 @@ export interface ShareDeps {
   // torn down on teardown(). If either dep is absent the bridge is a no-op.
   eventBus?: EventBus;
   flowIdsForBroadcast?: () => string[];
+  // OperationsDeps used by the default RPC dispatcher. Required when
+  // `rpcDispatcher` is omitted; tests inject `rpcDispatcher` directly and can
+  // skip this.
+  operationsDeps?: OperationsDeps;
+  // Per-op dispatcher invoked by `handleRpcFrame` after envelope validation.
+  // Defaults to `createDefaultRpcDispatcher(operationsDeps)`. Tests inject
+  // stubs to assert dispatch contract without touching the real impls.
+  rpcDispatcher?: RpcDispatcher;
+  // Injected for tests so they can capture audit writes without hitting disk.
+  // Defaults to the real `appendShareAudit` writing to `auditDir`.
+  appendShareAuditFn?: (sessionId: string, entry: RpcAuditEntry) => void;
 }
 
 interface RelaySessionResponse {
@@ -108,6 +206,26 @@ interface BootHandle {
 
 const BOOT_TIMEOUT_MS = 10_000;
 
+// Fallback frame id surfaced when the inbound envelope failed validation
+// hard enough that we can't recover `frame.id`. Anything is fine as long as
+// it satisfies the wire schema's `min(1)` constraint on the `id` field.
+const INVALID_FRAME_ID = 'invalid';
+
+const extractFrameId = (frame: unknown): string => {
+  if (frame && typeof frame === 'object' && 'id' in frame) {
+    const raw = (frame as { id?: unknown }).id;
+    if (typeof raw === 'string' && raw.length > 0) return raw;
+  }
+  return INVALID_FRAME_ID;
+};
+
+const makeRpcResultFrame = (id: string, payload: RpcResultFrame['payload']): RpcResultFrame => ({
+  v: 1,
+  type: 'rpc-result',
+  id,
+  payload,
+});
+
 export function createShareController(deps: ShareDeps): ShareController {
   // current is mutated through setState() so subscribers fan-out on every
   // transition. hostKey + transport live in closure scope — hostKey is never
@@ -120,6 +238,12 @@ export function createShareController(deps: ShareDeps): ShareController {
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
   const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
   const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
+  const rpcDispatcher: RpcDispatcher | null =
+    deps.rpcDispatcher ??
+    (deps.operationsDeps ? createDefaultRpcDispatcher(deps.operationsDeps) : null);
+  const appendShareAuditFn =
+    deps.appendShareAuditFn ??
+    ((sessionId, entry) => appendShareAudit(sessionId, entry, { dir: auditDir }));
 
   let hostKey: string | null = null;
   let transport: ShareTransport | null = null;
@@ -432,6 +556,72 @@ export function createShareController(deps: ShareDeps): ShareController {
 
       // status === 'stopping' or 'error' — treat as no-op; the in-flight
       // stop will complete on its own and a fresh start() can follow.
+    },
+    async handleRpcFrame(frame, fromPeerId) {
+      const fallbackId = extractFrameId(frame);
+      const parsed = RpcFrameSchema.safeParse(frame);
+      if (!parsed.success) {
+        // Never include payload in the log: a tampered envelope is hostile by
+        // assumption.
+        console.warn('[share] rpc frame rejected:', {
+          type: 'rpc',
+          from: fromPeerId,
+          reason: 'invalid_envelope',
+        });
+        return makeRpcResultFrame(fallbackId, { ok: false, reason: 'invalid_envelope' });
+      }
+      const op = parsed.data.payload;
+      if (!ALLOWED_RPC_OPS.has(op.op)) {
+        // Defense-in-depth: unreachable past the schema, but guards a future
+        // path that bypasses validation.
+        console.warn('[share] rpc frame rejected:', {
+          type: 'rpc',
+          from: fromPeerId,
+          reason: 'op_not_allowed',
+        });
+        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'op_not_allowed' });
+      }
+      if (current.status !== 'active') {
+        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'not_active' });
+      }
+      if (!rpcDispatcher) {
+        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'no_dispatcher' });
+      }
+      const sessionId = current.sessionId;
+      let outcome: RpcDispatchOutcome;
+      try {
+        outcome = await rpcDispatcher(op);
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        outcome = { kind: 'dispatcherThrew', message };
+      }
+      const ok = outcome.kind === 'ok';
+      const reason = ok
+        ? undefined
+        : outcome.kind + (outcome.message ? `: ${outcome.message}` : '');
+      try {
+        const entry: RpcAuditEntry = {
+          ts: Date.now(),
+          peerId: fromPeerId,
+          op: op.op,
+          flowId: op.flowId,
+          ok,
+          ...(reason ? { reason } : {}),
+        };
+        appendShareAuditFn(sessionId, entry);
+      } catch (err) {
+        console.warn('[share] rpc audit append failed:', err);
+      }
+      if (ok) {
+        return makeRpcResultFrame(parsed.data.id, {
+          ok: true,
+          ...(outcome.data !== undefined ? { result: outcome.data } : {}),
+        });
+      }
+      return makeRpcResultFrame(parsed.data.id, {
+        ok: false,
+        reason: reason ?? outcome.kind,
+      });
     },
     async kick(peerId: string) {
       if (current.status !== 'active' || !transport) {

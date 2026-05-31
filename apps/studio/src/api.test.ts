@@ -5041,6 +5041,12 @@ const createFakeShare = (init?: {
       current = next;
       for (const fn of subscribers) fn(next);
     },
+    handleRpcFrame: async () => ({
+      v: 1,
+      type: 'rpc-result',
+      id: 'fake',
+      payload: { ok: true },
+    }),
   };
 };
 
