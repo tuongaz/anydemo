@@ -1,5 +1,6 @@
 import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
+import { LiveShareDialog } from '@/components/live-share-dialog';
 import { useAttributionToasts } from '@/hooks/use-attribution-toasts';
 import { useDemos } from '@/hooks/use-demos';
 import {
@@ -150,6 +151,7 @@ export function App() {
   // DemoStackEntry alongside the rest of the per-entry data wiring.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [liveShareOpen, setLiveShareOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
 
   // US-053: surface attribution toasts for every accepted remote edit while
@@ -169,6 +171,7 @@ export function App() {
       onDownloadPdf: () => canvasRef.current?.exportPdf(),
       onDownloadPng: () => canvasRef.current?.exportPng(),
       onExportToCloud: () => setExportDialogOpen(true),
+      onLiveShare: () => setLiveShareOpen(true),
     };
   }, [flowId]);
 
@@ -217,6 +220,17 @@ export function App() {
             }
           />
         ) : null}
+        <LiveShareDialog
+          open={liveShareOpen}
+          onOpenChange={setLiveShareOpen}
+          peers={shareState.status === 'active' ? shareState.peers : []}
+          {...(shareState.status === 'active' && shareState.hostDisplayName
+            ? { hostDisplayName: shareState.hostDisplayName }
+            : {})}
+          {...(shareState.status === 'active' && shareState.recentSessionCount !== undefined
+            ? { recentSessionCount: shareState.recentSessionCount }
+            : {})}
+        />
       </div>
     </TooltipProvider>
   );

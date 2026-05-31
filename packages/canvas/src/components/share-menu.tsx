@@ -1,4 +1,4 @@
-import { FileDown, Image as ImageIcon, Loader2, Share2, Square, Upload } from 'lucide-react';
+import { FileDown, Image as ImageIcon, Loader2, Share2, Square, Upload, Users } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { cn } from '../lib/cn.ts';
@@ -49,6 +49,12 @@ export interface ShareMenuProps {
    */
   onExportToCloud?: () => void;
   /**
+   * Open the host's Live Share dialog (real-time co-edit session). Edit-mode-only
+   * opt-in: rendered only when this callback is set AND `mode === 'edit'`. The
+   * dialog itself drives start/stop/peer-management — this callback just opens it.
+   */
+  onLiveShare?: () => void;
+  /**
    * Controlled `open` state for the inner EmbedDialog. When provided, the menu
    * defers entirely to the host for embed-state ownership (used by
    * SeeflowCanvas's imperative `openEmbedDialog()` handle in US-014). When
@@ -68,6 +74,7 @@ const SHARE_LABEL = 'Share / download';
 const DOWNLOAD_PDF_LABEL = 'Download PDF';
 const DOWNLOAD_PNG_LABEL = 'Download PNG';
 const EMBED_LABEL = 'Embed';
+const LIVE_SHARE_LABEL = 'Live Share';
 const EXPORT_TO_CLOUD_LABEL = 'Export to seeflow.dev';
 
 /**
@@ -83,6 +90,7 @@ export function ShareMenu({
   onDownloadPdf,
   onDownloadPng,
   onExportToCloud,
+  onLiveShare,
   embedOpen: embedOpenProp,
   onEmbedOpenChange,
 }: ShareMenuProps) {
@@ -115,8 +123,9 @@ export function ShareMenu({
   const showPng = Boolean(onDownloadPng);
   const showEmbed = enableEmbed && typeof projectId === 'string' && projectId.length > 0;
   const showExportToCloud = mode === 'edit' && Boolean(onExportToCloud);
+  const showLiveShare = mode === 'edit' && Boolean(onLiveShare);
 
-  if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
+  if (!showPdf && !showPng && !showEmbed && !showExportToCloud && !showLiveShare) return null;
 
   return (
     <>
@@ -190,6 +199,17 @@ export function ShareMenu({
             >
               <Square className="sf:h-4 sf:w-4" aria-hidden="true" />
               <span>{EMBED_LABEL}</span>
+            </DropdownMenuItem>
+          ) : null}
+          {showLiveShare ? (
+            <DropdownMenuItem
+              data-testid="share-menu-live-share"
+              onSelect={() => {
+                onLiveShare?.();
+              }}
+            >
+              <Users className="sf:h-4 sf:w-4" aria-hidden="true" />
+              <span>{LIVE_SHARE_LABEL}</span>
             </DropdownMenuItem>
           ) : null}
           {showExportToCloud ? (

@@ -21,6 +21,7 @@ export interface HeaderShareCallbacks {
   onDownloadPdf: () => Promise<unknown> | unknown;
   onDownloadPng: () => Promise<unknown> | unknown;
   onExportToCloud: () => void;
+  onLiveShare: () => void;
 }
 
 export interface HeaderProps {
@@ -109,6 +110,7 @@ export function Header({
             onDownloadPdf={share.onDownloadPdf}
             onDownloadPng={share.onDownloadPng}
             onExportToCloud={share.onExportToCloud}
+            onLiveShare={share.onLiveShare}
           />
         ) : null}
         <DropdownMenu>

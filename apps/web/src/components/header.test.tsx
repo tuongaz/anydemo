@@ -135,7 +135,10 @@ describe('Header', () => {
       const onDownloadPdf = () => {};
       const onDownloadPng = () => {};
       const onExportToCloud = () => {};
-      const tree = renderHeader({ share: { onDownloadPdf, onDownloadPng, onExportToCloud } });
+      const onLiveShare = () => {};
+      const tree = renderHeader({
+        share: { onDownloadPdf, onDownloadPng, onExportToCloud, onLiveShare },
+      });
 
       const share = findShareMenu(tree);
       if (!share) throw new Error('expected ShareMenu in the tree when share prop is provided');
