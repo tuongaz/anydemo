@@ -179,3 +179,19 @@ Started: Sun 31 May 2026 13:26:10 AEST
   - The placeholder file deletion (US-011 acceptance criterion deferred from prior story) is now done — done atomically with the route swap to avoid a broken intermediate state.
   - The two new HTTP routes ride on the existing `/api/*` CloudFront behavior (path-rewrite strips `/api` before forwarding to API Gateway); no new CloudFront behavior needed.
 ---
+
+## 2026-05-31 - US-013
+- Added Live Share smoke-test CLI per plan Task 10.
+- Created `cloud/bin/share-smoke.ts`: Bun script with `host` and `join <token>` modes.
+  - `host`: POSTs `/api/share/sessions`, opens WS, sends `auth-host` frame, ticks `sse` every 5s.
+  - `join <token>`: POSTs `/api/share/join`, opens WS, sends `auth-peer` frame, logs incoming frames.
+  - Reads `SHARE_HTTP_URL` from env (default `https://seeflow.dev`).
+- Cast `response.json()` results to typed shapes so `noImplicitAny` is satisfied without changing tsconfig.
+- `bun run typecheck`: clean. `bun build bin/share-smoke.ts`: bundles cleanly (syntax check). `bun test`: 82/82 across 14 files (regression baseline).
+- Files changed: `cloud/bin/share-smoke.ts`.
+- **Learnings for future iterations:**
+  - The smoke-test CLI lives under `cloud/bin/` alongside `app.ts`. It's NOT on the build path (tsc includes `bin/**/*.ts` so it does need to typecheck), but it is not run in CI.
+  - `fetch()` Response generics: the plan's destructure (`const { sessionId, token, ... } = await r.json()`) hits `noImplicitAny` because `Response.json()` returns `Promise<any>` typed as unknown under strict mode. Cast the awaited value to the expected shape inline (`(await r.json()) as { ... }`) rather than threading a generic through `fetch`.
+  - WebSocket is a global in Node 22+ (and Bun) and is typed via `@types/node`'s `web-globals/fetch.d.ts`. No `lib: ["dom"]` needed in tsconfig.
+  - For syntax-only verification of a Bun script that uses bun-only globals, `bun build --target=bun --outdir=/tmp/... bin/share-smoke.ts` is a clean way to exercise the parser without running the script (no `--check` flag on bun build, but a successful bundle is equivalent).
+---
