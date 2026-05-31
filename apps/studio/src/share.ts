@@ -13,6 +13,7 @@
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { z } from 'zod';
+import type { EventBus } from './events.ts';
 import {
   type AuditEntry,
   type AuditLog,
@@ -82,6 +83,14 @@ export interface ShareDeps {
   // by stop(). Path defaults to ~/.seeflow/share-history.
   auditDir?: string;
   auditLogFactory?: (opts: AuditLogOpts) => AuditLog;
+  // Local EventBus to bridge onto outbound 'sse' envelopes so peers see live
+  // runtime events (node:running, node:done, etc.) the same way the studio's
+  // own SSE listeners do. On transition idle -> active we subscribe to each
+  // flowId returned by flowIdsForBroadcast() and forward every StudioEvent as
+  // makeEnvelope('sse', event, { to: 'all', from: 'host' }). Subscriptions are
+  // torn down on teardown(). If either dep is absent the bridge is a no-op.
+  eventBus?: EventBus;
+  flowIdsForBroadcast?: () => string[];
 }
 
 interface RelaySessionResponse {
@@ -116,6 +125,8 @@ export function createShareController(deps: ShareDeps): ShareController {
   let transport: ShareTransport | null = null;
   let bootHandle: BootHandle | null = null;
   let auditLog: AuditLog | null = null;
+  // EventBus unsubscribe closures captured at active-time, drained in teardown.
+  let eventUnsubscribes: (() => void)[] = [];
   // peerId -> connId. Populated by presence/join frames; consulted by kick()
   // so a host can address a peer by stable peerId while the relay routes on
   // the per-connection connId. Cleared on teardown.
@@ -135,12 +146,44 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
+  const subscribeToEventBus = () => {
+    if (!deps.eventBus || !deps.flowIdsForBroadcast) return;
+    const flowIds = deps.flowIdsForBroadcast();
+    for (const flowId of flowIds) {
+      const off = deps.eventBus.subscribe(flowId, (event) => {
+        // Best-effort fan-out: if the transport is gone or not open, drop the
+        // event (no buffering for v1). Wrap send in try/catch so a throwing
+        // transport doesn't poison the EventBus subscriber list.
+        if (!transport || !transport.isOpen()) return;
+        try {
+          transport.send(makeEnvelope('sse', event, { to: 'all', from: 'host' }));
+        } catch (err) {
+          console.warn('[share] sse fan-out send failed:', err);
+        }
+      });
+      eventUnsubscribes.push(off);
+    }
+  };
+
+  const unsubscribeFromEventBus = () => {
+    const offs = eventUnsubscribes;
+    eventUnsubscribes = [];
+    for (const off of offs) {
+      try {
+        off();
+      } catch (err) {
+        console.warn('[share] eventBus unsubscribe failed:', err);
+      }
+    }
+  };
+
   const teardown = () => {
     const t = transport;
     const log = auditLog;
     transport = null;
     hostKey = null;
     auditLog = null;
+    unsubscribeFromEventBus();
     peerConnIds.clear();
     connPeers.clear();
     if (t) {
@@ -326,6 +369,10 @@ export function createShareController(deps: ShareDeps): ShareController {
               console.warn('[share] audit log open failed:', err);
               auditLog = null;
             }
+            // Subscribe to local runtime events BEFORE transitioning state so
+            // any event that fires synchronously from a state subscriber finds
+            // the bridge wired up.
+            subscribeToEventBus();
             setState({
               status: 'active',
               sessionId: body.sessionId,

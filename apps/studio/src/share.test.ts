@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'bun:test';
+import { createEventBus } from './events.ts';
 import type { AuditEntry, AuditLog, AuditLogOpts } from './share-audit.ts';
 import type { Envelope } from './share-envelope.ts';
 import type { RateLimitResult, RateLimiter } from './share-ratelimit.ts';
@@ -650,5 +651,83 @@ describe('createShareController rate-limit + audit', () => {
     await Promise.resolve();
     await Promise.resolve();
     expect(audit.closed).toBe(true);
+  });
+});
+
+describe('createShareController eventBus -> sse bridge', () => {
+  it('forwards eventBus events as sse envelopes after start()', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const eventBus = createEventBus();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      eventBus,
+      flowIdsForBroadcast: () => ['flow-a'],
+    });
+    await ctrl.start();
+
+    eventBus.broadcast({ type: 'node:running', flowId: 'flow-a', payload: { nodeId: 'n1' } });
+
+    expect(fake.sends()).toHaveLength(1);
+    const frame = fake.sends()[0];
+    if (!frame) throw new Error('expected sse frame');
+    expect(frame.v).toBe(1);
+    expect(frame.type).toBe('sse');
+    expect(frame.from).toBe('host');
+    expect(frame.to).toBe('all');
+    const payload = frame.payload as {
+      type: string;
+      flowId: string;
+      payload: { nodeId: string };
+      ts: number;
+    };
+    expect(payload.type).toBe('node:running');
+    expect(payload.flowId).toBe('flow-a');
+    expect(payload.payload).toEqual({ nodeId: 'n1' });
+    expect(typeof payload.ts).toBe('number');
+  });
+
+  it('does not forward events for flowIds outside flowIdsForBroadcast()', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const eventBus = createEventBus();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      eventBus,
+      flowIdsForBroadcast: () => ['flow-a'],
+    });
+    await ctrl.start();
+
+    // flow-b is not in the broadcast set; this should not reach the transport.
+    eventBus.broadcast({ type: 'node:running', flowId: 'flow-b', payload: { nodeId: 'n1' } });
+    expect(fake.sends()).toHaveLength(0);
+  });
+
+  it('tears down eventBus subscriptions on stop() so later broadcasts do not call transport.send', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const eventBus = createEventBus();
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+      eventBus,
+      flowIdsForBroadcast: () => ['flow-a'],
+    });
+    await ctrl.start();
+    expect(eventBus.subscriberCount('flow-a')).toBe(1);
+
+    await ctrl.stop();
+    expect(eventBus.subscriberCount('flow-a')).toBe(0);
+
+    eventBus.broadcast({ type: 'node:done', flowId: 'flow-a', payload: { nodeId: 'n1' } });
+    expect(fake.sends()).toHaveLength(0);
   });
 });
