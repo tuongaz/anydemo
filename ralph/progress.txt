@@ -11,6 +11,18 @@ Started: Sun 31 May 2026 16:17:07 AEST
 
 ---
 
+## 2026-05-31 - US-015
+- Added `apps/studio/src/share-envelope.ts`: `EnvelopeSchema` (Zod) with `v: literal(1)`, 14-variant `EnvelopeTypeSchema` matching the relay contract, `parseEnvelope` returning a discriminated `{ ok }` result with a path:message reason on failure, and `makeEnvelope<T>(type, payload, opts)` that defaults `from='host'` and only includes `id`/`to` when supplied (so `bun:test`'s `toEqual` round-trips cleanly).
+- Added `apps/studio/src/share-envelope.test.ts` with 9 cases: valid rpc parse, wrong-v rejected, unknown-type rejected, auth-host parse, auth-peer parse, non-object rejected, makeEnvelope defaults, makeEnvelope overrides, round-trip through parseEnvelope.
+- Files changed: `apps/studio/src/share-envelope.ts` (new), `apps/studio/src/share-envelope.test.ts` (new), `ralph/prd.json` (US-015 passes=true), `ralph/progress.txt`.
+- Quality: `bun test apps/studio/src/share-envelope.test.ts` 9/9 pass; `bun run format`, `bun run lint`, `bun run typecheck` all clean.
+- **Learnings for future iterations:**
+  - The 14 envelope `type` strings live in two places now — keep `ENVELOPE_TYPES` in share-envelope.ts in sync with the relay-side enum when phase 1 (relay) lands. The acceptance criteria list in US-015 is the canonical order.
+  - `z.unknown()` for `payload` is intentional: the relay is a dumb router and validation of `payload` shape lives in per-type sub-schemas (presence in US-019, etc.). Don't tighten it on the envelope itself.
+  - For `Envelope` round-tripping via `toEqual`, only set optional fields (`id`, `to`) when they're actually provided — Zod doesn't strip `undefined` keys, so `{ id: undefined }` !== `{}` under `toEqual`. The `if (opts.x !== undefined) env.x = opts.x` pattern keeps the shape minimal.
+  - `parseEnvelope` returns the first Zod issue formatted as `path.join('.') || '<root>'` + `: message`; transport-level `console.warn` should log only this `reason` (never the original payload) per the design doc's "logs only `{ type, from, to, sizeBytes }`" rule.
+---
+
 ## 2026-05-31 - US-014
 - Scaffolded `apps/studio/src/share.ts`: `ShareController`, `ShareState` discriminated union (idle/starting/active/stopping/error), `PeerSummary`, `ShareDeps`, and `createShareController` factory. Stub methods throw `Error('not-implemented')` per spec; `hostKey` lives only inside the closure (never on `state()`).
 - Added `apps/studio/src/share.test.ts` with 6 cases: idle initial state; synchronous initial subscribe delivery; working unsubscribe (idempotent); double-start under stub leaves state untouched; stop/kick/rotateUrl stubs throw without mutating state; `state()` never exposes hostKey.
