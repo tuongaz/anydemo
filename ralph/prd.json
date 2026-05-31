@@ -38,8 +38,8 @@
         "Tests pass"
       ],
       "priority": 2,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented apps/studio/src/share/sse-tap.ts + sibling test. createSseTap(events, opts) returns { start, stop, refreshFlows, snapshot }. start() is idempotent; refreshFlows is a no-op before start; per-flow add/remove diff keeps unchanged subscriptions stable. Ring buffer caps at opts.bufferSize ?? 50. snapshot() carries only node-level events with a string nodeId in payload. seq is a closure-scoped monotonic counter (per tap instance — process-wide will be wired in US-067 when share.ts owns the single tap)."
     },
     {
       "id": "US-067",

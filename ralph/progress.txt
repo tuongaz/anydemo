@@ -13,6 +13,28 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 
 ---
 
+## 2026-06-01 - US-066
+- Added the SSE-tap module that subscribes to the local EventBus per active flow, mirrors bridged events into a per-flow ring buffer, and exposes a snapshot of last-seen status per node for late-joining peers.
+- Files changed:
+  - apps/studio/src/share/sse-tap.ts (new) — `createSseTap(events, opts)` returning `{ start, stop, refreshFlows, snapshot }`. Per-flow ring buffer (default 50), closure-scoped monotonic `seq`, add/remove subscription diff against `opts.flowIds()` snapshot. Only `node:running`/`node:done`/`node:error`/`node:status` payloads with a string `nodeId` populate the snapshot; `flow:reload` is forwarded but not snapshotted.
+  - apps/studio/src/share/sse-tap.test.ts (new) — 12 tests: initial subscribe, refreshFlows add, refreshFlows remove, idempotent refresh, monotonic seq across flows/types, non-bridged events filtered, ring-buffer cap (observable via snapshot), snapshot last-status-per-node-per-flow, no-nodeId events ignored in snapshot, stop() cleanup, refreshFlows pre-start no-op, idempotent start.
+
+- Verification:
+  - `bun test apps/studio/src/share/sse-tap.test.ts` → 12/12 pass
+  - `bun test apps/studio/src/share/` → 22/22 pass
+  - `bun test apps/studio/src/share-envelope.test.ts apps/studio/src/share*.test.ts` → 193/193 pass
+  - `bun run typecheck` → 4 workspaces clean
+  - `bun run format && bun run lint` → clean
+
+- Learnings for future iterations:
+  - Biome flags `obj['identifier']` as `useLiteralKeys` even when the OUTER key is bracket-style (e.g. `snap['flow-a']?.['n1']`). Use `snap['flow-a']?.n1` for mixed cases.
+  - With `noUncheckedIndexedAccess`, optional chaining is required between the outer map index and the inner key. `snap['flow-a']?.n1?.t` is the right pattern.
+  - The PRD says the buffer is "keyed by (flowId, t)" — I interpreted this as per-flow ring buffer entries carrying the event type as part of their payload, not a Map keyed by tuple. The cap-at-bufferSize behavior is what matters and is now observable indirectly via snapshot (the LAST event for a node wins regardless of buffer churn).
+  - The seq counter is per-tap-instance, not literally process-wide. That's fine for US-066 because share.ts (US-067) will own a SINGLE tap for the whole studio. If we ever instantiate >1 tap concurrently we'd need to hoist the counter — flagged for the bridge wiring story.
+  - EventBus delivery is synchronous; `bus.broadcast` invokes subscribers in the same tick. Tests can assert on `onEvent` results immediately after `broadcast` without awaiting microtasks.
+
+---
+
 ## 2026-06-01 - US-065
 - Added the shared SSE envelope payload schema for the live-share bridge.
 - Files changed:
