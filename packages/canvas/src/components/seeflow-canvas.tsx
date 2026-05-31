@@ -39,6 +39,8 @@ import {
   useRef,
   useState,
 } from 'react';
+import { wrapIoAdapterAsCanvasAdapter } from '../adapter/io-adapter-wrap.ts';
+import type { IoAdapter } from '../adapter/io-adapter.ts';
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
 import type { LayoutNodeInput } from '../adapter/types.ts';
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
@@ -404,6 +406,17 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * consume it via `useCanvasStudio()` without prop drilling.
    */
   studioBaseUrl?: string;
+  /**
+   * US-036: optional non-throwing adapter seam for peer transports (live share).
+   * When provided, the canvas wraps it via `wrapIoAdapterAsCanvasAdapter` and
+   * uses the resulting `CanvasAdapter` for every internal adapter access. When
+   * BOTH `ioAdapter` and `adapter` are passed, `ioAdapter` wins (a one-time
+   * `console.warn` flags the precedence) — peer SPAs that import an existing
+   * REST adapter can shadow it without first detaching the original prop.
+   * Edit mode still requires at least one of `adapter` / `ioAdapter`; the
+   * discriminated `SeeflowCanvasProps` union enforces this at the call site.
+   */
+  ioAdapter?: IoAdapter;
   nodes: FlowNode[];
   connectors: Connector[];
   /** Currently selected node ids (US-019: multi-select). */
@@ -924,15 +937,17 @@ export interface SeeflowCanvasHandle {
 }
 
 /**
- * US-027: discriminated union — `adapter` is required in edit mode, optional
- * in view mode (a view-mode embedder has no mutations to persist) and in
- * mini mode (thumbnails dispatch nothing). All three arms share
- * {@link SeeflowCanvasBaseProps}; the discriminator + adapter shape are the
- * only difference. TypeScript narrows `props.adapter` to `CanvasAdapter` in
- * the edit branch without callers having to assert.
+ * US-027 / US-036: discriminated union — edit mode requires AT LEAST one of
+ * `adapter` (REST `CanvasAdapter`) or `ioAdapter` (peer-transport `IoAdapter`).
+ * View and mini modes accept both as optional — a view-mode embedder has no
+ * mutations to persist and a thumbnail dispatches nothing. All arms share
+ * {@link SeeflowCanvasBaseProps}; the discriminator + the adapter-shape
+ * presence are the only differences. TypeScript narrows the edit branch to
+ * one of the two adapter-bearing shapes without callers having to assert.
  */
 export type SeeflowCanvasProps =
-  | (SeeflowCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter })
+  | (SeeflowCanvasBaseProps & { mode: 'edit'; adapter: CanvasAdapter; ioAdapter?: IoAdapter })
+  | (SeeflowCanvasBaseProps & { mode: 'edit'; adapter?: CanvasAdapter; ioAdapter: IoAdapter })
   | (SeeflowCanvasBaseProps & { mode: 'view'; adapter?: CanvasAdapter })
   | (SeeflowCanvasBaseProps & { mode: 'mini'; adapter?: CanvasAdapter });
 
@@ -947,6 +962,14 @@ const MIN_DRAW_SIZE = 40;
 // entirely in favour of LINKFLOW_DEFAULT_SIZE. Above the threshold the user
 // gets the drag rectangle (clamped to LINKFLOW_MIN_SIZE).
 const LINKFLOW_NEAR_ZERO_DRAG = 4;
+
+/**
+ * US-036: one-shot guard so the "both `adapter` and `ioAdapter` provided —
+ * `ioAdapter` wins" warning only fires once per process, regardless of how many
+ * canvases mount with the dual configuration. Module-level (not per-instance)
+ * to avoid log spam during development hot-reload cycles.
+ */
+let hasWarnedDualAdapter = false;
 
 /**
  * US-008: canonical options for every fitView call originating from inside
@@ -1813,7 +1836,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // manager) route through `adapter.openFile` / `adapter.revealFile`. Every
     // other mutation site still goes through the explicit callback props the
     // parent supplies.
+    //
+    // US-036: `ioAdapter` is the peer-transport seam. When set, it shadows
+    // `adapter` via `wrapIoAdapterAsCanvasAdapter` and every downstream
+    // adapter access in this body reads from `effectiveAdapter` instead.
     adapter,
+    ioAdapter,
     topLeftSlot,
     topRightSlot,
     projectId,
@@ -1960,6 +1988,25 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       enableEmbed,
     ],
   );
+  // US-036: `effectiveAdapter` collapses the two adapter seams (`adapter` and
+  // `ioAdapter`) into the single CanvasAdapter surface every downstream usage
+  // reads from. When `ioAdapter` is present it wraps it via
+  // `wrapIoAdapterAsCanvasAdapter` and shadows any concurrently-passed
+  // `adapter` (a one-shot console.warn flags the precedence). useMemo (not
+  // useState) so the hook-shim test slot ordering stays intact — see the
+  // useState-placement rule in packages/canvas/CLAUDE.md.
+  const effectiveAdapter = useMemo<CanvasAdapter | undefined>(() => {
+    if (ioAdapter) {
+      if (adapter && !hasWarnedDualAdapter) {
+        hasWarnedDualAdapter = true;
+        console.warn(
+          '[SeeflowCanvas] Both `adapter` and `ioAdapter` were provided — `ioAdapter` takes precedence; the `adapter` prop is ignored.',
+        );
+      }
+      return wrapIoAdapterAsCanvasAdapter(ioAdapter);
+    }
+    return adapter;
+  }, [ioAdapter, adapter]);
   const isEditMode = mode === 'edit';
   // US-027: mirror `flags` into a ref so empty-deps useCallback bodies (like
   // `onWrapperContextMenuCapture` below) can read the live value without
@@ -3454,7 +3501,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // visual-only, not persisted (same philosophy as view-mode drags in US-027).
   // Anchors the laid-out cluster to its current top-left so the canvas
   // doesn't teleport on click, mirroring the host's onTidy convention.
-  const adapterMaybe = (props.adapter ?? null) as CanvasAdapter | null;
+  // US-036: prefer `effectiveAdapter` so peer-side adapters (wrapped from
+  // `ioAdapter`) participate in the tidy fallback. The wrapped adapter has no
+  // `computeLayout`, so peers stay disabled — matches the design (server-side
+  // layout is studio-only).
+  const adapterMaybe = (effectiveAdapter ?? null) as CanvasAdapter | null;
   const internalTidy = useMemo(() => {
     if (!adapterMaybe?.computeLayout) return undefined;
     return async () => {
@@ -4275,7 +4326,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // the picker falls back to the bundled lucide list either way. Appended at
   // the END of the body to preserve dispatcher-shim hook ordering (see the
   // useState-placement rule in packages/canvas/CLAUDE.md).
-  const iconsAdapter = adapter?.icons;
+  const iconsAdapter = effectiveAdapter?.icons;
   useEffect(() => {
     if (!iconsAdapter) return;
     let cancelled = false;
@@ -4976,7 +5027,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 flowId={sidebarDemoId}
                 node={sidebarNode}
                 connector={null}
-                adapter={adapter ?? null}
+                adapter={effectiveAdapter ?? null}
                 statusReport={statusReport}
                 onNameChange={onNameChange}
                 onDescriptionChange={onDescriptionChange}

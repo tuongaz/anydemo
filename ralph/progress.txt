@@ -3,10 +3,12 @@ Started: Sun 31 May 2026 18:44:56 AEST
 
 ## Codebase Patterns
 - `packages/canvas/src/index.ts` is the only public barrel — add new exports under the matching numbered section and keep it sorted (5 → 5b → 5c → 6 …).
-- Biome's `organizeImports` enforces alphabetical order on import groups; sort sibling type-only imports by source path or the lint fails.
+- Biome's `organizeImports` enforces alphabetical order on import groups; sort sibling type-only imports by source path or the lint fails. Value imports come BEFORE type imports from the same path family.
 - `bun test <path>` only works from the repo root (the bun-test cwd-filter trips up nested paths in `apps/*` / `packages/*`).
 - Adapter-layer types live in `packages/canvas/src/adapter/`. The canonical adapter shape is `CanvasAdapter` (throw-on-error); a non-throwing twin (`IoAdapter`) sits in a sibling file and is wrapped at the SeeflowCanvas prop boundary — never imported from the rendering layer.
 - `bun run format` MUST run before `bun run lint` — Biome only emits fixes when `--write` runs, and `lint` is the gate.
+- `apps/studio/src/server.test.ts` and `apps/studio/src/watcher.test.ts` have pre-existing flakiness (timeouts under parallel load and timing-sensitive fs-watcher assertions) that is independent of canvas-side work. Canvas-only changes only need canvas-suite green.
+- `Partial<SeeflowCanvasProps>` cannot be spread into a typed `SeeflowCanvasProps` literal once the union has overlapping mode arms — the test helper casts via `as unknown as SeeflowCanvasProps` to bypass arm-by-arm narrowing.
 ---
 
 ## 2026-05-31 — US-035
@@ -24,4 +26,28 @@ Started: Sun 31 May 2026 18:44:56 AEST
   - When mirroring `CanvasAdapter` method shapes, the result `T` for `updateNode`/`deleteNode`/etc is `void` (not absent) — the IoAdapter result envelope still wraps it as `{ ok: true, value: undefined }`.
   - The Biome `organizeImports` rule sorts type-only imports by source path, so put `./io-adapter.ts` before `./types.ts` even when CanvasAdapter is referenced first in code.
   - Tests for type-level invariants (e.g. "wrapping IoAdapter into CanvasAdapter still compiles") are best expressed as a real runtime wrapper function — any future drift breaks both compile and test in the same commit.
+---
+
+## 2026-05-31 — US-036
+- Added `wrapIoAdapterAsCanvasAdapter` helper at `packages/canvas/src/adapter/io-adapter-wrap.ts` — wraps the 9 IoAdapter methods into the throw-on-error CanvasAdapter contract; intentionally drops the optional CanvasAdapter fields (`playAction`, `openFile`, `revealFile`, `computeLayout`, `icons`) since peers don't expose them.
+- Added `ioAdapter?: IoAdapter` to `SeeflowCanvasBaseProps` with full JSDoc; expanded `SeeflowCanvasProps` discriminated union so edit mode now has two arms — `{ adapter: CanvasAdapter; ioAdapter?: IoAdapter }` and `{ adapter?: CanvasAdapter; ioAdapter: IoAdapter }` — enforcing "at least one required".
+- Computed `effectiveAdapter` via `useMemo` inside `SeeflowCanvasImpl` (right after the `flags` memo) — wraps ioAdapter when present, otherwise returns adapter. NO new useState slots (per the canvas's hook-shim placement rule).
+- Module-level `hasWarnedDualAdapter` flag emits a one-shot `console.warn` when BOTH `adapter` and `ioAdapter` are passed; `ioAdapter` wins.
+- Swapped the three internal `adapter`/`props.adapter` reads to `effectiveAdapter`: tidy fallback (`adapterMaybe`), `iconsAdapter`, and the DetailPanel's `adapter` prop. The wrapped adapter has no `icons`/`computeLayout`, so peer-mode tidy + icon pack tabs remain disabled — design intent.
+- Added 8 tests in `io-adapter-wrap.test.ts` covering: success path round-trip per method (createNode value, updateNodePosition value, void-returning methods, createConnector, uploadImage with File arg unchanged), failure path (rejected with Error(reason) on `{ ok: false }`), and a 9-method dispatch round-trip ordering test.
+- Added a new `US-036` describe block in `seeflow-canvas.test.tsx` with a tripwire-adapter test: when both `adapter` and `ioAdapter` are passed, the DetailPanel's `adapter` prop routes through `ioAdapter.updateNodePosition` and the tripwire proxy NEVER fires — proves the wrap routing is load-bearing and that ioAdapter wins precedence.
+- Files changed:
+  - `packages/canvas/src/adapter/io-adapter-wrap.ts` (new)
+  - `packages/canvas/src/adapter/io-adapter-wrap.test.ts` (new)
+  - `packages/canvas/src/components/seeflow-canvas.tsx` (added prop, useMemo, swapped adapter reads, expanded union)
+  - `packages/canvas/src/components/seeflow-canvas.test.tsx` (added US-036 describe, cast `props` literal via `as unknown as` to dodge union-arm narrowing)
+  - `ralph/prd.json` (US-036 passes → true)
+- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all workspaces clean, `bun test packages/canvas/` 1261 pass / 0 fail. apps/studio's `server.test.ts` + `watcher.test.ts` failures are pre-existing on the clean tree (timing-flaky).
+- **Learnings for future iterations:**
+  - The hook-shim test pattern's `useMemo: (fn) => fn()` means new `useMemo` calls execute every render in tests — no slot ordering to worry about, unlike `useState` which is index-sensitive. Free to add new `useMemo` anywhere.
+  - When you extend the `SeeflowCanvasProps` discriminated union with overlapping arms (e.g. two `mode: 'edit'` arms), the `callSeeflowCanvas` test helper's `Partial<SeeflowCanvasProps>` spread loses arm-by-arm narrowing — solve with `as unknown as SeeflowCanvasProps` on the props literal instead of rewriting `LegacyOverrides`.
+  - The "at-least-one-of" constraint pattern in a discriminated union: two arms with the SAME discriminator but different "required" fields — `{ adapter: T; ioAdapter?: U }` and `{ adapter?: T; ioAdapter: U }`. Cleaner than a single arm + runtime validation.
+  - `console.warn` in a hook-shim test prints to the test output but doesn't fail the assertion — useful for the "warn once" gate; the noise is acceptable.
+  - `wrapIoAdapterAsCanvasAdapter` does NOT carry the optional CanvasAdapter fields (`playAction`, `openFile`, `revealFile`, `computeLayout`, `icons`). Don't add them with no-op stubs — letting them be undefined drives feature-detection elsewhere (e.g. peer-mode tidy stays disabled, peer-mode icon pack tabs stay collapsed).
+  - The "module-level guard for one-shot warn" pattern (`let hasWarnedDualAdapter = false`) is the right shape: per-process not per-instance, so dev-mode HMR remounts don't spam the console.
 ---
