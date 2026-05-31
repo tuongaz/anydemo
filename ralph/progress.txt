@@ -1,221 +1,214 @@
 # Ralph Progress Log
-Started: Mon  1 Jun 2026 03:11:50 AEST
+Started: Mon  1 Jun 2026 04:46:20 AEST
 ---
 
 ## Codebase Patterns
-- Phase-8 stories alternate between two repos: `/Users/tuongaz/dev/seeflow` (studio + viewer UI) and `/Users/tuongaz/dev/seeflow-viewer/cloud` (AWS CDK + lambdas). Always cd into the right one before running tests/typecheck. PRD branchName `ralph/live-share-phase-8` applies to BOTH repos — create the branch in each on first touch.
-- `SessionRow` in `cloud/lambda/share/shared/sessions.ts` is the DDB row contract. When you add a required field, EVERY local `row()`/`Partial<SessionRow>` fixture in the test files needs the new default OR typecheck fails (currently: files-proxy.test.ts, ws-disconnect.test.ts, ws-default.test.ts, ws-default.cursor.test.ts, ws-default.presence.test.ts).
-- DDB UpdateExpression composition: `ADD tokenVersion :one SET lastActivity = :l, #ttl = :ttl` is valid — keywords (SET/ADD/REMOVE/DELETE) each start their own clause. Use `ReturnValues: 'UPDATED_NEW'` + read `Attributes.<field>` to get the post-increment value.
-- The `fakeDocSend` mock in cloud tests is hand-rolled — it inspects `UpdateExpression` strings to apply mutations. When you add a new UpdateCommand shape (e.g., `list_append(if_not_exists(...))`), extend the mock's branch list in sessions.test.ts AND keep ws-default.test.ts in sync if it routes the same expression.
-- Peer JWT payload (`PeerPayload` in jwt.ts) round-trips through `mintPeerToken` / `verifyPeerToken`. Every test that mints a token (jwt.test.ts, ws-default.test.ts, ws-default.presence.test.ts) needs the new fields in its payload literal.
-- HTTP-API share lambdas register via `mkShareLambda(id, file)` + an `httpApi.addRoutes(...)` call in `cloud/lib/seeflow-stack.ts`. Add the fn to the `for (const fn of [...])` loop to get `shareSessions.grantReadWriteData`. Anything that calls back into WebSocket (PostToConnection / DeleteConnection) also needs `shareWsApi.grantManageConnections(fn)`.
-- HTTP-API share lambdas (non-WS) DON'T receive `event.requestContext.domainName/stage` for the WebSocket API — they must construct the ApiGatewayManagementApiClient endpoint themselves. Easiest: read `process.env.SHARE_WS_URL` (set by `sharedShareEnv`) and convert `wss://` → `https://`.
-- Lambda deps-injection pattern: export `_setDepsForTest(d)` so tests can stub `postToConnection`/`deleteConnection` without touching `ApiGatewayManagementApiClient.prototype.send`. Pattern matches files-proxy + ws-default.
-- The seeflow-viewer git root is `/Users/tuongaz/dev/seeflow-viewer`, NOT `cloud/`. `git add -A` from inside cloud will pick up unrelated `.seeflow/` scaffolding sitting in the parent. Always check `git status` and unstage non-cloud files before committing.
-
+- Phase 9 work lives in a DIFFERENT repo: `/Users/tuongaz/dev/seeflow-viewer/cloud` (not this worktree).
+- Branch `ralph/live-share-phase-9` was created from `ralph/live-share-phase-8`; previous phases form a chain.
+- Cloud package script: `bun test` from `cloud/` discovers all `*.test.ts`. Run typecheck with `bun run typecheck` (just `tsc --noEmit`).
+- Test fixture pattern: `ws-default.test.ts` uses a `store` Map<sessionId, SessionRow>, mocked `doc.send` switch on `cmd.constructor.name`, mocked `ApiGatewayManagementApiClient.prototype.send` recording `postCalls[]`. Add helper `row(over)` for SessionRow fixtures.
+- `event(connId, body)` helper accepts a string body OR an object; passing a string skips JSON.stringify (use it for malformed/oversized body tests).
+- Hardening limits live in `cloud/lambda/share/shared/limits.ts` (`LIMITS` const). `envelope.ts` re-exports `MAX_FRAME_BYTES` from it so host + relay share one constant.
+- `.seeflow/` directory in seeflow-viewer is unrelated SeeFlow MCP scratch data — do NOT include in PRD commits.
+- `expect(x).toBe(LITERAL_NUMBER)` against a `LIMITS.*` value typed as a literal needs `expect<number>(x)` to widen the overload.
+- Rate limit shape: `rateWindow: { [connId]: { frames, bytes, windowStartSec } }` lives on session row. Per-conn frame cap = `LIMITS.FRAMES_PER_SEC_PER_CONN * 60` (1800/min). Session byte cap = sum across conns vs `LIMITS.MAX_BYTES_PER_MIN_PER_SESSION` (10 MB/min).
+- Replay-protection shape: `seenJwtNonces: Record<nonce, expSec>` lives on the session row. `createSeenNonces(sessionId)` factory (in `shared/jwt-replay.ts`) returns the `SeenNonces` interface from `shared/jwt.ts`. PeerPayload now carries `nonce: string` (16 url-safe chars from 12 random bytes). Map pruned on every record() touch and capped at 256 entries (oldest-exp first eviction).
+- Impersonation hardening (US-090): `routeFrame` always sets `env.from = connId` after `findConnRole`. Peers cannot send `kick`/`files-manifest`/`rpc-result` (403 host-only-type). Peers sending `to:'all'` get rewritten to `to:'host'` (only host broadcasts). Specific connId targets that don't match `session.hostConnId`, `session.peers[*]`, or `PROXY_FROM` ('<proxy>') return 404 unknown-target. Cursor handler still sets `routed.to='all'` AFTER the rewrite, so peer cursor broadcast is preserved.
+- Auth-failure structured log shape: `console.log(JSON.stringify({metric:'share.auth_failure', reason, sessionId}))`. Emitted on verifyPeerToken non-ok (`reason: 'malformed'|'bad-signature'|'expired'`, sessionId null) and on replay (`reason: 'replay-detected'`, sessionId set). NOT emitted for kicked/token-rotated/no-session 401s — those have their own status bodies.
+- `recordFrame` uses `SET rateWindow.#c = :w` conditional on `attribute_exists(rateWindow)`, falling back to `SET rateWindow = :rw` to initialize. Mocks must persist both UpdateExpression branches and honor the ConditionalCheckFailedException.
+- New 429 path on `routeFrame` emits structured log `{metric:'share.rate_limited', sessionId, connId, reason}` and best-effort kick frame back to offender. Body is `'rate-limited:rate'` or `'rate-limited:bytes'`.
+- Existing test mocks that don't handle the new rateWindow UpdateExpression silently no-op — that's fine because the new rate-limit guard only trips when `rateWindow` is persisted in the store. Each existing test stays under 1800 frames/min on a single conn.
 ---
 
-## 2026-06-01 - US-075
-- Implemented kicked-peer set + tokenVersion on ShareSessions schema.
-- Files changed in /Users/tuongaz/dev/seeflow-viewer/cloud:
-  - lambda/share/shared/sessions.ts: SessionRow gains `kickedPeerIds: string[]` and `tokenVersion: number`; `createSession` defaults to `[]` + `1`; added `markPeerKicked` (list_append with if_not_exists) and `bumpTokenVersion` (`ADD tokenVersion :one`, returns `UPDATED_NEW.tokenVersion`).
-  - lambda/share/shared/jwt.ts: `PeerPayload.tv: number` field added; `mintPeerToken` and `verifyPeerToken` round-trip it inside the JWT body.
-  - lambda/share/session-join.ts: reads `session.tokenVersion ?? 1` and passes it as `tv` when minting peer JWTs.
-  - lambda/share/ws-default.ts: `handleAuthPeer` rejects with 401 body `'kicked'` if peerId is in `session.kickedPeerIds`, and 401 body `'token-rotated'` if `verify.payload.tv !== session.tokenVersion`. Both checks run before `addPeer`.
-  - Test files updated: shared/sessions.test.ts (new markPeerKicked + bumpTokenVersion cases, mock handles list_append + ADD tokenVersion), shared/jwt.test.ts (tv assertion), ws-default.test.ts (kicked/token-rotated 401 cases + row() defaults), ws-default.cursor.test.ts, ws-default.presence.test.ts, files-proxy.test.ts, ws-disconnect.test.ts (row() defaults).
-- bun test (cloud): 147 pass / 0 fail. bun run typecheck (cloud): clean.
+## 2026-06-01 05:30 AEST - US-087
+- Implemented DDB-backed per-conn frame + per-session byte rate limiter wired into routeFrame.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/shared/rate-limit.ts (new) — `TokenBucket` class + `recordFrame(sessionId, connId, sizeBytes)` with `RateWindowEntry` shape and `{ok:true} | {ok:false, reason:'rate'|'bytes'}` return type.
+  - cloud/lambda/share/shared/rate-limit.test.ts (new) — 7 tests covering TokenBucket (start/empty/refill/cap) and recordFrame (missing row, init, accumulate, rate cap, byte cap across conns, window reset).
+  - cloud/lambda/share/ws-default.ts — imports `recordFrame`; calls it after `findConnRole` in routeFrame; on `ok:false` logs `share.rate_limited` metric line, best-effort posts a kick envelope to the offender, returns `{statusCode:429, body:'rate-limited:<reason>'}`.
+  - cloud/lambda/share/ws-default.test.ts — extended fakeDocSend mock to persist `SET rateWindow.#c = :w` (with ConditionalCheckFailedException when rateWindow attribute is absent) and `SET rateWindow = :rw` (init); new `ws-default frame rate limiter` describe block fires 100 presence frames in a tight loop with rateWindow pre-seeded one below the per-min cap and asserts ≥1 429 response, persisted cap saturation, and at least one kick frame back to the offender.
+- Tests: `bun test lambda/share/shared/rate-limit.test.ts lambda/share/ws-default.test.ts` → 32/32 pass.
+- Full suite: `bun test` → 193/193 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - When adding fields to SessionRow, 5 test files have local `row()` helpers — search for `Partial<SessionRow>` to find them all.
-  - The DDB fakeDocSend mock pattern in tests is fragile: extend the if/else branches on `UpdateExpression` string matches when adding new mutations.
-  - `mintPeerToken` is called in 4 places (3 test files + session-join.ts). Adding fields to `PeerPayload` requires updating all call sites; jwt.ts uses `Omit<PeerPayload, 'exp'>` so non-exp fields must all be supplied.
-  - The cwd resets across Bash calls in this harness — every shell command targeting the cloud repo needs an explicit `cd /Users/tuongaz/dev/seeflow-viewer/cloud`.
-  - The seeflow-viewer branch `ralph/live-share-phase-8` was created on first use (from `ralph/live-share-phase-6`).
+  - The existing `consumeRateToken` in ws-default.ts is an in-memory bucket for cursor/presence broadcast quotas — leave it alone. The new `recordFrame` is a DDB-backed per-min counter; both run on routing.
+  - When pre-seeding `rateWindow` in tests through the `row()` helper, add `// @ts-expect-error rateWindow lives only on the persisted shape, not the typed Row` — SessionRow doesn't (yet) declare `rateWindow`. We intentionally avoid widening the shared type since the field is internal to the rate limiter and pruned by TTL.
+  - The 60-second cap windows reset via `now - windowStartSec > 60` — failing frames do NOT increment the counter (only successful ones write back), so a saturated conn stays exactly at cap until window rollover.
+  - `try { update with attribute_exists(rateWindow) } catch { init with SET rateWindow = :rw }` is the simplest way to bootstrap the nested map on first touch without modifying createSession.
+  - The structured log `{metric:'share.rate_limited', ...}` is the EMF-style line that US-092's CloudWatch MetricFilter will key off — keep the `metric` field name stable.
 ---
 
-## 2026-06-01 - US-076
-- Implemented POST /api/share/kick relay endpoint.
-- Files added/changed in /Users/tuongaz/dev/seeflow-viewer:
-  - cloud/lambda/share/session-kick.ts: handler validates `{sessionId, hostKey, peerId}`, timingSafeEqual on hostKey (401 mismatch), 404 on missing session, 400 on missing fields / invalid JSON; finds every connId in `session.peers` whose `peerId === body.peerId`, posts `{v:1,type:'kick',from:'host',to:connId,payload:{reason:'kicked-by-host'}}` then DeleteConnection on each; calls `markPeerKicked` once + `removePeer` per connId; returns `{ok:true, kicked:<count>}` (0 when no match, no DDB mutation in that case). Uses deps-injection (`_setDepsForTest`) so tests stub postToConnection/deleteConnection. wsEndpoint built by converting `SHARE_WS_URL` (wss://) → https://. Logs `{type, from, to, sizeBytes}` per kick frame (no payload).
-  - cloud/lambda/share/session-kick.test.ts: 6 cases — happy path (2 matching connIds + 1 unrelated peer stays), wrong hostKey 401, unknown session 404, peer not found 200/0, missing fields 400, invalid JSON 400.
-  - cloud/lib/seeflow-stack.ts: new `ShareSessionKickFn` via `mkShareLambda`, added to DDB `grantReadWriteData` loop, granted `shareWsApi.grantManageConnections`, registered HTTP route `POST /share/kick`.
-  - cloud/lib/seeflow-stack.share.test.ts: asserts `POST /share/kick` route exists + kick lambda has ShareSessionsTable + ManageConnections grants.
-- bun test (cloud): 155 pass / 0 fail. bun run typecheck (cloud): clean.
+
+## 2026-06-01 05:10 AEST - US-086
+- Implemented per-session peer count cap on auth-peer in ws-default handler.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/ws-default.ts — `handleAuthPeer` now counts `Object.keys(session.peers).length` after the existing kicked/tokenVersion checks; if >= LIMITS.MAX_PEERS_PER_SESSION (20), best-effort PostToConnection a `kick` envelope `{ reason:'peer-cap-reached', cap:20 }` to the offending connId, then returns `{ statusCode: 429, body: 'peer-cap-reached' }` before any `addPeer` write.
+  - cloud/lambda/share/ws-default.test.ts — two new tests in the `ws-default auth-peer` describe block: at-cap (20 peers) → 429 + addPeer NOT called + courtesy kick frame on postCalls; under-cap (19 peers) → 200 + addPeer called and 20 peers persisted.
+- Tests: `bun test lambda/share/ws-default.test.ts` → 22/22 pass.
+- Full suite: `bun test` → 183/183 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - When the `cloud/` directory is NOT the git root, `git add -A` from cloud will pick up `.seeflow/` scaffolding sitting in the seeflow-viewer parent. Reset those before commit.
-  - HTTP-API lambdas calling WebSocket need their own ApiGatewayManagementApiClient endpoint — construct via `wsUrl.replace(/^wss:\/\//, 'https://')` from `SHARE_WS_URL` env (sharedShareEnv already provides it).
-  - `markPeerKicked` (DDB UpdateExpression with `list_append(if_not_exists(...))`) is correctly handled by the existing test-mock branch (`expr.includes('kickedPeerIds = list_append')`). When adding a new test file, copy the relevant branches from `shared/sessions.test.ts`.
-  - The `findResources` + `JSON.stringify(p.Properties.Roles).includes('ShareSessionKickFn')` pattern is how share infra tests assert per-lambda grants — `Roles` references the role logical id, which CDK derives from the function logical id.
-  - HTTP-API event in tests is just `{ body: '...' }`; no need to mock requestContext.
+  - `handleAuthPeer` already calls `getBySessionId` and binds the row to `session` — additional caps slot in BEFORE `addPeer` rather than refetching.
+  - `RELAY_FROM` (`<relay>`) is already defined at top of ws-default.ts as the sentinel for relay-originated envelopes; reuse it for courtesy frames (the PRD literal "relay" would work too because envelope `from` is just `z.string()`).
+  - Best-effort PostToConnection: wrap `post()` in a try/catch with an empty catch — `post()` already swallows GoneException internally but other AWS errors still surface; the catch keeps the 429 response path safe.
+  - The `postCalls` fixture captures the courtesy kick frame regardless of GoneException flow because the mock records the call BEFORE checking goneSet.
 ---
 
-## 2026-06-01 - US-077
-- Implemented POST /api/share/rotate relay endpoint.
-- Files added/changed in /Users/tuongaz/dev/seeflow-viewer:
-  - cloud/lambda/share/session-rotate.ts: handler validates `{sessionId, hostKey}`, timingSafeEqual on hostKey (401), 404 on missing, 400 on missing fields / invalid JSON. Mints new token via `newToken()` (injected for tests), bumps `tokenVersion` via `bumpTokenVersion`, then `rotateToken` writes the new `token` while refreshing lastActivity/ttl. Iterates every connId in `session.peers`, posts `{v:1,type:'kick',from:'host',to:connId,payload:{reason:'token-rotated'}}` + DeleteConnection + removePeer per conn. Returns `{ok:true, token, url:'https://share.seeflow.dev/<token>'}`. Uses deps-injection (`_setDepsForTest`) for post/delete/newToken stubs. Logs `{type, from, to, sizeBytes}` per kick frame (no payload).
-- cloud/lambda/share/shared/sessions.ts: new `rotateToken(sessionId, newToken)` doing `SET #tk = :t, lastActivity = :l, #ttl = :ttl`.
-- cloud/lambda/share/shared/sessions.test.ts: rotate-token round-trip case; mock UpdateCommand handler now recognizes `#tk = :t`.
-- cloud/lambda/share/session-rotate.test.ts: 6 cases — happy path (token swap, both peers booted with token-rotated reason, tokenVersion 1→2, peers map cleared), wrong hostKey 401, unknown session 404, missing fields 400, invalid JSON 400, mintedAt-version-fails-after-rotate semantic check, empty-peers-map still rotates.
-- cloud/lib/seeflow-stack.ts: new `ShareSessionRotateFn` via `mkShareLambda`, added to DDB `grantReadWriteData` loop, granted `shareWsApi.grantManageConnections`, registered HTTP route `POST /share/rotate`.
-- cloud/lib/seeflow-stack.share.test.ts: asserts `POST /share/rotate` route + lambda has ShareSessionsTable + ManageConnections grants.
-- bun test (cloud): 165 pass / 0 fail. bun run typecheck (cloud): clean.
+## 2026-06-01 04:55 AEST - US-085
+- Implemented LIMITS constants module + frame-size cap on ws-default handler.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/shared/limits.ts (new) — LIMITS const with 8 hardening caps
+  - cloud/lambda/share/shared/limits.test.ts (new) — constant assertions + MAX_FRAME_BYTES re-export check
+  - cloud/lambda/share/shared/envelope.ts — added `MAX_FRAME_BYTES` re-export from limits.ts
+  - cloud/lambda/share/ws-default.ts — guard at top of handler returns 413 'frame-too-large' before JSON.parse when body > LIMITS.MAX_FRAME_BYTES
+  - cloud/lambda/share/ws-default.test.ts — new `ws-default frame-size cap` describe block asserts 413 + no doc.send / postCalls
+- Tests: `bun test lambda/share/shared/limits.test.ts lambda/share/ws-default.test.ts` → 23/23 pass.
+- Full suite: `bun test` → 181/181 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - `rotateToken` updates `token` via `#tk` (same name used by the `token-index` GSI). DDB allows UpdateCommand on GSI partition-key fields; the GSI re-indexes asynchronously off the new value.
-  - When extending sessions.test.ts mock branches for a new UpdateExpression shape, the `#tk = :t` check must run alongside the other branches so the same `:l`/`:ttl` updates still apply.
-  - Deps-injection pattern extends cleanly: include `newToken: () => string` in the deps shape so tests can pin the minted token without mocking `crypto.randomBytes`.
-  - Pattern for two-step DDB mutation: call `bumpTokenVersion` THEN `rotateToken` — separate atomic updates keep the version + token writes independently observable in tests.
+  - The PRD's working dir is `/Users/tuongaz/dev/seeflow-viewer/cloud` — a separate git repo from this Ralph worktree. Always cd there for cloud lambda edits.
+  - `LIMITS.*` values are inferred as narrow literal numbers (because of `as const`). Tests that compare against them via `toBe(256 * 1024)` need `expect<number>(value)` to widen the overload.
+  - Use the `event(connId, bodyString)` helper with a raw string to simulate malformed/oversized bodies that should be rejected before JSON.parse.
+  - The `.seeflow/` directory created by the MCP server in seeflow-viewer is NOT part of feature work — exclude from PRD commits.
 ---
 
-## 2026-06-01 - US-078
-- Implemented host-side audit log writer (createAuditLogger) in /Users/tuongaz/dev/seeflow.
-- Files changed:
-  - apps/studio/src/share-audit.ts: renamed existing `AuditEntry` -> `FrameAuditEntry` (callers in share.ts / share.test.ts updated). Added new US-078 `AuditEntry` interface (`{ts, peerId, displayName, kind, op?, reason?, details?}`) plus `AuditKind` union (`rpc-accept|rpc-reject|kick|rotate|kill-switch|host-start|host-stop|peer-join|peer-leave`). Added `createAuditLogger(sessionId, root?)` returning `{append, list, close}`. `append`: auto-stamps `ts`, writes one JSON line via `fs/promises.appendFile` (kernel O_APPEND), with an in-process per-file Promise chain so concurrent callers can't interleave. `list({limit=200, cursor=0})` reads file via `readFile`, walks newline-delimited lines from the byte offset, returns up to `limit` entries plus `nextCursor` (byte offset to resume, null on EOF). `close()` waits for the in-flight append chain. `~/.seeflow/share-history/` default root via `homedir()`; per-call validation reuses existing `isSafeSessionId`.
-  - apps/studio/src/share-audit.test.ts: new `createAuditLogger` describe block — 7 cases: append+ts auto-stamp; recursive mkdir; list returns empty on missing file; 1000 appends -> 5 pages of 200 (cursor pagination); default limit 200; 10x20 concurrent appends preserve all 200 entries with no partial-line corruption; rejects unsafe sessionIds.
-  - apps/studio/src/share.ts: import + `audit(entry)` signature switched from `AuditEntry` to `FrameAuditEntry`.
-  - apps/studio/src/share.test.ts: same rename for fixtures.
-- bun test: 2859 pass / 1 skip / 0 fail across 167 files. bun run typecheck clean. bun run lint clean.
+
+## 2026-06-01 06:00 AEST - US-088
+- Enforced per-intent + per-session upload-byte limits in ws-default `handleFileUploadIntent`.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/shared/limits.ts — added MAX_SESSION_UPLOAD_TOTAL_BYTES = 1_073_741_824 (1 GB).
+  - cloud/lambda/share/shared/limits.test.ts — assertion on the new constant.
+  - cloud/lambda/share/shared/sessions.ts — added `uploadBytesUsed?: number` to SessionRow and a `reserveUploadBytes(sessionId, delta, cap)` helper. Helper issues a conditional UpdateExpression `SET uploadBytesUsed = if_not_exists(uploadBytesUsed, :z) + :s` with ConditionExpression `attribute_not_exists(uploadBytesUsed) OR uploadBytesUsed + :s <= :cap`; on ConditionalCheckFailedException returns `{ ok:false, reason:'cap-reached' }`.
+  - cloud/lambda/share/ws-default.ts — `handleFileUploadIntent` now (a) returns 400 'invalid-upload-intent' on zod failure (previously returned 200 OK silently), (b) returns 413 'upload-too-large' when payload.size > LIMITS.MAX_UPLOAD_BYTES (no forward to host), (c) calls reserveUploadBytes before the inline-vs-S3 branch — on cap-reached returns 413 'session-upload-cap-reached'.
+  - cloud/lambda/share/ws-default.test.ts — extended fakeDocSend mock to honour the conditional `uploadBytesUsed` UpdateExpression and throw ConditionalCheckFailedException when the new tally would exceed `:cap`. Added three tests under `ws-default file frame routing`: oversized (11 MB → 413, no postCalls); 5 MB happy path (uploadBytesUsed incremented to 5 MB); pre-seeded uploadBytesUsed = 1_073_000_000 + 1 MB intent → 413 session-upload-cap-reached.
+- Tests: `bun test lambda/share/shared/limits.test.ts lambda/share/ws-default.test.ts` → 29/29 pass.
+- Full suite: `bun test` → 196/196 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - The existing `share-audit.ts` already housed THREE entry shapes (frame, rpc, file-upload). US-078 introduces a FOURTH on the same JSONL file (kind-based). Readers must treat each line as the union — there is no per-file schema discriminator beyond the field shape.
-  - To avoid the name clash, rename existing `AuditEntry` -> `FrameAuditEntry` (3 callers: share.ts import, share.ts `audit` fn arg, share.test.ts `AuditCapture` type + entries arrays). Don't rename `AuditLog/AuditLogOpts/createAuditLog` since they don't conflict.
-  - Pattern for atomic per-file append serialization in Bun: `const prev = map.get(key) ?? Promise.resolve(); const task = prev.then(() => appendFile(...)); map.set(key, task.then(()=>undefined, ()=>undefined)); await task;` — the lock-map promise must NEVER reject (subsequent appenders chain off it) but the inner `task` does propagate errors to the caller. Stay away from a single chain that rejects — one bad write would poison every subsequent append.
-  - Biome's import-sorting rule fires on type-only imports too; keep `import type { A, B, C }` alphabetical within the brace group (same as value imports).
-  - `bun test` (default) runs all `*.test.ts` across the workspace from repo root — useful for cross-package safety net. Integration `.it.ts` files are NOT picked up (need `bun run test:it:bun`).
+  - `FileUploadIntentPayloadSchema` was ALREADY defined in envelope.ts with stricter requirements (NodeIdSchema regex + Sha256HexSchema) than the PRD's loose narrow schema. Reused the existing schema rather than narrowing it — the PRD's "Add narrow Zod schema" was actually a requirement-met no-op.
+  - Two upload-byte counters now coexist on SessionRow: `stagedBytes` (S3 multipart staging quota, "session-quota" reason, ~1 GB hard limit unchanged) AND `uploadBytesUsed` (per-intent declared total, "session-upload-cap-reached" reason, LIMITS.MAX_SESSION_UPLOAD_TOTAL_BYTES). They look similar but are distinct: stagedBytes only increments on the S3 branch (>256 KB); uploadBytesUsed increments on ALL valid intents regardless of size, to throttle declared traffic.
+  - Order in handleFileUploadIntent matters: zod → MAX_UPLOAD_BYTES check → reserveUploadBytes → existing stagedBytes branch. Existing "session-quota" test stays green because peerRow leaves uploadBytesUsed undefined, so the new conditional always passes through to the existing stagedBytes path.
+  - When pre-seeding `(session as any).uploadBytesUsed = N` in tests, cast through `any` — SessionRow declares it optional but TS still narrows on direct assignment when the row literal omitted it.
+  - PRD acceptance criterion `nodeId: z.string()` is intentionally looser than the existing NodeIdSchema regex. Don't downgrade the existing schema — the tighter check has been protecting routing for prior phases.
 ---
 
-## 2026-06-01 - US-079
-- Wired Phase-8 kick/rotate/audit through host-side ShareController + local API.
-- Files changed in /Users/tuongaz/dev/seeflow:
-  - apps/studio/src/share.ts:
-    - ShareDeps gains `auditLoggerFactory?: (sessionId, root?) => AuditLogger`; closure owns `auditLogger: AuditLogger | null` alongside the existing FrameAuditEntry log. Created on transport-open (idle->active) right next to `auditLog`; closed in `teardown`.
-    - `auditKind(entry)` helper: fire-and-forget `auditLogger.append(...)` swallowing rejections with console.warn — never blocks RPC dispatch on disk I/O.
-    - host-start written immediately after the audit logger opens; host-stop written at the top of the active->stop branch (BEFORE teardown so the logger is still open).
-    - presence/join + presence/leave handlers also write `peer-join` / `peer-leave` AuditEntries (in addition to the existing FrameAuditEntry accept lines).
-    - dispatchRpcFrame: on outcome.ok appends `{kind:'rpc-accept', peerId, displayName, op, details:{flowId, nodeId?}}`; on reject appends `{kind:'rpc-reject', peerId, displayName, op, reason}` — coexists with the existing RpcAuditEntry line so consumers can filter either schema.
-    - `kick(peerId)`: now requires `hostKey`; throws `share-peer-not-found` locally (with `rpc-reject` audit) when peer not in connPeers; otherwise POSTs `${relayHttpUrl}/api/share/kick` with `{sessionId, hostKey, peerId}`. On HTTP failure logs `rpc-reject` and rethrows; on success logs `{kind:'kick', peerId, displayName}`.
-    - `rotateUrl()`: POSTs `${relayHttpUrl}/api/share/rotate` with `{sessionId, hostKey}`; reads `body.token`; rebuilds url via `${shareUrlBase}/${token}`; updates `current.token` + `current.url` in place via setState (preserves sessionId — relay rotates the same session). Local peers/connPeers/peerSseQueues all cleared because the relay kicks every peer as part of the rotation. Logs `{kind:'rotate', peerId:null, displayName:null}`.
-    - Exposes new `audit: { list(opts) }` on the ShareController interface — wraps the AuditLogger; returns empty page when no session is active.
-  - apps/studio/src/api.ts: added `GET /api/share/audit?cursor=&limit=`. Returns 503 when no controller, 400 when state != active, otherwise delegates to `share.audit.list({limit?, cursor?})` and echoes `{entries, nextCursor}`. limit/cursor are parsed as integers — non-numeric input is silently treated as undefined so the logger picks its own default (200 / 0).
-  - apps/studio/src/share.test.ts:
-    - `noopAuditLoggerFactory` added to baseDeps so existing tests don't accidentally write to `~/.seeflow/share-history`.
-    - `makeAuditLoggerCapture()` helper mirrors the existing `makeAuditCapture` pattern but for the kind-shaped log.
-    - Existing kick tests rewritten to assert the relay HTTP POST + audit instead of a WS envelope. New "relay rejection rethrows and records rpc-reject audit entry" case added (502 path).
-    - rotateUrl test rewritten: same controller instance, only one transport, token+url swap in place, peers cleared, rotate audit recorded.
-    - Removed unused `mockFetchSequence` helper.
-  - apps/studio/src/api.test.ts:
-    - `FakeShare` + `createFakeShare(init?)` extended to accept an `audit` override and default to a no-op list.
-    - New describe('GET /api/share/audit') with 200 (active session returns `{entries,nextCursor}`) and 400 (idle session) cases.
-- bun test (apps/studio + workspace): 2862 pass / 1 skip / 0 fail. bun run typecheck clean. bun run format clean. bun run lint clean.
+
+## 2026-06-01 06:30 AEST - US-089
+- Hardened peer JWT verification with nonce-based replay protection + EMF-style auth-failure metric on the relay.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/shared/jwt.ts — added `nonce: string` to `PeerPayload` (generated by `mintPeerToken` as 16 url-safe chars from 12 random bytes); exported `SeenNonces` interface `{ has(nonce): Promise<bool>; record(nonce, expSec): Promise<void> }`.
+  - cloud/lambda/share/shared/jwt-replay.ts (new) — `createSeenNonces(sessionId)` factory backed by the session row's `seenJwtNonces` map. `record()` reads current map, prunes entries with `exp <= now`, caps at 256 (oldest-exp first eviction), writes back via `SET seenJwtNonces = :n`. Also exports `pruneAndCap` and `MAX_NONCES` for testability.
+  - cloud/lambda/share/shared/sessions.ts — added `seenJwtNonces?: Record<string, number>` to SessionRow (no schema migration; field is optional and DynamoDB tolerates missing attributes).
+  - cloud/lambda/share/ws-default.ts — imported `createSeenNonces`; `handleAuthPeer` now (1) emits `share.auth_failure` structured log + 401 when verifyPeerToken fails, (2) after kicked/tokenVersion checks, calls `nonces.has(payload.nonce)` — on hit emits replay-detected metric + 401, (3) before `addPeer`, calls `nonces.record(payload.nonce, payload.exp)` so subsequent reuse of the same JWT is rejected.
+  - cloud/lambda/share/shared/jwt-replay.test.ts (new) — 7 tests covering has(false for new), has(false for expired stored entry), record→has flow, prune on touch (mixed expired/live + new entry), cap eviction at 256 (300 nonces with increasing exp → oldest 44 dropped), plus 2 `pruneAndCap` unit tests.
+  - cloud/lambda/share/ws-default.test.ts — extended fakeDocSend mock to honour `SET seenJwtNonces = :n`; added two `ws-default auth-peer` tests: (a) same peerJwt used twice → first 200 + nonce persisted, second 401 'replay-detected' + metric line logged with sessionId='s1'; (b) 100 invalid JWTs in a loop → all 401, exactly 100 metric lines with reason∈{malformed,bad-signature,expired} + sessionId=null, no peers added, no seenJwtNonces written.
+- Tests: `bun test lambda/share/shared/jwt-replay.test.ts lambda/share/shared/jwt.test.ts lambda/share/ws-default.test.ts` → 39/39 pass.
+- Full suite: `bun test` → 205/205 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - The legacy `auditLog` (FrameAuditEntry, sync `appendFileSync`) and the new US-078 `auditLogger` (AuditEntry, async `appendFile`) BOTH write to `<auditDir>/<sessionId>.jsonl`. Each accepted RPC therefore writes TWO lines (one of each shape). Readers must treat each line as a union; the audit-drawer UI in US-080 will need to filter by `kind` field presence.
-  - `createApp(...)` (server.ts) auto-builds a default `ShareController` when no `share` is passed — so the 503-when-no-controller path in `/api/share/*` is UNREACHABLE via `createApp`. Test 503 by calling `createApi(...)` directly if needed; otherwise omit the case (the AC for US-079 only requires 200/400).
-  - When mocking `fetch` in share tests, route by URL substring (`url.endsWith('/api/share/sessions')` vs `/api/share/kick`) so a single mock handles both the session-bootstrap call AND the new endpoints. The previous `mockFetchSequence` pattern relied on call order, which couples tests to internal call sequencing.
-  - `ShareController.rotateUrl()` no longer restarts the transport — the relay rotates the token on the same session. Anything in `current.peers` becomes stale because the relay sends DeleteConnection to each peer (no leave frames reach the host). Clear `peerConnIds`/`connPeers`/`peerSseQueues` to keep the local state honest.
-  - `audit-on-failure` for kick: BOTH the local pre-check (`share-peer-not-found`) AND the HTTP failure write an `rpc-reject` entry. The Phase-8 schema doesn't distinguish — the `reason` field is what consumers branch on.
-  - `auditKind` swallows append errors with `console.warn` rather than letting them propagate. This is deliberate: a transient disk failure shouldn't take down the dispatch path. If you change this, update `dispatchRpcFrame` + `kick` + `rotateUrl` paths in lockstep.
+  - `urlSafe(randomBytes(12))` is exactly 16 chars (12 % 3 == 0 → no `=` padding stripped). Use this pattern when a fixed-length url-safe nonce is needed; randomBytes(n) where n is a multiple of 3 keeps the length deterministic.
+  - The `SeenNonces` interface is intentionally session-scoped via a factory so its `has`/`record` signatures stay nonce-only — matching the PRD literal. Callers do `createSeenNonces(session.sessionId).has(...)` rather than threading sessionId through every call.
+  - `pruneAndCap` keeps insertion order via `Array.prototype.sort` on numeric exp (V8/Node sort is stable) then `Object.fromEntries`. When all entries share an exp, the last-inserted wins — important because record() always merges the new nonce LAST into `{...raw, [nonce]: expSec}`, so the latest write is always retained.
+  - The `share.auth_failure` log line is the trigger pattern for US-092's CloudWatch MetricFilter. The PRD literal `reason: verify.reason ?? 'replay-detected'` is the source of truth — DO NOT extend the log to kicked/token-rotated unless US-092 explicitly asks. Those use different status bodies (`'kicked'`, `'token-rotated'`) that future filters can match independently.
+  - When testing structured-log emissions, swap `console.log` for an array-pushing shim inside a try/finally (do not use `mock(...)` on console.log — bun:test's mock spies don't reset the original cleanly across describe blocks).
+  - The `(b)` storm test must use an envelope whose top-level JSON is valid (so `parseEnvelope` accepts it) — only the inner `payload.peerJwt` is garbage. Using a literal `'garbage.${i}.notavalidjwt'` produces a 3-part split and hits the `length mismatch` branch in `verifyPeerToken` for reason `'bad-signature'`.
 ---
 
-## 2026-06-01 - US-080
-- Added LiveShareDialog (apps/web component) with kick affordance per peer + collapsible Activity drawer.
-- Files added in /Users/tuongaz/dev/seeflow:
-  - apps/web/src/hooks/use-live-share-audit.ts: `useLiveShareAudit(open)` returning `{entries, refresh, loading}`. Fetches `/api/share/audit?limit=200` immediately when `open` flips true, then polls every 5s. Cleanup function (returned from useEffect) clears the interval. When `open=false`, the effect bails out early — no fetch, no polling. Failures keep the previously-rendered page on screen. Re-declares `AuditEntry` + `AuditKind` locally so the web bundle stays free of a hard studio dep.
-  - apps/web/src/components/live-share-dialog.tsx: `LiveShareDialog` renders peer rows (color dot, displayName, icon-only Kick via UserX) inside the canvas-shipped Dialog primitive. Kick handler defaults to `POST /api/share/kick {peerId}` but accepts an `onKick` override for tests. `pendingKick` slot disables the active row + swaps the icon for `Loader2` spinner. Successful kick pushes a 3s "Removed X" toast (per-toast `setTimeout` schedules its own removal). Activity drawer is a `<button>` toggle showing `Activity (N)` with chevron, reveals a `max-h-[240px]` scroll list of entries reverse-chronologically with `HH:mm:ss` time in JetBrains Mono (font-mono), display name, and an uppercase tracking-[0.18em] kind badge. System-kind entries (`host-*`, `rotate`, `kill-switch`, or `peerId === null`) dim to `text-muted-foreground`. `kindLabel(entry)` formats rpc-accept ops into `moved Node <id>` / `edited Node <id>` / etc.; peer-join → "joined"; rotate → "rotated URL"; etc. Two props (`auditApi`, `onKick`) are test-only overrides — production callers pass neither.
-  - apps/web/src/components/live-share-dialog.test.tsx: 11 cases using the hook-shim test pattern (mirrors flow-create-dialog.test.tsx). Extends the shim by capturing `useEffect` callbacks in an `effects[]` array so the polling-lifecycle tests can run effects + cleanups by hand. Covers: 3 peers → 3 Kick buttons; empty peers → no Kick buttons + list renders; clicking Kick POSTs `/api/share/kick` with `{peerId}`; in-flight kick shows Loader2 + disables button; Activity header label tracks entries.length; expanding Activity renders entries reverse-chrono with formatted HH:mm:ss timestamps; toggle button flips `activityOpen` slot; Dialog open + onOpenChange round-trip; with no auditApi override, useEffect fetches `/api/share/audit?limit=200` on mount when open=true; doesn't fetch when open=false; cleanup runs without throwing.
-- bun test (workspace): 2873 pass / 1 skip / 0 fail across 168 files. bun run typecheck clean. bun run format + bun run lint clean.
+
+## 2026-06-01 06:50 AEST - US-090
+- Hardened `routeFrame` against peer impersonation: bind `env.from` to authenticated connId, restrict host-only types, rewrite peer `to:'all'` → `to:'host'`, and reject unknown specific connId targets with 404.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/ws-default.ts — added `HOST_ONLY_TYPES = Set(['kick','files-manifest','rpc-result'])`; at top of `routeFrame` after `findConnRole`: (1) `env = { ...env, from: connId }`, (2) if peer and host-only-type → 403 'host-only-type', (3) if peer and `env.to === 'all'` → rewrite to 'host', (4) if `env.to` is a specific connId (not 'all'/'host'/PROXY_FROM) and not session.hostConnId and not in session.peers → 404 'unknown-target'. All checks run BEFORE rate-limit/dispatch.
+  - cloud/lambda/share/ws-default.test.ts — updated existing `to: all from a peer → fan-out` test to reflect new semantics (only host receives, `data.to === 'host'`); added 6 new tests in a `ws-default impersonation hardening` describe block: spoofed env.from overwritten, peer `type:kick`/`files-manifest`/`rpc-result` → 403, peer to unknown connId → 404, host `to:'all'` still fans out to every peer.
+- Tests: `bun test lambda/share/ws-default.test.ts` → 34/34 pass.
+- Full suite: `bun test` → 211/211 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - The hook-shim dispatcher in apps/web/components/*.test.tsx defaults `useEffect: () => {}`. To test effect-driven behavior (polling, subscription teardown), extend the shim with `useEffect: (effect) => { effects.push(effect); }` and an `effects[]` array threaded into `renderWithHooks` — the test then calls each effect manually and observes side-effects (fetch counts, etc.). Cleanups returned from `effect()` are typeof === 'function' and can be invoked in the same test to assert teardown is safe.
-  - When `LiveShareDialog` calls `useLiveShareAudit` unconditionally (so the rule of hooks holds when an `auditApi` override is present), it contributes 2 useState slots BEFORE the dialog's own. Final slot order in the test shim: 0:hook.entries, 1:hook.loading, 2:activityOpen, 3:pendingKick, 4:toasts. Any new state in either the hook OR the dialog body shifts these — declare new useState at the END of whichever body adds them.
-  - For "control-flow narrows boolean to null" TS errors in test closures (e.g. `let x: boolean | null = null; closure does x = v;`), prefer pushing onto an array (`const observed: boolean[] = []`) instead of a single mutable cell. Cleaner equality and no narrowing surprise.
-  - Biome flags `() => void | (() => void)` as `noConfusingVoidType` — use `() => undefined | (() => void)` for the "effect that may return a cleanup" shape. Also `noForEach` fires on `arr.forEach(fn)` even inside `expect(() => ...).not.toThrow()` — use `for (const x of arr) fn(x)` instead.
-  - JSX expression `Activity ({count})` renders as `["Activity (", count, ")"]` in the React element children array. When the hook-shim test stringifies to find text, JSON.stringify the whole element (not just children) — children alone gets you a mix of strings + element objects without the literal text concatenated.
-  - The wire AuditEntry contract is duplicated in apps/web (`use-live-share-audit.ts`) because the web bundle doesn't depend on apps/studio. Any change to the studio's `AuditKind` / `AuditEntry` MUST be mirrored here.
-  - `Tooltip` + `TooltipContent` + `TooltipTrigger` ARE exported from @seeflow/canvas (`packages/canvas/src/ui/index.ts`). `TooltipProvider` is required at a higher level — already mounted in `apps/web/src/App.tsx`. New components that use tooltips don't need to add their own provider.
+  - Peer cursor broadcast still works after this hardening: the cursor handler unconditionally sets `routed = { ...env, to: 'all' }` AFTER my peer-to-host rewrite, so cursors fan out to all peers as before. The hardening only affects the general routing path for non-cursor/non-file frames.
+  - The 404 unknown-target check must allowlist `PROXY_FROM` ('<proxy>') because `handleFileBytes` uses `env.to === PROXY_FROM` as a special sentinel for the cross-container deliverReply path. Without that exemption, every file-bytes-to-proxy frame would 404.
+  - Setting `env.from = connId` before dispatch is safe because all downstream handlers (`handleFileBytes`, `handleFileUploadIntent`, etc.) use the function-arg `connId` for cleanup decisions; none of them read `env.from`. The overwritten value only appears in the wire frame delivered to the target connection.
+  - When updating semantics that an existing test relies on (`to:'all'` from peer fanning out to host + other peers), update the test in place rather than adding a parallel new test — keeping a stale assertion alive would flake CI as soon as someone runs `bun test`.
+  - The pre-existing tests use `from: 'p1'` (a peerId string) but the test assertions never read `data.from`, so overwriting it with the connId is transparent. The only test asserting on `data.from` is the new impersonation test that explicitly checks the overwrite.
 ---
 
-## 2026-06-01 - US-081
-- Implemented host kill-switch end-to-end across both repos.
-- Files added/changed in /Users/tuongaz/dev/seeflow-viewer:
-  - cloud/lambda/share/shared/sessions.ts: new `endSession(sessionId)` helper (DeleteCommand on the row); imported DeleteCommand from `@aws-sdk/lib-dynamodb`.
-  - cloud/lambda/share/session-end.ts: new POST /api/share/end lambda. Validates `{sessionId, hostKey}` with timingSafeEqual (401), 404 on missing session, 400 on missing fields / invalid JSON. Sends `{v:1, type:'kick', from:'host', to:<connId>, payload:{reason:'session-ended'}}` to host conn (if set) + every peer conn, calls DeleteConnection on each, then `endSession(sessionId)`. Returns `{ok:true, ended:<count>}`. Uses deps-injection (`_setDepsForTest`) for post/delete stubs. Logs `{type, from, to, sizeBytes}` per kick frame (no payload).
-  - cloud/lambda/share/session-end.test.ts: 6 cases — happy path (host conn + 2 peer conns kicked + row deleted), wrong hostKey 401, unknown session 404, missing fields 400, invalid JSON 400, empty session still deletes.
-  - cloud/lib/seeflow-stack.ts: new `ShareSessionEndFn` via `mkShareLambda`, added to DDB `grantReadWriteData` loop, granted `shareWsApi.grantManageConnections`, registered HTTP route `POST /share/end`.
-  - cloud/lib/seeflow-stack.share.test.ts: asserts `POST /share/end` route + end lambda has ShareSessionsTable + ManageConnections grants.
-- Files changed in /Users/tuongaz/dev/seeflow:
-  - apps/studio/src/share.ts:
-    - ShareDeps gains `activeSessionsPath?: string` (defaults to `<auditDir>/active.json`).
-    - ShareController interface adds `killAll(): Promise<{revoked, failed}>`.
-    - Added `readTrackedSessions` / `writeTrackedSessions` / `addTrackedSession` / `removeTrackedSession` helpers. Reads tolerate ENOENT + non-array JSON by returning []. Writes use `writeFileAtomic` after `mkdirSync(dirname, {recursive:true})` (writeFileAtomic does NOT auto-mkdir).
-    - On `start()` transport-open path: after `host-start` audit, `addTrackedSession(sessionId, hostKey)`.
-    - On `stop()` active branch: `removeTrackedSession(sessionId)` between `host-stop` audit and `setState({status:'stopping'})`.
-    - `killAll()`: reads tracked sessions, POSTs `${relayHttpUrl}/api/share/end` for each with `{sessionId, hostKey}`. Counts `revoked` (ok response) vs `failed` (non-ok or throw). Then iterates again and uses `auditLoggerFactory(sessionId, auditDir)` to open + append `{kind:'kill-switch', peerId:null, displayName:null, details:{revoked, failed}}` + close. Finally `writeTrackedSessions([])` truncates the file. Returns `{revoked, failed}`.
-  - apps/studio/src/api.ts: added `POST /api/share/kill-all` route delegating to `share.killAll()` (503 when no controller, mapped errors via `shareErrorStatus`).
-  - apps/studio/src/api.test.ts: `createFakeShare(init)` gains `killAll?` parameter + default no-op; added `describe('POST /api/share/kill-all')` with happy path (200, body echoes `{revoked, failed}`) + 500 on rejection.
-  - apps/studio/src/share.test.ts: new `describe('createShareController.killAll()')` with 4 cases. Local `makeMultiSessionAuditCapture` helper keeps a `Map<sessionId, AuditEntry[]>` since the existing single-sid capture can't track N parallel loggers. Local `makeTrackedSessionsTmp` mkdtempSync-based helper seeds active.json + returns cleanup. Cases: (1) 3 tracked sessions → 3 POST /api/share/end calls + 3 kill-switch entries (one per session, all carrying `{revoked:3, failed:0}`) + truncated file; (2) 1 ok + 1 502 → `{revoked:1, failed:1}` recorded on both kill-switch entries; (3) empty active.json → `{revoked:0, failed:0}`, no fetches; (4) start()/stop() round-trip writes then truncates active.json with the right shape.
-- bun test (apps/studio): 258 pass / 1 skip / 0 fail (share.test.ts + api.test.ts). bun test (full workspace): 2879 pass / 1 skip / 0 fail across 168 files. bun run typecheck clean. bun run format + bun run lint clean.
-- bun test (seeflow-viewer/cloud): 173 pass / 0 fail. bun run typecheck (cloud): clean.
+
+## 2026-06-01 07:00 AEST - US-091
+- Added per-route API Gateway HTTP throttling for POST /share/sessions (burst 5, rate 1) and POST /share/join (burst 20, rate 5).
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lib/seeflow-stack.ts — captured `shareSessionRoutes` and `shareJoinRoutes` from `httpApi.addRoutes(...)`; appended both into the existing dependency-wiring `for (const route of [...])` loop so the L1 Stage update orders after the new Routes; added the two new RouteSettings entries inside `stage.addPropertyOverride('RouteSettings', {...})`.
+  - cloud/lib/seeflow-stack.share.test.ts — imported `Match` from `aws-cdk-lib/assertions`; added two tests asserting `AWS::ApiGatewayV2::Stage` RouteSettings contain `POST /share/sessions` (ThrottlingRateLimit:1 / ThrottlingBurstLimit:5) and `POST /share/join` (ThrottlingRateLimit:5 / ThrottlingBurstLimit:20).
+- Tests: `bun test lib/seeflow-stack.share.test.ts` → 20/20 pass.
+- Full suite: `bun test` → 213/213 pass.
+- Typecheck: `bun run typecheck` clean.
+- CDK synth: `npx cdk synth --parameters ShareJwtSecret=$(openssl rand -base64 32) > /dev/null` succeeds.
 - **Learnings for future iterations:**
-  - The studio's active-sessions tracker (active.json) lives in the same `~/.seeflow/share-history/` directory as the per-session JSONL audit logs. Tests MUST inject `activeSessionsPath` (and use mkdtempSync) so they don't pollute the real user dir. The default path is `join(auditDir, 'active.json')` — but `auditDir` defaults to `~/.seeflow/share-history` so without an override, killAll/start would touch real disk.
-  - `writeFileAtomic` (apps/studio/src/atomic-write.ts) does NOT create parent dirs — call `mkdirSync(dirname(path), {recursive:true})` first or the write throws ENOENT. This is documented in apps/studio/CLAUDE.md but worth re-noting.
-  - The kill-switch flow writes `kill-switch` AuditEntries to EACH affected session's log via `auditLoggerFactory(sessionId, auditDir)` — so the factory MUST be safe to invoke for arbitrary sessionIds (it is: createAuditLogger validates via `isSafeSessionId` + lazy-mkdirs the file). Closing the new logger via `.close()` only awaits the in-process lock chain, no file handle is held.
-  - cloud session-end behaviour: targets list = `hostConnId` (if non-null) + every peer connId. Order matters only for log assertion stability — happy-path test sorts the targets before comparing. The session row is deleted AFTER posting/deleting all conns so a partial failure leaves the row intact (next killAll will retry).
-  - Local `require()` inside a test fn works in bun-test for opportunistic fs/os/path access without polluting top-level imports. The Biome formatter leaves these alone as long as they're inside a function body.
-  - When mocking the relay's `/api/share/end` response for the "1 ok + 1 502" case, route by body substring (`body.includes('sess-b')`) rather than url, since every call hits the same endpoint. Don't rely on call ORDER — tracked sessions iterate in array order but tests shouldn't pin that contract.
-  - When extending the `FakeShare` in api.test.ts, add the new method to both the `createFakeShare(init?)` parameter type AND the returned object literal. Default to a no-op `async () => ({revoked:0, failed:0})` so existing tests don't need to opt-in.
+  - The dependency loop is load-bearing: any new route referenced in `RouteSettings` MUST also be appended to that `for (const route of [...])` block or `cdk deploy` will fail with `Unable to find Route by key ...` because the L1 escape hatch doesn't track refs.
+  - `httpApi.addRoutes(...)` returns `HttpRoute[]` (one entry per HTTP method on the route) — spread into the loop array so each `route.node.defaultChild as CfnRoute` is wired individually. POST-only routes still come back as a 1-element array.
+  - `Match.objectLike` is the right matcher for partial RouteSettings assertions — using a plain object literal would force an exact-match against the full settings map (20+ keys) and fail.
+  - The CloudFront `pathRewriteFn` strips `/api` BEFORE the request reaches API Gateway, so throttling keys are post-strip path (`POST /share/sessions`, not `POST /api/share/sessions`). Same convention as all other `/share/*` route settings.
+  - Throttling is a per-stage soft limit shaped by API Gateway's token bucket — burst is instant capacity, rate is steady-state replenishment per second. burst 5 / rate 1 means a bot can fire 5 session-creates in one burst, then 1/sec sustained. Aligns with `POST /flows` and `POST /projects` settings already in place.
 ---
 
-## 2026-06-01 - US-082
-- Added kill-switch UI affordance + confirm dialog in apps/web LiveShareDialog.
-- Files changed in /Users/tuongaz/dev/seeflow:
-  - apps/studio/src/share.ts: extended active-branch `ShareState` with `recentSessionCount: number` (US-082); `enrichWithSseMetrics` now overlays `readTrackedSessions().length` on every state() / subscribe deliver so the SSE bridge sees the latest count without a setState transition; idle→active construction passes 0 (overwritten by enrich on first read).
-  - apps/studio/src/api.test.ts: 2 fixture sites that build an `active` state now include `recentSessionCount` so the required field stays satisfied.
-  - apps/web/src/hooks/use-share-state.ts: mirrored `recentSessionCount?: number` (optional for back-compat with older studios still on the wire) onto the apps/web ShareState union.
-  - apps/web/src/components/live-share-dialog.tsx: added 3 props (`recentSessionCount`, `onKillAll`, `onKillAllSuccess`), 3 new useState slots APPENDED (killAllConfirmOpen, killAllPending, killAllError) so existing slot constants don't shift, footer with destructive "End all sessions" button + "Active sessions: N" muted subtitle, nested confirm `Dialog` with Cancel + "End all" buttons. Default kill-all impl POSTs `/api/share/kill-all`; on success closes both dialogs and fires `onKillAllSuccess(revoked)`; on failure renders inline error. Tooltip "No active sessions to end" surfaces only when recentSessionCount===0.
-  - apps/web/src/components/live-share-dialog.test.tsx: SLOT layout doc extended with slots 5/6/7; new `SLOT_KILL_ALL_CONFIRM_OPEN = 5` constant. Added 5 cases under describe('kill-switch (US-082)'): button click flips slot 5, confirm POSTs /api/share/kill-all, cancel doesn't fetch + flips slot 5 false, recentSessionCount===0 disables the button, subtitle reflects the count.
-- bun test: 2884 pass / 1 skip / 0 fail across 168 files. bun run typecheck clean. bun run format + lint clean.
+
+## 2026-06-01 - US-092
+- Wired CloudWatch metric filters + alarms for the three abuse-signal log lines emitted by ws-default.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/ws-default.ts — handleAuthPeer peer-cap branch now emits `{metric:'share.peer_cap_reached', sessionId, cap}` before the courtesy kick + 429 (auth_failure was already emitted in US-089; rate_limited in US-087).
+  - cloud/lib/seeflow-stack.ts — imported `aws-cdk-lib/aws-logs` (MetricFilter, FilterPattern) and `aws-cdk-lib/aws-cloudwatch` (Alarm, Metric, ComparisonOperator, TreatMissingData). After `shareStagingBucket.grantDelete(wsDefaultFn)` added an `abuseMetrics` array iterating three configs (share.auth_failure→ShareAuthFailureBurst @ 20, share.rate_limited→ShareRateLimitedBurst @ 50, share.peer_cap_reached→SharePeerCapHit @ 5) creating one MetricFilter (namespace 'Seeflow/Share', defaultValue 0, metricValue '1') + one Alarm per metric (Sum/5 min, GREATER_THAN_OR_EQUAL_TO_THRESHOLD, NOT_BREACHING).
+  - cloud/lib/seeflow-stack.share.test.ts — four new tests: count of 3 Seeflow/Share MetricFilters + their metric names; three `hasResourceProperties('AWS::CloudWatch::Alarm', ...)` checks asserting AlarmName, Threshold, ComparisonOperator, TreatMissingData, Namespace, MetricName per alarm.
+- Tests: `bun test lib/seeflow-stack.share.test.ts` → 24/24 pass.
+- Full suite: `bun test` → 217/217 pass.
+- Typecheck: `bun run typecheck` clean.
+- CDK synth: `npx cdk synth --parameters ShareJwtSecret=$(openssl rand -base64 32) > /dev/null` succeeds.
 - **Learnings for future iterations:**
-  - When extending the `ShareState` active branch with a new required field, search api.test.ts for `status: 'active'` literal fixtures — there are 2 (the GET /api/share/audit happy-path test + the GET /api/share/state transition test).
-  - The hook-shim test pattern (apps/web convention) indexes useState slots by DECLARATION order — new useStates MUST be appended at the END of the component body. Adding 3 slots in the middle would shift `SLOT_ACTIVITY_OPEN` / `SLOT_PENDING_KICK` constants and silently break unrelated tests.
-  - `enrichWithSseMetrics` is the per-read enrichment hook. Use it for fields that can mutate without a state transition (queue depths, file-backed counters) — avoids the setState fan-out cost AND keeps the persisted `current` snapshot small. The function references `readTrackedSessions` which is declared further down the file, but the closure body only runs after `createShareController` returns, so the const ordering doesn't matter at runtime.
-  - The `@seeflow/canvas` Button supports `variant="destructive"` (`sf:bg-destructive sf:text-destructive-foreground sf:hover:bg-destructive/90`). Use this directly — don't inline rose-500 utility classes (the canvas tokenizes destructive in `--destructive`, sourced from design.html).
-  - Nested Dialog primitive instances work fine inside the canvas's portal context — the outer onOpenChange + inner onOpenChange manage independent open state. Guard the inner onOpenChange when a request is in-flight (`if (killAllPending) return;`) so the spinner can't be aborted by an Escape key.
+  - `lambdaNodejs.NodejsFunction.logGroup` lazily creates a CDK-managed `AWS::Logs::LogGroup` resource the first time it's accessed; safe to reuse for multiple MetricFilters. No explicit `new LogGroup(...)` is required.
+  - `FilterPattern.stringValue('$.metric', '=', 'share.x')` generates the right `{ $.metric = "share.x" }` JSON pattern that matches the EMF-style log lines emitted by ws-default; no need to roll a literal pattern.
+  - CloudFormation serializes `TreatMissingData.NOT_BREACHING` as the string `'notBreaching'` — assert against that lowercase form when using `hasResourceProperties` on `AWS::CloudWatch::Alarm`.
+  - CDK 2.254 keeps `cloudwatch.Alarm` constructor accepting `metric: new cloudwatch.Metric({...statistic:'Sum', period:Duration.minutes(5)})` — no need for the deprecated MetricOptions overload.
+  - The three structured log lines (`share.auth_failure`, `share.rate_limited`, `share.peer_cap_reached`) must keep stable `metric` keys; downstream MetricFilters key off `$.metric`. If you rename a metric, update both the emitter and the filter.
 ---
 
-## 2026-06-01 - US-083
-- Implemented peer-side kick/end/rotate UX in the viewer SPA.
-- Files changed in /Users/tuongaz/dev/seeflow-viewer:
-  - src/lib/share-client.ts: new `TerminalReason` union + exported `mapTerminalReason(reason)` helper that normalizes 'kicked' → 'kicked-by-host'. `ConnectionState.kicked` now carries optional `terminal?: TerminalReason`. New `onTerminated?: (reason) => void` option on `ShareClientOptions`; private `terminatedFired` flag + `fireTerminated()` enforces once-only. The kick-frame branch in `handleMessage` and the WS `onclose` both call `mapTerminalReason` and route through `fireTerminated`. Non-terminal reasons still surface as `kicked` (with raw `reason`) or `closed` so legacy behaviour is preserved.
-  - src/lib/share-api.ts: new `ShareTerminalError(reason: TerminalReason)`; 401 path now reads `body.error`, normalizes via `mapTerminalReason`, and throws `ShareTerminalError` on match. Falls through to a plain Error for unknown 401 reasons.
-  - src/pages/share-session.tsx: new exported `TerminalSessionScreen({reason, sessionId?, hostDisplayName?})` component with per-reason copy (kicked-by-host / token-rotated / session-ended), rose-500 icon (Ban / Link2Off / PowerOff from lucide-react), JetBrains Mono `session: <id>` footer, and a `Link to="/"` Go home button. `JoinState` gains a `terminal` variant; the `.catch` branch routes `ShareTerminalError` directly to it. The existing `wsState.kind === 'kicked'` branch now renders `TerminalSessionScreen` with `wsState.terminal ?? 'kicked-by-host'`.
-  - src/lib/share-client.test.ts: 10 new US-083 cases — kick payload reason for each of the 3 terminal reasons, legacy `'kicked'` → `kicked-by-host`, non-terminal reason leaves `terminal` undefined + does NOT fire callback, WS close with terminal reason routes to kicked state, WS close with non-terminal stays closed, onTerminated fires at most once, no reconnect after terminal (FakeWebSocket.instances.length stays at 1).
-  - src/lib/share-api.test.ts: 5 new cases covering 401 → ShareTerminalError for each reason + legacy 'kicked' + unknown-error fall-through.
-  - src/pages/share-session.test.tsx: new file — 5 cases on `TerminalSessionScreen` via direct-function-call render + React-element walker (mirrors connection-status-badge.test.tsx pattern). Asserts per-reason copy, `data-testid="terminal-session-screen"` + `data-reason`, `session: <id>` footer with/without sessionId, and the Go home link's `to="/"`.
-- bun test (full viewer suite): 334 pass / 0 fail across 39 files. bun run typecheck clean.
+
+## 2026-06-01 07:00 AEST - US-093
+- Added abuse-pattern integration test suite driving the real share handlers against in-process fakes.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - cloud/lambda/share/abuse.test.ts (new) — single bun-test file (~365 LoC) with a `setupSession()` helper bootstrapping session-create + session-join + auth-host + auth-peer through the real handlers. Eight describe blocks cover the abuse scenarios from the PRD:
+    1. **flood** — pre-seeds rateWindow at `cap - 1` and fires 200 presence frames; asserts ≥1 status 429 (rate-limited) and total runtime < 5s.
+    2. **oversized frame** — 300 KB body → 413 frame-too-large with no PostToConnection issued.
+    3. **replay** — second auth-peer call reusing the same peerJwt → 401 replay-detected, peer not added.
+    4. **peer impersonation** — peer sends `from:'fake-host-conn', to:'all'` → host receives one frame with `from` rewritten to the authenticated peerConnId and `to` coerced to 'host' (NEVER 'all' from a peer).
+    5. **JWT storm** — 1000 garbage JWTs hit auth-peer with NO session pre-seeded → all 401, total runtime < 5s, zero DDB writes (`puts + updates + deletes` counter stays at 0).
+    6. **oversized upload** — 20 MB file-upload-intent → 413 upload-too-large, not forwarded, `uploadBytesUsed` stays undefined.
+    7. **peer cap** — fill peers to 20, mint fresh JWT via session-join, 21st auth-peer call → 429 peer-cap-reached + courtesy kick frame.
+    8. **idempotent addPeer** — call `addPeer(sessionId, 'conn-dup', …)` twice with different payloads; assert peers map gained exactly 1 entry (SET overwrites) and the second payload wins.
+    Bonus 9th block: ws-disconnect cleanup probe (peer disconnect → peer removed + 'left' presence broadcast to host).
+  - cloud/package.json — added `"test:abuse": "bun test lambda/share/abuse.test.ts"` script.
+- Tests: `bun run test:abuse` → 9/9 pass (≈300 ms).
+- Full suite: `bun test` → 226/226 pass.
+- Typecheck: `bun run typecheck` clean.
 - **Learnings for future iterations:**
-  - The viewer's `share-session.test.tsx`-style render harness (mirrors `connection-status-badge.test.tsx`) calls the component as a plain function and walks the returned React-element tree. JSX of the form `session: {sessionId}` produces a children array of `['session: ', sessionId]` — the walker collects them as separate strings. Join with '' (NOT ' ') so substring assertions against the rendered copy are stable.
-  - The viewer's `ConnectionState` test in `share-client.test.ts` uses a hand-rolled `FakeWebSocket` (no jsdom). When extending the kick path, reuse the existing `connectClient` helper (per-suite scoped) so the constructor count is reset to 0 on each test — assertions on `FakeWebSocket.instances.length` then reflect ONLY the current test's reconnect attempts.
-  - The `mapTerminalReason('kicked') → 'kicked-by-host'` normalization is duplicated implicitly across both share-client (WS path) and share-api (HTTP 401 path) — both call the same helper. When extending the reason list, add to the union AND the helper in one place.
-  - The viewer's lucide-react version is 0.453.0; icons available include `Ban`, `Link2Off`, `PowerOff` (not `LinkOff` or `Unplug`). Verify name before importing.
-  - The legacy `wsState.kicked` branch in share-session.tsx previously rendered a generic `StatusCard` with `body={wsState.reason}` — now it ALWAYS routes through `TerminalSessionScreen` with a default of `'kicked-by-host'` when no `terminal` field was parsed. This is a behavior shift for non-canonical reasons (they used to surface the raw string verbatim); the AC's "three distinct terminal states" requirement makes that the right call.
-  - The current `ShareJoinResponse` does not surface the host's display name — `TerminalSessionScreen` takes the field as an optional prop but production callers don't pass it. If a future story adds host metadata to the join response, the field is already wired through.
+  - For end-to-end abuse scenarios that need a real session + host + peer, run them through the actual session-create/session-join/auth-host/auth-peer handlers (in that order) so the rateWindow, seenJwtNonces, hostConnId, and peers maps end up in the EXACT shape production sees. A `setupSession()` helper at the top of the test file makes each scenario one call.
+  - When asserting "no DDB writes for invalid JWTs", count Put + Update + Delete invocations in the fake `doc.send` mock. Get/Scan/Query are reads and are fine. The simplest counter is a module-level `{ puts, updates, deletes }` object zeroed in `beforeEach`.
+  - The JWT storm scenario does NOT need any session pre-seeded — invalid JWTs return 401 at `verifyPeerToken` before `getBySessionId` is called. Pre-seeding would corrupt the "no writes" assertion because session-create writes a Put.
+  - The PRD wanted `abuse.it.ts` BUT noted that `bun test` only discovers `*.test.ts`. Named the file `abuse.test.ts` so it's picked up by the default `bun test` run and the script glob alike.
+  - To trigger the peer-cap path without tripping replay protection, call `session-join` a second time on the same token to mint a fresh JWT (different nonce, different peerId). Reusing the original peerJwt from `setupSession()` would always 401 replay-detected.
+  - To trigger the per-conn frame cap in 200 requests, pre-seed `rateWindow.<peerConnId> = { frames: cap - 1, bytes: 0, windowStartSec: now }`. The cap is 1800/min — 200 frames alone can never trip it.
+  - The fake `doc.send` mock from ws-default.test.ts can be reused almost verbatim BUT add PutCommand + QueryCommand + DeleteCommand branches because session-create + session-join + endSession use those.
 ---
 
-## 2026-06-01 - US-084
-- Added Phase-8 integration test + cloud log-discipline test for kick/rotate/kill-switch.
-- Files added in /Users/tuongaz/dev/seeflow:
-  - apps/studio/integration/share-phase8.it.ts: FakeRelay derived from share-host-peer.it.ts but extended with HTTP endpoints for /api/share/{sessions,kick,rotate,end,join}. Tracks per-endpoint observations (kickRequests, rotateRequests, endRequests). WS routing keeps the share-host-peer rules (rewrite `from` to server-assigned connId, fan-out on `to: 'all'|undefined`, host shortcut on `to: 'host'`). Three scenarios:
-    - Scenario 1 (kick): start session, attach 2 stub peer WS clients sending auth-peer + presence/join (so the studio's connPeers map populates), POST /api/share/kick on peer-a via the studio. Polls audit JSONL until {kind:'kick', peerId:'peer-a'} entry appears (1s budget). Asserts relay observed exactly one kick POST with the studio's sessionId + hostKey.
-    - Scenario 2 (rotate): start session, capture T1 from the URL, POST /api/share/rotate, capture T2, assert T1 !== T2 and relay.currentToken(sessionId) === T2. Audit polls for {kind:'rotate'}. Issues two follow-up POST /api/share/join calls against the relay-stub — T1 returns 404 (stub mimics token-version invalidation by replacing session.token), T2 returns 200.
-    - Scenario 3 (kill-switch): seed active.json with 2 tracked sessions + pre-issue both on the relay-stub. POST /api/share/kill-all on studio. Assert response {revoked:2, failed:0}, relay observed 2 end requests, and per-session audit JSONL files each contain one {kind:'kill-switch', details:{revoked:2, failed:0}} entry. active.json truncated to [].
-- Files added in /Users/tuongaz/dev/seeflow-viewer:
-  - cloud/lambda/share/session-kick.log.test.ts: spies on console.log (replaces the function for the duration of beforeEach/afterEach), invokes kick/rotate/end happy-paths, and asserts every captured frame-log object has EXACTLY the keys [type, from, to, sizeBytes] (sorted-array equality). Defense-in-depth: also asserts the captured log has no `payload`, `reason`, or `details` property AND that the union of all log calls' JSON-stringified output never contains the reason strings 'kicked-by-host' / 'token-rotated' / 'session-ended' or the literal "payload".
-- Cloud-side fakeDocSend mock duplicates the relevant branches from the existing session-{kick,rotate,end}.test.ts mocks (GetCommand, UpdateCommand with kickedPeerIds/list_append, ADD tokenVersion, #tk = :t, DeleteCommand). All three lambdas share the same posted/deleted spy arrays; each test reseeds session rows as needed.
-- bun test (workspace): 2884 pass / 1 skip / 0 fail across 168 files. bun run typecheck (studio): clean. bun run format + lint clean.
-- bun test (seeflow-viewer/cloud): 177 pass / 0 fail across 21 files. bun run typecheck (cloud): clean.
-- bun run test:it:bun -- apps/studio/integration/share-phase8.it.ts: 3 pass / 0 fail. (Two pre-existing failures in the full test:it:bun run — share-host-peer.it.ts "test 3" flakes on transport timing, share-rpc-schema-sync.it.ts compares against the viewer repo path — are unrelated to US-084.)
+
+## 2026-06-01 07:30 AEST - US-094
+- Authored the Live Share leak rehearsal runbook + appended the Phase 9 hardening section to the existing live-share design doc.
+- Files changed (in /Users/tuongaz/dev/seeflow worktree):
+  - docs/plans/2026-05-31-live-share-leak-rehearsal.md (new) — Scenario, Detection signals, Containment (host), Containment (operator), Post-incident, Rehearsal procedure. Each containment section ties back to the host UI affordances shipped in US-079/US-081/US-082 and to the CloudWatch alarms shipped in US-092. Rehearsal procedure ends with a `### Past rehearsals` placeholder for quarterly findings.
+  - docs/plans/2026-05-31-live-share-design.md — appended `## Hardening (Phase 9)` after the existing `## Implementation phasing` numbered list. New section has: caps table linking to cloud/lambda/share/shared/limits.ts (single source of truth), impersonation-rejection paragraph, CloudWatch alarms table (3 alarms with thresholds), abuse-test suite pointer (lambda/share/abuse.test.ts + bun run test:abuse), and a cross-link to the leak rehearsal doc.
+- Checks (run from /Users/tuongaz/dev/seeflow worktree root):
+  - `bun run lint` → biome check . on 492 files, no fixes applied (pass).
+  - `bun run typecheck` → tsc --noEmit across all workspaces (canvas, web, studio, mcp-app), all green.
 - **Learnings for future iterations:**
-  - The studio's `share-host-peer.it.ts` FakeRelay is the right template for any Phase-8+ integration test that needs to exercise the real ShareController + WS round-trip. Extend it with HTTP endpoints by adding cases to the `fetch(req, srv)` handler; do NOT spin up a second server for HTTP-only stubs (the same socket carries both HTTP and WS upgrades).
-  - In a FakeRelay HTTP handler, `await req.json()` MUST come BEFORE checking the body's discriminator — Bun.serve doesn't expose a stream-and-rewind, so reading the JSON consumes the body once.
-  - When asserting an audit JSONL entry lands, poll via `waitUntil` reading `<auditDir>/<sessionId>.jsonl` — the studio's `auditKind()` helper appends fire-and-forget, so the line may not be on disk immediately after the HTTP response resolves. 1s budget is comfortable; the existing share.test.ts unit tests also implicitly assume sub-ms latency.
-  - The `recentSessionCount` field on `ShareState` (US-082) reads `active.json` synchronously via `readTrackedSessions()` on every state() call. In integration tests the seed-then-read pattern works correctly without any subscribe round-trip — even right after writeFileSync.
-  - For the cloud log-discipline test, replacing `console.log` directly (`console.log = ((arg) => logCalls.push(arg)) as typeof console.log`) is simpler than `spyOn(console, 'log')` since the lambdas always call `console.log(singleObjectArg)` — the spy doesn't need to handle multiple arguments. Restore in afterEach.
-  - When seeding `active.json` for the kill-switch integration test, write the file BEFORE starting the studio so the controller's initial state read sees the count immediately (US-082's `enrichWithSseMetrics` re-reads on every state() call but the SSE state stream may already be open from a prior request).
-  - The bun.lock at `/Users/tuongaz/dev/seeflow-viewer/cloud` was missing on first invocation (probably because bunx biome installed at the parent). Cloud tests don't depend on biome; only `bun test` + `bun run typecheck` are required. The PR's CI gates also skip biome on the cloud repo.
+  - US-094 was the only Phase 9 story whose working dir is the seeflow worktree, not seeflow-viewer. All other phase-9 stories landed in seeflow-viewer/cloud; the design doc + rehearsal runbook live in this repo at docs/plans/.
+  - The existing design doc ends at line 312 with the phasing list, so appending a new top-level `## Hardening (Phase 9)` section after line 312 keeps the doc's narrative ordering intact (problem → design → walkthrough → futures → open questions → phasing → final posture).
+  - Repo-level `bun run lint` is biome (no markdown linter is wired) so the new `.md` files don't trigger anything. `bun run typecheck` is a sanity-only check for this story; useful catch in case shared TS broke during the workspace.
+  - Cross-doc links should be relative (`./2026-05-31-live-share-leak-rehearsal.md`) — the docs are sibling files under docs/plans/.
+  - Phase 9 doc cross-references seeflow-viewer source paths via an absolute GitHub URL, since the repo split means relative paths to cloud/lambda/* would dangle inside seeflow. Mirrors how 2026-05-31-live-share-design.md already references the relay.
 ---

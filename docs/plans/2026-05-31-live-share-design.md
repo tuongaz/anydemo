@@ -310,3 +310,44 @@ Suggested order (each phase ships independently):
 7. **SSE bridge** for live runtime events.
 8. **Kick, rotate URL, audit log UI, kill-switches.**
 9. **Hardening:** rate limits, caps, abuse tests, leak rehearsal.
+
+## Hardening (Phase 9)
+
+Final posture after Phase 9 shipped. All limits live in [`cloud/lambda/share/shared/limits.ts`](https://github.com/tuongaz/seeflow-viewer/blob/main/cloud/lambda/share/shared/limits.ts) (single source of truth, imported by the relay handlers, host upload guard, and abuse-test suite).
+
+### Enforced caps
+
+| Cap | Value | Where enforced | Rejection |
+|---|---|---|---|
+| `MAX_PEERS_PER_SESSION` | 20 | `ws-default.handleAuthPeer` after `verifyPeerToken` | `429 peer-cap-reached` + courtesy `kick` frame |
+| `MAX_FRAME_BYTES` | 256 KB | Top of `ws-default` handler before JSON.parse | `413 frame-too-large` |
+| `MAX_UPLOAD_BYTES` | 10 MB | `ws-default.handleFileUploadIntent` (per-intent) | `413 upload-too-large` |
+| `MAX_SESSION_UPLOAD_TOTAL_BYTES` | 1 GB | DDB conditional UpdateExpression on `uploadBytesUsed` | `413 session-upload-cap-reached` |
+| `FRAMES_PER_SEC_PER_CONN` | 30 (1800/min/conn) | `recordFrame` token bucket on session row | `429 rate-limited:rate` + courtesy `kick` |
+| `MAX_BYTES_PER_MIN_PER_SESSION` | 10 MB/min | `recordFrame` summed across conns | `429 rate-limited:bytes` |
+| `MAX_DISPLAY_NAME_CHARS` | 40 | Host SPA + Zod on `auth-peer` payload | 400 from peer SPA before send |
+| JWT replay window | 256 nonces / session | `seenJwtNonces` map on session row, pruned on touch | `401 replay-detected` |
+| HTTP throttling — `POST /share/sessions` | burst 5 / rate 1 rps | API Gateway stage RouteSettings | 429 from API Gateway |
+| HTTP throttling — `POST /share/join` | burst 20 / rate 5 rps | API Gateway stage RouteSettings | 429 from API Gateway |
+
+Peer impersonation is rejected by `routeFrame`: it overwrites `env.from = connId` after `findConnRole`, forbids peer-originated `kick` / `files-manifest` / `rpc-result` (403 `host-only-type`), rewrites peer `to:'all'` to `to:'host'` (only the host can broadcast), and returns `404 unknown-target` for unknown specific connIds.
+
+### CloudWatch alarms
+
+Three EMF-style structured log lines feed three MetricFilters in namespace `Seeflow/Share`, and three alarms fire on bursty thresholds (`GREATER_THAN_OR_EQUAL_TO_THRESHOLD`, `TreatMissingData.NOT_BREACHING`):
+
+| Alarm | Metric | Threshold | What it means |
+|---|---|---|---|
+| `AuthFailureBurst` | `share.auth_failure` | ≥ 20 / 5 min | Bots replaying or brute-forcing peer JWTs. |
+| `RateLimitedBurst` | `share.rate_limited` | ≥ 50 / 5 min | A conn (or several) is being throttled — typically only legitimate during a host deploy. |
+| `PeerCapHit` | `share.peer_cap_reached` | ≥ 5 / 5 min | A leaked URL is fan-out joining beyond the 20-peer cap. |
+
+CDK definitions live in `cloud/lib/seeflow-stack.ts`; assertion coverage is `cloud/lib/seeflow-stack.share.test.ts`.
+
+### Abuse-test suite
+
+`cloud/lambda/share/abuse.test.ts` drives the real handlers against a fake DDB + fake `ApiGatewayManagementApiClient` and exercises eight regression scenarios end-to-end: flood, oversized frame, replay, impersonation, JWT storm, oversized upload intent, peer-cap, and idempotent `addPeer`. Run via `bun run test:abuse` (or as part of `bun test`).
+
+### Leak rehearsal
+
+See [2026-05-31-live-share-leak-rehearsal.md](./2026-05-31-live-share-leak-rehearsal.md) for the operator-facing runbook: detection signals (alarms + audit log + in-UI peer list), host containment (kick / rotate / kill-switch), operator containment (DDB row delete + JWT secret rotation), and the quarterly rehearsal procedure. Findings from each rehearsal append to the bottom of that doc.
