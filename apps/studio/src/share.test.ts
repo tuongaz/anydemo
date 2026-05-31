@@ -11,6 +11,7 @@ const baseDeps = {
 interface FakeTransportHandle {
   factory: (opts: ShareTransportOpts) => ShareTransport;
   emit: (s: ShareTransportState) => void;
+  emitFrame: (env: Envelope) => void;
   capturedOpts: () => ShareTransportOpts | null;
   wasClosed: () => boolean;
   closeCount: () => number;
@@ -45,6 +46,7 @@ function makeFakeTransport(autoEmit: ShareTransportState[] = []): FakeTransportH
   return {
     factory,
     emit: (s) => lastOpts?.onStateChange(s),
+    emitFrame: (env) => lastOpts?.onFrame(env),
     capturedOpts: () => lastOpts,
     wasClosed: () => closed,
     closeCount: () => closeCount,
@@ -260,7 +262,7 @@ describe('createShareController.kick()', () => {
     expect(ctrl.state()).toEqual({ status: 'idle' });
   });
 
-  it('from active sends a kick envelope addressed to peerId', async () => {
+  it('from active without prior join rejects with share-peer-not-found', async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
     const ctrl = createShareController({
       ...baseDeps,
@@ -270,17 +272,172 @@ describe('createShareController.kick()', () => {
       transportFactory: fake.factory,
     });
     await ctrl.start();
+    await expect(ctrl.kick('peer-42')).rejects.toThrow('share-peer-not-found');
+    // No frame sent — the kick never crossed the wire.
+    expect(fake.sends()).toHaveLength(0);
+  });
+
+  it('from active after presence/join sends a kick envelope addressed to the recorded connId', async () => {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+    });
+    await ctrl.start();
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+
     await ctrl.kick('peer-42');
 
     expect(fake.sends()).toHaveLength(1);
     const frame = fake.sends()[0];
-    expect(frame).toBeDefined();
     if (!frame) throw new Error('expected kick frame');
     expect(frame.v).toBe(1);
     expect(frame.type).toBe('kick');
     expect(frame.from).toBe('host');
-    expect(frame.to).toBe('peer-42');
+    // Routed to connId, not peerId — relay only knows connections.
+    expect(frame.to).toBe('conn-7');
     expect(frame.payload).toEqual({ peerId: 'peer-42' });
+  });
+});
+
+describe('createShareController frame routing', () => {
+  async function startActive() {
+    const fake = makeFakeTransport(['connecting', 'open']);
+    const ctrl = createShareController({
+      ...baseDeps,
+      fetch: mockFetch({
+        body: { sessionId: 'sess-1', token: 'tok-1', hostKey: 'hk-1', wsUrl: 'wss://relay/ws' },
+      }),
+      transportFactory: fake.factory,
+    });
+    await ctrl.start();
+    return { ctrl, fake };
+  }
+
+  it("presence 'join' adds the peer to state.peers and notifies subscribers", async () => {
+    const { ctrl, fake } = await startActive();
+    const seen: ShareState[] = [];
+    ctrl.subscribe((s) => seen.push(s));
+    // First seen entry is the initial-deliver (active with peers=[]).
+    expect(seen).toHaveLength(1);
+
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+
+    expect(seen).toHaveLength(2);
+    const after = seen[1];
+    if (!after || after.status !== 'active') throw new Error('expected active state');
+    expect(after.peers).toHaveLength(1);
+    expect(after.peers[0]?.peerId).toBe('peer-42');
+    expect(after.peers[0]?.displayName).toBe('Ada');
+    expect(typeof after.peers[0]?.joinedAt).toBe('number');
+  });
+
+  it('duplicate presence/join for the same peerId is idempotent', async () => {
+    const { ctrl, fake } = await startActive();
+    const seen: ShareState[] = [];
+    ctrl.subscribe((s) => seen.push(s));
+
+    const joinFrame = {
+      v: 1 as const,
+      type: 'presence' as const,
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    };
+    fake.emitFrame(joinFrame);
+    fake.emitFrame(joinFrame);
+
+    const s = ctrl.state();
+    if (s.status !== 'active') throw new Error('expected active state');
+    expect(s.peers).toHaveLength(1);
+    // Initial-deliver + exactly one join transition (second is suppressed).
+    expect(seen).toHaveLength(2);
+  });
+
+  it("presence 'leave' removes the peer and its connId mapping", async () => {
+    const { ctrl, fake } = await startActive();
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'join', peerId: 'peer-42', displayName: 'Ada' },
+    });
+    fake.emitFrame({
+      v: 1,
+      type: 'presence',
+      from: 'conn-7',
+      payload: { kind: 'leave', peerId: 'peer-42' },
+    });
+
+    const s = ctrl.state();
+    if (s.status !== 'active') throw new Error('expected active state');
+    expect(s.peers).toEqual([]);
+    // After leave, kick now finds no connId mapping.
+    await expect(ctrl.kick('peer-42')).rejects.toThrow('share-peer-not-found');
+  });
+
+  it('malformed presence payload is dropped without throwing or mutating state', async () => {
+    const { ctrl, fake } = await startActive();
+    const before = ctrl.state();
+
+    // Missing peerId — fails the strict 'join' variant, falls through
+    // to the open-other variant and no-ops silently.
+    expect(() =>
+      fake.emitFrame({
+        v: 1,
+        type: 'presence',
+        from: 'conn-7',
+        payload: { kind: 'join' },
+      }),
+    ).not.toThrow();
+
+    // Completely invalid (missing kind) — rejected by the sub-schema entirely.
+    expect(() =>
+      fake.emitFrame({
+        v: 1,
+        type: 'presence',
+        from: 'conn-7',
+        payload: 'not-an-object',
+      }),
+    ).not.toThrow();
+
+    expect(ctrl.state()).toEqual(before);
+  });
+
+  it('rpc / file / sse / node-patched / rpc-result frames are accepted-and-dropped silently', async () => {
+    const { ctrl, fake } = await startActive();
+    const before = ctrl.state();
+
+    const droppable: Envelope[] = [
+      { v: 1, type: 'rpc', from: 'conn-7', payload: { method: 'patchNode' } },
+      { v: 1, type: 'rpc-result', from: 'conn-7', payload: { ok: true } },
+      { v: 1, type: 'sse', from: 'conn-7', payload: { evt: 'x' } },
+      { v: 1, type: 'file-request', from: 'conn-7', payload: { path: 'a' } },
+      { v: 1, type: 'file-upload-intent', from: 'conn-7', payload: { path: 'a' } },
+      { v: 1, type: 'file-upload-done', from: 'conn-7', payload: { path: 'a' } },
+      { v: 1, type: 'node-patched', from: 'conn-7', payload: {} },
+      { v: 1, type: 'files-manifest', from: 'conn-7', payload: [] },
+      { v: 1, type: 'file-bytes', from: 'conn-7', payload: {} },
+      { v: 1, type: 'file-redirect', from: 'conn-7', payload: { url: 'x' } },
+    ];
+    for (const env of droppable) {
+      expect(() => fake.emitFrame(env)).not.toThrow();
+    }
+    expect(ctrl.state()).toEqual(before);
+    // Nothing was sent in response — host does not auto-ack in v1.
+    expect(fake.sends()).toHaveLength(0);
   });
 });
 

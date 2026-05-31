@@ -10,6 +10,7 @@
  * so an abused share link can be invalidated.
  */
 
+import { z } from 'zod';
 import { type Envelope, makeEnvelope } from './share-envelope.ts';
 import {
   type ShareTransport,
@@ -17,6 +18,18 @@ import {
   type ShareTransportState,
   createShareTransport,
 } from './share-transport.ts';
+
+// Presence frame payloads. We validate `kind` against the base shape, then
+// re-validate join/leave with their strict required fields so malformed
+// join/leave frames are dropped rather than treated as sideband. Cursor,
+// viewport, and any other future `kind` no-op in v1 per the design doc.
+const PresenceBaseSchema = z.object({ kind: z.string() }).passthrough();
+const PresenceJoinSchema = z.object({
+  kind: z.literal('join'),
+  peerId: z.string(),
+  displayName: z.string(),
+});
+const PresenceLeaveSchema = z.object({ kind: z.literal('leave'), peerId: z.string() });
 
 export interface PeerSummary {
   peerId: string;
@@ -82,6 +95,10 @@ export function createShareController(deps: ShareDeps): ShareController {
   let hostKey: string | null = null;
   let transport: ShareTransport | null = null;
   let bootHandle: BootHandle | null = null;
+  // peerId -> connId. Populated by presence/join frames; consulted by kick()
+  // so a host can address a peer by stable peerId while the relay routes on
+  // the per-connection connId. Cleared on teardown.
+  const peerConnIds = new Map<string, string>();
 
   const setState = (next: ShareState) => {
     current = next;
@@ -98,6 +115,7 @@ export function createShareController(deps: ShareDeps): ShareController {
     const t = transport;
     transport = null;
     hostKey = null;
+    peerConnIds.clear();
     if (t) {
       try {
         t.close('user');
@@ -105,6 +123,55 @@ export function createShareController(deps: ShareDeps): ShareController {
         console.warn('[share] close failed during teardown:', err);
       }
     }
+  };
+
+  const handleFrame = (env: Envelope) => {
+    if (env.type === 'presence') {
+      const base = PresenceBaseSchema.safeParse(env.payload);
+      if (!base.success) {
+        console.warn('[share] dropped presence frame: invalid payload');
+        return;
+      }
+      const kind = base.data.kind;
+      if (kind === 'join') {
+        const parsed = PresenceJoinSchema.safeParse(env.payload);
+        if (!parsed.success) {
+          console.warn('[share] dropped presence/join: invalid fields');
+          return;
+        }
+        const { peerId, displayName } = parsed.data;
+        peerConnIds.set(peerId, env.from);
+        if (current.status !== 'active') return;
+        if (current.peers.some((peer) => peer.peerId === peerId)) return;
+        setState({
+          ...current,
+          peers: [...current.peers, { peerId, displayName, joinedAt: Date.now() }],
+        });
+        return;
+      }
+      if (kind === 'leave') {
+        const parsed = PresenceLeaveSchema.safeParse(env.payload);
+        if (!parsed.success) {
+          console.warn('[share] dropped presence/leave: invalid fields');
+          return;
+        }
+        const { peerId } = parsed.data;
+        peerConnIds.delete(peerId);
+        if (current.status !== 'active') return;
+        if (!current.peers.some((peer) => peer.peerId === peerId)) return;
+        setState({
+          ...current,
+          peers: current.peers.filter((peer) => peer.peerId !== peerId),
+        });
+        return;
+      }
+      // Other presence kinds (cursor, viewport, etc.) are sideband-only in v1.
+      return;
+    }
+    // All other envelope types are accepted-and-dropped in v1; real handling
+    // (rpc dispatch into operations.ts, file streaming, sse fan-out) lands in
+    // phase 4+. Log type+from only — never the payload.
+    console.debug('[share] dropped frame:', { type: env.type, from: env.from });
   };
 
   const controller: ShareController = {
@@ -180,16 +247,11 @@ export function createShareController(deps: ShareDeps): ShareController {
           reject(new Error('share-transport-closed-during-boot'));
         };
 
-        const onFrame = (_env: Envelope) => {
-          // Frame routing lands in US-019+. Until then, valid frames are
-          // dropped — the relay does not depend on host-side ack for boot.
-        };
-
         transport = transportFactory({
           wsUrl: body.wsUrl,
           sessionId: body.sessionId,
           hostKey: body.hostKey,
-          onFrame,
+          onFrame: handleFrame,
           onStateChange: onTransportState,
         });
       });
@@ -228,7 +290,11 @@ export function createShareController(deps: ShareDeps): ShareController {
       if (current.status !== 'active' || !transport) {
         throw new Error('share-not-active');
       }
-      transport.send(makeEnvelope('kick', { peerId }, { to: peerId }));
+      const connId = peerConnIds.get(peerId);
+      if (!connId) {
+        throw new Error('share-peer-not-found');
+      }
+      transport.send(makeEnvelope('kick', { peerId }, { to: connId }));
     },
     async rotateUrl() {
       if (current.status !== 'active') {
