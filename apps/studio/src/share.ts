@@ -395,6 +395,88 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
+  const dispatchRpcFrame = async (frame: unknown, fromPeerId: string): Promise<RpcResultFrame> => {
+    const fallbackId = extractFrameId(frame);
+    const parsed = RpcFrameSchema.safeParse(frame);
+    if (!parsed.success) {
+      // Never include payload in the log: a tampered envelope is hostile by
+      // assumption.
+      console.warn('[share] rpc frame rejected:', {
+        type: 'rpc',
+        from: fromPeerId,
+        reason: 'invalid_envelope',
+      });
+      return makeRpcResultFrame(fallbackId, { ok: false, reason: 'invalid_envelope' });
+    }
+    const op = parsed.data.payload;
+    if (!ALLOWED_RPC_OPS.has(op.op)) {
+      // Defense-in-depth: unreachable past the schema, but guards a future
+      // path that bypasses validation.
+      console.warn('[share] rpc frame rejected:', {
+        type: 'rpc',
+        from: fromPeerId,
+        reason: 'op_not_allowed',
+      });
+      return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'op_not_allowed' });
+    }
+    if (current.status !== 'active') {
+      return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'not_active' });
+    }
+    if (!rpcDispatcher) {
+      return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'no_dispatcher' });
+    }
+    const sessionId = current.sessionId;
+    let outcome: RpcDispatchOutcome;
+    try {
+      outcome = await rpcDispatcher(op);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      outcome = { kind: 'dispatcherThrew', message };
+    }
+    const ok = outcome.kind === 'ok';
+    const reason = ok ? undefined : outcome.kind + (outcome.message ? `: ${outcome.message}` : '');
+    try {
+      const entry: RpcAuditEntry = {
+        ts: Date.now(),
+        peerId: fromPeerId,
+        op: op.op,
+        flowId: op.flowId,
+        ok,
+        ...(reason ? { reason } : {}),
+      };
+      appendShareAuditFn(sessionId, entry);
+    } catch (err) {
+      console.warn('[share] rpc audit append failed:', err);
+    }
+    if (ok) {
+      // Broadcast the canonical diff BEFORE resolving rpc-result so peers
+      // (including the originator) see the patch first; the originator's
+      // optimistic reconcile then folds into a no-op.
+      const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
+      flowVersions.set(op.flowId, nextVersion);
+      const diff = computeNodePatchedDiff(op, outcome);
+      try {
+        broadcast(
+          makeEnvelope(
+            'node-patched',
+            { flowId: op.flowId, op: op.op, diff, version: nextVersion },
+            { to: 'all' },
+          ),
+        );
+      } catch (err) {
+        console.warn('[share] node-patched broadcast failed:', err);
+      }
+      return makeRpcResultFrame(parsed.data.id, {
+        ok: true,
+        ...(outcome.data !== undefined ? { result: outcome.data } : {}),
+      });
+    }
+    return makeRpcResultFrame(parsed.data.id, {
+      ok: false,
+      reason: reason ?? outcome.kind,
+    });
+  };
+
   const handleFrame = (env: Envelope) => {
     if (env.type === 'presence') {
       const base = PresenceBaseSchema.safeParse(env.payload);
@@ -488,9 +570,37 @@ export function createShareController(deps: ShareDeps): ShareController {
       verdict: 'accept',
     });
 
+    if (env.type === 'rpc') {
+      // The wire-side `RpcFrameSchema` is strict, so strip envelope-only fields
+      // (`from`, `to`) before dispatch. Missing fields surface as
+      // 'invalid_envelope' below.
+      const wireFrame = {
+        v: env.v,
+        type: env.type,
+        id: env.id,
+        payload: env.payload,
+      };
+      const replyTo = env.from;
+      dispatchRpcFrame(wireFrame, peer.peerId)
+        .then((result) => {
+          if (!transport || !transport.isOpen()) return;
+          try {
+            transport.send(
+              makeEnvelope('rpc-result', result.payload, { to: replyTo, id: result.id }),
+            );
+          } catch (err) {
+            console.warn('[share] rpc-result send failed:', err);
+          }
+        })
+        .catch((err) => {
+          console.warn('[share] dispatchRpcFrame threw:', err);
+        });
+      return;
+    }
+
     // All other envelope types are accepted-and-dropped in v1; real handling
-    // (rpc dispatch into operations.ts, file streaming, sse fan-out) lands in
-    // phase 4+. Log type+from only — never the payload.
+    // (file streaming, etc.) lands in phase 6+. Log type+from only — never
+    // the payload.
     console.debug('[share] dropped frame:', { type: env.type, from: env.from });
   };
 
@@ -619,89 +729,7 @@ export function createShareController(deps: ShareDeps): ShareController {
       // status === 'stopping' or 'error' — treat as no-op; the in-flight
       // stop will complete on its own and a fresh start() can follow.
     },
-    async handleRpcFrame(frame, fromPeerId) {
-      const fallbackId = extractFrameId(frame);
-      const parsed = RpcFrameSchema.safeParse(frame);
-      if (!parsed.success) {
-        // Never include payload in the log: a tampered envelope is hostile by
-        // assumption.
-        console.warn('[share] rpc frame rejected:', {
-          type: 'rpc',
-          from: fromPeerId,
-          reason: 'invalid_envelope',
-        });
-        return makeRpcResultFrame(fallbackId, { ok: false, reason: 'invalid_envelope' });
-      }
-      const op = parsed.data.payload;
-      if (!ALLOWED_RPC_OPS.has(op.op)) {
-        // Defense-in-depth: unreachable past the schema, but guards a future
-        // path that bypasses validation.
-        console.warn('[share] rpc frame rejected:', {
-          type: 'rpc',
-          from: fromPeerId,
-          reason: 'op_not_allowed',
-        });
-        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'op_not_allowed' });
-      }
-      if (current.status !== 'active') {
-        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'not_active' });
-      }
-      if (!rpcDispatcher) {
-        return makeRpcResultFrame(parsed.data.id, { ok: false, reason: 'no_dispatcher' });
-      }
-      const sessionId = current.sessionId;
-      let outcome: RpcDispatchOutcome;
-      try {
-        outcome = await rpcDispatcher(op);
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        outcome = { kind: 'dispatcherThrew', message };
-      }
-      const ok = outcome.kind === 'ok';
-      const reason = ok
-        ? undefined
-        : outcome.kind + (outcome.message ? `: ${outcome.message}` : '');
-      try {
-        const entry: RpcAuditEntry = {
-          ts: Date.now(),
-          peerId: fromPeerId,
-          op: op.op,
-          flowId: op.flowId,
-          ok,
-          ...(reason ? { reason } : {}),
-        };
-        appendShareAuditFn(sessionId, entry);
-      } catch (err) {
-        console.warn('[share] rpc audit append failed:', err);
-      }
-      if (ok) {
-        // Broadcast the canonical diff BEFORE resolving rpc-result so peers
-        // (including the originator) see the patch first; the originator's
-        // optimistic reconcile then folds into a no-op.
-        const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
-        flowVersions.set(op.flowId, nextVersion);
-        const diff = computeNodePatchedDiff(op, outcome);
-        try {
-          broadcast(
-            makeEnvelope(
-              'node-patched',
-              { flowId: op.flowId, op: op.op, diff, version: nextVersion },
-              { to: 'all' },
-            ),
-          );
-        } catch (err) {
-          console.warn('[share] node-patched broadcast failed:', err);
-        }
-        return makeRpcResultFrame(parsed.data.id, {
-          ok: true,
-          ...(outcome.data !== undefined ? { result: outcome.data } : {}),
-        });
-      }
-      return makeRpcResultFrame(parsed.data.id, {
-        ok: false,
-        reason: reason ?? outcome.kind,
-      });
-    },
+    handleRpcFrame: (frame, fromPeerId) => dispatchRpcFrame(frame, fromPeerId),
     async kick(peerId: string) {
       if (current.status !== 'active' || !transport) {
         throw new Error('share-not-active');
