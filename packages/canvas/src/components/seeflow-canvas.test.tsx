@@ -3117,18 +3117,18 @@ describe('SeeflowCanvas', () => {
       expect(findInspectorToggle(tree)).toBeNull();
     });
 
-    it('InspectorToggle.open reflects the sidebarOpen state', () => {
-      // Closed by default — toggle.open === false.
+    it('InspectorToggle is mounted only while sidebar is closed', () => {
+      // Closed by default — toggle mounts so the user can open the panel.
       const closedTree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
       const closedToggle = findInspectorToggle(closedTree);
       expect((closedToggle?.props as { open?: boolean }).open).toBe(false);
-      // Pinned open via slot-13 — toggle.open === true.
+      // Pinned open via slot-13 — the in-sidebar close button owns the close
+      // affordance, so the top-right toggle unmounts to avoid a duplicate icon.
       const openTree = callSeeflowCanvas(
         { nodes: [makeShapeNode('a')] },
         { useStateOverrides: sidebarOpenOverrides },
       );
-      const openToggle = findInspectorToggle(openTree);
-      expect((openToggle?.props as { open?: boolean }).open).toBe(true);
+      expect(findInspectorToggle(openTree)).toBeNull();
     });
 
     it('InspectorToggle sits to the LEFT of ShareMenu in the shared flex row', () => {

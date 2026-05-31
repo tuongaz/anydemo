@@ -4792,7 +4792,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   <Panel position="top-right">
                     <div className="sf:flex sf:items-center sf:gap-1">
                       {topRightSlot}
-                      {sidebarEnabled ? (
+                      {sidebarEnabled && !sidebarOpen ? (
                         <InspectorToggle
                           open={sidebarOpen}
                           onToggle={() => setSidebarOpen((v) => !v)}
