@@ -64,6 +64,12 @@ import {
   createShareTransport,
 } from './share-transport.ts';
 import type { SsePayload, SseSnapshotPayload } from './share/sse-frame.ts';
+import {
+  type PeerSseQueue,
+  type PeerSseQueueMetrics,
+  createPeerSseQueue,
+} from './share/sse-outbound-queue.ts';
+import type { RateLimitOptions } from './share/sse-rate-limit.ts';
 import { type SseTap, createSseTap } from './share/sse-tap.ts';
 
 // Presence frame payloads. We validate `kind` against the base shape, then
@@ -82,6 +88,13 @@ export interface PeerSummary {
   peerId: string;
   displayName: string;
   joinedAt: number;
+  /**
+   * Per-peer SSE outbound queue metrics surfaced for the LiveShareDialog's
+   * "slow peer" warning (US-072). Absent when the peer has no SSE queue
+   * (e.g. before the bridge has wired up, or when the session was started
+   * without an `eventBus`).
+   */
+  outboundSse?: PeerSseQueueMetrics;
 }
 
 export type ShareState =
@@ -271,6 +284,29 @@ export interface ShareDeps {
   // callers leave this undefined and the controller builds one from
   // `operationsDeps.registry`. Without a registry the manifest is empty.
   filesManifestBuilder?: FilesManifestBuilder;
+  /**
+   * Per-peer outbound SSE send seam (US-072). Awaited per-frame inside the
+   * per-peer queue so a slow consumer creates backpressure HERE rather than
+   * in the producer. Defaults to a sync wrapper around `broadcast` that
+   * sends an `sse` envelope addressed to the peer's connId. Tests inject a
+   * delayed stub to exercise queue overflow + drop policy without standing
+   * up a transport.
+   */
+  outboundSseSend?: (payload: SsePayload, peerConnId: string) => Promise<void> | void;
+  /** Max in-queue frames per peer before eviction kicks in. Defaults to 256. */
+  outboundSseMaxFrames?: number;
+  /** Lifetime drops within this rolling window trigger a resync. Default 60000. */
+  outboundSseDropResyncWindowMs?: number;
+  /** Default 100. */
+  outboundSseDropResyncThreshold?: number;
+  /**
+   * Tap-level rate-limit override (US-068). Passed through to `createSseTap`
+   * as its `rateLimit` option. Defaults to the tap's own defaults (60/sec,
+   * burst 120). Pass `false` to disable when testing per-peer backpressure
+   * (US-072) so frames reach the queues without the tap's coalescer
+   * absorbing the storm first.
+   */
+  sseTapRateLimit?: false | Omit<RateLimitOptions, 'onEmit'>;
 }
 
 interface RelaySessionResponse {
@@ -450,6 +486,15 @@ export function createShareController(deps: ShareDeps): ShareController {
   // connId -> peer info. Inverse of peerConnIds, kept in lockstep. Used by
   // handleFrame to resolve env.from -> peerId before rate-limiting/auditing.
   const connPeers = new Map<string, { peerId: string; displayName: string }>();
+  // Per-peer outbound SSE queues (US-072), keyed by connId. Created on
+  // presence/join, disposed on presence/leave + teardown. Absent before the
+  // first peer joins; the SSE bridge falls back to a `to: 'all'` broadcast
+  // when this map is empty so the relay's own fan-out still reaches
+  // unattributed peers (and so the legacy 0-peer tests keep passing).
+  const peerSseQueues = new Map<string, PeerSseQueue>();
+  const outboundSseMaxFrames = deps.outboundSseMaxFrames;
+  const outboundSseDropResyncThreshold = deps.outboundSseDropResyncThreshold;
+  const outboundSseDropResyncWindowMs = deps.outboundSseDropResyncWindowMs;
 
   const broadcast =
     deps.broadcast ??
@@ -460,6 +505,15 @@ export function createShareController(deps: ShareDeps): ShareController {
       } catch (err) {
         console.warn('[share] broadcast send failed:', err);
       }
+    });
+
+  // Default per-peer SSE send: emit an addressed `sse` envelope through the
+  // broadcast seam. Tests override with a stub that returns a delayed Promise
+  // to exercise queue backpressure without touching the transport.
+  const outboundSseSend: (payload: SsePayload, peerConnId: string) => Promise<void> | void =
+    deps.outboundSseSend ??
+    ((payload, peerConnId) => {
+      broadcast(makeEnvelope('sse', payload, { to: peerConnId, from: 'host' }));
     });
 
   // File-request handler (US-060). Instantiated lazily so test deps that pass
@@ -509,11 +563,26 @@ export function createShareController(deps: ShareDeps): ShareController {
   // races with init awaits this before broadcasting.
   let filesManifestReady: Promise<void> | null = null;
 
+  // Enrich an active ShareState with current per-peer outbound SSE metrics
+  // (US-072). Idempotent — re-reading state() at any time picks up the latest
+  // queue depths/drops without requiring a setState transition.
+  const enrichWithSseMetrics = (s: ShareState): ShareState => {
+    if (s.status !== 'active') return s;
+    const enrichedPeers = s.peers.map((p) => {
+      const connId = peerConnIds.get(p.peerId);
+      const queue = connId ? peerSseQueues.get(connId) : undefined;
+      if (!queue) return p;
+      return { ...p, outboundSse: queue.metrics() };
+    });
+    return { ...s, peers: enrichedPeers };
+  };
+
   const setState = (next: ShareState) => {
     current = next;
+    const enriched = enrichWithSseMetrics(next);
     for (const fn of subscribers) {
       try {
-        fn(next);
+        fn(enriched);
       } catch (err) {
         console.error('[share] subscriber threw on transition:', err);
       }
@@ -529,15 +598,28 @@ export function createShareController(deps: ShareDeps): ShareController {
     // private to the tap and used by US-069 / US-070 for join replay.
     const tap = createSseTap(deps.eventBus, {
       flowIds: () => flowIdsForBroadcast(),
+      ...(deps.sseTapRateLimit !== undefined ? { rateLimit: deps.sseTapRateLimit } : {}),
       onEvent: (payload) => {
-        // Best-effort fan-out: if the transport is gone or not open, drop the
-        // event (no buffering at the broadcast layer — the tap's ring buffer
-        // is for snapshot priming, NOT relay-side replay; reconnect handled
-        // peer-side via sse-snapshot in US-069).
-        try {
-          broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }));
-        } catch (err) {
-          console.warn('[share] sse fan-out broadcast failed:', err);
+        // With at least one connected peer, fan out per-peer through bounded
+        // queues so a slow consumer can't stall the host event loop (US-072).
+        // With zero known peers, fall back to the legacy `to: 'all'` broadcast
+        // so the relay still fans out to any peer the host hasn't seen
+        // presence/join for yet (e.g. first frame after auth-peer races with
+        // the bridge).
+        if (peerSseQueues.size === 0) {
+          try {
+            broadcast(makeEnvelope('sse', payload, { to: 'all', from: 'host' }));
+          } catch (err) {
+            console.warn('[share] sse fan-out broadcast failed:', err);
+          }
+          return;
+        }
+        for (const queue of peerSseQueues.values()) {
+          try {
+            queue.enqueue(payload);
+          } catch (err) {
+            console.warn('[share] sse enqueue failed:', err);
+          }
         }
       },
     });
@@ -577,6 +659,38 @@ export function createShareController(deps: ShareDeps): ShareController {
     }
   };
 
+  // Build a per-peer SSE outbound queue (US-072). On threshold drops the queue
+  // fires our onResyncTriggered, which we use to emit a one-shot `sse-snapshot`
+  // addressed to the peer so its canvas catches back up after the host stops
+  // sending live frames (or, more typically, after the peer's network gets
+  // back enough headroom to drain).
+  const buildPeerSseQueue = (peerConnId: string): PeerSseQueue =>
+    createPeerSseQueue({
+      peerConnId,
+      send: outboundSseSend,
+      maxFrames: outboundSseMaxFrames,
+      dropResyncThreshold: outboundSseDropResyncThreshold,
+      dropResyncWindowMs: outboundSseDropResyncWindowMs,
+      onResyncTriggered: () => {
+        try {
+          emitSseSnapshotForPeer(peerConnId);
+        } catch (err) {
+          console.warn('[share] sse resync emit failed:', err);
+        }
+      },
+    });
+
+  const disposePeerSseQueue = (peerConnId: string): void => {
+    const q = peerSseQueues.get(peerConnId);
+    if (!q) return;
+    peerSseQueues.delete(peerConnId);
+    try {
+      q.dispose();
+    } catch (err) {
+      console.warn('[share] sse queue dispose failed:', err);
+    }
+  };
+
   const teardown = () => {
     const t = transport;
     const log = auditLog;
@@ -585,6 +699,14 @@ export function createShareController(deps: ShareDeps): ShareController {
     auditLog = null;
     filesManifestReady = null;
     unsubscribeFromEventBus();
+    for (const q of peerSseQueues.values()) {
+      try {
+        q.dispose();
+      } catch (err) {
+        console.warn('[share] sse queue dispose failed:', err);
+      }
+    }
+    peerSseQueues.clear();
     peerConnIds.clear();
     connPeers.clear();
     if (t) {
@@ -791,6 +913,12 @@ export function createShareController(deps: ShareDeps): ShareController {
         const { peerId, displayName } = parsed.data;
         peerConnIds.set(peerId, env.from);
         connPeers.set(env.from, { peerId, displayName });
+        // Spin up the per-peer outbound SSE queue alongside the connId
+        // bookkeeping so any live frame that fires after presence/join lands
+        // on a bounded queue rather than hitting the legacy `to: 'all'` path.
+        if (!peerSseQueues.has(env.from)) {
+          peerSseQueues.set(env.from, buildPeerSseQueue(env.from));
+        }
         // Join itself is always accepted — the peer becomes "known" only as
         // a result of this frame, so rate-limiting it would be a chicken-and-
         // egg problem. Audit it as accept so the trail shows who joined when.
@@ -822,6 +950,7 @@ export function createShareController(deps: ShareDeps): ShareController {
         const known = connPeers.get(env.from);
         peerConnIds.delete(peerId);
         connPeers.delete(env.from);
+        disposePeerSseQueue(env.from);
         if (known) {
           audit({
             ts: Date.now(),
@@ -1131,12 +1260,12 @@ export function createShareController(deps: ShareDeps): ShareController {
       return { url };
     },
     state() {
-      return current;
+      return enrichWithSseMetrics(current);
     },
     subscribe(fn) {
       subscribers.add(fn);
       try {
-        fn(current);
+        fn(enrichWithSseMetrics(current));
       } catch (err) {
         console.error('[share] subscriber threw on initial deliver, dropping:', err);
       }
