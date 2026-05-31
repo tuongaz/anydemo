@@ -5236,6 +5236,7 @@ describe('GET /api/share/audit', () => {
         peers: [],
         startedAt: 0,
         hostDisplayName: 'Host',
+        recentSessionCount: 1,
       },
       audit: {
         list: async () => ({ entries: [sample], nextCursor: 42 }),
@@ -5315,6 +5316,7 @@ describe('GET /api/share/state', () => {
         peers: [],
         startedAt: 12345,
         hostDisplayName: 'Host',
+        recentSessionCount: 1,
       });
     }, 10);
 

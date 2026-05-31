@@ -117,6 +117,10 @@ export type ShareState =
       // (defaults to 'Host') and exposed on state so the SSE bridge and local
       // studio UI can render the host's own suppressed self-attribution.
       hostDisplayName: string;
+      // US-082: count of sessions currently tracked in active.json. Surfaced
+      // on state so the apps/web LiveShareDialog can disable the kill-switch
+      // button (and render "Active sessions: N") without a side-channel fetch.
+      recentSessionCount: number;
     }
   | { status: 'stopping' }
   | { status: 'error'; reason: string };
@@ -605,8 +609,9 @@ export function createShareController(deps: ShareDeps): ShareController {
   let filesManifestReady: Promise<void> | null = null;
 
   // Enrich an active ShareState with current per-peer outbound SSE metrics
-  // (US-072). Idempotent — re-reading state() at any time picks up the latest
-  // queue depths/drops without requiring a setState transition.
+  // (US-072) and the live tracked-session count (US-082). Idempotent —
+  // re-reading state() at any time picks up the latest queue depths/drops AND
+  // the latest `active.json` count without requiring a setState transition.
   const enrichWithSseMetrics = (s: ShareState): ShareState => {
     if (s.status !== 'active') return s;
     const enrichedPeers = s.peers.map((p) => {
@@ -615,7 +620,11 @@ export function createShareController(deps: ShareDeps): ShareController {
       if (!queue) return p;
       return { ...p, outboundSse: queue.metrics() };
     });
-    return { ...s, peers: enrichedPeers };
+    return {
+      ...s,
+      peers: enrichedPeers,
+      recentSessionCount: readTrackedSessions().length,
+    };
   };
 
   const setState = (next: ShareState) => {
@@ -1298,6 +1307,7 @@ export function createShareController(deps: ShareDeps): ShareController {
               peers: [],
               startedAt: Date.now(),
               hostDisplayName,
+              recentSessionCount: 0,
             });
             resolve({ url, sessionId: body.sessionId });
             return;

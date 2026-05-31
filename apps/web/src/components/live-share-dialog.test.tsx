@@ -146,8 +146,12 @@ function renderDialog(
 //   2: activityOpen                (boolean)
 //   3: pendingKick                 (string | null)
 //   4: toasts                      (ToastItem[])
+//   5: killAllConfirmOpen          (boolean)
+//   6: killAllPending              (boolean)
+//   7: killAllError                (string | null)
 const SLOT_ACTIVITY_OPEN = 2;
 const SLOT_PENDING_KICK = 3;
+const SLOT_KILL_ALL_CONFIRM_OPEN = 5;
 
 const realFetch = globalThis.fetch;
 type FetchCall = { url: string; method?: string; body?: string };
@@ -361,6 +365,77 @@ describe('LiveShareDialog', () => {
       expect(() => {
         for (const c of cleanups) c();
       }).not.toThrow();
+    });
+  });
+
+  describe('kill-switch (US-082)', () => {
+    it('clicking "End all sessions" flips killAllConfirmOpen state (slot 5)', () => {
+      const setterCalls: SetterCall[] = [];
+      const tree = renderDialog({ recentSessionCount: 2 }, [], setterCalls);
+      const button = findByTestId(tree, 'live-share-kill-all-button');
+      if (!button) throw new Error('kill-all button missing');
+      const onClick = (button.props as { onClick?: () => void }).onClick;
+      if (!onClick) throw new Error('kill-all onClick missing');
+      setterCalls.length = 0;
+      onClick();
+      const flips = setterCalls.filter((c) => c.slot === SLOT_KILL_ALL_CONFIRM_OPEN);
+      expect(flips.length).toBeGreaterThanOrEqual(1);
+      expect(flips[flips.length - 1]?.value).toBe(true);
+    });
+
+    it('clicking "End all" inside the confirm calls fetch POST /api/share/kill-all', async () => {
+      const { calls } = installFetchMock(() => ({ status: 200, body: { revoked: 3, failed: 0 } }));
+      // Seed killAllConfirmOpen = true so the confirm content is present.
+      const overrides: unknown[] = [];
+      overrides[SLOT_KILL_ALL_CONFIRM_OPEN] = true;
+      const tree = renderDialog({ recentSessionCount: 3, onKillAll: undefined }, overrides);
+      const confirm = findByTestId(tree, 'live-share-kill-all-confirm-button');
+      if (!confirm) throw new Error('confirm button missing');
+      const onClick = (confirm.props as { onClick?: () => Promise<void> | void }).onClick;
+      if (!onClick) throw new Error('confirm onClick missing');
+      await onClick();
+      expect(calls.length).toBe(1);
+      expect(calls[0]?.url).toBe('/api/share/kill-all');
+      expect(calls[0]?.method).toBe('POST');
+    });
+
+    it('clicking Cancel inside the confirm does NOT call fetch', async () => {
+      const { calls } = installFetchMock(() => ({ status: 200, body: { revoked: 0, failed: 0 } }));
+      const overrides: unknown[] = [];
+      overrides[SLOT_KILL_ALL_CONFIRM_OPEN] = true;
+      const setterCalls: SetterCall[] = [];
+      const tree = renderDialog(
+        { recentSessionCount: 1, onKillAll: undefined },
+        overrides,
+        setterCalls,
+      );
+      const cancel = findByTestId(tree, 'live-share-kill-all-cancel');
+      if (!cancel) throw new Error('cancel button missing');
+      const onClick = (cancel.props as { onClick?: () => void }).onClick;
+      if (!onClick) throw new Error('cancel onClick missing');
+      setterCalls.length = 0;
+      onClick();
+      expect(calls.length).toBe(0);
+      const flips = setterCalls.filter((c) => c.slot === SLOT_KILL_ALL_CONFIRM_OPEN);
+      expect(flips.some((f) => f.value === false)).toBe(true);
+    });
+
+    it('recentSessionCount === 0 disables the kill-switch button', () => {
+      const tree = renderDialog({ recentSessionCount: 0 });
+      const button = findByTestId(tree, 'live-share-kill-all-button');
+      if (!button) throw new Error('kill-all button missing');
+      expect((button.props as { disabled?: boolean }).disabled).toBe(true);
+      const subtitle = findByTestId(tree, 'live-share-active-sessions-count');
+      const text = JSON.stringify(subtitle);
+      expect(text).toContain('Active sessions:');
+      expect(text).toContain('0');
+    });
+
+    it('renders the Active sessions: N subtitle reflecting recentSessionCount', () => {
+      const tree = renderDialog({ recentSessionCount: 7 });
+      const subtitle = findByTestId(tree, 'live-share-active-sessions-count');
+      const text = JSON.stringify(subtitle);
+      expect(text).toContain('7');
     });
   });
 });

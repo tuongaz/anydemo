@@ -18,6 +18,14 @@ export type ShareState =
       peers: ShareStatePeerSummary[];
       startedAt: number;
       hostDisplayName: string;
+      /**
+       * US-082: count of sessions the studio is currently tracking in
+       * `active.json`. Used by the LiveShareDialog kill-switch affordance
+       * to disable the button when no live sessions exist and to render
+       * "Active sessions: N". `undefined` while older studios are still
+       * deployed; readers must default to 0.
+       */
+      recentSessionCount?: number;
     }
   | { status: 'stopping' }
   | { status: 'error'; reason: string };

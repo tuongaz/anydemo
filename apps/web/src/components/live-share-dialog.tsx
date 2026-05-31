@@ -22,6 +22,12 @@ export interface LiveShareDialogProps {
   /** Host display name, surfaced at the top of the dialog. */
   hostDisplayName?: string;
   /**
+   * US-082: number of sessions the studio is currently tracking in
+   * `active.json`. Drives the kill-switch button: disabled when 0, with the
+   * "Active sessions: N" subtitle reflecting this value. Defaults to 0.
+   */
+  recentSessionCount?: number;
+  /**
    * Audit-hook override for tests. Defaults to `useLiveShareAudit(open)`.
    * Splitting it out keeps the dialog testable without faking globals.
    */
@@ -35,6 +41,18 @@ export interface LiveShareDialogProps {
    * {method:'POST', body:{peerId}})` POST.
    */
   onKick?: (peer: ShareStatePeerSummary) => Promise<void>;
+  /**
+   * Kill-switch implementation override for tests. Defaults to a
+   * `fetch('/api/share/kill-all', {method:'POST'})` POST returning
+   * `{ revoked, failed }`. Errors are surfaced inline in the confirm dialog.
+   */
+  onKillAll?: () => Promise<{ revoked: number; failed: number }>;
+  /**
+   * Notified with the `revoked` count after a successful kill-all. The host
+   * wires this up to its top-level toast stack so the dialog can close while
+   * the toast remains visible.
+   */
+  onKillAllSuccess?: (revoked: number) => void;
 }
 
 interface ToastItem {
@@ -53,6 +71,16 @@ async function defaultKick(peer: ShareStatePeerSummary): Promise<void> {
   if (!res.ok && res.status !== 204) {
     throw new Error(`kick failed: ${res.status}`);
   }
+}
+
+async function defaultKillAll(): Promise<{ revoked: number; failed: number }> {
+  const res = await fetch('/api/share/kill-all', { method: 'POST' });
+  if (!res.ok) throw new Error(`kill-all failed: ${res.status}`);
+  const body = (await res.json()) as { revoked?: number; failed?: number };
+  return {
+    revoked: typeof body.revoked === 'number' ? body.revoked : 0,
+    failed: typeof body.failed === 'number' ? body.failed : 0,
+  };
 }
 
 function formatTime(ts: number): string {
@@ -109,8 +137,11 @@ export function LiveShareDialog({
   onOpenChange,
   peers,
   hostDisplayName,
+  recentSessionCount = 0,
   auditApi,
   onKick,
+  onKillAll,
+  onKillAllSuccess,
 }: LiveShareDialogProps) {
   const defaultAudit = useLiveShareAudit(auditApi ? false : open);
   const audit = auditApi ?? defaultAudit;
@@ -118,6 +149,11 @@ export function LiveShareDialog({
   const [activityOpen, setActivityOpen] = useState(false);
   const [pendingKick, setPendingKick] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
+  // Slots 5/6/7 — appended at the end so existing test slot constants
+  // (SLOT_ACTIVITY_OPEN=2, SLOT_PENDING_KICK=3) stay valid.
+  const [killAllConfirmOpen, setKillAllConfirmOpen] = useState(false);
+  const [killAllPending, setKillAllPending] = useState(false);
+  const [killAllError, setKillAllError] = useState<string | null>(null);
 
   const expireToast = useCallback((id: number) => {
     setToasts((current) => current.filter((t) => t.id !== id));
@@ -140,6 +176,24 @@ export function LiveShareDialog({
     },
     [onKick, expireToast],
   );
+
+  const handleKillAllConfirm = useCallback(async () => {
+    setKillAllPending(true);
+    setKillAllError(null);
+    try {
+      const result = await (onKillAll ?? defaultKillAll)();
+      setKillAllConfirmOpen(false);
+      onOpenChange(false);
+      onKillAllSuccess?.(result.revoked);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Kill-all failed';
+      setKillAllError(message);
+    } finally {
+      setKillAllPending(false);
+    }
+  }, [onKillAll, onKillAllSuccess, onOpenChange]);
+
+  const killSwitchDisabled = recentSessionCount === 0 || killAllPending;
 
   const entriesReversed = [...audit.entries].reverse();
 
@@ -278,6 +332,100 @@ export function LiveShareDialog({
             ))}
           </div>
         ) : null}
+
+        <div
+          data-testid="live-share-footer"
+          className="sf:flex sf:flex-col sf:gap-1 sf:border-t sf:border-border sf:pt-3"
+        >
+          <div className="sf:flex sf:items-start sf:justify-between sf:gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="sf:inline-flex">
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={killSwitchDisabled}
+                    onClick={() => {
+                      setKillAllError(null);
+                      setKillAllConfirmOpen(true);
+                    }}
+                    data-testid="live-share-kill-all-button"
+                  >
+                    End all sessions
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {recentSessionCount === 0 ? (
+                <TooltipContent>No active sessions to end</TooltipContent>
+              ) : null}
+            </Tooltip>
+          </div>
+          <div
+            data-testid="live-share-active-sessions-count"
+            className="sf:text-xs sf:text-muted-foreground"
+          >
+            Active sessions: {recentSessionCount}
+          </div>
+        </div>
+
+        <Dialog
+          open={killAllConfirmOpen}
+          onOpenChange={(next) => {
+            if (killAllPending) return;
+            setKillAllConfirmOpen(next);
+            if (!next) setKillAllError(null);
+          }}
+        >
+          <DialogContent className="sf:sm:max-w-md" data-testid="live-share-kill-all-confirm">
+            <DialogHeader>
+              <DialogTitle>End all live sessions?</DialogTitle>
+              <DialogDescription>
+                This revokes every share link this studio has issued. Anyone currently connected
+                will be disconnected. This cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+            {killAllError ? (
+              <div
+                data-testid="live-share-kill-all-error"
+                className="sf:rounded-md sf:border sf:border-destructive/40 sf:bg-destructive/10 sf:px-3 sf:py-2 sf:text-sm sf:text-destructive"
+              >
+                {killAllError}
+              </div>
+            ) : null}
+            <div className="sf:flex sf:justify-end sf:gap-2 sf:pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={killAllPending}
+                onClick={() => {
+                  setKillAllConfirmOpen(false);
+                  setKillAllError(null);
+                }}
+                data-testid="live-share-kill-all-cancel"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                size="sm"
+                disabled={killAllPending}
+                onClick={handleKillAllConfirm}
+                data-testid="live-share-kill-all-confirm-button"
+              >
+                {killAllPending ? (
+                  <Loader2
+                    className="sf:mr-2 sf:h-4 sf:w-4 sf:animate-spin"
+                    data-testid="live-share-kill-all-spinner"
+                  />
+                ) : null}
+                End all
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
       </DialogContent>
     </Dialog>
   );
