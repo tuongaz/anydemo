@@ -125,6 +125,7 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       eventBus: events,
       flowIdsForBroadcast: () => registry.list().map((e) => e.id),
       hostDisplayName: resolveHostDisplayName(),
+      operationsDeps: { registry, ...(watcher ? { watcher } : {}) },
     });
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
