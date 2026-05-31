@@ -9,6 +9,9 @@ Started: Sun 31 May 2026 18:44:56 AEST
 - `bun run format` MUST run before `bun run lint` — Biome only emits fixes when `--write` runs, and `lint` is the gate.
 - `apps/studio/src/server.test.ts` and `apps/studio/src/watcher.test.ts` have pre-existing flakiness (timeouts under parallel load and timing-sensitive fs-watcher assertions) that is independent of canvas-side work. Canvas-only changes only need canvas-suite green.
 - `Partial<SeeflowCanvasProps>` cannot be spread into a typed `SeeflowCanvasProps` literal once the union has overlapping mode arms — the test helper casts via `as unknown as SeeflowCanvasProps` to bypass arm-by-arm narrowing.
+- Files that are byte-for-byte mirrored across the seeflow + seeflow-viewer repos MUST be self-contained — no imports from sibling modules that don't exist on both sides (e.g. operations.ts is studio-only; schema.ts likewise). The wire schema for live-share is intentionally loose (`z.record(z.unknown())`) for complex bodies and defers strict re-validation to the impl layer.
+- Bun's directory discovery STILL skips `*.it.ts` from `bun test apps/.../foo.it.ts` (the basename test), but `bun test ./apps/.../foo.it.ts` with a leading `./` treats it as an explicit path and runs it. The repo-level `test:it:bun` script globs `./apps/studio/integration/*.it.ts` and doesn't accept a name filter — run individual `.it.ts` files via `bun test ./path/to/file.it.ts` from the repo root instead.
+- The repo-level `test:it:bun` script is at the ROOT package.json (`./apps/studio/integration/*.it.ts`), NOT under `apps/studio/`. Don't `cd apps/studio && bun run test:it:bun` — it will fail with "Script not found".
 ---
 
 ## 2026-05-31 — US-035
@@ -50,4 +53,28 @@ Started: Sun 31 May 2026 18:44:56 AEST
   - `console.warn` in a hook-shim test prints to the test output but doesn't fail the assertion — useful for the "warn once" gate; the noise is acceptable.
   - `wrapIoAdapterAsCanvasAdapter` does NOT carry the optional CanvasAdapter fields (`playAction`, `openFile`, `revealFile`, `computeLayout`, `icons`). Don't add them with no-op stubs — letting them be undefined drives feature-detection elsewhere (e.g. peer-mode tidy stays disabled, peer-mode icon pack tabs stay collapsed).
   - The "module-level guard for one-shot warn" pattern (`let hasWarnedDualAdapter = false`) is the right shape: per-process not per-instance, so dev-mode HMR remounts don't spam the console.
+---
+
+## 2026-05-31 — US-037
+- Created `apps/studio/src/share-rpc-schema.ts` — self-contained Zod envelope schema for live-share `rpc` + `rpc-result` frames. 9 op schemas (addNode, patchNode, moveNode, reorderNode, deleteNode, addConnector, patchConnector, deleteConnector, addBulk) glued by `z.discriminatedUnion('op', […])`. Each op uses `.strict()` so cross-op shape mixing (e.g. `{ op: 'addNode', nodeId, position }`) rejects loud. `addBulk` reuses operations.ts's 100-item cap inline.
+- `RpcFrameSchema` = `{ v: 1, type: 'rpc', id, payload: RpcOp }`. `RpcResultFrameSchema` payload is a discriminated union on `ok` with strict variants for both branches.
+- Inline strict shapes for `position` (`{ x: number().finite(), y: number().finite() }`) and `reorder` (5-arm discriminated union mirroring operations.ts). Patch + add bodies are loose `z.record(z.unknown())` because the strict NodePatchBodySchema / ConnectorPatchBodySchema can't be mirrored into the viewer repo (they pull in schema.ts). Strict re-validation happens at impl-dispatch time per the file header.
+- Exported types: `RpcOp`, `RpcFrame`, `RpcResultFrame`.
+- Mirrored the file byte-for-byte to `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (`diff -q` confirms BYTE MATCH).
+- Added `apps/studio/src/share-rpc-schema.test.ts` — 28 tests across 4 describe blocks: per-op valid+invalid (18 tests across 9 ops), cross-op pairing (3 tests including unknown-op rejection + addBulk empty-arrays accepted at schema layer), RpcFrame envelope (3 tests: full frame, v!=1 rejected, empty id rejected), RpcResultFrame (4 tests: ok:true ±result, ok:false +reason, ok:false missing reason rejected).
+- Added `apps/studio/integration/share-rpc-schema-sync.it.ts` — reads both copies via `fs.readFileSync` and asserts `Buffer.equals`. Soft-skips with a console.warn when the viewer repo isn't on disk (SEEFLOW_VIEWER_PATH env override + sibling fallback + hardcoded dev fallback). 1 pass locally.
+- Quality gates: `bun run format` + `bun run lint` clean, `bun run typecheck` all workspaces clean, viewer's `bun run typecheck` clean, viewer's `bun test src/lib/` 19 pass / 0 fail. Studio's `bun test apps/studio/src/` had 7 pre-existing failures all in server.test.ts + watcher.test.ts (known-flaky per Codebase Patterns).
+- Files changed:
+  - `apps/studio/src/share-rpc-schema.ts` (new)
+  - `apps/studio/src/share-rpc-schema.test.ts` (new)
+  - `apps/studio/integration/share-rpc-schema-sync.it.ts` (new)
+  - `/Users/tuongaz/dev/seeflow-viewer/src/lib/share-rpc-schema.ts` (new — byte-for-byte mirror)
+  - `ralph/prd.json` (US-037 passes → true)
+- **Learnings for future iterations:**
+  - The AC's "reuses the existing body schemas" wording conflicts with the byte-for-byte mirror requirement (operations.ts imports don't resolve in the viewer repo). Resolution: self-contained schemas with `z.record(z.unknown())` for complex bodies, inline strict shapes for the small ones (position, reorder). The header comment documents the trade-off.
+  - `z.discriminatedUnion` ONLY accepts `ZodObject` members, not `ZodEffects` (refined schemas). So `FlowBulkBodyShape.extend(...).refine(nonEmpty)` can't be a union member — the non-empty check has to be deferred to the dispatch handler (US-038).
+  - Bun's test path resolution: `bun test apps/.../foo.it.ts` (no leading dot) fails with "filter had no matches" because `.it.ts` doesn't match `.test|.spec`. Use `bun test ./apps/.../foo.it.ts` (leading dot = explicit path) to run a single integration file from repo root.
+  - The viewer file path resolves differently in a worktree vs the canonical seeflow checkout. The integration test uses an env-var-with-fallbacks pattern (SEEFLOW_VIEWER_PATH → sibling → hardcoded dev path → soft-skip with warn). Never hardcode an assumption — the worktree breaks "../../../../seeflow-viewer".
+  - `.strict()` on each op schema in a discriminatedUnion catches cross-op shape mixing (e.g. `{ op: 'addNode', nodeId: 'x', position }` is rejected as an unknown-key violation on AddNodeOpSchema). Without `.strict()`, the union would silently accept the wrong wrapper shape so long as the required fields were present.
+  - Biome's organizeImports puts `bun:test` BEFORE `node:fs`/`node:path` alphabetically — sort by full source string, not by category.
 ---
