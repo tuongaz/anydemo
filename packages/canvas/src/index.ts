@@ -270,6 +270,7 @@ export type {
 // 5c. IoAdapter
 // ----------------------------------------------------------------------------
 export type {
+  CanvasSseEvent,
   IoAdapter,
   IoAdapterDispatchEnvelope,
   IoAdapterResult,

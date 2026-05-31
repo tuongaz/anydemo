@@ -1,7 +1,7 @@
 {
   "project": "SeeFlow Live Share",
   "branchName": "ralph/live-share-phase-7",
-  "description": "Phase 7 — SSE bridge for live runtime events.",
+  "description": "Phase 7 \u2014 SSE bridge for live runtime events.",
   "userStories": [
     {
       "id": "US-065",
@@ -39,7 +39,7 @@
       ],
       "priority": 2,
       "passes": true,
-      "notes": "Implemented apps/studio/src/share/sse-tap.ts + sibling test. createSseTap(events, opts) returns { start, stop, refreshFlows, snapshot }. start() is idempotent; refreshFlows is a no-op before start; per-flow add/remove diff keeps unchanged subscriptions stable. Ring buffer caps at opts.bufferSize ?? 50. snapshot() carries only node-level events with a string nodeId in payload. seq is a closure-scoped monotonic counter (per tap instance — process-wide will be wired in US-067 when share.ts owns the single tap)."
+      "notes": "Implemented apps/studio/src/share/sse-tap.ts + sibling test. createSseTap(events, opts) returns { start, stop, refreshFlows, snapshot }. start() is idempotent; refreshFlows is a no-op before start; per-flow add/remove diff keeps unchanged subscriptions stable. Ring buffer caps at opts.bufferSize ?? 50. snapshot() carries only node-level events with a string nodeId in payload. seq is a closure-scoped monotonic counter (per tap instance \u2014 process-wide will be wired in US-067 when share.ts owns the single tap)."
     },
     {
       "id": "US-067",
@@ -49,7 +49,7 @@
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Modify apps/studio/src/share.ts (created earlier phases): in `start()`, instantiate the SSE tap from US-066 and forward each event to the WebSocket as `wrapAsSseFrame(event, seq)` via the existing relay send helper",
         "Tap auto-tracks the registry: when a new flow registers (registry:reload event) or unregisters, `sse-tap.refreshFlows()` is called so the subscription set stays in sync",
-        "On host WS reconnect, the buffered ring is NOT re-sent (peers handle reconnect via the snapshot replay path in US-070); only events that arrive AFTER reconnect are forwarded — verify no double-emit",
+        "On host WS reconnect, the buffered ring is NOT re-sent (peers handle reconnect via the snapshot replay path in US-070); only events that arrive AFTER reconnect are forwarded \u2014 verify no double-emit",
         "Add unit test apps/studio/src/share.sse-bridge.test.ts using a fake EventBus and a stub WS sender: a `node:running` event for a registered flow results in exactly one outbound `{type:'sse'}` frame whose payload matches the SsePayloadSchema; events for unregistered flows are dropped",
         "`bun run typecheck` passes",
         "Typecheck passes",
@@ -67,7 +67,7 @@
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Extend apps/studio/src/share/sse-tap.ts (or a sibling apps/studio/src/share/sse-rate-limit.ts) with a token bucket: 60 frames/sec sustained, burst 120, configurable via opts",
         "Coalescing rule: while a frame for the same (flowId, nodeId, type='node:status') is pending in the bucket queue, the latest payload replaces the queued one rather than enqueuing a new entry (keeps last-wins semantics)",
-        "Terminal events (`node:done`, `node:error`) are NEVER coalesced or dropped — always pass through",
+        "Terminal events (`node:done`, `node:error`) are NEVER coalesced or dropped \u2014 always pass through",
         "When the bucket overflows, drop the oldest pending non-terminal frame and increment a `droppedFrames` counter exposed via `tap.metrics()`",
         "Create apps/studio/src/share/sse-rate-limit.test.ts: burst of 200 node:status frames in 50ms results in <=120 outbound frames + droppedFrames > 0; intermixed node:done is always delivered; same-node coalescing keeps the LATEST payload (assert by serial number in the payload)",
         "`bun run typecheck` passes",
@@ -81,12 +81,12 @@
     {
       "id": "US-069",
       "title": "Send a `sse-snapshot` replay frame to each peer on join",
-      "description": "As a peer joining mid-session, I need the host to send the current per-node status snapshot immediately on join so my canvas badges, ring animations, and StatusReport state match the host within one render — not after waiting for the next live tick.",
+      "description": "As a peer joining mid-session, I need the host to send the current per-node status snapshot immediately on join so my canvas badges, ring animations, and StatusReport state match the host within one render \u2014 not after waiting for the next live tick.",
       "acceptanceCriteria": [
         "Working dir: /Users/tuongaz/dev/seeflow",
-        "Add envelope type `'sse-snapshot'` to cloud/lambda/share/shared/envelope.ts (enum literal addition) and to its sibling tests; bump no version field — the snapshot is a discrete frame type, not a v2",
+        "Add envelope type `'sse-snapshot'` to cloud/lambda/share/shared/envelope.ts (enum literal addition) and to its sibling tests; bump no version field \u2014 the snapshot is a discrete frame type, not a v2",
         "Mirror the new enum value in apps/studio/src/share/sse-frame.ts and seeflow-viewer/src/lib/share-sse-frame.ts (and re-run the sync check from US-065)",
-        "In apps/studio/src/share.ts, when the host receives a `presence` frame indicating a new peer joined (or a peer-rejoin), call `sseTap.snapshot()` and send a single `{ type: 'sse-snapshot', to: <peerConnId>, payload: { flows: Record<flowId, Record<nodeId, latestEvent>> } }` frame addressed to that peer only — not broadcast",
+        "In apps/studio/src/share.ts, when the host receives a `presence` frame indicating a new peer joined (or a peer-rejoin), call `sseTap.snapshot()` and send a single `{ type: 'sse-snapshot', to: <peerConnId>, payload: { flows: Record<flowId, Record<nodeId, latestEvent>> } }` frame addressed to that peer only \u2014 not broadcast",
         "Snapshot payload size cap: 256 KB. If exceeded, split per-flow into chunked snapshots with `{ chunk: n, total: m }` headers; peer reassembles before applying",
         "Add unit test apps/studio/src/share.sse-snapshot.test.ts: a stub join event triggers exactly one snapshot frame addressed to the joiner; broadcasting peers do NOT receive it; large snapshot is chunked correctly",
         "`bun run typecheck` passes",
@@ -95,7 +95,7 @@
       ],
       "priority": 5,
       "passes": true,
-      "notes": "Added envelope type 'sse-snapshot' to apps/studio/src/share-envelope.ts ENVELOPE_TYPES + the viewer mirror at seeflow-viewer/src/lib/share-envelope.ts. Added SseSnapshotPayloadSchema + SseSnapshotPayload to the SYNC-WITH-PEER region of apps/studio/src/share/sse-frame.ts and the viewer mirror; sync check passes. share.ts now emits an sse-snapshot frame (or N chunked frames) addressed to the joiner's connId from the presence/join handler. Snapshot serialization is capped at 256 KB per frame via `chunkSnapshotByFlow<T>()` (exported, generic): single chunk -> no chunk/total headers, multi-chunk -> { chunk: 0..N-1, total: N } stamped on each frame. A flow whose own snapshot exceeds the cap is emitted as its own (oversize) chunk — per-flow is the indivisible unit per the PRD. Snapshot is suppressed entirely when the eventBus dep is omitted (no tap to read) or when snapshot() is empty. Idempotent join: duplicate presence/join from the same peerId hits the existing guard before the snapshot emit path, so only one snapshot frame goes out. Tests in apps/studio/src/share.sse-snapshot.test.ts (11 cases, including chunkSnapshotByFlow unit cases). Also added envelope-level acceptance tests in both share-envelope.test.ts and sse-frame.test.ts mirrors. All 249 share-related + 14 viewer tests pass; typecheck across 4 workspaces clean."
+      "notes": "Added envelope type 'sse-snapshot' to apps/studio/src/share-envelope.ts ENVELOPE_TYPES + the viewer mirror at seeflow-viewer/src/lib/share-envelope.ts. Added SseSnapshotPayloadSchema + SseSnapshotPayload to the SYNC-WITH-PEER region of apps/studio/src/share/sse-frame.ts and the viewer mirror; sync check passes. share.ts now emits an sse-snapshot frame (or N chunked frames) addressed to the joiner's connId from the presence/join handler. Snapshot serialization is capped at 256 KB per frame via `chunkSnapshotByFlow<T>()` (exported, generic): single chunk -> no chunk/total headers, multi-chunk -> { chunk: 0..N-1, total: N } stamped on each frame. A flow whose own snapshot exceeds the cap is emitted as its own (oversize) chunk \u2014 per-flow is the indivisible unit per the PRD. Snapshot is suppressed entirely when the eventBus dep is omitted (no tap to read) or when snapshot() is empty. Idempotent join: duplicate presence/join from the same peerId hits the existing guard before the snapshot emit path, so only one snapshot frame goes out. Tests in apps/studio/src/share.sse-snapshot.test.ts (11 cases, including chunkSnapshotByFlow unit cases). Also added envelope-level acceptance tests in both share-envelope.test.ts and sse-frame.test.ts mirrors. All 249 share-related + 14 viewer tests pass; typecheck across 4 workspaces clean."
     },
     {
       "id": "US-070",
@@ -105,15 +105,15 @@
         "Working dir: /Users/tuongaz/dev/seeflow-viewer",
         "Modify src/lib/share-client.ts (created in Phase 3): add a `dispatchSseFrame(envelope)` method that Zod-validates the payload against the schema from US-065, then either (a) emits a `StudioEvent`-shaped object to the existing canvas-event sink the same way EventSource listeners do on the studio side, or (b) for `sse-snapshot`, seeds per-node visualStatus by replaying each entry through the same sink",
         "Out-of-order arrival: track last-seen `seq` per (flowId, nodeId); drop any incoming frame with `seq` strictly less than the last seen, but always accept a frame whose `t` is `node:done` or `node:error` (terminal wins even if seq is stale)",
-        "Reconnect handling: on WS reconnect, the client clears its per-(flowId,nodeId) seq map and waits for the host's next `sse-snapshot` frame before re-applying live events — guarantees a clean reset",
+        "Reconnect handling: on WS reconnect, the client clears its per-(flowId,nodeId) seq map and waits for the host's next `sse-snapshot` frame before re-applying live events \u2014 guarantees a clean reset",
         "Add unit test src/lib/share-client.sse.test.ts using a fake event sink: snapshot frame seeds 3 nodes' statuses; subsequent `node:status` with increasing seq updates; stale seq is dropped; terminal `node:error` with stale seq still applies; reconnect clears seq map",
         "`bun run typecheck` passes",
         "Typecheck passes",
         "Tests pass"
       ],
       "priority": 6,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "Implemented in the sibling seeflow-viewer repo. Added `dispatchSseFrame(envelope)` to ShareClient (src/lib/share-client.ts) that Zod-parses `sse` and `sse-snapshot` payloads, emits a `StudioEvent`-shaped object through a new `on('studio-event', listener)` sink (the canvas-event sink for US-071), enforces per-(flowId, nodeId) seq ordering with terminal-wins override (node:done/node:error always apply even when seq is stale), and arms a reconnect gate on WS close/kick that drops live `sse` frames until the next `sse-snapshot` clears the gate + re-seeds the seq map. Per-flow seq tracking is keyed by `${flowId}:${nodeId}`; flow:reload bypasses tracking because it carries no nodeId. The SSE router is lazy-installed on the first `on('studio-event', ...)` call (matches the node-patched/file router pattern). 11 tests in src/lib/share-client.sse.test.ts cover snapshot seeding, increasing-seq updates, stale-seq drops, terminal stale-seq override, per-node seq isolation, flow:reload bypass, reconnect gate (live frame dropped before snapshot, accepted after), seq-map cleared by reconnect, and malformed-payload rejection. Viewer typecheck + all 279 tests pass; studio sync check (check-sse-frame-sync.ts) + studio typecheck remain clean. Viewer commit: feat: US-070 - ... on branch ralph/live-share-phase-6 in /Users/tuongaz/dev/seeflow-viewer/."
     },
     {
       "id": "US-071",
@@ -121,7 +121,7 @@
       "description": "As a peer viewing a flow, I need the `share-client` SSE dispatch to drive the same `deriveVisualStatus` path used on the host so the StatusIconPill, PlayButton ring, and edge handoff pulse all animate identically.",
       "acceptanceCriteria": [
         "Working dir: /Users/tuongaz/dev/seeflow-viewer",
-        "Extend the `IoAdapter` interface (added to packages/canvas in Phase 4) with an optional `subscribeEvents(flowId, listener)` method — when present, the canvas uses it INSTEAD of constructing an EventSource against `/api/events` (the existing fallback)",
+        "Extend the `IoAdapter` interface (added to packages/canvas in Phase 4) with an optional `subscribeEvents(flowId, listener)` method \u2014 when present, the canvas uses it INSTEAD of constructing an EventSource against `/api/events` (the existing fallback)",
         "In src/lib/share-client.ts, implement `subscribeEvents(flowId, listener)` that pipes the dispatchSseFrame output to the listener with a `StudioEvent`-shape ({ type, ts, flowId, ...payload }), returning a disposer that unsubscribes",
         "In src/pages/share-session.tsx, pass the shareClient as `ioAdapter` to `<SeeflowCanvas>` (already done in earlier phases) and verify visualStatus derivation runs against the bridged events (no code change here beyond confirming wiring)",
         "Add an integration-style test src/pages/share-session.sse-wiring.test.tsx (vitest+RTL or equivalent): renders a stub canvas that calls `ioAdapter.subscribeEvents`; pushes a fake `node:done` frame via the share-client mock; assert the listener fires exactly once with the right shape",
@@ -131,7 +131,7 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": false,
+      "passes": true,
       "notes": ""
     },
     {
@@ -163,7 +163,7 @@
         "Spin up the studio with a stubbed relay WebSocket (an in-process `Bun.serve` WebSocket echoing envelopes); register a fake flow; trigger `events.broadcast({ type: 'node:running', flowId, payload: { nodeId } })` and `{ type: 'node:done', ... }` and `{ type: 'node:error', ... }`",
         "Assert the stub relay receives, in order, `{type:'sse',payload:{t:'node:running',...}}`, then `{type:'sse',payload:{t:'node:done',...}}`, then `{type:'sse',payload:{t:'node:error',...}}` with monotonically increasing seq values",
         "Late-join scenario: after a few events fire, simulate a peer connect-frame; assert the very next outbound frame is `{type:'sse-snapshot', to:<peerConnId>}` containing the latest-status-per-node entries",
-        "Add the new test glob to apps/studio/package.json's `test:it:bun` script (it already discovers `*.it.ts` via the orchestrator — verify it picks the file up)",
+        "Add the new test glob to apps/studio/package.json's `test:it:bun` script (it already discovers `*.it.ts` via the orchestrator \u2014 verify it picks the file up)",
         "Run via `bun run test:it:bun`; the test passes locally",
         "`bun run typecheck` passes",
         "Typecheck passes",
@@ -181,7 +181,7 @@
         "Working dir: /Users/tuongaz/dev/seeflow",
         "Create apps/studio/e2e/share-sse-live.e2e.ts (Playwright, chromium-linux baseline) that: (a) starts the studio + a local fake relay; (b) opens a host context against the studio; (c) opens a second peer context against the peer SPA; (d) on the host, click the PlayButton of a known node in the `order-pipeline` example",
         "Within 500ms of the host's PlayButton click, the peer's matching node renders the active visualStatus (`[data-status=\"active\"]` on the PlayButton); within another 2s it transitions to `success` (`[data-status=\"success\"]`)",
-        "Assert via DOM (no screenshots required) — keeps the test stable across rendering changes; if screenshots are needed for the StatusIconPill animation, use the chromium-linux pinned baseline pattern and commit only `*-chromium-linux.png`",
+        "Assert via DOM (no screenshots required) \u2014 keeps the test stable across rendering changes; if screenshots are needed for the StatusIconPill animation, use the chromium-linux pinned baseline pattern and commit only `*-chromium-linux.png`",
         "Add a separate assertion that a peer who joins AFTER the play action has already completed sees the node in `success` state on first render (via the sse-snapshot path)",
         "Run via `bun run test:it:e2e` (which dispatches to the Playwright Docker image on darwin hosts per project CLAUDE.md)",
         "`bun run typecheck` passes",

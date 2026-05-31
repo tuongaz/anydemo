@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import type { IoAdapter, IoAdapterDispatchEnvelope, IoAdapterResult } from './io-adapter.ts';
+import type {
+  CanvasSseEvent,
+  IoAdapter,
+  IoAdapterDispatchEnvelope,
+  IoAdapterResult,
+} from './io-adapter.ts';
 import type { CanvasAdapter } from './types.ts';
 
 // Build a minimal IoAdapter that succeeds for every method — exercises the
@@ -99,6 +104,85 @@ describe('IoAdapterDispatchEnvelope — op discriminator', () => {
   it('exposes exactly the 8 documented op tags', () => {
     expect(ops.length).toBe(8);
     expect(new Set(ops).size).toBe(8);
+  });
+});
+
+describe('IoAdapter — subscribeEvents optional slot (US-071)', () => {
+  // The default IoAdapter built by makeOkAdapter() does NOT carry subscribeEvents.
+  // Consumers that need runtime SSE events fall back to their EventSource path.
+  it('is absent on a minimal IoAdapter (consumers fall back to EventSource)', () => {
+    const adapter = makeOkAdapter();
+    expect(adapter.subscribeEvents).toBeUndefined();
+  });
+
+  it('when present, invokes the listener with the CanvasSseEvent shape and filters by flowId', () => {
+    const received: CanvasSseEvent[] = [];
+    const emit: Array<(event: CanvasSseEvent) => void> = [];
+    const adapter: IoAdapter = {
+      ...makeOkAdapter(),
+      subscribeEvents: (flowId, listener) => {
+        const wrapped = (event: CanvasSseEvent) => {
+          if (event.flowId !== flowId) return;
+          listener(event);
+        };
+        emit.push(wrapped);
+        return () => {
+          const idx = emit.indexOf(wrapped);
+          if (idx >= 0) emit.splice(idx, 1);
+        };
+      },
+    };
+
+    const dispose = adapter.subscribeEvents?.('flow-a', (e) => received.push(e));
+    expect(typeof dispose).toBe('function');
+
+    for (const fn of emit) {
+      fn({ type: 'node:done', ts: 1, flowId: 'flow-a', nodeId: 'n1', ok: true });
+      fn({ type: 'node:status', ts: 2, flowId: 'flow-other', nodeId: 'n2' });
+    }
+
+    expect(received).toEqual([
+      { type: 'node:done', ts: 1, flowId: 'flow-a', nodeId: 'n1', ok: true },
+    ]);
+  });
+
+  it('disposer returned by subscribeEvents detaches the listener', () => {
+    const received: CanvasSseEvent[] = [];
+    const emit: Array<(event: CanvasSseEvent) => void> = [];
+    const adapter: IoAdapter = {
+      ...makeOkAdapter(),
+      subscribeEvents: (_flowId, listener) => {
+        emit.push(listener);
+        return () => {
+          const idx = emit.indexOf(listener);
+          if (idx >= 0) emit.splice(idx, 1);
+        };
+      },
+    };
+
+    const dispose = adapter.subscribeEvents?.('flow-a', (e) => received.push(e));
+    for (const fn of emit) fn({ type: 'node:running', ts: 1, flowId: 'flow-a' });
+    dispose?.();
+    for (const fn of emit) fn({ type: 'node:done', ts: 2, flowId: 'flow-a' });
+
+    expect(received).toEqual([{ type: 'node:running', ts: 1, flowId: 'flow-a' }]);
+  });
+
+  it('CanvasSseEvent allows arbitrary payload fields at the top level', () => {
+    // Type-level smoke: the index signature lets adapters spread payload fields
+    // straight onto the event so visualStatus consumers read `event.progress`
+    // / `event.error` directly without a nested `payload`.
+    const event: CanvasSseEvent = {
+      type: 'node:status',
+      ts: 100,
+      flowId: 'flow-a',
+      nodeId: 'n1',
+      progress: 0.4,
+      label: 'parsing',
+    };
+    expect(event.progress).toBe(0.4);
+    expect(event.label).toBe('parsing');
+    expect(event.nodeId).toBe('n1');
   });
 });
 

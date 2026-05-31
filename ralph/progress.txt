@@ -13,6 +13,42 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
 - `bun run format` must run BEFORE `bun run lint` (Biome).
 - `apps/studio/src/watcher.test.ts` has pre-existing flaky fs-watching failures unrelated to share work — ignore in CI gating unless you touched watcher code.
 - TypeScript narrows `let x: T | null = null` to `null` for the surrounding scope even when later writes happen inside injected callbacks. When testing schedule/cancel injection, capture the value via an object box (`const ref: { value: T | null } = { value: null }`) instead of a bare `let`.
+- Canvas package consumes a built `dist/` (tsup): after editing public types under `packages/canvas/src/`, run `bun run --filter @seeflow/canvas build` before the seeflow-viewer can import the new symbol — the viewer's `@seeflow/canvas` resolves to `dist/index.d.ts` even though node_modules is symlinked.
+- Canvas public API extension pattern: declare new types in their owning module (e.g. `adapter/io-adapter.ts`), then add them to the matching numbered section of `packages/canvas/src/index.ts`. Forgetting the barrel export silently keeps the type internal to the package.
+
+---
+
+## 2026-06-01 - US-071
+- Added the optional `subscribeEvents(flowId, listener)` slot to the canvas `IoAdapter` and wired the viewer's `ShareClient` to fill it, so peer browsers route SSE through the live-share WebSocket relay instead of opening their own `EventSource('/api/events')`. The slot is OPTIONAL on `IoAdapter` — embedders that don't supply it fall back to their default EventSource path.
+
+- Files changed (studio repo, this worktree):
+  - packages/canvas/src/adapter/io-adapter.ts — added `CanvasSseEvent` type (`{ type: string; ts: number; flowId: string; [key: string]: unknown }`) so payload fields land at the top level for `deriveVisualStatus` consumers; added `subscribeEvents?(flowId, listener) => () => void` to the `IoAdapter` interface with doc-comment explaining the EventSource-fallback semantics.
+  - packages/canvas/src/index.ts — exported `CanvasSseEvent` alongside `IoAdapter` / `IoAdapterDispatchEnvelope` / `IoAdapterResult` in the 5c barrel section.
+  - packages/canvas/src/adapter/io-adapter.test.ts — 4 new tests under a `subscribeEvents optional slot (US-071)` describe block: (1) absent on a minimal IoAdapter so consumers fall back to EventSource, (2) when present, listener fires with the right shape AND filters by flowId, (3) disposer detaches the listener, (4) CanvasSseEvent allows arbitrary payload fields at the top level.
+  - packages/canvas/dist/* — rebuilt via `bun run --filter @seeflow/canvas build` so the seeflow-viewer's `import type { CanvasSseEvent } from '@seeflow/canvas'` resolves through the published `.d.ts`.
+
+- Files changed (seeflow-viewer repo, at /Users/tuongaz/dev/seeflow-viewer):
+  - src/lib/share-client.ts — imported `CanvasSseEvent` from `@seeflow/canvas`; added `subscribeEvents(flowId, listener)` (REQUIRED, not optional) to the `ShareClientIoAdapter` extension; wired it inside `createIoAdapter` via a new private method `subscribeEventsForAdapter` that subscribes via `this.on('studio-event', …)`, filters by flowId, and reshapes the internal `StudioEvent` ({ type, flowId, ts, payload }) into the canvas's `CanvasSseEvent` ({ type, ts, flowId, ...payload }). Plain-object payloads spread to the top level; non-object payloads are preserved under `payload` so consumers don't lose the raw shape. The envelope's type/ts/flowId always win over conflicting payload keys (authoritative routing fields).
+  - src/pages/share-session.sse-wiring.test.tsx (new) — 4 tests using the existing FakeWebSocket pattern from share-session.io.test.tsx: (1) a `node:done` `sse` envelope dispatches exactly one `CanvasSseEvent` with the right spread shape, (2) subscribeEvents filters by flowId so events for other flows don't reach the listener, (3) the returned disposer detaches the listener, (4) the returned IoAdapter exposes `subscribeEvents` as a function (canvas-side slot is filled).
+  - share-session.tsx is unchanged — it already passes `adapterBinding.adapter` as `ioAdapter` to `<EditCanvas>` (US-043). With `subscribeEvents` now living on that adapter, a future canvas consumer that branches on `ioAdapter.subscribeEvents` (replacing its EventSource fallback) automatically picks up the live-share-bridged stream without further wiring.
+
+- Verification:
+  - `bun test packages/canvas/src/adapter/io-adapter.test.ts` → 18/18 pass (existing 14 + 4 new)
+  - `bun test packages/canvas/src/adapter/` → 50/50 pass
+  - `bun run typecheck` (4 studio workspaces) → clean
+  - `bun run format && bun run lint` → clean
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/pages/share-session.sse-wiring.test.tsx)` → 4/4 pass
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test)` → 283/283 pass (one transient flake on a cursor-related test reproduced clean on retry)
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun run typecheck)` → clean
+  - Viewer commit will land alongside this studio commit per the cross-repo bundle pattern documented in US-070.
+
+- Learnings for future iterations:
+  - The canvas package consumes a built `dist/` (tsup). After editing public types under `packages/canvas/src/`, you MUST run `bun run --filter @seeflow/canvas build` before the seeflow-viewer's `import type ... from '@seeflow/canvas'` resolves to the new symbol. The viewer's node_modules/@seeflow/canvas IS a symlink to the source package, but `package.json:exports['.'].types` points at `./dist/index.d.ts`, not at source. This silently bit the in-flight typecheck before the rebuild.
+  - The internal `StudioEvent` shape on the share-client (`{ type, flowId, ts, payload }`) is intentionally DIFFERENT from the wire-equivalent `CanvasSseEvent` the canvas consumes (`{ type, ts, flowId, ...payload }`). The reshape lives in `subscribeEventsForAdapter`: plain-object payloads spread, non-object payloads stash under `payload`. Keep the two shapes distinct — the share-client's internal one is opaque-payload-friendly for general consumers, the canvas-facing one is flat-keyed so existing `deriveVisualStatus` code reads `event.nodeId` / `event.progress` directly.
+  - `ShareClientIoAdapter` declares `subscribeEvents` as REQUIRED (not optional) even though the upstream `IoAdapter` slot is optional. Rationale: the live-share peer can always supply it, and downstream binding code in `share-session-edit.ts` calls it unconditionally. If a future binding wants to opt out, narrow at the call site rather than relaxing the interface.
+  - The AC mentioned `rest.test.ts` as the test location, but `rest.test.ts` actually tests `createRestAdapter` (a `CanvasAdapter`, not `IoAdapter`). The IoAdapter optional-slot tests went into `io-adapter.test.ts` where they fit the existing test taxonomy. Future AC-vs-actual-test-file mismatches: trust the codebase's organization over the AC's literal paths.
+  - The "stub canvas" in `share-session.sse-wiring.test.tsx` is a function (not a rendered React component) because the existing share-session test pattern doesn't use React Testing Library — just bun:test + a FakeWebSocket. The AC's "vitest+RTL or equivalent" phrasing meant "any integration-style harness" — not literally JSX rendering. Match the existing pattern unless you genuinely need DOM.
+  - Cross-repo coordination: edits to the viewer's `share-client.ts` need a matching commit IN the viewer repo. The seeflow-viewer is on branch `ralph/live-share-phase-6` (US-070 left it there), so commit US-071 changes onto the same branch in the viewer repo when wiring lands.
 
 ---
 
@@ -114,6 +150,38 @@ Started: Mon  1 Jun 2026 00:58:33 AEST
   - The seeflow-viewer mirror file LIVES in a separate git repo at `/Users/tuongaz/dev/seeflow-viewer/`. Writes to it don't appear in this worktree's git diff and won't be committed here. The operator must commit + push that repo separately. Future US that "mirrors" anything in seeflow-viewer should plan for the two-repo handoff.
   - StudioEventType has 7 values; only 5 are bridged to peers. `wrapAsSseFrame` returns `null` for `file:changed` and `registry:reload` rather than throwing, so the bridge loop in US-067 can filter cleanly.
   - The envelope's `to` for broadcast SSE is `'all'` (string literal), matching the existing peer envelope schema that already allowed `z.union([z.string(), z.literal('host'), z.literal('all')])`.
+---
+
+## 2026-06-01 - US-070
+- Added the peer-side SSE-frame handler to `ShareClient` in the sibling seeflow-viewer repo so the WebSocket client recognizes `sse` and `sse-snapshot` envelopes and routes them to a generic studio-event sink. Subsequent stories (US-071) will wire that sink into the canvas `ioAdapter`.
+- Files changed (in /Users/tuongaz/dev/seeflow-viewer):
+  - src/lib/share-client.ts — new public `dispatchSseFrame(envelope)` method; new `on('studio-event', listener)` overload; new `StudioEvent` exported type (peer-side reconstruction of the host's apps/studio/src/events.ts StudioEvent); module-level `extractNodeIdFromSsePayload(data)` helper. Internal state: `sseRouterInstalled` flag (idempotent lazy install on first studio-event subscribe), `studioEventListeners` Set, `lastSseSeq` Map<`${flowId}:${nodeId}`, number>, `gateLiveSseUntilSnapshot` boolean.
+  - src/lib/share-client.sse.test.ts (new) — 11 tests: snapshot replay seeds the sink (3 entries → 3 events); subsequent live node:status with increasing seq updates and emits; stale node:status seq dropped; terminal node:error/node:done with stale seq still apply (terminal wins); per-(flowId, nodeId) seq isolation (same seq across nodes/flows all pass); flow:reload bypasses seq tracking (no nodeId); reconnect drops live frames until sse-snapshot clears gate AND re-seeds seq map; malformed sse/sse-snapshot payloads drop silently.
+  - src/lib/share-sse-frame.ts (US-065 mirror, previously uncommitted) — included in the same commit so the peer mirror lands with its consumer.
+  - src/lib/share-envelope.ts (US-069 mirror, previously uncommitted) — `'sse-snapshot'` enum value, included in the same commit.
+
+- Behavior:
+  - `dispatchSseFrame(env)` is the public entry point. For `sse-snapshot`: validates against `SseSnapshotPayloadSchema`, clears the reconnect gate, walks `flows[flowId][nodeId]`, seeds (or bumps) `lastSseSeq[flowId:nodeId]` to the entry's seq, and emits each entry through `emitStudioEvent`. For `sse`: validates against `SsePayloadSchema`; if `gateLiveSseUntilSnapshot` is true, drops the frame; extracts `data.nodeId` (if string + non-empty); if a non-terminal frame has `seq <= lastSeenSeq[key]`, drops it; otherwise emits and bumps the seq.
+  - Reconnect gate: lazy-installed state listener flips `gateLiveSseUntilSnapshot = true` AND clears `lastSseSeq` on every `closed`/`kicked` state transition. Subsequent live `sse` frames are dropped; the next `sse-snapshot` clears the gate.
+  - StudioEvent shape: `{ type: SseEventType, flowId: string, ts: number, payload: unknown }` — drops the `seq` field used internally for ordering, exposes only the canonical wire-equivalent the canvas's `deriveVisualStatus` path consumes.
+
+- Verification:
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test src/lib/share-client.sse.test.ts)` → 11/11 pass
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun test)` → 279/279 pass
+  - `(cd /Users/tuongaz/dev/seeflow-viewer && bun run typecheck)` → clean
+  - `bun apps/studio/scripts/check-sse-frame-sync.ts` → OK (peer mirror in sync with studio source of truth)
+  - `bun run typecheck` (4 studio workspaces) → clean
+  - Viewer commit landed on `ralph/live-share-phase-6` (seeflow-viewer's existing branch — separate from this repo's worktree branch). Push of that repo is the operator's responsibility.
+
+- Learnings for future iterations:
+  - The seeflow-viewer repo is on `ralph/live-share-phase-6` even though this repo's PRD says phase 7 — the prior US-067..US-069 mirror writes left their files uncommitted in the viewer. US-070 commits all three sets together (US-065 + US-069 + US-070) because they are interdependent — the test file can't compile without the schema files. Future viewer-touching stories should plan to commit the viewer changes alongside the studio commit, or accept the bundled-commit pattern.
+  - The SSE router is installed lazily on the first `on('studio-event', ...)` subscription (matches the node-patched router pattern). If a future story wants the router to be eager (e.g. to count metrics before the first listener attaches), call `ensureSseRouterInstalled()` from the constructor.
+  - `on('frame', ...)` dispatch is invoked for every envelope type, so the SSE router checks `envelope.type === 'sse' || envelope.type === 'sse-snapshot'` and early-returns otherwise. Don't add `'sse'` to `TYPED_FRAME_EVENTS` — those buckets are keyed by `envelope.type`, but the dispatch happens via the generic frame channel inside `dispatchSseFrame` (which is also the public API for tests that need to inject frames synchronously without crossing the WebSocket).
+  - `StudioEvent` (the viewer-side type) deliberately omits `seq` — `seq` is internal sequencing metadata, and exposing it through the sink would let canvas consumers branch on host-internal counters. Keep it `{ type, flowId, ts, payload }` to match the host's existing StudioEvent contract.
+  - Terminal-wins seq override: even when a stale `node:done`/`node:error` arrives, it MUST settle the visual state. Otherwise a reordered terminal could leave the canvas stuck in a running state forever. The implementation does NOT bump `lastSseSeq` for the stale terminal — it just emits — so a later non-terminal with a higher seq would still re-take ownership of seq tracking (very rare in practice but the semantics are precise).
+  - Reconnect detection lives in the state listener. There's no "previously connected" check — on every `closed`/`kicked`, the gate flips on. First connect (`idle` → `connecting` → `authed`) never trips the listener, so the gate stays off until the first disconnect. Live events are processed normally during the initial session — the snapshot just primes badges to match the host's current per-node status.
+  - `extractNodeIdFromSsePayload(data)` is a module-level helper (not a class method) because it's pure and reusable. If a future story needs to extract more SSE payload fields (e.g. `progress` for node:status visualization), keep them as separate module-level helpers rather than methods.
+
 ---
 
 ## 2026-06-01 - US-069

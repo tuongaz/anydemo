@@ -67,6 +67,26 @@ export interface IoAdapterDispatchEnvelope {
 }
 
 /**
+ * Runtime event shape delivered to listeners registered via
+ * `IoAdapter.subscribeEvents` (US-071). Mirrors the host's flat
+ * `StudioEvent` (apps/web/src/hooks/use-studio-events.ts) — `payload` fields
+ * are spread to the top level so the canvas's existing `deriveVisualStatus`
+ * consumers (StatusIconPill, PlayButton ring, edge handoff pulse) don't
+ * need to learn a new schema. `flowId` is included so a single multiplexed
+ * transport (e.g. the live-share WebSocket relay) can demux per-flow.
+ *
+ * The `type` field is kept as a free-form string so the adapter seam doesn't
+ * pin a concrete union — peer transports that bridge additional event types
+ * over the same channel can pass them through without a type-change here.
+ */
+export interface CanvasSseEvent {
+  type: string;
+  ts: number;
+  flowId: string;
+  [key: string]: unknown;
+}
+
+/**
  * IoAdapter — non-throwing twin of `CanvasAdapter`. Same nine mutation method
  * shapes; every return type is wrapped in `IoAdapterResult<T>` so transports
  * can surface `{ ok: false, reason }` instead of rejecting the promise.
@@ -95,4 +115,15 @@ export interface IoAdapter {
     file: File,
     filename: string,
   ): Promise<IoAdapterResult<UploadImageResult>>;
+  /**
+   * Optional: subscribe to runtime studio events for `flowId` (US-071). When
+   * present, embedders use this seam INSTEAD of constructing an EventSource
+   * against `/api/events` — peer SPAs route SSE through the live-share
+   * WebSocket relay (US-067 / US-070), and other non-HTTP transports inject
+   * their own event source here. Returns a disposer; idempotent on repeated
+   * calls. Listeners receive `CanvasSseEvent` ({type, ts, flowId, ...payload})
+   * so the visual-status derivation path stays unchanged. Absent →
+   * consumers fall back to their default `EventSource` path.
+   */
+  subscribeEvents?(flowId: string, listener: (event: CanvasSseEvent) => void): () => void;
 }
