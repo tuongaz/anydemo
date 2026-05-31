@@ -1,6 +1,6 @@
 import { existsSync, renameSync, unlinkSync, writeFileSync } from 'node:fs';
 
-export const writeFileAtomic = (filePath: string, content: string): void => {
+export const writeFileAtomic = (filePath: string, content: string | Uint8Array): void => {
   const tempPath = `${filePath}.tmp.${process.pid}.${Date.now()}`;
   try {
     writeFileSync(tempPath, content);

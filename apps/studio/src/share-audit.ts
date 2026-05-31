@@ -84,6 +84,24 @@ const isSafeSessionId = (sessionId: string): boolean => {
 };
 
 /**
+ * File-upload audit entry. Mirrors the design doc shape:
+ * `{ peerId, op:'file-upload', nodeId, filename, size, sha256, ts, accept }`.
+ * Coexists with `RpcAuditEntry` + `AuditEntry` on the same JSONL file; readers
+ * should treat each line as the union.
+ */
+export interface FileUploadAuditEntry {
+  ts: number;
+  peerId: string;
+  op: 'file-upload';
+  nodeId: string;
+  filename: string;
+  size: number;
+  sha256: string;
+  accept: boolean;
+  reason?: string;
+}
+
+/**
  * Append one JSON line to `<dir>/<sessionId>.jsonl`. The directory is created
  * recursively on first write. Rejects sessionIds that contain path separators,
  * NUL bytes, or `..` traversal attempts so a tampered peer can't drop frames
@@ -91,7 +109,7 @@ const isSafeSessionId = (sessionId: string): boolean => {
  */
 export function appendShareAudit(
   sessionId: string,
-  entry: RpcAuditEntry,
+  entry: RpcAuditEntry | FileUploadAuditEntry,
   opts: AppendShareAuditOpts = {},
 ): void {
   if (!isSafeSessionId(sessionId)) {

@@ -49,6 +49,11 @@ import {
   type RequestUploadIntent,
   createFileRequestHandler,
 } from './share-file-request.ts';
+import {
+  type AppendFileUploadAudit,
+  type FileUploadHandler,
+  createFileUploadHandler,
+} from './share-file-upload.ts';
 import { type RateLimiter, createRateLimiter } from './share-ratelimit.ts';
 import { RpcFrameSchema, type RpcOp, type RpcResultFrame } from './share-rpc-schema.ts';
 import {
@@ -252,6 +257,13 @@ export interface ShareDeps {
   // leave this undefined and the controller builds one from registry +
   // broadcast + the S3 deps above.
   fileRequestHandler?: FileRequestHandler;
+  // Test seam: swap the entire file-upload handler. Production callers leave
+  // this undefined and the controller builds one from registry + broadcast +
+  // the active session id.
+  fileUploadHandler?: FileUploadHandler;
+  // Injected for tests so they can capture the upload audit entry without
+  // hitting disk. Defaults to `appendShareAudit` writing to `auditDir`.
+  appendFileUploadAuditFn?: AppendFileUploadAudit;
 }
 
 interface RelaySessionResponse {
@@ -411,6 +423,24 @@ export function createShareController(deps: ShareDeps): ShareController {
           broadcast: (env) => broadcast(env),
           requestUploadIntent: deps.requestUploadIntent,
           putToS3: deps.putToS3,
+        })
+      : null);
+
+  // File-upload handler (US-061). Mirrors the file-request lazy-instantiation
+  // contract: tests supply an explicit `fileUploadHandler` to short-circuit;
+  // production callers thread `operationsDeps.registry`. Without a registry
+  // upload frames are dropped with a warn.
+  const appendFileUploadAuditFn: AppendFileUploadAudit =
+    deps.appendFileUploadAuditFn ??
+    ((sessionId, entry) => appendShareAudit(sessionId, entry, { dir: auditDir }));
+  const fileUploadHandler: FileUploadHandler | null =
+    deps.fileUploadHandler ??
+    (deps.operationsDeps
+      ? createFileUploadHandler({
+          registry: deps.operationsDeps.registry,
+          broadcast: (env) => broadcast(env),
+          getSessionId: () => (current.status === 'active' ? current.sessionId : null),
+          appendAudit: appendFileUploadAuditFn,
         })
       : null);
 
@@ -704,6 +734,28 @@ export function createShareController(deps: ShareDeps): ShareController {
       }
       fileRequestHandler.handle(env).catch((err) => {
         console.warn('[share] file-request handler threw:', err);
+      });
+      return;
+    }
+
+    if (
+      env.type === 'file-upload-intent' ||
+      env.type === 'file-bytes' ||
+      env.type === 'file-upload-done'
+    ) {
+      if (!fileUploadHandler) {
+        console.warn(`[share] dropped ${env.type}: no upload handler configured`);
+        return;
+      }
+      const peerCtx = { peerId: peer.peerId, displayName: peer.displayName };
+      const dispatch =
+        env.type === 'file-upload-intent'
+          ? fileUploadHandler.handleIntent(env, peerCtx)
+          : env.type === 'file-bytes'
+            ? fileUploadHandler.handleBytes(env, peerCtx)
+            : fileUploadHandler.handleDone(env, peerCtx);
+      dispatch.catch((err) => {
+        console.warn(`[share] ${env.type} handler threw:`, err);
       });
       return;
     }

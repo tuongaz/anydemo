@@ -170,8 +170,8 @@
         "Tests pass"
       ],
       "priority": 7,
-      "passes": false,
-      "notes": ""
+      "passes": true,
+      "notes": "writeFileAtomic widened to accept `string | Uint8Array` so Buffer uploads atomic-rename without a temp string conversion. File-upload audit entry shape ({peerId, op:'file-upload', nodeId, filename, size, sha256, ts, accept, reason?}) coexists with RpcAuditEntry on the same JSONL file. FileUploadIntent/FileUploadDone schemas strip unknown keys — `payload.upload` (relay amendment) and `payload.getUrl` (S3-done) are read from the raw envelope.payload, not the parsed payload. rpc-result wire-strict schema forced via/key/putUrl inside `result` instead of the top-level payload."
     },
     {
       "id": "US-062",
