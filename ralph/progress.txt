@@ -11,6 +11,22 @@ Started: Sun 31 May 2026 16:17:07 AEST
 
 ---
 
+## 2026-05-31 - US-017
+- Implemented `ShareController.start()` in `apps/studio/src/share.ts`. Flow: synchronous reject with `share-already-active` if state !== 'idle' → POST to `${relayHttpUrl}/api/share/sessions` (throws `share-relay-http-<status>` on non-2xx) → parse `{ sessionId, token, hostKey, wsUrl }` → store `hostKey` in closure → create transport via injectable `transportFactory` (default: `createShareTransport`) → bridge transport state events to controller state: 'connecting'/'reconnecting' → `starting`, 'open' → `active` (resolves with `{ url: shareUrlBase/token, sessionId }`), 'closed' before 'open' → rollback to `idle` and reject with `share-transport-closed-during-boot`. 10s boot timeout via `setTimeout` rolls back identically with `share-boot-timeout`.
+- Extended `ShareDeps` with `transportFactory?: (opts: ShareTransportOpts) => ShareTransport`.
+- Added `setState(next)` helper that mutates `current` and fans out to subscribers with the same try/catch-log discipline as the initial-deliver path.
+- Added 4 new test cases in `apps/studio/src/share.test.ts` using a `makeFakeTransport(autoEmit: ShareTransportState[])` helper + a minimal `mockFetch({ status?, body? })`: (1) happy path verifies `idle→starting→active` ordering, captured url/token/peers/startedAt, and forwarded `hostKey`/`wsUrl`/`sessionId` to the transport factory; (2) HTTP 500 → reject + idle; (3) transport `closed` mid-boot → reject + state rollback to idle observed by subscribers; (4) second `start()` while active → `share-already-active`. 9/9 share.test cases pass; full share trio (envelope + transport + controller) 25/25.
+- Removed the obsolete "start twice in idle stub" test from US-014 — the stub is gone; "second start while active" supersedes it.
+- Files changed: `apps/studio/src/share.ts`, `apps/studio/src/share.test.ts`, `ralph/prd.json`, `ralph/progress.txt`.
+- Quality: `bun test src/share*.test.ts` 25/25; `bun run format`, `bun run lint`, `bun run typecheck` all clean.
+- **Learnings for future iterations:**
+  - Biome's `noUnusedVariables` treats *writes* as references — `let hostKey: string | null = null; hostKey = body.hostKey;` does NOT need a `biome-ignore` even when never read in the current story. Adding the suppression triggers the meta-rule `suppressions/unused`. Only suppress when the symbol is truly inert (declared, never written, never read).
+  - The auto-emit fake transport pattern is the cleanest way to drive synchronous transport state in start() tests: `makeFakeTransport(['connecting', 'open'])` fires the events inside the factory call so `start()` resolves on the same microtask chain that called it — no `await Promise.resolve()` choreography needed.
+  - For state rollback assertions, snapshot subscribers' `seen` array of statuses and `toEqual(['idle', 'starting', 'idle'])` — this is far more diagnostic than just asserting the final `state()` is idle, because it catches missing intermediate transitions.
+  - When the body of `new Promise((resolve, reject) => { ... })` calls `transportFactory(...)` and the factory synchronously fires `onStateChange('connecting')`, the callback fires BEFORE the `transport = factory(...)` assignment completes. Don't reference the outer `transport` variable inside the 'connecting' branch; it's still the prior value. Safe today because we only call `setState(...)` there.
+  - The `Response`-shape mock for fetch only needs `{ ok, status, json: async () => body }` — Bun's TS lib is lenient enough that `as unknown as Response` then `as unknown as typeof fetch` lets you skip a real Response constructor.
+---
+
 ## 2026-05-31 - US-016
 - Added `apps/studio/src/share-transport.ts`: `createShareTransport(opts)` returning `{ send, close, isOpen }`. Connects synchronously via injectable `wsFactory` (defaulting to Bun's global `WebSocket`), emits state through `onStateChange` ('connecting' | 'open' | 'reconnecting' | 'closed'), sends the `auth-host` envelope as the first frame after `open`, parses inbound text frames via `parseEnvelope` (drops invalid + logs only the reason), reconnects on non-1000 close with exponential backoff (500ms → 30s cap, +/- 20% jitter), and suppresses reconnects after `close('user')` (1000).
 - Injected `setTimeoutFn`/`clearTimeoutFn`/`random` so tests can drive the scheduler synchronously without real time.
