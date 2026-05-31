@@ -5020,6 +5020,7 @@ const createFakeShare = (init?: {
   stop?: () => Promise<void>;
   kick?: (peerId: string) => Promise<void>;
   rotateUrl?: () => Promise<{ url: string }>;
+  killAll?: () => Promise<{ revoked: number; failed: number }>;
   initialState?: ShareState;
   audit?: ShareController['audit'];
 }): FakeShare => {
@@ -5030,6 +5031,7 @@ const createFakeShare = (init?: {
     stop: init?.stop ?? (async () => undefined),
     kick: init?.kick ?? (async () => undefined),
     rotateUrl: init?.rotateUrl ?? (async () => ({ url: 'https://share/x' })),
+    killAll: init?.killAll ?? (async () => ({ revoked: 0, failed: 0 })),
     state: () => current,
     subscribe(fn) {
       subscribers.add(fn);
@@ -5189,6 +5191,29 @@ describe('POST /api/share/rotate', () => {
     const { app } = buildAppWithShare(share);
     const res = await app.request('/api/share/rotate', { method: 'POST' });
     expect(res.status).toBe(409);
+  });
+});
+
+describe('POST /api/share/kill-all', () => {
+  it('returns 200 { revoked, failed } on success', async () => {
+    const share = createFakeShare({
+      killAll: async () => ({ revoked: 3, failed: 0 }),
+    });
+    const { app } = buildAppWithShare(share);
+    const res = await app.request('/api/share/kill-all', { method: 'POST' });
+    expect(res.status).toBe(200);
+    expect(await res.json()).toEqual({ revoked: 3, failed: 0 });
+  });
+
+  it('returns 500 when controller rejects', async () => {
+    const share = createFakeShare({
+      killAll: async () => {
+        throw new Error('boom');
+      },
+    });
+    const { app } = buildAppWithShare(share);
+    const res = await app.request('/api/share/kill-all', { method: 'POST' });
+    expect(res.status).toBe(500);
   });
 });
 

@@ -2169,6 +2169,21 @@ export function createApi(options: ApiOptions): Hono {
     }
   });
 
+  // POST /api/share/kill-all — host kill-switch (US-081). Revokes every
+  // session this studio has tracked in `active.json`, not just the active
+  // one. Local-only by the cors.ts middleware. Returns the counts surfaced
+  // by the controller so the UI toast can show "Ended N live sessions".
+  api.post('/share/kill-all', async (c) => {
+    if (!share) return c.json({ error: 'share controller not configured' }, 503);
+    try {
+      const result = await share.killAll();
+      return c.json(result);
+    } catch (err) {
+      const mapped = shareErrorStatus(err);
+      return c.json({ error: mapped.error }, mapped.status);
+    }
+  });
+
   // GET /api/share/audit — page through the per-session AuditEntry JSONL log.
   // Local-only by virtue of the cors.ts middleware. Requires an active session
   // — when the controller is idle there is no logger to read from, so respond

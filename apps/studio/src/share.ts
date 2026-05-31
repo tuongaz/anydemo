@@ -14,9 +14,11 @@
  * re-renders via the rpc-result `id` correlation in US-041.
  */
 
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { homedir, userInfo } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { z } from 'zod';
+import { writeFileAtomic } from './atomic-write.ts';
 import type { EventBus } from './events.ts';
 import {
   ConnectorPatchBodySchema,
@@ -124,6 +126,15 @@ export interface ShareController {
   stop(): Promise<void>;
   kick(peerId: string): Promise<void>;
   rotateUrl(): Promise<{ url: string }>;
+  /**
+   * Host kill-switch (US-081). Revokes every session this studio has ever
+   * opened — not just the currently active one. Tracked sessions live in
+   * `<auditDir>/active.json`; killAll POSTs `/api/share/end` to the relay
+   * for each entry, appends a `kill-switch` audit entry to each affected
+   * session's JSONL log, then truncates `active.json`. Returns counts so
+   * the UI toast can show "Ended N live sessions".
+   */
+  killAll(): Promise<{ revoked: number; failed: number }>;
   state(): ShareState;
   subscribe(fn: (s: ShareState) => void): () => void;
   /**
@@ -251,6 +262,13 @@ export interface ShareDeps {
   // Audit log lives one-per-session: created on transition to active, closed
   // by stop(). Path defaults to ~/.seeflow/share-history.
   auditDir?: string;
+  /**
+   * Path to the active-sessions tracking file (US-081 kill-switch). Defaults
+   * to `<auditDir>/active.json`. The host appends `{sessionId, hostKey}` on
+   * each start() and removes it on stop(); `killAll()` reads the file,
+   * revokes every entry via POST /api/share/end, then truncates.
+   */
+  activeSessionsPath?: string;
   auditLogFactory?: (opts: AuditLogOpts) => AuditLog;
   // Phase-8 audit logger (US-078 shape: AuditEntry with kind). Created on
   // idle -> active alongside the legacy per-frame `auditLog`. Tests inject a
@@ -473,6 +491,7 @@ export function createShareController(deps: ShareDeps): ShareController {
   const transportFactory = deps.transportFactory ?? createShareTransport;
   const rateLimiter = deps.rateLimiter ?? createRateLimiter({ ratePerSec: 30, burst: 30 });
   const auditDir = deps.auditDir ?? join(homedir(), '.seeflow', 'share-history');
+  const activeSessionsPath = deps.activeSessionsPath ?? join(auditDir, 'active.json');
   const auditLogFactory = deps.auditLogFactory ?? createAuditLog;
   const auditLoggerFactory = deps.auditLoggerFactory ?? createAuditLogger;
   const hostDisplayName = deps.hostDisplayName ?? resolveHostDisplayName();
@@ -1140,6 +1159,52 @@ export function createShareController(deps: ShareDeps): ShareController {
     console.debug('[share] dropped frame:', { type: env.type, from: env.from });
   };
 
+  // Active-sessions tracker (US-081). Persists `{sessionId, hostKey}` per
+  // session in `<auditDir>/active.json` so a single `killAll()` call can
+  // revoke every share link this studio has ever opened — not just the
+  // currently active one. Writes are atomic; reads tolerate a missing or
+  // corrupted file by returning an empty array.
+  interface TrackedSession {
+    sessionId: string;
+    hostKey: string;
+  }
+  const readTrackedSessions = (): TrackedSession[] => {
+    try {
+      if (!existsSync(activeSessionsPath)) return [];
+      const raw = readFileSync(activeSessionsPath, 'utf8');
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) return [];
+      return parsed.filter(
+        (s): s is TrackedSession =>
+          typeof s === 'object' &&
+          s !== null &&
+          typeof (s as { sessionId?: unknown }).sessionId === 'string' &&
+          typeof (s as { hostKey?: unknown }).hostKey === 'string',
+      );
+    } catch {
+      return [];
+    }
+  };
+  const writeTrackedSessions = (sessions: TrackedSession[]): void => {
+    try {
+      mkdirSync(dirname(activeSessionsPath), { recursive: true });
+      writeFileAtomic(activeSessionsPath, JSON.stringify(sessions));
+    } catch (err) {
+      console.warn('[share] active sessions write failed:', err);
+    }
+  };
+  const addTrackedSession = (sessionId: string, hk: string): void => {
+    const tracked = readTrackedSessions();
+    if (tracked.some((s) => s.sessionId === sessionId)) return;
+    writeTrackedSessions([...tracked, { sessionId, hostKey: hk }]);
+  };
+  const removeTrackedSession = (sessionId: string): void => {
+    const tracked = readTrackedSessions();
+    const next = tracked.filter((s) => s.sessionId !== sessionId);
+    if (next.length === tracked.length) return;
+    writeTrackedSessions(next);
+  };
+
   const controller: ShareController = {
     async start() {
       if (current.status !== 'idle') {
@@ -1210,6 +1275,9 @@ export function createShareController(deps: ShareDeps): ShareController {
             // host-start is the first kind-shaped entry written to the file
             // so a consumer reading from cursor:0 sees the session boundary.
             auditKind({ kind: 'host-start', peerId: null, displayName: null });
+            // Track the session in active.json so killAll() can revoke it
+            // later — even after the controller goes idle.
+            if (hostKey) addTrackedSession(body.sessionId, hostKey);
             // Subscribe to local runtime events BEFORE transitioning state so
             // any event that fires synchronously from a state subscriber finds
             // the bridge wired up.
@@ -1277,6 +1345,7 @@ export function createShareController(deps: ShareDeps): ShareController {
         // host-stop fires BEFORE teardown so the audit append lands on the
         // still-open logger; teardown closes it after.
         auditKind({ kind: 'host-stop', peerId: null, displayName: null });
+        removeTrackedSession(current.sessionId);
         setState({ status: 'stopping' });
         teardown();
         setState({ status: 'idle' });
@@ -1402,6 +1471,48 @@ export function createShareController(deps: ShareDeps): ShareController {
       }
       auditKind({ kind: 'rotate', peerId: null, displayName: null });
       return { url: newUrl };
+    },
+    async killAll() {
+      const tracked = readTrackedSessions();
+      let revoked = 0;
+      let failed = 0;
+      for (const { sessionId, hostKey: hk } of tracked) {
+        try {
+          const res = await fetchFn(`${deps.relayHttpUrl}/api/share/end`, {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify({ sessionId, hostKey: hk }),
+          });
+          if (!res.ok) {
+            failed += 1;
+            continue;
+          }
+          revoked += 1;
+        } catch {
+          failed += 1;
+        }
+      }
+      // Per-session audit append. Each session gets a `kill-switch` entry so
+      // a reader paging through that file sees the boundary. Use the factory
+      // (not the active controller's `auditLogger`) so we can target any
+      // tracked session — including ones whose controller is long since
+      // torn down.
+      for (const { sessionId } of tracked) {
+        try {
+          const logger = auditLoggerFactory(sessionId, auditDir);
+          await logger.append({
+            kind: 'kill-switch',
+            peerId: null,
+            displayName: null,
+            details: { revoked, failed },
+          });
+          await logger.close();
+        } catch (err) {
+          console.warn('[share] kill-switch audit append failed:', err);
+        }
+      }
+      writeTrackedSessions([]);
+      return { revoked, failed };
     },
     state() {
       return enrichWithSseMetrics(current);

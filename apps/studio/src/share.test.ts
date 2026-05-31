@@ -692,6 +692,200 @@ describe('createShareController.rotateUrl()', () => {
   });
 });
 
+describe('createShareController.killAll()', () => {
+  function makeMultiSessionAuditCapture(): {
+    factory: (sessionId: string, root?: string) => AuditLogger;
+    entriesBySession: Map<string, AuditEntry[]>;
+  } {
+    const entriesBySession = new Map<string, AuditEntry[]>();
+    return {
+      entriesBySession,
+      factory: (sid) => {
+        const list = entriesBySession.get(sid) ?? [];
+        if (!entriesBySession.has(sid)) entriesBySession.set(sid, list);
+        return {
+          append: async (entry) => {
+            list.push({ ...entry, ts: Date.now() });
+          },
+          list: async () => ({ entries: [...list], nextCursor: null }),
+          close: async () => {},
+        };
+      },
+    };
+  }
+
+  function makeTrackedSessionsTmp(initial: Array<{ sessionId: string; hostKey: string }>): {
+    path: string;
+    cleanup: () => void;
+  } {
+    const fs = require('node:fs') as typeof import('node:fs');
+    const os = require('node:os') as typeof import('node:os');
+    const path = require('node:path') as typeof import('node:path');
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'share-killall-'));
+    const file = path.join(dir, 'active.json');
+    fs.writeFileSync(file, JSON.stringify(initial));
+    return {
+      path: file,
+      cleanup: () => {
+        try {
+          fs.rmSync(dir, { recursive: true, force: true });
+        } catch {
+          // best-effort
+        }
+      },
+    };
+  }
+
+  it('iterates over 3 tracked sessions, returns {revoked:3, failed:0}, truncates active.json, appends kill-switch to each', async () => {
+    const initial = [
+      { sessionId: 'sess-a', hostKey: 'hk-a' },
+      { sessionId: 'sess-b', hostKey: 'hk-b' },
+      { sessionId: 'sess-c', hostKey: 'hk-c' },
+    ];
+    const { path: activeSessionsPath, cleanup } = makeTrackedSessionsTmp(initial);
+    try {
+      const fetchCalls: { url: string; body?: string }[] = [];
+      const fetchSpy: typeof fetch = (async (url: string, init?: RequestInit) => {
+        const body = typeof init?.body === 'string' ? init.body : undefined;
+        fetchCalls.push({ url, body });
+        return { ok: true, status: 200, json: async () => ({ ok: true, ended: 0 }) } as Response;
+      }) as unknown as typeof fetch;
+      const klogger = makeMultiSessionAuditCapture();
+      const ctrl = createShareController({
+        ...baseDeps,
+        fetch: fetchSpy,
+        activeSessionsPath,
+        auditLoggerFactory: klogger.factory,
+      });
+
+      const result = await ctrl.killAll();
+      expect(result).toEqual({ revoked: 3, failed: 0 });
+
+      // POST /api/share/end was called once per tracked session with the right body.
+      const endCalls = fetchCalls.filter((c) => c.url.endsWith('/api/share/end'));
+      expect(endCalls).toHaveLength(3);
+      const sentBodies = endCalls
+        .map((c) => JSON.parse(c.body ?? '{}'))
+        .sort((a, b) => a.sessionId.localeCompare(b.sessionId));
+      expect(sentBodies).toEqual([
+        { sessionId: 'sess-a', hostKey: 'hk-a' },
+        { sessionId: 'sess-b', hostKey: 'hk-b' },
+        { sessionId: 'sess-c', hostKey: 'hk-c' },
+      ]);
+
+      // Each session got a kill-switch audit entry.
+      for (const sid of ['sess-a', 'sess-b', 'sess-c']) {
+        const entries = klogger.entriesBySession.get(sid) ?? [];
+        const kills = entries.filter((e) => e.kind === 'kill-switch');
+        expect(kills).toHaveLength(1);
+        expect(kills[0]?.details).toEqual({ revoked: 3, failed: 0 });
+      }
+
+      // active.json is truncated to [].
+      const fs = require('node:fs') as typeof import('node:fs');
+      const after = JSON.parse(fs.readFileSync(activeSessionsPath, 'utf8'));
+      expect(after).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('counts a 502 response as failed but still appends kill-switch + truncates', async () => {
+    const initial = [
+      { sessionId: 'sess-a', hostKey: 'hk-a' },
+      { sessionId: 'sess-b', hostKey: 'hk-b' },
+    ];
+    const { path: activeSessionsPath, cleanup } = makeTrackedSessionsTmp(initial);
+    try {
+      const fetchSpy: typeof fetch = (async (_url: string, init?: RequestInit) => {
+        const body = typeof init?.body === 'string' ? init.body : '';
+        const isB = body.includes('sess-b');
+        return {
+          ok: !isB,
+          status: isB ? 502 : 200,
+          json: async () => ({}),
+        } as Response;
+      }) as unknown as typeof fetch;
+      const klogger = makeMultiSessionAuditCapture();
+      const ctrl = createShareController({
+        ...baseDeps,
+        fetch: fetchSpy,
+        activeSessionsPath,
+        auditLoggerFactory: klogger.factory,
+      });
+
+      const result = await ctrl.killAll();
+      expect(result).toEqual({ revoked: 1, failed: 1 });
+
+      // kill-switch entries written for both, carrying the final counts.
+      for (const sid of ['sess-a', 'sess-b']) {
+        const kills = (klogger.entriesBySession.get(sid) ?? []).filter(
+          (e) => e.kind === 'kill-switch',
+        );
+        expect(kills).toHaveLength(1);
+        expect(kills[0]?.details).toEqual({ revoked: 1, failed: 1 });
+      }
+
+      const fs = require('node:fs') as typeof import('node:fs');
+      expect(JSON.parse(fs.readFileSync(activeSessionsPath, 'utf8'))).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('with no tracked sessions returns {revoked:0, failed:0} and is a no-op', async () => {
+    const { path: activeSessionsPath, cleanup } = makeTrackedSessionsTmp([]);
+    try {
+      const fetchCalls: { url: string }[] = [];
+      const fetchSpy: typeof fetch = (async (url: string) => {
+        fetchCalls.push({ url });
+        return { ok: true, status: 200, json: async () => ({}) } as Response;
+      }) as unknown as typeof fetch;
+      const ctrl = createShareController({
+        ...baseDeps,
+        fetch: fetchSpy,
+        activeSessionsPath,
+      });
+
+      const result = await ctrl.killAll();
+      expect(result).toEqual({ revoked: 0, failed: 0 });
+      expect(fetchCalls).toHaveLength(0);
+    } finally {
+      cleanup();
+    }
+  });
+
+  it('start() appends the session+hostKey to active.json; stop() removes it', async () => {
+    const { path: activeSessionsPath, cleanup } = makeTrackedSessionsTmp([]);
+    try {
+      const fake = makeFakeTransport(['connecting', 'open']);
+      const ctrl = createShareController({
+        ...baseDeps,
+        fetch: mockFetch({
+          body: {
+            sessionId: 'sess-9',
+            token: 'tok-9',
+            hostKey: 'hk-9',
+            wsUrl: 'wss://relay/ws',
+          },
+        }),
+        transportFactory: fake.factory,
+        activeSessionsPath,
+      });
+      await ctrl.start();
+      const fs = require('node:fs') as typeof import('node:fs');
+      let tracked = JSON.parse(fs.readFileSync(activeSessionsPath, 'utf8'));
+      expect(tracked).toEqual([{ sessionId: 'sess-9', hostKey: 'hk-9' }]);
+
+      await ctrl.stop();
+      tracked = JSON.parse(fs.readFileSync(activeSessionsPath, 'utf8'));
+      expect(tracked).toEqual([]);
+    } finally {
+      cleanup();
+    }
+  });
+});
+
 describe('createShareController rate-limit + audit', () => {
   it('rate-limited frame is dropped and audited as reject', async () => {
     const fake = makeFakeTransport(['connecting', 'open']);
