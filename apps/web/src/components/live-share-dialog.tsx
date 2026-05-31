@@ -11,8 +11,10 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@seeflow/canvas';
-import { ChevronDown, ChevronRight, Loader2, UserX } from 'lucide-react';
+import { Check, ChevronDown, ChevronRight, Copy, Loader2, UserX } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+
+export type LiveShareDialogStatus = 'idle' | 'starting' | 'active' | 'stopping' | 'error';
 
 export interface LiveShareDialogProps {
   open: boolean;
@@ -21,6 +23,30 @@ export interface LiveShareDialogProps {
   peers: ShareStatePeerSummary[];
   /** Host display name, surfaced at the top of the dialog. */
   hostDisplayName?: string;
+  /**
+   * Current share status from useShareState(). Drives whether the dialog
+   * shows the "Start sharing" CTA or the active-session controls (URL,
+   * peer list, End session). Defaults to 'idle' when omitted.
+   */
+  status?: LiveShareDialogStatus;
+  /**
+   * The peer-joinable URL, set when `status === 'active'`. Surfaced in a
+   * read-only field with a copy button.
+   */
+  shareUrl?: string;
+  /**
+   * Start-share implementation override for tests. Defaults to a
+   * `fetch('/api/share/start', {method:'POST'})` POST. The dialog does not
+   * read the response — the studio's SSE state stream drives the transition
+   * to `status === 'active'`.
+   */
+  onStart?: () => Promise<void>;
+  /**
+   * Stop-share implementation override for tests. Defaults to a
+   * `fetch('/api/share/stop', {method:'POST'})` POST. Like `onStart`, the
+   * status transition is driven by the SSE state stream.
+   */
+  onStop?: () => Promise<void>;
   /**
    * US-082: number of sessions the studio is currently tracking in
    * `active.json`. Drives the kill-switch button: disabled when 0, with the
@@ -61,6 +87,16 @@ interface ToastItem {
 }
 
 const TOAST_DURATION_MS = 3000;
+
+async function defaultStart(): Promise<void> {
+  const res = await fetch('/api/share/start', { method: 'POST' });
+  if (!res.ok) throw new Error(`share/start failed: ${res.status}`);
+}
+
+async function defaultStop(): Promise<void> {
+  const res = await fetch('/api/share/stop', { method: 'POST' });
+  if (!res.ok && res.status !== 204) throw new Error(`share/stop failed: ${res.status}`);
+}
 
 async function defaultKick(peer: ShareStatePeerSummary): Promise<void> {
   const res = await fetch('/api/share/kick', {
@@ -138,6 +174,10 @@ export function LiveShareDialog({
   peers,
   hostDisplayName,
   recentSessionCount = 0,
+  status = 'idle',
+  shareUrl,
+  onStart,
+  onStop,
   auditApi,
   onKick,
   onKillAll,
@@ -154,10 +194,51 @@ export function LiveShareDialog({
   const [killAllConfirmOpen, setKillAllConfirmOpen] = useState(false);
   const [killAllPending, setKillAllPending] = useState(false);
   const [killAllError, setKillAllError] = useState<string | null>(null);
+  // Slots 8/9/10 — start/stop CTA state + copy-to-clipboard feedback.
+  // Appended at the end per the hook-shim slot rule.
+  const [startError, setStartError] = useState<string | null>(null);
+  const [startPending, setStartPending] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const expireToast = useCallback((id: number) => {
     setToasts((current) => current.filter((t) => t.id !== id));
   }, []);
+
+  const handleStart = useCallback(async () => {
+    if (startPending) return;
+    setStartError(null);
+    setStartPending(true);
+    try {
+      await (onStart ?? defaultStart)();
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : 'Failed to start sharing');
+    } finally {
+      setStartPending(false);
+    }
+  }, [onStart, startPending]);
+
+  const handleStop = useCallback(async () => {
+    if (startPending) return;
+    setStartPending(true);
+    try {
+      await (onStop ?? defaultStop)();
+    } catch (err) {
+      setStartError(err instanceof Error ? err.message : 'Failed to stop sharing');
+    } finally {
+      setStartPending(false);
+    }
+  }, [onStop, startPending]);
+
+  const handleCopyUrl = useCallback(async () => {
+    if (!shareUrl) return;
+    try {
+      await navigator.clipboard.writeText(shareUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      // Clipboard write can fail on insecure contexts — leave the icon as Copy.
+    }
+  }, [shareUrl]);
 
   const handleKick = useCallback(
     async (peer: ShareStatePeerSummary) => {
@@ -208,6 +289,90 @@ export function LiveShareDialog({
               : 'Peers joined via the share link.'}
           </DialogDescription>
         </DialogHeader>
+
+        {status === 'active' && shareUrl ? (
+          <div
+            data-testid="live-share-url-row"
+            className="sf:flex sf:flex-col sf:gap-2 sf:rounded-md sf:border sf:border-border sf:bg-muted/40 sf:p-3"
+          >
+            <div className="sf:text-xs sf:font-medium sf:uppercase sf:tracking-[0.18em] sf:text-muted-foreground">
+              Share link
+            </div>
+            <div className="sf:flex sf:items-center sf:gap-2">
+              <input
+                type="text"
+                value={shareUrl}
+                readOnly
+                onFocus={(e) => e.currentTarget.select()}
+                data-testid="live-share-url-input"
+                className="sf:flex-1 sf:rounded-md sf:border sf:border-border sf:bg-background sf:px-2 sf:py-1.5 sf:font-mono sf:text-xs"
+              />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={handleCopyUrl}
+                    aria-label="Copy share link"
+                    data-testid="live-share-copy-button"
+                  >
+                    {copied ? (
+                      <Check className="sf:h-4 sf:w-4" aria-hidden="true" />
+                    ) : (
+                      <Copy className="sf:h-4 sf:w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{copied ? 'Copied!' : 'Copy link'}</TooltipContent>
+              </Tooltip>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={startPending}
+                onClick={handleStop}
+                data-testid="live-share-stop-button"
+              >
+                {startPending ? (
+                  <Loader2 className="sf:mr-2 sf:h-4 sf:w-4 sf:animate-spin" aria-hidden="true" />
+                ) : null}
+                End session
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div
+            data-testid="live-share-start-section"
+            className="sf:flex sf:flex-col sf:gap-3 sf:rounded-md sf:border sf:border-border sf:bg-muted/40 sf:p-4"
+          >
+            <p className="sf:text-sm sf:text-muted-foreground">
+              Start a live share session to generate a peer-joinable link. Anyone with the link can
+              join, see your canvas in real time, and make edits if you allow it.
+            </p>
+            {startError ? (
+              <div
+                data-testid="live-share-start-error"
+                className="sf:rounded-md sf:border sf:border-destructive/40 sf:bg-destructive/10 sf:px-3 sf:py-2 sf:text-sm sf:text-destructive"
+              >
+                {startError}
+              </div>
+            ) : null}
+            <Button
+              type="button"
+              size="sm"
+              disabled={startPending || status === 'starting' || status === 'stopping'}
+              onClick={handleStart}
+              data-testid="live-share-start-button"
+              className="sf:w-fit"
+            >
+              {startPending || status === 'starting' ? (
+                <Loader2 className="sf:mr-2 sf:h-4 sf:w-4 sf:animate-spin" aria-hidden="true" />
+              ) : null}
+              {status === 'stopping' ? 'Ending session…' : 'Start sharing'}
+            </Button>
+          </div>
+        )}
 
         <div data-testid="live-share-peer-list" className="sf:flex sf:flex-col sf:gap-1 sf:py-2">
           {peers.length === 0 ? (

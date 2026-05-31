@@ -224,6 +224,8 @@ export function App() {
           open={liveShareOpen}
           onOpenChange={setLiveShareOpen}
           peers={shareState.status === 'active' ? shareState.peers : []}
+          status={shareState.status === 'error' ? 'error' : shareState.status}
+          {...(shareState.status === 'active' ? { shareUrl: shareState.url } : {})}
           {...(shareState.status === 'active' && shareState.hostDisplayName
             ? { hostDisplayName: shareState.hostDisplayName }
             : {})}
