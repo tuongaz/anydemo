@@ -54,6 +54,7 @@ import {
   type FileUploadHandler,
   createFileUploadHandler,
 } from './share-file-upload.ts';
+import { type FilesManifestBuilder, createFilesManifestBuilder } from './share-files-manifest.ts';
 import { type RateLimiter, createRateLimiter } from './share-ratelimit.ts';
 import { RpcFrameSchema, type RpcOp, type RpcResultFrame } from './share-rpc-schema.ts';
 import {
@@ -264,6 +265,10 @@ export interface ShareDeps {
   // Injected for tests so they can capture the upload audit entry without
   // hitting disk. Defaults to `appendShareAudit` writing to `auditDir`.
   appendFileUploadAuditFn?: AppendFileUploadAudit;
+  // Test seam: swap the entire files-manifest builder (US-062). Production
+  // callers leave this undefined and the controller builds one from
+  // `operationsDeps.registry`. Without a registry the manifest is empty.
+  filesManifestBuilder?: FilesManifestBuilder;
 }
 
 interface RelaySessionResponse {
@@ -444,6 +449,20 @@ export function createShareController(deps: ShareDeps): ShareController {
         })
       : null);
 
+  // Files-manifest builder (US-062). Lazy-instantiated from the registry, with
+  // the same test-seam pattern as file-request / file-upload handlers. The
+  // controller drives `init()` on transition idle -> active and emits one
+  // `files-manifest` frame per accepted presence/join.
+  const filesManifestBuilder: FilesManifestBuilder | null =
+    deps.filesManifestBuilder ??
+    (deps.operationsDeps
+      ? createFilesManifestBuilder({ registry: deps.operationsDeps.registry })
+      : null);
+  // Resolves when `filesManifestBuilder.init()` has finished for the current
+  // session. Set on idle -> active; cleared on teardown. A presence/join that
+  // races with init awaits this before broadcasting.
+  let filesManifestReady: Promise<void> | null = null;
+
   const setState = (next: ShareState) => {
     current = next;
     for (const fn of subscribers) {
@@ -492,6 +511,7 @@ export function createShareController(deps: ShareDeps): ShareController {
     transport = null;
     hostKey = null;
     auditLog = null;
+    filesManifestReady = null;
     unsubscribeFromEventBus();
     peerConnIds.clear();
     connPeers.clear();
@@ -634,6 +654,21 @@ export function createShareController(deps: ShareDeps): ShareController {
     });
   };
 
+  // Emit the files-manifest frame to a freshly-joined peer. Awaits init() so a
+  // racing join (e.g. peer auth-peer'd before the walk completed) still gets a
+  // populated manifest. Errors only warn — the manifest is a hint, not a
+  // gating signal; the peer can fall back to file-request on cache miss.
+  const emitFilesManifestForPeer = async (peerConnId: string): Promise<void> => {
+    if (!filesManifestBuilder) return;
+    try {
+      if (filesManifestReady) await filesManifestReady;
+      const payload = filesManifestBuilder.build();
+      broadcast(makeEnvelope('files-manifest', payload, { to: peerConnId }));
+    } catch (err) {
+      console.warn('[share] files-manifest emit failed:', err);
+    }
+  };
+
   const handleFrame = (env: Envelope) => {
     if (env.type === 'presence') {
       const base = PresenceBaseSchema.safeParse(env.payload);
@@ -661,6 +696,10 @@ export function createShareController(deps: ShareDeps): ShareController {
           ...current,
           peers: [...current.peers, { peerId, displayName, joinedAt: Date.now() }],
         });
+        // Prime the new peer with a one-shot files-manifest snapshot so its
+        // canvas can render placeholder sizing before any file-request fires.
+        // Fire-and-forget; emit failures are warned, never propagated.
+        void emitFilesManifestForPeer(env.from);
         return;
       }
       if (kind === 'leave') {
@@ -859,6 +898,14 @@ export function createShareController(deps: ShareDeps): ShareController {
             // any event that fires synchronously from a state subscriber finds
             // the bridge wired up.
             subscribeToEventBus();
+            // Kick off the files-manifest disk walk. presence/join handlers
+            // await this before emitting so the first joiner gets a populated
+            // payload even if it races init.
+            if (filesManifestBuilder) {
+              filesManifestReady = filesManifestBuilder.init().catch((err) => {
+                console.warn('[share] files-manifest init failed:', err);
+              });
+            }
             setState({
               status: 'active',
               sessionId: body.sessionId,
