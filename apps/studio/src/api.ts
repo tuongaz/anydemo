@@ -274,7 +274,9 @@ export function createApi(options: ApiOptions): Hono {
   // live-share peers receive a `node-patched` envelope and can apply the diff
   // to their local snapshot. No-op when the share controller is absent or the
   // session is not active. Wrapped in try/catch defensively — broadcast
-  // failures must NEVER fail the local HTTP request.
+  // failures must NEVER fail the local HTTP request. The share controller
+  // normalizes flat `patchNode` bodies into a peer-applicable wire shape via
+  // its own `canonicalizePatchNode` helper before broadcasting.
   const share = options.share;
   const broadcastEdit = (op: RpcOp, result: { kind: string; data?: unknown }): void => {
     if (!share) return;

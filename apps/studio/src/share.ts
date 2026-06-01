@@ -818,15 +818,43 @@ export function createShareController(deps: ShareDeps): ShareController {
     });
   };
 
+  // The studio API receives a flat node-patch body (`name`, `description`,
+  // color tokens, `width` / `height`, …) which `mergeNodeUpdates` dispatches
+  // into `node.data.*`. The peer SPA applies the wire diff as a shallow merge
+  // against the node root, so a flat patch would land at the root and leave
+  // `data.*` stale — the renderer reads `data.name` and would silently keep
+  // the old label. Normalize the wire shape by reading the post-mutation node
+  // from the watcher's snapshot and forwarding the full merged `data` (plus
+  // `position` / `type` if they moved). Keeps the peer's shallow-merge
+  // semantics correct without changing the wire schema.
+  const NODE_ROOT_PATCH_KEYS = new Set(['position', 'type']);
+  const canonicalizePatchNode = (op: RpcOp): RpcOp => {
+    if (op.op !== 'patchNode') return op;
+    const watcher = deps.operationsDeps?.watcher;
+    const snap = watcher?.snapshot(op.flowId);
+    const node = snap?.flow?.nodes.find((n) => n.id === op.nodeId);
+    if (!node) return op;
+    const newPatch: Record<string, unknown> = {};
+    for (const key of Object.keys(op.patch)) {
+      if (NODE_ROOT_PATCH_KEYS.has(key)) {
+        newPatch[key] = (node as unknown as Record<string, unknown>)[key];
+      } else {
+        newPatch.data = node.data;
+      }
+    }
+    return { ...op, patch: newPatch };
+  };
+
   // Build + emit a `node-patched` envelope for an accepted op. Centralized so
   // peer-rpc and host-local edits assemble the wire payload identically (only
   // the `attributedTo` value differs). Returns the version assigned so callers
   // can echo it back into rpc-result if needed.
   const broadcastNodePatched = (
-    op: RpcOp,
+    rawOp: RpcOp,
     outcome: RpcDispatchOutcome,
     attributedTo: { peerId: string; displayName: string },
   ): number => {
+    const op = canonicalizePatchNode(rawOp);
     const nextVersion = (flowVersions.get(op.flowId) ?? 0) + 1;
     flowVersions.set(op.flowId, nextVersion);
     const diff = computeNodePatchedDiff(op, outcome);
