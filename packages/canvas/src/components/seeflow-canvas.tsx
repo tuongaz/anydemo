@@ -82,6 +82,7 @@ import { ImageNode } from '../nodes/image-node.tsx';
 import { LINKFLOW_DEFAULT_SIZE, LINKFLOW_MIN_SIZE, LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';
+import type { ResizeAlignmentHooks } from '../nodes/use-resize-gesture.ts';
 import type {
   CanvasMode,
   Connector,
@@ -2652,6 +2653,24 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     },
     [flushPendingFit],
   );
+  // US-005: stable resize-alignment delegate injected into every node's runtime
+  // data (`data.resizeAlignment`) so `useResizeGesture` can snap the moving
+  // edge(s) and surface live guides. It reads through `alignmentApiRef` (the
+  // hook's API is assigned there at render below) so this object's identity
+  // never changes — node `data` stays referentially stable across renders.
+  // useMemo (not useState) keeps the hook-shim test slot ordering intact.
+  const resizeAlignment = useMemo<ResizeAlignmentHooks>(
+    () => ({
+      beginResize: (nodeId, edges) => alignmentApiRef.current?.beginResize(nodeId, edges),
+      applyResizeSnap: (rawRect, event) =>
+        alignmentApiRef.current?.applyResizeSnap(rawRect, event) ?? {
+          snappedRect: rawRect,
+          guides: [],
+        },
+      endResize: () => alignmentApiRef.current?.endResize(),
+    }),
+    [],
+  );
   // US-009: signal-driven external-change fit. Bumping `autoFitViewSignal`
   // re-runs this effect; the first run (initial mount tick) flips
   // `signalEffectMountedRef` and skips so the signal path doesn't double-fire
@@ -2899,6 +2918,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           onResize: onNodeResize,
           onResizeEnd: onNodeResizeEnd,
           setResizing,
+          // US-005: alignment-guide resize integration. Only injected when the
+          // feature is enabled (edit mode); view/mini get undefined so the
+          // resize gesture stays byte-identical to legacy there. The renderer
+          // forwards it to useResizeGesture as `alignment`.
+          resizeAlignment: flags.enableAlignmentGuides ? resizeAlignment : undefined,
           // type:'html' + type:'component': routed through to the renderer's
           // fit-to-content button. Gated on type so other node variants don't
           // pick up an unused callback in their runtime data.
@@ -3020,6 +3044,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onHtmlNodeFitToContent,
     onComponentNodeFitToContent,
     setResizing,
+    resizeAlignment,
+    flags.enableAlignmentGuides,
     nodeOverrides,
     onNodeNameChange,
     onNodeDescriptionChange,

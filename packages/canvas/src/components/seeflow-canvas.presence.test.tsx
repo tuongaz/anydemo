@@ -209,10 +209,12 @@ describe('SeeflowCanvas — US-048 presence layer + cursor callback', () => {
   });
 
   it('skips the ViewportPortal entirely when presenceLayer is undefined', () => {
-    // The legacy path (no presence) must add zero React-tree weight — no
-    // ViewportPortal node, no pointer-events-none wrapper. This guards
-    // against accidentally always mounting the portal.
-    const tree = callSeeflowCanvas();
+    // The legacy path (no presence) must add zero React-tree weight from the
+    // presence layer — no ViewportPortal node, no pointer-events-none wrapper.
+    // This guards against accidentally always mounting the presence portal.
+    // US-005: the alignment-guide overlay (US-004) also mounts a ViewportPortal
+    // in edit mode, so disable it here to isolate the presence path's weight.
+    const tree = callSeeflowCanvas({ enableAlignmentGuides: false });
     const portal = findElement(tree, (el) => el.type === ViewportPortal);
     expect(portal).toBeNull();
   });

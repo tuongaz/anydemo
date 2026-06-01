@@ -10,7 +10,7 @@ import type { HtmlNodeData } from '../types.ts';
 import { Icon } from '../ui/icon.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
 import { ResizeControls } from './resize-controls.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 export type HtmlNodeRuntimeData = HtmlNodeData & {
   onResize?: (
@@ -22,6 +22,8 @@ export type HtmlNodeRuntimeData = HtmlNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   // When wired (edit mode only), the renderer's "Fit to content" button calls
   // this. The host's handler PATCHes { autoSize: true } through the adapter,
   // which strips width/height server-side per the autoSize invariant.
@@ -41,6 +43,8 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   // autoSize defaults to true (field absent → auto-size is the default for
   // new htmlNodes per the studio adapter invariant). `isResizing` temporarily

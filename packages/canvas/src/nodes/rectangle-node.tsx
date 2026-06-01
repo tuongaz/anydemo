@@ -9,7 +9,7 @@ import { PlayButton } from './lib/play-button.tsx';
 import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { StatusBadge } from './status-badge.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 /**
  * Runtime data attached to a rectangle node by the canvas host. Extends the
@@ -35,6 +35,8 @@ export type RectangleNodeData = GeometricNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   onNameChange?: (nodeId: string, name: string) => void;
   onDescriptionChange?: (nodeId: string, description: string) => void;
   onIconChange?: (nodeId: string, icon: string | null) => void;
@@ -67,6 +69,8 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   const [descEditing, setDescEditing] = useState(false);
   const descEditable = !!data.onDescriptionChange;

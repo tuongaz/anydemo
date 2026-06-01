@@ -5,7 +5,7 @@ import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { fileUrl } from '../lib/file-url.ts';
 import type { ImageNodeData } from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 export type ImageNodeRuntimeData = ImageNodeData & {
   onResize?: (
@@ -17,6 +17,8 @@ export type ImageNodeRuntimeData = ImageNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   /**
    * US-004: project id injected into every node's runtime data by demo-canvas
    * so the renderer can build a project-scoped file URL. Not persisted to disk
@@ -58,6 +60,8 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   // Once user-resized (or pre-sized via authoring), the React Flow wrapper
   // owns dimensions and the inner fills via h-full w-full. Before any resize,

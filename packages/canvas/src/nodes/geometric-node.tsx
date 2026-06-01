@@ -21,7 +21,7 @@ import { deriveVisualStatus } from './lib/visual-status.ts';
 import { ResizeControls } from './resize-controls.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from './shapes/registry.ts';
 import { StatusBadge } from './status-badge.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 // Illustrative shapes own their visuals via inline-SVG components under
 // ./shapes/. The wrapper's Tailwind chrome (border / bg / rotation) is
@@ -73,6 +73,8 @@ export type GeometricNodeRuntimeData = GeometricNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   /** Persist a new name (PATCH /nodes/:id { name }). */
   onNameChange?: (nodeId: string, name: string) => void;
   /** Persist a new description (PATCH /nodes/:id { description }). */
@@ -226,6 +228,8 @@ function GeometricNodeImpl({
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   const [editing, setEditing] = useState<EditField>(() => {
     if (!data.autoEditOnMount) return null;

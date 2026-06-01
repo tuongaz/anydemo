@@ -5,7 +5,7 @@ import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { LinkflowNodeData } from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 /**
  * Runtime data carried on a linkflow node. The on-disk shape is
@@ -48,6 +48,8 @@ export type LinkflowNodeRuntimeData = LinkflowNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
 } & Record<string, unknown>;
 
 export type LinkflowNodeType = Node<LinkflowNodeRuntimeData, 'linkflow'>;
@@ -87,6 +89,8 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
 
   // One-shot auto-open hook for the toolbar's drag-create flow. `firedRef`

@@ -8,7 +8,7 @@ import type { ComponentNodeData } from '../types.ts';
 import { ComponentRuntime } from './component-runtime.tsx';
 import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 export type ComponentNodeRuntimeData = ComponentNodeData & {
   onResize?: (
@@ -20,6 +20,8 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   /** Threaded from the host so script-kind actions know which project to POST against. */
   projectSlug?: string;
   /** Threaded from the host so script-kind actions know which flow to POST against. */
@@ -50,6 +52,8 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   // autoSize defaults to true so freshly created component nodes shrink-wrap
   // to their rendered spec — mirrors HtmlNodeData.autoSize. `isResizing`

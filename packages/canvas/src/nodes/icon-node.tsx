@@ -13,7 +13,7 @@ import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { IconNodeData } from '../types.ts';
 import { ResizeControls } from './resize-controls.tsx';
-import { useResizeGesture } from './use-resize-gesture.ts';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 export type IconNodeRuntimeData = IconNodeData & {
   onResize?: (
@@ -25,6 +25,8 @@ export type IconNodeRuntimeData = IconNodeData & {
     dims: { width: number; height: number; x: number; y: number },
   ) => void;
   setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
   // Persist the inline-edited name (PATCH /nodes/:id { name }).
   // Mirrors the shape-node name-edit path; demo-view's onNodeNameChange
   // pushes a single coalesced undo entry per edit session (500ms window).
@@ -58,6 +60,8 @@ function IconNodeImpl({ id, data, selected, isConnectable }: NodeProps<IconNodeT
     onResize: (dims) => data.onResize?.(id, dims),
     onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
     setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
   });
   // `isResizing` deliberately excluded: see state-node.tsx for the full
   // rationale (precreated-node click-shrink fix).
