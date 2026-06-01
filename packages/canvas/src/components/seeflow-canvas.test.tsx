@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import { type Connection, Controls, MiniMap, type Node, ReactFlow } from '@xyflow/react';
 import * as React from 'react';
-import type { IoAdapter } from '../adapter/io-adapter.ts';
 import type { CanvasAdapter, CanvasRuntime } from '../adapter/types.ts';
 import { COLOR_TOKENS, NODE_DEFAULT_BG_WHITE } from '../lib/color-tokens.ts';
 import { CloudShape } from '../nodes/shapes/cloud.tsx';
@@ -204,10 +203,6 @@ function callSeeflowCanvas(
     (nodeOverrides || connectorOverrides
       ? { pendingOverrides: { nodes: nodeOverrides, connectors: connectorOverrides } }
       : undefined);
-  // US-036: cast away the discriminated-union narrowing on the spread — the
-  // `Partial<SeeflowCanvasProps>` arm-by-arm distribution can't pick a single
-  // arm when both `adapter` and `ioAdapter` overrides are flowing through,
-  // and forcing tests to disambiguate isn't worth the boilerplate.
   const props = {
     // US-027: tests default to mode='edit' so the legacy assertions (every
     // chrome render + handler reachable) continue to hold. Per-test overrides
@@ -3828,68 +3823,6 @@ describe('US-004: flat node types — fixture coverage across the 12-tag set', (
     const rfNodes = getRfNodes([node]);
     expect(rfNodes[0]?.type).toBe('icon');
     expect(rfNodes[0]?.data.icon).toBe('server');
-  });
-});
-
-describe('US-036: ioAdapter prop wraps into the effective CanvasAdapter', () => {
-  // Build a recording IoAdapter so the test can assert which underlying
-  // method actually ran when the wrapped adapter is invoked.
-  function makeRecordingIoAdapter(): {
-    io: IoAdapter;
-    calls: { method: string; args: unknown[] }[];
-  } {
-    const calls: { method: string; args: unknown[] }[] = [];
-    const record =
-      <T,>(method: string, value: T) =>
-      async (...args: unknown[]) => {
-        calls.push({ method, args });
-        return { ok: true as const, value };
-      };
-    const io: IoAdapter = {
-      createNode: record('createNode', { id: 'n1', node: {} }) as IoAdapter['createNode'],
-      updateNode: record('updateNode', undefined) as IoAdapter['updateNode'],
-      updateNodePosition: record('updateNodePosition', {
-        ok: true,
-        position: { x: 7, y: 9 },
-      }) as IoAdapter['updateNodePosition'],
-      deleteNode: record('deleteNode', undefined) as IoAdapter['deleteNode'],
-      reorderNode: record('reorderNode', undefined) as IoAdapter['reorderNode'],
-      createConnector: record('createConnector', { id: 'c1' }) as IoAdapter['createConnector'],
-      updateConnector: record('updateConnector', undefined) as IoAdapter['updateConnector'],
-      deleteConnector: record('deleteConnector', undefined) as IoAdapter['deleteConnector'],
-      uploadImage: record('uploadImage', { path: 'p' }) as IoAdapter['uploadImage'],
-    };
-    return { io, calls };
-  }
-
-  it('when ioAdapter is passed, the effective adapter routes updateNodePosition through ioAdapter (not the REST adapter)', async () => {
-    // The canvas threads `effectiveAdapter` into the DetailPanel as its
-    // `adapter` prop (the only stable, well-typed surface for asserting the
-    // wrap routing under the hook-shim). Drag-end persistence in the studio
-    // is wired by the host via `onNodePositionChange` against the same
-    // adapter — so verifying the wrap here is the canonical pin-point for
-    // "the canvas dispatches edits through ioAdapter when present".
-    const { io, calls } = makeRecordingIoAdapter();
-    // Trip-wire: if effectiveAdapter ever reads from `adapter` while ioAdapter
-    // is set, this throws as a load-bearing canary.
-    const tripwire: CanvasAdapter = new Proxy({} as CanvasAdapter, {
-      get(_t, key) {
-        return () => {
-          throw new Error(`adapter.${String(key)} was invoked even though ioAdapter was passed`);
-        };
-      },
-    });
-    const tree = callSeeflowCanvas({ adapter: tripwire, ioAdapter: io });
-    const dp = findElement(tree, (el) => el.type === DetailPanel);
-    if (!dp) throw new Error('DetailPanel not found in SeeflowCanvas tree');
-    const effective = dp.props.adapter as CanvasAdapter | null;
-    if (!effective) throw new Error('DetailPanel.adapter should not be null when ioAdapter is set');
-    const result = await effective.updateNodePosition('n1', { x: 7, y: 9 });
-    expect(result).toEqual({ ok: true, position: { x: 7, y: 9 } });
-    const moveCall = calls.find((c) => c.method === 'updateNodePosition');
-    if (!moveCall) throw new Error('ioAdapter.updateNodePosition was never invoked');
-    expect(moveCall.args[0]).toBe('n1');
-    expect(moveCall.args[1]).toEqual({ x: 7, y: 9 });
   });
 });
 

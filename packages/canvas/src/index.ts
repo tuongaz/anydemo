@@ -8,7 +8,6 @@
 //   4. Helpers               — pure functions / browser utilities
 //   5. Adapter               — REST adapter + adapter contract types
 //  5b. History               — undo/redo wrapper + handle types
-//  5c. IoAdapter             — non-throwing adapter seam for peer transports (US-035)
 //   6. Nodes                 — React Flow node components
 //   7. Edges                 — React Flow edge components
 //   8. UI primitives         — buttons, dialogs, popovers, etc.
@@ -143,9 +142,6 @@ export type { ResizeGestureCallbacks } from './lib/detail-panel-width.ts';
 
 export { fileUrl } from './lib/file-url.ts';
 
-export { formatAttribution } from './lib/format-attribution.ts';
-export type { FormatAttributionResult } from './lib/format-attribution.ts';
-
 export {
   endpointFromPin,
   endpointToPin,
@@ -267,16 +263,6 @@ export type {
 } from './history/types.ts';
 
 // ----------------------------------------------------------------------------
-// 5c. IoAdapter
-// ----------------------------------------------------------------------------
-export type {
-  CanvasSseEvent,
-  IoAdapter,
-  IoAdapterDispatchEnvelope,
-  IoAdapterResult,
-} from './adapter/io-adapter.ts';
-
-// ----------------------------------------------------------------------------
 // 6. Nodes (re-exports from ./nodes/index.ts)
 // ----------------------------------------------------------------------------
 export * from './nodes/index.ts';
@@ -342,15 +328,6 @@ export type { InlineEditProps } from './components/inline-edit.tsx';
 
 export { ShareMenu } from './components/share-menu.tsx';
 export type { ShareMenuMode, ShareMenuProps } from './components/share-menu.tsx';
-
-export { PeerCursorsLayer } from './components/peer-cursors-layer.tsx';
-export type { PeerCursor, PeerCursorsLayerProps } from './components/peer-cursors-layer.tsx';
-
-export { AttributionToastStack } from './components/attribution-toast.tsx';
-export type {
-  AttributionToastItem,
-  AttributionToastStackProps,
-} from './components/attribution-toast.tsx';
 
 export {
   computeNewRectFromAnchorDrag,
