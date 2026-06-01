@@ -47,8 +47,6 @@ import {
 } from './schema-catalog.ts';
 import type { ComponentAction, SeeflowManifest } from './schema.ts';
 import { FlowIdPattern, FlowSchema, ResolvedFlowSchema } from './schema.ts';
-import type { RpcOp } from './share-rpc-schema.ts';
-import type { AttributionEvent, RpcDispatchOutcome, ShareController, ShareState } from './share.ts';
 import { type Spawner, defaultSpawner } from './shellout.ts';
 import { ID_TYPES, MAX_ID_COUNT, generateIds, isIdType } from './short-id.ts';
 import type { StatusRunner } from './status-runner.ts';
@@ -238,13 +236,7 @@ export interface ApiOptions {
   /** Override the icon installer fetcher. Production uses fetchWithProgress;
    *  integration tests inject a fixture-returning closure. */
   iconFetcher?: IconFetcher;
-  /** Live Share controller. The studio bootstrap instantiates one per process
-   *  (see server.ts); tests inject a fake to drive the /api/share/* routes
-   *  without touching the relay or a real WebSocket. */
-  share?: ShareController;
 }
-
-const KickBodySchema = z.object({ peerId: z.string().min(1) });
 
 /**
  * Thin call-through wrapper around the proxy.ts module exports. Lets tests
@@ -268,25 +260,6 @@ export function createApi(options: ApiOptions): Hono {
   const proxy = options.proxy ?? defaultProxyFacade;
   const ops = createOperations({ registry, watcher });
   const api = new Hono();
-
-  // Fan-out helper for host-originated edits (US-039). Every node/connector
-  // mutation endpoint below funnels through this after a successful op so the
-  // live-share peers receive a `node-patched` envelope and can apply the diff
-  // to their local snapshot. No-op when the share controller is absent or the
-  // session is not active. Wrapped in try/catch defensively — broadcast
-  // failures must NEVER fail the local HTTP request. The share controller
-  // normalizes flat `patchNode` bodies into a peer-applicable wire shape via
-  // its own `canonicalizePatchNode` helper before broadcasting.
-  const share = options.share;
-  const broadcastEdit = (op: RpcOp, result: { kind: string; data?: unknown }): void => {
-    if (!share) return;
-    if (result.kind !== 'ok') return;
-    try {
-      share.broadcastHostEdit(op, result as RpcDispatchOutcome);
-    } catch (err) {
-      console.warn('[api] share broadcastHostEdit failed:', err);
-    }
-  };
 
   const iconJobs = options.iconJobs ?? createJobRegistry();
   api.route(
@@ -1690,7 +1663,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.moveNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit({ op: 'moveNode', flowId: id, nodeId, position: parsed.data }, result);
         return c.json({ ok: true, position: result.data.position });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1734,7 +1706,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.reorderNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit({ op: 'reorderNode', flowId: id, nodeId, reorder: parsed.data }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1778,7 +1749,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.patchNode(id, nodeId, parsed.data);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit({ op: 'patchNode', flowId: id, nodeId, patch: parsed.data }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1816,10 +1786,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addNode(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit(
-          { op: 'addNode', flowId: id, node: result.data.node as Record<string, unknown> },
-          result,
-        );
         return c.json({ ok: true, id: result.data.id, node: result.data.node });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1860,15 +1826,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addBulk(id, parsed.data);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit(
-          {
-            op: 'addBulk',
-            flowId: id,
-            ...(parsed.data.nodes ? { nodes: parsed.data.nodes } : {}),
-            ...(parsed.data.connectors ? { connectors: parsed.data.connectors } : {}),
-          },
-          result,
-        );
         return c.json({
           ok: true,
           nodes: result.data.nodes,
@@ -1910,7 +1867,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.deleteNode(id, nodeId);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit({ op: 'deleteNode', flowId: id, nodeId }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1954,10 +1910,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.patchConnector(id, connId, parsed.data);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit(
-          { op: 'patchConnector', flowId: id, connectorId: connId, patch: parsed.data },
-          result,
-        );
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -1996,14 +1948,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.addConnector(id, body as Record<string, unknown>);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit(
-          {
-            op: 'addConnector',
-            flowId: id,
-            connector: { ...(body as Record<string, unknown>), id: result.data.id },
-          },
-          result,
-        );
         return c.json({ ok: true, id: result.data.id });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -2029,7 +1973,6 @@ export function createApi(options: ApiOptions): Hono {
     const result = await ops.deleteConnector(id, connId);
     switch (result.kind) {
       case 'ok':
-        broadcastEdit({ op: 'deleteConnector', flowId: id, connectorId: connId }, result);
         return c.json({ ok: true });
       case 'flowNotFound':
         return c.json({ error: 'unknown demo' }, 404);
@@ -2130,240 +2073,6 @@ export function createApi(options: ApiOptions): Hono {
           // Wait for the next event OR a heartbeat tick — whichever comes
           // first. On a heartbeat we emit an SSE comment line (invisible to
           // EventSource) so the idle connection isn't reaped mid-session.
-          let heartbeat: ReturnType<typeof setTimeout> | null = null;
-          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
-            resume = () => r('event');
-            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
-          });
-          if (heartbeat) clearTimeout(heartbeat);
-          resume = null;
-          if (reason === 'heartbeat' && active) {
-            await stream.write(': ping\n\n');
-          }
-        }
-      } finally {
-        unsubscribe();
-      }
-    });
-  });
-
-  // Live Share local API. Five routes that delegate to the injected
-  // ShareController. The controller is optional — when absent (e.g. tests
-  // that don't exercise share) every endpoint returns 503 so misconfigured
-  // deployments fail visibly instead of silently 404ing. `share` is defined
-  // at the top of createApi together with `broadcastEdit`.
-
-  // Map a controller rejection to an HTTP status + error body. share-not-active
-  // and share-peer-not-found are the two domain-specific reasons; everything
-  // else surfaces as 500 with the raw message so misconfigurations (bad relay
-  // URL, network failures, etc.) are debuggable from the response.
-  const shareErrorStatus = (err: unknown): { status: 400 | 404 | 409 | 500; error: string } => {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (msg === 'share-not-active') return { status: 409, error: msg };
-    if (msg === 'share-peer-not-found') return { status: 404, error: msg };
-    if (msg === 'share-already-active') return { status: 409, error: msg };
-    return { status: 500, error: msg };
-  };
-
-  api.post('/share/start', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    try {
-      const result = await share.start();
-      return c.json(result);
-    } catch (err) {
-      const mapped = shareErrorStatus(err);
-      return c.json({ error: mapped.error }, mapped.status);
-    }
-  });
-
-  api.post('/share/stop', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    try {
-      await share.stop();
-      return c.body(null, 204);
-    } catch (err) {
-      const mapped = shareErrorStatus(err);
-      return c.json({ error: mapped.error }, mapped.status);
-    }
-  });
-
-  api.post('/share/kick', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    let body: unknown;
-    try {
-      body = await c.req.json();
-    } catch {
-      return c.json({ error: 'Body must be valid JSON' }, 400);
-    }
-    const parsed = KickBodySchema.safeParse(body);
-    if (!parsed.success) {
-      return c.json({ error: 'Invalid kick body', issues: parsed.error.issues }, 400);
-    }
-    try {
-      await share.kick(parsed.data.peerId);
-      return c.body(null, 204);
-    } catch (err) {
-      const mapped = shareErrorStatus(err);
-      return c.json({ error: mapped.error }, mapped.status);
-    }
-  });
-
-  api.post('/share/rotate', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    try {
-      const result = await share.rotateUrl();
-      return c.json(result);
-    } catch (err) {
-      const mapped = shareErrorStatus(err);
-      return c.json({ error: mapped.error }, mapped.status);
-    }
-  });
-
-  // POST /api/share/kill-all — host kill-switch (US-081). Revokes every
-  // session this studio has tracked in `active.json`, not just the active
-  // one. Local-only by the cors.ts middleware. Returns the counts surfaced
-  // by the controller so the UI toast can show "Ended N live sessions".
-  api.post('/share/kill-all', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    try {
-      const result = await share.killAll();
-      return c.json(result);
-    } catch (err) {
-      const mapped = shareErrorStatus(err);
-      return c.json({ error: mapped.error }, mapped.status);
-    }
-  });
-
-  // GET /api/share/audit — page through the per-session AuditEntry JSONL log.
-  // Local-only by virtue of the cors.ts middleware. Requires an active session
-  // — when the controller is idle there is no logger to read from, so respond
-  // 400 rather than silently returning an empty page (consumers can use the
-  // status code to distinguish "no entries yet" from "no session").
-  api.get('/share/audit', async (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    if (share.state().status !== 'active') {
-      return c.json({ error: 'share-not-active' }, 400);
-    }
-    const limitRaw = c.req.query('limit');
-    const cursorRaw = c.req.query('cursor');
-    const limit = limitRaw !== undefined ? Number.parseInt(limitRaw, 10) : undefined;
-    const cursor = cursorRaw !== undefined ? Number.parseInt(cursorRaw, 10) : undefined;
-    const opts: { limit?: number; cursor?: number } = {};
-    if (typeof limit === 'number' && Number.isFinite(limit)) opts.limit = limit;
-    if (typeof cursor === 'number' && Number.isFinite(cursor)) opts.cursor = cursor;
-    try {
-      const page = await share.audit.list(opts);
-      return c.json(page);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      return c.json({ error: message }, 500);
-    }
-  });
-
-  // GET /api/share/state — SSE stream of ShareState transitions. Initial frame
-  // is the current state; subsequent frames are pushed on each controller
-  // subscribe callback. Mirrors the /api/events shape (queue + wake + heartbeat)
-  // so the UI can use the same EventSource handling.
-  api.get('/share/state', (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    const controller = share;
-
-    return streamSSE(c, async (stream) => {
-      let active = true;
-      const queue: Array<{ event: string; data: string }> = [];
-      let resume: (() => void) | null = null;
-
-      const wake = () => {
-        if (resume) {
-          const r = resume;
-          resume = null;
-          r();
-        }
-      };
-
-      const enqueue = (s: ShareState) => {
-        queue.push({ event: 'state', data: JSON.stringify(s) });
-        wake();
-      };
-
-      // subscribe() invokes fn synchronously with the current state, so the
-      // initial frame lands in the queue automatically — no explicit prologue.
-      const unsubscribe = controller.subscribe(enqueue);
-
-      stream.onAbort(() => {
-        active = false;
-        unsubscribe();
-        wake();
-      });
-
-      try {
-        while (active) {
-          while (queue.length > 0) {
-            const next = queue.shift();
-            if (!next) break;
-            await stream.writeSSE(next);
-          }
-          if (!active) break;
-          let heartbeat: ReturnType<typeof setTimeout> | null = null;
-          const reason = await new Promise<'event' | 'heartbeat'>((r) => {
-            resume = () => r('event');
-            heartbeat = setTimeout(() => r('heartbeat'), SSE_HEARTBEAT_MS);
-          });
-          if (heartbeat) clearTimeout(heartbeat);
-          resume = null;
-          if (reason === 'heartbeat' && active) {
-            await stream.write(': ping\n\n');
-          }
-        }
-      } finally {
-        unsubscribe();
-      }
-    });
-  });
-
-  // GET /api/share/attributions — SSE stream of `node-patched` attribution
-  // events for the host studio's apps/web UI (US-053). Fires once per accepted
-  // op (peer-originated AND host-originated), carrying `{flowId, op, diff,
-  // version, attributedTo, ts}`. No initial replay — the toast stack is for
-  // live activity only.
-  api.get('/share/attributions', (c) => {
-    if (!share) return c.json({ error: 'share controller not configured' }, 503);
-    const controller = share;
-
-    return streamSSE(c, async (stream) => {
-      let active = true;
-      const queue: Array<{ event: string; data: string }> = [];
-      let resume: (() => void) | null = null;
-
-      const wake = () => {
-        if (resume) {
-          const r = resume;
-          resume = null;
-          r();
-        }
-      };
-
-      const enqueue = (event: AttributionEvent) => {
-        queue.push({ event: 'attribution', data: JSON.stringify(event) });
-        wake();
-      };
-
-      const unsubscribe = controller.subscribeAttributions(enqueue);
-
-      stream.onAbort(() => {
-        active = false;
-        unsubscribe();
-        wake();
-      });
-
-      try {
-        while (active) {
-          while (queue.length > 0) {
-            const next = queue.shift();
-            if (!next) break;
-            await stream.writeSSE(next);
-          }
-          if (!active) break;
           let heartbeat: ReturnType<typeof setTimeout> | null = null;
           const reason = await new Promise<'event' | 'heartbeat'>((r) => {
             resume = () => r('event');

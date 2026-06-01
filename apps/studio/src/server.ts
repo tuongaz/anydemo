@@ -14,7 +14,6 @@ import { seeflowHome } from './paths.ts';
 import { type ProcessSpawner, defaultProcessSpawner } from './process-spawner.ts';
 import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
-import { type ShareController, createShareController, resolveHostDisplayName } from './share.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
@@ -80,15 +79,7 @@ export interface CreateAppOptions {
   /** Override the icon installer's fetcher. Production uses fetchWithProgress
    *  (real network); integration tests inject a fixture-returning closure. */
   iconFetcher?: IconFetcher;
-  /** Inject a Live Share controller. Defaults to one pointed at
-   *  https://seeflow.dev (SEEFLOW_SHARE_RELAY_URL) with share URLs rooted at
-   *  https://seeflow.dev/share (SEEFLOW_SHARE_URL_BASE). Tests inject a fake
-   *  to exercise the /api/share/* routes without a real relay. */
-  share?: ShareController;
 }
-
-const DEFAULT_SHARE_RELAY_URL = 'https://seeflow.dev';
-const DEFAULT_SHARE_URL_BASE = 'https://seeflow.dev/share';
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
 const DEFAULT_STATIC_ROOT = resolvePath(import.meta.dir, '../dist/web');
@@ -117,16 +108,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     options.statusRunner ??
     createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const iconJobs = options.iconJobs ?? createJobRegistry();
-  const share =
-    options.share ??
-    createShareController({
-      relayHttpUrl: process.env.SEEFLOW_SHARE_RELAY_URL ?? DEFAULT_SHARE_RELAY_URL,
-      shareUrlBase: process.env.SEEFLOW_SHARE_URL_BASE ?? DEFAULT_SHARE_URL_BASE,
-      eventBus: events,
-      flowIdsForBroadcast: () => registry.list().map((e) => e.id),
-      hostDisplayName: resolveHostDisplayName(),
-      operationsDeps: { registry, ...(watcher ? { watcher } : {}) },
-    });
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
     watcher.watchAll();
@@ -190,7 +171,6 @@ export function createApp(options: CreateAppOptions = {}): Hono {
       iconJobs,
       iconCacheRoot: options.iconCacheRoot,
       iconFetcher: options.iconFetcher,
-      share,
     }),
   );
 
