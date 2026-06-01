@@ -97,6 +97,12 @@ layer(base);
   --ring-selected: 0 0 0 3px rgba(16, 185, 129, 0.18), 0 0 40px -6px rgba(16, 185, 129, 0.35);
   --glow-dot-color: rgba(0, 0, 0, 0.18);
 
+  /* Alignment-guides overlay (drag/resize snapping). Edge/center guides reuse
+     the emerald brand accent (--primary, identical in dark); spacing guides
+     use a distinct Figma-pink so the two guide kinds read apart at a glance. */
+  --sf-accent: hsl(var(--primary));
+  --sf-alignment-spacing: #ec4899;
+
   /* DetailPanel chrome: light theme pairs a subtle 1px divider (color from
      --border) with a soft layered drop-shadow; dark theme keeps its own
      hairline + heavier shadow (overridden in .dark below). */
