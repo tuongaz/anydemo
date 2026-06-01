@@ -45,6 +45,11 @@ import { wrapIoAdapterAsCanvasAdapter } from '../adapter/io-adapter-wrap.ts';
 import type { IoAdapter } from '../adapter/io-adapter.ts';
 import type { CanvasAdapter, CanvasRuntime, ReorderOp } from '../adapter/types.ts';
 import type { LayoutNodeInput } from '../adapter/types.ts';
+import {
+  AlignmentOverlay,
+  type UseAlignmentGuidesApi,
+  useAlignmentGuides,
+} from '../alignment/index.ts';
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
 import type { HistoryHandle } from '../history/types.ts';
 import { useCanvasExport } from '../hooks/use-canvas-export.ts';
@@ -189,6 +194,20 @@ export interface CanvasFeatureOverrides {
    * `mini` so the thumbnail is fully static.
    */
   enableNodeMove?: boolean;
+  /**
+   * Miro/Figma-style alignment guides + snap during node drag / resize. When
+   * on, dragging (or resizing) a node renders colored guidelines as its
+   * edges/centers align with other nodes and snaps into alignment within
+   * {@link alignmentSnapThreshold} screen pixels. Default ON for `edit`, OFF
+   * for `view` and `mini`. Holding Cmd/Ctrl suppresses both guides and snap
+   * for a single gesture.
+   */
+  enableAlignmentGuides?: boolean;
+  /**
+   * Snap threshold in *screen* pixels for {@link enableAlignmentGuides}. No
+   * mode preset — the alignment hook falls back to `6` when unset.
+   */
+  alignmentSnapThreshold?: number;
   storageKey?: string;
 }
 
@@ -215,6 +234,9 @@ export interface ResolvedCanvasFlags {
   enableSelection: boolean;
   enableNodeMove: boolean;
   enableEmbed: boolean;
+  enableAlignmentGuides: boolean;
+  // No preset default — the alignment hook falls back to 6 when undefined.
+  alignmentSnapThreshold?: number;
 }
 
 const EDIT_DEFAULTS: ResolvedCanvasFlags = {
@@ -236,6 +258,8 @@ const EDIT_DEFAULTS: ResolvedCanvasFlags = {
   enableNodeMove: true,
   // Embed is a SeeFlow-studio-specific affordance — opt-in even in edit mode.
   enableEmbed: false,
+  // Alignment guides + snap are an editing affordance — on by default in edit.
+  enableAlignmentGuides: true,
 };
 
 const VIEW_DEFAULTS: ResolvedCanvasFlags = {
@@ -274,6 +298,8 @@ const VIEW_DEFAULTS: ResolvedCanvasFlags = {
   enableNodeMove: true,
   // Embed is edit-mode-only inside ShareMenu, so view never surfaces it.
   enableEmbed: false,
+  // View mode is read-only — no drag-snap affordances.
+  enableAlignmentGuides: false,
 };
 
 /**
@@ -303,6 +329,8 @@ const MINI_DEFAULTS: ResolvedCanvasFlags = {
   enableSelection: false,
   enableNodeMove: false,
   enableEmbed: false,
+  // Thumbnails are static — no alignment guides.
+  enableAlignmentGuides: false,
 };
 
 /**
@@ -335,6 +363,9 @@ export function resolveFlags(
     enableSelection: input.enableSelection ?? defaults.enableSelection,
     enableNodeMove: input.enableNodeMove ?? defaults.enableNodeMove,
     enableEmbed: input.enableEmbed ?? defaults.enableEmbed,
+    enableAlignmentGuides: input.enableAlignmentGuides ?? defaults.enableAlignmentGuides,
+    // No preset — pass through verbatim; the hook defaults to 6 when undefined.
+    alignmentSnapThreshold: input.alignmentSnapThreshold,
   };
 }
 
@@ -1965,6 +1996,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     enableSelection,
     enableNodeMove,
     enableEmbed,
+    enableAlignmentGuides,
+    alignmentSnapThreshold,
   } = props;
   // US-027: collapse mode + feature overrides into the concrete flag set every
   // gate below reads from. `isEditMode` is the discriminator-derived boolean
@@ -1993,6 +2026,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         enableSelection,
         enableNodeMove,
         enableEmbed,
+        enableAlignmentGuides,
+        alignmentSnapThreshold,
       }),
     [
       mode,
@@ -2013,6 +2048,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       enableSelection,
       enableNodeMove,
       enableEmbed,
+      enableAlignmentGuides,
+      alignmentSnapThreshold,
     ],
   );
   // US-036: `effectiveAdapter` collapses the two adapter seams (`adapter` and
@@ -2576,6 +2613,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // resizingRef is set/cleared by node components via data.setResizing.
   const draggingRef = useRef(false);
   const resizingRef = useRef(false);
+  // US-004 alignment guides: the hook's API (assigned at render below, after
+  // the last useState slot so it doesn't shift the hook-shim test indices) and
+  // the latest drag-event modifier state (Cmd/Ctrl). `onNodesChange` and the
+  // drag handlers read these refs so their useCallbacks stay dependency-stable.
+  // Declared AFTER drawingRef (REF index 19 in the hook-shim test) so the
+  // index-coupled ref assertions don't drift; refs never affect useState slots.
+  const alignmentApiRef = useRef<UseAlignmentGuidesApi | null>(null);
+  const lastDragModifierRef = useRef<{ metaKey?: boolean; ctrlKey?: boolean }>({});
   // View-mode drag override: in view mode, commitDraggedNodes skips the
   // parent dispatch (no adapter PATCH), so a moved node's new position lives
   // only in `rfNodes`. Any sourceNodes rebuild (selection change, SSE tick,
@@ -3082,7 +3127,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     edgeIds: Set<string>;
   } | null>(null);
 
-  const onNodesChange = useCallback((changes: NodeChange[]) => {
+  const onNodesChange = useCallback((rawChanges: NodeChange[]) => {
+    // US-004: alignment snap interception. Before any other processing, let the
+    // alignment hook rewrite dragging position changes with the snap offset
+    // (and commit the active guide lines to its own state). When disabled, no
+    // gesture is active, or Cmd/Ctrl is held, this returns the changes
+    // untouched. The modifier state is captured per-frame from onNodeDrag /
+    // onSelectionDrag into `lastDragModifierRef`.
+    const align = alignmentApiRef.current;
+    const changes = align
+      ? (align.interceptChanges(rawChanges, lastDragModifierRef.current) as NodeChange[])
+      : rawChanges;
     // US-010: during an additive (Shift/Meta) marquee, skip xyflow's reset-
     // deselect for ids in the additive base — they should stay selected
     // through the gesture so the user sees the existing selection preserved.
@@ -4121,6 +4176,23 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // handlePaneClickWithGroupExit). Connector selection never opens it (the
   // DetailPanel's connector prop is wired to null).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // US-004: alignment-guides gesture hook. CRITICAL — this call sits AFTER the
+  // last component-level `useState` (sidebarOpen, slot 14) so the hook's own
+  // internal `useState` lands in a slot beyond every index the hook-shim tests
+  // reference (0–13); the existing `useStateOverrides[N]` assertions stay
+  // valid. The returned API is published into `alignmentApiRef` (read by
+  // onNodesChange + the drag handlers) and `alignment.guides` drives the
+  // overlay below. `viewport.zoom` converts the screen-px threshold to world
+  // units; rfInstance is unavailable on the very first render and under the
+  // hook-shim tests, so we fall back to an identity viewport (zoom 1).
+  const alignmentViewport = rfInstanceRef.current?.getViewport() ?? { x: 0, y: 0, zoom: 1 };
+  const alignment = useAlignmentGuides({
+    enabled: flags.enableAlignmentGuides,
+    thresholdPx: flags.alignmentSnapThreshold ?? 6,
+    viewport: alignmentViewport,
+    rfNodesRef,
+  });
+  alignmentApiRef.current = alignment;
   // Effective enable state: subscribed values when `history` is supplied,
   // false otherwise. Undo is available iff the host wires a HistoryHandle.
   const effectiveCanUndo = history ? historyState.canUndo : false;
@@ -4268,24 +4340,51 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     },
     [onViewportChange],
   );
-  const handleNodeDragStart = useCallback(() => {
-    draggingRef.current = true;
-    onNodeDragStart?.();
-  }, [onNodeDragStart]);
+  const handleNodeDragStart = useCallback(
+    (e: ReactMouseEvent, _node: Node, draggedNodes: Node[]) => {
+      draggingRef.current = true;
+      // US-004: capture the gesture's modifier state and freeze the alignment
+      // reference snapshot of the non-dragged nodes. xyflow always passes the
+      // event + dragged-node list; the optional access keeps the legacy
+      // no-arg test callers (and any future bare invocation) from throwing.
+      lastDragModifierRef.current = { metaKey: e?.metaKey, ctrlKey: e?.ctrlKey };
+      alignmentApiRef.current?.beginGesture((draggedNodes ?? []).map((n) => n.id));
+      onNodeDragStart?.();
+    },
+    [onNodeDragStart],
+  );
+  // US-004: per-frame modifier refresh. xyflow fires onNodeDrag alongside the
+  // position changes, so `lastDragModifierRef` is current when onNodesChange
+  // calls interceptChanges. A mid-drag Cmd/Ctrl press therefore suppresses the
+  // snap on the very next frame.
+  const handleNodeDrag = useCallback((e: ReactMouseEvent) => {
+    lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+  }, []);
   const handleNodeDragStop = useCallback(
     (e: unknown, node: Node, draggedNodes: Node[]) => {
       onNodeDragStopCb(e, node, draggedNodes);
+      // US-004: clear guides + drop the snapshot.
+      alignmentApiRef.current?.endGesture();
       onNodeDragStop?.();
     },
     [onNodeDragStopCb, onNodeDragStop],
   );
-  const handleSelectionDragStart = useCallback(() => {
-    onSelectionDragStartCb();
-    onNodeDragStart?.();
-  }, [onSelectionDragStartCb, onNodeDragStart]);
+  const handleSelectionDragStart = useCallback(
+    (e: ReactMouseEvent, draggedNodes: Node[]) => {
+      onSelectionDragStartCb();
+      lastDragModifierRef.current = { metaKey: e?.metaKey, ctrlKey: e?.ctrlKey };
+      alignmentApiRef.current?.beginGesture((draggedNodes ?? []).map((n) => n.id));
+      onNodeDragStart?.();
+    },
+    [onSelectionDragStartCb, onNodeDragStart],
+  );
+  const handleSelectionDrag = useCallback((e: ReactMouseEvent) => {
+    lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+  }, []);
   const handleSelectionDragStop = useCallback(
     (e: unknown, draggedNodes: Node[]) => {
       onSelectionDragStopCb(e, draggedNodes);
+      alignmentApiRef.current?.endGesture();
       onNodeDragStop?.();
     },
     [onSelectionDragStopCb, onNodeDragStop],
@@ -4616,8 +4715,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onMove={handleMove}
                 onEdgesChange={onEdgesChange}
                 onNodeDragStart={handleNodeDragStart}
+                onNodeDrag={handleNodeDrag}
                 onNodeDragStop={handleNodeDragStop}
                 onSelectionDragStart={handleSelectionDragStart}
+                onSelectionDrag={handleSelectionDrag}
                 onSelectionDragStop={handleSelectionDragStop}
                 // US-003: route React Flow's click-only events to the parent so the
                 // detail panel can be driven by explicit clicks instead of selection
@@ -4682,6 +4783,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     >
                       {presenceLayer}
                     </div>
+                  </ViewportPortal>
+                ) : null}
+                {/* US-004: alignment guides overlay. Mounted inside
+                <ViewportPortal> so its SVG lines render in world coordinates
+                and pan/zoom with the canvas (`vector-effect=non-scaling-stroke`
+                keeps the stroke 1 screen px). Gated on the resolved flag so
+                view/mini never mount an empty portal; the overlay itself
+                returns null while `guides` is empty. */}
+                {flags.enableAlignmentGuides ? (
+                  <ViewportPortal>
+                    <AlignmentOverlay guides={alignment.guides} />
                   </ViewportPortal>
                 ) : null}
                 {mode !== 'mini' && <GlowOverlay />}

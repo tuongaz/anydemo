@@ -3476,6 +3476,10 @@ describe('US-027: resolveFlags helper', () => {
       // Embed defaults OFF in every mode — it's a SeeFlow-studio-specific
       // affordance, so embedders of @seeflow/canvas opt in explicitly.
       enableEmbed: false,
+      // US-004: alignment guides default ON in edit mode.
+      enableAlignmentGuides: true,
+      // No preset for the snap threshold — passes through undefined.
+      alignmentSnapThreshold: undefined,
     });
   });
 
@@ -3505,6 +3509,9 @@ describe('US-027: resolveFlags helper', () => {
       enableSelection: true,
       enableNodeMove: true,
       enableEmbed: false,
+      // US-004: view mode is read-only — alignment guides off.
+      enableAlignmentGuides: false,
+      alignmentSnapThreshold: undefined,
     });
   });
 
@@ -3534,6 +3541,9 @@ describe('US-027: resolveFlags helper', () => {
       enableSelection: false,
       enableNodeMove: false,
       enableEmbed: false,
+      // US-004: mini thumbnails are static — alignment guides off.
+      enableAlignmentGuides: false,
+      alignmentSnapThreshold: undefined,
     });
   });
 
@@ -3880,5 +3890,123 @@ describe('US-036: ioAdapter prop wraps into the effective CanvasAdapter', () => 
     if (!moveCall) throw new Error('ioAdapter.updateNodePosition was never invoked');
     expect(moveCall.args[0]).toBe('n1');
     expect(moveCall.args[1]).toEqual({ x: 7, y: 9 });
+  });
+});
+
+describe('US-004: alignment guides drag wiring', () => {
+  // The alignment hook batches guide commits through requestAnimationFrame,
+  // which bun does not provide. interceptChanges schedules that commit BEFORE
+  // it rewrites the change, so the call would throw without a RAF stub. We
+  // stub a no-op queue (the snap math runs synchronously and doesn't depend on
+  // a flush — only the guide-state commit does, which this test doesn't assert).
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+  beforeEach(() => {
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = ((_cb: FrameRequestCallback) =>
+      1) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof globalThis.cancelAnimationFrame;
+  });
+  afterEach(() => {
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  it('snaps a dragged node into edge alignment within the threshold and commits the snapped position', () => {
+    // Two nodes at the same x (left edges aligned at 0). 'a' is the static
+    // reference; 'b' is dragged to x=4 — 4 world px from 'a''s left edge, well
+    // within the 6px threshold (zoom falls back to 1 with no rfInstance). The
+    // edge-pass picks the closest X anchor (centers win the tie) and snaps the
+    // dragged node back to x=0; the snapped position is what onNodesChange
+    // commits into the local rfNodes state (slot 8).
+    const refNode: FlowNode = {
+      id: 'a',
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data: { name: 'a', width: 80, height: 40 },
+    };
+    const draggedNode: FlowNode = {
+      id: 'b',
+      type: 'rectangle',
+      position: { x: 0, y: 100 },
+      data: { name: 'b', width: 80, height: 40 },
+    };
+    const setterSink: CapturedSetterCall[] = [];
+    const tree = callSeeflowCanvas(
+      {
+        mode: 'edit',
+        nodes: [refNode, draggedNode],
+        selectedNodeIds: [],
+        onNodePositionChange: () => {},
+      },
+      { setterSink },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+    const onNodeDragStart = rf.props.onNodeDragStart as (
+      e: { metaKey?: boolean; ctrlKey?: boolean },
+      node: Node,
+      nodes: Node[],
+    ) => void;
+    const onNodesChange = rf.props.onNodesChange as (changes: unknown[]) => void;
+
+    // Begin the gesture so the hook freezes its reference snapshot of 'a'.
+    const draggedRf = { id: 'b', position: { x: 0, y: 100 } } as unknown as Node;
+    onNodeDragStart({ metaKey: false, ctrlKey: false }, draggedRf, [draggedRf]);
+
+    // One drag frame landing 4px off alignment.
+    onNodesChange([{ type: 'position', id: 'b', position: { x: 4, y: 100 }, dragging: true }]);
+
+    const commit = setterSink.filter((s) => s.slot === 8).at(-1);
+    if (!commit) throw new Error('expected an rfNodes commit (slot 8) after the drag frame');
+    const committed = commit.next as Node[];
+    const moved = committed.find((n) => n.id === 'b');
+    if (!moved) throw new Error('dragged node missing from committed rfNodes');
+    expect(moved.position.x).toBe(0);
+    // The Y axis had no aligned neighbor, so it stays put.
+    expect(moved.position.y).toBe(100);
+  });
+
+  it('Cmd/Ctrl held during the drag suppresses the snap (raw position forwarded)', () => {
+    const refNode: FlowNode = {
+      id: 'a',
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data: { name: 'a', width: 80, height: 40 },
+    };
+    const draggedNode: FlowNode = {
+      id: 'b',
+      type: 'rectangle',
+      position: { x: 0, y: 100 },
+      data: { name: 'b', width: 80, height: 40 },
+    };
+    const setterSink: CapturedSetterCall[] = [];
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [refNode, draggedNode], selectedNodeIds: [] },
+      { setterSink },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+    const onNodeDragStart = rf.props.onNodeDragStart as (
+      e: { metaKey?: boolean; ctrlKey?: boolean },
+      node: Node,
+      nodes: Node[],
+    ) => void;
+    const onNodesChange = rf.props.onNodesChange as (changes: unknown[]) => void;
+
+    // Begin the gesture with the modifier held — interceptChanges must forward
+    // the raw position untouched.
+    const draggedRf = { id: 'b', position: { x: 0, y: 100 } } as unknown as Node;
+    onNodeDragStart({ metaKey: true, ctrlKey: false }, draggedRf, [draggedRf]);
+    onNodesChange([{ type: 'position', id: 'b', position: { x: 4, y: 100 }, dragging: true }]);
+
+    const commit = setterSink.filter((s) => s.slot === 8).at(-1);
+    if (!commit) throw new Error('expected an rfNodes commit (slot 8) after the drag frame');
+    const committed = commit.next as Node[];
+    const moved = committed.find((n) => n.id === 'b');
+    if (!moved) throw new Error('dragged node missing from committed rfNodes');
+    // No snap — the raw 4px offset stands.
+    expect(moved.position.x).toBe(4);
   });
 });
