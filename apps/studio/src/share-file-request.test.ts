@@ -433,14 +433,17 @@ describe('createFileRequestHandler — oversize S3 path', () => {
     // size-agnostic so the only contract the host owes is consistent total +
     // eof on the last chunk.
     expect(sends.length).toBeGreaterThan(1);
-    const chunks = sends.map((e) => e.payload as {
-      reqId: string;
-      seq: number;
-      total: number;
-      base64: string;
-      sha256: string;
-      eof: boolean;
-    });
+    const chunks = sends.map(
+      (e) =>
+        e.payload as {
+          reqId: string;
+          seq: number;
+          total: number;
+          base64: string;
+          sha256: string;
+          eof: boolean;
+        },
+    );
     expect(chunks[0]?.total).toBe(2);
     expect(chunks[0]?.eof).toBe(false);
     expect(chunks[1]?.eof).toBe(true);

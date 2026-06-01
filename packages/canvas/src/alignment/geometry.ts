@@ -85,6 +85,71 @@ function refYAnchorValues(r: Rect): number[] {
 }
 
 /**
+ * Line-of-sight visibility test: is `r` "seeable" from `moving`, given the
+ * other refs in `all`? A ref is blocked when another ref's bounding box sits
+ * directly between moving and r in the relevant communication channel:
+ *
+ *  - Refs that share moving's X-column (vertical sight line): blocked by any
+ *    third ref also X-overlapping both, whose Y sits between them.
+ *  - Refs that share moving's Y-row (horizontal sight line): blocked by any
+ *    third ref also Y-overlapping both, whose X sits between them.
+ *  - Diagonal refs (no projection overlap with moving on either axis): always
+ *    seeable. No principled "between" test in two dimensions; matches the
+ *    Figma/Miro feel where a corner-of-canvas neighbor can still align.
+ */
+function isSeeable(M: Rect, R: Rect, all: Rect[]): boolean {
+  const xOverlapMR = M.x < R.x + R.w - EPS && R.x < M.x + M.w - EPS;
+  const yOverlapMR = M.y < R.y + R.h - EPS && R.y < M.y + M.h - EPS;
+
+  // Overlapping refs are trivially seeable (no gap to block).
+  if (xOverlapMR && yOverlapMR) return true;
+
+  if (xOverlapMR) {
+    // Vertical sight line. R is above or below M.
+    const aboveR = R.y + R.h <= M.y + EPS;
+    for (const C of all) {
+      if (C.id === M.id || C.id === R.id) continue;
+      const xOverlapCM = C.x < M.x + M.w - EPS && M.x < C.x + C.w - EPS;
+      const xOverlapCR = C.x < R.x + R.w - EPS && R.x < C.x + C.w - EPS;
+      if (!xOverlapCM || !xOverlapCR) continue;
+      const blocks = aboveR
+        ? C.y + C.h > R.y + EPS && C.y < M.y - EPS
+        : C.y + C.h > M.y + M.h + EPS && C.y < R.y - EPS;
+      if (blocks) return false;
+    }
+    return true;
+  }
+
+  if (yOverlapMR) {
+    // Horizontal sight line. R is left or right of M.
+    const rightOfM = R.x >= M.x + M.w - EPS;
+    for (const C of all) {
+      if (C.id === M.id || C.id === R.id) continue;
+      const yOverlapCM = C.y < M.y + M.h - EPS && M.y < C.y + C.h - EPS;
+      const yOverlapCR = C.y < R.y + R.h - EPS && R.y < C.y + C.h - EPS;
+      if (!yOverlapCM || !yOverlapCR) continue;
+      const blocks = rightOfM
+        ? C.x + C.w > M.x + M.w + EPS && C.x < R.x - EPS
+        : C.x + C.w > R.x + R.w + EPS && C.x < M.x - EPS;
+      if (blocks) return false;
+    }
+    return true;
+  }
+
+  // Diagonal: no principled "between" test; treat as seeable.
+  return true;
+}
+
+/**
+ * Filter `refs` down to the "seeable" set from `moving` — refs not blocked by
+ * another ref's bounding box along their communication channel with moving.
+ * O(n²) worst case; fine for the typical canvas (<100 nodes).
+ */
+function seeableRefs(moving: Rect, refs: Rect[]): Rect[] {
+  return refs.filter((r) => isSeeable(moving, r, refs));
+}
+
+/**
  * Pick the single closest edge/center alignment on one axis within threshold.
  * Ties (equal |delta|) break toward a moving center anchor (Figma convention).
  */
@@ -223,15 +288,22 @@ export function computeGuides(
   const { resizeMode = false, activeEdges } = opts;
   const guides: GuideLine[] = [];
 
+  // Only refs in line-of-sight of moving participate. A ref that shares a
+  // column/row with moving but has ANOTHER ref between them is "blocked" and
+  // never triggers a guide. Matches the "only align to nodes you can actually
+  // see from moving" rule — a distant node only fires alignment when there's
+  // no intervening node to hide behind.
+  const neighbors = seeableRefs(moving, refs);
+
   const xSnap = bestAxisSnap(
     movingXAnchors(moving, activeEdges),
-    refs,
+    neighbors,
     refXAnchorValues,
     thresholdWorld,
   );
   const ySnap = bestAxisSnap(
     movingYAnchors(moving, activeEdges),
-    refs,
+    neighbors,
     refYAnchorValues,
     thresholdWorld,
   );
@@ -241,14 +313,15 @@ export function computeGuides(
 
   const snapped: Rect = { ...moving, x: snappedX, y: snappedY };
 
-  if (xSnap) guides.push(buildVGuide(xSnap.line, snapped, refs));
-  if (ySnap) guides.push(buildHGuide(ySnap.line, snapped, refs));
+  if (xSnap) guides.push(buildVGuide(xSnap.line, snapped, neighbors));
+  if (ySnap) guides.push(buildHGuide(ySnap.line, snapped, neighbors));
 
-  // Spacing pass — cheap hot path: only after the edge pass found a snap.
+  // Spacing pass — also restricted to cardinal neighbors. Equal-spacing only
+  // makes sense with refs that are actually "next to" moving.
   if (xSnap || ySnap) {
     // X-axis spacing only if the edge pass left X free (edge wins same-axis tie).
     if (!xSnap) {
-      const yOverlap = refs.filter(
+      const yOverlap = neighbors.filter(
         (r) => snapped.y < r.y + r.h - EPS && r.y < snapped.y + snapped.h - EPS,
       );
       const sp = computeSpacing(
@@ -267,7 +340,7 @@ export function computeGuides(
     }
     // Y-axis spacing only if the edge pass left Y free.
     if (!ySnap) {
-      const xOverlap = refs.filter(
+      const xOverlap = neighbors.filter(
         (r) => snapped.x < r.x + r.w - EPS && r.x < snapped.x + snapped.w - EPS,
       );
       const sp = computeSpacing(

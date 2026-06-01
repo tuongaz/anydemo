@@ -110,28 +110,29 @@ describe('computeGuides — spacing pass', () => {
     expect(sp.gap).toBe(50);
   });
 
-  it('continues an equal gap to the right (4-rect config)', () => {
+  it('does NOT chain past the immediate left neighbor (line-of-sight rule)', () => {
+    // Line-of-sight hides `a` and `b` behind `c` (the rightmost ref in the
+    // chain), so the spacing pass only sees one neighbor and can't detect an
+    // equal-gap chain to extend. Matches the "only align to nodes you can see
+    // from moving" rule.
     const a: Rect = { id: 'a', x: 0, y: 0, w: 50, h: 60 };
     const b: Rect = { id: 'b', x: 100, y: 0, w: 50, h: 60 };
     const c: Rect = { id: 'c', x: 200, y: 0, w: 50, h: 60 };
-    // gaps are 50; moving continues past c at x≈300.
     const out = computeGuides({ id: 'm', x: 302, y: 0, w: 50, h: 60 }, [a, b, c], T);
-    expect(out.snappedX).toBe(300);
-    expect(has(out.guides, 'spacing-v')).toBe(true);
+    expect(out.snappedX).toBe(302);
+    expect(has(out.guides, 'spacing-v')).toBe(false);
   });
 
-  it('continues an equal gap with a 5-rect config', () => {
+  it('does NOT chain past the immediate left neighbor in a 5-rect config either', () => {
     const refs: Rect[] = [
       { id: 'a', x: 0, y: 0, w: 40, h: 60 },
       { id: 'b', x: 80, y: 0, w: 40, h: 60 },
       { id: 'c', x: 160, y: 0, w: 40, h: 60 },
       { id: 'd', x: 240, y: 0, w: 40, h: 60 },
     ];
-    // gaps are 40; moving continues past d → target 320.
     const out = computeGuides({ id: 'm', x: 318, y: 0, w: 40, h: 60 }, refs, T);
-    expect(out.snappedX).toBe(320);
-    const sp = out.guides.find((g) => g.kind === 'spacing-v') as { gap: number };
-    expect(sp.gap).toBe(40);
+    expect(out.snappedX).toBe(318);
+    expect(has(out.guides, 'spacing-v')).toBe(false);
   });
 
   it('emits a vertical spacing-h guide for Y-axis distribution', () => {
@@ -245,5 +246,83 @@ describe('computeGuides — both axes + guide composition', () => {
     expect(h.y).toBe(50);
     expect(v.refIds).toContain('corner');
     expect(kinds(out.guides)).toEqual(expect.arrayContaining(['v', 'h']));
+  });
+});
+
+describe('computeGuides — line-of-sight filter', () => {
+  it('aligns to a side-by-side ref (clear horizontal line of sight)', () => {
+    const left: Rect = { id: 'left', x: 0, y: 0, w: 100, h: 50 };
+    const moving: Rect = { id: 'm', x: 152, y: 0, w: 100, h: 50 };
+    const out = computeGuides(moving, [left], T);
+    // Same Y → H-guide fires.
+    expect(out.guides.find((g) => g.kind === 'h')).toBeDefined();
+  });
+
+  it('filters out a ref blocked by an intervening node in the same column', () => {
+    // moving at (100, 100), blocker between, far ref at (102, 5000).
+    // The blocker sits in moving's column AND between moving and far → far is
+    // hidden behind blocker → no alignment to far.
+    const moving: Rect = { id: 'm', x: 100, y: 100, w: 50, h: 50 };
+    const blocker: Rect = { id: 'blocker', x: 100, y: 300, w: 50, h: 50 };
+    const far: Rect = { id: 'far', x: 102, y: 5000, w: 50, h: 50 };
+    const out = computeGuides(moving, [blocker, far], T);
+    const v = out.guides.find((g) => g.kind === 'v') as
+      | { refIds: string[]; y2: number }
+      | undefined;
+    expect(v).toBeDefined();
+    expect(v?.refIds).toEqual(['blocker']);
+    expect(v?.refIds).not.toContain('far');
+    // Guide line ends at blocker, not far.
+    expect(v?.y2).toBeLessThanOrEqual(350);
+  });
+
+  it('aligns to a ref with no blocker in between (clear vertical line of sight)', () => {
+    // Even in a sparse canvas a ref is seeable when nothing blocks it.
+    const moving: Rect = { id: 'm', x: 100, y: 100, w: 50, h: 50 };
+    const near: Rect = { id: 'near', x: 100, y: 200, w: 50, h: 50 };
+    const out = computeGuides(moving, [near], T);
+    expect(out.guides.find((g) => g.kind === 'v')).toBeDefined();
+  });
+
+  it('keeps a diagonal ref alignable when no other ref obscures the channel', () => {
+    // moving and ref share neither X nor Y projection. Diagonal sight lines
+    // are treated as seeable (no principled "between" test in 2D).
+    const moving: Rect = { id: 'm', x: 100, y: 100, w: 50, h: 50 };
+    const diag: Rect = { id: 'diag', x: 300, y: 152, w: 50, h: 50 };
+    const out = computeGuides(moving, [diag], T);
+    // moving.bottom=150 within T=6 of diag.top=152 → H-guide fires.
+    expect(out.guides.find((g) => g.kind === 'h')).toBeDefined();
+  });
+
+  it('horizontal sight line blocks a far same-row ref behind an intervening node', () => {
+    // moving on the left; blocker right next to it; far ref way past blocker
+    // in the same row.
+    const moving: Rect = { id: 'm', x: 0, y: 0, w: 50, h: 50 };
+    const blocker: Rect = { id: 'blocker', x: 200, y: 0, w: 50, h: 50 };
+    const far: Rect = { id: 'far', x: 5000, y: 0, w: 50, h: 50 };
+    const out = computeGuides(moving, [blocker, far], T);
+    const h = out.guides.find((g) => g.kind === 'h') as
+      | { refIds: string[]; x2: number }
+      | undefined;
+    expect(h).toBeDefined();
+    expect(h?.refIds).toEqual(expect.arrayContaining(['blocker']));
+    expect(h?.refIds).not.toContain('far');
+  });
+
+  it('includes multiple unblocked refs in the same guide line span', () => {
+    // Two refs both above moving, in moving's column, but neither blocks the
+    // other (they sit side-by-side X-wise within the column).
+    // Actually: refs in the same column with full X-overlap CAN block each
+    // other if Y-stacked. Use refs with partial X-overlap so neither hides
+    // the other: ref1 at x=100..120, ref2 at x=130..150, moving covers 100..150.
+    const moving: Rect = { id: 'm', x: 100, y: 200, w: 50, h: 50 };
+    const r1: Rect = { id: 'r1', x: 100, y: 0, w: 20, h: 40 };
+    const r2: Rect = { id: 'r2', x: 130, y: 50, w: 20, h: 40 };
+    const out = computeGuides(moving, [r1, r2], T);
+    // moving.left=100 matches r1.left=100 → V-guide fires; r1 + r2 both
+    // contribute since neither blocks the other (different X-columns).
+    const v = out.guides.find((g) => g.kind === 'v') as { refIds: string[] } | undefined;
+    expect(v).toBeDefined();
+    expect(v?.refIds).toContain('r1');
   });
 });
