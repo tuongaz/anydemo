@@ -34,6 +34,14 @@ import {
 import { resolveNodeFile } from './share-file-resolver.ts';
 
 const INLINE_LIMIT_BYTES = 256 * 1024;
+// Chunk size for the WS-streaming fallback (used when S3 staging is absent).
+// Match the inline single-frame budget so the same MTU shape lands on the wire
+// either way; the peer's reassembler is size-agnostic.
+const FILE_CHUNK_BYTES = 256 * 1024;
+// Hard cap on chunked-WS file serving — keeps a single oversize asset from
+// dominating the per-peer queue when S3 isn't available. Above this size,
+// host returns 'too-large' so the user uploads via a normal HTTP path.
+const MAX_WS_BYTES = 10 * 1024 * 1024;
 const MAX_INFLIGHT_PER_PEER = 30;
 
 // Extension -> content type allowlist. Anything not in the map falls back to
@@ -212,6 +220,37 @@ export function createFileRequestHandler(deps: FileRequestDeps): FileRequestHand
     deps.broadcast(makeEnvelope('file-bytes', payload, { to: replyTo }));
   };
 
+  // Chunked WS fallback for files larger than INLINE_LIMIT_BYTES when S3 staging
+  // is not configured. The peer's `handleFileBytesIn` already reassembles by
+  // (seq, total, eof) and verifies the final sha256 against the assembled bytes,
+  // so each chunk repeats the same sha256 (it describes the whole file). Used
+  // by self-hosted deployments + local studios where the relay can't mint a
+  // presigned PUT.
+  const respondChunked = (
+    replyTo: string,
+    reqId: string,
+    bytes: Buffer,
+    contentType: string,
+    sha256: string,
+  ) => {
+    const total = Math.max(1, Math.ceil(bytes.length / FILE_CHUNK_BYTES));
+    for (let seq = 0; seq < total; seq++) {
+      const start = seq * FILE_CHUNK_BYTES;
+      const end = Math.min(start + FILE_CHUNK_BYTES, bytes.length);
+      const chunk = bytes.subarray(start, end);
+      const payload: FileBytesPayload = {
+        reqId,
+        seq,
+        total,
+        base64: chunk.toString('base64'),
+        contentType,
+        sha256,
+        eof: seq === total - 1,
+      };
+      deps.broadcast(makeEnvelope('file-bytes', payload, { to: replyTo }));
+    }
+  };
+
   const respondRedirect = (
     replyTo: string,
     reqId: string,
@@ -290,9 +329,16 @@ export function createFileRequestHandler(deps: FileRequestDeps): FileRequestHand
         return;
       }
 
-      // Oversize path: stage to S3 and reply with redirect.
+      // Oversize path: prefer S3 redirect when staging is wired (avoids
+      // base64-over-WS overhead). Fall back to chunked WS frames for
+      // self-hosted / local studios that lack S3 — capped at MAX_WS_BYTES so
+      // a giant asset doesn't pin the relay's per-peer queue.
       if (!deps.requestUploadIntent || !deps.putToS3) {
-        sendErrorReply(replyTo, reqId, 'too-large');
+        if (bytes.length > MAX_WS_BYTES) {
+          sendErrorReply(replyTo, reqId, 'too-large');
+          return;
+        }
+        respondChunked(replyTo, reqId, bytes, contentType, sha256);
         return;
       }
       const intentPayload: FileUploadIntentPayload = {

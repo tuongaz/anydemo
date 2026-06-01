@@ -412,7 +412,8 @@ describe('createFileRequestHandler — oversize S3 path', () => {
     expect((sends[1]?.payload as { reason: string }).reason).toBe('intent-failed');
   });
 
-  it('rejects oversize with too-large when S3 deps are unconfigured', async () => {
+  it('falls back to chunked WS when oversize and S3 deps are unconfigured', async () => {
+    // Two-chunk file: 256KB + 1 byte → ceil(2) chunks at the 256KB boundary.
     const bytes = randomBytes(256 * 1024 + 1);
     writeFileSync(join(nodeDir, 'big.png'), bytes);
 
@@ -426,6 +427,43 @@ describe('createFileRequestHandler — oversize S3 path', () => {
       type: 'file-request',
       from: 'conn-peer-1',
       payload: { reqId: 'req-cfg', nodeId: NODE_ID, relPath: 'big.png' },
+    });
+
+    // Every emitted envelope is a file-bytes chunk; the peer's reassembler is
+    // size-agnostic so the only contract the host owes is consistent total +
+    // eof on the last chunk.
+    expect(sends.length).toBeGreaterThan(1);
+    const chunks = sends.map((e) => e.payload as {
+      reqId: string;
+      seq: number;
+      total: number;
+      base64: string;
+      sha256: string;
+      eof: boolean;
+    });
+    expect(chunks[0]?.total).toBe(2);
+    expect(chunks[0]?.eof).toBe(false);
+    expect(chunks[1]?.eof).toBe(true);
+    // Reassembled bytes must round-trip identically.
+    const assembled = Buffer.concat(chunks.map((c) => Buffer.from(c.base64, 'base64')));
+    expect(assembled.equals(bytes)).toBe(true);
+  });
+
+  it('rejects oversize with too-large when bytes exceed the WS chunk cap', async () => {
+    // 10 MB cap + 1 byte → no S3, no WS → too-large.
+    const bytes = randomBytes(10 * 1024 * 1024 + 1);
+    writeFileSync(join(nodeDir, 'huge.png'), bytes);
+
+    const handler = createFileRequestHandler({
+      registry: makeRegistry([makeEntry(tmpDir)]),
+      broadcast: (env) => sends.push(env),
+    });
+
+    await handler.handle({
+      v: 1,
+      type: 'file-request',
+      from: 'conn-peer-1',
+      payload: { reqId: 'req-huge', nodeId: NODE_ID, relPath: 'huge.png' },
     });
 
     expect((sends[1]?.payload as { reason: string }).reason).toBe('too-large');
