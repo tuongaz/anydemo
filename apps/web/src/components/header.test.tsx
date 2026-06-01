@@ -135,9 +135,8 @@ describe('Header', () => {
       const onDownloadPdf = () => {};
       const onDownloadPng = () => {};
       const onExportToCloud = () => {};
-      const onLiveShare = () => {};
       const tree = renderHeader({
-        share: { onDownloadPdf, onDownloadPng, onExportToCloud, onLiveShare },
+        share: { onDownloadPdf, onDownloadPng, onExportToCloud },
       });
 
       const share = findShareMenu(tree);

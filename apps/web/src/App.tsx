@@ -1,7 +1,5 @@
 import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
-import { LiveShareDialog } from '@/components/live-share-dialog';
-import { useAttributionToasts } from '@/hooks/use-attribution-toasts';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
@@ -12,14 +10,13 @@ import {
 import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
-import { useShareState } from '@/hooks/use-share-state';
 import type { CreateProjectResult } from '@/lib/api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
 import { FlowStackPane } from '@/pages/flow-stack-pane';
 import { StudioHome } from '@/pages/studio-home';
-import { AttributionToastStack, type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
+import { type SeeflowCanvasHandle, TooltipProvider } from '@seeflow/canvas';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 // US-005: seed the flow navigation stack from the initial URL + stamp
@@ -151,19 +148,7 @@ export function App() {
   // DemoStackEntry alongside the rest of the per-entry data wiring.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
-  const [liveShareOpen, setLiveShareOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
-
-  // US-053: surface attribution toasts for every accepted remote edit while
-  // share is active. Host-originated edits (peerId === 'host') are suppressed
-  // by the hook, so the host sees their own edits silently — peer edits flash
-  // a small toast bottom-left.
-  const shareState = useShareState();
-  const shareActive = shareState.status === 'active';
-  const { items: attributionItems, onExpire: onAttributionExpire } = useAttributionToasts({
-    active: shareActive,
-    selfPeerId: 'host',
-  });
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;
@@ -171,7 +156,6 @@ export function App() {
       onDownloadPdf: () => canvasRef.current?.exportPdf(),
       onDownloadPng: () => canvasRef.current?.exportPng(),
       onExportToCloud: () => setExportDialogOpen(true),
-      onLiveShare: () => setLiveShareOpen(true),
     };
   }, [flowId]);
 
@@ -206,9 +190,6 @@ export function App() {
             <StudioHome demos={demos} />
           )}
         </main>
-        {shareActive ? (
-          <AttributionToastStack items={attributionItems} onExpire={onAttributionExpire} />
-        ) : null}
         {flowId && topProject ? (
           <ExportDialog
             open={exportDialogOpen}
@@ -220,19 +201,6 @@ export function App() {
             }
           />
         ) : null}
-        <LiveShareDialog
-          open={liveShareOpen}
-          onOpenChange={setLiveShareOpen}
-          peers={shareState.status === 'active' ? shareState.peers : []}
-          status={shareState.status === 'error' ? 'error' : shareState.status}
-          {...(shareState.status === 'active' ? { shareUrl: shareState.url } : {})}
-          {...(shareState.status === 'active' && shareState.hostDisplayName
-            ? { hostDisplayName: shareState.hostDisplayName }
-            : {})}
-          {...(shareState.status === 'active' && shareState.recentSessionCount !== undefined
-            ? { recentSessionCount: shareState.recentSessionCount }
-            : {})}
-        />
       </div>
     </TooltipProvider>
   );
