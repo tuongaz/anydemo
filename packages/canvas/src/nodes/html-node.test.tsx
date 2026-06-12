@@ -10,7 +10,7 @@ const window = new Window();
 
 const { HtmlNode } = await import('./html-node.tsx');
 const { PlaceholderCard } = await import('./placeholder-card.tsx');
-const { Icon } = await import('../ui/icon.tsx');
+const { IconRenderer } = await import('../components/icon-renderer.tsx');
 const { COLOR_TOKENS } = await import('../lib/color-tokens.ts');
 
 import { Handle, type NodeProps } from '@xyflow/react';
@@ -26,6 +26,7 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: <T>(context: unknown) => T;
 };
 
 function renderWithHooks<T>(fn: () => T): T {
@@ -46,6 +47,9 @@ function renderWithHooks<T>(fn: () => T): T {
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    // HtmlNode reads CanvasStudioContext (studioBaseUrl) for the caption icon's
+    // IconRenderer; the shim returns the same-origin default.
+    useContext: <T,>(_context: unknown) => ({ studioBaseUrl: '' }) as T,
   };
   try {
     return fn();
@@ -316,21 +320,32 @@ function findLabel(tree: unknown): ReactElementLike | null {
 }
 
 describe('HtmlNode caption icon', () => {
-  it('renders an Icon inline with the caption when data.icon is set', () => {
+  it('renders an IconRenderer inline with the caption when data.icon is set', () => {
     const tree = callHtmlNode({ name: 'Welcome card', icon: 'sparkles' });
     const label = findLabel(tree);
     if (!label) throw new Error('expected html-node-label');
-    const icon = findElement(label, (el) => el.type === Icon);
-    if (!icon) throw new Error('expected Icon in html-node-label');
-    expect((icon.props as { name?: string }).name).toBe('sparkles');
-    expect((icon.props as { size?: number }).size).toBe(12);
+    const icon = findElement(label, (el) => el.type === IconRenderer);
+    if (!icon) throw new Error('expected IconRenderer in html-node-label');
+    expect((icon.props as { iconId?: string }).iconId).toBe('sparkles');
+    // 12px caption glyph == h-3/w-3 (IconRenderer sizes via className).
+    expect((icon.props as { className?: string }).className).toContain('sf:h-3');
   });
 
-  it('does not render an Icon in the caption when data.icon is undefined', () => {
+  it('routes a vendor-prefixed caption icon through IconRenderer (not the ? fallback)', () => {
+    const tree = callHtmlNode({ name: 'Welcome card', icon: 'azure:functions' });
+    const label = findLabel(tree);
+    if (!label) throw new Error('expected html-node-label');
+    const icon = findElement(label, (el) => el.type === IconRenderer);
+    if (!icon) throw new Error('expected IconRenderer in html-node-label');
+    expect((icon.props as { iconId?: string }).iconId).toBe('azure:functions');
+    expect((icon.props as { studioBaseUrl?: string }).studioBaseUrl).toBe('');
+  });
+
+  it('does not render an icon in the caption when data.icon is undefined', () => {
     const tree = callHtmlNode({ name: 'Welcome card' });
     const label = findLabel(tree);
     if (!label) throw new Error('expected html-node-label');
-    expect(findElement(label, (el) => el.type === Icon)).toBeNull();
+    expect(findElement(label, (el) => el.type === IconRenderer)).toBeNull();
   });
 
   it('renders the caption with no flex/span wrappers when data.icon is undefined', () => {

@@ -2,9 +2,9 @@ import { describe, expect, it, mock } from 'bun:test';
 import type { CSSProperties } from 'react';
 import * as React from 'react';
 import { IconPickerPopover } from '../../components/icon-picker-popover.tsx';
+import { IconRenderer } from '../../components/icon-renderer.tsx';
 import { InlineEdit } from '../../components/inline-edit.tsx';
 import { colorTokenStyle } from '../../lib/color-tokens.ts';
-import { Icon } from '../../ui/icon.tsx';
 import { NodeHeader, type NodeHeaderProps } from './node-header.tsx';
 
 // Hook-shim renderer pattern from image-node.test.tsx, with useStateOverrides
@@ -17,6 +17,7 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: <T>(context: unknown) => T;
 };
 
 function renderWithHooks<T>(fn: () => T, useStateOverrides?: ReadonlyArray<unknown>): T {
@@ -41,6 +42,9 @@ function renderWithHooks<T>(fn: () => T, useStateOverrides?: ReadonlyArray<unkno
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    // NodeHeader reads CanvasStudioContext (studioBaseUrl) via useCanvasStudio;
+    // the shim returns the same-origin default the real context exposes.
+    useContext: <T,>(_context: unknown) => ({ studioBaseUrl: '' }) as T,
   };
   try {
     return fn();
@@ -137,18 +141,30 @@ describe('NodeHeader — static render', () => {
 
   it('omits the icon when icon is null or undefined', () => {
     const treeNull = callNodeHeader({ icon: null });
-    expect(findAll(treeNull, (el) => el.type === Icon)).toHaveLength(0);
+    expect(findAll(treeNull, (el) => el.type === IconRenderer)).toHaveLength(0);
     const treeUndef = callNodeHeader({});
-    expect(findAll(treeUndef, (el) => el.type === Icon)).toHaveLength(0);
+    expect(findAll(treeUndef, (el) => el.type === IconRenderer)).toHaveLength(0);
   });
 
-  it('renders a 16px Icon when icon is set (and not editable)', () => {
+  it('renders a 16px IconRenderer when icon is set (and not editable)', () => {
     const tree = callNodeHeader({ icon: 'sparkles' });
-    const icons = findAll(tree, (el) => el.type === Icon);
+    const icons = findAll(tree, (el) => el.type === IconRenderer);
     expect(icons).toHaveLength(1);
-    const iconProps = icons[0]?.props as { name?: string; size?: number };
-    expect(iconProps.name).toBe('sparkles');
-    expect(iconProps.size).toBe(16);
+    const iconProps = icons[0]?.props as { iconId?: string; className?: string };
+    expect(iconProps.iconId).toBe('sparkles');
+    // IconRenderer sizes via className (no `size` prop); 16px == h-4/w-4.
+    expect(iconProps.className).toContain('sf:h-4');
+    expect(iconProps.className).toContain('sf:w-4');
+  });
+
+  it('routes a vendor-prefixed icon through IconRenderer (svg-url, not the ? fallback)', () => {
+    const tree = callNodeHeader({ icon: 'aws:lambda' });
+    const icons = findAll(tree, (el) => el.type === IconRenderer);
+    expect(icons).toHaveLength(1);
+    const iconProps = icons[0]?.props as { iconId?: string; studioBaseUrl?: string };
+    expect(iconProps.iconId).toBe('aws:lambda');
+    // studioBaseUrl must be threaded so the svg-url branch can build the URL.
+    expect(iconProps.studioBaseUrl).toBe('');
   });
 
   it('applies italic placeholder classes on the title when name is empty', () => {
@@ -230,22 +246,22 @@ describe('NodeHeader — icon picker', () => {
     expect(pickers).toHaveLength(1);
   });
 
-  it('renders a plain Icon (no picker) when not selected', () => {
+  it('renders a plain IconRenderer (no picker) when not selected', () => {
     const tree = callNodeHeader({ ...baseEditable, selected: false });
     expect(findAll(tree, (el) => el.type === IconPickerPopover)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === Icon)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === IconRenderer)).toHaveLength(1);
   });
 
-  it('renders a plain Icon (no picker) when onIconChange is undefined', () => {
+  it('renders a plain IconRenderer (no picker) when onIconChange is undefined', () => {
     const tree = callNodeHeader({ icon: 'sparkles', selected: true });
     expect(findAll(tree, (el) => el.type === IconPickerPopover)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === Icon)).toHaveLength(1);
+    expect(findAll(tree, (el) => el.type === IconRenderer)).toHaveLength(1);
   });
 
   it('renders nothing when icon is falsy (no picker even if onIconChange + selected)', () => {
     const tree = callNodeHeader({ ...baseEditable, icon: null });
     expect(findAll(tree, (el) => el.type === IconPickerPopover)).toHaveLength(0);
-    expect(findAll(tree, (el) => el.type === Icon)).toHaveLength(0);
+    expect(findAll(tree, (el) => el.type === IconRenderer)).toHaveLength(0);
   });
 
   it('icon-trigger button stops onClick / onMouseDown / onDoubleClick propagation', () => {

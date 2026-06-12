@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it } from 'bun:test';
 import * as React from 'react';
+import { IconRenderer } from '../components/icon-renderer.tsx';
 import type { FlowNode } from '../types.ts';
 
 // The DetailPanel root reads localStorage on first render
@@ -44,6 +45,7 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: <T>(context: unknown) => T;
 };
 
 function renderWithHooks<T>(fn: () => T, useStateOverrides?: ReadonlyArray<unknown>): T {
@@ -68,6 +70,9 @@ function renderWithHooks<T>(fn: () => T, useStateOverrides?: ReadonlyArray<unkno
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    // DetailPanel + TitleIconTrigger read CanvasStudioContext (studioBaseUrl)
+    // for vendor-icon IconRenderers; the shim returns the same-origin default.
+    useContext: <T,>(_context: unknown) => ({ studioBaseUrl: '' }) as T,
   };
   try {
     return fn();
@@ -484,6 +489,23 @@ describe('DetailPanel icon trigger', () => {
       (el) => el.props['data-testid'] === 'detail-panel-icon-readonly',
     );
     expect(readOnly.length).toBe(1);
+  });
+
+  it('routes a vendor-prefixed read-only icon through IconRenderer (not the ? fallback)', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeRectangleNode({ data: { icon: 'gcp:cloud-run' } } as Partial<FlowNode>),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+      }),
+    );
+    const renderers = findAll(tree, (el) => el.type === IconRenderer);
+    expect(renderers.length).toBe(1);
+    const props = renderers[0]?.props as { iconId?: string; studioBaseUrl?: string };
+    expect(props.iconId).toBe('gcp:cloud-run');
+    expect(props.studioBaseUrl).toBe('');
   });
 
   it('omits read-only icon span when node has no icon set', () => {

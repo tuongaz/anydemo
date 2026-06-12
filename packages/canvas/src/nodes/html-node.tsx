@@ -1,13 +1,22 @@
 import { Handle, type Node, type NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
 import { Maximize2 } from 'lucide-react';
-import { type CSSProperties, type ReactNode, type RefObject, memo, useEffect, useRef } from 'react';
+import {
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+  memo,
+  useContext,
+  useEffect,
+  useRef,
+} from 'react';
+import { IconRenderer } from '../components/icon-renderer.tsx';
+import { CanvasStudioContext } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { debouncedResizeObserver } from '../lib/debounced-resize-observer.ts';
 import { injectSanitizedHtml } from '../lib/inject-sanitized-html.ts';
 import { ensureTailwindLoaded } from '../lib/tailwind-runtime.ts';
 import type { HtmlNodeData } from '../types.ts';
-import { Icon } from '../ui/icon.tsx';
 import { PlaceholderCard } from './placeholder-card.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
@@ -52,6 +61,11 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
   // the first frame, before the autoSize: false write echoes back from disk.
   const autoSize = data.autoSize ?? true;
   const userSized = isResizing || !autoSize;
+
+  // Vendor-prefixed icon ids (`aws:…`, `gcp:…`, `azure:…`, `iconify:…`) in the
+  // caption resolve through IconRenderer's svg-url / iconify branches, which
+  // need the studio base URL. Bundled Lucide names ignore it.
+  const { studioBaseUrl } = useContext(CanvasStudioContext);
 
   // US-014: htmlNode defaults to a transparent / borderless wrapper so author
   // HTML can paint edge-to-edge. Only fields the author has SET land in the
@@ -220,7 +234,11 @@ function HtmlNodeImpl({ id, data, selected, isConnectable }: NodeProps<HtmlNodeT
         >
           {data.icon ? (
             <div className="sf:flex sf:items-center sf:justify-center sf:gap-1">
-              <Icon name={data.icon} size={12} aria-hidden />
+              <IconRenderer
+                iconId={data.icon}
+                studioBaseUrl={studioBaseUrl}
+                className="sf:h-3 sf:w-3 sf:shrink-0"
+              />
               <span className="truncate">{data.name}</span>
             </div>
           ) : (

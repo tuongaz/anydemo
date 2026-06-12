@@ -14,6 +14,7 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { CanvasAdapter } from '../adapter/types.ts';
+import { useCanvasStudio } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import {
   getStoredDetailPanelWidth,
@@ -23,8 +24,8 @@ import {
 import { StatusBadge } from '../nodes/status-badge.tsx';
 import type { Connector, FlowNode, StatusReport } from '../types.ts';
 import { Button } from '../ui/button.tsx';
-import { Icon } from '../ui/icon.tsx';
 import { IconPickerPopover } from './icon-picker-popover.tsx';
+import { IconRenderer } from './icon-renderer.tsx';
 import { MermaidBlock } from './mermaid-block.tsx';
 
 // Local alias to keep the title-row JSX tidy. The trigger always renders as a
@@ -97,6 +98,9 @@ export function DetailPanel({
   // the inline-edited text and offer no extra fields, so the panel stays
   // closed for them. Clicking a text node still selects it on the canvas;
   // double-click still opens inline edit.
+  // Vendor-prefixed icon ids resolve through IconRenderer's svg-url / iconify
+  // branches, which need the studio base URL (Lucide names ignore it).
+  const { studioBaseUrl } = useCanvasStudio();
   const isTextNode = node?.type === 'text';
   // Ellipse + sticky nodes have no Name concept — their on-canvas label is
   // the `description` field, so the panel suppresses the Name row entirely.
@@ -231,7 +235,11 @@ export function DetailPanel({
                         aria-hidden
                         className="sf:inline-flex sf:h-7 sf:w-7 sf:shrink-0 sf:items-center sf:justify-center sf:text-foreground/90"
                       >
-                        <Icon name={currentIcon} size={16} />
+                        <IconRenderer
+                          iconId={currentIcon}
+                          studioBaseUrl={studioBaseUrl}
+                          className="sf:h-4 sf:w-4"
+                        />
                       </span>
                     ) : null}
                     <div className="sf:min-w-0 sf:flex-1">
@@ -534,6 +542,7 @@ export function TitleIconTrigger({
   onChange: IconChangeHandler;
 }) {
   const [open, setOpen] = useState(false);
+  const { studioBaseUrl } = useCanvasStudio();
   return (
     <IconPickerPopover
       open={open}
@@ -557,7 +566,7 @@ export function TitleIconTrigger({
           )}
         >
           {icon ? (
-            <Icon name={icon} size={16} aria-hidden />
+            <IconRenderer iconId={icon} studioBaseUrl={studioBaseUrl} className="sf:h-4 sf:w-4" />
           ) : (
             <ImagePlus className="sf:h-4 sf:w-4" aria-hidden />
           )}

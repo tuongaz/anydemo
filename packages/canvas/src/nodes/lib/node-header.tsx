@@ -5,11 +5,12 @@ import {
   useState,
 } from 'react';
 import { IconPickerPopover } from '../../components/icon-picker-popover.tsx';
+import { IconRenderer } from '../../components/icon-renderer.tsx';
 import { InlineEdit } from '../../components/inline-edit.tsx';
+import { useCanvasStudio } from '../../lib/canvas-studio-context.tsx';
 import { cn } from '../../lib/cn.ts';
 import { colorTokenStyle } from '../../lib/color-tokens.ts';
 import type { ColorToken } from '../../types.ts';
-import { Icon } from '../../ui/icon.tsx';
 
 export interface NodeHeaderProps {
   nodeId: string;
@@ -51,6 +52,10 @@ export function NodeHeader({
 }: NodeHeaderProps) {
   const [editing, setEditing] = useState(false);
   const [iconPickerOpen, setIconPickerOpen] = useState(false);
+  // Vendor-prefixed icon ids (`aws:lambda`, `gcp:cloud-run`, `azure:functions`,
+  // `iconify:…`) resolve through IconRenderer's svg-url / iconify branches,
+  // which need the studio base URL. Bundled Lucide names ignore it.
+  const { studioBaseUrl } = useCanvasStudio();
 
   const nameEditable = !!onNameChange;
   const iconEditable = !!onIconChange && !!selected && !!icon;
@@ -118,17 +123,21 @@ export function NodeHeader({
                 onMouseDown={(e) => e.stopPropagation()}
                 onDoubleClick={(e) => e.stopPropagation()}
               >
-                <Icon name={icon} size={16} style={adaptedTextStyle} aria-hidden />
+                <IconRenderer
+                  iconId={icon}
+                  studioBaseUrl={studioBaseUrl}
+                  className="sf:h-4 sf:w-4"
+                  color={adaptedTextStyle?.color}
+                />
               </button>
             }
           />
         ) : (
-          <Icon
-            name={icon}
-            size={16}
-            className="sf:shrink-0"
-            style={adaptedTextStyle}
-            aria-hidden
+          <IconRenderer
+            iconId={icon}
+            studioBaseUrl={studioBaseUrl}
+            className="sf:h-4 sf:w-4 sf:shrink-0"
+            color={adaptedTextStyle?.color}
           />
         )
       ) : null}
