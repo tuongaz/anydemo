@@ -848,9 +848,25 @@ export function StyleStrip({
                   options={DIRECTION_OPTIONS}
                 />
               </PopoverSection>
+            </div>
+          </PopoverButton>
+        ) : null}
+
+        {pureConnector ? (
+          <PopoverButton
+            testId="style-strip-head-shape"
+            tooltip="Head shape"
+            ariaLabel="head shape"
+            renderIcon={() => {
+              const Icon =
+                HEAD_SHAPE_OPTIONS.find((o) => o.value === headShapeActive)?.icon ?? ArrowRight;
+              return <Icon className="sf:h-4 sf:w-4" />;
+            }}
+          >
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
               {/* Head shape only applies to ends that carry a head — disabled
                   when direction is 'none' (no heads to shape). */}
-              <PopoverSection label="Head shape" testId="style-strip-head-shape">
+              <PopoverSection label="Head shape" testId="style-strip-head-shape-section">
                 <div
                   className={cn(
                     directionActive === 'none' && 'sf:pointer-events-none sf:opacity-40',
@@ -864,6 +880,11 @@ export function StyleStrip({
                     options={HEAD_SHAPE_OPTIONS}
                   />
                 </div>
+                {directionActive === 'none' ? (
+                  <p className="sf:mt-2 sf:text-[11px] sf:text-muted-foreground">
+                    Set a direction to show heads.
+                  </p>
+                ) : null}
               </PopoverSection>
             </div>
           </PopoverButton>

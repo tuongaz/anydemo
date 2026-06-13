@@ -723,8 +723,8 @@ describe('StyleStrip — text alignment toggle', () => {
 });
 
 // Request 1: the standalone "Connector path" button folds into the Connector
-// popover as a third section. Request 2: head-shape lives as a second section
-// inside the Direction popover.
+// popover as a third section. Request 2: head-shape is its own top-level
+// toolbar button (style-strip-head-shape), sibling to Direction.
 describe('StyleStrip — connector path merge + head shape', () => {
   const conn = (over: Partial<Connector> = {}): Connector =>
     ({ id: 'c1', source: 'a', target: 'b', ...over }) as Connector;
