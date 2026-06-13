@@ -392,6 +392,19 @@ const NodeSchema = z.discriminatedUnion('type', [
 const ConnectorStyleSchema = z.enum(['solid', 'dashed', 'dotted']);
 const ConnectorDirectionSchema = z.enum(['forward', 'backward', 'both', 'none']);
 const ConnectorPathSchema = z.enum(['curve', 'step']);
+// Head/marker glyph drawn at the arrow ends. `direction` decides WHICH ends
+// carry a head; `headShape` decides WHAT it looks like. Absent ⇒ 'arrow'
+// (the historical closed arrowhead), so existing flows render unchanged.
+// 'one' / 'many' / 'optional-many' are ER crow's-foot endpoints (single tick,
+// fork, circle+fork). 'diamond' / 'circle' are filled UML-ish endpoints.
+const ConnectorHeadShapeSchema = z.enum([
+  'arrow',
+  'one',
+  'many',
+  'optional-many',
+  'diamond',
+  'circle',
+]);
 
 const ConnectorVisualBaseShape = {
   style: ConnectorStyleSchema.optional(),
@@ -399,6 +412,7 @@ const ConnectorVisualBaseShape = {
   direction: ConnectorDirectionSchema.optional(),
   borderSize: z.number().min(0).optional(),
   path: ConnectorPathSchema.optional(),
+  headShape: ConnectorHeadShapeSchema.optional(),
   fontSize: z.number().positive().optional(),
 };
 
@@ -518,6 +532,7 @@ export type Connector = z.infer<typeof ConnectorSchema>;
 export type ConnectorStyle = z.infer<typeof ConnectorStyleSchema>;
 export type ConnectorDirection = z.infer<typeof ConnectorDirectionSchema>;
 export type ConnectorPath = z.infer<typeof ConnectorPathSchema>;
+export type ConnectorHeadShape = z.infer<typeof ConnectorHeadShapeSchema>;
 export type EdgePin = z.infer<typeof EdgePinSchema>;
 export type EdgePinSide = z.infer<typeof EdgePinSideSchema>;
 export type PlayAction = z.infer<typeof PlayActionSchema>;
@@ -806,6 +821,7 @@ const ConnectorStyleEntrySchema = z
     direction: ConnectorDirectionSchema.optional(),
     borderSize: z.number().min(0).optional(),
     path: ConnectorPathSchema.optional(),
+    headShape: ConnectorHeadShapeSchema.optional(),
     fontSize: z.number().positive().optional(),
   })
   .strict();

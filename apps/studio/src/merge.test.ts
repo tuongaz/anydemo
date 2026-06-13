@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { mergeFlowAndStyle } from './merge.ts';
+import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import { mergeNodeUpdates } from './operations.ts';
 import type { Flow, Style } from './schema.ts';
 
@@ -40,6 +40,26 @@ describe('mergeFlowAndStyle', () => {
       fontSize: 14,
       borderColor: 'blue',
     });
+  });
+
+  it('round-trips connector headShape through the style overlay (splitFlow → merge)', () => {
+    // headShape is a visual field: splitFlow must route it to style.connectors
+    // (NOT leave it on flow.json, where strict FlowConnectorSchema rejects it),
+    // and mergeFlowAndStyle must put it back on the resolved connector.
+    const { flow, style } = splitFlow({
+      version: 2,
+      name: 'T',
+      nodes: [
+        { id: 'a', type: 'rectangle', data: {} },
+        { id: 'b', type: 'rectangle', data: {} },
+      ],
+      connectors: [{ id: 'c', source: 'a', target: 'b', headShape: 'many', direction: 'forward' }],
+    });
+    // headShape lives in the overlay, not in flow.json.
+    expect((flow.connectors as Array<Record<string, unknown>>)[0]).not.toHaveProperty('headShape');
+    expect((style.connectors as Record<string, Record<string, unknown>>).c?.headShape).toBe('many');
+    const resolved = mergeFlowAndStyle(flow as unknown as Flow, style as unknown as Style);
+    expect(resolved.connectors[0]).toMatchObject({ headShape: 'many', direction: 'forward' });
   });
 
   it('spreads connector handles + visual fields onto the connector', () => {

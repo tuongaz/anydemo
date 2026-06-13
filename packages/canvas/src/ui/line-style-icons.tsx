@@ -40,3 +40,27 @@ export const PathStepIcon = (props: SVGProps<SVGSVGElement>) => (
     <path d="M2 12 H 6 V 4 H 14" />
   </svg>
 );
+
+// ER crow's-foot head-shape toggle icons: a line into the right edge ending in
+// the endpoint mark (matches the glyphs drawn by ConnectorHeadGlyph).
+export const HeadOneIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...baseProps(props)} aria-hidden="true">
+    <line x1="2" y1="8" x2="13" y2="8" />
+    <line x1="11" y1="4" x2="11" y2="12" />
+  </svg>
+);
+
+export const HeadManyIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...baseProps(props)} aria-hidden="true">
+    <line x1="2" y1="8" x2="8" y2="8" />
+    <path d="M8 8 L14 4 M8 8 L14 8 M8 8 L14 12" />
+  </svg>
+);
+
+export const HeadOptionalManyIcon = (props: SVGProps<SVGSVGElement>) => (
+  <svg {...baseProps(props)} aria-hidden="true">
+    <line x1="2" y1="8" x2="4" y2="8" />
+    <circle cx="6" cy="8" r="2" />
+    <path d="M9 8 L14 4 M9 8 L14 8 M9 8 L14 12" />
+  </svg>
+);

@@ -245,6 +245,65 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(node).toHaveScreenshot('database-with-play.png', { maxDiffPixelRatio: 0.02 });
   });
 
+  // Connector head shapes: arrow (native ArrowClosed marker) + the five custom
+  // glyphs drawn by EditableEdge — the ER crow's-foot marks (one / many /
+  // optional-many) plus diamond / circle. Each pair stacks source-above-target
+  // so every head points downward and reads clearly. Locks both the glyph
+  // geometry AND the stroke-derived coloring (the connectors carry a non-default
+  // color so a regression to a wrong fill surfaces in the diff).
+  test('connector head shapes visual snapshot', async ({ page, studio }) => {
+    const SHAPES = ['arrow', 'one', 'many', 'optional-many', 'diamond', 'circle'] as const;
+    // 3-column × 2-band grid: each pair stacks source-above-target with a tall
+    // gap so the downward head sits clearly on the line. Narrow overall width
+    // keeps fitView zoomed in enough that the stroke-only marks (the hollow
+    // circle especially) read as hollow rather than as solid dots.
+    const nodes = SHAPES.flatMap((shape, i) => {
+      const x = (i % 3) * 280;
+      const srcY = Math.floor(i / 3) * 560;
+      return [
+        {
+          id: `${shape}-src`,
+          type: 'rectangle' as const,
+          position: { x, y: srcY },
+          data: { name: shape },
+        },
+        {
+          id: `${shape}-dst`,
+          type: 'rectangle' as const,
+          position: { x, y: srcY + 280 },
+          data: { name: shape },
+        },
+      ];
+    });
+    const connectors = SHAPES.map((shape) => ({
+      id: `c-${shape}`,
+      source: `${shape}-src`,
+      target: `${shape}-dst`,
+      direction: 'forward' as const,
+      headShape: shape,
+      color: 'blue' as const,
+    }));
+    const resolvedFlow = { version: 2 as const, name: 'Head Shapes', nodes, connectors };
+    const registered = await registerFlow(studio.studio, 'head-shapes', resolvedFlow, {
+      name: 'Head Shapes',
+    });
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await page.addStyleTag({ content: DISABLE_MOTION_CSS });
+    await waitForCanvasSettled(page);
+
+    // All six edges mounted. The five custom-head edges each draw a
+    // <g data-testid="connector-head-glyph"> inside their edge group; the
+    // arrow edge uses a native marker (no glyph), so expect exactly five.
+    await expect(page.locator('.react-flow__edge')).toHaveCount(6);
+    await expect(page.locator('[data-testid="connector-head-glyph"]')).toHaveCount(5);
+
+    const root = page.locator('.seeflow-canvas-root').first();
+    await expect(root).toHaveScreenshot('connector-head-shapes.png', { maxDiffPixelRatio: 0.02 });
+  });
+
   test('draw-mode database creates a node with type:database', async ({ page, studio }) => {
     const resolvedFlow = {
       version: 2 as const,

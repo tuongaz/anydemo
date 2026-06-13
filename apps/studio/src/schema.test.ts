@@ -2388,11 +2388,28 @@ describe('StyleSchema', () => {
           direction: 'forward',
           borderSize: 1,
           path: 'curve',
+          headShape: 'many',
           fontSize: 11,
         },
       },
     });
     expect(r.success).toBe(true);
+  });
+
+  it('accepts every connector headShape and rejects unknown ones', () => {
+    for (const headShape of [
+      'arrow',
+      'one',
+      'many',
+      'optional-many',
+      'diamond',
+      'circle',
+    ] as const) {
+      const r = StyleSchema.safeParse({ connectors: { c1: { headShape } } });
+      expect(r.success).toBe(true);
+    }
+    const bad = StyleSchema.safeParse({ connectors: { c1: { headShape: 'cylinder' } } });
+    expect(bad.success).toBe(false);
   });
 
   it('rejects unknown keys on a node entry', () => {

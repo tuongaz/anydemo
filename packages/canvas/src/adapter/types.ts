@@ -10,6 +10,7 @@ import type {
   ColorToken,
   Connector,
   ConnectorDirection,
+  ConnectorHeadShape,
   ConnectorPath,
   ConnectorStyle,
   EdgePin,
@@ -125,6 +126,8 @@ export interface ConnectorPatch {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
+  /** Head glyph drawn at the active arrow ends (per `direction`). */
+  headShape?: ConnectorHeadShape;
   /** Per-connector label font size in px. */
   fontSize?: number;
   eventName?: string;

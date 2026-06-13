@@ -721,3 +721,105 @@ describe('StyleStrip — text alignment toggle', () => {
     expect(findElement(tree, testIdEquals('style-strip-text-align'))).toBeNull();
   });
 });
+
+// Request 1: the standalone "Connector path" button folds into the Connector
+// popover as a third section. Request 2: head-shape lives as a second section
+// inside the Direction popover.
+describe('StyleStrip — connector path merge + head shape', () => {
+  const conn = (over: Partial<Connector> = {}): Connector =>
+    ({ id: 'c1', source: 'a', target: 'b', ...over }) as Connector;
+
+  function findPathToggle(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-path'));
+    if (!section) throw new Error('path section missing');
+    const toggle = findElement(section, (el) => {
+      const p = el.props as { ariaLabel?: string };
+      return p.ariaLabel === 'Connector path';
+    });
+    if (!toggle) throw new Error('path toggle missing');
+    return toggle;
+  }
+
+  function findHeadToggle(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-head-shape'));
+    if (!section) throw new Error('head-shape section missing');
+    const toggle = findElement(section, (el) => {
+      const p = el.props as { ariaLabel?: string };
+      return p.ariaLabel === 'Connector head shape';
+    });
+    if (!toggle) throw new Error('head-shape toggle missing');
+    return toggle;
+  }
+
+  it('no longer renders a standalone Connector-path popover button', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn()] });
+    // The Path section moved INSIDE the Connector popover; there is no
+    // top-level path button anymore. The Connector popover (style-strip-border)
+    // is the sole owner.
+    expect(findElement(tree, testIdEquals('style-strip-border'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-path'))).not.toBeNull();
+  });
+
+  it('renders the Path section inside the Connector popover and reflects the active value', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ path: 'step' })] });
+    const border = findElement(tree, testIdEquals('style-strip-border'));
+    if (!border) throw new Error('connector popover missing');
+    // The path section is a descendant of the Connector popover, not a sibling.
+    expect(findElement(border, testIdEquals('style-strip-path'))).not.toBeNull();
+    expect((findPathToggle(tree).props as { value?: string }).value).toBe('step');
+  });
+
+  it('does NOT render the Path section for a node selection', () => {
+    const tree = callStrip({ nodes: [rectangleFixture('r1')] });
+    expect(findElement(tree, testIdEquals('style-strip-path'))).toBeNull();
+  });
+
+  it('picking a path fans out to every selected connector via onStyleConnector', () => {
+    const onStyleConnector = mock(() => {});
+    const tree = callStrip({
+      nodes: [],
+      connectors: [conn({ id: 'c1' }), conn({ id: 'c2' })],
+      onStyleConnector,
+    });
+    (findPathToggle(tree).props as { onChange: (p: 'curve' | 'step') => void }).onChange('step');
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { path: 'step' });
+    expect(onStyleConnector).toHaveBeenCalledWith('c2', { path: 'step' });
+  });
+
+  it("defaults the head-shape toggle to 'arrow' when unset", () => {
+    const tree = callStrip({ nodes: [], connectors: [conn()] });
+    expect((findHeadToggle(tree).props as { value?: string }).value).toBe('arrow');
+  });
+
+  it('reflects an explicit headShape as the active value', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ headShape: 'many' })] });
+    expect((findHeadToggle(tree).props as { value?: string }).value).toBe('many');
+  });
+
+  it('picking a head shape fans out to every selected connector', () => {
+    const onStyleConnector = mock(() => {});
+    const tree = callStrip({
+      nodes: [],
+      connectors: [conn({ id: 'c1' }), conn({ id: 'c2' })],
+      onStyleConnector,
+    });
+    (
+      findHeadToggle(tree).props as {
+        onChange: (s: 'arrow' | 'one' | 'many' | 'optional-many' | 'diamond' | 'circle') => void;
+      }
+    ).onChange('many');
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { headShape: 'many' });
+    expect(onStyleConnector).toHaveBeenCalledWith('c2', { headShape: 'many' });
+  });
+
+  it('disables the head-shape section when direction is none', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ direction: 'none' })] });
+    const section = findElement(tree, testIdEquals('style-strip-head-shape'));
+    if (!section) throw new Error('head-shape section missing');
+    const disabledWrap = findElement(
+      section,
+      (el) => (el.props as { 'aria-disabled'?: boolean })['aria-disabled'] === true,
+    );
+    expect(disabledWrap).not.toBeNull();
+  });
+});

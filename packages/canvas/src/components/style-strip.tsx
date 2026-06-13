@@ -5,6 +5,8 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Check,
+  Circle,
+  Diamond,
   Layers,
   Minus,
   MoveLeft,
@@ -19,12 +21,16 @@ import type {
   ColorToken,
   Connector,
   ConnectorDirection,
+  ConnectorHeadShape,
   ConnectorPath,
   ConnectorStyle,
   FlowNode,
 } from '../types.ts';
 import { IconToggleGroup, type IconToggleOption } from '../ui/icon-toggle-group.tsx';
 import {
+  HeadManyIcon,
+  HeadOneIcon,
+  HeadOptionalManyIcon,
   LineDashedIcon,
   LineDottedIcon,
   LineSolidIcon,
@@ -63,6 +69,8 @@ export interface ConnectorStylePatch {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
+  /** Head glyph drawn at the active arrow ends (per `direction`). */
+  headShape?: ConnectorHeadShape;
   /** US-018: per-connector label font size (mirrors NodeStylePatch.fontSize). */
   fontSize?: number;
 }
@@ -161,6 +169,20 @@ const PATH_OPTIONS: IconToggleOption<ConnectorPath>[] = [
   { value: 'step', icon: PathStepIcon, label: 'Zigzag', testId: 'style-tab-edge-path-step' },
 ];
 
+const HEAD_SHAPE_OPTIONS: IconToggleOption<ConnectorHeadShape>[] = [
+  { value: 'arrow', icon: ArrowRight, label: 'Arrow', testId: 'style-tab-head-shape-arrow' },
+  { value: 'one', icon: HeadOneIcon, label: 'One', testId: 'style-tab-head-shape-one' },
+  { value: 'many', icon: HeadManyIcon, label: 'Many', testId: 'style-tab-head-shape-many' },
+  {
+    value: 'optional-many',
+    icon: HeadOptionalManyIcon,
+    label: 'Optional many',
+    testId: 'style-tab-head-shape-optional-many',
+  },
+  { value: 'diamond', icon: Diamond, label: 'Diamond', testId: 'style-tab-head-shape-diamond' },
+  { value: 'circle', icon: Circle, label: 'Circle', testId: 'style-tab-head-shape-circle' },
+];
+
 type TextAlign = 'left' | 'center' | 'right';
 
 // Default alignment when a node has no explicit `textAlign` set yet. Most
@@ -253,6 +275,7 @@ export function StyleStrip({
   const connectorStyleActive: ConnectorStyle = firstConnector?.style ?? 'solid';
   const directionActive = (firstConnector?.direction ?? 'forward') as ConnectorDirection;
   const pathActive = (firstConnector?.path ?? 'curve') as ConnectorPath;
+  const headShapeActive = (firstConnector?.headShape ?? 'arrow') as ConnectorHeadShape;
 
   // Apply helpers — fan out a single user pick to every selected entity.
   // For "shared" properties on mixed selections, both fan-outs run.
@@ -371,6 +394,9 @@ export function StyleStrip({
   };
   const applyConnectorDirection = (direction: ConnectorDirection) => {
     for (const c of connectors) onStyleConnector(c.id, { direction });
+  };
+  const applyConnectorHeadShape = (headShape: ConnectorHeadShape) => {
+    for (const c of connectors) onStyleConnector(c.id, { headShape });
   };
   // US-014: type:'icon' stroke color writes to data.color via the same
   // onStyleNode path the geometric color picker uses — no new update plumbing.
@@ -742,6 +768,16 @@ export function StyleStrip({
                   }
                 />
               </PopoverSection>
+              {pureConnector ? (
+                <PopoverSection label="Path" testId="style-strip-path">
+                  <IconToggleGroup<ConnectorPath>
+                    ariaLabel="Connector path"
+                    value={pathActive}
+                    onChange={applyConnectorPath}
+                    options={PATH_OPTIONS}
+                  />
+                </PopoverSection>
+              ) : null}
             </div>
           </PopoverButton>
         ) : null}
@@ -794,25 +830,6 @@ export function StyleStrip({
 
         {pureConnector ? (
           <PopoverButton
-            testId="style-strip-path"
-            tooltip="Connector path"
-            ariaLabel="connector path"
-            renderIcon={() => {
-              const Icon = PATH_OPTIONS.find((o) => o.value === pathActive)?.icon ?? PathCurveIcon;
-              return <Icon className="sf:h-4 sf:w-4" />;
-            }}
-          >
-            <IconToggleGroup<ConnectorPath>
-              ariaLabel="Connector path"
-              value={pathActive}
-              onChange={applyConnectorPath}
-              options={PATH_OPTIONS}
-            />
-          </PopoverButton>
-        ) : null}
-
-        {pureConnector ? (
-          <PopoverButton
             testId="style-strip-direction"
             tooltip="Direction"
             ariaLabel="direction"
@@ -822,12 +839,33 @@ export function StyleStrip({
               return <Icon className="sf:h-4 sf:w-4" />;
             }}
           >
-            <IconToggleGroup<ConnectorDirection>
-              ariaLabel="Connector direction"
-              value={directionActive}
-              onChange={applyConnectorDirection}
-              options={DIRECTION_OPTIONS}
-            />
+            <div className="sf:flex sf:w-56 sf:flex-col sf:gap-3">
+              <PopoverSection label="Direction" testId="style-strip-direction-section">
+                <IconToggleGroup<ConnectorDirection>
+                  ariaLabel="Connector direction"
+                  value={directionActive}
+                  onChange={applyConnectorDirection}
+                  options={DIRECTION_OPTIONS}
+                />
+              </PopoverSection>
+              {/* Head shape only applies to ends that carry a head — disabled
+                  when direction is 'none' (no heads to shape). */}
+              <PopoverSection label="Head shape" testId="style-strip-head-shape">
+                <div
+                  className={cn(
+                    directionActive === 'none' && 'sf:pointer-events-none sf:opacity-40',
+                  )}
+                  aria-disabled={directionActive === 'none'}
+                >
+                  <IconToggleGroup<ConnectorHeadShape>
+                    ariaLabel="Connector head shape"
+                    value={headShapeActive}
+                    onChange={applyConnectorHeadShape}
+                    options={HEAD_SHAPE_OPTIONS}
+                  />
+                </div>
+              </PopoverSection>
+            </div>
           </PopoverButton>
         ) : null}
       </div>

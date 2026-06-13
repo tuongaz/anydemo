@@ -19,7 +19,14 @@ import {
   resolveEdgeEndpoints,
 } from '../lib/floating-edge-geometry.ts';
 import { deriveVisualStatus } from '../nodes/lib/visual-status.ts';
-import type { ConnectorPath, EdgePin, NodeStatus, StatusReport } from '../types.ts';
+import type {
+  ConnectorHeadShape,
+  ConnectorPath,
+  EdgePin,
+  NodeStatus,
+  StatusReport,
+} from '../types.ts';
+import { ConnectorHeadGlyph, HEAD_TRIM } from './head-glyph.tsx';
 
 /**
  * Returns true when an edge should fire its handoff pulse, given the source
@@ -65,6 +72,17 @@ const POSITION_BY_SIDE: Record<Side, Position> = {
   left: Position.Left,
 };
 
+// Outward unit normal of each node face (pointing back along the line, away
+// from the node). Used to pull a custom-head edge's path endpoint back by the
+// glyph's length so the line terminates at the glyph instead of running
+// through it — the native-arrow equivalent of a marker `refX` offset.
+const OUTWARD_NORMAL: Record<Side, readonly [number, number]> = {
+  top: [0, -1],
+  bottom: [0, 1],
+  left: [-1, 0],
+  right: [1, 0],
+};
+
 const sideFromPosition = (p: Position): Side => {
   switch (p) {
     case Position.Top:
@@ -83,6 +101,16 @@ export type EditableEdgeData = {
   onLabelChange?: (id: string, label: string) => void;
   /** Path geometry — 'curve' (default bezier) or 'step' (smoothstep). */
   path?: ConnectorPath;
+  /**
+   * Custom (non-arrow) head shape drawn at the edge endpoints. Absent for the
+   * default arrow head, which uses React Flow's native markers instead. When
+   * set, `headStart` / `headEnd` decide which ends carry the glyph.
+   */
+  headShape?: Exclude<ConnectorHeadShape, 'arrow'>;
+  /** Draw the custom head at the source endpoint. */
+  headStart?: boolean;
+  /** Draw the custom head at the target endpoint. */
+  headEnd?: boolean;
   /** US-018: per-connector label font size in px (undefined → 11px default). */
   fontSize?: number;
   /**
@@ -257,23 +285,36 @@ export function EditableEdge({
     }
   }, [id, sourceShift.cx, sourceShift.cy, targetShift.cx, targetShift.cy]);
 
+  // Pull the path endpoints back by the head glyph's length so the line stops
+  // at the glyph (clean terminator) instead of running through it. The glyphs
+  // themselves still render at the true endpoints (tX/tY, sX/sY). 'one' trims by
+  // 0 (it's a tick the line crosses), arrow uses a native marker (no glyph).
+  const headEndTrim = data?.headShape && data.headEnd ? HEAD_TRIM[data.headShape] : 0;
+  const headStartTrim = data?.headShape && data.headStart ? HEAD_TRIM[data.headShape] : 0;
+  const [tNx, tNy] = OUTWARD_NORMAL[targetSide];
+  const [sNx, sNy] = OUTWARD_NORMAL[sourceSide];
+  const pathSX = sX + sNx * headStartTrim;
+  const pathSY = sY + sNy * headStartTrim;
+  const pathTX = tX + tNx * headEndTrim;
+  const pathTY = tY + tNy * headEndTrim;
+
   const [edgePath, labelX, labelY] =
     data?.path === 'step'
       ? getSmoothStepPath({
-          sourceX: sX,
-          sourceY: sY,
+          sourceX: pathSX,
+          sourceY: pathSY,
           sourcePosition: sPos,
-          targetX: tX,
-          targetY: tY,
+          targetX: pathTX,
+          targetY: pathTY,
           targetPosition: tPos,
           borderRadius: SMOOTHSTEP_BORDER_RADIUS,
         })
       : getBezierPath({
-          sourceX: sX,
-          sourceY: sY,
+          sourceX: pathSX,
+          sourceY: pathSY,
           sourcePosition: sPos,
-          targetX: tX,
-          targetY: tY,
+          targetX: pathTX,
+          targetY: pathTY,
           targetPosition: tPos,
         });
   const onLabelChange = data?.onLabelChange;
@@ -298,6 +339,13 @@ export function EditableEdge({
   const sourcePinned = data?.sourcePin !== undefined;
   const targetPinned = data?.targetPin !== undefined;
 
+  // Custom head glyphs (database/diamond/circle) are drawn here, in the edge's
+  // own <g>, rather than via SVG markers — React Flow re-renders and strips
+  // foreign nodes from its edge svg, so a <marker> def injected there wouldn't
+  // survive. They color from the edge stroke and sit at the floating endpoints.
+  const headShape = data?.headShape;
+  const headColor = (style as { stroke?: string } | undefined)?.stroke;
+
   return (
     <>
       <BaseEdge
@@ -308,6 +356,12 @@ export function EditableEdge({
         markerStart={markerStart}
         interactionWidth={interactionWidth}
       />
+      {headShape && data?.headEnd ? (
+        <ConnectorHeadGlyph x={tX} y={tY} side={targetSide} shape={headShape} color={headColor} />
+      ) : null}
+      {headShape && data?.headStart ? (
+        <ConnectorHeadGlyph x={sX} y={sY} side={sourceSide} shape={headShape} color={headColor} />
+      ) : null}
       {showEndpointDots ? (
         <ViewportPortal>
           <div

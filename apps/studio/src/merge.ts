@@ -96,6 +96,7 @@ const CONNECTOR_STYLE_KEYS = new Set([
   'direction',
   'borderSize',
   'path',
+  'headShape',
   'fontSize',
 ]);
 

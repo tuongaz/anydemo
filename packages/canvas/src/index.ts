@@ -28,6 +28,7 @@ export type {
   Connector,
   ConnectorBase,
   ConnectorDirection,
+  ConnectorHeadShape,
   ConnectorPath,
   ConnectorStyle,
   Flow,

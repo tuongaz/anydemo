@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'bun:test';
-import { MarkerType } from '@xyflow/react';
+import { type EdgeMarker, MarkerType } from '@xyflow/react';
 import type { Connector } from '../types.ts';
 import { connectorToEdge } from './connector-to-edge';
+
+// The native arrow head is an EdgeMarker object; custom heads are url() strings.
+// These helpers narrow to the object form for the arrow-marker assertions.
+const asMarker = (m: EdgeMarker | string | undefined): EdgeMarker | undefined =>
+  typeof m === 'object' ? m : undefined;
 
 describe('connectorToEdge', () => {
   it('preserves id/source/target and uses the editableEdge custom type', () => {
@@ -45,7 +50,7 @@ describe('connectorToEdge', () => {
       url: 'http://b/',
     };
     const edge = connectorToEdge(c, false);
-    expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerEnd)?.type).toBe(MarkerType.ArrowClosed);
     expect(edge.markerStart).toBeUndefined();
   });
 
@@ -86,7 +91,7 @@ describe('connectorToEdge', () => {
       direction: 'backward',
     };
     const edge = connectorToEdge(c, false);
-    expect(edge.markerStart?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerStart)?.type).toBe(MarkerType.ArrowClosed);
     expect(edge.markerEnd).toBeUndefined();
   });
 
@@ -98,14 +103,14 @@ describe('connectorToEdge', () => {
       direction: 'both',
     };
     const edge = connectorToEdge(c, false);
-    expect(edge.markerStart?.type).toBe(MarkerType.ArrowClosed);
-    expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerStart)?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerEnd)?.type).toBe(MarkerType.ArrowClosed);
   });
 
   it('treats absent direction as forward (markerEnd only)', () => {
     const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
-    expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerEnd)?.type).toBe(MarkerType.ArrowClosed);
     expect(edge.markerStart).toBeUndefined();
   });
 
@@ -208,15 +213,15 @@ describe('connectorToEdge', () => {
     };
     const edge = connectorToEdge(c, false);
     expect(edge.style.stroke).toBeTruthy();
-    expect(edge.markerStart?.color).toBe(edge.style.stroke);
-    expect(edge.markerEnd?.color).toBe(edge.style.stroke);
+    expect(asMarker(edge.markerStart)?.color).toBe(edge.style.stroke);
+    expect(asMarker(edge.markerEnd)?.color).toBe(edge.style.stroke);
   });
 
   it('renders the default token with an explicit stroke + matching marker (no fall-through to React Flow defaults)', () => {
     const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.style.stroke).toBeTruthy();
-    expect(edge.markerEnd?.color).toBe(edge.style.stroke);
+    expect(asMarker(edge.markerEnd)?.color).toBe(edge.style.stroke);
   });
 
   it('does not set a per-edge zIndex so connectors paint behind nodes (US-014)', () => {
@@ -242,7 +247,7 @@ describe('connectorToEdge', () => {
     const c: Connector = { id: 'c1', source: 'a', target: 'b' };
     const edge = connectorToEdge(c, false);
     expect(edge.markerEnd).toBeDefined();
-    expect(edge.markerEnd?.type).toBe(MarkerType.ArrowClosed);
+    expect(asMarker(edge.markerEnd)?.type).toBe(MarkerType.ArrowClosed);
     expect(edge.markerStart).toBeUndefined();
   });
 
@@ -303,6 +308,67 @@ describe('connectorToEdge', () => {
     const e2 = connectorToEdge(c2, false, false);
     expect(e2).not.toBe(e1);
     expect(e2.label).toBe('updated');
+  });
+
+  it('keeps the native ArrowClosed marker when headShape is absent or "arrow"', () => {
+    const absent: Connector = { id: 'c1', source: 'a', target: 'b' };
+    const explicit: Connector = { id: 'c2', source: 'a', target: 'b', headShape: 'arrow' };
+    expect((connectorToEdge(absent, false).markerEnd as { type?: string })?.type).toBe(
+      MarkerType.ArrowClosed,
+    );
+    expect((connectorToEdge(explicit, false).markerEnd as { type?: string })?.type).toBe(
+      MarkerType.ArrowClosed,
+    );
+  });
+
+  // Custom shapes are drawn by EditableEdge (no native marker) — they surface
+  // via edge.data.headShape + headStart/headEnd, and the native marker slots
+  // stay empty so a connector never shows an arrow AND a custom glyph.
+  it('routes custom head shapes through edge.data with no native marker', () => {
+    for (const shape of ['one', 'many', 'optional-many', 'diamond', 'circle'] as const) {
+      const c: Connector = { id: 'c1', source: 'a', target: 'b', headShape: shape };
+      const edge = connectorToEdge(c, false);
+      expect(edge.data.headShape).toBe(shape);
+      expect(edge.markerEnd).toBeUndefined();
+      expect(edge.markerStart).toBeUndefined();
+      // direction defaults to forward → head at the target end only.
+      expect(edge.data.headEnd).toBe(true);
+      expect(edge.data.headStart).toBe(false);
+    }
+  });
+
+  it('flags both head ends when direction is both', () => {
+    const both: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      headShape: 'diamond',
+      direction: 'both',
+    };
+    const edge = connectorToEdge(both, false);
+    expect(edge.data.headShape).toBe('diamond');
+    expect(edge.data.headStart).toBe(true);
+    expect(edge.data.headEnd).toBe(true);
+  });
+
+  it('flags no head ends when direction is none regardless of headShape', () => {
+    const c: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      headShape: 'many',
+      direction: 'none',
+    };
+    const edge = connectorToEdge(c, false);
+    expect(edge.markerStart).toBeUndefined();
+    expect(edge.markerEnd).toBeUndefined();
+    expect(edge.data.headStart).toBe(false);
+    expect(edge.data.headEnd).toBe(false);
+  });
+
+  it('leaves data.headShape undefined for the default arrow head', () => {
+    const c: Connector = { id: 'c1', source: 'a', target: 'b' };
+    expect(connectorToEdge(c, false).data.headShape).toBeUndefined();
   });
 
   it('forwards optional connector fontSize to edge data (US-018)', () => {

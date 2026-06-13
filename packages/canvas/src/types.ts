@@ -293,6 +293,7 @@ export type CanvasMode =
 export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
 export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';
 export type ConnectorPath = 'curve' | 'step';
+export type ConnectorHeadShape = 'arrow' | 'one' | 'many' | 'optional-many' | 'diamond' | 'circle';
 
 export type EdgePinSide = 'top' | 'right' | 'bottom' | 'left';
 export interface EdgePin {
@@ -316,6 +317,8 @@ export interface ConnectorBase {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
+  /** Glyph drawn at the active arrow ends (per `direction`). Absent ⇒ 'arrow'. */
+  headShape?: ConnectorHeadShape;
   fontSize?: number;
 }
 

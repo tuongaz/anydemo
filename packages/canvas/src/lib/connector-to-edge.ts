@@ -1,5 +1,11 @@
 import { type EdgeMarker, MarkerType } from '@xyflow/react';
-import type { Connector, ConnectorPath, ConnectorStyle, EdgePin } from '../types.ts';
+import type {
+  Connector,
+  ConnectorHeadShape,
+  ConnectorPath,
+  ConnectorStyle,
+  EdgePin,
+} from '../types.ts';
 import { colorTokenStyle } from './color-tokens.ts';
 
 export interface DerivedEdge {
@@ -35,8 +41,19 @@ export interface DerivedEdge {
     targetPin?: EdgePin;
     /** US-018: per-connector label font size in px (undefined → 11px). */
     fontSize?: number;
+    // Custom (non-arrow) head shape for EditableEdge to draw. Absent for the
+    // default arrow (which uses native markers) so the edge stays marker-driven.
+    headShape?: Exclude<ConnectorHeadShape, 'arrow'>;
+    /** Draw the custom head at the source end (mirrors a markerStart). */
+    headStart?: boolean;
+    /** Draw the custom head at the target end (mirrors a markerEnd). */
+    headEnd?: boolean;
   };
   style: { strokeDasharray?: string; stroke?: string; strokeWidth?: number; opacity?: number };
+  // Only the default 'arrow' head uses native React Flow markers. The custom
+  // shapes (database/diamond/circle) are drawn by EditableEdge via edge.data
+  // (headShape + headStart/headEnd) — see the `data` comment below — so these
+  // marker fields stay undefined for them.
   markerStart?: EdgeMarker;
   markerEnd?: EdgeMarker;
   selected?: boolean;
@@ -118,9 +135,20 @@ export const connectorToEdge = (
   // 'none'     → no arrows (plain line).
   const direction = connector.direction ?? 'forward';
   const markerColor = colorStyle.stroke;
+  // `headShape` decides the glyph; `direction` decides which ends carry it.
+  //   'forward' (or absent) → head at target only (historical behavior).
+  //   'backward' → head at source only.  'both' → both ends.  'none' → none.
+  const headShape = connector.headShape ?? 'arrow';
+  const hasStart = direction === 'backward' || direction === 'both';
+  const hasEnd = direction === 'forward' || direction === 'both';
+  // Only the default arrow uses native React Flow markers; custom shapes are
+  // drawn by EditableEdge (native markers can't live in React Flow's re-rendered
+  // edge svg reliably). Keep both paths mutually exclusive so a connector never
+  // renders a native arrow AND a custom glyph at the same end.
+  const isCustomHead = headShape !== 'arrow';
   const arrow = arrowMarker(markerColor);
-  const markerStart = direction === 'backward' || direction === 'both' ? arrow : undefined;
-  const markerEnd = direction === 'forward' || direction === 'both' ? arrow : undefined;
+  const markerStart = !isCustomHead && hasStart ? arrow : undefined;
+  const markerEnd = !isCustomHead && hasEnd ? arrow : undefined;
   const edge: DerivedEdge = {
     id: connector.id,
     source: connector.source,
@@ -137,6 +165,13 @@ export const connectorToEdge = (
       sourcePin: connector.sourcePin,
       targetPin: connector.targetPin,
       fontSize: connector.fontSize,
+      ...(isCustomHead
+        ? {
+            headShape: headShape as Exclude<ConnectorHeadShape, 'arrow'>,
+            headStart: hasStart,
+            headEnd: hasEnd,
+          }
+        : {}),
     },
     style,
     markerStart,
