@@ -54,6 +54,7 @@ import { useCanvasExport } from '../hooks/use-canvas-export.ts';
 import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { CanvasStudioProvider } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { connectorToEdge } from '../lib/connector-to-edge.ts';
 import {
   type Side,
@@ -1469,11 +1470,15 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
     let effectiveFromX = fromX;
     let effectiveFromY = fromY;
     let effectiveFromPosition = fromPosition;
+    // Hoisted so the moving-end block below can reuse the fixed (source) node's
+    // bbox to render the EXACT committed floating geometry for a new-connection
+    // preview (both endpoints via line-through-centers).
+    let fixedBox: { x: number; y: number; w: number; h: number } | null = null;
     if (fixedNode) {
       const fW = fixedNode.measured.width ?? fixedNode.width ?? 0;
       const fH = fixedNode.measured.height ?? fixedNode.height ?? 0;
       if (fW > 0 && fH > 0) {
-        const fixedBox = {
+        fixedBox = {
           x: fixedNode.internals.positionAbsolute.x,
           y: fixedNode.internals.positionAbsolute.y,
           w: fW,
@@ -1537,6 +1542,11 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
     let effectiveToX = toX;
     let effectiveToY = toY;
     let effectiveToPosition = toPosition;
+    // For a NEW connection over a target, the committed connector paints a
+    // closed arrow at the target (default direction='forward'). The first
+    // connection has no existing edge marker to reference, so we draw the head
+    // inline (see the return) — set when a target is identified below.
+    let drawTargetArrow = false;
     if (zoom > 0) {
       const bufferFlow = RECONNECT_BUFFER_PX / zoom;
       // Node id to exclude from the snap targets:
@@ -1599,27 +1609,37 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
         const w = bestNode.measured.width ?? bestNode.width ?? 0;
         const h = bestNode.measured.height ?? bestNode.height ?? 0;
         if (w > 0 && h > 0) {
-          const projectedPin = projectCursorToPerimeter(
-            {
-              x: bestNode.internals.positionAbsolute.x,
-              y: bestNode.internals.positionAbsolute.y,
-              w,
-              h,
-            },
-            { x: toX, y: toY },
-          );
-          const projectedEndpoint = endpointFromPin(
-            {
-              x: bestNode.internals.positionAbsolute.x,
-              y: bestNode.internals.positionAbsolute.y,
-              w,
-              h,
-            },
-            projectedPin,
-          );
+          const targetBox = {
+            x: bestNode.internals.positionAbsolute.x,
+            y: bestNode.internals.positionAbsolute.y,
+            w,
+            h,
+          };
+          // Moving (target) end: project the cursor onto the target perimeter.
+          // This matches the committed connector exactly — a body-drop pins the
+          // target at this same projection (onConnectEndCb), and a reconnect
+          // drop pins its moving end the same way. So the preview never jumps
+          // here on release.
+          const projectedPin = projectCursorToPerimeter(targetBox, { x: toX, y: toY });
+          const projectedEndpoint = endpointFromPin(targetBox, projectedPin);
           effectiveToX = projectedEndpoint.x;
           effectiveToY = projectedEndpoint.y;
           effectiveToPosition = POSITION_BY_SIDE_LINE[projectedEndpoint.side];
+          // Fixed (source) end of a NEW connection: the committed connector
+          // floats the source (line-through-centers toward the target — see
+          // resolveEdgeEndpoints / onCreateConnector), but xyflow's `fromX/Y`
+          // points at the grabbed handle. Float it the moment a target node is
+          // identified so the preview source sits at the SMART face (matching
+          // the final), instead of jumping from the handle to that face on
+          // release. Reconnect already anchors its fixed end above.
+          if (!reconnectingEdge && fixedBox) {
+            const tCenter = { x: targetBox.x + targetBox.w / 2, y: targetBox.y + targetBox.h / 2 };
+            const src = getNodeIntersection(fixedBox, tCenter);
+            effectiveFromX = src.x;
+            effectiveFromY = src.y;
+            effectiveFromPosition = POSITION_BY_SIDE_LINE[src.side];
+            drawTargetArrow = true;
+          }
         }
       }
     }
@@ -1642,7 +1662,16 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
           targetY: effectiveToY,
           targetPosition: effectiveToPosition,
         });
-    const style = reconnectingEdge?.style ?? connectionLineStyle ?? undefined;
+    // Style precedence: a reconnect drag inherits the live edge's style; a new
+    // connection mirrors the committed default connector (stroke = default edge
+    // color token, width 2 — matching connectorToEdge) so the preview doesn't
+    // re-style on release. Fall back to xyflow's default only when neither
+    // applies (e.g. the first mousedown frame before a source is resolved).
+    const newConnectStyle =
+      !reconnectingEdge && fixedNode
+        ? { ...colorTokenStyle(undefined, 'edge'), strokeWidth: 2 }
+        : undefined;
+    const style = reconnectingEdge?.style ?? newConnectStyle ?? connectionLineStyle ?? undefined;
     // Mirror the committed edge's arrow markers onto the in-flight line so
     // the connector keeps its arrowhead while the user drags an outlet.
     // xyflow generates the marker URL as `url('#${markerId}')` where
@@ -1673,18 +1702,56 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
       : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
+    // Inline closed-arrow head for a NEW connection's target end — the committed
+    // connector stamps a native ArrowClosed marker there, but the first
+    // connection has no edge marker in the DOM yet, so we draw an equivalent
+    // triangle pointing into the target along `effectiveToPosition`. Tuned to
+    // match `arrowMarker`'s 18px ArrowClosed.
+    const arrowFill = (style as { stroke?: string } | undefined)?.stroke;
+    const arrowPoints =
+      drawTargetArrow && arrowFill
+        ? buildConnectionArrowPoints(effectiveToX, effectiveToY, effectiveToPosition)
+        : null;
     return (
-      <path
-        d={path}
-        fill="none"
-        className="react-flow__connection-path"
-        style={style}
-        markerStart={markerStartUrl}
-        markerEnd={markerEndUrl}
-      />
+      <>
+        <path
+          d={path}
+          fill="none"
+          className="react-flow__connection-path"
+          style={style}
+          markerStart={markerStartUrl}
+          markerEnd={markerEndUrl}
+        />
+        {arrowPoints ? <polygon points={arrowPoints} fill={arrowFill ?? undefined} /> : null}
+      </>
     );
   };
 };
+
+// Closed-arrow triangle pointing INTO the node along `position` (the side of
+// the target the line attaches to). Tip at the endpoint, base trailing back
+// along the outward normal. Sized to read like `arrowMarker`'s 18px head.
+const ARROW_LEN = 11;
+const ARROW_HALF = 5.5;
+function buildConnectionArrowPoints(x: number, y: number, position: Position): string {
+  // Inward unit vector (where the arrow points) per attach side.
+  const inward =
+    position === Position.Left
+      ? { x: 1, y: 0 }
+      : position === Position.Right
+        ? { x: -1, y: 0 }
+        : position === Position.Top
+          ? { x: 0, y: 1 }
+          : { x: 0, y: -1 };
+  const perp = { x: -inward.y, y: inward.x };
+  const baseX = x - inward.x * ARROW_LEN;
+  const baseY = y - inward.y * ARROW_LEN;
+  const b1x = baseX + perp.x * ARROW_HALF;
+  const b1y = baseY + perp.y * ARROW_HALF;
+  const b2x = baseX - perp.x * ARROW_HALF;
+  const b2y = baseY - perp.y * ARROW_HALF;
+  return `${x},${y} ${b1x},${b1y} ${b2x},${b2y}`;
+}
 
 // Map from our floating-edge Side type to React Flow's Position enum,
 // local to the connection-line component so it doesn't have to import

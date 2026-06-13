@@ -304,6 +304,76 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(root).toHaveScreenshot('connector-head-shapes.png', { maxDiffPixelRatio: 0.02 });
   });
 
+  // Regression: a new-connection drag-preview must render the SAME geometry the
+  // committed connector lands on — the source floats to the smart face (not the
+  // grabbed handle) and the target lands at the cursor projection — so the
+  // connector doesn't visibly jump/re-render on release. Asserts the in-flight
+  // `.react-flow__connection-path` `d` equals the committed `.react-flow__edge-path` `d`.
+  test('new-connection preview matches the committed connector (no jump)', async ({
+    page,
+    studio,
+  }) => {
+    // B sits up-and-right of A, so the smart source face (top/right) differs
+    // from the grabbed right handle — exercising the source-float fix.
+    const resolvedFlow = {
+      version: 2 as const,
+      name: 'Connect Preview',
+      nodes: [
+        { id: 'A', type: 'rectangle' as const, position: { x: 120, y: 360 }, data: { name: 'A' } },
+        { id: 'B', type: 'rectangle' as const, position: { x: 520, y: 60 }, data: { name: 'B' } },
+      ],
+      connectors: [],
+    };
+    const registered = await registerFlow(studio.studio, 'connect-preview', resolvedFlow, {
+      name: 'Connect Preview',
+    });
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await waitForCanvasSettled(page);
+
+    // Select A so its source handles render, then drag from A's right handle to B.
+    const aBox = await page.locator('.react-flow__node[data-id="A"]').boundingBox();
+    const bBox = await page.locator('.react-flow__node[data-id="B"]').boundingBox();
+    if (!aBox || !bBox) throw new Error('node boxes missing');
+    await page.mouse.click(aBox.x + 40, aBox.y + aBox.height / 2);
+    await page.waitForTimeout(150);
+    const handleBox = await page
+      .locator('.react-flow__node[data-id="A"] .react-flow__handle.source.react-flow__handle-right')
+      .boundingBox();
+    if (!handleBox) throw new Error('source handle missing');
+    const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+    const drop = { x: bBox.x + 30, y: bBox.y + bBox.height / 2 };
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 14, start.y - 8, { steps: 4 });
+    await page.mouse.move(drop.x, drop.y, { steps: 16 });
+    await page.waitForTimeout(120);
+    // String-form eval: the studio e2e tsconfig omits the DOM lib, so a
+    // function callback referencing `document` would fail typecheck (same
+    // reason waitForCanvasSettled uses a string).
+    const dMid = (await page.evaluate(
+      "document.querySelector('.react-flow__connection-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+    await page.mouse.up();
+    await waitForCanvasSettled(page);
+    await page.waitForTimeout(150);
+    const dFinal = (await page.evaluate(
+      "document.querySelector('.react-flow__edge-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+
+    expect(dMid).not.toBeNull();
+    expect(dFinal).not.toBeNull();
+    // The preview path and the committed path are byte-identical — no re-render
+    // jump. (Before the fix the preview started at the grabbed right handle
+    // while the committed source floated to A's top face.)
+    expect(dMid).toBe(dFinal);
+    // The committed connector exists.
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  });
+
   test('draw-mode database creates a node with type:database', async ({ page, studio }) => {
     const resolvedFlow = {
       version: 2 as const,
