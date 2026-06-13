@@ -55,7 +55,7 @@ import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { CanvasStudioProvider } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
-import { connectorToEdge } from '../lib/connector-to-edge.ts';
+import { STYLE_BY_NAME, connectorToEdge } from '../lib/connector-to-edge.ts';
 import {
   type Side,
   endpointFromPin,
@@ -1412,6 +1412,18 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
       isReconnectingRef.current ? (s.edges.find((e) => e.reconnectable === true) ?? null) : null,
     );
     const data = reconnectingEdge?.data as EditableEdgeData | undefined;
+    // New-connection preview: the committed connector inherits the host's
+    // last-used connector style — demo-view's onCreateConnector spreads the
+    // SAME `getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector` over every new
+    // connector. Read it here so the in-flight preview renders the SAME path
+    // type (curve vs step), stroke color, dash, width, and arrow ends the
+    // connector will land on. Without this the preview is hardcoded to a bezier
+    // curve while a step-defaulted connector commits as a zigzag — the connector
+    // visibly "re-renders"/jumps the moment the mouse is released. Null for a
+    // reconnect drag, which already inherits the live edge's style/data below.
+    const newConnectorDefaults = reconnectingEdge
+      ? null
+      : getLastUsedStyle(DEFAULT_STORAGE_PREFIX).connector;
     // "NEVER move the other outlet" — during the reconnect drag itself.
     // React Flow's stored `fromX, fromY` for the fixed end is the handle's
     // cardinal position (top/right/bottom/left center), not the floating-
@@ -1537,26 +1549,51 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
     //     perimeter; the line's `to` should snap to the same node's
     //     perimeter at the cursor projection.
     const zoom = useStore((s) => s.transform[2]);
+    const panX = useStore((s) => s.transform[0]);
+    const panY = useStore((s) => s.transform[1]);
     const nodeMap = useStore((s) => s.nodeLookup);
     const xyflowToNodeId = useStore((s) => s.connection.toHandle?.nodeId ?? null);
+    // Raw, UNSNAPPED cursor in screen (container-relative) coords. xyflow keeps
+    // `connection.pointer` at the true pointer position even when it snaps
+    // `connection.to` (delivered here as `toX/toY`) to a nearby handle's cardinal
+    // center — which it does whenever the moving end hovers near the target
+    // node's own handles (every reconnect/move drag). The committed connector
+    // projects the raw cursor (`screenToFlowPosition` in onConnect/onReconnect
+    // End), so the preview must project the raw cursor too or the previewed
+    // target FACE (e.g. left handle center) diverges from the committed face
+    // (raw cursor, e.g. bottom) — the connector visibly jumps on release.
+    const pointerScreenX = useStore((s) => s.connection.pointer?.x ?? null);
+    const pointerScreenY = useStore((s) => s.connection.pointer?.y ?? null);
+    // Convert the screen-space pointer into flow space exactly as
+    // `screenToFlowPosition` does: subtract the viewport translation, divide by
+    // zoom. Equals `toX/toY` when xyflow didn't snap (new-connection drags),
+    // and the true cursor (not the snapped handle) when it did (reconnects).
+    const cursorFlowX = pointerScreenX !== null && zoom > 0 ? (pointerScreenX - panX) / zoom : null;
+    const cursorFlowY = pointerScreenY !== null && zoom > 0 ? (pointerScreenY - panY) / zoom : null;
     let effectiveToX = toX;
     let effectiveToY = toY;
     let effectiveToPosition = toPosition;
-    // For a NEW connection over a target, the committed connector paints a
-    // closed arrow at the target (default direction='forward'). The first
-    // connection has no existing edge marker to reference, so we draw the head
-    // inline (see the return) — set when a target is identified below.
-    let drawTargetArrow = false;
+    // True once a NEW connection's drag is over (or buffered-near) a commit
+    // target. The committed connector paints its head(s) per `direction`; the
+    // first connection has no edge marker in the DOM yet, so we draw the head(s)
+    // inline (see the return) gated on this flag.
+    let targetIdentified = false;
     if (zoom > 0) {
       const bufferFlow = RECONNECT_BUFFER_PX / zoom;
-      // Node id to exclude from the snap targets:
-      //   - reconnect: the other endpoint's node (self-loop guard)
-      //   - new connect: nothing extra beyond the source itself, which is
-      //     fixedNode (handled by the snap-onto-own-fixed branch below)
+      // Node id to exclude from the snap targets — the ANCHORED (fixed) end's
+      // node, because dropping the MOVING end there would make source === target
+      // (a self-loop), which onReconnectEndCb rejects. Critically this is the
+      // fixed end's node, NOT the moving end's own node: the user routinely
+      // re-pins an endpoint to a different face of the SAME node it's already on
+      // (onReconnectEndCb's 'pin-own' path), so the moving end's own node MUST
+      // stay a valid snap target or the preview can't follow the cursor around
+      // its perimeter while the commit does — the exact left-face-preview vs
+      // bottom-face-commit jump this fixes. New connections exclude nothing
+      // extra here; their source is skipped via the `fixedNode` guard below.
       const excludeNodeId = reconnectingEdge
         ? fixedNodeIsSource
-          ? reconnectingEdge.target
-          : reconnectingEdge.source
+          ? reconnectingEdge.source
+          : reconnectingEdge.target
         : null;
       let bestNode: typeof fixedNode = null;
       // Path (a): xyflow's own handle-proximity snap. Takes precedence
@@ -1589,22 +1626,9 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
           }
         }
       }
-      // Snap onto fixed-end's own node is allowed for reconnect drag
-      // (pin-own gesture). For new connect, dropping back on the source
-      // is rejected by onConnectEndCb so we deliberately don't preview
-      // such a snap.
-      if (!bestNode && reconnectingEdge && fixedNode) {
-        const w = fixedNode.measured.width ?? fixedNode.width ?? 0;
-        const h = fixedNode.measured.height ?? fixedNode.height ?? 0;
-        if (w > 0 && h > 0) {
-          const x = fixedNode.internals.positionAbsolute.x;
-          const y = fixedNode.internals.positionAbsolute.y;
-          const dx = Math.max(x - toX, 0, toX - (x + w));
-          const dy = Math.max(y - toY, 0, toY - (y + h));
-          const dist = Math.hypot(dx, dy);
-          if (dist <= bufferFlow) bestNode = fixedNode;
-        }
-      }
+      // (The moving end's OWN-node re-pin is now handled by the scan above —
+      // its node is no longer excluded. We deliberately do NOT snap onto the
+      // anchored `fixedNode`: that would preview a self-loop the commit rejects.)
       if (bestNode) {
         const w = bestNode.measured.width ?? bestNode.width ?? 0;
         const h = bestNode.measured.height ?? bestNode.height ?? 0;
@@ -1615,12 +1639,18 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
             w,
             h,
           };
-          // Moving (target) end: project the cursor onto the target perimeter.
-          // This matches the committed connector exactly — a body-drop pins the
-          // target at this same projection (onConnectEndCb), and a reconnect
-          // drop pins its moving end the same way. So the preview never jumps
-          // here on release.
-          const projectedPin = projectCursorToPerimeter(targetBox, { x: toX, y: toY });
+          // Moving (target) end: project the RAW cursor onto the target
+          // perimeter so the previewed face matches the committed pin exactly
+          // (both project the same cursor via projectCursorToPerimeter). Prefer
+          // the unsnapped `cursorFlow` (from connection.pointer) over xyflow's
+          // `toX/toY`, which it snaps to a handle's cardinal center near the
+          // target's handles — that snap is what made a reconnect preview land
+          // on the LEFT face while the commit pinned the BOTTOM face.
+          const cursorFlow =
+            cursorFlowX !== null && cursorFlowY !== null
+              ? { x: cursorFlowX, y: cursorFlowY }
+              : { x: toX, y: toY };
+          const projectedPin = projectCursorToPerimeter(targetBox, cursorFlow);
           const projectedEndpoint = endpointFromPin(targetBox, projectedPin);
           effectiveToX = projectedEndpoint.x;
           effectiveToY = projectedEndpoint.y;
@@ -1638,12 +1668,12 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
             effectiveFromX = src.x;
             effectiveFromY = src.y;
             effectiveFromPosition = POSITION_BY_SIDE_LINE[src.side];
-            drawTargetArrow = true;
+            targetIdentified = true;
           }
         }
       }
     }
-    const isStep = data?.path === 'step';
+    const isStep = reconnectingEdge ? data?.path === 'step' : newConnectorDefaults?.path === 'step';
     const [path] = isStep
       ? getSmoothStepPath({
           sourceX: effectiveFromX,
@@ -1663,13 +1693,20 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
           targetPosition: effectiveToPosition,
         });
     // Style precedence: a reconnect drag inherits the live edge's style; a new
-    // connection mirrors the committed default connector (stroke = default edge
-    // color token, width 2 — matching connectorToEdge) so the preview doesn't
-    // re-style on release. Fall back to xyflow's default only when neither
+    // connection mirrors the committed connector's style EXACTLY by running the
+    // same derivation `connectorToEdge` applies to the last-used connector —
+    // dash pattern (`style`), stroke color token (`color`), and width
+    // (`borderSize ?? 2`). Mirroring all three means the preview doesn't
+    // re-style on release even when the user's last connector was, say, a thick
+    // dashed orange step edge. Fall back to xyflow's default only when neither
     // applies (e.g. the first mousedown frame before a source is resolved).
     const newConnectStyle =
       !reconnectingEdge && fixedNode
-        ? { ...colorTokenStyle(undefined, 'edge'), strokeWidth: 2 }
+        ? {
+            ...(newConnectorDefaults?.style ? STYLE_BY_NAME[newConnectorDefaults.style] : {}),
+            ...colorTokenStyle(newConnectorDefaults?.color, 'edge'),
+            strokeWidth: newConnectorDefaults?.borderSize ?? 2,
+          }
         : undefined;
     const style = reconnectingEdge?.style ?? newConnectStyle ?? connectionLineStyle ?? undefined;
     // Mirror the committed edge's arrow markers onto the in-flight line so
@@ -1702,15 +1739,26 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
       : reconnectingEdge?.markerStart;
     const markerStartUrl = makeMarkerUrl(orientedMarkerStart, rfId);
     const markerEndUrl = makeMarkerUrl(orientedMarkerEnd, rfId);
-    // Inline closed-arrow head for a NEW connection's target end — the committed
-    // connector stamps a native ArrowClosed marker there, but the first
-    // connection has no edge marker in the DOM yet, so we draw an equivalent
-    // triangle pointing into the target along `effectiveToPosition`. Tuned to
-    // match `arrowMarker`'s 18px ArrowClosed.
+    // Inline closed-arrow head(s) for a NEW connection — the committed connector
+    // stamps native ArrowClosed markers, but the first connection has no edge
+    // marker in the DOM yet, so we draw equivalent triangles pointing into the
+    // node(s) along the attach side. Which ends carry a head, and whether they
+    // do at all, mirror `connectorToEdge`'s `direction`/`headShape` rules:
+    //   forward (default) → target end · backward → source end · both → both ·
+    //   none → neither. Custom (non-arrow) head shapes are drawn as glyphs by
+    //   EditableEdge on the committed edge; the preview omits them (the glyph
+    //   pops in on release) rather than draw a wrong-shaped arrow.
     const arrowFill = (style as { stroke?: string } | undefined)?.stroke;
-    const arrowPoints =
-      drawTargetArrow && arrowFill
+    const newDirection = newConnectorDefaults?.direction ?? 'forward';
+    const newHeadIsArrow = (newConnectorDefaults?.headShape ?? 'arrow') === 'arrow';
+    const drawHeads = targetIdentified && newHeadIsArrow && Boolean(arrowFill);
+    const targetArrowPoints =
+      drawHeads && (newDirection === 'forward' || newDirection === 'both')
         ? buildConnectionArrowPoints(effectiveToX, effectiveToY, effectiveToPosition)
+        : null;
+    const sourceArrowPoints =
+      drawHeads && (newDirection === 'backward' || newDirection === 'both')
+        ? buildConnectionArrowPoints(effectiveFromX, effectiveFromY, effectiveFromPosition)
         : null;
     return (
       <>
@@ -1722,7 +1770,12 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
           markerStart={markerStartUrl}
           markerEnd={markerEndUrl}
         />
-        {arrowPoints ? <polygon points={arrowPoints} fill={arrowFill ?? undefined} /> : null}
+        {targetArrowPoints ? (
+          <polygon points={targetArrowPoints} fill={arrowFill ?? undefined} />
+        ) : null}
+        {sourceArrowPoints ? (
+          <polygon points={sourceArrowPoints} fill={arrowFill ?? undefined} />
+        ) : null}
       </>
     );
   };

@@ -374,6 +374,150 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(page.locator('.react-flow__edge')).toHaveCount(1);
   });
 
+  // Regression: a new-connection drag-preview must render the SAME PATH TYPE the
+  // committed connector inherits from the host's last-used connector style.
+  // The committed connector spreads `getLastUsedStyle(...).connector` (so a
+  // last-used `path: 'step'` makes the new connector a zigzag), but the preview
+  // used to hardcode a bezier curve — the connector visibly "re-rendered" from a
+  // smooth curve to a step zigzag the instant the mouse was released. Asserts the
+  // in-flight preview is a step path AND byte-identical to the committed edge.
+  test('new-connection preview matches a step-path connector (no curve→zigzag jump)', async ({
+    page,
+    studio,
+  }) => {
+    const resolvedFlow = {
+      version: 2 as const,
+      name: 'Connect Preview Step',
+      nodes: [
+        { id: 'A', type: 'rectangle' as const, position: { x: 120, y: 360 }, data: { name: 'A' } },
+        { id: 'B', type: 'rectangle' as const, position: { x: 520, y: 60 }, data: { name: 'B' } },
+      ],
+      connectors: [],
+    };
+    const registered = await registerFlow(studio.studio, 'connect-preview-step', resolvedFlow, {
+      name: 'Connect Preview Step',
+    });
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await waitForCanvasSettled(page);
+    // Remember a step-path connector style so the next created connector commits
+    // as a zigzag. String-form eval: the e2e tsconfig omits the DOM lib, so a
+    // function callback referencing `localStorage` would fail typecheck.
+    await page.evaluate(
+      "localStorage.setItem('seeflow:last-used-style:v1', JSON.stringify({ node: {}, connector: { path: 'step' } }))",
+    );
+
+    const aBox = await page.locator('.react-flow__node[data-id="A"]').boundingBox();
+    const bBox = await page.locator('.react-flow__node[data-id="B"]').boundingBox();
+    if (!aBox || !bBox) throw new Error('node boxes missing');
+    await page.mouse.click(aBox.x + 40, aBox.y + aBox.height / 2);
+    await page.waitForTimeout(150);
+    const handleBox = await page
+      .locator('.react-flow__node[data-id="A"] .react-flow__handle.source.react-flow__handle-right')
+      .boundingBox();
+    if (!handleBox) throw new Error('source handle missing');
+    const start = { x: handleBox.x + handleBox.width / 2, y: handleBox.y + handleBox.height / 2 };
+    const drop = { x: bBox.x + 30, y: bBox.y + bBox.height / 2 };
+
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x + 14, start.y - 8, { steps: 4 });
+    await page.mouse.move(drop.x, drop.y, { steps: 16 });
+    await page.waitForTimeout(120);
+    const dMid = (await page.evaluate(
+      "document.querySelector('.react-flow__connection-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+    await page.mouse.up();
+    await waitForCanvasSettled(page);
+    await page.waitForTimeout(150);
+    const dFinal = (await page.evaluate(
+      "document.querySelector('.react-flow__edge-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+
+    expect(dMid).not.toBeNull();
+    expect(dFinal).not.toBeNull();
+    // Step (smoothstep) paths use L/Q commands and never a cubic-bezier `C`.
+    // Before the fix the preview was a bezier (`C`) while the commit was a step.
+    expect(dMid).not.toContain('C');
+    expect(dFinal).not.toContain('C');
+    // Byte-identical — the preview is already the committed zigzag.
+    expect(dMid).toBe(dFinal);
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  });
+
+  // Regression: moving (reconnecting) an endpoint to a different face of the
+  // SAME node must preview the exact face the commit pins. The preview used to
+  // exclude the moving end's own node from its snap scan, so the projection was
+  // skipped and the in-flight endpoint stuck on xyflow's snapped handle (e.g.
+  // the LEFT face) while onReconnectEndCb's 'pin-own' path projected the raw
+  // cursor (e.g. the BOTTOM face) — the connector jumped on release. Asserts the
+  // in-flight preview is byte-identical to the committed edge after a same-node
+  // target re-pin.
+  test('endpoint re-pin preview matches the committed connector (same-node move)', async ({
+    page,
+    studio,
+  }) => {
+    const resolvedFlow = {
+      version: 2 as const,
+      name: 'Repin Preview',
+      nodes: [
+        { id: 'A', type: 'rectangle' as const, position: { x: 120, y: 340 }, data: { name: 'A' } },
+        { id: 'B', type: 'rectangle' as const, position: { x: 620, y: 340 }, data: { name: 'B' } },
+      ],
+      connectors: [
+        {
+          id: 'c1',
+          source: 'A',
+          target: 'B',
+          path: 'step' as const,
+          targetPin: { side: 'left' as const, t: 0.5 },
+        },
+      ],
+    };
+    const registered = await registerFlow(studio.studio, 'repin-preview', resolvedFlow, {
+      name: 'Repin Preview',
+    });
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await waitForCanvasSettled(page);
+
+    // Select the edge so its endpoint reconnect dots render.
+    await page.locator('.react-flow__edge').first().click({ force: true });
+    await page.waitForTimeout(200);
+    const dotBox = await page.locator('[data-testid="edge-endpoint-target-c1"]').boundingBox();
+    const bBox = await page.locator('.react-flow__node[data-id="B"]').boundingBox();
+    if (!dotBox || !bBox) throw new Error('endpoint dot or node box missing');
+    const grab = { x: dotBox.x + dotBox.width / 2, y: dotBox.y + dotBox.height / 2 };
+    // Drag the target endpoint from B's left face down to B's bottom face.
+    const drop = { x: bBox.x + bBox.width / 2, y: bBox.y + bBox.height - 6 };
+
+    await page.mouse.move(grab.x, grab.y);
+    await page.mouse.down();
+    await page.mouse.move(grab.x + 4, grab.y + 12, { steps: 4 });
+    await page.mouse.move(drop.x, drop.y, { steps: 20 });
+    await page.waitForTimeout(120);
+    const dMid = (await page.evaluate(
+      "document.querySelector('.react-flow__connection-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+    await page.mouse.up();
+    await waitForCanvasSettled(page);
+    await page.waitForTimeout(150);
+    const dFinal = (await page.evaluate(
+      "document.querySelector('.react-flow__edge-path')?.getAttribute('d') ?? null",
+    )) as string | null;
+
+    expect(dMid).not.toBeNull();
+    expect(dFinal).not.toBeNull();
+    // Byte-identical — the previewed re-pin face equals the committed face.
+    expect(dMid).toBe(dFinal);
+    // Still exactly one connector (re-pin, not a new/duplicate edge).
+    await expect(page.locator('.react-flow__edge')).toHaveCount(1);
+  });
+
   test('draw-mode database creates a node with type:database', async ({ page, studio }) => {
     const resolvedFlow = {
       version: 2 as const,

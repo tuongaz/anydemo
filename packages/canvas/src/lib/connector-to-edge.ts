@@ -76,7 +76,10 @@ const arrowMarker = (color?: string): EdgeMarker => ({
   ...(color ? { color } : {}),
 });
 
-const STYLE_BY_NAME: Record<ConnectorStyle, { strokeDasharray?: string }> = {
+// Exported so the in-flight connection-line preview (seeflow-canvas.tsx) can
+// mirror the committed connector's dash pattern without re-deriving the map —
+// keeping the new-connection preview byte-identical to what commits on release.
+export const STYLE_BY_NAME: Record<ConnectorStyle, { strokeDasharray?: string }> = {
   solid: {},
   dashed: { strokeDasharray: '6 4' },
   dotted: { strokeDasharray: '2 4' },
