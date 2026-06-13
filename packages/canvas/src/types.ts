@@ -317,8 +317,10 @@ export interface ConnectorBase {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
-  /** Glyph drawn at the active arrow ends (per `direction`). Absent ⇒ 'arrow'. */
+  /** Glyph at the target (head) end (per `direction`). Absent ⇒ 'arrow'. */
   headShape?: ConnectorHeadShape;
+  /** Glyph at the source (tail) end. Absent ⇒ falls back to `headShape`. */
+  tailShape?: ConnectorHeadShape;
   fontSize?: number;
 }
 

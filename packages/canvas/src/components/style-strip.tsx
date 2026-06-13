@@ -69,8 +69,10 @@ export interface ConnectorStylePatch {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
-  /** Head glyph drawn at the active arrow ends (per `direction`). */
+  /** Glyph at the target (head) end (per `direction`). */
   headShape?: ConnectorHeadShape;
+  /** Glyph at the source (tail) end. Absent ⇒ falls back to `headShape`. */
+  tailShape?: ConnectorHeadShape;
   /** US-018: per-connector label font size (mirrors NodeStylePatch.fontSize). */
   fontSize?: number;
 }
@@ -276,6 +278,15 @@ export function StyleStrip({
   const directionActive = (firstConnector?.direction ?? 'forward') as ConnectorDirection;
   const pathActive = (firstConnector?.path ?? 'curve') as ConnectorPath;
   const headShapeActive = (firstConnector?.headShape ?? 'arrow') as ConnectorHeadShape;
+  // Tail (source end) falls back to the head shape when unset — matches the
+  // connector-to-edge rendering rule so the toggle reflects what's drawn.
+  const tailShapeActive = (firstConnector?.tailShape ??
+    firstConnector?.headShape ??
+    'arrow') as ConnectorHeadShape;
+  // Each end only carries a glyph when `direction` points through it: the head
+  // (target) for forward/both, the tail (source) for backward/both.
+  const headEndActive = directionActive === 'forward' || directionActive === 'both';
+  const tailEndActive = directionActive === 'backward' || directionActive === 'both';
 
   // Apply helpers — fan out a single user pick to every selected entity.
   // For "shared" properties on mixed selections, both fan-outs run.
@@ -397,6 +408,9 @@ export function StyleStrip({
   };
   const applyConnectorHeadShape = (headShape: ConnectorHeadShape) => {
     for (const c of connectors) onStyleConnector(c.id, { headShape });
+  };
+  const applyConnectorTailShape = (tailShape: ConnectorHeadShape) => {
+    for (const c of connectors) onStyleConnector(c.id, { tailShape });
   };
   // US-014: type:'icon' stroke color writes to data.color via the same
   // onStyleNode path the geometric color picker uses — no new update plumbing.
@@ -789,14 +803,12 @@ export function StyleStrip({
                 </PopoverSection>
               ) : null}
               {pureConnector ? (
-                // Head shape only applies to ends that carry a head — disabled
-                // when direction is 'none' (no heads to shape).
+                // Head shape styles the TARGET end — only carried when the
+                // direction points at it (forward/both).
                 <PopoverSection label="Head shape" testId="style-strip-head-shape">
                   <div
-                    className={cn(
-                      directionActive === 'none' && 'sf:pointer-events-none sf:opacity-40',
-                    )}
-                    aria-disabled={directionActive === 'none'}
+                    className={cn(!headEndActive && 'sf:pointer-events-none sf:opacity-40')}
+                    aria-disabled={!headEndActive}
                   >
                     <IconToggleGroup<ConnectorHeadShape>
                       ariaLabel="Connector head shape"
@@ -805,9 +817,31 @@ export function StyleStrip({
                       options={HEAD_SHAPE_OPTIONS}
                     />
                   </div>
-                  {directionActive === 'none' ? (
+                  {!headEndActive ? (
                     <p className="sf:mt-2 sf:text-[11px] sf:text-muted-foreground">
-                      Set a direction to show heads.
+                      Point the direction forward to show a head.
+                    </p>
+                  ) : null}
+                </PopoverSection>
+              ) : null}
+              {pureConnector ? (
+                // Tail shape styles the SOURCE end — only carried when the
+                // direction points back at it (backward/both).
+                <PopoverSection label="Tail shape" testId="style-strip-tail-shape">
+                  <div
+                    className={cn(!tailEndActive && 'sf:pointer-events-none sf:opacity-40')}
+                    aria-disabled={!tailEndActive}
+                  >
+                    <IconToggleGroup<ConnectorHeadShape>
+                      ariaLabel="Connector tail shape"
+                      value={tailShapeActive}
+                      onChange={applyConnectorTailShape}
+                      options={HEAD_SHAPE_OPTIONS}
+                    />
+                  </div>
+                  {!tailEndActive ? (
+                    <p className="sf:mt-2 sf:text-[11px] sf:text-muted-foreground">
+                      Point the direction backward (or both) to show a tail.
                     </p>
                   ) : null}
                 </PopoverSection>

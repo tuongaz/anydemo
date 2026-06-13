@@ -62,6 +62,33 @@ describe('mergeFlowAndStyle', () => {
     expect(resolved.connectors[0]).toMatchObject({ headShape: 'many', direction: 'forward' });
   });
 
+  it('round-trips connector tailShape through the style overlay (splitFlow → merge)', () => {
+    // tailShape is a visual field like headShape — it must route to
+    // style.connectors and survive the merge back onto the resolved connector.
+    const { flow, style } = splitFlow({
+      version: 2,
+      name: 'T',
+      nodes: [
+        { id: 'a', type: 'rectangle', data: {} },
+        { id: 'b', type: 'rectangle', data: {} },
+      ],
+      connectors: [
+        {
+          id: 'c',
+          source: 'a',
+          target: 'b',
+          headShape: 'many',
+          tailShape: 'one',
+          direction: 'both',
+        },
+      ],
+    });
+    expect((flow.connectors as Array<Record<string, unknown>>)[0]).not.toHaveProperty('tailShape');
+    expect((style.connectors as Record<string, Record<string, unknown>>).c?.tailShape).toBe('one');
+    const resolved = mergeFlowAndStyle(flow as unknown as Flow, style as unknown as Style);
+    expect(resolved.connectors[0]).toMatchObject({ headShape: 'many', tailShape: 'one' });
+  });
+
   it('spreads connector handles + visual fields onto the connector', () => {
     const flow: Flow = {
       version: 2,

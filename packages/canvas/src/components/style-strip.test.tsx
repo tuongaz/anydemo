@@ -751,6 +751,17 @@ describe('StyleStrip — connector path merge + head shape', () => {
     return toggle;
   }
 
+  function findTailToggle(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-tail-shape'));
+    if (!section) throw new Error('tail-shape section missing');
+    const toggle = findElement(section, (el) => {
+      const p = el.props as { ariaLabel?: string };
+      return p.ariaLabel === 'Connector tail shape';
+    });
+    if (!toggle) throw new Error('tail-shape toggle missing');
+    return toggle;
+  }
+
   it('no longer renders a standalone Connector-path popover button', () => {
     const tree = callStrip({ nodes: [], connectors: [conn()] });
     // The Path section moved INSIDE the Connector popover; there is no
@@ -831,5 +842,51 @@ describe('StyleStrip — connector path merge + head shape', () => {
       (el) => (el.props as { 'aria-disabled'?: boolean })['aria-disabled'] === true,
     );
     expect(disabledWrap).not.toBeNull();
+  });
+
+  it("defaults the tail-shape toggle to the head shape ('arrow' when unset)", () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ headShape: 'diamond' })] });
+    // Tail mirrors the head when it has no explicit shape of its own.
+    expect((findTailToggle(tree).props as { value?: string }).value).toBe('diamond');
+  });
+
+  it('reflects an explicit tailShape as the active value', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn({ tailShape: 'one' })] });
+    expect((findTailToggle(tree).props as { value?: string }).value).toBe('one');
+  });
+
+  it('picking a tail shape fans out to every selected connector', () => {
+    const onStyleConnector = mock(() => {});
+    const tree = callStrip({
+      nodes: [],
+      connectors: [conn({ id: 'c1' }), conn({ id: 'c2' })],
+      onStyleConnector,
+    });
+    (
+      findTailToggle(tree).props as {
+        onChange: (s: 'arrow' | 'one' | 'many' | 'optional-many' | 'diamond' | 'circle') => void;
+      }
+    ).onChange('one');
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { tailShape: 'one' });
+    expect(onStyleConnector).toHaveBeenCalledWith('c2', { tailShape: 'one' });
+  });
+
+  it('enables the tail-shape section for backward/both and disables it otherwise', () => {
+    const disabledFor = (direction: 'forward' | 'backward' | 'both' | 'none') => {
+      const tree = callStrip({ nodes: [], connectors: [conn({ direction })] });
+      const section = findElement(tree, testIdEquals('style-strip-tail-shape'));
+      if (!section) throw new Error('tail-shape section missing');
+      return (
+        findElement(
+          section,
+          (el) => (el.props as { 'aria-disabled'?: boolean })['aria-disabled'] === true,
+        ) !== null
+      );
+    };
+    // Tail only carries a glyph when the direction points back at the source.
+    expect(disabledFor('backward')).toBe(false);
+    expect(disabledFor('both')).toBe(false);
+    expect(disabledFor('forward')).toBe(true);
+    expect(disabledFor('none')).toBe(true);
   });
 });

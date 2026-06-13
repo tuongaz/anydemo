@@ -1750,14 +1750,20 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
     //   pops in on release) rather than draw a wrong-shaped arrow.
     const arrowFill = (style as { stroke?: string } | undefined)?.stroke;
     const newDirection = newConnectorDefaults?.direction ?? 'forward';
-    const newHeadIsArrow = (newConnectorDefaults?.headShape ?? 'arrow') === 'arrow';
-    const drawHeads = targetIdentified && newHeadIsArrow && Boolean(arrowFill);
+    // Resolve each end's arrow-ness independently: the target (head) reads
+    // `headShape`; the source (tail) reads `tailShape` and falls back to
+    // `headShape`. Only arrow ends draw a preview triangle — custom glyphs pop
+    // in via EditableEdge on release rather than draw a wrong-shaped arrow.
+    const newEndIsArrow = (newConnectorDefaults?.headShape ?? 'arrow') === 'arrow';
+    const newStartIsArrow =
+      (newConnectorDefaults?.tailShape ?? newConnectorDefaults?.headShape ?? 'arrow') === 'arrow';
+    const canDrawHeads = targetIdentified && Boolean(arrowFill);
     const targetArrowPoints =
-      drawHeads && (newDirection === 'forward' || newDirection === 'both')
+      canDrawHeads && newEndIsArrow && (newDirection === 'forward' || newDirection === 'both')
         ? buildConnectionArrowPoints(effectiveToX, effectiveToY, effectiveToPosition)
         : null;
     const sourceArrowPoints =
-      drawHeads && (newDirection === 'backward' || newDirection === 'both')
+      canDrawHeads && newStartIsArrow && (newDirection === 'backward' || newDirection === 'both')
         ? buildConnectionArrowPoints(effectiveFromX, effectiveFromY, effectiveFromPosition)
         : null;
     return (

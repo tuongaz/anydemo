@@ -1600,6 +1600,11 @@ describe('seeflow_patch_connector', () => {
       style: 'dashed',
       color: 'blue',
       direction: 'both',
+      // Endpoint glyphs — distinct head vs tail (ER one-to-many). Regression
+      // guard for the "Invalid connector patch body" 400 + the merge.ts
+      // CONNECTOR_STYLE_KEYS allowlist silently dropping these on write.
+      headShape: 'many',
+      tailShape: 'one',
     });
     expect(expectOk(envelope)).toEqual({ ok: true });
 
@@ -1607,7 +1612,16 @@ describe('seeflow_patch_connector', () => {
       connectors: Array<{ id: string; label?: string }>;
     };
     const style = JSON.parse(readFileSync(styleFile, 'utf8')) as {
-      connectors: Record<string, { style?: string; color?: string; direction?: string }>;
+      connectors: Record<
+        string,
+        {
+          style?: string;
+          color?: string;
+          direction?: string;
+          headShape?: string;
+          tailShape?: string;
+        }
+      >;
     };
     const conn = arch.connectors.find((c) => c.id === 'a-to-b');
     expect(conn?.label).toBe('renamed');
@@ -1615,6 +1629,8 @@ describe('seeflow_patch_connector', () => {
     expect(styleEntry?.style).toBe('dashed');
     expect(styleEntry?.color).toBe('blue');
     expect(styleEntry?.direction).toBe('both');
+    expect(styleEntry?.headShape).toBe('many');
+    expect(styleEntry?.tailShape).toBe('one');
   });
 
   it('merges optional eventName metadata into the connector on PATCH', async () => {

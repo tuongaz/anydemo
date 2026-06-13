@@ -41,19 +41,24 @@ export interface DerivedEdge {
     targetPin?: EdgePin;
     /** US-018: per-connector label font size in px (undefined → 11px). */
     fontSize?: number;
-    // Custom (non-arrow) head shape for EditableEdge to draw. Absent for the
-    // default arrow (which uses native markers) so the edge stays marker-driven.
+    // Custom (non-arrow) glyph for EditableEdge to draw at the target (head)
+    // end. Absent for the default arrow (which uses native markers) so the
+    // edge stays marker-driven.
     headShape?: Exclude<ConnectorHeadShape, 'arrow'>;
-    /** Draw the custom head at the source end (mirrors a markerStart). */
+    // Custom (non-arrow) glyph at the source (tail) end. Independent of
+    // `headShape` so an edge can carry different glyphs at each end (e.g. ER
+    // one-to-many). Absent for the default arrow.
+    tailShape?: Exclude<ConnectorHeadShape, 'arrow'>;
+    /** Whether the source end carries a head at all (per `direction`). */
     headStart?: boolean;
-    /** Draw the custom head at the target end (mirrors a markerEnd). */
+    /** Whether the target end carries a head at all (per `direction`). */
     headEnd?: boolean;
   };
   style: { strokeDasharray?: string; stroke?: string; strokeWidth?: number; opacity?: number };
-  // Only the default 'arrow' head uses native React Flow markers. The custom
-  // shapes (database/diamond/circle) are drawn by EditableEdge via edge.data
-  // (headShape + headStart/headEnd) — see the `data` comment below — so these
-  // marker fields stay undefined for them.
+  // Only the default 'arrow' end uses native React Flow markers. The custom
+  // shapes (crow's-foot/diamond/circle) are drawn by EditableEdge via edge.data
+  // (headShape/tailShape) — see the `data` comment below — so a given marker
+  // field stays undefined whenever that end carries a custom glyph.
   markerStart?: EdgeMarker;
   markerEnd?: EdgeMarker;
   selected?: boolean;
@@ -138,20 +143,26 @@ export const connectorToEdge = (
   // 'none'     → no arrows (plain line).
   const direction = connector.direction ?? 'forward';
   const markerColor = colorStyle.stroke;
-  // `headShape` decides the glyph; `direction` decides which ends carry it.
+  // `headShape`/`tailShape` decide each end's glyph; `direction` decides which
+  // ends carry one.
   //   'forward' (or absent) → head at target only (historical behavior).
   //   'backward' → head at source only.  'both' → both ends.  'none' → none.
-  const headShape = connector.headShape ?? 'arrow';
+  // The source (tail) end falls back to `headShape` when `tailShape` is unset,
+  // so a single head pick still styles both ends symmetrically.
+  const endShape = connector.headShape ?? 'arrow';
+  const startShape = connector.tailShape ?? endShape;
   const hasStart = direction === 'backward' || direction === 'both';
   const hasEnd = direction === 'forward' || direction === 'both';
   // Only the default arrow uses native React Flow markers; custom shapes are
   // drawn by EditableEdge (native markers can't live in React Flow's re-rendered
-  // edge svg reliably). Keep both paths mutually exclusive so a connector never
-  // renders a native arrow AND a custom glyph at the same end.
-  const isCustomHead = headShape !== 'arrow';
+  // edge svg reliably). Resolved per end so an arrow tail can pair with a custom
+  // head (or vice versa) without one end stealing the other's renderer.
+  const endIsCustom = endShape !== 'arrow';
+  const startIsCustom = startShape !== 'arrow';
   const arrow = arrowMarker(markerColor);
-  const markerStart = !isCustomHead && hasStart ? arrow : undefined;
-  const markerEnd = !isCustomHead && hasEnd ? arrow : undefined;
+  const markerStart = hasStart && !startIsCustom ? arrow : undefined;
+  const markerEnd = hasEnd && !endIsCustom ? arrow : undefined;
+  const anyCustomHead = endIsCustom || startIsCustom;
   const edge: DerivedEdge = {
     id: connector.id,
     source: connector.source,
@@ -168,9 +179,12 @@ export const connectorToEdge = (
       sourcePin: connector.sourcePin,
       targetPin: connector.targetPin,
       fontSize: connector.fontSize,
-      ...(isCustomHead
+      ...(anyCustomHead
         ? {
-            headShape: headShape as Exclude<ConnectorHeadShape, 'arrow'>,
+            ...(endIsCustom ? { headShape: endShape as Exclude<ConnectorHeadShape, 'arrow'> } : {}),
+            ...(startIsCustom
+              ? { tailShape: startShape as Exclude<ConnectorHeadShape, 'arrow'> }
+              : {}),
             headStart: hasStart,
             headEnd: hasEnd,
           }

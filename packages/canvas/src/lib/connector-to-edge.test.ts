@@ -371,6 +371,68 @@ describe('connectorToEdge', () => {
     expect(connectorToEdge(c, false).data.headShape).toBeUndefined();
   });
 
+  // tailShape styles the SOURCE end independently of headShape.
+  it('routes an arrow head + custom tail to a native markerEnd and a glyph tail', () => {
+    const c: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      headShape: 'arrow',
+      tailShape: 'many',
+      direction: 'both',
+    };
+    const edge = connectorToEdge(c, false);
+    // Target end: native arrow marker, no custom head glyph.
+    expect(asMarker(edge.markerEnd)?.type).toBe(MarkerType.ArrowClosed);
+    expect(edge.data.headShape).toBeUndefined();
+    // Source end: custom crow's-foot glyph, no native marker.
+    expect(edge.markerStart).toBeUndefined();
+    expect(edge.data.tailShape).toBe('many');
+    expect(edge.data.headStart).toBe(true);
+    expect(edge.data.headEnd).toBe(true);
+  });
+
+  it('mixes distinct head and tail glyphs (ER one-to-many)', () => {
+    const c: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      headShape: 'many',
+      tailShape: 'one',
+      direction: 'both',
+    };
+    const edge = connectorToEdge(c, false);
+    expect(edge.data.headShape).toBe('many');
+    expect(edge.data.tailShape).toBe('one');
+    expect(edge.markerStart).toBeUndefined();
+    expect(edge.markerEnd).toBeUndefined();
+  });
+
+  it('falls back to headShape for the tail when tailShape is unset', () => {
+    const c: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      headShape: 'diamond',
+      direction: 'both',
+    };
+    const edge = connectorToEdge(c, false);
+    expect(edge.data.tailShape).toBe('diamond');
+  });
+
+  it('leaves data.tailShape undefined when the tail end is a plain arrow', () => {
+    const c: Connector = {
+      id: 'c1',
+      source: 'a',
+      target: 'b',
+      tailShape: 'arrow',
+      direction: 'both',
+    };
+    const edge = connectorToEdge(c, false);
+    expect(edge.data.tailShape).toBeUndefined();
+    expect(asMarker(edge.markerStart)?.type).toBe(MarkerType.ArrowClosed);
+  });
+
   it('forwards optional connector fontSize to edge data (US-018)', () => {
     const sized: Connector = {
       id: 'c1',

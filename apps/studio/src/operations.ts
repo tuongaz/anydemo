@@ -614,10 +614,13 @@ export const ConnectorPatchBodySchema = z
     direction: z.enum(['forward', 'backward', 'both', 'none']).optional(),
     borderSize: z.number().min(0).optional(),
     path: z.enum(['curve', 'step']).optional(),
-    // Head glyph shape — `direction` decides which ends carry a head, this
-    // decides what it looks like (arrow / crow's-foot / diamond / circle).
-    // Absent ⇒ 'arrow'. Mirrors ConnectorVisualBaseShape.headShape.
+    // Endpoint glyph shapes — `direction` decides which ends carry a head,
+    // these decide what each looks like (arrow / crow's-foot / diamond /
+    // circle). `headShape` is the target end, `tailShape` the source end;
+    // absent ⇒ 'arrow', and absent tailShape falls back to headShape. Mirrors
+    // ConnectorVisualBaseShape.{headShape,tailShape}.
     headShape: ConnectorHeadShapeSchema.optional(),
+    tailShape: ConnectorHeadShapeSchema.optional(),
     // US-018: per-connector label font size (mirrors NodeVisualBaseShape.fontSize).
     fontSize: z.number().positive().optional(),
     eventName: z.string().optional(),

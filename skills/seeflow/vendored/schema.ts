@@ -392,11 +392,14 @@ const NodeSchema = z.discriminatedUnion('type', [
 const ConnectorStyleSchema = z.enum(['solid', 'dashed', 'dotted']);
 const ConnectorDirectionSchema = z.enum(['forward', 'backward', 'both', 'none']);
 const ConnectorPathSchema = z.enum(['curve', 'step']);
-// Head/marker glyph drawn at the arrow ends. `direction` decides WHICH ends
-// carry a head; `headShape` decides WHAT it looks like. Absent ⇒ 'arrow'
-// (the historical closed arrowhead), so existing flows render unchanged.
-// 'one' / 'many' / 'optional-many' are ER crow's-foot endpoints (single tick,
-// fork, circle+fork). 'diamond' / 'circle' are filled UML-ish endpoints.
+// Endpoint glyph drawn at the arrow ends. `direction` decides WHICH ends carry
+// a head; `headShape` (target end) and `tailShape` (source end) decide WHAT
+// each looks like. Both absent ⇒ 'arrow' (the historical closed arrowhead), so
+// existing flows render unchanged; `tailShape` absent falls back to `headShape`
+// so a single pick still styles both ends symmetrically. 'one' / 'many' /
+// 'optional-many' are ER crow's-foot endpoints (single tick, fork, circle+fork);
+// 'diamond' / 'circle' are filled UML-ish endpoints. Mixing them — e.g.
+// tailShape:'one' + headShape:'many' — draws ER one-to-many relationships.
 export const ConnectorHeadShapeSchema = z.enum([
   'arrow',
   'one',
@@ -413,6 +416,7 @@ const ConnectorVisualBaseShape = {
   borderSize: z.number().min(0).optional(),
   path: ConnectorPathSchema.optional(),
   headShape: ConnectorHeadShapeSchema.optional(),
+  tailShape: ConnectorHeadShapeSchema.optional(),
   fontSize: z.number().positive().optional(),
 };
 
@@ -822,6 +826,7 @@ const ConnectorStyleEntrySchema = z
     borderSize: z.number().min(0).optional(),
     path: ConnectorPathSchema.optional(),
     headShape: ConnectorHeadShapeSchema.optional(),
+    tailShape: ConnectorHeadShapeSchema.optional(),
     fontSize: z.number().positive().optional(),
   })
   .strict();

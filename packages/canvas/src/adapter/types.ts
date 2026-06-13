@@ -126,8 +126,10 @@ export interface ConnectorPatch {
   direction?: ConnectorDirection;
   borderSize?: number;
   path?: ConnectorPath;
-  /** Head glyph drawn at the active arrow ends (per `direction`). */
+  /** Glyph at the target (head) end (per `direction`). */
   headShape?: ConnectorHeadShape;
+  /** Glyph at the source (tail) end. Absent ⇒ falls back to `headShape`. */
+  tailShape?: ConnectorHeadShape;
   /** Per-connector label font size in px. */
   fontSize?: number;
   eventName?: string;

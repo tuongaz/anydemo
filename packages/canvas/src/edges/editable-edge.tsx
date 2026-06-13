@@ -102,14 +102,19 @@ export type EditableEdgeData = {
   /** Path geometry — 'curve' (default bezier) or 'step' (smoothstep). */
   path?: ConnectorPath;
   /**
-   * Custom (non-arrow) head shape drawn at the edge endpoints. Absent for the
-   * default arrow head, which uses React Flow's native markers instead. When
-   * set, `headStart` / `headEnd` decide which ends carry the glyph.
+   * Custom (non-arrow) glyph drawn at the target (head) endpoint. Absent for
+   * the default arrow head, which uses React Flow's native markers instead.
+   * Drawn when `headEnd` is set.
    */
   headShape?: Exclude<ConnectorHeadShape, 'arrow'>;
-  /** Draw the custom head at the source endpoint. */
+  /**
+   * Custom (non-arrow) glyph drawn at the source (tail) endpoint — independent
+   * of `headShape` so each end can differ. Drawn when `headStart` is set.
+   */
+  tailShape?: Exclude<ConnectorHeadShape, 'arrow'>;
+  /** The source endpoint carries a head (per `direction`). */
   headStart?: boolean;
-  /** Draw the custom head at the target endpoint. */
+  /** The target endpoint carries a head (per `direction`). */
   headEnd?: boolean;
   /** US-018: per-connector label font size in px (undefined → 11px default). */
   fontSize?: number;
@@ -290,7 +295,7 @@ export function EditableEdge({
   // themselves still render at the true endpoints (tX/tY, sX/sY). 'one' trims by
   // 0 (it's a tick the line crosses), arrow uses a native marker (no glyph).
   const headEndTrim = data?.headShape && data.headEnd ? HEAD_TRIM[data.headShape] : 0;
-  const headStartTrim = data?.headShape && data.headStart ? HEAD_TRIM[data.headShape] : 0;
+  const headStartTrim = data?.tailShape && data.headStart ? HEAD_TRIM[data.tailShape] : 0;
   const [tNx, tNy] = OUTWARD_NORMAL[targetSide];
   const [sNx, sNy] = OUTWARD_NORMAL[sourceSide];
   const pathSX = sX + sNx * headStartTrim;
@@ -343,7 +348,8 @@ export function EditableEdge({
   // own <g>, rather than via SVG markers — React Flow re-renders and strips
   // foreign nodes from its edge svg, so a <marker> def injected there wouldn't
   // survive. They color from the edge stroke and sit at the floating endpoints.
-  const headShape = data?.headShape;
+  const headEndShape = data?.headShape;
+  const headStartShape = data?.tailShape;
   const headColor = (style as { stroke?: string } | undefined)?.stroke;
 
   return (
@@ -356,11 +362,23 @@ export function EditableEdge({
         markerStart={markerStart}
         interactionWidth={interactionWidth}
       />
-      {headShape && data?.headEnd ? (
-        <ConnectorHeadGlyph x={tX} y={tY} side={targetSide} shape={headShape} color={headColor} />
+      {headEndShape && data?.headEnd ? (
+        <ConnectorHeadGlyph
+          x={tX}
+          y={tY}
+          side={targetSide}
+          shape={headEndShape}
+          color={headColor}
+        />
       ) : null}
-      {headShape && data?.headStart ? (
-        <ConnectorHeadGlyph x={sX} y={sY} side={sourceSide} shape={headShape} color={headColor} />
+      {headStartShape && data?.headStart ? (
+        <ConnectorHeadGlyph
+          x={sX}
+          y={sY}
+          side={sourceSide}
+          shape={headStartShape}
+          color={headColor}
+        />
       ) : null}
       {showEndpointDots ? (
         <ViewportPortal>

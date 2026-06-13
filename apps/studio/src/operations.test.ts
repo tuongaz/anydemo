@@ -840,6 +840,16 @@ describe('ConnectorPatchBodySchema — head shape', () => {
     const parsed = ConnectorPatchBodySchema.safeParse({ headShape: 'triangle' });
     expect(parsed.success).toBe(false);
   });
+
+  it('accepts a tailShape (source-end glyph) independent of headShape', () => {
+    const parsed = ConnectorPatchBodySchema.safeParse({ tailShape: 'one', headShape: 'many' });
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects an unknown tail shape', () => {
+    const parsed = ConnectorPatchBodySchema.safeParse({ tailShape: 'triangle' });
+    expect(parsed.success).toBe(false);
+  });
 });
 
 describe('NodePatchBodySchema — action overlays', () => {
