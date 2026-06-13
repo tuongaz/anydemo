@@ -722,9 +722,9 @@ describe('StyleStrip — text alignment toggle', () => {
   });
 });
 
-// Request 1: the standalone "Connector path" button folds into the Connector
-// popover as a third section. Request 2: head-shape is its own top-level
-// toolbar button (style-strip-head-shape), sibling to Direction.
+// The connector controls live in a single "Connector" popover
+// (style-strip-border): Style, Width, Path, Direction, and Head shape are all
+// sections inside it — no standalone Path / Direction / Head-shape buttons.
 describe('StyleStrip — connector path merge + head shape', () => {
   const conn = (over: Partial<Connector> = {}): Connector =>
     ({ id: 'c1', source: 'a', target: 'b', ...over }) as Connector;
@@ -767,6 +767,16 @@ describe('StyleStrip — connector path merge + head shape', () => {
     // The path section is a descendant of the Connector popover, not a sibling.
     expect(findElement(border, testIdEquals('style-strip-path'))).not.toBeNull();
     expect((findPathToggle(tree).props as { value?: string }).value).toBe('step');
+  });
+
+  it('renders Direction and Head shape as sections inside the Connector popover', () => {
+    const tree = callStrip({ nodes: [], connectors: [conn()] });
+    const border = findElement(tree, testIdEquals('style-strip-border'));
+    if (!border) throw new Error('connector popover missing');
+    // Both fold into the single Connector popover — no standalone buttons.
+    expect(findElement(border, testIdEquals('style-strip-direction-section'))).not.toBeNull();
+    expect(findElement(border, testIdEquals('style-strip-head-shape'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-direction'))).toBeNull();
   });
 
   it('does NOT render the Path section for a node selection', () => {
