@@ -397,7 +397,7 @@ const ConnectorPathSchema = z.enum(['curve', 'step']);
 // (the historical closed arrowhead), so existing flows render unchanged.
 // 'one' / 'many' / 'optional-many' are ER crow's-foot endpoints (single tick,
 // fork, circle+fork). 'diamond' / 'circle' are filled UML-ish endpoints.
-const ConnectorHeadShapeSchema = z.enum([
+export const ConnectorHeadShapeSchema = z.enum([
   'arrow',
   'one',
   'many',

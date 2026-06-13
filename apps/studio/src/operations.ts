@@ -29,6 +29,7 @@ import { type FlowEntry, type Registry, slugify } from './registry.ts';
 import {
   ColorTokenSchema,
   ComponentSpecSchema,
+  ConnectorHeadShapeSchema,
   EdgePinSchema,
   type Flow,
   FlowSchema,
@@ -613,6 +614,10 @@ export const ConnectorPatchBodySchema = z
     direction: z.enum(['forward', 'backward', 'both', 'none']).optional(),
     borderSize: z.number().min(0).optional(),
     path: z.enum(['curve', 'step']).optional(),
+    // Head glyph shape — `direction` decides which ends carry a head, this
+    // decides what it looks like (arrow / crow's-foot / diamond / circle).
+    // Absent ⇒ 'arrow'. Mirrors ConnectorVisualBaseShape.headShape.
+    headShape: ConnectorHeadShapeSchema.optional(),
     // US-018: per-connector label font size (mirrors NodeVisualBaseShape.fontSize).
     fontSize: z.number().positive().optional(),
     eventName: z.string().optional(),

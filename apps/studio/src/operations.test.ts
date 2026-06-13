@@ -12,6 +12,7 @@ import { join } from 'node:path';
 import { createEventBus } from './events.ts';
 import { nodeFileAbsPath, nodeFileRef } from './node-files.ts';
 import {
+  ConnectorPatchBodySchema,
   NodePatchBodySchema,
   addConnectorImpl,
   addFlowBulkImpl,
@@ -824,6 +825,20 @@ describe('addFlowBulkImpl', () => {
       nodes: [{ type: 'rectangle', data: { name: 'X' } }],
     });
     expect(res.kind).toBe('flowNotFound');
+  });
+});
+
+describe('ConnectorPatchBodySchema — head shape', () => {
+  it('accepts every head shape the toolbar can send', () => {
+    for (const headShape of ['arrow', 'one', 'many', 'optional-many', 'diamond', 'circle']) {
+      const parsed = ConnectorPatchBodySchema.safeParse({ headShape });
+      expect(parsed.success).toBe(true);
+    }
+  });
+
+  it('rejects an unknown head shape', () => {
+    const parsed = ConnectorPatchBodySchema.safeParse({ headShape: 'triangle' });
+    expect(parsed.success).toBe(false);
   });
 });
 
