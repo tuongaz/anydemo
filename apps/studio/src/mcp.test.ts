@@ -199,17 +199,20 @@ describe('seeflow_schema', () => {
         'component',
         'database',
         'diamond',
+        'document',
         'ellipse',
         'hexagon',
         'html',
         'icon',
         'image',
         'linkflow',
+        'parallelogram',
         'queue',
         'rectangle',
         'server',
         'sticky',
         'text',
+        'triangle',
         'user',
       ].sort(),
     );
@@ -1340,10 +1343,10 @@ describe('seeflow_patch_node', () => {
 
   // Regression: under the flat-types refactor, retyping is via NodePatchBody.type
   // (the discriminator IS the variant). NodePatchBodySchema accepts the full
-  // 14-tag NodeTypeSchema; this test pins the 7 illustrative geometric
-  // variants (database/server/user/queue/cloud/diamond/hexagon) so a future
-  // schema split narrowing the allowed retype set surfaces here.
-  it('accepts the illustrative shape variants (database/server/user/queue/cloud/diamond/hexagon)', async () => {
+  // 19-tag NodeTypeSchema; this test pins the 10 illustrative geometric
+  // variants (database/server/user/queue/cloud/diamond/hexagon/triangle/parallelogram/document)
+  // so a future schema split narrowing the allowed retype set surfaces here.
+  it('accepts the illustrative shape variants (database/server/user/queue/cloud/diamond/hexagon/triangle/parallelogram/document)', async () => {
     const shapeDemo = {
       version: 2,
       name: 'Shape Patch',
@@ -1361,6 +1364,9 @@ describe('seeflow_patch_node', () => {
       'cloud',
       'diamond',
       'hexagon',
+      'triangle',
+      'parallelogram',
+      'document',
     ] as const) {
       const envelope = await callTool(app, 'seeflow_patch_node', {
         project: reg.project,

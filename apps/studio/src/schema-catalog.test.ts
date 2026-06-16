@@ -61,17 +61,20 @@ describe('schema-catalog', () => {
           'component',
           'database',
           'diamond',
+          'document',
           'ellipse',
           'hexagon',
           'html',
           'icon',
           'image',
           'linkflow',
+          'parallelogram',
           'queue',
           'rectangle',
           'server',
           'sticky',
           'text',
+          'triangle',
           'user',
         ].sort(),
       );
@@ -108,11 +111,11 @@ describe('schema-catalog', () => {
       expect(payload.notes[0]).toMatch(/source.*target.*nodes\[\]\.id/);
     });
 
-    it('node → all 16 flat variants', () => {
+    it('node → all 19 flat variants', () => {
       const payload = loadCategory('node');
       const keys = Object.keys(payload.schemas).sort();
       // Flat-types refactor: schema-catalog returns one schema per
-      // FlowNodeSchema variant — 11 geometric tags + image + html + icon +
+      // FlowNodeSchema variant — 14 geometric tags + image + html + icon +
       // component + linkflow.
       expect(keys).toEqual(
         [
@@ -120,17 +123,20 @@ describe('schema-catalog', () => {
           'component',
           'database',
           'diamond',
+          'document',
           'ellipse',
           'hexagon',
           'html',
           'icon',
           'image',
           'linkflow',
+          'parallelogram',
           'queue',
           'rectangle',
           'server',
           'sticky',
           'text',
+          'triangle',
           'user',
         ].sort(),
       );
@@ -299,17 +305,20 @@ describe('schema-catalog', () => {
           'component',
           'database',
           'diamond',
+          'document',
           'ellipse',
           'hexagon',
           'html',
           'icon',
           'image',
           'linkflow',
+          'parallelogram',
           'queue',
           'rectangle',
           'server',
           'sticky',
           'text',
+          'triangle',
           'user',
         ].sort(),
       );

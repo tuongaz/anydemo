@@ -1310,6 +1310,9 @@ const nodeTypes = {
   cloud: GeometricNode,
   diamond: GeometricNode,
   hexagon: GeometricNode,
+  triangle: GeometricNode,
+  parallelogram: GeometricNode,
+  document: GeometricNode,
   image: ImageNode,
   icon: IconNode,
   // US-014: file-backed escape-hatch node — fetches author HTML at
