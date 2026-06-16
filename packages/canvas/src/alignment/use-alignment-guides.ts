@@ -176,7 +176,12 @@ export function useAlignmentGuides(params: UseAlignmentGuidesParams): UseAlignme
       let maxY = Number.NEGATIVE_INFINITY;
       let count = 0;
       for (const c of changes) {
-        if (c.type !== 'position' || c.dragging !== true || !c.position || !c.id) continue;
+        // The active snapshot is the gesture gate, so both live (`dragging:
+        // true`) frames AND the terminal drag-stop frame (`dragging: false`,
+        // which xyflow emits with its raw unsnapped position) are snapped.
+        // Snapping the terminal frame is what stops the node jumping 1-2px back
+        // off the guide on mouse release.
+        if (c.type !== 'position' || !c.position || !c.id) continue;
         const node = rfNodesRef.current.find((n) => n.id === c.id);
         const { w, h } = nodeDims(node);
         minX = Math.min(minX, c.position.x);
@@ -203,7 +208,7 @@ export function useAlignmentGuides(params: UseAlignmentGuidesParams): UseAlignme
       const dy = result.snappedY - bbox.y;
       if (dx === 0 && dy === 0) return changes;
       return changes.map((c) => {
-        if (c.type === 'position' && c.dragging === true && c.position) {
+        if (c.type === 'position' && c.position) {
           return { ...c, position: { x: c.position.x + dx, y: c.position.y + dy } };
         }
         return c;

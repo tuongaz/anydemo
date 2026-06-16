@@ -120,6 +120,11 @@ function posChange(id: string, x: number, y: number): NodeChangeLike {
   return { type: 'position', id, position: { x, y }, dragging: true };
 }
 
+/** The terminal drag-stop change xyflow emits with `dragging: false`. */
+function posChangeStop(id: string, x: number, y: number): NodeChangeLike {
+  return { type: 'position', id, position: { x, y }, dragging: false };
+}
+
 function lastGuides(setterCalls: SetterCall[]): GuideLine[] {
   const last = setterCalls.at(-1);
   return (last?.next ?? []) as GuideLine[];
@@ -172,6 +177,26 @@ describe('useAlignmentGuides', () => {
       const change = out[0] as NodeChangeLike;
       // Snaps B's left edge to x=0 (aligned with A).
       expect(change.position?.x).toBe(0);
+    });
+
+    it('snaps the terminal drag-stop change so the committed position matches the live snap', () => {
+      // Regression: on mouse release xyflow emits a final position change with
+      // `dragging: false` carrying its raw (unsnapped) internal position. If the
+      // hook only rewrites `dragging: true` frames, the committed position is the
+      // raw one and the node visibly jumps 1-2px from where it snapped. The
+      // snapshot is still active on this frame (endGesture runs afterwards), so
+      // the terminal change must receive the same snap offset.
+      const { params } = makeParams([node('A', 0, 0, 100, 100), node('B', 300, 0, 100, 100)]);
+      const { api } = renderHook(params);
+      api.beginGesture(['B']);
+
+      // Last live drag frame snaps B's left edge from x=2 to x=0.
+      const live = api.interceptChanges([posChange('B', 2, 0)], noMods);
+      expect((live[0] as NodeChangeLike).position?.x).toBe(0);
+
+      // Terminal frame at the same raw position must commit the snapped x=0.
+      const stop = api.interceptChanges([posChangeStop('B', 2, 0)], noMods);
+      expect((stop[0] as NodeChangeLike).position?.x).toBe(0);
     });
 
     it('passes changes through untouched when disabled', () => {
