@@ -41,7 +41,6 @@ import {
   type SeeflowCanvasHandle,
   applyNudge,
   buildNewShapeData,
-  computeIconInsertPosition,
   createRestAdapter,
   downscaleImageFile,
   getLastUsedStyle,
@@ -1144,14 +1143,14 @@ export function DemoView({
   // from the .then so it binds to the server-issued id. The new node is also
   // marked selected on success so the detail panel + style strip open on it.
   const onCreateIconNode = useCallback(
-    (iconName: string, position: Position) => {
+    (iconName: string, position: Position, dims?: { width: number; height: number }) => {
       if (!flowId || !adapter) return;
       setEditError(null);
       const id = `node-${shortId()}`;
       const data = {
         icon: iconName,
-        width: ICON_DEFAULT_SIZE.width,
-        height: ICON_DEFAULT_SIZE.height,
+        width: dims?.width ?? ICON_DEFAULT_SIZE.width,
+        height: dims?.height ?? ICON_DEFAULT_SIZE.height,
       };
       const payload = {
         id,
@@ -1343,10 +1342,13 @@ export function DemoView({
     (nodeId: string) => openIconPicker('replace', nodeId),
     [openIconPicker],
   );
-  // Pick-handler dispatches to either onCreateIconNode (insert) or a
+  // Pick-handler dispatches to either draw-icon mode (insert) or a
   // single-field PATCH on the existing node (replace). Replace-mode preserves
-  // position/size/color/strokeWidth/alt — only data.icon mutates. Both paths
-  // call pushRecent and close the picker.
+  // position/size/color/strokeWidth/alt — only data.icon mutates. Insert mode
+  // mirrors the shape-tool UX: arming `canvasMode = { kind:'draw-icon', iconName }`
+  // means the user draws the icon on the canvas (click or click-drag) instead
+  // of having it auto-inserted at the viewport center. Both paths call
+  // pushRecent and close the picker.
   const handleIconPicked = useCallback(
     (name: string) => {
       pushRecent(name);
@@ -1362,15 +1364,8 @@ export function DemoView({
             console.error('updateNode (icon replace) failed', err);
           });
         }
-      } else {
-        const rfInstance = rfInstanceRef.current;
-        if (rfInstance && flowId) {
-          const position = computeIconInsertPosition(rfInstance, {
-            width: window.innerWidth,
-            height: window.innerHeight,
-          });
-          onCreateIconNode(name, position);
-        }
+      } else if (flowId) {
+        setCanvasMode({ kind: 'draw-icon', iconName: name });
       }
       closeIconPicker();
     },
@@ -1381,7 +1376,6 @@ export function DemoView({
       adapter,
       setNodeOverride,
       dropNodeOverride,
-      onCreateIconNode,
       closeIconPicker,
     ],
   );
@@ -2581,6 +2575,7 @@ export function DemoView({
           onNodeDescriptionChange={onNodeDescriptionChange}
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
+          onCreateIconNode={flowId ? onCreateIconNode : undefined}
           onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
           onRetryImageUpload={flowId ? onRetryImageUpload : undefined}

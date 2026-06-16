@@ -282,13 +282,17 @@ export type FlowNode =
 // `select` is the neutral default — click/marquee selects, pane-drag pans.
 // `hand` locks node interaction; left-drag pans (cursor: grab/grabbing).
 // `draw` carries the armed drawable node type for click/drag-to-create
-// gestures. Image / html / icon are NOT drawable — they need an upload or
-// dedicated authoring flow, not a click-drop on the canvas. `linkflow` is
-// drawable: it auto-opens the picker dialog on commit.
+// gestures. Image / html are NOT drawable — they need an upload or dedicated
+// authoring flow. `linkflow` is drawable: it auto-opens the picker dialog on
+// commit.
+// `draw-icon` is the icon-equivalent of `draw`: armed AFTER the user picks
+// an icon from the Insert-icon popover, so the click/drag-to-place gesture
+// stays consistent with shapes (no auto-insert at viewport center).
 export type CanvasMode =
   | { kind: 'select' }
   | { kind: 'hand' }
-  | { kind: 'draw'; shape: DrawableNodeType };
+  | { kind: 'draw'; shape: DrawableNodeType }
+  | { kind: 'draw-icon'; iconName: string };
 
 export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
 export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';

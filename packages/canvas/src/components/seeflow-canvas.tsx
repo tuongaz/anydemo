@@ -76,7 +76,7 @@ import {
   shapeChromeStyle,
 } from '../nodes/geometric-node.tsx';
 import { HtmlNode } from '../nodes/html-node.tsx';
-import { IconNode } from '../nodes/icon-node.tsx';
+import { ICON_DEFAULT_SIZE, IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
 import { LINKFLOW_DEFAULT_SIZE, LINKFLOW_MIN_SIZE, LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
@@ -106,6 +106,7 @@ import { CanvasPortalContainerProvider } from './canvas-portal-container.tsx';
 import { CanvasToolbar, HTML_BLOCK_DND_TYPE, TOOLBAR_SHAPES } from './canvas-toolbar.tsx';
 import { DetailPanel } from './detail-panel.tsx';
 import { GlowOverlay } from './glow-overlay.tsx';
+import { IconRenderer } from './icon-renderer.tsx';
 import { InspectorToggle } from './inspector-toggle.tsx';
 import {
   type MultiResizeUpdate,
@@ -544,6 +545,21 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onCreateShapeNode?: (
     shape: GeometricNodeType,
+    position: { x: number; y: number },
+    dims: { width: number; height: number },
+  ) => void;
+  /**
+   * Commit a new `type:'icon'` node from the toolbar's draw-icon flow. The
+   * Insert-icon popover no longer auto-inserts at viewport center — picking
+   * an icon arms `canvasMode = { kind:'draw-icon', iconName }` and the next
+   * click/drag on the pane commits here with the drawn rect (or a near-zero
+   * tap falls back to the icon's default size). Wiring this enables the
+   * draw-on-canvas behavior; absent → the canvas commits nothing on
+   * pointer-up while in draw-icon mode (the picker can still be wired
+   * standalone via `onPickIcon` for hosts that prefer the auto-insert path).
+   */
+  onCreateIconNode?: (
+    iconName: string,
     position: { x: number; y: number },
     dims: { width: number; height: number },
   ) => void;
@@ -2001,6 +2017,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onNodeDescriptionChange,
     onConnectorLabelChange,
     onCreateShapeNode,
+    onCreateIconNode,
     onCreateLinkflowNode,
     onCreateImageFromFile,
     onRetryImageUpload,
@@ -2212,6 +2229,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // existing gesture/cursor code keeps reading the same value. `handMode` is
   // the new flag for the four React Flow lock-down props.
   const drawShape: DrawableNodeType | null = canvasMode.kind === 'draw' ? canvasMode.shape : null;
+  // Draw-icon mirrors `drawShape` for the icon-insert flow: a non-null
+  // `iconName` arms the same click/drag-to-place gesture used for shapes,
+  // so the Insert-icon popover commits via the canvas (not at viewport center).
+  const drawIcon: string | null = canvasMode.kind === 'draw-icon' ? canvasMode.iconName : null;
+  // True when either draw flow is armed — gates cursor, RF lock-downs,
+  // selection, and pan activation identically for both.
+  const drawArmed = drawShape !== null || drawIcon !== null;
   const handMode = canvasMode.kind === 'hand';
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
@@ -2393,22 +2417,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const [drawStart, setDrawStart] = useState<{ x: number; y: number } | null>(null);
   const [drawCurrent, setDrawCurrent] = useState<{ x: number; y: number } | null>(null);
   const drawShapeRef = useRef<DrawableNodeType | null>(null);
+  const drawIconRef = useRef<string | null>(null);
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const drawCurrentRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
 
-  // Mirror drawShape state into a ref so handlers see the live value without
-  // depending on closure identity (handler refs need to stay stable so React
-  // event delegation keeps working across renders mid-gesture).
+  // Mirror drawShape/drawIcon state into refs so handlers see the live value
+  // without depending on closure identity (handler refs need to stay stable so
+  // React event delegation keeps working across renders mid-gesture).
   useEffect(() => {
     drawShapeRef.current = drawShape;
   }, [drawShape]);
+  useEffect(() => {
+    drawIconRef.current = drawIcon;
+  }, [drawIcon]);
 
   const exitDrawMode = useCallback(() => {
     onCanvasModeChange({ kind: 'select' });
     setDrawStart(null);
     setDrawCurrent(null);
     drawShapeRef.current = null;
+    drawIconRef.current = null;
     drawStartRef.current = null;
     drawCurrentRef.current = null;
     drawingRef.current = false;
@@ -2440,8 +2469,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (e.key !== 'Escape') return;
       // 1. Inline label edit — defer to InlineEdit's own handler.
       if (isEditableTarget(document.activeElement)) return;
-      // 2. Drag-create.
-      if (drawShapeRef.current) {
+      // 2. Drag-create (shape or icon).
+      if (drawShapeRef.current || drawIconRef.current) {
         e.preventDefault();
         exitDrawMode();
         return;
@@ -2545,7 +2574,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
-    if (!drawShapeRef.current) return;
+    if (!drawShapeRef.current && !drawIconRef.current) return;
     const target = e.target as HTMLElement | null;
     if (!target?.classList.contains('react-flow__pane')) return;
     const client = { x: e.clientX, y: e.clientY };
@@ -2586,12 +2615,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const start = drawStartRef.current;
       const current = drawCurrentRef.current;
       const shape = drawShapeRef.current;
+      const iconName = drawIconRef.current;
       const rfInstance = rfInstanceRef.current;
       // Always exit draw mode after a gesture, even if the commit short-circuits
       // (too small, missing references). The PRD spec: "After commit (or ESC),
       // draw mode exits automatically and the cursor returns to default."
       exitDrawMode();
-      if (!start || !current || !shape || !rfInstance) return;
+      if (!start || !current || !rfInstance) return;
+      if (!shape && !iconName) return;
       const minX = Math.min(start.x, current.x);
       const minY = Math.min(start.y, current.y);
       const maxX = Math.max(start.x, current.x);
@@ -2630,6 +2661,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         onCreateLinkflowNode?.(flowMin, { width, height });
         return;
       }
+      // Icon commit: same MIN_DRAW_SIZE "intentional drag" threshold as
+      // geometric shapes, but the floor is ICON_DEFAULT_SIZE so a near-zero
+      // tap still produces a usable node at the picker's expected size.
+      if (iconName) {
+        const tooSmall = dragScreenWidth < MIN_DRAW_SIZE || dragScreenHeight < MIN_DRAW_SIZE;
+        const width = tooSmall ? ICON_DEFAULT_SIZE.width : dragFlowWidth;
+        const height = tooSmall ? ICON_DEFAULT_SIZE.height : dragFlowHeight;
+        onCreateIconNode?.(iconName, flowMin, { width, height });
+        return;
+      }
+      if (!shape) return;
       // MIN_DRAW_SIZE stays in screen pixels — it's a UX threshold for
       // distinguishing "intentional drag" from "accidental click", which the
       // user perceives in screen-space, not flow-space. Below the threshold
@@ -2640,7 +2682,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const height = tooSmall ? SHAPE_DEFAULT_SIZE[shape].height : dragFlowHeight;
       onCreateShapeNode?.(shape, flowMin, { width, height });
     },
-    [exitDrawMode, onCreateShapeNode, onCreateLinkflowNode],
+    [exitDrawMode, onCreateShapeNode, onCreateIconNode, onCreateLinkflowNode],
   );
   // Block upstream sync while a node is mid-drag or mid-resize. NodeResizer
   // dispatches dimension changes into rfNodes during the gesture; if we then
@@ -4475,7 +4517,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // the same grab/grabbing pair as Hand. Else default arrow — US-010 made
   // primary-mouse drag a marquee gesture, but the default cursor is the
   // design-tool norm for the rubber-band so we don't override it.
-  const wrapperCursor = drawShape
+  const wrapperCursor = drawArmed
     ? 'crosshair'
     : handMode || spaceHeld
       ? spaceDragging
@@ -4609,7 +4651,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // gates the actual PATCH dispatch.
                 nodesDraggable={
                   (isEditMode ? !!onNodePositionChange : true) &&
-                  !drawShape &&
+                  !drawArmed &&
                   !handMode &&
                   flags.enableNodeMove
                 }
@@ -4617,7 +4659,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // and per-node connectable flags are gated; combined with the onConnect
                 // early return this is a triple-gate against stray edge creation.
                 // Hand mode locks connection-drag too — any pane click pans instead.
-                nodesConnectable={isEditMode && !!onCreateConnector && !drawShape && !handMode}
+                nodesConnectable={isEditMode && !!onCreateConnector && !drawArmed && !handMode}
                 // US-027: in view mode we disable keyboard-driven deletion entirely
                 // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
                 // flag — the per-edge `deletable` defaults to true and only the
@@ -4694,7 +4736,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // (US-005) and US-014 pins every node above every edge regardless
                 // of selection — no extra node-vs-node elevation needed.
                 elevateNodesOnSelect={false}
-                elementsSelectable={!drawShape && !handMode && flags.enableSelection}
+                elementsSelectable={!drawArmed && !handMode && flags.enableSelection}
                 // US-018: dragging an unselected node moves it WITHOUT auto-selecting
                 // (and therefore without opening the detail panel). React Flow defaults
                 // this to true; an explicit click (mousedown + mouseup without
@@ -4721,17 +4763,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // selectionKeyCode=null suppresses xyflow's modifier-marquee fallback
                 // (default would be 'Shift') since selectionOnDrag already covers
                 // marquee — keeping shift free for additive multi-select via click.
-                selectionOnDrag={!drawShape && !handMode && flags.enableSelection}
+                selectionOnDrag={!drawArmed && !handMode && flags.enableSelection}
                 // US-027: panning gated on the resolved flag. Draw mode still wins
                 // (toolbar shape gesture owns primary-drag). Hand mode promotes
                 // left-click to pan ([0,1,2]) so the cursor matches the affordance.
                 panOnDrag={
-                  drawShape ? false : handMode ? [0, 1, 2] : flags.enablePan ? [1, 2] : false
+                  drawArmed ? false : handMode ? [0, 1, 2] : flags.enablePan ? [1, 2] : false
                 }
                 selectionMode={SelectionMode.Partial}
                 selectionKeyCode={null}
-                multiSelectionKeyCode={drawShape ? null : ['Meta', 'Shift']}
-                panActivationKeyCode={drawShape ? null : 'Space'}
+                multiSelectionKeyCode={drawArmed ? null : ['Meta', 'Shift']}
+                panActivationKeyCode={drawArmed ? null : 'Space'}
                 // US-010: lift the marquee end to a single onSelectionChange call so
                 // the parent's `selectedNodeIds` / `selectedConnectorIds` props don't
                 // churn per frame. The onNodesChange / onEdgesChange handlers above
@@ -4973,6 +5015,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 <div
                   data-testid="canvas-draw-ghost"
                   data-ghost-shape={drawShape ?? undefined}
+                  data-ghost-icon={drawIcon ?? undefined}
                   aria-hidden
                   className={cn(
                     'sf:pointer-events-none sf:absolute sf:z-10',
@@ -4983,6 +5026,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     isLinkflowGhost
                       ? 'sf:flex sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground sf:text-sm'
                       : '',
+                    drawIcon ? 'sf:flex sf:items-center sf:justify-center' : '',
                   )}
                   style={{
                     ...ghostShapeStyle,
@@ -4992,6 +5036,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     height: ghostRect.height,
                   }}
                 >
+                  {drawIcon ? (
+                    // Mirror the committed icon node's IconRenderer so the
+                    // drag preview matches what mouse-up will paint. The
+                    // overlay div is sized to the literal drag rect; the
+                    // commit step enforces ICON_DEFAULT_SIZE only on near-zero
+                    // taps (mirrors the shape MIN_DRAW_SIZE rule above).
+                    <IconRenderer
+                      iconId={drawIcon}
+                      studioBaseUrl={studioBaseUrl}
+                      className="sf:block sf:h-full sf:w-full sf:select-none"
+                    />
+                  ) : null}
                   {isLinkflowGhost ? (
                     // Mirror the unlinked-state pill from linkflow-node.tsx so the
                     // drag preview matches what the commit will paint until the

@@ -771,9 +771,13 @@ describe('SeeflowCanvas', () => {
       signalEffectMounted: 5,
       resolvedAutoFitView: 6,
       drawShape: 16,
-      drawStart: 17,
-      drawCurrent: 18,
-      drawing: 19,
+      // drawIconRef sits between drawShapeRef and drawStartRef (mirrors the
+      // draw-icon canvasMode variant for the icon-equivalent of the shape
+      // drag-create flow), shifting every ref below by +1.
+      drawIcon: 17,
+      drawStart: 18,
+      drawCurrent: 19,
+      drawing: 20,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
