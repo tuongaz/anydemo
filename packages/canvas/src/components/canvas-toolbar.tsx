@@ -282,8 +282,12 @@ export function CanvasToolbar({
                 e.preventDefault();
               }}
             >
-              <div role="menu" aria-label="More shapes" className="sf:flex sf:flex-col sf:gap-0.5">
-                {ILLUSTRATIVE_SHAPES.map(({ shape, label, commandId, Icon }) => {
+              <div
+                role="menu"
+                aria-label="More shapes"
+                className="sf:grid sf:grid-cols-3 sf:gap-0.5"
+              >
+                {ILLUSTRATIVE_SHAPES.map(({ shape, commandId, Icon }) => {
                   const active = activeShape === shape;
                   const tooltip = getCommandTooltip(commandId);
                   return (
@@ -301,14 +305,13 @@ export function CanvasToolbar({
                         setShapePickerOpen(false);
                       }}
                       className={cn(
-                        'sf:flex sf:items-center sf:gap-2 sf:rounded-sm sf:px-2 sf:py-1.5 sf:text-left sf:text-sm',
+                        'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
                         active
                           ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50'
-                          : 'sf:hover:bg-muted sf:focus:bg-muted sf:focus:outline-hidden',
+                          : 'sf:hover:bg-muted sf:hover:text-foreground sf:focus:bg-muted sf:focus:outline-hidden',
                       )}
                     >
-                      <Icon className="sf:h-4 sf:w-4 sf:text-muted-foreground" aria-hidden="true" />
-                      <span>{label}</span>
+                      <Icon className="sf:h-4 sf:w-4" aria-hidden="true" />
                     </button>
                   );
                 })}
