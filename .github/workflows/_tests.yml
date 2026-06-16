@@ -47,6 +47,13 @@ jobs:
             playwright-${{ runner.os }}-
 
       - name: Install Playwright browsers
+        # Run from apps/studio so bunx resolves the workspace-pinned
+        # @playwright/test. From the repo root bunx falls through to the npm
+        # registry and pulls a newer playwright whose browser version
+        # (chromium-1228) no longer matches the locked test runner (1.60.0 →
+        # chromium-1223), leaving the test process pointing at a deleted
+        # chrome-headless-shell binary.
+        working-directory: apps/studio
         run: bunx playwright install --with-deps chromium
 
       - name: Typecheck
