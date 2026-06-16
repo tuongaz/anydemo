@@ -4,6 +4,7 @@ import {
   Columns3,
   Database,
   Diamond,
+  FileText,
   Hand,
   Hexagon,
   Link2,
@@ -13,8 +14,10 @@ import {
   Square,
   Sticker,
   StickyNote,
+  Triangle,
   Type,
   User,
+  createLucideIcon,
 } from 'lucide-react';
 import { useState } from 'react';
 import type { CanvasIconsAdapter } from '../adapter/types.ts';
@@ -33,6 +36,14 @@ import { IconPickerPopover } from './icon-picker-popover.tsx';
  * source of truth for the marker literal.
  */
 export const HTML_BLOCK_DND_TYPE = 'application/x-seeflow-create-html-block';
+
+// Lucide doesn't ship a parallelogram glyph, so we synthesize one via
+// `createLucideIcon` — same render shape as every other Lucide icon
+// (ForwardRefExoticComponent<LucideProps>), so the ToolbarShapeEntry.Icon
+// slot (`typeof Square`) accepts it without type widening. The path mirrors
+// the shape's SHEAR_RATIO (20%) so the toolbar tile reads as a tiny preview
+// of the committed node.
+const Parallelogram = createLucideIcon('Parallelogram', [['path', { d: 'M7 4h13l-3 16H4z' }]]);
 
 export interface CanvasToolbarProps {
   /**
@@ -146,6 +157,20 @@ const ILLUSTRATIVE_SHAPES: ToolbarShapeEntry[] = [
   // Hexagon — owned microservice / hexagonal-architecture cell. lucide's
   // Hexagon icon is a flat-top hex, same orientation as the SVG.
   { shape: 'hexagon', label: 'Hexagon', commandId: 'tool.hexagon', Icon: Hexagon },
+  // Triangle — warning / hierarchy glyph. Isoceles, apex-up.
+  { shape: 'triangle', label: 'Triangle', commandId: 'tool.triangle', Icon: Triangle },
+  // Parallelogram — BPMN data / IO node. Lucide has no parallelogram glyph,
+  // so the tile uses the in-file `Parallelogram` created via createLucideIcon.
+  {
+    shape: 'parallelogram',
+    label: 'Parallelogram',
+    commandId: 'tool.parallelogram',
+    Icon: Parallelogram,
+  },
+  // Document — classic flowchart "page with wavy bottom". FileText is the
+  // closest Lucide glyph (rectangle with horizontal text lines + folded corner)
+  // and reads as a document at toolbar tile size even without the wave.
+  { shape: 'document', label: 'Document', commandId: 'tool.document', Icon: FileText },
 ];
 
 // Combined list, exported so US-015's drop-on-pane popover can list the same

@@ -94,7 +94,7 @@ export interface NodeSemanticBase extends NodeDescription {
 }
 
 /**
- * The 13 flat node types. Visual kind is the type. Capabilities are
+ * The 19 flat node types. Visual kind is the type. Capabilities are
  * independent optional fields on `data`.
  */
 export const GEOMETRIC_NODE_TYPES = [
@@ -109,6 +109,9 @@ export const GEOMETRIC_NODE_TYPES = [
   'cloud',
   'diamond',
   'hexagon',
+  'triangle',
+  'parallelogram',
+  'document',
 ] as const;
 export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 

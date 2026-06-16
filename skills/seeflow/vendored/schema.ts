@@ -191,7 +191,7 @@ const NodeCapabilitiesShape = {
 // SeeflowManifest schemas at the bottom of the file reuse the same constant.
 export const FlowIdPattern = /^[a-z0-9][a-z0-9-]*$/;
 
-// 16 flat node types. The first 11 are geometric/illustrative and share
+// 19 flat node types. The first 14 are geometric/illustrative and share
 // GeometricNodeData. `image`, `html`, `icon`, `component`, `linkflow` carry
 // per-type fields. The renderer picks the SVG / chrome by `type`; the schema
 // treats them (apart from the per-type fields below) as identical.
@@ -207,6 +207,9 @@ export const GEOMETRIC_NODE_TYPES = [
   'cloud',
   'diamond',
   'hexagon',
+  'triangle',
+  'parallelogram',
+  'document',
 ] as const;
 
 export const NodeTypeSchema = z.enum([
@@ -373,6 +376,9 @@ const NodeSchema = z.discriminatedUnion('type', [
   makeResolvedGeometricSchema('cloud'),
   makeResolvedGeometricSchema('diamond'),
   makeResolvedGeometricSchema('hexagon'),
+  makeResolvedGeometricSchema('triangle'),
+  makeResolvedGeometricSchema('parallelogram'),
+  makeResolvedGeometricSchema('document'),
   z.object({ ...NodeBaseShape, type: z.literal('image'), data: ResolvedImageNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('html'), data: ResolvedHtmlNodeData }),
   z.object({ ...NodeBaseShape, type: z.literal('icon'), data: ResolvedIconNodeData }),
@@ -659,6 +665,9 @@ export const FlowQueueNodeSchema = makeFlowGeometricSchema('queue');
 export const FlowCloudNodeSchema = makeFlowGeometricSchema('cloud');
 export const FlowDiamondNodeSchema = makeFlowGeometricSchema('diamond');
 export const FlowHexagonNodeSchema = makeFlowGeometricSchema('hexagon');
+export const FlowTriangleNodeSchema = makeFlowGeometricSchema('triangle');
+export const FlowParallelogramNodeSchema = makeFlowGeometricSchema('parallelogram');
+export const FlowDocumentNodeSchema = makeFlowGeometricSchema('document');
 
 export const FlowImageNodeSchema = z
   .object({
@@ -712,6 +721,9 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowCloudNodeSchema,
   FlowDiamondNodeSchema,
   FlowHexagonNodeSchema,
+  FlowTriangleNodeSchema,
+  FlowParallelogramNodeSchema,
+  FlowDocumentNodeSchema,
   FlowImageNodeSchema,
   FlowHtmlNodeSchema,
   FlowIconNodeSchema,

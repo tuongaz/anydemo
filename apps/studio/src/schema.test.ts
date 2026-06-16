@@ -233,7 +233,7 @@ describe('ResolvedFlowSchema', () => {
       nodes: [
         {
           id: 'shape-1',
-          type: 'triangle' as const,
+          type: 'pyramid' as const,
           position: { x: 0, y: 0 },
           data: {},
         },
@@ -2470,7 +2470,7 @@ describe('flow description field', () => {
 // invariant at the schema level. The flat schema's central claim is that
 // `playAction` / `statusAction` / `stateSource` are independent of `type` —
 // these tests fence that claim against drift.
-describe('US-009: flat node types — 14-tag matrix + capability invariants', () => {
+describe('US-009: flat node types — 17-tag matrix + capability invariants', () => {
   const ALL_TYPES = [
     'rectangle',
     'ellipse',
@@ -2483,6 +2483,9 @@ describe('US-009: flat node types — 14-tag matrix + capability invariants', ()
     'cloud',
     'diamond',
     'hexagon',
+    'triangle',
+    'parallelogram',
+    'document',
     'image',
     'html',
     'icon',
@@ -2498,7 +2501,7 @@ describe('US-009: flat node types — 14-tag matrix + capability invariants', ()
     return {};
   };
 
-  it('every one of the 14 type tags parses with a minimal valid payload', () => {
+  it('every one of the 17 type tags parses with a minimal valid payload', () => {
     for (const type of ALL_TYPES) {
       const id = `n-${type}`;
       const demo = {
@@ -2517,11 +2520,11 @@ describe('US-009: flat node types — 14-tag matrix + capability invariants', ()
     }
   });
 
-  it('rejects an unknown type tag (only the 15 flat tags are valid)', () => {
+  it('rejects an unknown type tag (only the 19 flat tags are valid)', () => {
     const demo = {
       version: 2 as const,
       name: 'unknown-type',
-      nodes: [{ id: 'n', type: 'triangle' as const, position: { x: 0, y: 0 }, data: {} }],
+      nodes: [{ id: 'n', type: 'pyramid' as const, position: { x: 0, y: 0 }, data: {} }],
       connectors: [],
     };
     expect(ResolvedFlowSchema.safeParse(demo).success).toBe(false);

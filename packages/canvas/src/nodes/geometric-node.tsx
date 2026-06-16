@@ -101,6 +101,12 @@ export const SHAPE_DEFAULT_SIZE: Record<GeometricKind, { width: number; height: 
   cloud: { width: 180, height: 120 },
   diamond: { width: 160, height: 120 },
   hexagon: { width: 180, height: 120 },
+  triangle: { width: 160, height: 140 },
+  // 25% wider than rectangle to compensate for the 20% horizontal shear
+  // (see SHEAR_RATIO in shapes/parallelogram.tsx) — the visible width
+  // ends up matching the rectangle's at default proportions.
+  parallelogram: { width: 240, height: 100 },
+  document: { width: 200, height: 140 },
 };
 
 // `text` deliberately omits border + background so the shape reads as a free
@@ -125,6 +131,9 @@ export const SHAPE_CLASS: Record<GeometricKind, string> = {
   cloud: '',
   diamond: '',
   hexagon: '',
+  triangle: '',
+  parallelogram: '',
+  document: '',
 };
 
 // Tailwind's `sf:shadow-md` resolved value — applied inline so an explicit

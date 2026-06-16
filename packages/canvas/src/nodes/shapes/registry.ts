@@ -3,9 +3,12 @@ import type { GeometricNodeType } from '../../types.ts';
 import { CloudShape } from './cloud.tsx';
 import { DatabaseShape } from './database.tsx';
 import { DiamondShape } from './diamond.tsx';
+import { DocumentShape } from './document.tsx';
 import { HexagonShape } from './hexagon.tsx';
+import { ParallelogramShape } from './parallelogram.tsx';
 import { QueueShape } from './queue.tsx';
 import { ServerShape } from './server.tsx';
+import { TriangleShape } from './triangle.tsx';
 import type { ShapePartProps } from './types.ts';
 import { UserShape } from './user.tsx';
 
@@ -25,4 +28,7 @@ export const ILLUSTRATIVE_SHAPE_RENDERERS: Partial<Record<GeometricNodeType, FC<
     cloud: CloudShape,
     diamond: DiamondShape,
     hexagon: HexagonShape,
+    triangle: TriangleShape,
+    parallelogram: ParallelogramShape,
+    document: DocumentShape,
   };

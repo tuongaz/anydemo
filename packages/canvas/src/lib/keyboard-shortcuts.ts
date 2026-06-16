@@ -73,6 +73,9 @@ export type CommandId =
   | 'tool.cloud'
   | 'tool.diamond'
   | 'tool.hexagon'
+  | 'tool.triangle'
+  | 'tool.parallelogram'
+  | 'tool.document'
   | 'tool.linkflow'
   | 'edit.undo'
   | 'edit.redo'
@@ -206,6 +209,24 @@ export const COMMANDS: readonly CommandDef[] = [
     id: 'tool.hexagon',
     label: 'Hexagon',
     description: 'Add a hexagon node (microservice)',
+    category: 'Tools',
+  },
+  {
+    id: 'tool.triangle',
+    label: 'Triangle',
+    description: 'Add a triangle node (warning / hierarchy)',
+    category: 'Tools',
+  },
+  {
+    id: 'tool.parallelogram',
+    label: 'Parallelogram',
+    description: 'Add a parallelogram node (data / IO in flowcharts)',
+    category: 'Tools',
+  },
+  {
+    id: 'tool.document',
+    label: 'Document',
+    description: 'Add a document node (file / report)',
     category: 'Tools',
   },
   // Linkflow lives in the secondary primary group with Sticky + Text; the

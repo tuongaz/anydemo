@@ -232,6 +232,9 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
   cloud: GEOMETRIC_SEMANTIC_KEYS,
   diamond: GEOMETRIC_SEMANTIC_KEYS,
   hexagon: GEOMETRIC_SEMANTIC_KEYS,
+  triangle: GEOMETRIC_SEMANTIC_KEYS,
+  parallelogram: GEOMETRIC_SEMANTIC_KEYS,
+  document: GEOMETRIC_SEMANTIC_KEYS,
   image: new Set([
     'name',
     'description',
