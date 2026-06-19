@@ -157,6 +157,13 @@ export function createApp(options: CreateAppOptions = {}): Hono {
 
   app.route('/demo', createDemoRouter(events));
 
+  // Public app config consumed by the SPA's auth bootstrap. Standalone/local
+  // studio has no auth, so this default reports `required: false` and the SPA
+  // resolves to its inert NullAuthProvider. A host (e.g. the cloud deployment)
+  // mounts its own `/api/config` AHEAD of the studio to advertise an auth
+  // requirement + adapter URL; that registration wins by route order.
+  app.get('/api/config', (c) => c.json({ mode: 'local', auth: { required: false } }));
+
   app.route(
     '/api',
     createApi({

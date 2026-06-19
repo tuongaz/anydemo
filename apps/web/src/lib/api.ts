@@ -1,6 +1,7 @@
 // Shared canvas types — single source of truth lives in @seeflow/canvas.
 // App-specific extensions (transient upload state, runtime API types) are
 // defined below and re-exported alongside the shared types.
+import { apiFetch } from '@/lib/api-client';
 import type { ImageNodeData as BaseImageNodeData, Flow } from '@seeflow/canvas';
 
 export type {
@@ -61,7 +62,7 @@ export interface FlowDetail {
 }
 
 export const fetchFlows = async (): Promise<FlowSummary[]> => {
-  const res = await fetch('/api/flows');
+  const res = await apiFetch('/api/flows');
   if (!res.ok) throw new Error(`GET /api/flows failed: ${res.status}`);
   return (await res.json()) as FlowSummary[];
 };
@@ -95,7 +96,7 @@ export interface ProjectSummary {
 }
 
 export const fetchProjects = async (): Promise<ProjectSummary[]> => {
-  const res = await fetch('/api/projects');
+  const res = await apiFetch('/api/projects');
   if (!res.ok) throw new Error(`GET /api/projects failed: ${res.status}`);
   const body = (await res.json()) as { projects: ProjectSummary[] };
   return body.projects;
@@ -103,7 +104,7 @@ export const fetchProjects = async (): Promise<ProjectSummary[]> => {
 
 export const fetchProjectFlows = async (project: string): Promise<ProjectFlowSummary[]> => {
   const url = `/api/projects/${encodeURIComponent(project)}/flows`;
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) {
     let errorBody: { error?: string } | null = null;
     try {
@@ -125,7 +126,7 @@ const flowApiBase = (project: string, flow: string): string =>
 
 export const fetchFlowDetail = async (project: string, flow: string): Promise<FlowDetail> => {
   const url = flowApiBase(project, flow);
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) throw new Error(`GET ${url} failed: ${res.status}`);
   return (await res.json()) as FlowDetail;
 };
@@ -159,7 +160,7 @@ export const deleteFlow = async (
     opts?.newDefault !== undefined
       ? `${base}?newDefault=${encodeURIComponent(opts.newDefault)}`
       : base;
-  const res = await fetch(url, { method: 'DELETE' });
+  const res = await apiFetch(url, { method: 'DELETE' });
   if (!res.ok) {
     let errorBody: { error?: string } | null = null;
     try {
@@ -178,7 +179,7 @@ export const deleteProject = async (
 ): Promise<{ ok: true }> => {
   const base = `/api/projects/${encodeURIComponent(project)}`;
   const url = opts?.deleteSource ? `${base}?deleteSource=true` : base;
-  const res = await fetch(url, { method: 'DELETE' });
+  const res = await apiFetch(url, { method: 'DELETE' });
   if (!res.ok) {
     let errorBody: { error?: string; detail?: string } | null = null;
     try {
@@ -247,7 +248,7 @@ export const createFlow = async (
   body: CreateFlowBody,
 ): Promise<MutateFlowResult> => {
   const url = `/api/projects/${encodeURIComponent(project)}/flows`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -264,7 +265,7 @@ export const updateFlow = async (
   body: PatchFlowBody,
 ): Promise<MutateFlowResult> => {
   const url = flowApiBase(project, flow);
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'PATCH',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -276,7 +277,7 @@ export const updateFlow = async (
 };
 
 export const createProject = async (body: CreateProjectBody): Promise<CreateProjectResult> => {
-  const res = await fetch('/api/projects', {
+  const res = await apiFetch('/api/projects', {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify(body),
@@ -312,7 +313,7 @@ const requestFileAction = async (
   action: 'open' | 'reveal',
   path: string,
 ): Promise<FileActionResult> => {
-  const res = await fetch(`/api/projects/${encodeURIComponent(projectId)}/files/${action}`, {
+  const res = await apiFetch(`/api/projects/${encodeURIComponent(projectId)}/files/${action}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: JSON.stringify({ path }),
@@ -371,7 +372,7 @@ export const playFlowNode = async (
   nodeId: string,
 ): Promise<PlayResult> => {
   const url = `${flowApiBase(project, flow)}/play/${encodeURIComponent(nodeId)}`;
-  const res = await fetch(url, {
+  const res = await apiFetch(url, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
     body: '{}',

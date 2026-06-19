@@ -1,3 +1,4 @@
+import { apiFetch } from '@/lib/api-client';
 import { strToU8, zipSync } from 'fflate';
 
 /**
@@ -89,7 +90,7 @@ export async function buildProjectBundle({
   flows,
 }: BuildProjectBundleInput): Promise<Uint8Array> {
   const projectUrl = `/api/projects/${encodeURIComponent(project)}`;
-  const projectRes = await fetch(projectUrl);
+  const projectRes = await apiFetch(projectUrl);
   if (!projectRes.ok) {
     throw new Error(`GET ${projectUrl} → ${projectRes.status}`);
   }
@@ -123,7 +124,7 @@ export async function buildProjectBundle({
     const detailUrl = `/api/projects/${encodeURIComponent(project)}/flows/${encodeURIComponent(
       flowSlug,
     )}`;
-    const detailRes = await fetch(detailUrl);
+    const detailRes = await apiFetch(detailUrl);
     if (!detailRes.ok) {
       throw new Error(`GET ${detailUrl} → ${detailRes.status}`);
     }
@@ -147,7 +148,7 @@ export async function buildProjectBundle({
       if (!assetPath || seen.has(assetPath)) continue;
       seen.add(assetPath);
       const fileUrl = `/api/projects/${encodeURIComponent(project)}/files/${assetPath}`;
-      const fileRes = await fetch(fileUrl);
+      const fileRes = await apiFetch(fileUrl);
       if (!fileRes.ok) continue;
       zipEntries[`flows/${flowSlug}/files/${assetPath}`] = new Uint8Array(
         await fileRes.arrayBuffer(),
