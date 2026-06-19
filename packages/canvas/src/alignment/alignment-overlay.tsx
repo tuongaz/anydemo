@@ -23,6 +23,16 @@ import type { GuideLine } from './geometry.ts';
 const EDGE_COLOR = 'var(--sf-accent)';
 const SPACING_COLOR = 'var(--sf-alignment-spacing)';
 
+/**
+ * Guides are a drag-time hint, not a hard rule: render the long alignment lines
+ * dashed and at reduced opacity so they read as subtle feedback rather than
+ * solid overlay lines competing with the nodes. The dash is interpreted in the
+ * SVG's non-scaled stroke space (via `vector-effect="non-scaling-stroke"`), so
+ * it stays a constant screen size at every zoom level — same as the 1px stroke.
+ */
+const GUIDE_DASH = '4 4';
+const GUIDE_OPACITY = 0.6;
+
 /** Half-length (world units) of the perpendicular "T" caps on spacing guides. */
 const CAP_HALF = 5;
 /** Badge box size (world units) for the spacing gap label. */
@@ -49,6 +59,7 @@ function guideLine(
   y2: number,
   color: string,
   key?: string,
+  dashed = true,
 ): ReactElement {
   return (
     <line
@@ -59,7 +70,8 @@ function guideLine(
       y2={y2}
       stroke={color}
       strokeWidth={1}
-      opacity={0.9}
+      opacity={GUIDE_OPACITY}
+      strokeDasharray={dashed ? GUIDE_DASH : undefined}
       vector-effect="non-scaling-stroke"
     />
   );
@@ -94,12 +106,44 @@ function renderSpacingGuide(
 
   const caps = isHorizontalSegment
     ? [
-        guideLine(mainX1, mainY1 - CAP_HALF, mainX1, mainY1 + CAP_HALF, SPACING_COLOR, 'cap-a'),
-        guideLine(mainX2, mainY2 - CAP_HALF, mainX2, mainY2 + CAP_HALF, SPACING_COLOR, 'cap-b'),
+        guideLine(
+          mainX1,
+          mainY1 - CAP_HALF,
+          mainX1,
+          mainY1 + CAP_HALF,
+          SPACING_COLOR,
+          'cap-a',
+          false,
+        ),
+        guideLine(
+          mainX2,
+          mainY2 - CAP_HALF,
+          mainX2,
+          mainY2 + CAP_HALF,
+          SPACING_COLOR,
+          'cap-b',
+          false,
+        ),
       ]
     : [
-        guideLine(mainX1 - CAP_HALF, mainY1, mainX1 + CAP_HALF, mainY1, SPACING_COLOR, 'cap-a'),
-        guideLine(mainX2 - CAP_HALF, mainY2, mainX2 + CAP_HALF, mainY2, SPACING_COLOR, 'cap-b'),
+        guideLine(
+          mainX1 - CAP_HALF,
+          mainY1,
+          mainX1 + CAP_HALF,
+          mainY1,
+          SPACING_COLOR,
+          'cap-a',
+          false,
+        ),
+        guideLine(
+          mainX2 - CAP_HALF,
+          mainY2,
+          mainX2 + CAP_HALF,
+          mainY2,
+          SPACING_COLOR,
+          'cap-b',
+          false,
+        ),
       ];
 
   return (

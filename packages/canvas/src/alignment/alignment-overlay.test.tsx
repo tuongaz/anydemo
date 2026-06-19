@@ -112,4 +112,33 @@ describe('AlignmentOverlay', () => {
       expect(line.props.stroke).toBe('var(--sf-alignment-spacing)');
     }
   });
+
+  it('renders every guide line at a reduced (sub-1) opacity so it reads as a hint', () => {
+    const lines = elementsOfType(render([V_GUIDE, H_GUIDE, SPACING_V, SPACING_H]), 'line');
+    expect(lines.length).toBeGreaterThan(0);
+    for (const line of lines) {
+      expect(line.props.opacity).toBeLessThan(0.9);
+    }
+  });
+
+  it('dashes the long alignment lines (edge guides + spacing main line)', () => {
+    const [edge] = elementsOfType(render([V_GUIDE]), 'line');
+    expect(edge?.props.strokeDasharray).toBeTruthy();
+
+    // The spacing main line is the one spanning the gap, not a short T-cap.
+    const main = elementsOfType(render([SPACING_V]), 'line').find(
+      (l) => l.props.x1 === SPACING_V.x1 && l.props.x2 === SPACING_V.x2,
+    );
+    expect(main?.props.strokeDasharray).toBeTruthy();
+  });
+
+  it('keeps the short spacing T-caps solid (a dashed 10px tick would read as broken)', () => {
+    const caps = elementsOfType(render([SPACING_V]), 'line').filter(
+      (l) => !(l.props.x1 === SPACING_V.x1 && l.props.x2 === SPACING_V.x2),
+    );
+    expect(caps).toHaveLength(2);
+    for (const cap of caps) {
+      expect(cap.props.strokeDasharray).toBeUndefined();
+    }
+  });
 });
