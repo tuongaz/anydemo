@@ -24,10 +24,11 @@ import type {
   LinkflowNodeData,
 } from '@/lib/api';
 import { fetchFlowDetail } from '@/lib/api';
-import { buildPastePayload, reconcilePasteFailure } from '@/lib/clipboard';
+import { buildPastePayload } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
+import { handlePasteFailure } from '@/lib/paste-failure';
 import { shortId } from '@/lib/short-id';
 import {
   type CanvasMode,
@@ -1632,38 +1633,29 @@ export function DemoView({
             await adapter.createConnector(c);
           }
         })
-        .catch(async (err) => {
-          console.error('paste failed', err);
+        .catch((err) =>
           // A paste POST can reject on the client AFTER the server already
-          // persisted the node (a false-negative response, or the SSE
-          // `flow:reload` echo arriving while the stream was mid-reconnect).
-          // Blindly dropping every optimistic override then strands a node that
-          // exists on disk but is invisible until a manual refresh — the
-          // reported bug. Reconcile against a fresh server snapshot instead:
-          // keep (and re-render) the entities that actually persisted, and only
-          // roll back + surface an error for the ones the server confirms gone.
-          let serverNodeIds: Set<string> | null = null;
-          let serverConnectorIds: Set<string> | null = null;
-          try {
-            const fresh = await fetchFlowDetail(project, flow);
-            serverNodeIds = new Set((fresh.flow?.nodes ?? []).map((n) => n.id));
-            serverConnectorIds = new Set((fresh.flow?.connectors ?? []).map((c) => c.id));
-            // Push server truth so a persisted-but-unechoed paste renders even
-            // when the SSE stream never delivered the reload.
-            applyDetail(fresh);
-          } catch (refetchErr) {
-            console.error('paste reconcile refetch failed', refetchErr);
-          }
-          const { dropNodeIds, dropConnectorIds, showError } = reconcilePasteFailure({
-            newNodeIds: newNodes.map((n) => n.id),
-            newConnectorIds: newConnectors.map((c) => c.id),
-            serverNodeIds,
-            serverConnectorIds,
-          });
-          for (const id of dropNodeIds) dropNodeOverride(id);
-          for (const id of dropConnectorIds) dropConnectorOverride(id);
-          if (showError) setEditError(err instanceof Error ? err.message : String(err));
-        });
+          // persisted the node (a false-negative response, a partial batch
+          // whose connector leg failed, or the SSE `flow:reload` echo arriving
+          // mid-reconnect). Blindly dropping every override would strand a node
+          // that exists on disk but is invisible until a manual refresh — the
+          // reported bug. `handlePasteFailure` reconciles against fresh server
+          // truth: keep + re-render persisted entities, roll back + surface an
+          // error only for the ones the server confirms gone.
+          handlePasteFailure(
+            err,
+            newNodes.map((n) => n.id),
+            newConnectors.map((c) => c.id),
+            {
+              fetchDetail: () => fetchFlowDetail(project, flow),
+              applyDetail,
+              dropNode: dropNodeOverride,
+              dropConnector: dropConnectorOverride,
+              setError: setEditError,
+              logError: (message, cause) => console.error(message, cause),
+            },
+          ),
+        );
     },
     [
       flowId,
