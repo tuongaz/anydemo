@@ -105,12 +105,20 @@ export function App() {
     [unregisterProject, refreshFlows, topProject],
   );
 
-  // On '/', skip the picker when there's nothing to pick: jump straight in if
-  // only one demo is registered, or if the stored last-used demo still
-  // resolves. Otherwise (2+ demos, no recall) StudioHome renders the picker.
+  // On the FIRST load only, skip the picker when there's nothing to pick: jump
+  // straight in if only one demo is registered, or if the stored last-used demo
+  // still resolves. Otherwise (2+ demos, no recall) StudioHome renders the picker.
+  //
+  // This runs once per app mount — gated on `autoResumedRef`. Re-running it on
+  // every navigation to '/' would make "home" unreachable: an explicit go-home
+  // (the SeeFlow logo, or the cloud avatar menu's "My projects") lands on '/',
+  // and the effect would immediately bounce back to the last-opened flow.
+  const autoResumedRef = useRef(false);
   useEffect(() => {
-    if (pathname !== '/') return;
     if (demos === null) return;
+    if (autoResumedRef.current) return;
+    autoResumedRef.current = true;
+    if (pathname !== '/') return;
     const target = pickInitialDemo(demos, readLastProjectId());
     if (target) {
       const split = splitFlowSlug(target.slug);
