@@ -1,3 +1,4 @@
+import { apiEventStream } from '@/lib/sse-client';
 import { useEffect, useRef, useState } from 'react';
 
 export interface UseRegistryEventsOptions {
@@ -36,7 +37,7 @@ export const useRegistryEvents = (
   }, [onRegistryReload, onHello]);
 
   useEffect(() => {
-    const source = new EventSource('/api/registry/events');
+    const source = apiEventStream('/api/registry/events');
 
     source.addEventListener('open', () => setConnected(true));
     source.addEventListener('error', () => setConnected(false));

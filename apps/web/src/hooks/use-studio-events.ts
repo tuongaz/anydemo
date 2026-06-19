@@ -1,3 +1,4 @@
+import { type SseEvent, apiEventStream } from '@/lib/sse-client';
 import type { Flow } from '@seeflow/canvas';
 import { useEffect, useRef, useState } from 'react';
 
@@ -80,7 +81,7 @@ export const useStudioEvents = (
     }
 
     const url = `/api/events?flowId=${encodeURIComponent(flowId)}`;
-    const source = new EventSource(url);
+    const source = apiEventStream(url);
 
     source.addEventListener('open', () => setConnected(true));
     source.addEventListener('error', () => setConnected(false));
@@ -110,7 +111,7 @@ export const useStudioEvents = (
   return { connected };
 };
 
-const parsePayload = (e: MessageEvent, type: StudioEventType): StudioEvent => {
+const parsePayload = (e: SseEvent, type: StudioEventType): StudioEvent => {
   try {
     const parsed = JSON.parse(e.data) as Record<string, unknown>;
     return { type, ts: Date.now(), ...parsed };
