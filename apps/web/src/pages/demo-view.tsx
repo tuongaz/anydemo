@@ -23,7 +23,9 @@ import type {
   GeometricNodeType,
   LinkflowNodeData,
 } from '@/lib/api';
-import { buildPastePayload } from '@/lib/clipboard';
+import { fetchFlowDetail } from '@/lib/api';
+import { buildPastePayload, reconcilePasteFailure } from '@/lib/clipboard';
+import { collectCopyTargets } from '@/lib/copy-targets';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
 import { shortId } from '@/lib/short-id';
@@ -156,6 +158,13 @@ export interface DemoViewProps {
    *  navigation lands on a page that resolves through `demos.find(...)`. */
   refreshFlows: () => Promise<void> | void;
   /**
+   * Push a freshly-fetched flow detail straight into the demo-data cache
+   * (same channel as the SSE `flow:reload` echo). Used by the paste error path
+   * to reconcile against server truth without waiting for an SSE round-trip —
+   * see {@link reconcilePasteFailure}.
+   */
+  applyDetail: (next: FlowDetail) => void;
+  /**
    * Imperative handle on the canvas's export workflow, owned by App.tsx so
    * the studio header's Share button and the cloud-export dialog can both
    * reach the same instance. DemoView forwards it into `<SeeflowCanvas ref>`
@@ -177,6 +186,7 @@ export function DemoView({
   externalReloadSignal,
   onPlayNode,
   refreshFlows,
+  applyDetail,
   canvasRef,
 }: DemoViewProps) {
   const summary = demos.find((d) => d.slug === slug);
@@ -1549,21 +1559,25 @@ export function DemoView({
 
   const onCopyNodes = useCallback(
     (nodeIds: string[]) => {
-      if (!demoNodes) return;
-      const idSet = new Set(nodeIds);
-      const nodes = demoNodes.filter((n) => idSet.has(n.id));
+      // Source from the LIVE view (server snapshot merged with optimistic
+      // overrides) rather than the raw server nodes. A just-created node that
+      // only exists as an override — or a node with pending edits the SSE echo
+      // hasn't confirmed — would otherwise be absent/stale, so copying it
+      // produced an empty clipboard and the follow-up paste silently no-opped.
+      const { nodes, connectors } = collectCopyTargets({
+        selectedIds: nodeIds,
+        serverNodes: demoNodes ?? [],
+        nodeOverrides: nodePending.overrides,
+        serverConnectors: demoConnectors ?? [],
+        connectorOverrides: connectorPending.overrides,
+      });
       if (nodes.length === 0) return;
-      // Connectors are copied only when BOTH endpoints are inside the copied
-      // set — connectors that touch unselected nodes would dangle on paste.
-      const connectors = (demoConnectors ?? []).filter(
-        (c) => idSet.has(c.source) && idSet.has(c.target),
-      );
       // Deep clone via JSON so a later server-side mutation can't bleed into
       // the clipboard payload (refs would alias the live data otherwise).
       clipboardRef.current = JSON.parse(JSON.stringify({ nodes, connectors }));
       setHasClipboard(true);
     },
-    [demoNodes, demoConnectors],
+    [demoNodes, demoConnectors, nodePending.overrides, connectorPending.overrides],
   );
 
   const onPasteNodes = useCallback(
@@ -1618,17 +1632,46 @@ export function DemoView({
             await adapter.createConnector(c);
           }
         })
-        .catch((err) => {
-          for (const n of newNodes) dropNodeOverride(n.id);
-          for (const c of newConnectors) dropConnectorOverride(c.id);
-          setEditError(err instanceof Error ? err.message : String(err));
+        .catch(async (err) => {
           console.error('paste failed', err);
+          // A paste POST can reject on the client AFTER the server already
+          // persisted the node (a false-negative response, or the SSE
+          // `flow:reload` echo arriving while the stream was mid-reconnect).
+          // Blindly dropping every optimistic override then strands a node that
+          // exists on disk but is invisible until a manual refresh — the
+          // reported bug. Reconcile against a fresh server snapshot instead:
+          // keep (and re-render) the entities that actually persisted, and only
+          // roll back + surface an error for the ones the server confirms gone.
+          let serverNodeIds: Set<string> | null = null;
+          let serverConnectorIds: Set<string> | null = null;
+          try {
+            const fresh = await fetchFlowDetail(project, flow);
+            serverNodeIds = new Set((fresh.flow?.nodes ?? []).map((n) => n.id));
+            serverConnectorIds = new Set((fresh.flow?.connectors ?? []).map((c) => c.id));
+            // Push server truth so a persisted-but-unechoed paste renders even
+            // when the SSE stream never delivered the reload.
+            applyDetail(fresh);
+          } catch (refetchErr) {
+            console.error('paste reconcile refetch failed', refetchErr);
+          }
+          const { dropNodeIds, dropConnectorIds, showError } = reconcilePasteFailure({
+            newNodeIds: newNodes.map((n) => n.id),
+            newConnectorIds: newConnectors.map((c) => c.id),
+            serverNodeIds,
+            serverConnectorIds,
+          });
+          for (const id of dropNodeIds) dropNodeOverride(id);
+          for (const id of dropConnectorIds) dropConnectorOverride(id);
+          if (showError) setEditError(err instanceof Error ? err.message : String(err));
         });
     },
     [
       flowId,
       adapter,
       history,
+      project,
+      flow,
+      applyDetail,
       setNodeOverride,
       dropNodeOverride,
       setConnectorOverride,

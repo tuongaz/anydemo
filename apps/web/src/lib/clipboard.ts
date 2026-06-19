@@ -89,3 +89,64 @@ export function buildPastePayload<N extends PasteableNode, C extends PasteableCo
 
   return { newNodes, newConnectors, idMap };
 }
+
+export interface ReconcilePasteFailureInput {
+  /** Ids of the optimistically-pasted nodes whose POSTs were in the failed batch. */
+  newNodeIds: readonly string[];
+  /** Ids of the optimistically-pasted connectors from the same batch. */
+  newConnectorIds: readonly string[];
+  /**
+   * Node ids the server reports AFTER a reconcile refetch, or `null` when that
+   * refetch itself failed (so we can't prove anything persisted).
+   */
+  serverNodeIds: ReadonlySet<string> | null;
+  /** Connector ids the server reports after the refetch, or `null`. */
+  serverConnectorIds: ReadonlySet<string> | null;
+}
+
+export interface ReconcilePasteFailureResult {
+  /** Optimistic node overrides to drop — the server has no record of these. */
+  dropNodeIds: string[];
+  /** Optimistic connector overrides to drop — server confirmed absent. */
+  dropConnectorIds: string[];
+  /**
+   * True when at least one pasted entity is genuinely missing from the server,
+   * i.e. the paste really did fail and the user should see the error. When
+   * every entity actually persisted (a false-negative response, or the SSE echo
+   * never arrived) this is false so no misleading banner is shown.
+   */
+  showError: boolean;
+}
+
+/**
+ * Decide how to recover from a rejected paste batch.
+ *
+ * The naive "drop every optimistic override + show an error" reaction is wrong
+ * when the POST failed AFTER the server already persisted the node (a
+ * false-negative response, or the SSE `flow:reload` echo arriving while the
+ * stream was mid-reconnect). Dropping the override then strands a node that
+ * exists on disk but is invisible until a manual refresh — the reported bug.
+ *
+ * Reconciling against a fresh server snapshot fixes that: keep the overrides
+ * for entities the server actually has (the prune effect clears them once the
+ * refetched detail lands) and only roll back + surface an error for the ones
+ * the server confirms are absent. When the reconcile refetch itself failed
+ * (`serverNodeIds`/`serverConnectorIds` are `null`) we can't prove anything
+ * persisted, so fall back to the conservative drop-everything behaviour.
+ */
+export function reconcilePasteFailure({
+  newNodeIds,
+  newConnectorIds,
+  serverNodeIds,
+  serverConnectorIds,
+}: ReconcilePasteFailureInput): ReconcilePasteFailureResult {
+  const dropNodeIds = newNodeIds.filter((id) => !serverNodeIds || !serverNodeIds.has(id));
+  const dropConnectorIds = newConnectorIds.filter(
+    (id) => !serverConnectorIds || !serverConnectorIds.has(id),
+  );
+  return {
+    dropNodeIds,
+    dropConnectorIds,
+    showError: dropNodeIds.length > 0 || dropConnectorIds.length > 0,
+  };
+}

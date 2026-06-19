@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'bun:test';
-import { type PasteableConnector, type PasteableNode, buildPastePayload } from '@/lib/clipboard';
+import {
+  type PasteableConnector,
+  type PasteableNode,
+  buildPastePayload,
+  reconcilePasteFailure,
+} from '@/lib/clipboard';
 
 type TestNode = PasteableNode & { tag?: string };
 type TestConn = PasteableConnector & { tag?: string };
@@ -108,5 +113,58 @@ describe('buildPastePayload', () => {
       defaultOffset: { x: 50, y: 75 },
     });
     expect(newNodes[0]?.position).toEqual({ x: 50, y: 75 });
+  });
+});
+
+describe('reconcilePasteFailure', () => {
+  it('keeps every override and shows no error when the server persisted everything', () => {
+    // False-negative: the POST rejected on the client but the node + connector
+    // are both on disk. The optimistic overrides must survive so the entities
+    // stay visible (the prune effect clears them once the refetch lands).
+    const result = reconcilePasteFailure({
+      newNodeIds: ['n1', 'n2'],
+      newConnectorIds: ['c1'],
+      serverNodeIds: new Set(['n1', 'n2', 'existing']),
+      serverConnectorIds: new Set(['c1']),
+    });
+    expect(result.dropNodeIds).toEqual([]);
+    expect(result.dropConnectorIds).toEqual([]);
+    expect(result.showError).toBe(false);
+  });
+
+  it('drops only the genuinely-absent entities and shows an error', () => {
+    const result = reconcilePasteFailure({
+      newNodeIds: ['n1', 'n2'],
+      newConnectorIds: ['c1', 'c2'],
+      serverNodeIds: new Set(['n1']),
+      serverConnectorIds: new Set(['c2']),
+    });
+    expect(result.dropNodeIds).toEqual(['n2']);
+    expect(result.dropConnectorIds).toEqual(['c1']);
+    expect(result.showError).toBe(true);
+  });
+
+  it('falls back to dropping everything when the reconcile refetch failed', () => {
+    const result = reconcilePasteFailure({
+      newNodeIds: ['n1', 'n2'],
+      newConnectorIds: ['c1'],
+      serverNodeIds: null,
+      serverConnectorIds: null,
+    });
+    expect(result.dropNodeIds).toEqual(['n1', 'n2']);
+    expect(result.dropConnectorIds).toEqual(['c1']);
+    expect(result.showError).toBe(true);
+  });
+
+  it('handles a node-only paste with no connectors', () => {
+    const result = reconcilePasteFailure({
+      newNodeIds: ['n1'],
+      newConnectorIds: [],
+      serverNodeIds: new Set(['n1']),
+      serverConnectorIds: new Set(),
+    });
+    expect(result.dropNodeIds).toEqual([]);
+    expect(result.dropConnectorIds).toEqual([]);
+    expect(result.showError).toBe(false);
   });
 });

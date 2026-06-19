@@ -191,6 +191,7 @@ export function DemoStackEntry({ entry, demos, refreshFlows, canvasRef }: DemoSt
       externalReloadSignal={externalReloadSignal}
       onPlayNode={onPlayNode}
       refreshFlows={refreshFlows}
+      applyDetail={applyDetail}
       canvasRef={effectiveCanvasRef}
     />
   );
