@@ -24,6 +24,7 @@ import type {
   LinkflowNodeData,
 } from '@/lib/api';
 import { fetchFlowDetail } from '@/lib/api';
+import { apiFetch } from '@/lib/api-client';
 import { buildPastePayload } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
@@ -359,7 +360,18 @@ export function DemoView({
   // rebuilt on flow switch. Every REST mutation in this file (and the prop
   // threaded to <SeeflowCanvas>) now routes through this adapter.
   const rawAdapter = useMemo(
-    () => createRestAdapter({ baseUrl: '', project, flow }),
+    // Route canvas mutations through apiFetch so they carry the auth bearer
+    // token in authenticated hosts (cloud). In local mode the NullAuthProvider
+    // adds no header, so this is identical to a bare fetch. Without this, every
+    // node/connector save bypasses auth and 401s ("Couldn't save change").
+    // Cast: apiFetch is fetch-compatible but lacks the `preconnect` static.
+    () =>
+      createRestAdapter({
+        baseUrl: '',
+        project,
+        flow,
+        fetch: apiFetch as unknown as typeof fetch,
+      }),
     [project, flow],
   );
   // Live snapshot of the flow state the wrapper reads when an intercepted
