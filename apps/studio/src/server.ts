@@ -16,6 +16,7 @@ import { type RegistryWatcher, createRegistryWatcher } from './registry-watcher.
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import type { Spawner } from './shellout.ts';
 import { type StatusRunner, createStatusRunner } from './status-runner.ts';
+import { createTenantResolver } from './tenancy.ts';
 import { type FlowWatcher, createWatcher } from './watcher.ts';
 
 /** Absolute path to the vendored runtime asset directory. Resolved relative
@@ -79,6 +80,11 @@ export interface CreateAppOptions {
   /** Override the icon installer's fetcher. Production uses fetchWithProgress
    *  (real network); integration tests inject a fixture-returning closure. */
   iconFetcher?: IconFetcher;
+  /** Host-injected per-request tenant resolver. Returns a tenant id (e.g. the
+   *  authenticated user's id) from the request context, or undefined for the
+   *  single-tenant local studio. Provider-agnostic — the studio never learns
+   *  HOW the id is produced. See src/tenancy.ts. */
+  getTenantId?: (ctx: import('hono').Context) => string | undefined;
 }
 
 const DEFAULT_VITE_DEV_URL = 'http://localhost:5173';
@@ -108,6 +114,8 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     options.statusRunner ??
     createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const iconJobs = options.iconJobs ?? createJobRegistry();
+  const tenantResolver = createTenantResolver({ defaultRegistry: registry, defaultEvents: events });
+  const getTenantId = options.getTenantId;
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
     watcher.watchAll();
@@ -117,6 +125,17 @@ export function createApp(options: CreateAppOptions = {}): Hono {
   }
 
   const app = new Hono();
+
+  // Per-request tenant context. With no getTenantId hook this resolves the
+  // default singletons (local studio). The cloud injects a hook returning
+  // user.sub so each request reads/writes its own tenant tree.
+  // Route-by-route adoption of c.get('tenant') is deferred to Phase 2.
+  app.use('*', async (c, next) => {
+    const tenantId = getTenantId ? getTenantId(c) : undefined;
+    if (tenantId) c.set('tenantId', tenantId);
+    c.set('tenant', tenantResolver.resolve(tenantId));
+    return next();
+  });
 
   // CORS + token gate runs first so every downstream route inherits the
   // null-origin rule. No-ops on requests without an Origin header (CLI
