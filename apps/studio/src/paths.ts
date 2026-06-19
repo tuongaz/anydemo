@@ -6,10 +6,18 @@ import { join } from 'node:path';
 // inside the Docker image, where it defaults to /workspace — state lands in
 // the bind-mounted workspace so it survives `docker run --rm`. Otherwise it
 // falls back to ~/.seeflow for local installs.
-export function seeflowHome(): string {
+export function seeflowHome(tenantId?: string): string {
   const workspace = process.env.SEEFLOW_WORKSPACE;
-  if (workspace && workspace.length > 0) return join(workspace, '.seeflow');
-  return join(homedir(), '.seeflow');
+  const base = workspace && workspace.length > 0 ? join(workspace, '.seeflow') : join(homedir(), '.seeflow');
+  if (tenantId && tenantId.length > 0) {
+    // Per-tenant nesting per the cloud tenancy design (§6.1):
+    //   workspace set -> <workspace>/users/<tenantId>/.seeflow
+    //   home fallback -> ~/.seeflow/users/<tenantId>/.seeflow
+    // The root differs so single- and multi-tenant layouts share one tree.
+    const root = workspace && workspace.length > 0 ? workspace : join(homedir(), '.seeflow');
+    return join(root, 'users', tenantId, '.seeflow');
+  }
+  return base;
 }
 
 // Per-project layout: everything lives at the project root. The studio never

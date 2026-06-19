@@ -35,6 +35,20 @@ describe('seeflowHome', () => {
     process.env.SEEFLOW_WORKSPACE = '/workspace';
     expect(seeflowHome()).toBe('/workspace/.seeflow');
   });
+
+  it('nests under users/<tenantId> when a tenant id is passed (workspace set)', () => {
+    process.env.SEEFLOW_WORKSPACE = '/workspace';
+    expect(seeflowHome('user_abc')).toBe('/workspace/users/user_abc/.seeflow');
+  });
+
+  it('nests under users/<tenantId> when a tenant id is passed (home fallback)', () => {
+    expect(seeflowHome('user_abc')).toBe(join(homedir(), '.seeflow', 'users', 'user_abc', '.seeflow'));
+  });
+
+  it('treats an empty tenant id like no tenant (single-tenant path)', () => {
+    process.env.SEEFLOW_WORKSPACE = '/workspace';
+    expect(seeflowHome('')).toBe('/workspace/.seeflow');
+  });
 });
 
 describe('project path helpers', () => {

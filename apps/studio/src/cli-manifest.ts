@@ -534,6 +534,31 @@ export const COMMAND_MANIFEST: CommandManifestEntry[] = [
     requiresStudio: false,
     examples: ['seeflow projects:list'],
   },
+  {
+    name: 'export',
+    synopsis: 'seeflow export [path] [--endpoint <url>] [--dry-run]',
+    description:
+      'Bundle a project (flow.json + style.json + node files) and export it to the ' +
+      'configured cloud endpoint using the cloud token from the shared credential ' +
+      'store. Creates a private cloud project on first export and updates it in place ' +
+      'on re-export (the returned project id is stamped into <root>/.seeflow/cloud.json). ' +
+      '--dry-run bundles without any network call.',
+    category: 'project',
+    args: [{ name: 'path', required: false, description: 'Project root (defaults to cwd)' }],
+    flags: [
+      {
+        name: 'endpoint',
+        valuePlaceholder: '<url>',
+        description: 'Cloud endpoint (default https://cloud.seeflow.dev)',
+      },
+      { name: 'dry-run', description: 'Bundle and print the file list without exporting' },
+    ],
+    outputs: {
+      okExample: { exported: true, endpoint: 'https://cloud.seeflow.dev', projectId: 'proj_abc' },
+    },
+    requiresStudio: false,
+    examples: ['seeflow export', 'seeflow export ./checkout --dry-run'],
+  },
   // ---- nodes -------------------------------------------------------------
   {
     name: 'nodes:add',

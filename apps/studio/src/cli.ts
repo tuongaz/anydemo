@@ -9,8 +9,12 @@ import {
   printOk,
   printOutcome,
 } from './cli-helpers.ts';
+import { runLogin, runLogout, runWhoami } from './cli-auth.ts';
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations, registerProject } from './cli-ops.ts';
+import { DEFAULT_CLOUD_ENDPOINT } from './credentials.ts';
+import { bundleProject } from './export-bundle.ts';
+import { publishProject } from './publish.ts';
 import { createEventBus } from './events.ts';
 import { JqError, applyJq } from './jq-filter.ts';
 import type { LayoutOptions } from './layout.ts';
@@ -230,6 +234,14 @@ if (argv.includes('--version') || argv.includes('-v')) {
   await runE2e();
 } else if (sub === 'emit') {
   await runEmit();
+} else if (sub === 'login') {
+  await runLoginCmd();
+} else if (sub === 'logout') {
+  runLogoutCmd();
+} else if (sub === 'whoami') {
+  runWhoamiCmd();
+} else if (sub === 'export') {
+  await runExportCmd();
 } else {
   console.error(`Unknown subcommand: ${sub}`);
   printHelp();
@@ -299,6 +311,14 @@ Commands (require a running studio):
   emit <id> <n> <st>   Broadcast a status event for node <n> (st: running|done|error)
                        [--run-id <id>] [--payload <json>] [--studio-url <url>]
   e2e                  End-to-end validate a registered flow (--project <p> --flow <f> [--skip-nodes a,b])
+
+Cloud account:
+  login                Sign in to the cloud (opens a browser) [--endpoint <url>]
+  logout               Clear the stored cloud credential [--endpoint <url>]
+  whoami               Show the stored cloud identity [--endpoint <url>]
+  export [path]        Bundle a project (default: cwd) and export it to the cloud,
+                       creating it on first run and updating in place after
+                       [--endpoint <url>] [--dry-run]
 
 Meta:
   version              Print the CLI version
@@ -1330,4 +1350,51 @@ async function runIconsRemove() {
   const { iconCacheRoot } = await import('./icons/paths.ts');
   removeIconPack(vendor, { cacheRoot: iconCacheRoot() });
   printOk({ removed: vendor });
+}
+
+// --- Cloud account verbs (generic, provider-agnostic) -----------------------
+// Declared as a hoisted function (not a const arrow) so the cloud command
+// handlers, which are invoked from the top-level dispatch above, can reach it
+// without tripping the temporal-dead-zone on the const binding.
+function cloudEndpoint(): string {
+  return flagValue('endpoint') ?? process.env.SEEFLOW_CLOUD_URL ?? DEFAULT_CLOUD_ENDPOINT;
+}
+
+async function runLoginCmd() {
+  const endpoint = cloudEndpoint();
+  console.error(`Opening ${endpoint} to sign in… (a browser window should open)`);
+  try {
+    const outcome = await runLogin({ endpoint });
+    printOk({ loggedIn: true, endpoint: outcome.endpoint, userId: outcome.userId, email: outcome.email });
+  } catch (err) {
+    printError(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+}
+
+function runLogoutCmd() {
+  const endpoint = cloudEndpoint();
+  runLogout(endpoint);
+  printOk({ loggedOut: true, endpoint });
+}
+
+function runWhoamiCmd() {
+  printOk(runWhoami(cloudEndpoint()));
+}
+
+async function runExportCmd() {
+  const root = resolve(positionalArgs()[0] ?? '.');
+  const endpoint = cloudEndpoint();
+  // --dry-run bundles the project without any network call (no credential
+  // needed) — useful for inspecting what would be shipped.
+  if (hasFlag('dry-run')) {
+    const bundle = bundleProject(root);
+    printOk({ dryRun: true, endpoint, name: bundle.name, files: bundle.files.map((f) => f.path) });
+    return;
+  }
+  try {
+    const { projectId } = await publishProject({ root, baseUrl: endpoint });
+    printOk({ exported: true, endpoint, projectId });
+  } catch (err) {
+    printError(`Export failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
 }
