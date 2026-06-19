@@ -1,7 +1,8 @@
 /**
- * In-memory pub/sub keyed by flowId. Subscribers receive every event published
- * for that demo until they unsubscribe; subscribers for other demos are not
- * notified.
+ * In-memory pub/sub keyed by (tenantId, flowId). Subscribers receive every
+ * event published for that (tenant, demo) until they unsubscribe; other
+ * tenants and other demos are not notified. `tenantId` is optional — omitting
+ * it uses a single shared partition (the single-tenant local studio).
  */
 
 export type StudioEventType =
@@ -16,6 +17,8 @@ export type StudioEventType =
 export interface StudioEvent {
   type: StudioEventType;
   flowId: string;
+  /** Optional tenant partition. Undefined = the single shared partition. */
+  tenantId?: string;
   /** Arbitrary JSON-serializable payload. Shape depends on event type. */
   payload: unknown;
   /** Server-side timestamp (ms since epoch). */
@@ -25,34 +28,40 @@ export interface StudioEvent {
 export type Subscriber = (event: StudioEvent) => void;
 
 export interface EventBus {
-  /** Subscribe to events for a specific demo. Returns an unsubscribe fn. */
-  subscribe(flowId: string, fn: Subscriber): () => void;
-  /** Broadcast an event to all subscribers of `flowId`. */
+  /** Subscribe to events for a (tenant, demo). Returns an unsubscribe fn. */
+  subscribe(flowId: string, fn: Subscriber, tenantId?: string): () => void;
+  /** Broadcast an event to all subscribers of (tenantId, flowId). */
   broadcast(event: Omit<StudioEvent, 'ts'> & { ts?: number }): void;
-  /** Number of active subscribers for a given demo (used in tests). */
-  subscriberCount(flowId: string): number;
+  /** Number of active subscribers for a (tenant, demo) (used in tests). */
+  subscriberCount(flowId: string, tenantId?: string): number;
 }
+
+/** Partition key: tenant-scoped when a tenant id is present, else shared. */
+const partitionKey = (flowId: string, tenantId?: string): string =>
+  tenantId && tenantId.length > 0 ? `${tenantId} ${flowId}` : flowId;
 
 export function createEventBus(): EventBus {
   const subs = new Map<string, Set<Subscriber>>();
 
   return {
-    subscribe(flowId, fn) {
-      let set = subs.get(flowId);
+    subscribe(flowId, fn, tenantId) {
+      const key = partitionKey(flowId, tenantId);
+      let set = subs.get(key);
       if (!set) {
         set = new Set();
-        subs.set(flowId, set);
+        subs.set(key, set);
       }
       set.add(fn);
       return () => {
-        const current = subs.get(flowId);
+        const current = subs.get(key);
         if (!current) return;
         current.delete(fn);
-        if (current.size === 0) subs.delete(flowId);
+        if (current.size === 0) subs.delete(key);
       };
     },
     broadcast(event) {
-      const set = subs.get(event.flowId);
+      const key = partitionKey(event.flowId, event.tenantId);
+      const set = subs.get(key);
       if (!set) return;
       const full: StudioEvent = { ...event, ts: event.ts ?? Date.now() };
       for (const fn of set) {
@@ -63,8 +72,8 @@ export function createEventBus(): EventBus {
         }
       }
     },
-    subscriberCount(flowId) {
-      return subs.get(flowId)?.size ?? 0;
+    subscriberCount(flowId, tenantId) {
+      return subs.get(partitionKey(flowId, tenantId))?.size ?? 0;
     },
   };
 }
