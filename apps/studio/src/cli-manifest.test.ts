@@ -24,6 +24,7 @@ describe('COMMAND_MANIFEST', () => {
         'flows:play',
         'projects:create',
         'projects:list',
+        'export',
         'nodes:add',
         'nodes:get',
         'nodes:patch',
