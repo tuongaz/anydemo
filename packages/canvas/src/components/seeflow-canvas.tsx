@@ -2258,6 +2258,22 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     };
   }, []);
 
+  // Which connector (if any) currently has its label open for inline edit.
+  // Lives in a ref — NOT EditableEdge's local state — because an SSE
+  // `flow:reload` echo (every label commit triggers one) makes React Flow
+  // transiently re-resolve edge positions; for one frame the edge's positions
+  // read null, so xyflow's EdgeWrapper renders null and tears down + remounts
+  // the EditableEdge. Local `editing` state would be lost in that remount,
+  // collapsing the editor and stealing focus mid-typing. A canvas-owned ref
+  // survives the remount: the freshly-mounted EditableEdge reads it back and
+  // re-enters edit mode. A ref (not state) avoids a re-render of every edge and
+  // keeps the hook-shim test's useState slot indices stable.
+  const editingConnectorIdRef = useRef<string | null>(null);
+  const getEditingConnectorId = useCallback(() => editingConnectorIdRef.current, []);
+  const setEditingConnectorId = useCallback((id: string | null) => {
+    editingConnectorIdRef.current = id;
+  }, []);
+
   // already left hover and the user needs to discover drop targets without
   // hover-then-aim. Toggled via onConnectStart/End + onReconnectStart/End.
   const [connecting, setConnecting] = useState(false);
@@ -3639,6 +3655,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // US-018: stable callback (useCallback with empty deps) so the
           // memoized edge cache key doesn't churn.
           registerEditHandle,
+          // Inline-edit session state lives on the canvas (see
+          // editingConnectorIdRef) so it survives the edge remount an SSE echo
+          // triggers mid-edit. Both are stable refs/callbacks → no cache churn.
+          getEditingConnectorId,
+          setEditingConnectorId,
         },
       };
     };
@@ -3689,6 +3710,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onConnectorLabelChange,
     reconnectableEdges,
     registerEditHandle,
+    getEditingConnectorId,
+    setEditingConnectorId,
     isEditMode,
   ]);
 

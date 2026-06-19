@@ -124,6 +124,18 @@ export type EditableEdgeData = {
    * callback so double-click anywhere on the edge body opens the editor.
    */
   registerEditHandle?: (id: string, enter: () => void) => () => void;
+  /**
+   * Canvas-owned inline-edit session state. `editing` is derived from
+   * `getEditingConnectorId() === id` rather than local component state so the
+   * edit survives the EditableEdge remount an SSE `flow:reload` echo triggers
+   * mid-edit: xyflow's EdgeWrapper renders null for one frame when edge
+   * positions briefly resolve null during the echo's node re-adoption, tearing
+   * the EditableEdge down and rebuilding it. Local state would be lost; a
+   * canvas-owned ref is read back by the fresh instance to restore edit mode.
+   * Stable refs/callbacks injected by SeeflowCanvas.
+   */
+  getEditingConnectorId?: () => string | null;
+  setEditingConnectorId?: (id: string | null) => void;
   /** US-025: floating endpoints when !== false. */
   sourceHandleAutoPicked?: boolean;
   /** US-025: same as sourceHandleAutoPicked but for the target endpoint. */
@@ -177,7 +189,29 @@ export function EditableEdge({
   interactionWidth,
   data,
 }: EdgeProps<EditableEdgeType>) {
-  const [editing, setEditing] = useState(false);
+  // Edit-session state is owned by the canvas (data.getEditingConnectorId), not
+  // local state, so it survives the remount an SSE echo triggers mid-edit (see
+  // EditableEdgeData docstring). The lazy initializer re-reads the canvas ref on
+  // EVERY mount — including the remount — so a freshly rebuilt edge re-enters
+  // edit mode instead of collapsing the editor and stealing focus.
+  const getEditingConnectorId = data?.getEditingConnectorId;
+  const setEditingConnectorId = data?.setEditingConnectorId;
+  const [editing, setEditing] = useState(() => getEditingConnectorId?.() === id);
+  // True only when THIS instance entered edit via a user gesture (double-click).
+  // A remount-restored edit leaves it false so the editor re-mounts with the
+  // caret at the end (no select-all) — resumed typing appends instead of wiping.
+  const enteredViaGestureRef = useRef(false);
+  const enterEdit = () => {
+    enteredViaGestureRef.current = true;
+    setEditingConnectorId?.(id);
+    setEditing(true);
+  };
+  const exitEdit = () => {
+    // Only clear the shared id if it still points at us — a different connector
+    // may have taken over the edit (its enterEdit ran before our blur fired).
+    if (getEditingConnectorId?.() === id) setEditingConnectorId?.(null);
+    setEditing(false);
+  };
   // useInternalNode subscribes the edge to changes on each node — including
   // position and dimensions — so a drag visibly slides the floating
   // endpoint along the perimeter in real time without any rerouter machinery.
@@ -328,12 +362,18 @@ export function EditableEdge({
   const fontSize = data?.fontSize;
   const fontSizeStyle = typeof fontSize === 'number' ? { fontSize: `${fontSize}px` } : undefined;
 
-  // US-018: register an external entry point to enter edit mode.
+  // US-018: register an external entry point to enter edit mode. Inlined (not a
+  // reference to enterEdit) so the closure's deps stay stable and the handle
+  // isn't re-registered every render.
   const registerEditHandle = data?.registerEditHandle;
   useEffect(() => {
     if (!registerEditHandle || !editable) return;
-    return registerEditHandle(id, () => setEditing(true));
-  }, [id, registerEditHandle, editable]);
+    return registerEditHandle(id, () => {
+      enteredViaGestureRef.current = true;
+      setEditingConnectorId?.(id);
+      setEditing(true);
+    });
+  }, [id, registerEditHandle, editable, setEditingConnectorId]);
 
   // US-024: only render the visible endpoint dots when this edge is
   // reconnectable (sole-selected). The dots are purely visual — `pointer-
@@ -412,7 +452,11 @@ export function EditableEdge({
               initialValue={labelText}
               field="connector-label"
               onCommit={(v) => onLabelChange?.(id, v)}
-              onExit={() => setEditing(false)}
+              onExit={exitEdit}
+              // Select-all on a fresh double-click (overtype the whole label);
+              // caret-at-end when the editor is re-mounted by a remount-restore
+              // so resumed typing appends instead of replacing.
+              selectOnMount={enteredViaGestureRef.current}
               className="sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-1.5 sf:py-0.5 sf:text-[11px] sf:text-foreground/85 sf:shadow-md"
               style={fontSizeStyle}
               placeholder="Label"
@@ -429,7 +473,7 @@ export function EditableEdge({
                 editable
                   ? (e) => {
                       e.stopPropagation();
-                      setEditing(true);
+                      enterEdit();
                     }
                   : undefined
               }
@@ -443,7 +487,7 @@ export function EditableEdge({
               className="sf:rounded-full sf:border sf:border-dashed sf:border-muted-foreground/40 sf:bg-card sf:px-1 sf:text-[10px] sf:text-muted-foreground/60 sf:opacity-0 sf:transition-opacity sf:hover:opacity-100 sf:group-hover/canvas:opacity-50"
               onDoubleClick={(e) => {
                 e.stopPropagation();
-                setEditing(true);
+                enterEdit();
               }}
             >
               +

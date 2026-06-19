@@ -33,6 +33,13 @@ export interface InlineEditProps {
   className?: string;
   style?: CSSProperties;
   placeholder?: string;
+  /**
+   * Select all seeded text on mount (default true) so a fresh edit overtypes.
+   * Pass false to place the caret at the end instead — used when the editor is
+   * re-mounted by a host remount mid-edit (e.g. an SSE echo rebuilding the edge
+   * a connector label lives on) so resumed typing appends rather than wiping.
+   */
+  selectOnMount?: boolean;
 }
 
 /**
@@ -58,6 +65,7 @@ export function InlineEdit({
   className,
   style,
   placeholder,
+  selectOnMount = true,
 }: InlineEditProps) {
   // 'blur-only' implies multiline reading (innerText) so newlines round-trip.
   const isMultiline = multiline || commitMode === 'blur-only';
@@ -68,12 +76,12 @@ export function InlineEdit({
   const lastCommittedRef = useRef(initialValue);
   const skipBlurRef = useRef(false);
 
-  // Mount: seed the editor's text, focus, and select all so the user can
-  // immediately overtype. We seed via DOM (not via JSX children) because
-  // contenteditable + React children fights React's reconciliation: the
+  // Mount: seed the editor's text, focus, and (by default) select all so the
+  // user can immediately overtype. We seed via DOM (not via JSX children)
+  // because contenteditable + React children fights React's reconciliation: the
   // browser mutates the subtree on every keystroke, then React tries to
   // restore it on re-render and the caret jumps.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: initialValue is a one-shot seed.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: initialValue/selectOnMount are one-shot mount seeds.
   useEffect(() => {
     const el = editorRef.current;
     if (!el) return;
@@ -83,6 +91,9 @@ export function InlineEdit({
     if (selection) {
       const range = document.createRange();
       range.selectNodeContents(el);
+      // selectOnMount=false → collapse to the end so the caret sits after the
+      // existing text instead of selecting it (remount-restore case).
+      if (!selectOnMount) range.collapse(false);
       selection.removeAllRanges();
       selection.addRange(range);
     }
@@ -202,6 +213,16 @@ export function InlineEdit({
       skipBlurRef.current = false;
       return;
     }
+    // A blur fired because the editor element was detached from the DOM (the
+    // host re-rendered and unmounted/remounted us — e.g. React Flow tearing
+    // down the edge a connector label lives on during an SSE echo) must NOT
+    // finalize/exit: that would clear the host's "currently editing" state and
+    // collapse the editor for good, stealing focus mid-edit. The mount-cleanup
+    // debouncer.flush() already persists any pending text, and the host
+    // restores the edit on remount. Genuine click-away blurs leave the element
+    // connected, so they still finalize.
+    const el = editorRef.current;
+    if (!el || !el.isConnected) return;
     finalize();
   };
 

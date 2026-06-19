@@ -589,3 +589,83 @@ test.describe('canvas — flat node types (US-009)', () => {
     await expect(created).toHaveCount(1, { timeout: 5_000 });
   });
 });
+
+// Regression: editing a connector label must NOT lose focus when the SSE
+// `flow:reload` echo (which every debounced label commit triggers) lands
+// mid-typing. The echo makes React Flow transiently re-resolve edge positions;
+// for one frame the edge's positions read null, so xyflow's EdgeWrapper renders
+// null and tears down + remounts the EditableEdge. The inline-edit session used
+// to live in EditableEdge's local state, so the remount collapsed the editor
+// and stole focus ("focus moved somewhere else, can't keep typing"). The fix
+// lifts the session onto the canvas so the rebuilt edge re-enters edit mode.
+test.describe('canvas — connector label edit survives SSE echo', () => {
+  test('inline editor keeps focus through the commit + flow:reload echo', async ({
+    page,
+    studio,
+  }) => {
+    const resolvedFlow = {
+      version: 2 as const,
+      name: 'Label Edit Focus',
+      nodes: [
+        { id: 'A', type: 'rectangle' as const, position: { x: 120, y: 340 }, data: { name: 'A' } },
+        { id: 'B', type: 'rectangle' as const, position: { x: 620, y: 340 }, data: { name: 'B' } },
+      ],
+      connectors: [{ id: 'c1', source: 'A', target: 'B', label: 'order.created' }],
+    };
+    const registered = await registerFlow(studio.studio, 'label-edit-focus', resolvedFlow, {
+      name: 'Label Edit Focus',
+    });
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(registered.projectSlug, registered.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await waitForCanvasSettled(page);
+
+    // Enter inline edit by dispatching a bubbling dblclick straight on the label
+    // button (React's delegated handler catches it). A real pointer dblclick is
+    // swallowed by the edge's invisible interaction stroke that overlaps the
+    // label — see editable-edge.tsx — which is orthogonal to this regression.
+    const labelButton = page
+      .locator('.react-flow__edgelabel-renderer button', { hasText: 'order.created' })
+      .first();
+    await labelButton.waitFor({ state: 'visible' });
+    // Dispatch the dblclick via Playwright's native dispatchEvent (bubbles to
+    // React's delegated onDoubleClick). A real pointer dblclick is swallowed by
+    // the edge's invisible interaction stroke overlapping the label. (Page
+    // evals below use string form: the studio tsconfig omits the DOM lib so a
+    // callback referencing `document` would fail typecheck; the string runs in
+    // the browser where the global exists.)
+    await labelButton.dispatchEvent('dblclick');
+
+    const editor = page.locator('[data-testid="inline-edit-input"][data-field="connector-label"]');
+    await expect(editor).toBeVisible();
+    const focusedOnOpen = await page.evaluate(
+      "document.activeElement?.getAttribute('data-testid') === 'inline-edit-input'",
+    );
+    expect(focusedOnOpen).toBe(true);
+
+    // Type, then wait for the debounced commit's PATCH to fire (proves the
+    // server round-trip + watcher flow:reload echo that used to kill the editor
+    // is actually exercised here, so the test fails loudly on a regression).
+    const patch = page.waitForResponse(
+      (r) => r.url().includes('/connectors/') && r.request().method() === 'PATCH',
+      { timeout: 10_000 },
+    );
+    await page.keyboard.press('End');
+    await page.keyboard.type(' XYZ', { delay: 40 });
+    await patch;
+    // Give the watcher → SSE flow:reload echo → re-render (the remount) a beat.
+    await page.waitForTimeout(800);
+
+    // The editor must still be mounted AND still hold focus.
+    await expect(editor).toBeVisible();
+    const stillFocused = await page.evaluate(
+      "document.activeElement?.getAttribute('data-testid') === 'inline-edit-input' && !!document.activeElement?.isContentEditable",
+    );
+    expect(stillFocused).toBe(true);
+
+    // Resumed typing must append (caret restored to the end), not replace.
+    await page.keyboard.type('END', { delay: 40 });
+    await expect(editor).toHaveText(/order\.created XYZEND/);
+  });
+});

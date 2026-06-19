@@ -770,14 +770,17 @@ describe('SeeflowCanvas', () => {
       pendingFit: 4,
       signalEffectMounted: 5,
       resolvedAutoFitView: 6,
-      drawShape: 16,
+      // editingConnectorIdRef (connector inline-edit session, survives the
+      // SSE-echo edge remount) was added immediately after editHandlesRef —
+      // above drawShape — so every ref below drifted down by +1.
+      drawShape: 17,
       // drawIconRef sits between drawShapeRef and drawStartRef (mirrors the
       // draw-icon canvasMode variant for the icon-equivalent of the shape
       // drag-create flow), shifting every ref below by +1.
-      drawIcon: 17,
-      drawStart: 18,
-      drawCurrent: 19,
-      drawing: 20,
+      drawIcon: 18,
+      drawStart: 19,
+      drawCurrent: 20,
+      drawing: 21,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
