@@ -16,7 +16,7 @@ function root(): string {
 
 test('first publish posts without a project id and stores the returned id', async () => {
   const r = root();
-  let seenBody: { projectId?: string; bundle: { files: Array<{ path: string }> } };
+  let seenBody!: { projectId?: string; bundle: { files: Array<{ path: string }> } };
   const fakeFetch = async (_url: string, init: RequestInit) => {
     seenBody = JSON.parse(init.body as string);
     return new Response(JSON.stringify({ projectId: 'proj_new' }), { status: 200 });
