@@ -3949,4 +3949,61 @@ describe('US-004: alignment guides drag wiring', () => {
     // No snap — the raw 4px offset stands.
     expect(moved.position.x).toBe(4);
   });
+
+  it('commits the SNAPPED position on drag stop, not the raw xyflow dragItem position', () => {
+    // Regression: the rendered node snaps to the guide during the drag, but
+    // xyflow's onNodeDragStop payload carries the *raw* (unsnapped)
+    // `dragItem.position` — see @xyflow/system `getEventHandlerParams`, which
+    // spreads the store node then overrides `position: dragItem.position`.
+    // commitDraggedNodes must persist what was rendered (the snapped rfNodes
+    // position); otherwise the adapter echo yanks the node back off the guide
+    // by the snap delta (~1px when dropped near-aligned) the instant the mouse
+    // is released.
+    const refNode: FlowNode = {
+      id: 'a',
+      type: 'rectangle',
+      position: { x: 0, y: 0 },
+      data: { name: 'a', width: 80, height: 40 },
+    };
+    const draggedNode: FlowNode = {
+      id: 'b',
+      type: 'rectangle',
+      position: { x: 0, y: 100 },
+      data: { name: 'b', width: 80, height: 40 },
+    };
+    const positionCommits: Array<{ id: string; position: { x: number; y: number } }> = [];
+    const tree = callSeeflowCanvas({
+      mode: 'edit',
+      nodes: [refNode, draggedNode],
+      selectedNodeIds: [],
+      onNodePositionChange: (id, position) => positionCommits.push({ id, position }),
+    });
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+    const onNodeDragStart = rf.props.onNodeDragStart as (
+      e: { metaKey?: boolean; ctrlKey?: boolean },
+      node: Node,
+      nodes: Node[],
+    ) => void;
+    const onNodesChange = rf.props.onNodesChange as (changes: unknown[]) => void;
+    const onNodeDragStop = rf.props.onNodeDragStop as (
+      e: unknown,
+      node: Node,
+      nodes: Node[],
+    ) => void;
+
+    const draggedRf = { id: 'b', position: { x: 0, y: 100 } } as unknown as Node;
+    onNodeDragStart({ metaKey: false, ctrlKey: false }, draggedRf, [draggedRf]);
+    // Terminal frame: xyflow emits the raw position with dragging:false; the
+    // hook snaps rfNodes back to x=0 (4px is within the 6px threshold).
+    onNodesChange([{ type: 'position', id: 'b', position: { x: 4, y: 100 }, dragging: false }]);
+    // xyflow's drag-stop payload carries the RAW position (x=4), not the snap.
+    const rawStopNode = { id: 'b', position: { x: 4, y: 100 } } as unknown as Node;
+    onNodeDragStop(null, rawStopNode, [rawStopNode]);
+
+    const committedB = positionCommits.filter((c) => c.id === 'b').at(-1);
+    if (!committedB) throw new Error('expected onNodePositionChange to fire for the dragged node');
+    expect(committedB.position.x).toBe(0);
+    expect(committedB.position.y).toBe(100);
+  });
 });

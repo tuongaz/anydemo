@@ -12,10 +12,13 @@
 //   2. SNAP PROOF — while the pointer sits a few SCREEN px short of exact
 //      alignment (inside the ~6px band but off-target by > 1 world px), the
 //      node is held at the left node's X, i.e. the live snap pulled it in; and
-//   3. the dropped position equals the aligned coordinate within 1px.
-// The drag-STOP change is intentionally not snapped (only `dragging === true`
-// changes are), so the release happens dead-on alignment to land the node on
-// the aligned X — step 2 is what proves the snap itself engaged.
+//   3. RELEASE PROOF — the mouse is released while STILL that few px short, and
+//      the COMMITTED (server-persisted) position is the aligned coordinate, not
+//      the off-target pointer position. The drag-stop frame is snapped too (the
+//      hook snaps `dragging: false`), and commitDraggedNodes persists the
+//      snapped rfNodes position rather than xyflow's raw `dragItem.position` —
+//      so the node sticks to the guide on release instead of jumping ~1px back
+//      the instant the mouse is released.
 //
 // Filename ends in `.e2e.ts` (not `.spec.ts`) so bun's default test discovery
 // can't pick it up — same convention as the other studio e2e suites.
@@ -107,18 +110,16 @@ test.describe('canvas — alignment guides (US-006)', () => {
     const startY = rightBox.y + rightBox.height / 2;
     const afterThresholdX = startX - FIRST_MOVE;
 
-    // Two pointer targets, both reached during one continuous drag:
+    // Single pointer target for the drag (one continuous gesture):
     //  - probeX: 4 SCREEN px short of exact alignment. Inside the ~6px snap
     //    band but off-target by 4/zoom (> 1) world px — so the live snap, not
-    //    pointer accuracy, is what must pull the node onto the left node's X.
-    //  - exactX: dead-on alignment. The drag-STOP change is not snapped (only
-    //    `dragging === true` changes are, by design), so the node persists at
-    //    the pointer's world position on release; dropping here makes the
-    //    committed position the aligned coordinate.
-    // The absorbed first move is added back into each displacement.
+    //    pointer accuracy, is what pulls the node onto the left node's X. We
+    //    both probe the live snap here AND release here, so the snapped position
+    //    has to survive the commit: xyflow's raw `dragItem.position` would land
+    //    4/zoom px off the guide (see the release-proof assertion below).
+    // The absorbed first move is added back into the displacement.
     const PROBE_OFFSET_SCREEN = 4;
     const probeX = startX - (span - PROBE_OFFSET_SCREEN + FIRST_MOVE);
-    const exactX = startX - (span + FIRST_MOVE);
 
     const stepTo = async (fromX: number, toX: number, steps: number): Promise<void> => {
       for (let i = 1; i <= steps; i++) {
@@ -145,13 +146,16 @@ test.describe('canvas — alignment guides (US-006)', () => {
     expect(offsetWorldPx).toBeGreaterThan(1);
     await expect.poll(async () => Math.abs(await worldX('right'))).toBeLessThanOrEqual(1);
 
-    // Finish onto exact alignment and release.
-    await stepTo(probeX, exactX, 6);
+    // Release while STILL PROBE_OFFSET_SCREEN px short of exact alignment — the
+    // commit must persist the snapped (aligned) position, not the raw pointer
+    // position. This is the regression guard for the "node jumps ~1px off the
+    // guide the instant the mouse is released" bug.
     await page.mouse.up();
 
     // The committed position lives on the server-resolved flow (the drag PATCH
-    // round-trips through the adapter). Assert the dropped right node landed on
-    // the left node's X within 1px — the aligned coordinate.
+    // round-trips through the adapter). Assert the right node was PERSISTED at
+    // the left node's X within 1px — i.e. the snap survived release even though
+    // the pointer was released 4/zoom (> 1) world px short of exact alignment.
     const flowApi = `${studio.studio.baseURL}/api/projects/${flow.projectSlug}/flows/${flow.flowSlug}`;
     const nodeX = async (id: string): Promise<number> => {
       const res = await page.request.get(flowApi);

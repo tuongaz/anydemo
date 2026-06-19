@@ -4382,6 +4382,22 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const commitDraggedNodes = useCallback(
     (draggedNodes: Node[]) => {
       if (draggedNodes.length === 0) return;
+      // US-004: xyflow's drag-event payload carries the RAW pointer-derived
+      // position (`dragItem.position`), NOT the alignment-snapped position the
+      // hook wrote into rfNodes during the drag — `@xyflow/system`'s
+      // `getEventHandlerParams` spreads the store node then overrides
+      // `position: dragItem.position`. Persisting that raw value lets the
+      // adapter echo yank the node back off the guide by the snap delta (~1px
+      // when dropped near-aligned) the instant the mouse is released. Resolve
+      // every dragged node's position from the controlled rfNodes ref instead —
+      // the single source of truth for what was actually rendered. Falls back
+      // to the event position when a node isn't found (defensive; identical to
+      // the event value on any drag where no snap was applied).
+      const committedPositionOf = (n: Node): { x: number; y: number } => {
+        const live = rfNodesRef.current.find((r) => r.id === n.id);
+        const pos = live ? live.position : n.position;
+        return { x: pos.x, y: pos.y };
+      };
       // US-027: view mode — React Flow's internal applyNodeChanges has already
       // updated the local rfNodes during the drag, so the visual move stuck.
       // We skip the parent dispatches that would have persisted via the
@@ -4393,20 +4409,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (!isEditMode) {
         const map = viewModePositionsRef.current;
         for (const n of draggedNodes) {
-          map.set(n.id, { x: n.position.x, y: n.position.y });
+          map.set(n.id, committedPositionOf(n));
         }
         return;
       }
       if (draggedNodes.length === 1) {
         const moved = draggedNodes[0];
         if (moved && onNodePositionChange) {
-          onNodePositionChange(moved.id, { x: moved.position.x, y: moved.position.y });
+          onNodePositionChange(moved.id, committedPositionOf(moved));
         }
         return;
       }
       if (onNodePositionsChange) {
         onNodePositionsChange(
-          draggedNodes.map((n) => ({ id: n.id, position: { x: n.position.x, y: n.position.y } })),
+          draggedNodes.map((n) => ({ id: n.id, position: committedPositionOf(n) })),
         );
         return;
       }
@@ -4414,7 +4430,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // the legacy behavior (N undo entries) still works.
       if (!onNodePositionChange) return;
       for (const moved of draggedNodes) {
-        onNodePositionChange(moved.id, { x: moved.position.x, y: moved.position.y });
+        onNodePositionChange(moved.id, committedPositionOf(moved));
       }
     },
     [onNodePositionChange, onNodePositionsChange, isEditMode],
