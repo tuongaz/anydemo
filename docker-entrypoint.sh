@@ -16,8 +16,11 @@ case "${1:-start}" in
     ;;
 esac
 
-# Start the studio in the background; pin its PID for signal forwarding.
-bun /app/apps/studio/src/cli.ts start --port "$SEEFLOW_PORT" &
+# Start the studio attached (--foreground). `start` defaults to spawning a
+# DETACHED daemon and returning — fatal in a container, where PID 1 exiting stops
+# the container (and kills the daemon with it). `--foreground` keeps the studio as
+# this script's child so the `wait` below holds the container open.
+bun /app/apps/studio/src/cli.ts start --port "$SEEFLOW_PORT" --foreground &
 STUDIO_PID=$!
 
 # PID-1 hygiene: forward SIGTERM/SIGINT to the studio so `docker stop` is clean.

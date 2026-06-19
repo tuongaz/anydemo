@@ -60,6 +60,12 @@ COPY --from=web-builder /src/package.json ./package.json
 COPY --from=web-builder /src/bun.lock ./bun.lock
 COPY --from=web-builder /src/node_modules ./node_modules
 
+# Bun's workspace symlink (node_modules/@seeflow/canvas -> packages/canvas) is NOT
+# preserved through the multi-stage `COPY --from ... node_modules` above, so the
+# `@seeflow/canvas/catalog` subpath import in schema.ts fails to resolve at runtime
+# ("Cannot find module '@seeflow/canvas/catalog'"). Recreate it explicitly.
+RUN mkdir -p node_modules/@seeflow && ln -sfn ../../packages/canvas node_modules/@seeflow/canvas
+
 # Entrypoint: PID-1-clean studio launcher with auto-register on /workspace.
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
