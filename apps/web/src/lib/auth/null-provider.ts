@@ -13,4 +13,6 @@ export const NullAuthProvider: AuthProvider = {
   signIn: async () => {},
   signOut: async () => {},
   onChange: () => () => {},
+  // No identity in local mode; the avatar menu is gated on cloud + user anyway.
+  getUser: () => null,
 };

@@ -25,6 +25,7 @@ import type {
 } from '@/lib/api';
 import { fetchFlowDetail } from '@/lib/api';
 import { apiFetch } from '@/lib/api-client';
+import { useAppConfig } from '@/lib/auth/app-config';
 import { buildPastePayload } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
@@ -359,20 +360,29 @@ export function DemoView({
   // through DemoViewProps. Bound to one (project, flow) for its lifetime;
   // rebuilt on flow switch. Every REST mutation in this file (and the prop
   // threaded to <SeeflowCanvas>) now routes through this adapter.
+  const { isCloud } = useAppConfig();
   const rawAdapter = useMemo(
     // Route canvas mutations through apiFetch so they carry the auth bearer
     // token in authenticated hosts (cloud). In local mode the NullAuthProvider
     // adds no header, so this is identical to a bare fetch. Without this, every
     // node/connector save bypasses auth and 401s ("Couldn't save change").
     // Cast: apiFetch is fetch-compatible but lacks the `preconnect` static.
-    () =>
-      createRestAdapter({
+    () => {
+      const base = createRestAdapter({
         baseUrl: '',
         project,
         flow,
         fetch: apiFetch as unknown as typeof fetch,
-      }),
-    [project, flow],
+      });
+      if (!isCloud) return base;
+      // Cloud is the collaborative canvas: no host execution, no local
+      // filesystem. Dropping these optional adapter methods hides the
+      // Play / Open-in-editor / Reveal-in-Finder affordances in the canvas
+      // (their backend endpoints are 409-guarded in cloud anyway).
+      const { playAction, openFile, revealFile, ...rest } = base;
+      return rest;
+    },
+    [project, flow, isCloud],
   );
   // Live snapshot of the flow state the wrapper reads when an intercepted
   // mutation needs a `before` value. We use a ref (not the values themselves)

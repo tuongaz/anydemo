@@ -1,7 +1,9 @@
 import { ProjectSwitcher } from '@/components/project-switcher';
+import { UserMenu } from '@/components/user-menu';
 import { reset as resetFlow } from '@/hooks/use-navigate-flow';
 import { type Theme, useTheme } from '@/hooks/use-theme';
 import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
+import { useAppConfig } from '@/lib/auth/app-config';
 import {
   Button,
   DropdownMenu,
@@ -62,6 +64,7 @@ export function Header({
   previousFlowName,
 }: HeaderProps) {
   const { theme, setTheme } = useTheme();
+  const { isCloud, user, provider } = useAppConfig();
   const showBack = previousFlowName !== undefined;
 
   return (
@@ -108,7 +111,9 @@ export function Header({
             enableEmbed={false}
             onDownloadPdf={share.onDownloadPdf}
             onDownloadPng={share.onDownloadPng}
-            onExportToCloud={share.onExportToCloud}
+            // Export-to-cloud targets the seeflow.dev viewer — hide it in the
+            // cloud app (omitting the callback hides the menu item).
+            onExportToCloud={isCloud ? undefined : share.onExportToCloud}
           />
         ) : null}
         <DropdownMenu>
@@ -146,6 +151,14 @@ export function Header({
             </DropdownMenuRadioGroup>
           </DropdownMenuContent>
         </DropdownMenu>
+        {isCloud && user ? (
+          <UserMenu
+            user={user}
+            onOpenProfile={() => provider.openProfile?.()}
+            onMyProjects={() => resetFlow(null)}
+            onSignOut={() => void provider.signOut()}
+          />
+        ) : null}
       </div>
     </header>
   );

@@ -1,14 +1,16 @@
 import { EmptyState } from '@/components/empty-state';
 import { reset as resetFlow } from '@/hooks/use-navigate-flow';
-import type { FlowSummary } from '@/lib/api';
+import type { CreateProjectResult, FlowSummary } from '@/lib/api';
 import { splitFlowSlug } from '@/lib/router';
 
 export interface StudioHomeProps {
   demos: FlowSummary[];
+  /** Cloud only: forwarded to the empty-state "Create your first project" CTA. */
+  onProjectCreated?: (result: CreateProjectResult) => void;
 }
 
-export function StudioHome({ demos }: StudioHomeProps) {
-  if (demos.length === 0) return <EmptyState />;
+export function StudioHome({ demos, onProjectCreated }: StudioHomeProps) {
+  if (demos.length === 0) return <EmptyState onProjectCreated={onProjectCreated} />;
   return (
     <div className="flex h-full w-full items-start justify-center overflow-y-auto bg-background p-8">
       <div data-testid="studio-home-picker" className="flex w-full max-w-2xl flex-col gap-6 pt-8">

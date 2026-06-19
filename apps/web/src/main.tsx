@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 
 import { App } from './App.tsx';
+import { AppConfigProvider } from './lib/auth/app-config.tsx';
 import { loadConfig } from './lib/auth/config.ts';
 import { resolveAuthProvider, setAuthProvider } from './lib/auth/provider.ts';
 import '@seeflow/canvas/style.css';
@@ -52,7 +53,9 @@ async function bootstrap() {
 
   root.render(
     <React.StrictMode>
-      <App />
+      <AppConfigProvider config={config} provider={provider}>
+        <App />
+      </AppConfigProvider>
     </React.StrictMode>,
   );
 }

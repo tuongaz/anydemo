@@ -187,7 +187,7 @@ export function App() {
           {stack.length > 0 ? (
             <FlowStackPane demos={demos} refreshFlows={refreshFlows} canvasRef={canvasRef} />
           ) : (
-            <StudioHome demos={demos} />
+            <StudioHome demos={demos} onProjectCreated={onProjectCreated} />
           )}
         </main>
         {flowId && topProject ? (

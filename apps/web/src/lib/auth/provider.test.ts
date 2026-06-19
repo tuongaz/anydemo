@@ -37,5 +37,6 @@ describe('NullAuthProvider', () => {
     expect(NullAuthProvider.isAuthenticated()).toBe(true);
     expect(await NullAuthProvider.getToken()).toBeNull();
     expect(typeof NullAuthProvider.onChange(() => {})).toBe('function');
+    expect(NullAuthProvider.getUser?.()).toBeNull();
   });
 });

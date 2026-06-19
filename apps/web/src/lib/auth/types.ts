@@ -8,6 +8,13 @@
  * and behaves exactly as before (no token, no gate).
  */
 
+/** Display info for the signed-in user (e.g. the header avatar menu). */
+export interface AuthUserInfo {
+  name?: string;
+  email?: string;
+  imageUrl?: string;
+}
+
 /** An auth provider drives sign-in and hands the API client a bearer token. */
 export interface AuthProvider {
   /** Boot the underlying SDK. Called once during bootstrap, before any gate. */
@@ -26,6 +33,10 @@ export interface AuthProvider {
   signOut(): Promise<void>;
   /** Subscribe to session changes; returns an unsubscribe fn. */
   onChange(cb: () => void): () => void;
+  /** Current user's display info, or null when signed out / no auth. */
+  getUser?(): AuthUserInfo | null;
+  /** Open the provider's account/profile UI (e.g. Clerk's profile modal). */
+  openProfile?(): void;
 }
 
 /** Public auth descriptor carried by `GET /api/config` (no secrets). */

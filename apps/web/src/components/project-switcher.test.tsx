@@ -89,6 +89,7 @@ type Hooks = {
   useMemo: <T>(fn: () => T) => T;
   useRef: <T>(initial: T) => { current: T };
   useEffect: () => void;
+  useContext: (context: unknown) => unknown;
 };
 
 function renderWithHooks<T>(fn: () => T, stateOverrides: readonly unknown[] = []): T {
@@ -114,6 +115,9 @@ function renderWithHooks<T>(fn: () => T, stateOverrides: readonly unknown[] = []
     useMemo: <T,>(fn: () => T) => fn(),
     useRef: <T,>(initial: T) => ({ current: initial }),
     useEffect: () => {},
+    // useAppConfig() reads context; with no provider it falls back to
+    // DEFAULT_APP_CONFIG (isCloud false) — i.e. local studio behavior.
+    useContext: () => undefined,
   };
   try {
     return fn();
