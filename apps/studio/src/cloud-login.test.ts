@@ -8,7 +8,7 @@ describe('startLoopbackLogin', () => {
     expect(url.pathname).toBe('/cli/login');
     expect(url.searchParams.get('port')).toBe(String(session.port));
     const state = url.searchParams.get('state');
-    expect(state && state.length).toBeGreaterThan(10);
+    expect(state?.length).toBeGreaterThan(10);
 
     // Simulate the cloud SPA POSTing the token back to the loopback callback.
     const cb = `http://127.0.0.1:${session.port}/callback?state=${state}&token=ctok_123&userId=u1&email=u1%40x.dev`;

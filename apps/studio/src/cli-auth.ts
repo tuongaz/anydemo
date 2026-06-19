@@ -1,10 +1,10 @@
+import { startLoopbackLogin } from './cloud-login.ts';
 import {
   DEFAULT_CLOUD_ENDPOINT,
   clearCredential,
   loadCredential,
   saveCredential,
 } from './credentials.ts';
-import { startLoopbackLogin } from './cloud-login.ts';
 
 export interface LoginOptions {
   endpoint?: string;

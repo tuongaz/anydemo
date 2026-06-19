@@ -1,8 +1,8 @@
+import { join } from 'node:path';
 import type { Context } from 'hono';
 import { type EventBus, createEventBus } from './events.ts';
-import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
-import { join } from 'node:path';
 import { seeflowHome } from './paths.ts';
+import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 
 /** The per-request tenant state downstream handlers consume. */
 export interface TenantContext {

@@ -1148,7 +1148,12 @@ describe('seeflow export', () => {
     // No credential + no studio: --dry-run must still succeed (it never POSTs).
     const r = await runCli(['export', dir, '--dry-run'], { SEEFLOW_WORKSPACE: dir });
     expect(r.code).toBe(0);
-    const out = JSON.parse(r.stdout) as { ok: boolean; dryRun: boolean; name: string; files: string[] };
+    const out = JSON.parse(r.stdout) as {
+      ok: boolean;
+      dryRun: boolean;
+      name: string;
+      files: string[];
+    };
     expect(out.ok).toBe(true);
     expect(out.dryRun).toBe(true);
     expect(out.name).toBe('Exported');

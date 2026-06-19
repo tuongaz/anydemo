@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdirSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { readCloudProjectId, writeCloudProjectId } from './cloud-meta.ts';
 
 describe('cloud-meta', () => {

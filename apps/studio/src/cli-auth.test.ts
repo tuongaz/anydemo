@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { runLogin, runLogout, runWhoami } from './cli-auth.ts';
-import { loadCredential, saveCredential, DEFAULT_CLOUD_ENDPOINT } from './credentials.ts';
+import { DEFAULT_CLOUD_ENDPOINT, loadCredential, saveCredential } from './credentials.ts';
 
 describe('cli auth verbs', () => {
   let dir: string;
@@ -26,7 +26,9 @@ describe('cli auth verbs', () => {
         const u = new URL(loginUrl);
         const port = u.searchParams.get('port');
         const state = u.searchParams.get('state');
-        await fetch(`http://127.0.0.1:${port}/callback?state=${state}&token=ctok_abc&userId=u1&email=u1%40x.dev`);
+        await fetch(
+          `http://127.0.0.1:${port}/callback?state=${state}&token=ctok_abc&userId=u1&email=u1%40x.dev`,
+        );
       },
     });
     expect(out).toMatchObject({ ok: true, userId: 'u1' });
@@ -34,8 +36,17 @@ describe('cli auth verbs', () => {
   });
 
   it('runWhoami reports the stored identity', () => {
-    saveCredential({ endpoint: DEFAULT_CLOUD_ENDPOINT, token: 't', userId: 'u9', email: 'u9@x.dev' });
-    expect(runWhoami(DEFAULT_CLOUD_ENDPOINT)).toMatchObject({ loggedIn: true, userId: 'u9', email: 'u9@x.dev' });
+    saveCredential({
+      endpoint: DEFAULT_CLOUD_ENDPOINT,
+      token: 't',
+      userId: 'u9',
+      email: 'u9@x.dev',
+    });
+    expect(runWhoami(DEFAULT_CLOUD_ENDPOINT)).toMatchObject({
+      loggedIn: true,
+      userId: 'u9',
+      email: 'u9@x.dev',
+    });
   });
 
   it('runWhoami reports logged-out when no credential', () => {

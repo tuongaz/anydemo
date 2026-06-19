@@ -4,11 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   DEFAULT_CLOUD_ENDPOINT,
+  clearCredential,
   credentialsPath,
   loadCredential,
   readCredentials,
   saveCredential,
-  clearCredential,
 } from './credentials.ts';
 
 describe('credentials store', () => {
@@ -34,7 +34,12 @@ describe('credentials store', () => {
   });
 
   it('round-trips a saved credential keyed by endpoint host', () => {
-    saveCredential({ endpoint: DEFAULT_CLOUD_ENDPOINT, token: 't0k', userId: 'u1', email: 'u1@x.dev' });
+    saveCredential({
+      endpoint: DEFAULT_CLOUD_ENDPOINT,
+      token: 't0k',
+      userId: 'u1',
+      email: 'u1@x.dev',
+    });
     const cred = loadCredential(DEFAULT_CLOUD_ENDPOINT);
     expect(cred).toMatchObject({ token: 't0k', userId: 'u1', email: 'u1@x.dev' });
     expect(typeof cred?.savedAt).toBe('string');

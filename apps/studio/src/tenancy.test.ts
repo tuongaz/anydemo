@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'bun:test';
-import { createTenantResolver } from './tenancy.ts';
-import { createRegistry } from './registry.ts';
 import { createEventBus } from './events.ts';
+import { createRegistry } from './registry.ts';
+import { createTenantResolver } from './tenancy.ts';
 
 describe('createTenantResolver', () => {
   it('returns the same registry/events for the same tenant id (cached)', () => {
@@ -41,7 +41,9 @@ describe('createApp getTenantId hook', () => {
     // Smoke: the app boots with the hook wired and still serves /health.
     // A deeper route-level assertion lands in Phase 2 when routes read
     // c.get('tenant').
-    const res = await app.fetch(new Request('http://x/health', { headers: { 'x-tenant': 'tenant-a' } }));
+    const res = await app.fetch(
+      new Request('http://x/health', { headers: { 'x-tenant': 'tenant-a' } }),
+    );
     expect(res.status).toBe(200);
   });
 });

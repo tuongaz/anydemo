@@ -1,6 +1,6 @@
-import { bundleProject } from './export-bundle.ts';
 import { readCloudProjectId, writeCloudProjectId } from './cloud-meta.ts';
 import { DEFAULT_CLOUD_ENDPOINT, loadCredential } from './credentials.ts';
+import { bundleProject } from './export-bundle.ts';
 
 /**
  * Generic, provider-agnostic publish/export provider. Bundles a project, POSTs
@@ -27,8 +27,7 @@ export interface PublishResult {
 export async function publishProject(opts: PublishOptions): Promise<PublishResult> {
   const baseUrl = opts.baseUrl ?? DEFAULT_CLOUD_ENDPOINT;
   const fetchImpl = opts.fetchImpl ?? globalThis.fetch;
-  const token =
-    opts.token === undefined ? (loadCredential(baseUrl)?.token ?? null) : opts.token;
+  const token = opts.token === undefined ? (loadCredential(baseUrl)?.token ?? null) : opts.token;
   if (!token) {
     throw new Error('not logged in — run `seeflow login` first');
   }

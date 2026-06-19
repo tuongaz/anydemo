@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { closeSync, cpSync, existsSync, mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve } from 'node:path';
+import { runLogin, runLogout, runWhoami } from './cli-auth.ts';
 import {
   drainStdin,
   loadBody,
@@ -9,13 +10,11 @@ import {
   printOk,
   printOutcome,
 } from './cli-helpers.ts';
-import { runLogin, runLogout, runWhoami } from './cli-auth.ts';
 import { COMMAND_MANIFEST, renderCommandHelp, renderCommandList } from './cli-manifest.ts';
 import { createCliOperations, registerProject } from './cli-ops.ts';
 import { DEFAULT_CLOUD_ENDPOINT } from './credentials.ts';
-import { bundleProject } from './export-bundle.ts';
-import { publishProject } from './publish.ts';
 import { createEventBus } from './events.ts';
+import { bundleProject } from './export-bundle.ts';
 import { JqError, applyJq } from './jq-filter.ts';
 import type { LayoutOptions } from './layout.ts';
 import {
@@ -26,6 +25,7 @@ import {
 } from './operations.ts';
 import { PROJECT_FLOW_FILENAME, seeflowHome } from './paths.ts';
 import { defaultProcessSpawner } from './process-spawner.ts';
+import { publishProject } from './publish.ts';
 import { type Registry, createRegistry, manifestOnlyEntryFilter } from './registry.ts';
 import {
   DEFAULT_CONFIG,
@@ -1365,7 +1365,12 @@ async function runLoginCmd() {
   console.error(`Opening ${endpoint} to sign in… (a browser window should open)`);
   try {
     const outcome = await runLogin({ endpoint });
-    printOk({ loggedIn: true, endpoint: outcome.endpoint, userId: outcome.userId, email: outcome.email });
+    printOk({
+      loggedIn: true,
+      endpoint: outcome.endpoint,
+      userId: outcome.userId,
+      email: outcome.email,
+    });
   } catch (err) {
     printError(`Login failed: ${err instanceof Error ? err.message : String(err)}`);
   }

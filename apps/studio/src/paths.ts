@@ -8,7 +8,8 @@ import { join } from 'node:path';
 // falls back to ~/.seeflow for local installs.
 export function seeflowHome(tenantId?: string): string {
   const workspace = process.env.SEEFLOW_WORKSPACE;
-  const base = workspace && workspace.length > 0 ? join(workspace, '.seeflow') : join(homedir(), '.seeflow');
+  const base =
+    workspace && workspace.length > 0 ? join(workspace, '.seeflow') : join(homedir(), '.seeflow');
   if (tenantId && tenantId.length > 0) {
     // Per-tenant nesting per the cloud tenancy design (§6.1):
     //   workspace set -> <workspace>/users/<tenantId>/.seeflow

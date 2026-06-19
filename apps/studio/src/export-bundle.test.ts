@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { bundleProject } from './export-bundle.ts';
 
 function fixtureRoot(): string {
@@ -9,7 +9,11 @@ function fixtureRoot(): string {
   mkdirSync(join(root, 'nodes', 'n1'), { recursive: true });
   writeFileSync(
     join(root, 'flow.json'),
-    JSON.stringify({ version: 1, name: 'Demo', nodes: [{ id: 'n1', type: 'rectangle' }], connectors: [] }, null, 2),
+    JSON.stringify(
+      { version: 1, name: 'Demo', nodes: [{ id: 'n1', type: 'rectangle' }], connectors: [] },
+      null,
+      2,
+    ),
   );
   writeFileSync(join(root, 'style.json'), JSON.stringify({ nodes: {}, connectors: {} }));
   writeFileSync(join(root, 'nodes', 'n1', 'detail.md'), '# hi');

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
-import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { publishProject } from './publish.ts';
 
 function root(): string {
@@ -16,9 +16,9 @@ function root(): string {
 
 test('first publish posts without a project id and stores the returned id', async () => {
   const r = root();
-  let seenBody: any;
-  const fakeFetch = async (_url: string, init: any) => {
-    seenBody = JSON.parse(init.body);
+  let seenBody: { projectId?: string; bundle: { files: Array<{ path: string }> } };
+  const fakeFetch = async (_url: string, init: RequestInit) => {
+    seenBody = JSON.parse(init.body as string);
     return new Response(JSON.stringify({ projectId: 'proj_new' }), { status: 200 });
   };
   const res = await publishProject({
@@ -28,7 +28,7 @@ test('first publish posts without a project id and stores the returned id', asyn
     fetchImpl: fakeFetch as unknown as typeof fetch,
   });
   expect(seenBody.projectId).toBeUndefined();
-  expect(seenBody.bundle.files.some((f: any) => f.path === 'flow.json')).toBe(true);
+  expect(seenBody.bundle.files.some((f: { path: string }) => f.path === 'flow.json')).toBe(true);
   expect(res.projectId).toBe('proj_new');
   expect(
     JSON.parse(readFileSync(join(r, '.seeflow', 'cloud.json'), 'utf8'))['https://cloud.seeflow.dev']
@@ -40,12 +40,22 @@ test('re-publish sends the stored project id (update in place)', async () => {
   const r = root();
   let seenId: unknown;
   const f1 = async () => new Response(JSON.stringify({ projectId: 'proj_x' }), { status: 200 });
-  await publishProject({ root: r, baseUrl: 'https://c.dev', token: 't', fetchImpl: f1 as unknown as typeof fetch });
-  const f2 = async (_u: string, init: any) => {
-    seenId = JSON.parse(init.body).projectId;
+  await publishProject({
+    root: r,
+    baseUrl: 'https://c.dev',
+    token: 't',
+    fetchImpl: f1 as unknown as typeof fetch,
+  });
+  const f2 = async (_u: string, init: RequestInit) => {
+    seenId = JSON.parse(init.body as string).projectId;
     return new Response(JSON.stringify({ projectId: 'proj_x' }), { status: 200 });
   };
-  await publishProject({ root: r, baseUrl: 'https://c.dev', token: 't', fetchImpl: f2 as unknown as typeof fetch });
+  await publishProject({
+    root: r,
+    baseUrl: 'https://c.dev',
+    token: 't',
+    fetchImpl: f2 as unknown as typeof fetch,
+  });
   expect(seenId).toBe('proj_x');
 });
 

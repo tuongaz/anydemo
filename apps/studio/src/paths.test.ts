@@ -42,7 +42,9 @@ describe('seeflowHome', () => {
   });
 
   it('nests under users/<tenantId> when a tenant id is passed (home fallback)', () => {
-    expect(seeflowHome('user_abc')).toBe(join(homedir(), '.seeflow', 'users', 'user_abc', '.seeflow'));
+    expect(seeflowHome('user_abc')).toBe(
+      join(homedir(), '.seeflow', 'users', 'user_abc', '.seeflow'),
+    );
   });
 
   it('treats an empty tenant id like no tenant (single-tenant path)', () => {
