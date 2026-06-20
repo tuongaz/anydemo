@@ -4,6 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
+  paddedViewBox,
 } from './types.ts';
 
 // Right-leaning parallelogram — the BPMN convention for data / IO nodes. The
@@ -37,7 +38,7 @@ export function ParallelogramShape({
     <svg
       width="100%"
       height="100%"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={paddedViewBox(width, height, strokeWidth)}
       preserveAspectRatio="none"
       role="img"
       aria-label="Parallelogram"
