@@ -158,8 +158,10 @@ export function ShareMenu({
           {showMembers ? (
             <DropdownMenuItem
               data-testid="share-menu-members"
-              onSelect={(e) => {
-                e.preventDefault();
+              onSelect={() => {
+                // Let the menu close on select (unlike PDF/PNG/Embed, which keep
+                // it open). This item opens a separate host-owned dialog, so the
+                // dropdown should dismiss rather than linger behind the modal.
                 onShareWithMembers?.();
               }}
             >
