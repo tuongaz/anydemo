@@ -74,6 +74,7 @@ import {
   isAccidentalStroke,
   normalizePoints,
   simplifyRDP,
+  snapToStraightLine,
 } from '../nodes/freehand-geometry.ts';
 import { FreehandNode } from '../nodes/freehand-node.tsx';
 import {
@@ -2508,6 +2509,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const penPointsRef = useRef<Point[]>([]);
   const penDrawingRef = useRef(false);
   const penModeRef = useRef(penMode);
+  // Tracks whether Shift was held on the most recent pen pointer event, so the
+  // live preview and the commit can straighten the stroke. A ref (not state) so
+  // it never adds a useStateOverrides slot.
+  const penShiftRef = useRef(false);
 
   // Mirror drawShape/drawIcon state into refs so handlers see the live value
   // without depending on closure identity (handler refs need to stay stable so
@@ -2535,6 +2540,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // mode also funnels through here) leaves no orphaned path.
     penDrawingRef.current = false;
     penPointsRef.current = [];
+    penShiftRef.current = false;
   }, [onCanvasModeChange]);
 
   // US-006: ESC priority chain. A single window-level keydown listener handles
@@ -2714,6 +2720,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
     // Pen tool: accumulate the stroke sample and re-render the live preview.
     if (penDrawingRef.current) {
+      penShiftRef.current = e.shiftKey;
       penPointsRef.current.push([e.clientX, e.clientY, e.pressure || 0.5]);
       setDrawCurrent({ x: e.clientX, y: e.clientY });
       return;
@@ -2738,20 +2745,41 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         }
         const raw = penPointsRef.current;
         penPointsRef.current = [];
+        // Read the Shift state from the SAME source the live preview uses
+        // (`penShiftRef`, the last pointermove's shiftKey) — NOT `e.shiftKey` on
+        // the pointer-up event — so "what you see is what commits": if the user
+        // lifts Shift between the final move and release without moving, the
+        // preview already shows the straight line and the commit must match it.
+        // The ref is reset to false only AFTER the straighten decision reads it
+        // below.
+        const straighten = penShiftRef.current;
         setDrawStart(null);
         setDrawCurrent(null);
         const rfInstance = rfInstanceRef.current;
         // < 2 points (a tap) or no RF instance → nothing to commit; stay armed.
-        if (!rfInstance || raw.length < 2) return;
+        if (!rfInstance || raw.length < 2) {
+          penShiftRef.current = false;
+          return;
+        }
+        // Hold Shift → straighten the stroke to a 2-point segment snapped to the
+        // nearest 45° direction, BEFORE the normalize→RDP pipeline. The
+        // accidental-click guard below still runs on the original `raw` screen
+        // extent so a true tap never commits, while a deliberate short straight
+        // line does.
+        const first = raw[0];
+        const last = raw[raw.length - 1];
+        const samples: Point[] =
+          straighten && first && last ? [first, snapToStraightLine(first, last)] : raw;
+        penShiftRef.current = false;
         // Project each client sample into flow coords for the committed box.
-        const flowPts: Point[] = raw.map((p) => {
+        const flowPts: Point[] = samples.map((p) => {
           const f = rfInstance.screenToFlowPosition({ x: p[0], y: p[1] });
           return [f.x, f.y, p[2]];
         });
         const box = boundingBox(flowPts);
         // Accidental-click guard uses SCREEN extent — it's a UX threshold the
         // user perceives in screen px, independent of zoom (mirrors the shape
-        // MIN_DRAW_SIZE rule).
+        // MIN_DRAW_SIZE rule). Always measured on the ORIGINAL raw samples.
         const screenBox = boundingBox(raw);
         if (isAccidentalStroke(screenBox)) return;
         const normalized = simplifyRDP(normalizePoints(flowPts, box), 0.005);
@@ -4840,6 +4868,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             // leaves penDrawingRef armed and welds into the next gesture.
             penDrawingRef.current = false;
             penPointsRef.current = [];
+            penShiftRef.current = false;
             setDrawStart(null);
             setDrawCurrent(null);
             setSpaceDragging(false);
@@ -5340,9 +5369,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     const wrapperRect = wrapperRef.current?.getBoundingClientRect();
                     const offsetX = wrapperRect?.left ?? 0;
                     const offsetY = wrapperRect?.top ?? 0;
-                    const pts = penPointsRef.current
-                      .map(([x, y]) => `${x - offsetX},${y - offsetY}`)
-                      .join(' ');
+                    // Hold Shift → preview the straightened 2-point segment so the
+                    // live overlay matches what will commit.
+                    const penPoints = penPointsRef.current;
+                    const previewFirst = penPoints[0];
+                    const previewLast = penPoints[penPoints.length - 1];
+                    const source: Point[] =
+                      penShiftRef.current && previewFirst && previewLast
+                        ? [previewFirst, snapToStraightLine(previewFirst, previewLast)]
+                        : penPoints;
+                    const pts = source.map(([x, y]) => `${x - offsetX},${y - offsetY}`).join(' ');
                     return (
                       <svg
                         data-testid="canvas-freehand-preview"
