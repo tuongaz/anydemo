@@ -245,7 +245,7 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
     expect(() => onClick?.({ stopPropagation: () => {} })).not.toThrow();
   });
 
-  it('renders a Pencil edit button that fires onOpenPicker("edit")', () => {
+  it('renders a Pencil edit button in the header trailing slot that fires onOpenPicker("edit")', () => {
     const seen: { mode: string | null } = { mode: null };
     const tree = callLinkflowNode({
       target: { project: 'demo', flow: 'orders' },
@@ -254,9 +254,13 @@ describe('LinkflowNode linked-healthy state (US-002)', () => {
         seen.mode = mode;
       },
     });
-    const pencils = findAll(tree, (el) => el.type === Pencil);
+    // The pencil lives in the header's `trailing` prop (not body children), so
+    // reach it through the NodeHeader element rather than walking the tree.
+    const header = getLinkflowHeader(tree);
+    const trailing = (header.props as { trailing?: unknown }).trailing;
+    const pencils = findAll(trailing, (el) => el.type === Pencil);
     expect(pencils.length).toBeGreaterThan(0);
-    const editBtn = findElement(tree, (el) => {
+    const editBtn = findElement(trailing, (el) => {
       const p = el.props as { 'data-testid'?: string };
       return p['data-testid'] === 'linkflow-edit-button';
     });

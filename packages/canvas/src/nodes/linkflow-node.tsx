@@ -1,6 +1,6 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { AlertTriangle, Link2, Pencil } from 'lucide-react';
-import { type CSSProperties, memo, useEffect, useRef } from 'react';
+import { type CSSProperties, cloneElement, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { LinkflowNodeData } from '../types.ts';
@@ -270,6 +270,25 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
   // comes purely from `containerStyle.backgroundColor` (toolbar color picker
   // writes `data.backgroundColor`) so there's no class fallback to override.
   const resolved = data._resolvedTarget as { projectName: string; flowName: string };
+  // Re-target affordance lives in the header's trailing slot so it can't
+  // overlap the title text (the absolute-positioned variant used to float over
+  // the new header bar). Hover/focus-revealed, same picker('edit') handler.
+  const editButton = (
+    <button
+      type="button"
+      data-testid="linkflow-edit-button"
+      aria-label="Change linked flow"
+      title="Change linked flow"
+      onClick={(e) => {
+        e.stopPropagation();
+        data.onOpenPicker?.('edit');
+      }}
+      onMouseDown={(e) => e.stopPropagation()}
+      className="sf:flex sf:h-6 sf:w-6 sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
+    >
+      <Pencil size={12} aria-hidden />
+    </button>
+  );
   return (
     <div
       data-testid="linkflow-node"
@@ -280,20 +299,7 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     >
       {resizeControls}
       {handles}
-      {header}
-      <button
-        type="button"
-        data-testid="linkflow-edit-button"
-        aria-label="Change linked flow"
-        title="Change linked flow"
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onOpenPicker?.('edit');
-        }}
-        className="sf:absolute sf:top-1 sf:right-1 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
-      >
-        <Pencil size={12} aria-hidden />
-      </button>
+      {cloneElement(header, { trailing: editButton })}
       <div className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:gap-3 sf:px-3 sf:py-2">
         <span
           data-testid="linkflow-flow-name"
