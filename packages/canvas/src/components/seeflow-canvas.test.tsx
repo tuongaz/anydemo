@@ -3670,7 +3670,7 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     return findElement(tree, (el) => el.type === (ShareMenu as unknown));
   }
 
-  it('exposes exportPdf, exportPng, openEmbedDialog, capturePreview on the ref handle after mount', () => {
+  it('exposes exportPdf, exportPng, openEmbedDialog, capturePreview, pasteImageFromClipboard on the ref handle after mount', () => {
     const handle: { current: SeeflowCanvasHandle | null } = { current: null };
     callSeeflowCanvas({}, { ref: handle });
     expect(handle.current).not.toBeNull();
@@ -3678,6 +3678,10 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     expect(typeof handle.current?.exportPng).toBe('function');
     expect(typeof handle.current?.openEmbedDialog).toBe('function');
     expect(typeof handle.current?.capturePreview).toBe('function');
+    expect(typeof handle.current?.pasteImageFromClipboard).toBe('function');
+    // No-op path: jsdom has no real rfInstance/wrapper, so calling it without
+    // a DataTransfer-backed image must not throw.
+    expect(() => handle.current?.pasteImageFromClipboard({} as DataTransfer)).not.toThrow();
   });
 
   it('renders the ShareMenu in edit mode by default', () => {

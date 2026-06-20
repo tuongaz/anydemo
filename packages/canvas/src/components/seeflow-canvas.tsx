@@ -990,6 +990,14 @@ export interface SeeflowCanvasHandle {
    * (fit-view + snapshot + restore) co-located with the canvas.
    */
   capturePreview(): Promise<string | undefined>;
+  /**
+   * Paste image file(s) from a clipboard `DataTransfer` (e.g. a native
+   * `paste` event's `clipboardData`) as image node(s). Reuses the same
+   * drop pipeline as an OS image drop, dropping at the canvas wrapper's
+   * center (a keyboard paste carries no cursor coordinates). No-op when
+   * image-drop is unwired/disabled or the canvas isn't fully mounted.
+   */
+  pasteImageFromClipboard(dataTransfer: DataTransfer): void;
 }
 
 /**
@@ -4360,6 +4368,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     projectId,
     getReactFlow: () => rfInstanceRef.current,
   });
+  // US-008: host-facing entry for "paste image from clipboard". Mirrors the
+  // guards in `onWrapperDrop` and reuses `handleCanvasFileDrop`, but drops at
+  // the wrapper center since a keyboard paste carries no cursor position.
+  const pasteImageFromClipboard = useCallback(
+    (dataTransfer: DataTransfer) => {
+      if (!onCreateImageFromFile || !flags.enableImageDrop) return;
+      const rfInstance = rfInstanceRef.current;
+      const wrapper = wrapperRef.current;
+      if (!rfInstance || !wrapper) return;
+      const rect = wrapper.getBoundingClientRect();
+      const clientPos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+      void handleCanvasFileDrop({
+        dataTransfer,
+        clientPos,
+        rfInstance,
+        computeDims: computeImageDims,
+        dispatch: onCreateImageFromFile,
+      });
+    },
+    [onCreateImageFromFile, flags.enableImageDrop],
+  );
   useImperativeHandle(
     ref,
     () => ({
@@ -4367,8 +4396,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       exportPng: exportApi.exportPng,
       openEmbedDialog: () => setShareEmbedDialogOpen(true),
       capturePreview: exportApi.capturePreview,
+      pasteImageFromClipboard,
     }),
-    [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview],
+    [exportApi.exportPdf, exportApi.exportPng, exportApi.capturePreview, pasteImageFromClipboard],
   );
   useEffect(() => {
     // US-027: Space-held pan is a keyboard affordance — gate on the same flag

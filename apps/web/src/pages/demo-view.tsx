@@ -26,12 +26,13 @@ import type {
 import { fetchFlowDetail } from '@/lib/api';
 import { apiFetch } from '@/lib/api-client';
 import { useAppConfig } from '@/lib/auth/app-config';
-import { buildPastePayload } from '@/lib/clipboard';
+import { buildPastePayload, encodeClipboard } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
 import { resolveFileSrc } from '@/lib/file-src-resolver';
 import { decideFirstOpenFit } from '@/lib/first-open-fit';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
+import { decidePasteAction } from '@/lib/paste-dispatch';
 import { handlePasteFailure } from '@/lib/paste-failure';
 import { shortId } from '@/lib/short-id';
 import {
@@ -74,6 +75,9 @@ const isEditableElement = (el: Element | null): boolean => {
   if (EDITABLE_TAGS.has(el.tagName)) return true;
   return el instanceof HTMLElement && el.isContentEditable;
 };
+
+/** True when the currently-focused element is an input/textarea/contentEditable. */
+const isEditableActive = (): boolean => isEditableElement(document.activeElement);
 
 /**
  * Apply a z-order reorder op to a list of node ids. Mirrors the server's
@@ -1643,9 +1647,15 @@ export function DemoView({
   );
 
   const onPasteNodes = useCallback(
-    (flowPos: Position | null) => {
+    (
+      flowPos: Position | null,
+      explicitPayload?: { nodes: readonly FlowNode[]; connectors: readonly Connector[] },
+    ) => {
       if (!flowId || !adapter) return;
-      const payload = clipboardRef.current;
+      // Cross-tab paste passes an explicit envelope (parsed from the OS
+      // clipboard); the same-tab path (Cmd+D, right-click) falls back to the
+      // in-memory clipboardRef.
+      const payload = explicitPayload ?? clipboardRef.current;
       if (!payload || payload.nodes.length === 0) return;
       const { newNodes, newConnectors } = buildPastePayload<FlowNode, Connector>({
         nodes: payload.nodes,
@@ -1740,12 +1750,12 @@ export function DemoView({
   // Both are skipped while focus is in any editable element so the browser's
   // native chords keep working inside form controls / InlineEdit.
   //
-  // US-022: Cmd+C and Cmd+V are NOT handled here — SeeflowCanvas owns them via
-  // its own `handleClipboardShortcut` listener (wired through the new
-  // `onCopySelection` / `onPasteSelection` props). The resolver still emits
-  // `copy` / `paste` action types for the Cmd+D path, but the dispatcher
-  // ignores them when they arrive standalone — the canvas's listener fires
-  // first via window-event ordering and already drove the action.
+  // US-022: Cmd+C and Cmd+V are NOT handled here — native `copy` / `paste` DOM
+  // events (registered in the effect below) own them so the OS clipboard
+  // round-trips cross-tab. The canvas keydown chord is disabled for C/V too
+  // (onCopySelection/onPasteSelection pass `undefined`). The resolver still
+  // emits `copy` / `paste` action types for the Cmd+D path, but the dispatcher
+  // ignores them when they arrive standalone.
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       const action = resolveClipboardChord({
@@ -1773,6 +1783,68 @@ export function DemoView({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [demoNodes, demoConnectors, onCopyNodes, onPasteNodes]);
+
+  // US-022/US-008: native `copy` / `paste` DOM events own Cmd/Ctrl+C/V. The
+  // canvas keydown chord for C/V is disabled (onCopySelection/onPasteSelection
+  // pass `undefined`) so these listeners are the single source of truth.
+  //   • copy — writes a seeflow JSON envelope to the OS clipboard (cross-tab)
+  //     AND mirrors into the in-memory clipboardRef (same-tab Cmd+D fast path).
+  //   • paste — image files create image nodes via the canvas drop pipeline;
+  //     seeflow envelopes paste as nodes (cross-tab); anything else is ignored.
+  useEffect(() => {
+    if (!flowId || !adapter) return;
+
+    const onCopy = (e: ClipboardEvent) => {
+      if (isEditableActive() || selectedIds.length === 0 || !e.clipboardData) return;
+      const sel = new Set(selectedIds);
+      const nodes = (demoNodes ?? []).filter((n) => sel.has(n.id));
+      const connectors = (demoConnectors ?? []).filter(
+        (c) => sel.has(c.source) && sel.has(c.target),
+      );
+      if (nodes.length === 0) return;
+      e.preventDefault();
+      e.clipboardData.setData('text/plain', encodeClipboard({ nodes, connectors }));
+      // Same-tab mirror so paste works even if the OS clipboard is unreadable.
+      onCopyNodes(selectedIds);
+    };
+
+    const onPaste = (e: ClipboardEvent) => {
+      const cd = e.clipboardData;
+      if (!cd) return;
+      const items = Array.from(cd.items).map((it) => ({ kind: it.kind, type: it.type }));
+      const action = decidePasteAction({
+        isEditable: isEditableActive(),
+        items,
+        text: cd.getData('text/plain'),
+      });
+      if (action.kind === 'ignore') return;
+      e.preventDefault();
+      if (action.kind === 'image') {
+        // clipboardData IS a DataTransfer; the canvas runs the same drop
+        // pipeline and drops at the wrapper center.
+        canvasRef.current?.pasteImageFromClipboard(cd);
+        return;
+      }
+      // action.kind === 'nodes' — OS-clipboard envelope (cross-tab paste).
+      onPasteNodes(null, action.payload as { nodes: FlowNode[]; connectors: Connector[] });
+    };
+
+    window.addEventListener('copy', onCopy);
+    window.addEventListener('paste', onPaste);
+    return () => {
+      window.removeEventListener('copy', onCopy);
+      window.removeEventListener('paste', onPaste);
+    };
+  }, [
+    flowId,
+    adapter,
+    selectedIds,
+    demoNodes,
+    demoConnectors,
+    onCopyNodes,
+    onPasteNodes,
+    canvasRef,
+  ]);
 
   // US-024: arrow-key nudge. Bare arrows shift every selected node by 1px on
   // the matched axis; Shift+arrow uses 10px. Single-node nudge routes through
@@ -2693,8 +2765,13 @@ export function DemoView({
           onDeleteNode={onDeleteNode}
           onCopyNode={(nodeId) => onCopyNodes([nodeId])}
           onPasteAt={onPasteNodes}
-          onCopySelection={flowId ? onCopyNodes : undefined}
-          onPasteSelection={flowId ? () => onPasteNodes(null) : undefined}
+          // US-022: native `copy`/`paste` DOM events (registered above) own
+          // Cmd/Ctrl+C/V now, so the canvas keydown chord must NOT also fire —
+          // passing `undefined` no-ops its C/V handler and avoids double-paste.
+          // Cmd+D (duplicate) and Cmd+A (select-all) use separate paths and are
+          // unaffected; the right-click Copy/Paste keeps using onCopyNode/onPasteAt.
+          onCopySelection={undefined}
+          onPasteSelection={undefined}
           hasClipboard={hasClipboard}
           selectedNodes={selectedNodes}
           selectedConnectors={selectedConnectorsList}
