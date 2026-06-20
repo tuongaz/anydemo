@@ -16,6 +16,7 @@ export default defineConfig({
     'recharts',
     'shiki',
     'mermaid',
+    'perfect-freehand',
     '@iconify/react',
     '@iconify-json/logos',
   ],

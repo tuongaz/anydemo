@@ -39,7 +39,7 @@
     },
     "apps/studio": {
       "name": "@tuongaz/seeflow",
-      "version": "0.1.98",
+      "version": "0.2.6",
       "bin": {
         "seeflow": "bin/seeflow",
         "seeflow-mcp": "bin/seeflow-mcp",
@@ -100,7 +100,7 @@
     },
     "packages/canvas": {
       "name": "@seeflow/canvas",
-      "version": "0.1.0",
+      "version": "0.2.0",
       "dependencies": {
         "@iconify-json/logos": "^1",
         "@radix-ui/react-context-menu": "^2.2.2",
@@ -129,6 +129,7 @@
         "autoprefixer": "^10.4.20",
         "happy-dom": "^20.9.0",
         "mermaid": "^11.4.1",
+        "perfect-freehand": "^1.2.3",
         "postcss": "^8.4.49",
         "recharts": "^2.13.0",
         "shiki": "^1.24.0",
@@ -1297,6 +1298,8 @@
     "path-to-regexp": ["path-to-regexp@8.4.2", "", {}, "sha512-qRcuIdP69NPm4qbACK+aDogI5CBDMi1jKe0ry5rSQJz8JVLsC7jV8XpiJjGRLLol3N+R5ihGYcrPLTno6pAdBA=="],
 
     "pathe": ["pathe@2.0.3", "", {}, "sha512-WUjGcAqP1gQacoQe+OBJsFA7Ld4DyXuUIjZ5cc75cLHvJ7dtNsTugphxIADwspS+AraAUePCKrSVtPLFj/F88w=="],
+
+    "perfect-freehand": ["perfect-freehand@1.2.3", "", {}, "sha512-bHZSfqDHGNlPpgH2yxXgPHlQSPpEbo+qg7li0M78J9vNAi2yjwLeA4x79BEQhX44lEWpCLSFCeRZwpw0niiXPA=="],
 
     "performance-now": ["performance-now@2.1.0", "", {}, "sha512-7EAHlyLHI56VEIdK57uwHdHKIaAGbnXPiw0yWbarQZOKaKpvUIgW0jWRVLiatnM+XXlSwsanIBH/hzGMJulMow=="],
 

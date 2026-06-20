@@ -34,6 +34,7 @@
     "@xyflow/react": "*",
     "lucide-react": "*",
     "mermaid": "^11",
+    "perfect-freehand": "^1.2.0",
     "react": "*",
     "react-dom": "*",
     "react-markdown": "^10",
@@ -42,10 +43,21 @@
     "shiki": "^1.24.0"
   },
   "peerDependenciesMeta": {
-    "@iconify/react": { "optional": true },
-    "mermaid": { "optional": true },
-    "recharts": { "optional": true },
-    "shiki": { "optional": true }
+    "@iconify/react": {
+      "optional": true
+    },
+    "mermaid": {
+      "optional": true
+    },
+    "perfect-freehand": {
+      "optional": true
+    },
+    "recharts": {
+      "optional": true
+    },
+    "shiki": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@iconify-json/logos": "^1",
@@ -75,6 +87,7 @@
     "autoprefixer": "^10.4.20",
     "happy-dom": "^20.9.0",
     "mermaid": "^11.4.1",
+    "perfect-freehand": "^1.2.3",
     "postcss": "^8.4.49",
     "recharts": "^2.13.0",
     "shiki": "^1.24.0",
