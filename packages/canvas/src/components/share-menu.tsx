@@ -1,4 +1,4 @@
-import { FileDown, Image as ImageIcon, Loader2, Share2, Square, Upload } from 'lucide-react';
+import { FileDown, Image as ImageIcon, Loader2, Share2, Square, Upload, Users } from 'lucide-react';
 import { useCallback, useState } from 'react';
 
 import { cn } from '../lib/cn.ts';
@@ -49,6 +49,13 @@ export interface ShareMenuProps {
    */
   onExportToCloud?: () => void;
   /**
+   * Open the host's "share with people" dialog. Generic opt-in: rendered
+   * whenever this callback is set, in BOTH edit and view mode (the cloud
+   * viewer mounts the canvas in view mode). The canvas knows nothing about
+   * grants — it just fires the callback.
+   */
+  onShareWithMembers?: () => void;
+  /**
    * Controlled `open` state for the inner EmbedDialog. When provided, the menu
    * defers entirely to the host for embed-state ownership (used by
    * SeeflowCanvas's imperative `openEmbedDialog()` handle in US-014). When
@@ -69,6 +76,7 @@ const DOWNLOAD_PDF_LABEL = 'Download PDF';
 const DOWNLOAD_PNG_LABEL = 'Download PNG';
 const EMBED_LABEL = 'Embed';
 const EXPORT_TO_CLOUD_LABEL = 'Export to seeflow.dev';
+const SHARE_WITH_PEOPLE_LABEL = 'Share with people';
 
 /**
  * Top-right share affordance for SeeflowCanvas. Surfaces Download PDF /
@@ -83,6 +91,7 @@ export function ShareMenu({
   onDownloadPdf,
   onDownloadPng,
   onExportToCloud,
+  onShareWithMembers,
   embedOpen: embedOpenProp,
   onEmbedOpenChange,
 }: ShareMenuProps) {
@@ -115,8 +124,9 @@ export function ShareMenu({
   const showPng = Boolean(onDownloadPng);
   const showEmbed = enableEmbed && typeof projectId === 'string' && projectId.length > 0;
   const showExportToCloud = mode === 'edit' && Boolean(onExportToCloud);
+  const showMembers = Boolean(onShareWithMembers);
 
-  if (!showPdf && !showPng && !showEmbed && !showExportToCloud) return null;
+  if (!showPdf && !showPng && !showEmbed && !showExportToCloud && !showMembers) return null;
 
   return (
     <>
@@ -145,6 +155,18 @@ export function ShareMenu({
             e.preventDefault();
           }}
         >
+          {showMembers ? (
+            <DropdownMenuItem
+              data-testid="share-menu-members"
+              onSelect={(e) => {
+                e.preventDefault();
+                onShareWithMembers?.();
+              }}
+            >
+              <Users className="sf:h-4 sf:w-4" aria-hidden="true" />
+              <span>{SHARE_WITH_PEOPLE_LABEL}</span>
+            </DropdownMenuItem>
+          ) : null}
           {showPdf ? (
             <DropdownMenuItem
               data-testid="share-menu-pdf"

@@ -272,4 +272,30 @@ describe('ShareMenu (US-013)', () => {
     onSelect({ preventDefault: () => {} } as unknown as Event);
     expect(onExportToCloud).toHaveBeenCalledTimes(1);
   });
+
+  it('renders the members item in view mode when onShareWithMembers is set', () => {
+    const tree = renderShareMenu({ mode: 'view', onShareWithMembers: () => {} });
+    expect(findElement(tree, testIdEquals('share-menu-members'))).not.toBeNull();
+  });
+
+  it('hides the members item when onShareWithMembers is absent', () => {
+    const tree = renderShareMenu({ mode: 'view', onDownloadPng: () => {} });
+    expect(findElement(tree, testIdEquals('share-menu-members'))).toBeNull();
+  });
+
+  it('selecting the members item invokes onShareWithMembers', () => {
+    const onShareWithMembers = mock(() => {});
+    const tree = renderShareMenu({ mode: 'view', onShareWithMembers });
+    const item = findElement(tree, testIdEquals('share-menu-members'));
+    // onSelect signature matches the other items in this file's tests
+    (item?.props as { onSelect?: (e: { preventDefault: () => void }) => void }).onSelect?.({
+      preventDefault: () => {},
+    });
+    expect(onShareWithMembers).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders null when only onShareWithMembers is absent and nothing else is set', () => {
+    const tree = renderShareMenu({ mode: 'view' });
+    expect(tree).toBeNull();
+  });
 });
