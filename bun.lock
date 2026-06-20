@@ -39,7 +39,7 @@
     },
     "apps/studio": {
       "name": "@tuongaz/seeflow",
-      "version": "0.2.6",
+      "version": "0.3.0",
       "bin": {
         "seeflow": "bin/seeflow",
         "seeflow-mcp": "bin/seeflow-mcp",
@@ -143,6 +143,7 @@
         "@xyflow/react": "*",
         "lucide-react": "*",
         "mermaid": "^11",
+        "perfect-freehand": "^1.2.0",
         "react": "*",
         "react-dom": "*",
         "react-markdown": "^10",
@@ -153,6 +154,7 @@
       "optionalPeers": [
         "@iconify/react",
         "mermaid",
+        "perfect-freehand",
         "recharts",
         "shiki",
       ],
