@@ -4,6 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
+  paddedViewBox,
 } from './types.ts';
 
 // US-023: person glyph — a head circle in the top quarter sitting above a
@@ -56,7 +57,7 @@ export function UserShape({
     <svg
       width="100%"
       height="100%"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={paddedViewBox(width, height, strokeWidth)}
       preserveAspectRatio="none"
       role="img"
       aria-label="User"

@@ -4,6 +4,7 @@ import {
   DEFAULT_STROKE_WIDTH,
   type ShapePartProps,
   dashFor,
+  paddedViewBox,
 } from './types.ts';
 
 // US-024: message-queue glyph — a horizontal pill (rx = height/2 for true
@@ -34,7 +35,7 @@ export function QueueShape({
     <svg
       width="100%"
       height="100%"
-      viewBox={`0 0 ${width} ${height}`}
+      viewBox={paddedViewBox(width, height, strokeWidth)}
       preserveAspectRatio="none"
       role="img"
       aria-label="Queue"

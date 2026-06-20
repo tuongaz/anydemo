@@ -11,8 +11,8 @@ describe('paddedViewBox', () => {
     expect(paddedViewBox(200, 100, 6)).toBe('-6 -6 212 112');
   });
 
-  it('never produces a zero-area viewBox for tiny shapes', () => {
-    // width/height are always >0 in practice; guard is defensive
+  it('pads small dimensions the same way as large ones', () => {
+    // positive case for a small shape: the margin is still the full stroke width
     expect(paddedViewBox(10, 10, 2)).toBe('-2 -2 14 14');
   });
 });
