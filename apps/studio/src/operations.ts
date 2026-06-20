@@ -424,6 +424,11 @@ export const mergeNodeUpdates = (node: Record<string, unknown>, updates: NodePat
 export interface OperationsDeps {
   registry: Registry;
   watcher?: FlowWatcher;
+  /** Tenant-scoped studio home for default project scaffolding. When omitted,
+   *  falls back to the process-wide `seeflowHome()` (single-tenant local
+   *  studio). The cloud passes `seeflowHome(tenantId)` so a UI-created project's
+   *  files land in the caller's per-user tree, not the shared root. */
+  home?: string;
 }
 
 export interface FlowListItem {
@@ -1311,7 +1316,7 @@ export async function createProjectImpl(
   const folderPath =
     body.path && body.path.trim().length > 0
       ? body.path
-      : join(seeflowHome(), 'projects', slugify(name));
+      : join(deps.home ?? seeflowHome(), 'projects', slugify(name));
 
   // Manifest-driven layout (US-018): a project is the seeflow.json manifest
   // plus one flow folder under flows/<id>/. The default flow id for a

@@ -128,8 +128,9 @@ export function createApp(options: CreateAppOptions = {}): Hono {
 
   // Per-request tenant context. With no getTenantId hook this resolves the
   // default singletons (local studio). The cloud injects a hook returning
-  // user.sub so each request reads/writes its own tenant tree.
-  // Route-by-route adoption of c.get('tenant') is deferred to Phase 2.
+  // user.sub so each request reads/writes its own tenant tree. The studio's
+  // registry/event/ops routes consume this via `tenant(c)` in api.ts, so one
+  // tenant never sees another's projects.
   app.use('*', async (c, next) => {
     const tenantId = getTenantId ? getTenantId(c) : undefined;
     if (tenantId) c.set('tenantId', tenantId);

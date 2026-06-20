@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, realpathSync, renameSync, rmSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Hono } from 'hono';
+import type { Context } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { z } from 'zod';
 import { registerProject } from './cli-ops.ts';
@@ -22,6 +23,7 @@ import {
   CreateProjectBodySchema,
   FlowBulkBodySchema,
   NodePatchBodySchema,
+  type Operations,
   PositionBodySchema,
   RegisterBodySchema,
   ReorderBodySchema,
@@ -30,6 +32,7 @@ import {
   resolveFilePath,
   writeFileAtomic,
 } from './operations.ts';
+import { seeflowHome } from './paths.ts';
 import type { ProcessSpawner } from './process-spawner.ts';
 import { readProjectManifest } from './project-scanner.ts';
 import { type PlayResult, type RunPlayOptions, runPlay as defaultRunPlay } from './proxy.ts';
@@ -253,13 +256,42 @@ export const defaultProxyFacade: ProxyFacade = {
 };
 
 export function createApi(options: ApiOptions): Hono {
-  const { registry, events, watcher, statusRunner } = options;
+  const { watcher, statusRunner } = options;
   const spawner = options.spawner ?? defaultSpawner;
   const platform = options.platform ?? process.platform;
   const processSpawner = options.processSpawner;
   const proxy = options.proxy ?? defaultProxyFacade;
-  const ops = createOperations({ registry, watcher });
+  // Injected singletons = the single-tenant local studio. In the cloud, each
+  // request carries a tenant context (server.ts middleware) and routes resolve
+  // a per-user registry/events/ops via `tenant(c)` below.
+  const defaultRegistry = options.registry;
+  const defaultEvents = options.events;
+  const defaultOps = createOperations({ registry: defaultRegistry, watcher });
   const api = new Hono();
+
+  // Phase-2 tenancy: resolve the per-request tenant's registry/events/ops from
+  // the context set by the studio's tenant middleware. The tenant resolver
+  // returns the injected singletons when no tenant id is present, so local
+  // studio behaviour is byte-identical. EVERY route that touches the registry,
+  // event bus, or ops MUST go through this — otherwise one tenant reads or
+  // writes another tenant's projects (cross-tenant leak). ops is memoised per
+  // registry so a tenant reuses one Operations facade across requests.
+  const opsByRegistry = new WeakMap<Registry, Operations>();
+  const tenant = (
+    c: Context,
+  ): { registry: Registry; events: EventBus | undefined; ops: Operations } => {
+    const ctx = c.get('tenant') as { registry: Registry; events: EventBus } | undefined;
+    const reg = ctx?.registry ?? defaultRegistry;
+    const ev = ctx?.events ?? defaultEvents;
+    if (reg === defaultRegistry) return { registry: reg, events: ev, ops: defaultOps };
+    let o = opsByRegistry.get(reg);
+    if (!o) {
+      const tid = c.get('tenantId') as string | undefined;
+      o = createOperations({ registry: reg, watcher, home: tid ? seeflowHome(tid) : undefined });
+      opsByRegistry.set(reg, o);
+    }
+    return { registry: reg, events: ev, ops: o };
+  };
 
   const iconJobs = options.iconJobs ?? createJobRegistry();
   api.route(
@@ -272,6 +304,7 @@ export function createApi(options: ApiOptions): Hono {
   );
 
   api.post('/flows/register', async (c) => {
+    const { events, ops } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -306,6 +339,7 @@ export function createApi(options: ApiOptions): Hono {
   // per-flow names (vs. /api/flows/register which is the legacy single-flow
   // path that uses the same name for both project and flow).
   api.post('/projects/register', async (c) => {
+    const { events, registry } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -360,6 +394,7 @@ export function createApi(options: ApiOptions): Hono {
   // (validation is structural only). Returns 200 even on validation failure —
   // the result is the validation report itself.
   api.post('/validate', async (c) => {
+    const { ops } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -514,6 +549,7 @@ export function createApi(options: ApiOptions): Hono {
   // `flow.json`, returns 409 — callers should use POST /api/flows/register
   // instead.
   api.post('/projects', async (c) => {
+    const { ops } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -642,6 +678,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/flows', (c) => {
+    const { ops } = tenant(c);
     const result = ops.listFlows();
     return c.json(result.data);
   });
@@ -650,6 +687,7 @@ export function createApi(options: ApiOptions): Hono {
   // watcher snapshot when available so author edits to flow.json show up
   // immediately; falls back to the registry copy persisted at register time.
   api.get('/flows/summary', (c) => {
+    const { ops } = tenant(c);
     const result = ops.listFlowsSummary();
     return c.json(result.data);
   });
@@ -661,6 +699,7 @@ export function createApi(options: ApiOptions): Hono {
   // `isDefault: true` entry for defaultFlow — so a partially-broken project
   // still surfaces in the picker.
   api.get('/projects', (c) => {
+    const { registry } = tenant(c);
     const grouped = new Map<string, FlowEntry[]>();
     for (const entry of registry.list()) {
       const existing = grouped.get(entry.projectSlug);
@@ -702,6 +741,7 @@ export function createApi(options: ApiOptions): Hono {
   // manifest read is best-effort (missing/malformed → null) so the route
   // never depends on disk state for the slug check itself.
   api.get('/projects/:project', (c) => {
+    const { registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const flows = registry.list().filter((e) => e.projectSlug === projectSlug);
     const head = flows[0];
@@ -727,6 +767,7 @@ export function createApi(options: ApiOptions): Hono {
   // when no registry entry shares the slug (same shape US-007 + the
   // GET /api/projects/:project route above use for resolution failures).
   api.get('/projects/:project/flows', (c) => {
+    const { registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
     if (entries.length === 0) {
@@ -750,6 +791,7 @@ export function createApi(options: ApiOptions): Hono {
   // flows are never the project default — the caller has to use PATCH
   // /projects/:project/flows/:flow (US-016) to flip defaultFlow.
   api.post('/projects/:project/flows', async (c) => {
+    const { events, registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
     const head = entries[0];
@@ -871,6 +913,7 @@ export function createApi(options: ApiOptions): Hono {
   // through the registry + filesystem so two concurrent id renames against
   // the same project cannot interleave to produce a duplicate folder.
   api.patch('/projects/:project/flows/:flow', async (c) => {
+    const { events, registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const flowSlug = c.req.param('flow');
     const resolved = resolveProjectFlow(registry, projectSlug, flowSlug);
@@ -1044,6 +1087,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/projects/:project/flows/:flow', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const result = await ops.getFlow(resolved.entry.id);
@@ -1060,6 +1104,7 @@ export function createApi(options: ApiOptions): Hono {
   // Flow skeleton without per-node file content (detail.md / view.html).
   // Pairs with GET /projects/:project/flows/:flow/nodes/:nodeId for full per-node detail.
   api.get('/projects/:project/flows/:flow/graph', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const result = await ops.getFlowGraph(resolved.entry.id);
@@ -1078,6 +1123,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const result = await ops.getNode(resolved.entry.id, c.req.param('nodeId'));
@@ -1104,6 +1150,7 @@ export function createApi(options: ApiOptions): Hono {
   // shared across every flow within the project — assets that live at the
   // project root or under a sibling flow folder are addressable here.
   api.get('/projects/:project/files/:path{.+}', async (c) => {
+    const { registry } = tenant(c);
     const rawPath = c.req.param('path');
     let relPath: string;
     try {
@@ -1141,6 +1188,7 @@ export function createApi(options: ApiOptions): Hono {
   // the response body so the frontend can copy-to-clipboard when $EDITOR
   // isn't set or the spawn fails. Path safety mirrors the GET route.
   api.post('/projects/:project/files/open', async (c) => {
+    const { registry } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -1180,6 +1228,7 @@ export function createApi(options: ApiOptions): Hono {
   // containing directory; xdg has no portable "select-this-file" verb). Same
   // fallback shape as /open: response always includes `absPath` for clipboard.
   api.post('/projects/:project/files/reveal', async (c) => {
+    const { registry } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -1236,6 +1285,7 @@ export function createApi(options: ApiOptions): Hono {
   // so delete_node's removeNodeDir cascade cleans up the asset along with
   // the node row.
   api.post('/projects/:project/flows/:flow/nodes/:nodeId/files/upload', async (c) => {
+    const { registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const entry = resolved.entry;
@@ -1316,6 +1366,7 @@ export function createApi(options: ApiOptions): Hono {
   // snapshot and drop the registry entry. On manifest-write failure the
   // snapshot is renamed back so the externally-observable state is preserved.
   api.delete('/projects/:project/flows/:flow', (c) => {
+    const { events, registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const flowSlug = c.req.param('flow');
     const newDefault = c.req.query('newDefault');
@@ -1443,6 +1494,7 @@ export function createApi(options: ApiOptions): Hono {
   // will not be deleted" promise. With `?deleteSource=true` it also
   // rm-rf's the entire repoPath after the registry is cleaned.
   api.delete('/projects/:project', (c) => {
+    const { events, registry } = tenant(c);
     const projectSlug = c.req.param('project');
     const deleteSource = c.req.query('deleteSource') === 'true';
 
@@ -1483,6 +1535,7 @@ export function createApi(options: ApiOptions): Hono {
   // /api/validate; on missing flow file / bad JSON / write failure returns
   // HTTP 4xx/5xx.
   api.post('/projects/:project/flows/:flow/layout', async (c) => {
+    const { events, ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1524,6 +1577,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.post('/projects/:project/flows/:flow/play/:nodeId', async (c) => {
+    const { events, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const entry = resolved.entry;
@@ -1591,6 +1645,7 @@ export function createApi(options: ApiOptions): Hono {
   // `runComponentAction`. Response is the script's parsed JSON stdout on
   // success.
   api.post('/projects/:project/flows/:flow/nodes/:nodeId/actions/:name', async (c) => {
+    const { events, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const entry = resolved.entry;
@@ -1644,6 +1699,7 @@ export function createApi(options: ApiOptions): Hono {
   // write via tempfile + rename keeps editor diffs clean and avoids
   // corruption mid-write.
   api.patch('/projects/:project/flows/:flow/nodes/:nodeId/position', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1687,6 +1743,7 @@ export function createApi(options: ApiOptions): Hono {
   // which the undo path uses to faithfully revert forward/backward gestures
   // even if the array changed between the original op and the undo.
   api.patch('/projects/:project/flows/:flow/nodes/:nodeId/order', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1730,6 +1787,7 @@ export function createApi(options: ApiOptions): Hono {
   // is re-validated through ResolvedFlowSchema before commit, preventing partial
   // writes from breaking invariants like the connector→node superRefine.
   api.patch('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1769,6 +1827,7 @@ export function createApi(options: ApiOptions): Hono {
   // server-side if absent). Atomicity + final-ResolvedFlowSchema validation match the
   // PATCH path above, so a malformed node never produces a half-written file.
   api.post('/projects/:project/flows/:flow/nodes', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1808,6 +1867,7 @@ export function createApi(options: ApiOptions): Hono {
   // Intended for skill/LLM seeding where multiple singular calls would burn
   // tokens and round-trip latency.
   api.post('/projects/:project/flows/:flow/bulk', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1859,6 +1919,7 @@ export function createApi(options: ApiOptions): Hono {
   // should always pass, but the check makes the failure mode honest if the
   // file had a pre-existing schema violation we'd otherwise paper over.
   api.delete('/projects/:project/flows/:flow/nodes/:nodeId', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1891,6 +1952,7 @@ export function createApi(options: ApiOptions): Hono {
   // eventName) and the superRefine still gates source/target referential
   // integrity.
   api.patch('/projects/:project/flows/:flow/connectors/:connId', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1931,6 +1993,7 @@ export function createApi(options: ApiOptions): Hono {
   // user-drawn variant). Source/target referential integrity is enforced by
   // ResolvedFlowSchema's superRefine on the post-mutation parse.
   api.post('/projects/:project/flows/:flow/connectors', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1965,6 +2028,7 @@ export function createApi(options: ApiOptions): Hono {
   // DELETE a connector. Just removes the entry from demo.connectors — node
   // deletion is what cascades, not connector deletion.
   api.delete('/projects/:project/flows/:flow/connectors/:connId', async (c) => {
+    const { ops, registry } = tenant(c);
     const resolved = resolveProjectFlow(registry, c.req.param('project'), c.req.param('flow'));
     if (resolved.kind === 'error') return c.json({ ok: false, error: resolved.code }, 404);
     const id = resolved.entry.id;
@@ -1990,6 +2054,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.post('/emit', async (c) => {
+    const { events, registry } = tenant(c);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     let body: unknown;
@@ -2026,6 +2091,7 @@ export function createApi(options: ApiOptions): Hono {
   });
 
   api.get('/events', (c) => {
+    const { events, registry } = tenant(c);
     const flowId = c.req.query('flowId');
     if (!flowId) return c.json({ error: 'flowId query param required' }, 400);
     if (!registry.getById(flowId)) return c.json({ error: 'unknown flowId' }, 404);
@@ -2096,6 +2162,7 @@ export function createApi(options: ApiOptions): Hono {
   // registry-watcher.ts (kept inline to avoid leaking the constant into
   // every SSE consumer).
   api.get('/registry/events', (c) => {
+    const { events } = tenant(c);
     if (!events) return c.json({ error: 'events not enabled' }, 500);
 
     return streamSSE(c, async (stream) => {
