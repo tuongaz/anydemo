@@ -3724,6 +3724,17 @@ describe('US-014: imperative handle + ShareMenu wiring', () => {
     expect(typeof menu?.props.onEmbedOpenChange).toBe('function');
     expect(menu?.props.embedOpen).toBe(false);
   });
+
+  it('forwards onShareWithMembers into ShareMenu in view mode', () => {
+    const onShareWithMembers = () => {};
+    const tree = callSeeflowCanvas({
+      mode: 'view',
+      onShareWithMembers,
+    });
+    const menu = findShareMenu(tree);
+    expect(menu).not.toBeNull();
+    expect(menu?.props.onShareWithMembers).toBe(onShareWithMembers);
+  });
 });
 
 describe('US-004: flat node types — fixture coverage across the 12-tag set', () => {

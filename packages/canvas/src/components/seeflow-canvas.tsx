@@ -912,6 +912,14 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   onExportToCloud?: () => void;
   /**
+   * Open the host's "share with people" dialog. Generic opt-in: wired into the
+   * canvas's built-in ShareMenu whenever this callback is set, in BOTH edit and
+   * view mode (the cloud viewer mounts the canvas in view mode). The canvas
+   * knows nothing about grants — it just fires the callback. Absent → the item
+   * is hidden.
+   */
+  onShareWithMembers?: () => void;
+  /**
    * Telemetry: fired once when any node drag begins. Pure passthrough — the
    * canvas's internal `draggingRef` bookkeeping runs regardless. Wired by the
    * MCP App so the host model receives a drag-in-progress signal via
@@ -2068,6 +2076,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     autoFitViewSignal,
     customIcons,
     onExportToCloud,
+    onShareWithMembers,
     onNodeDragStart,
     onNodeDragStop,
     onViewportChange,
@@ -5045,6 +5054,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                           onDownloadPdf={exportApi.exportPdf}
                           onDownloadPng={exportApi.exportPng}
                           onExportToCloud={onExportToCloud}
+                          onShareWithMembers={onShareWithMembers}
                           embedOpen={shareEmbedDialogOpen}
                           onEmbedOpenChange={setShareEmbedDialogOpen}
                         />
