@@ -16,6 +16,23 @@ describe('readBootConfig', () => {
       mode: 'edit',
     });
   });
+  it('parses a boot config without a flowId (flowId optional)', () => {
+    const w = {
+      __SEEFLOW_BOOT__: { base: '/p/abc', projectSlug: 'meally', mode: 'edit' },
+    };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)).toEqual({
+      base: '/p/abc',
+      projectSlug: 'meally',
+      flowId: undefined,
+      mode: 'edit',
+    });
+  });
+  it('returns null when flowId is present but not a string', () => {
+    const w = {
+      __SEEFLOW_BOOT__: { base: '/p/abc', projectSlug: 'm', flowId: 42, mode: 'edit' },
+    };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)).toBeNull();
+  });
   it('returns null when required fields are missing', () => {
     const w = { __SEEFLOW_BOOT__: { base: '/p/abc' } };
     expect(readBootConfig(w as unknown as Window & typeof globalThis)).toBeNull();

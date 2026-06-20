@@ -73,6 +73,7 @@ describe('withBase ∘ stripBase round-trip', () => {
 // null, every matcher/builder must behave byte-for-byte as before.
 describe('boot mode', () => {
   const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+  const bootNoFlow = { base: '/p/abc', projectSlug: 'meally', mode: 'edit' as const };
 
   describe('flowPath', () => {
     it('builds /flows/<flow> under boot (project arg ignored)', () => {
@@ -94,6 +95,14 @@ describe('boot mode', () => {
       expect(matchProjectFlow('/', boot)).toEqual({ project: 'meally', flow: 'main' });
     });
 
+    it('returns null at the base root when boot has no flowId (no default)', () => {
+      expect(matchProjectFlow('/', bootNoFlow)).toBeNull();
+    });
+
+    it('still parses an explicit /flows/<flow> without a boot default', () => {
+      expect(matchProjectFlow('/flows/x', bootNoFlow)).toEqual({ project: 'meally', flow: 'x' });
+    });
+
     it('rejects the legacy grammar under boot', () => {
       expect(matchProjectFlow('/projects/p/flows/f', boot)).toBeNull();
     });
@@ -108,8 +117,13 @@ describe('boot mode', () => {
   });
 
   describe('matchProjectAlone', () => {
-    it('never matches under boot (no project-only landing)', () => {
+    it('never matches under boot when a flowId default exists', () => {
       expect(matchProjectAlone('/flows/x', boot)).toBeNull();
+      expect(matchProjectAlone('/', boot)).toBeNull();
+    });
+
+    it('surfaces the fixed project at the base root when boot has no flowId', () => {
+      expect(matchProjectAlone('/', bootNoFlow)).toEqual({ project: 'meally' });
     });
   });
 

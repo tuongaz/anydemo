@@ -1,7 +1,7 @@
 export interface BootConfig {
   base: string;
   projectSlug: string;
-  flowId: string;
+  flowId?: string;
   mode: 'edit' | 'view';
 }
 
@@ -18,9 +18,10 @@ export function readBootConfig(
   const boot = (w as unknown as Record<string, unknown> | undefined)?.__SEEFLOW_BOOT__;
   if (!boot || typeof boot !== 'object') return null;
   const { base, projectSlug, flowId, mode } = boot as Record<string, unknown>;
-  if (typeof base !== 'string' || typeof projectSlug !== 'string' || typeof flowId !== 'string') {
-    return null;
-  }
+  if (typeof base !== 'string' || typeof projectSlug !== 'string') return null;
+  // flowId is optional: absent means "no concrete default flow" (the studio
+  // resolves the project's default/last flow). When present it must be a string.
+  if (flowId !== undefined && typeof flowId !== 'string') return null;
   if (mode !== 'edit' && mode !== 'view') return null;
   return { base, projectSlug, flowId, mode };
 }

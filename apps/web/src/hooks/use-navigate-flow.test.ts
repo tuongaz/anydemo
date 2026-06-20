@@ -145,11 +145,17 @@ describe('initialStackFromPath', () => {
 
   describe('boot mode', () => {
     const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+    const bootNoFlow = { base: '/p/abc', projectSlug: 'meally', mode: 'edit' as const };
 
     it('seeds the project default flow from the base root "/"', () => {
       expect(initialStackFromPath('/', boot)).toEqual([
         { project: 'meally', flow: 'main', slug: 'meally/main' },
       ]);
+    });
+
+    it('returns an empty stack at the base root when boot has no flowId', () => {
+      // App.tsx resolves + resets to the project default flow from here.
+      expect(initialStackFromPath('/', bootNoFlow)).toEqual([]);
     });
 
     it('seeds the boot project + parsed flow from /flows/<flow>', () => {

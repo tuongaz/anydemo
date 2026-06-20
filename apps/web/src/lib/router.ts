@@ -97,7 +97,9 @@ export const flowPath = (
  * null for any other path or when either segment is empty.
  *
  * Boot mode: the project is FIXED to `boot.projectSlug`. The base root (`/`)
- * resolves to the project's default flow (`boot.flowId`); `/flows/<flow>`
+ * resolves to the project's default flow ONLY when `boot.flowId` is set;
+ * without a boot flowId the base root is null (no concrete flow — App.tsx
+ * resolves the project default via the project-only path). `/flows/<flow>`
  * resolves to that flow; anything else is null (the legacy `/projects/...`
  * grammar is invalid under boot). Without boot, the legacy
  * `/projects/:project/flows/:flow` grammar.
@@ -108,7 +110,9 @@ export const matchProjectFlow = (
 ): { project: string; flow: string } | null => {
   const parts = pathname.split('/').filter(Boolean);
   if (boot) {
-    if (parts.length === 0) return { project: boot.projectSlug, flow: boot.flowId };
+    if (parts.length === 0) {
+      return boot.flowId ? { project: boot.projectSlug, flow: boot.flowId } : null;
+    }
     if (parts.length === 2 && parts[0] === 'flows') {
       const flow = decodeURIComponent(parts[1] ?? '');
       if (!flow) return null;
@@ -151,14 +155,21 @@ export const splitFlowSlug = (slug: string): { project: string; flow: string } |
  * project-only landing page. App.tsx redirects this case to the user's
  * last-opened flow (or the project default) via pickInitialFlow.
  *
- * Boot mode: the project is FIXED and the base root already resolves to a flow,
- * so there is no project-only landing — always null.
+ * Boot mode: the project is FIXED. When `boot.flowId` is set the base root
+ * already resolves to that flow, so there is no project-only landing (null).
+ * When `boot.flowId` is absent, the base root surfaces the fixed project so
+ * App.tsx's project-only effect resolves the default/last flow — mirroring the
+ * non-boot `/projects/:slug` case. Any non-root path under boot is still null.
  */
 export const matchProjectAlone = (
   pathname: string,
   boot: BootConfig | null = readBootConfig(),
 ): { project: string } | null => {
-  if (boot) return null;
+  if (boot) {
+    if (boot.flowId) return null;
+    const parts = pathname.split('/').filter(Boolean);
+    return parts.length === 0 ? { project: boot.projectSlug } : null;
+  }
   const parts = pathname.split('/').filter(Boolean);
   if (parts.length !== 2) return null;
   if (parts[0] !== 'projects') return null;
