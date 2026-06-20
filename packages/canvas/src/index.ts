@@ -360,6 +360,7 @@ export {
   classifyReconnectBodyDrop,
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
+  FIT_VIEW_OPTIONS,
   handleClipboardShortcut,
   resolveFlags,
   SeeflowCanvas,

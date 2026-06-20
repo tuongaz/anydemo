@@ -28,6 +28,7 @@ import { apiFetch } from '@/lib/api-client';
 import { useAppConfig } from '@/lib/auth/app-config';
 import { buildPastePayload } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
+import { decideFirstOpenFit } from '@/lib/first-open-fit';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
 import { handlePasteFailure } from '@/lib/paste-failure';
@@ -37,6 +38,7 @@ import {
   type CommandId,
   type ConnectorStylePatch,
   DEFAULT_STORAGE_PREFIX,
+  FIT_VIEW_OPTIONS,
   ICON_DEFAULT_SIZE,
   type LayoutNodeInput,
   type NodeStylePatch,
@@ -271,24 +273,38 @@ export function DemoView({
     nodeId: string;
     mode: 'link' | 'edit';
   } | null>(null);
-  // Per-tab record of (project, flow) pairs that have already received their
-  // one auto-fit. SeeflowCanvas remounts on every flow switch (its `key` is
-  // `${project}/${flow}`), so without this gate every switch-back would re-fit
-  // and yank the user's viewport. Lives in a ref so adding a key never
-  // schedules a re-render. Resets on a full page reload — desired: the first
-  // flow opened after reload still gets the framing convenience.
+  // Per-tab record of (project, flow) pairs that have already been framed.
+  // The host owns auto-fit (the canvas gets `autoFitView={false}`): we fit
+  // EXACTLY ONCE per flow, when its initial load settles and it has content.
+  // After that we never fit again — node-create and SSE reload both leave the
+  // viewport exactly where the user left it. The canvas can't make this call
+  // (it can't tell "empty because loading" from "empty because the user is
+  // about to create the first node"); the host knows via `loading`/`detail`.
+  // Lives in a ref so adding a key never schedules a re-render. Resets on a
+  // full page reload — desired: the first flow opened after reload still gets
+  // the framing convenience.
   const fittedFlowsRef = useRef<Set<string>>(new Set());
   const flowKey = `${project}/${flow}`;
-  const isFirstLoad = !fittedFlowsRef.current.has(flowKey);
-  useEffect(() => {
-    fittedFlowsRef.current.add(flowKey);
-  }, [flowKey]);
+  // Mirror the latest flowKey into a ref so the (stable) onRfInit callback can
+  // compare a deferred-fit request against the flow that's actually mounted.
+  const flowKeyRef = useRef(flowKey);
+  flowKeyRef.current = flowKey;
+  // Set when the first-open fit fires before the rf instance is ready; flushed
+  // by onRfInit once the instance mounts (race guard).
+  const pendingFitFlowKeyRef = useRef<string | null>(null);
   // React Flow instance handed up from `<SeeflowCanvas onRfInit>` (US-024). Used
   // by the zoom-chord handler below — only the page owns the keyboard
   // listener so the canvas stays free of page-level chord wiring.
   const rfInstanceRef = useRef<ReactFlowInstance | null>(null);
   const onRfInit = useCallback((instance: ReactFlowInstance) => {
     rfInstanceRef.current = instance;
+    // Flush a deferred first-open fit, but only if it's still for the flow
+    // that just mounted (the canvas re-keys per flow, so a stale request from
+    // a previous flow must not yank the new one).
+    if (pendingFitFlowKeyRef.current === flowKeyRef.current) {
+      pendingFitFlowKeyRef.current = null;
+      instance.fitView(FIT_VIEW_OPTIONS);
+    }
   }, []);
 
   const { reset: resetNodeOverrides } = nodePending;
@@ -334,6 +350,28 @@ export function DemoView({
 
   const demoNodes = detail?.flow?.nodes;
   const demoConnectors = detail?.flow?.connectors;
+
+  // Host-owned first-open fit (the canvas runs with `autoFitView={false}`).
+  // Frame a flow exactly once, when its initial load settles AND it has
+  // content; mark it framed regardless so a genuinely empty flow doesn't get
+  // re-evaluated when the user creates its first node (which would otherwise
+  // hard-zoom onto that single node). Reloads / node-creates that arrive after
+  // the flow is framed are skipped here, so the viewport stays put.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: reads demoNodes/rf refs at settle time; keyed on the load-settle signals.
+  useEffect(() => {
+    const decision = decideFirstOpenFit({
+      alreadyFitted: fittedFlowsRef.current.has(flowKey),
+      loading,
+      hasDetail: !!detail,
+      nodeCount: demoNodes?.length ?? 0,
+      rfReady: !!rfInstanceRef.current,
+    });
+    if (decision === 'skip') return;
+    fittedFlowsRef.current.add(flowKey);
+    if (decision === 'fit-now') rfInstanceRef.current?.fitView(FIT_VIEW_OPTIONS);
+    else if (decision === 'defer') pendingFitFlowKeyRef.current = flowKey;
+  }, [flowKey, loading, detail]);
+
   const { pruneAgainst: pruneNodeOverrides } = nodePending;
   const { pruneAgainst: pruneConnectorOverrides } = connectorPending;
   const { pruneAgainst: pruneNodeDeletions } = nodeDeletions;
@@ -2672,7 +2710,10 @@ export function DemoView({
           onDescriptionChange={onNodeDescriptionChange}
           onDetailChange={onNodeDetailChange}
           onIconChange={onNodeIconChange}
-          autoFitView={isFirstLoad}
+          // Auto-fit is host-owned (see the first-open fit effect above): we
+          // fit once when a flow first loads with content, never on create or
+          // reload. So the canvas's own auto-fit stays off.
+          autoFitView={false}
         />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
