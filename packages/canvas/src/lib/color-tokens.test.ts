@@ -61,6 +61,13 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.default.headerBackground).toContain('var(--');
   });
 
+  it('points the default border at the neutral card edge (not a brand color)', () => {
+    // "Default option too": an unset node reads as a plain neutral card, the
+    // same outline a `'none'` node shows.
+    expect(COLOR_TOKENS.default.border).toBe('hsl(var(--border))');
+    expect(colorTokenStyle('default', 'node').borderColor).toBe('hsl(var(--border))');
+  });
+
   it('uses transparent placeholders for the none token', () => {
     expect(COLOR_TOKENS.none.border).toBe('transparent');
     expect(COLOR_TOKENS.none.background).toBe('transparent');
@@ -68,26 +75,37 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
   });
 
-  it('paints themed-token bodies at FULL opacity (opaque hsl, no alpha)', () => {
+  it('paints themed-token bodies at the adaptive card surface (theme-driven)', () => {
     for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.background.startsWith('hsl(')).toBe(true);
-      expect(entry.background).not.toMatch(/hsla\(/);
+      // Body now follows the theme surface so it adapts to dark/light mode —
+      // the accent lives on the border + a translucent header tint, not the body.
+      expect(entry.background).toBe('hsl(var(--card))');
     }
   });
 
-  it('paints headerBackground at the saturated header HSL for every themed token', () => {
+  it('paints headerBackground as a translucent accent tint for every themed token', () => {
     for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      expect(entry.headerBackground.startsWith('hsl(')).toBe(true);
-      expect(entry.headerBackground).not.toMatch(/hsla\(/);
+      // Translucent accent over the card body → tints subtly and adapts to
+      // dark/light mode from a single definition.
+      expect(entry.headerBackground.startsWith('hsla(')).toBe(true);
     }
   });
 
-  it('headerBackground differs from body for themed tokens (header is saturated, body is pastel)', () => {
+  it('headerBackground differs from body for themed tokens (translucent accent vs card)', () => {
     for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
       expect(entry.headerBackground).not.toBe(entry.background);
+    }
+  });
+
+  it('paints border at an opaque accent HSL (saturated, not a theme var) for themed tokens', () => {
+    for (const token of THEMED_TOKENS) {
+      const entry = COLOR_TOKENS[token];
+      expect(entry.border.startsWith('hsl(')).toBe(true);
+      expect(entry.border).not.toMatch(/hsla\(/);
+      expect(entry.border).not.toContain('var(--');
     }
   });
 
@@ -133,6 +151,15 @@ describe('colorTokenStyle', () => {
     }
   });
 
+  it('themed nodes paint the adaptive card surface + opaque accent border', () => {
+    for (const token of THEMED_TOKENS) {
+      const node = colorTokenStyle(token, 'node');
+      expect(node.backgroundColor).toBe('hsl(var(--card))');
+      expect((node.borderColor as string).startsWith('hsl(')).toBe(true);
+      expect(node.borderColor).not.toContain('var(--');
+    }
+  });
+
   it('returns the default token header background when given undefined for kind=node-header', () => {
     const style = colorTokenStyle(undefined, 'node-header');
     expect(style.backgroundColor).toBe(COLOR_TOKENS.default.headerBackground);
@@ -147,70 +174,44 @@ describe('colorTokenStyle', () => {
   });
 
   describe('kind=node-header-text', () => {
-    it('returns an empty style for theme-backed tokens (default + undefined + none)', () => {
-      expect(colorTokenStyle(undefined, 'node-header-text')).toEqual({});
-      expect(colorTokenStyle('default', 'node-header-text')).toEqual({});
-      expect(colorTokenStyle('none', 'node-header-text')).toEqual({});
-    });
-
-    it('returns dark text for light-header tokens (text:"light")', () => {
-      const darkText = 'hsl(220, 15%, 15%)';
-      // `white` is opaque white throughout — treated as a light header so
-      // the title stays readable. Themed tokens with `text:'light'` get dark
-      // text: the high-L hues (indigo/violet/fuchsia/pink) plus the luminous
-      // yellow-family hues (amber/yellow/lime) that read too light for white.
-      for (const token of [
-        'white',
-        'amber',
-        'yellow',
-        'lime',
-        'indigo',
-        'violet',
-        'fuchsia',
-        'pink',
-      ] as const) {
-        expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: darkText });
+    it('inherits theme foreground for theme-backed + every themed token', () => {
+      // The header is now a faint translucent accent tint over the adaptive
+      // card surface, so the title inherits the theme foreground (white-ish in
+      // dark mode, near-black in light mode) for every themed token.
+      for (const token of [undefined, 'default', 'none', ...THEMED_TOKENS] as const) {
+        expect(colorTokenStyle(token, 'node-header-text')).toEqual({});
       }
     });
 
-    it('returns light text for darker-header tokens (text:"dark")', () => {
-      const lightText = 'hsl(0, 0%, 98%)';
-      // Themed tokens whose saturated mid-dark header reads light text well.
-      for (const token of [
-        'slate',
-        'gray',
-        'red',
-        'orange',
-        'green',
-        'teal',
-        'cyan',
-        'sky',
-        'blue',
-      ] as const) {
-        expect(colorTokenStyle(token, 'node-header-text')).toEqual({ color: lightText });
-      }
+    it('returns fixed dark text only for the forced-white header', () => {
+      // `white` paints an opaque white card in BOTH modes, so its title text
+      // must stay dark regardless of canvas mode.
+      expect(colorTokenStyle('white', 'node-header-text')).toEqual({
+        color: 'hsl(220, 15%, 15%)',
+      });
     });
   });
 
   describe('kind=node-body-text', () => {
-    it('inherits theme foreground for default + undefined + none fills', () => {
-      expect(colorTokenStyle(undefined, 'node-body-text')).toEqual({});
-      expect(colorTokenStyle('default', 'node-body-text')).toEqual({});
-      expect(colorTokenStyle('none', 'node-body-text')).toEqual({});
+    it('inherits theme foreground for theme-backed + every themed fill', () => {
+      // Themed body fills are now the adaptive card surface, so body text
+      // inherits the theme muted-foreground and adapts to dark/light mode.
+      for (const token of [undefined, 'default', 'none', ...THEMED_TOKENS] as const) {
+        expect(colorTokenStyle(token, 'node-body-text')).toEqual({});
+      }
     });
 
-    it('returns fixed dark text for white + every themed fill (light pastel islands)', () => {
-      const bodyText = 'hsl(220, 14%, 36%)';
-      for (const token of ['white', ...THEMED_TOKENS] as const) {
-        expect(colorTokenStyle(token, 'node-body-text')).toEqual({ color: bodyText });
-      }
+    it('returns fixed dark text only for the forced-white fill', () => {
+      expect(colorTokenStyle('white', 'node-body-text')).toEqual({ color: 'hsl(220, 14%, 36%)' });
     });
   });
 
   describe('none token', () => {
-    it('returns transparent border + background for kind=node', () => {
+    it('returns a neutral gray border + transparent background for kind=node', () => {
+      // No fill, but a visible neutral outline so a colorless node doesn't
+      // vanish into the canvas.
       const style = colorTokenStyle('none', 'node');
-      expect(style.borderColor).toBe('transparent');
+      expect(style.borderColor).toBe('hsl(var(--border))');
       expect(style.backgroundColor).toBe('transparent');
     });
 

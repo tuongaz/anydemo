@@ -199,9 +199,9 @@ describe('IconNode', () => {
 
     const coloredTree = callIconNode({ icon: 'shopping-cart', color: 'blue' });
     const coloredRenderer = findElement(coloredTree, (type) => type === IconRenderer);
-    // 'blue' token's edge equals its border HSL in the curated palette — see
-    // THEMES.blue.border in color-tokens.ts.
-    expect(coloredRenderer?.props.color).toBe('hsl(217, 85%, 45%)');
+    // 'blue' token's edge equals its accent HSL in the curated palette — see
+    // ACCENTS.blue in color-tokens.ts.
+    expect(coloredRenderer?.props.color).toBe('hsl(217, 82%, 55%)');
   });
 
   it('ResizeControls fires data.onResize on resize end with width/height/x/y', () => {
