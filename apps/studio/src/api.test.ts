@@ -4424,9 +4424,23 @@ describe('POST /api/projects', () => {
     });
 
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { id: string; slug: string };
+    const body = (await res.json()) as {
+      id: string;
+      slug: string;
+      projectSlug: string;
+      defaultFlow: string;
+    };
     expect(body.id).toBeTruthy();
     expect(body.slug).toBe('fresh-project/main');
+    // Bare slug + default flow drive UI navigation. The flow-qualified `slug`
+    // is back-compat only; navigating with the bare fields below yields the
+    // correct `/projects/fresh-project/flows/main` URL (regression: the UI
+    // used `slug` as the project and produced `/projects/fresh-project%2Fmain/...`).
+    expect(body.projectSlug).toBe('fresh-project');
+    expect(body.defaultFlow).toBe('main');
+    expect(`/projects/${body.projectSlug}/flows/${body.defaultFlow}`).toBe(
+      '/projects/fresh-project/flows/main',
+    );
     expect(registry.list()).toHaveLength(1);
     const entry = registry.list()[0];
     if (!entry) throw new Error('registry entry missing');

@@ -84,10 +84,12 @@ export function App() {
       writeLastProjectId(result.id);
       refreshFlows();
       refreshProjects();
-      // createProjectImpl always scaffolds a 'main' default flow, so the
-      // fresh project is immediately navigable. Without this the dialog
-      // closes but the canvas stays on the previously-open project.
-      resetFlow({ project: result.slug, flow: 'main' });
+      // createProjectImpl always scaffolds a default flow, so the fresh project
+      // is immediately navigable. Navigate with the BARE projectSlug + its
+      // defaultFlow — `result.slug` is flow-qualified (`<proj>/<flow>`), so
+      // passing it as `project` produced a malformed
+      // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown demo" page.
+      resetFlow({ project: result.projectSlug, flow: result.defaultFlow });
     },
     [refreshFlows, refreshProjects],
   );

@@ -439,7 +439,14 @@ export interface RegisterFlowSuccess {
 
 export interface CreateProjectSuccess {
   id: string;
+  /** Flow-qualified registry slug `${projectSlug}/${defaultFlow}`. Kept for
+   *  back-compat (CLI / MCP echo it); UI navigation must use the bare
+   *  `projectSlug` + `defaultFlow` below, never this composite. */
   slug: string;
+  /** Bare project slug — the first path segment of the canvas URL. */
+  projectSlug: string;
+  /** Default flow id scaffolded for the new project (always "main" today). */
+  defaultFlow: string;
 }
 
 export type ListFlowsOutcome = { kind: 'ok'; data: FlowListItem[] };
@@ -1360,7 +1367,15 @@ export async function createProjectImpl(
     lastModified,
   });
   watcher?.watch(entry.id);
-  return { kind: 'ok', data: { id: entry.id, slug: entry.slug } };
+  return {
+    kind: 'ok',
+    data: {
+      id: entry.id,
+      slug: entry.slug,
+      projectSlug: entry.projectSlug,
+      defaultFlow: entry.flowSlug,
+    },
+  };
 }
 
 // Append a new node to the demo. Auto-generates an id when absent; ResolvedFlowSchema

@@ -147,7 +147,15 @@ export interface CreateProjectBody {
 
 export interface CreateProjectResult {
   id: string;
+  /** Flow-qualified registry slug `${projectSlug}/${defaultFlow}`. Do NOT use
+   *  for navigation — append `/flows/...` to this and you get a malformed
+   *  `/projects/<proj>%2F<flow>/flows/...` URL. Navigate with the bare
+   *  `projectSlug` + `defaultFlow` fields instead. */
   slug: string;
+  /** Bare project slug — the first segment of the canvas URL. */
+  projectSlug: string;
+  /** Default flow id scaffolded for the new project (always "main" today). */
+  defaultFlow: string;
 }
 
 export const deleteFlow = async (
