@@ -117,6 +117,34 @@ function getRoot(tree: unknown): ReactElementLike {
   return el;
 }
 
+// NodeHeader appears as an unexecuted `{ type: NodeHeader, props }` element
+// under the shim — its body (which paints `data-testid`) never runs, so we
+// match the component by name and read its forwarded props directly.
+function findByComponentName(tree: unknown, name: string): ReactElementLike[] {
+  return findAll(tree, (el) => {
+    const t = el.type as { name?: string } | { type?: { name?: string } } | unknown;
+    if (typeof t === 'function' && (t as { name?: string }).name === name) return true;
+    if (
+      typeof t === 'object' &&
+      t !== null &&
+      typeof (t as { type?: unknown }).type === 'function' &&
+      (t as { type: { name?: string } }).type.name === name
+    ) {
+      return true;
+    }
+    return false;
+  });
+}
+
+function getLinkflowHeader(tree: unknown): ReactElementLike {
+  const headers = findByComponentName(tree, 'NodeHeader').filter(
+    (el) => (el.props as { testId?: string }).testId === 'linkflow-header',
+  );
+  const header = headers[0];
+  if (!header) throw new Error('linkflow NodeHeader (testId=linkflow-header) missing');
+  return header;
+}
+
 describe('LinkflowNode unlinked state (US-002)', () => {
   it("renders dashed border + 'Link to a flow' button with Link2 icon when target is unset", () => {
     const tree = callLinkflowNode();
@@ -284,8 +312,14 @@ describe('LinkflowNode broken state (US-002)', () => {
         seen.mode = mode;
       },
     });
-    const root = getRoot(tree);
-    const onClick = (root.props as { onClick?: (e: { stopPropagation: () => void }) => void })
+    // The click-to-repick affordance now lives on the inner body button so the
+    // header's icon/title controls aren't swallowed by the outer wrapper.
+    const body = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'linkflow-broken-body';
+    });
+    if (!body) throw new Error('expected broken-body button');
+    const onClick = (body.props as { onClick?: (e: { stopPropagation: () => void }) => void })
       .onClick;
     onClick?.({ stopPropagation: () => {} });
     expect(seen.mode).toBe('edit');
@@ -446,5 +480,61 @@ describe('LinkflowNode auto-open picker on mount (toolbar drag-create)', () => {
     // `firedRef`, not in the data.
     renderLinkflowWithEffects(data, shim);
     expect(calls).toEqual(['link']);
+  });
+});
+
+describe('LinkflowNode header bar (icon + editable title)', () => {
+  it('unlinked state renders the linkflow-header AND the link button', () => {
+    const tree = callLinkflowNode();
+    const header = getLinkflowHeader(tree);
+    expect(header).not.toBeNull();
+    const button = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'linkflow-link-button';
+    });
+    expect(button).not.toBeNull();
+  });
+
+  it('broken state renders the header + linkflow-broken-label, and the outer element is NOT a <button>', () => {
+    const tree = callLinkflowNode({
+      target: { project: 'demo', flow: 'missing' },
+      _resolvedTarget: null,
+    });
+    const header = getLinkflowHeader(tree);
+    expect(header).not.toBeNull();
+    const label = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'linkflow-broken-label';
+    });
+    expect(label).not.toBeNull();
+    // Outer wrapper must be a plain element (div) so the header's icon-picker
+    // and inline-edit aren't swallowed by a button's event handling.
+    expect(getRoot(tree).type).not.toBe('button');
+  });
+
+  it('linked-healthy renders the header with the empty-name placeholder when data.name is unset AND still renders linkflow-flow-name', () => {
+    const tree = callLinkflowNode({
+      target: { project: 'demo', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
+    });
+    const header = getLinkflowHeader(tree);
+    // Empty by default — NodeHeader renders its italic placeholder for '' .
+    expect((header.props as { name?: string }).name).toBe('');
+    const flowName = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'linkflow-flow-name';
+    });
+    expect(flowName?.props.children).toBe('Orders Flow');
+  });
+
+  it('header title reflects data.name when set and does NOT fall back to the resolved flow name', () => {
+    const tree = callLinkflowNode({
+      name: 'My Link',
+      target: { project: 'demo', flow: 'orders' },
+      _resolvedTarget: { projectName: 'Demo Project', flowName: 'Orders Flow' },
+    });
+    const header = getLinkflowHeader(tree);
+    expect((header.props as { name?: string }).name).toBe('My Link');
+    expect((header.props as { name?: string }).name).not.toBe('Orders Flow');
   });
 });

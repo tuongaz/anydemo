@@ -1056,8 +1056,8 @@ describe('SeeflowCanvas', () => {
       });
 
       // A 50×30 drag is above LINKFLOW_NEAR_ZERO_DRAG=4 but below
-      // LINKFLOW_MIN_SIZE.height=80 — width should pass through (50 is below
-      // the floor too so it clamps to 160), and height clamps to 80.
+      // LINKFLOW_MIN_SIZE.height=96 — width should pass through (50 is below
+      // the floor too so it clamps to 160), and height clamps to 96.
       (wrapper.props.onPointerDown as (e: unknown) => void)(at(100, 100));
       (wrapper.props.onPointerMove as (e: unknown) => void)(at(150, 130));
       (wrapper.props.onPointerUp as (e: unknown) => void)(at(150, 130));
@@ -1066,7 +1066,7 @@ describe('SeeflowCanvas', () => {
       const commit = captured[0];
       if (!commit) throw new Error('onCreateLinkflowNode was not called');
       expect(commit.pos).toEqual({ x: 100, y: 100 });
-      expect(commit.size).toEqual({ width: 160, height: 80 });
+      expect(commit.size).toEqual({ width: 160, height: 96 });
     });
 
     it('linkflow drag larger than floor honors the drag rectangle', () => {
@@ -1125,7 +1125,7 @@ describe('SeeflowCanvas', () => {
       expect(commit.size).toEqual({ width: 300, height: 200 });
     });
 
-    it('linkflow tap (near-zero drag) falls back to LINKFLOW_DEFAULT_SIZE 240x100', () => {
+    it('linkflow tap (near-zero drag) falls back to LINKFLOW_DEFAULT_SIZE 240x132', () => {
       const refs: { current: unknown }[] = [];
       const captured: Array<{
         pos: { x: number; y: number };
@@ -1177,7 +1177,7 @@ describe('SeeflowCanvas', () => {
       const commit = captured[0];
       if (!commit) throw new Error('onCreateLinkflowNode was not called');
       expect(commit.pos).toEqual({ x: 200, y: 150 });
-      expect(commit.size).toEqual({ width: 240, height: 100 });
+      expect(commit.size).toEqual({ width: 240, height: 132 });
     });
   });
 

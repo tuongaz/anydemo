@@ -4,6 +4,7 @@ import { type CSSProperties, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { LinkflowNodeData } from '../types.ts';
+import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
@@ -50,11 +51,13 @@ export type LinkflowNodeRuntimeData = LinkflowNodeData & {
   setResizing?: (on: boolean) => void;
   /** US-005: alignment-guide integration injected by the canvas in edit mode. */
   resizeAlignment?: ResizeAlignmentHooks;
+  onNameChange?: (nodeId: string, name: string) => void;
+  onIconChange?: (nodeId: string, icon: string | null) => void;
 } & Record<string, unknown>;
 
 export type LinkflowNodeType = Node<LinkflowNodeRuntimeData, 'linkflow'>;
 
-export const LINKFLOW_DEFAULT_SIZE = { width: 240, height: 100 } as const;
+export const LINKFLOW_DEFAULT_SIZE = { width: 240, height: 132 } as const;
 
 /**
  * Minimum size enforced when the toolbar's draw-mode commits a sized linkflow
@@ -64,7 +67,7 @@ export const LINKFLOW_DEFAULT_SIZE = { width: 240, height: 100 } as const;
  * skip the floor entirely and fall back to {@link LINKFLOW_DEFAULT_SIZE} — see
  * the drag-release branch in `seeflow-canvas.tsx`.
  */
-export const LINKFLOW_MIN_SIZE = { width: 160, height: 80 } as const;
+export const LINKFLOW_MIN_SIZE = { width: 160, height: 96 } as const;
 
 const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
@@ -170,29 +173,50 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     </>
   );
 
+  // Shared title bar rendered at the top of every state. Title = `data.name`
+  // (EMPTY by default — no fallback to the resolved flow name; NodeHeader
+  // surfaces an italic placeholder for the empty string). The icon becomes
+  // editable once the node is selected and `onIconChange` is wired (edit mode).
+  const header = (
+    <NodeHeader
+      nodeId={id}
+      name={data.name ?? ''}
+      icon={data.icon}
+      selected={selected}
+      fontSize={data.fontSize}
+      backgroundColor={data.backgroundColor}
+      onNameChange={data.onNameChange}
+      onIconChange={data.onIconChange}
+      testId="linkflow-header"
+    />
+  );
+
   if (state === 'unlinked') {
     return (
       <div
         data-testid="linkflow-node"
         data-node-type="linkflow"
         data-linkflow-state="unlinked"
-        className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground"
+        className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:flex-col sf:overflow-hidden sf:rounded-md sf:border sf:border-dashed sf:border-border sf:bg-muted/40 sf:text-muted-foreground"
         style={containerStyle}
       >
         {resizeControls}
         {handles}
-        <button
-          type="button"
-          data-testid="linkflow-link-button"
-          onClick={(e) => {
-            e.stopPropagation();
-            data.onOpenPicker?.('link');
-          }}
-          className="sf:inline-flex sf:items-center sf:gap-2 sf:rounded-md sf:px-3 sf:py-1.5 sf:text-sm sf:font-medium sf:text-foreground sf:hover:bg-muted/60"
-        >
-          <Link2 size={14} aria-hidden />
-          <span>Link to a flow</span>
-        </button>
+        {header}
+        <div className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:justify-center sf:px-3 sf:py-2">
+          <button
+            type="button"
+            data-testid="linkflow-link-button"
+            onClick={(e) => {
+              e.stopPropagation();
+              data.onOpenPicker?.('link');
+            }}
+            className="sf:inline-flex sf:items-center sf:gap-2 sf:rounded-md sf:px-3 sf:py-1.5 sf:text-sm sf:font-medium sf:text-foreground sf:hover:bg-muted/60"
+          >
+            <Link2 size={14} aria-hidden />
+            <span>Link to a flow</span>
+          </button>
+        </div>
       </div>
     );
   }
@@ -201,33 +225,40 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     // Target is set but the resolver couldn't find it (renamed / deleted /
     // project unregistered). Surface the last-known slug pair as the label —
     // the picker (opened on body click in US-004) lets the user re-pick.
-    // Broken is a transient warning chrome — resize handles aren't useful
-    // here, so we keep the semantic <button> wrapper for keyboard a11y
-    // instead of swapping to a div + role="button".
+    // The outer wrapper is now a plain <div> so the header's icon-picker /
+    // inline-edit controls aren't swallowed by a button; the click-to-repick
+    // affordance lives on an inner <button> in the body.
     const lastKnown = data.target ? `${data.target.project} · ${data.target.flow}` : '';
     return (
-      <button
-        type="button"
+      <div
         data-testid="linkflow-node"
         data-node-type="linkflow"
         data-linkflow-state="broken"
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onOpenPicker?.('edit');
-        }}
-        className="sf:group sf:relative sf:flex sf:w-full sf:flex-col sf:items-center sf:justify-center sf:gap-1.5 sf:rounded-md sf:border sf:border-dashed sf:border-amber-500/60 sf:bg-amber-500/10 sf:px-3 sf:py-2 sf:text-center sf:text-amber-700 sf:dark:text-amber-300"
+        className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:flex-col sf:overflow-hidden sf:rounded-md sf:border sf:border-dashed sf:border-amber-500/60 sf:bg-amber-500/10 sf:text-amber-700 sf:dark:text-amber-300"
         style={containerStyle}
       >
+        {resizeControls}
         {handles}
-        <AlertTriangle size={16} aria-hidden />
-        <div
-          data-testid="linkflow-broken-label"
-          className="sf:truncate sf:text-xs sf:text-muted-foreground"
+        {header}
+        <button
+          type="button"
+          data-testid="linkflow-broken-body"
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onOpenPicker?.('edit');
+          }}
+          className="sf:flex sf:min-h-0 sf:flex-1 sf:flex-col sf:items-center sf:justify-center sf:gap-1.5 sf:px-3 sf:py-2 sf:text-center"
         >
-          {lastKnown}
-        </div>
-        <div className="sf:text-[11px] sf:text-muted-foreground">Linked flow missing</div>
-      </button>
+          <AlertTriangle size={16} aria-hidden />
+          <div
+            data-testid="linkflow-broken-label"
+            className="sf:truncate sf:text-xs sf:text-muted-foreground"
+          >
+            {lastKnown}
+          </div>
+          <div className="sf:text-[11px] sf:text-muted-foreground">Linked flow missing</div>
+        </button>
+      </div>
     );
   }
 
@@ -244,17 +275,12 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
       data-testid="linkflow-node"
       data-node-type="linkflow"
       data-linkflow-state="linked-healthy"
-      className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:items-center sf:gap-3 sf:rounded-md sf:border sf:border-border sf:px-3 sf:py-2 sf:text-left sf:text-card-foreground"
+      className="sf:group sf:relative sf:flex sf:h-full sf:w-full sf:flex-col sf:overflow-hidden sf:rounded-md sf:border sf:border-border sf:text-left sf:text-card-foreground"
       style={{ backgroundColor: 'hsl(var(--card))', ...containerStyle }}
     >
       {resizeControls}
       {handles}
-      <span
-        data-testid="linkflow-flow-name"
-        className="sf:min-w-0 sf:flex-1 sf:truncate sf:font-medium sf:text-base sf:leading-tight"
-      >
-        {resolved.flowName}
-      </span>
+      {header}
       <button
         type="button"
         data-testid="linkflow-edit-button"
@@ -268,19 +294,27 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
       >
         <Pencil size={12} aria-hidden />
       </button>
-      <button
-        type="button"
-        data-testid="linkflow-follow-button"
-        aria-label={`Open ${resolved.flowName}`}
-        title={`Open ${resolved.flowName}`}
-        onClick={(e) => {
-          e.stopPropagation();
-          data.onFollow?.();
-        }}
-        className="sf:flex sf:h-11 sf:w-11 sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-border sf:bg-background sf:text-foreground sf:transition-colors sf:hover:bg-muted sf:hover:text-foreground"
-      >
-        <Link2 size={22} aria-hidden />
-      </button>
+      <div className="sf:flex sf:min-h-0 sf:flex-1 sf:items-center sf:gap-3 sf:px-3 sf:py-2">
+        <span
+          data-testid="linkflow-flow-name"
+          className="sf:min-w-0 sf:flex-1 sf:truncate sf:text-sm sf:leading-tight sf:text-muted-foreground"
+        >
+          {resolved.flowName}
+        </span>
+        <button
+          type="button"
+          data-testid="linkflow-follow-button"
+          aria-label={`Open ${resolved.flowName}`}
+          title={`Open ${resolved.flowName}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            data.onFollow?.();
+          }}
+          className="sf:flex sf:h-11 sf:w-11 sf:shrink-0 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded-md sf:border sf:border-border sf:bg-background sf:text-foreground sf:transition-colors sf:hover:bg-muted sf:hover:text-foreground"
+        >
+          <Link2 size={22} aria-hidden />
+        </button>
+      </div>
       {/* The wrapped id is referenced in a data attribute so future debugging
           aids and integration tests can pin assertions to a specific node. */}
       <span hidden data-linkflow-node-id={id} />
