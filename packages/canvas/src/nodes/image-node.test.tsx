@@ -249,6 +249,56 @@ describe('ImageNode file-backed src (US-004)', () => {
     const src = getImgSrc(callImageNode({ path: 'assets/cover.png', projectId: undefined }));
     expect(src).toBe('');
   });
+
+  it('uses the direct fileUrl as the img src when no resolveFileSrc is provided', () => {
+    // Local / same-origin path: no host resolver, so the <img> points straight
+    // at the file-serving URL (byte-identical to the pre-cloud behaviour).
+    const src = getImgSrc(callImageNode({ path: 'assets/cover.png', projectId: 'demo-1' }));
+    expect(src).toBe('/api/projects/demo-1/files/assets/cover.png');
+  });
+});
+
+// Cloud/authed mode: a `resolveFileSrc` host hook fetches the token-gated asset
+// (a native <img> can't carry the bearer header) and returns a blob URL. While
+// it resolves, the node shows the Loading tile instead of a broken <img>.
+describe('ImageNode resolveFileSrc host hook', () => {
+  function findPlaceholder(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node-placeholder';
+    });
+  }
+  function findImg(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => el.type === 'img');
+  }
+
+  it('shows the loading placeholder (not <img>) while a resolver is pending', () => {
+    // Under the synchronous hook shim, useEffect does not run, so the resolved
+    // src stays empty — exactly the "resolving" window the placeholder covers.
+    const tree = callImageNode({
+      path: 'assets/cover.png',
+      projectId: 'demo-1',
+      resolveFileSrc: async (url: string) => `blob:${url}`,
+    });
+    const placeholder = findPlaceholder(tree);
+    expect(placeholder).not.toBeNull();
+    expect((placeholder?.props as { 'data-placeholder'?: string })['data-placeholder']).toBe(
+      'loading',
+    );
+    expect(findImg(tree)).toBeNull();
+  });
+
+  it('does not enter the resolving state before projectId is wired', () => {
+    // No URL to resolve yet → no loading tile, no <img> with a malformed src.
+    const tree = callImageNode({
+      path: 'assets/cover.png',
+      projectId: undefined,
+      resolveFileSrc: async (url: string) => `blob:${url}`,
+    });
+    expect(findPlaceholder(tree)).toBeNull();
+    const src = (findImg(tree)?.props as { src?: string } | undefined)?.src;
+    expect(src).toBe('');
+  });
 });
 
 // US-008: optimistic-placement loading + failure overlays. Driven by transient

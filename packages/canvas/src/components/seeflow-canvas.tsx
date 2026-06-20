@@ -422,6 +422,16 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    */
   fileBaseUrl?: string;
   /**
+   * Optional host hook that turns a file URL (the one `fileUrl()` builds for a
+   * file-backed node) into a displayable src — e.g. fetching it with an auth
+   * token and returning a blob URL. Needed in the cloud, where the file route
+   * is token-gated and a native `<img>` GET can't carry the bearer header (so
+   * it 401s and the image renders broken). Absent → file-backed nodes use the
+   * URL directly (local/same-origin, unchanged). Threaded into each node's
+   * runtime `data` alongside `projectId` / `fileBaseUrl`.
+   */
+  resolveFileSrc?: (url: string) => Promise<string>;
+  /**
    * Base URL the component-node runtime uses to POST script-kind actions:
    * `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
    * Defaults to `/api` (correct for the studio, same-origin). Embedders that
@@ -2005,6 +2015,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     projectId,
     flowSlug,
     fileBaseUrl,
+    resolveFileSrc,
     apiBaseUrl = '/api',
     studioBaseUrl = '',
     nodes,
@@ -2999,6 +3010,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resolve against a non-studio host — see SeeflowCanvasBaseProps.
           projectId,
           fileBaseUrl,
+          // Cloud/authed mode: lets type:'image' resolve its token-gated asset
+          // through the host (blob URL) instead of a header-less native <img>.
+          resolveFileSrc,
           // US-031: component-node runtime POSTs script-kind actions to
           // `${apiBaseUrl}/projects/:project/flows/:flow/nodes/:nodeId/actions/:name`.
           // Gated on type so non-component nodes don't carry stray fields they'd
@@ -3138,6 +3152,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     projectId,
     flowSlug,
     fileBaseUrl,
+    resolveFileSrc,
     apiBaseUrl,
     nodes,
     selectedNodeIdSet,

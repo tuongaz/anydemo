@@ -28,6 +28,7 @@ import { apiFetch } from '@/lib/api-client';
 import { useAppConfig } from '@/lib/auth/app-config';
 import { buildPastePayload } from '@/lib/clipboard';
 import { collectCopyTargets } from '@/lib/copy-targets';
+import { resolveFileSrc } from '@/lib/file-src-resolver';
 import { decideFirstOpenFit } from '@/lib/first-open-fit';
 import { performImageDropUpload } from '@/lib/image-upload-flow';
 import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
@@ -2643,6 +2644,10 @@ export function DemoView({
           // US-031: flowSlug drives the component-runtime's script-action URL
           // composition (`/api/projects/:project/flows/:flow/nodes/.../actions/...`).
           flowSlug={flow}
+          // Cloud only: image assets live behind the token-gated file route, and
+          // a native <img> GET can't carry the bearer header — so resolve the
+          // src through apiFetch into a blob URL. Local stays on the direct URL.
+          resolveFileSrc={isCloud ? resolveFileSrc : undefined}
           enableEmbed={false}
           // ShareMenu lives in the studio header now (App.tsx). The library
           // component still exists for embedders consuming @seeflow/canvas
