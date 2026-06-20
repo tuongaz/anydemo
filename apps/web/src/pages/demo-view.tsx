@@ -1251,6 +1251,41 @@ export function DemoView({
     [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
+  // Pen tool (freehand): commit a new type:'freehand' node from the captured
+  // stroke. Mirrors `onCreateIconNode`: client-side id, optimistic override so
+  // the stroke appears before the SSE echo arrives, and the new node is marked
+  // selected so the detail panel + style strip open on it. `points` are the
+  // normalized [x, y, pressure] triplets captured by the canvas; `size` is the
+  // stroke's flow-space bounding box.
+  const onCreateFreehandNode = useCallback(
+    (
+      position: Position,
+      size: { width: number; height: number },
+      points: [number, number, number][],
+    ) => {
+      if (!flowId || !adapter) return;
+      setEditError(null);
+      const id = `node-${shortId()}`;
+      const data = { points, width: size.width, height: size.height };
+      // `freehand` is not yet a member of the canvas `NodeType` / `FlowNode`
+      // union (the public-API widening lands separately), so the optimistic
+      // node and the createNode payload bridge the gap via `unknown`. The wire
+      // shape is validated server-side against the freehand-aware schema.
+      const payload = { id, type: 'freehand', position, data };
+      const optimistic = { id, type: 'freehand', position, data } as unknown as FlowNode;
+      setNodeOverride(id, optimistic as Partial<FlowNode>);
+      setSelectedIds([id]);
+      adapter
+        .createNode(payload as unknown as Parameters<typeof adapter.createNode>[0])
+        .catch((err) => {
+          dropNodeOverride(id);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('createNode (freehand) failed', err);
+        });
+    },
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
+  );
+
   // Commit a new type:'html' node at the drop position from the toolbar's HTML
   // block tile. Mirrors `onCreateShapeNode`: client-side id, optimistic override
   // so the node appears before the SSE echo arrives, single undo entry pushed
@@ -2750,6 +2785,7 @@ export function DemoView({
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
           onCreateIconNode={flowId ? onCreateIconNode : undefined}
+          onCreateFreehandNode={flowId ? onCreateFreehandNode : undefined}
           onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
           onRetryImageUpload={flowId ? onRetryImageUpload : undefined}
