@@ -68,6 +68,7 @@ import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
 import { ComponentNode } from '../nodes/component-node.tsx';
+import { FreehandNode } from '../nodes/freehand-node.tsx';
 import {
   GeometricNode,
   SHAPE_DEFAULT_SIZE,
@@ -1353,6 +1354,7 @@ const nodeTypes = {
   // (unlinked, linked-healthy, broken) — see linkflow-node.tsx. Click handlers
   // are no-ops at this story; US-004 wires the picker, US-007 wires navigation.
   linkflow: LinkflowNode,
+  freehand: FreehandNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 
