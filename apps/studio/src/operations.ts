@@ -288,6 +288,19 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
     'statusAction',
     'target',
   ]),
+  // Freehand nodes carry the normalized `points` array in flow.json data;
+  // color/strokeWidth are visual keys (NODE_VISUAL_KEYS) routed to style.json.
+  freehand: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'points',
+  ]),
 };
 
 // Visual data keys — routed to style.json on write by splitFlow. Kept here

@@ -219,6 +219,7 @@ export const NodeTypeSchema = z.enum([
   'icon',
   'component',
   'linkflow',
+  'freehand',
 ]);
 
 // --- Component node spec/action schemas --------------------------------------
@@ -352,6 +353,18 @@ const ResolvedLinkflowNodeData = z.object({
   target: LinkflowTargetSchema.optional(),
 });
 
+// Freehand ink stroke. `points` are [x, y, pressure] normalized to the node's
+// local box (x/y in 0..1, pressure in 0..1) so resize scales the rendered path.
+// color + strokeWidth come from the style side-table (same fields as icons).
+const ResolvedFreehandNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  points: z.array(z.tuple([z.number(), z.number(), z.number()])).min(2),
+  color: ColorTokenSchema.optional(),
+  strokeWidth: z.number().min(0.5).max(4).optional(),
+});
+
 const NodeBaseShape = {
   id: z.string().min(1),
   position: PositionSchema,
@@ -391,6 +404,11 @@ const NodeSchema = z.discriminatedUnion('type', [
     ...NodeBaseShape,
     type: z.literal('linkflow'),
     data: ResolvedLinkflowNodeData,
+  }),
+  z.object({
+    ...NodeBaseShape,
+    type: z.literal('freehand'),
+    data: ResolvedFreehandNodeData,
   }),
 ]);
 
@@ -641,6 +659,21 @@ const FlowLinkflowNodeData = z
   })
   .strict();
 
+// On-disk freehand data. `points` are normalized to the node box; the box
+// (position/width/height) plus color/strokeWidth live in style.json, never here.
+const FlowFreehandNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    points: z
+      .array(z.tuple([z.number(), z.number(), z.number()]))
+      .min(2)
+      .describe(
+        'Freehand ink samples as [x, y, pressure], normalized to the node box (x/y in 0..1, pressure in 0..1). Authored by the pen tool, not by hand.',
+      ),
+  })
+  .strict();
+
 const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
@@ -709,6 +742,14 @@ export const FlowLinkflowNodeSchema = z
   })
   .strict();
 
+export const FlowFreehandNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('freehand'),
+    data: FlowFreehandNodeData,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowRectangleNodeSchema,
   FlowEllipseNodeSchema,
@@ -729,6 +770,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowIconNodeSchema,
   FlowComponentNodeSchema,
   FlowLinkflowNodeSchema,
+  FlowFreehandNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {

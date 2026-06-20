@@ -1,6 +1,7 @@
-import { describe, expect, it } from 'bun:test';
+import { describe, expect, it, test } from 'bun:test';
 import { CANVAS_NODE_DATA_FIELDS } from '@seeflow/canvas/types';
 import {
+  FlowFreehandNodeSchema,
   FlowIdPattern,
   FlowRectangleNodeSchema,
   FlowSchema,
@@ -3099,5 +3100,47 @@ describe('canvas ↔ disk schema parity', () => {
         `Canvas field(s) ${list} are neither in the disk schema (FlowGeometricNodeData) nor in STRIPPED_VISUAL_FIELDS. Add to apps/studio/src/schema.ts (NodeCapabilitiesShape / NodeSemanticBaseShape) to persist, or to STRIPPED_VISUAL_FIELDS in this test if it is a visual stripped into style.json.`,
       );
     }
+  });
+});
+
+describe('freehand node type', () => {
+  test('NodeTypeSchema accepts freehand', () => {
+    expect(NodeTypeSchema.safeParse('freehand').success).toBe(true);
+  });
+
+  test('FlowFreehandNodeSchema requires >=2 points', () => {
+    const ok = FlowFreehandNodeSchema.safeParse({
+      id: 'n1',
+      type: 'freehand',
+      data: {
+        points: [
+          [0, 0, 0.5],
+          [1, 1, 0.5],
+        ],
+      },
+    });
+    expect(ok.success).toBe(true);
+
+    const tooFew = FlowFreehandNodeSchema.safeParse({
+      id: 'n1',
+      type: 'freehand',
+      data: { points: [[0, 0, 0.5]] },
+    });
+    expect(tooFew.success).toBe(false);
+  });
+
+  test('FlowFreehandNodeSchema rejects unknown data fields (strict)', () => {
+    const res = FlowFreehandNodeSchema.safeParse({
+      id: 'n1',
+      type: 'freehand',
+      data: {
+        points: [
+          [0, 0, 0.5],
+          [1, 1, 0.5],
+        ],
+        bogus: true,
+      },
+    });
+    expect(res.success).toBe(false);
   });
 });
