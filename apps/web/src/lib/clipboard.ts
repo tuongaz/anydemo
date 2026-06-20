@@ -150,3 +150,39 @@ export function reconcilePasteFailure({
     showError: dropNodeIds.length > 0 || dropConnectorIds.length > 0,
   };
 }
+
+/** Marker so a foreign clipboard string (a copied tweet, a file path) never
+ *  parses as a paste-able flow fragment. Bump `v` if the envelope shape changes. */
+const CLIPBOARD_MARKER = '__seeflow_clipboard__';
+export const SEEFLOW_CLIPBOARD_MIME = 'text/plain';
+
+export interface ClipboardEnvelope<N extends PasteableNode, C extends PasteableConnector> {
+  nodes: readonly N[];
+  connectors: readonly C[];
+}
+
+export function encodeClipboard<N extends PasteableNode, C extends PasteableConnector>(
+  payload: ClipboardEnvelope<N, C>,
+): string {
+  return JSON.stringify({
+    [CLIPBOARD_MARKER]: 1,
+    nodes: payload.nodes,
+    connectors: payload.connectors,
+  });
+}
+
+export function parseClipboard<N extends PasteableNode, C extends PasteableConnector>(
+  text: string,
+): ClipboardEnvelope<N, C> | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (typeof raw !== 'object' || raw === null) return null;
+  const obj = raw as Record<string, unknown>;
+  if (obj[CLIPBOARD_MARKER] !== 1) return null;
+  if (!Array.isArray(obj.nodes) || !Array.isArray(obj.connectors)) return null;
+  return { nodes: obj.nodes as N[], connectors: obj.connectors as C[] };
+}

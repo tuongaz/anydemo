@@ -2,7 +2,10 @@ import { describe, expect, it } from 'bun:test';
 import {
   type PasteableConnector,
   type PasteableNode,
+  SEEFLOW_CLIPBOARD_MIME,
   buildPastePayload,
+  encodeClipboard,
+  parseClipboard,
   reconcilePasteFailure,
 } from '@/lib/clipboard';
 
@@ -166,5 +169,29 @@ describe('reconcilePasteFailure', () => {
     expect(result.dropNodeIds).toEqual([]);
     expect(result.dropConnectorIds).toEqual([]);
     expect(result.showError).toBe(false);
+  });
+});
+
+describe('clipboard envelope', () => {
+  const nodes = [{ id: 'a', position: { x: 0, y: 0 } }] as const;
+  const connectors = [{ id: 'c', source: 'a', target: 'a' }] as const;
+
+  it('exposes a plain-text MIME so the OS clipboard carries it', () => {
+    expect(SEEFLOW_CLIPBOARD_MIME).toBe('text/plain');
+  });
+
+  it('round-trips nodes + connectors through encode/parse', () => {
+    const text = encodeClipboard({ nodes, connectors });
+    expect(parseClipboard(text)).toEqual({ nodes, connectors });
+  });
+
+  it('returns null for non-seeflow text', () => {
+    expect(parseClipboard('hello world')).toBeNull();
+    expect(parseClipboard('{"foo":1}')).toBeNull();
+    expect(parseClipboard('not json {')).toBeNull();
+  });
+
+  it('returns null when the envelope marker/version is wrong', () => {
+    expect(parseClipboard(JSON.stringify({ nodes, connectors }))).toBeNull();
   });
 });
