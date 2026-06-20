@@ -2702,6 +2702,32 @@ describe('SeeflowCanvas', () => {
       expect((a?.data as { onNameChange?: unknown }).onNameChange).toBeUndefined();
       expect((a?.data as { onDescriptionChange?: unknown }).onDescriptionChange).toBeUndefined();
     });
+
+    it('node.data.onIconChange is defined for linkflow nodes in edit mode (and undefined for text)', () => {
+      // The linkflow node renders a NodeHeader with an editable icon, so the
+      // canvas must thread onIconChange into its runtime data — same gate as
+      // rectangle/component. type:'text' has no header icon affordance, so it
+      // stays undefined.
+      const tree = callSeeflowCanvas({
+        nodes: [
+          {
+            id: 'lf',
+            type: 'linkflow',
+            position: { x: 0, y: 0 },
+            data: { name: 'lf' },
+          } as unknown as FlowNode,
+          makeTextNode('t'),
+        ],
+        onIconChange: () => {},
+      });
+      const rf = findElement(tree, (el) => el.type === ReactFlow);
+      if (!rf) throw new Error('ReactFlow element not found in SeeflowCanvas tree');
+      const rfNodes = rf.props.nodes as Node[];
+      const lf = rfNodes.find((n) => n.id === 'lf');
+      const t = rfNodes.find((n) => n.id === 't');
+      expect((lf?.data as { onIconChange?: unknown }).onIconChange).toBeDefined();
+      expect((t?.data as { onIconChange?: unknown }).onIconChange).toBeUndefined();
+    });
   });
 
   describe("mode='mini' renders a static, chrome-free thumbnail", () => {
