@@ -24,6 +24,13 @@ export default defineConfig(({ command }) => {
     // custom history router resolve under cloud.seeflow.dev/app. Must keep the
     // trailing slash — Vite requires it and `import.meta.env.BASE_URL` echoes
     // it verbatim (router.ts strips the trailing slash itself).
+    //
+    // NOTE: when the cloud host serves this same /app build under a /p/<id> URL
+    // it injects window.__SEEFLOW_BOOT__.base at runtime. That boot base drives
+    // ROUTING ONLY (pushState URLs + path matching, via router.ts). Emitted
+    // asset URLs stay pinned to THIS build-time base (/app/assets/...) — they
+    // are not rebased per request — so CloudFront still routes them to the
+    // studio's /app/* S3 prefix unchanged.
     base: process.env.VITE_BASE ?? '/',
     plugins: [react()],
     define: {
