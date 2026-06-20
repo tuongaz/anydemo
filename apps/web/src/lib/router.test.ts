@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { stripBase, withBase } from '@/lib/router';
+import { flowPath, matchProjectAlone, matchProjectFlow, stripBase, withBase } from '@/lib/router';
 
 // Base-aware routing: the SPA's custom history router operates in
 // base-RELATIVE space so the matchers work unchanged whether the studio is
@@ -65,4 +65,61 @@ describe('withBase ∘ stripBase round-trip', () => {
       });
     }
   }
+});
+
+// Boot mode: when the host injects a BootConfig, the router switches to the
+// `/flows/<flow>` grammar (project FIXED to boot.projectSlug; no /projects
+// segment) and the base root maps to the project's default flow. With boot
+// null, every matcher/builder must behave byte-for-byte as before.
+describe('boot mode', () => {
+  const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+
+  describe('flowPath', () => {
+    it('builds /flows/<flow> under boot (project arg ignored)', () => {
+      expect(flowPath('meally', 'retry', boot)).toBe('/flows/retry');
+      expect(flowPath('ignored-project', 'main', boot)).toBe('/flows/main');
+    });
+
+    it('builds the legacy /projects/:p/flows/:f grammar when boot is null', () => {
+      expect(flowPath('p', 'f', null)).toBe('/projects/p/flows/f');
+    });
+  });
+
+  describe('matchProjectFlow', () => {
+    it('parses /flows/<flow> to the fixed project under boot', () => {
+      expect(matchProjectFlow('/flows/retry', boot)).toEqual({ project: 'meally', flow: 'retry' });
+    });
+
+    it('maps the base root "/" to the project default flow under boot', () => {
+      expect(matchProjectFlow('/', boot)).toEqual({ project: 'meally', flow: 'main' });
+    });
+
+    it('rejects the legacy grammar under boot', () => {
+      expect(matchProjectFlow('/projects/p/flows/f', boot)).toBeNull();
+    });
+
+    it('rejects the new grammar when boot is null', () => {
+      expect(matchProjectFlow('/flows/f', null)).toBeNull();
+    });
+
+    it('parses the legacy grammar when boot is null', () => {
+      expect(matchProjectFlow('/projects/p/flows/f', null)).toEqual({ project: 'p', flow: 'f' });
+    });
+  });
+
+  describe('matchProjectAlone', () => {
+    it('never matches under boot (no project-only landing)', () => {
+      expect(matchProjectAlone('/flows/x', boot)).toBeNull();
+    });
+  });
+
+  describe('stripBase / withBase with the boot base', () => {
+    it('strips the boot base', () => {
+      expect(stripBase('/p/abc/flows/retry', '/p/abc')).toBe('/flows/retry');
+    });
+
+    it('re-attaches the boot base', () => {
+      expect(withBase('/flows/retry', '/p/abc')).toBe('/p/abc/flows/retry');
+    });
+  });
 });

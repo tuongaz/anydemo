@@ -1,3 +1,4 @@
+import { type BootConfig, readBootConfig } from '@/lib/boot-config';
 import { flowPath, matchProjectFlow, stripBase, withBase } from '@/lib/router';
 import { useSyncExternalStore } from 'react';
 
@@ -38,8 +39,14 @@ export const toFlowStackEntry = (target: NavigateFlowTarget): FlowStackEntry => 
   slug: `${target.project}/${target.flow}`,
 });
 
-export const initialStackFromPath = (pathname: string): FlowStackEntry[] => {
-  const match = matchProjectFlow(pathname);
+// Boot-injectable so the boot-mode grammar (base root → default flow,
+// `/flows/<flow>` → fixed project) flows through matchProjectFlow; production
+// calls default to the host-injected boot config.
+export const initialStackFromPath = (
+  pathname: string,
+  boot: BootConfig | null = readBootConfig(),
+): FlowStackEntry[] => {
+  const match = matchProjectFlow(pathname, boot);
   return match ? [toFlowStackEntry(match)] : [];
 };
 

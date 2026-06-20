@@ -126,6 +126,22 @@ describe('initialStackFromPath', () => {
       { project: 'foo bar', flow: 'baz', slug: 'foo bar/baz' },
     ]);
   });
+
+  describe('boot mode', () => {
+    const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+
+    it('seeds the project default flow from the base root "/"', () => {
+      expect(initialStackFromPath('/', boot)).toEqual([
+        { project: 'meally', flow: 'main', slug: 'meally/main' },
+      ]);
+    });
+
+    it('seeds the boot project + parsed flow from /flows/<flow>', () => {
+      expect(initialStackFromPath('/flows/retry', boot)).toEqual([
+        { project: 'meally', flow: 'retry', slug: 'meally/retry' },
+      ]);
+    });
+  });
 });
 
 describe('computePushLink', () => {
