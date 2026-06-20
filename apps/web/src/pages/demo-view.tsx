@@ -1267,21 +1267,25 @@ export function DemoView({
       setEditError(null);
       const id = `node-${shortId()}`;
       const data = { points, width: size.width, height: size.height };
-      // `freehand` is not yet a member of the canvas `NodeType` / `FlowNode`
-      // union (the public-API widening lands separately), so the optimistic
-      // node and the createNode payload bridge the gap via `unknown`. The wire
-      // shape is validated server-side against the freehand-aware schema.
-      const payload = { id, type: 'freehand', position, data };
-      const optimistic = { id, type: 'freehand', position, data } as unknown as FlowNode;
+      const payload = {
+        id,
+        type: 'freehand' as const,
+        position,
+        data,
+      };
+      const optimistic: FlowNode = {
+        id,
+        type: 'freehand',
+        position,
+        data,
+      };
       setNodeOverride(id, optimistic as Partial<FlowNode>);
       setSelectedIds([id]);
-      adapter
-        .createNode(payload as unknown as Parameters<typeof adapter.createNode>[0])
-        .catch((err) => {
-          dropNodeOverride(id);
-          setEditError(err instanceof Error ? err.message : String(err));
-          console.error('createNode (freehand) failed', err);
-        });
+      adapter.createNode(payload).catch((err) => {
+        dropNodeOverride(id);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('createNode (freehand) failed', err);
+      });
     },
     [flowId, adapter, setNodeOverride, dropNodeOverride],
   );

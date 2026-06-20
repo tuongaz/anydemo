@@ -244,10 +244,10 @@ export function StyleStrip({
   const firstIconNode = pureIconType
     ? (nodes.find((n) => n.type === 'icon') as Extract<FlowNode, { type: 'icon' }>)
     : undefined;
-  // Freehand ink shares the icon strip's collapsed color/strokeWidth controls:
-  // both are chromeless "ink" nodes whose only visual knob is the stroke color
-  // (data.color) + thickness (data.strokeWidth). The Change-icon affordance
-  // below stays icon-only.
+  // Freehand ink shares the icon strip's collapsed color swatch: both are
+  // chromeless "ink" nodes restyled via the stroke-color trigger (data.color).
+  // strokeWidth (data.strokeWidth) has no strip control yet — only the color
+  // swatch renders. The Change-icon affordance below stays icon-only.
   const pureInkType = pureNode && nodes.every((n) => n.type === 'icon' || n.type === 'freehand');
   const firstInkNode = pureInkType
     ? (nodes.find((n) => n.type === 'icon' || n.type === 'freehand') as Extract<

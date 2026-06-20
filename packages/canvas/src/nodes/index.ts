@@ -1,5 +1,7 @@
 export { COMPONENT_DEFAULT_SIZE, ComponentNode } from './component-node.tsx';
 export type { ComponentNodeRuntimeData, ComponentNodeType } from './component-node.tsx';
+export { FreehandNode } from './freehand-node.tsx';
+export type { FreehandNodeType } from './freehand-node.tsx';
 export {
   GeometricNode,
   SHAPE_CLASS,

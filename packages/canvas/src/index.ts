@@ -36,6 +36,7 @@ export type {
   DrawableNodeType,
   EdgePin,
   EdgePinSide,
+  FreehandNodeData,
   GeometricNodeData,
   GeometricNodeType,
   HtmlNodeData,
