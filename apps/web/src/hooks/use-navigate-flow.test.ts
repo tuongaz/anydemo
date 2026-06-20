@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 import {
   type FlowStackEntry,
   __getFlowStackForTests,
+  __resetFlowNavigationForTests,
   __setFlowStackForTests,
   computePopState,
   computePushLink,
   computeResetStack,
+  ensureFlowNavigation,
   initialStackFromPath,
   popBack,
   pushLink,
@@ -33,19 +35,25 @@ interface FakeWindow {
   pushStack: FakeHistoryEntry[];
   replaceStack: FakeHistoryEntry[];
   backCalls: number;
+  listeners: Record<string, EventListenerOrEventListenerObject[]>;
   addEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
   removeEventListener: (type: string, listener: EventListenerOrEventListenerObject) => void;
   dispatchEvent: (event: Event) => boolean;
+  // Boot mode installs the host-injected global here so `readBootConfig()` (which
+  // reads `window.__SEEFLOW_BOOT__` per call) picks up the boot grammar/base.
+  __SEEFLOW_BOOT__?: unknown;
 }
 
 const makeFakeWindow = (
-  initial: { pathname: string; state?: unknown } = { pathname: '/' },
+  initial: { pathname: string; state?: unknown; boot?: unknown } = { pathname: '/' },
 ): FakeWindow => {
   const w: FakeWindow = {
     events: [],
     pushStack: [],
     replaceStack: [],
     backCalls: 0,
+    listeners: {},
+    __SEEFLOW_BOOT__: initial.boot,
     location: { pathname: initial.pathname, search: '', hash: '' },
     history: {
       state: initial.state ?? null,
@@ -63,8 +71,15 @@ const makeFakeWindow = (
         w.backCalls += 1;
       },
     },
-    addEventListener() {},
-    removeEventListener() {},
+    addEventListener(type, listener) {
+      const list = w.listeners[type] ?? [];
+      list.push(listener);
+      w.listeners[type] = list;
+    },
+    removeEventListener(type, listener) {
+      const list = w.listeners[type];
+      if (list) w.listeners[type] = list.filter((l) => l !== listener);
+    },
     dispatchEvent(event) {
       w.events.push(event.type);
       return true;
@@ -94,6 +109,7 @@ afterEach(() => {
     restoreWindow = null;
   }
   __setFlowStackForTests([]);
+  __resetFlowNavigationForTests();
 });
 
 describe('toFlowStackEntry', () => {
@@ -293,5 +309,84 @@ describe('reset (effectful)', () => {
     expect(w.pushStack).toEqual([]);
     expect(w.replaceStack).toEqual([{ state: { stackDepth: 0 }, url: '/' }]);
     expect(w.events).toEqual(['seeflow:flow-stack']);
+  });
+});
+
+describe('effectful — boot mode', () => {
+  // Same fake-window harness as the no-boot effectful tests, but with the
+  // host-injected boot global set so `readBootConfig()` (read per call) drives
+  // the `/flows/<flow>` grammar and the `/p/abc` served base. The boot base is
+  // re-read per nav call (currentBase()), so it applies even though the global
+  // is installed after the module imported (BASE was frozen as '' then).
+  const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+
+  it('pushLink pushes /p/abc/flows/retry (boot base + /flows grammar, no /projects)', () => {
+    const w = makeFakeWindow({ pathname: '/p/abc/flows/main', state: { stackDepth: 1 }, boot });
+    installWindow(w);
+    __setFlowStackForTests([{ project: 'meally', flow: 'main', slug: 'meally/main' }]);
+
+    pushLink({ project: 'meally', flow: 'retry' });
+
+    expect(__getFlowStackForTests()).toEqual([
+      { project: 'meally', flow: 'main', slug: 'meally/main' },
+      { project: 'meally', flow: 'retry', slug: 'meally/retry' },
+    ]);
+    expect(w.pushStack).toEqual([{ state: { stackDepth: 2 }, url: '/p/abc/flows/retry' }]);
+    expect(w.pushStack[0]?.url).not.toContain('/projects/');
+    expect(w.events).toEqual(['seeflow:navigate', 'seeflow:flow-stack']);
+  });
+
+  it('reset pushes /p/abc/flows/retry under boot (not /projects/...)', () => {
+    const w = makeFakeWindow({ pathname: '/p/abc/flows/main', state: { stackDepth: 1 }, boot });
+    installWindow(w);
+    __setFlowStackForTests([{ project: 'meally', flow: 'main', slug: 'meally/main' }]);
+
+    reset({ project: 'meally', flow: 'retry' });
+
+    expect(__getFlowStackForTests()).toEqual([
+      { project: 'meally', flow: 'retry', slug: 'meally/retry' },
+    ]);
+    expect(w.pushStack).toEqual([{ state: { stackDepth: 1 }, url: '/p/abc/flows/retry' }]);
+    expect(w.pushStack[0]?.url).not.toContain('/projects/');
+    expect(w.replaceStack).toEqual([]);
+    expect(w.events).toEqual(['seeflow:navigate', 'seeflow:flow-stack']);
+  });
+
+  it('reset replaces /p/abc/flows/retry when already there (no new history entry)', () => {
+    const w = makeFakeWindow({ pathname: '/p/abc/flows/retry', state: { stackDepth: 5 }, boot });
+    installWindow(w);
+    __setFlowStackForTests([{ project: 'meally', flow: 'retry', slug: 'meally/retry' }]);
+
+    reset({ project: 'meally', flow: 'retry' });
+
+    expect(w.pushStack).toEqual([]);
+    expect(w.replaceStack).toEqual([{ state: { stackDepth: 1 }, url: '/p/abc/flows/retry' }]);
+    expect(w.replaceStack[0]?.url).not.toContain('/projects/');
+  });
+
+  it('back-navigation to the base root reconciles to the project default flow', () => {
+    // Install at /flows/retry, then simulate the browser popping back to the
+    // bare boot base (/p/abc → base-relative "/"). Under boot, matchProjectFlow
+    // ('/', boot) is non-null (the default flow), so the popstate handler must
+    // reconcile to the default-flow entry — never the empty-stack home state.
+    const w = makeFakeWindow({ pathname: '/p/abc/flows/retry', state: { stackDepth: 1 }, boot });
+    installWindow(w);
+
+    ensureFlowNavigation();
+    expect(__getFlowStackForTests()).toEqual([
+      { project: 'meally', flow: 'retry', slug: 'meally/retry' },
+    ]);
+
+    // Browser back: URL is now the bare boot base; history.state carries the
+    // base entry's depth (0 → the default-flow forward-fix path).
+    w.location.pathname = '/p/abc';
+    w.history.state = { stackDepth: 0 };
+    const popstate = w.listeners.popstate?.[0];
+    expect(popstate).toBeDefined();
+    (popstate as EventListener)(new Event('popstate'));
+
+    expect(__getFlowStackForTests()).toEqual([
+      { project: 'meally', flow: 'main', slug: 'meally/main' },
+    ]);
   });
 });

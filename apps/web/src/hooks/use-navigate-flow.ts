@@ -1,5 +1,5 @@
 import { type BootConfig, readBootConfig } from '@/lib/boot-config';
-import { flowPath, matchProjectFlow, stripBase, withBase } from '@/lib/router';
+import { BUILD_BASE, flowPath, matchProjectFlow, stripBase, withBase } from '@/lib/router';
 import { useSyncExternalStore } from 'react';
 
 /**
@@ -104,16 +104,31 @@ const getSnapshot = (): readonly FlowStackEntry[] => currentStack;
 export const useFlowStack = (): readonly FlowStackEntry[] =>
   useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
+// Resolve the served base PER CALL (boot base when the host injected one, else
+// the build-time base). Re-reading boot here — rather than relying on the
+// module-frozen `BASE` from router.ts — decouples the effectful nav functions
+// from import order: the host sets `window.__SEEFLOW_BOOT__` before the bundle
+// runs in production, so behavior is unchanged there, but it also makes the
+// boot path exercisable in tests that install the boot global after import.
+// With boot null this falls back to `BUILD_BASE`, i.e. byte-for-byte the
+// previous `withBase(url)` default.
+const currentBase = (): string => readBootConfig()?.base?.replace(/\/$/, '') ?? BUILD_BASE;
+
 // `url` is always base-RELATIVE (from `flowPath()` / `'/'`); `withBase` puts the
-// served base (`''` standalone, `/app` cloud) back on before touching history.
+// served base (`''` standalone, `/app` cloud, `/p/<id>` boot) back on before
+// touching history.
 const pushHistoryState = (depth: number, url: string): void => {
-  window.history.pushState({ stackDepth: depth }, '', withBase(url));
+  window.history.pushState({ stackDepth: depth }, '', withBase(url, currentBase()));
   window.dispatchEvent(new Event(NAV_EVENT));
 };
 
 const replaceHistoryDepth = (depth: number, url: string): void => {
   const prev = (window.history.state ?? null) as HistoryStackState | null;
-  window.history.replaceState({ ...(prev ?? {}), stackDepth: depth }, '', withBase(url));
+  window.history.replaceState(
+    { ...(prev ?? {}), stackDepth: depth },
+    '',
+    withBase(url, currentBase()),
+  );
 };
 
 export const pushLink = (target: NavigateFlowTarget): void => {
@@ -129,10 +144,15 @@ export const popBack = (): void => {
 
 export const reset = (target: NavigateFlowTarget | null): void => {
   const next = computeResetStack(target);
+  // Under boot there is no project-picker "home": the base root `/` maps to the
+  // project's default flow, so a null target (the no-boot "go home" case) does
+  // not arise from in-app navigation. `flowPath`/`stripBase` read boot per call,
+  // so this stays correct under both regimes — the null branch is only reachable
+  // in the no-boot standalone studio.
   const url = target ? flowPath(target.project, target.flow) : '/';
   // Compare in base-relative space: `url` is base-relative, the live pathname
   // carries the served base.
-  if (stripBase(window.location.pathname) === url) {
+  if (stripBase(window.location.pathname, currentBase()) === url) {
     replaceHistoryDepth(next.length, url);
   } else {
     pushHistoryState(next.length, url);
@@ -152,7 +172,7 @@ export const reset = (target: NavigateFlowTarget | null): void => {
 export const ensureFlowNavigation = (): void => {
   if (popstateInstalled) return;
   // Seed/match in base-relative space; the matchers don't know about the base.
-  currentStack = initialStackFromPath(stripBase(window.location.pathname));
+  currentStack = initialStackFromPath(stripBase(window.location.pathname, currentBase()));
   const prev = (window.history.state ?? null) as HistoryStackState | null;
   if (typeof prev?.stackDepth !== 'number') {
     // Keep the full (base-carrying) pathname here — we're only stamping
@@ -165,7 +185,13 @@ export const ensureFlowNavigation = (): void => {
   }
   window.addEventListener('popstate', () => {
     const state = (window.history.state ?? null) as HistoryStackState | null;
-    const pathMatch = matchProjectFlow(stripBase(window.location.pathname));
+    // Boot semantics: `matchProjectFlow('/', boot)` is NON-null (the base root
+    // resolves to the project's default flow), so back-navigating to the base
+    // root reconciles to that default-flow entry — the empty-stack "home" state
+    // (reachable only in the no-boot standalone studio, where `/` is the project
+    // picker) is intentionally unreachable under boot. This is intended, not a
+    // bug: there is no project-picker home when the project is fixed by boot.
+    const pathMatch = matchProjectFlow(stripBase(window.location.pathname, currentBase()));
     const next = computePopState(currentStack, state?.stackDepth, pathMatch);
     if (next !== null) {
       if (currentStack !== next) {
@@ -186,3 +212,9 @@ export const __setFlowStackForTests = (next: readonly FlowStackEntry[]): void =>
 };
 
 export const __getFlowStackForTests = (): readonly FlowStackEntry[] => currentStack;
+
+// Clears the install-once guard so a test can re-run `ensureFlowNavigation`
+// against a fresh fake window (the production guard is module-scoped).
+export const __resetFlowNavigationForTests = (): void => {
+  popstateInstalled = false;
+};
