@@ -1,8 +1,8 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import { type ReactElement, useEffect, useRef, useState } from 'react';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
-import type { ColorToken } from '../types.ts';
-import { type Point, denormalizePoints } from './freehand-geometry.ts';
+import type { ColorToken, FreehandNodeData } from '../types.ts';
+import { denormalizePoints } from './freehand-geometry.ts';
 import { FREEHAND_STROKE_OPTIONS, strokeOutlineToPath } from './freehand-stroke.ts';
 
 // perfect-freehand is an optional peer dep. Module-singleton dynamic import
@@ -19,15 +19,6 @@ function loadGetStroke(): Promise<GetStroke | null> {
     () => null,
   );
   return getStrokePromise;
-}
-
-export interface FreehandNodeData {
-  points: Point[];
-  name?: string;
-  width?: number;
-  height?: number;
-  color?: ColorToken;
-  strokeWidth?: number;
 }
 
 export type FreehandNodeType = Node<FreehandNodeData & Record<string, unknown>, 'freehand'>;

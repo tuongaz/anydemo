@@ -244,6 +244,17 @@ export function StyleStrip({
   const firstIconNode = pureIconType
     ? (nodes.find((n) => n.type === 'icon') as Extract<FlowNode, { type: 'icon' }>)
     : undefined;
+  // Freehand ink shares the icon strip's collapsed color/strokeWidth controls:
+  // both are chromeless "ink" nodes whose only visual knob is the stroke color
+  // (data.color) + thickness (data.strokeWidth). The Change-icon affordance
+  // below stays icon-only.
+  const pureInkType = pureNode && nodes.every((n) => n.type === 'icon' || n.type === 'freehand');
+  const firstInkNode = pureInkType
+    ? (nodes.find((n) => n.type === 'icon' || n.type === 'freehand') as Extract<
+        FlowNode,
+        { type: 'icon' | 'freehand' }
+      >)
+    : undefined;
   // US-014: dedicated image branch. Image borders use `borderWidth` (0–8),
   // NOT the geometric nodes' open-ended `borderSize`.
   // Multi-image selections fan out across every selected node so the user can
@@ -417,7 +428,7 @@ export function StyleStrip({
   const applyIconColor = (token: ColorToken) => {
     for (const n of nodes) onStyleNode(n.id, { color: token });
   };
-  const iconColorActive: ColorToken = firstIconNode?.data.color ?? 'default';
+  const iconColorActive: ColorToken = firstInkNode?.data.color ?? 'default';
 
   // Width slider source value: connector borderSize for pure-connector,
   // node borderSize otherwise (mixed selections fall back to the node's
@@ -433,11 +444,13 @@ export function StyleStrip({
   const colorInnerTestId = 'style-tab-color-trigger';
   const colorTokenPrefix = 'style-tab-color';
 
-  if (pureIconType) {
+  if (pureInkType) {
     // US-022: Change-icon button reuses the same callback the icon node's
     // double-click handler invokes (US-016) — `firstIconNode.id` is the
     // representative target; for a multi-icon-node selection the button is
-    // hidden because "change icon" is ambiguous across the set.
+    // hidden because "change icon" is ambiguous across the set. Freehand ink
+    // shares the color swatch but NOT the Change-icon button (gated on
+    // firstIconNode, which is undefined for a pure-freehand selection).
     const showChangeIcon = !!onRequestIconReplace && nodes.length === 1 && !!firstIconNode;
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);

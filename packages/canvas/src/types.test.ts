@@ -101,6 +101,8 @@ describe('US-010: component node types', () => {
           return 'component';
         case 'linkflow':
           return 'linkflow';
+        case 'freehand':
+          return 'freehand';
         default: {
           const _exhaustive: never = n;
           return _exhaustive;

@@ -115,7 +115,14 @@ export const GEOMETRIC_NODE_TYPES = [
 ] as const;
 export type GeometricNodeType = (typeof GEOMETRIC_NODE_TYPES)[number];
 
-export type NodeType = GeometricNodeType | 'image' | 'html' | 'icon' | 'component' | 'linkflow';
+export type NodeType =
+  | GeometricNodeType
+  | 'image'
+  | 'html'
+  | 'icon'
+  | 'component'
+  | 'linkflow'
+  | 'freehand';
 
 /**
  * Set of node types creatable via the canvas toolbar's draw-mode (click /
@@ -169,6 +176,13 @@ export interface IconNodeData extends Omit<NodeSemanticBase, 'icon'>, NodeVisual
   color?: ColorToken;
   strokeWidth?: number;
   alt?: string;
+}
+
+export interface FreehandNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  /** Required for type:'freehand' — normalized [x, y, pressure] stroke samples. */
+  points: [number, number, number][];
+  color?: ColorToken;
+  strokeWidth?: number;
 }
 
 export interface HtmlNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
@@ -279,7 +293,8 @@ export type FlowNode =
   | (NodeBase & { type: 'html'; data: HtmlNodeData })
   | (NodeBase & { type: 'icon'; data: IconNodeData })
   | (NodeBase & { type: 'component'; data: ComponentNodeData })
-  | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData });
+  | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData })
+  | (NodeBase & { type: 'freehand'; data: FreehandNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.

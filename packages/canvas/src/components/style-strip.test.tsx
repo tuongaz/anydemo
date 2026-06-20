@@ -130,6 +130,21 @@ function rectangleFixture(id: string): FlowNode {
   } as FlowNode;
 }
 
+function freehandFixture(id: string, color?: string): FlowNode {
+  return {
+    id,
+    type: 'freehand',
+    position: { x: 0, y: 0 },
+    data: {
+      points: [
+        [0, 0, 0.5],
+        [1, 1, 0.5],
+      ],
+      ...(color ? { color } : {}),
+    },
+  } as FlowNode;
+}
+
 describe('StyleStrip — icon color picker (US-014)', () => {
   it('renders only the icon-color swatch when a type:"icon" node is selected', () => {
     const tree = callStrip({ nodes: [iconFixture('n1', 'blue')] });
@@ -277,6 +292,53 @@ describe('StyleStrip — Change-icon button (US-022)', () => {
       onRequestIconReplace: () => {},
     });
     expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
+  });
+});
+
+describe('StyleStrip — freehand color picker (Task 9)', () => {
+  it('renders the color swatch when a type:"freehand" node is selected', () => {
+    const tree = callStrip({ nodes: [freehandFixture('f1', 'blue')] });
+    const swatch = findElement(tree, testIdEquals('style-strip-icon-color'));
+    expect(swatch).not.toBeNull();
+    expect((swatch?.props as { activeToken?: string }).activeToken).toBe('blue');
+
+    // Same collapsed ink strip as icon — none of the shared geometric controls.
+    expect(findElement(tree, testIdEquals('style-strip-color'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-border-style'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-font-size'))).toBeNull();
+  });
+
+  it('clicking a swatch token dispatches onStyleNode with { color }', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [freehandFixture('f1')], onStyleNode });
+    const swatch = findElement(tree, testIdEquals('style-strip-icon-color'));
+    if (!swatch) throw new Error('freehand color swatch missing');
+    const onSelect = (swatch.props as { onSelect: (token: string) => void }).onSelect;
+    onSelect('green');
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('f1', { color: 'green' });
+  });
+
+  it("active token falls back to 'default' when data.color is unset", () => {
+    const tree = callStrip({ nodes: [freehandFixture('f1')] });
+    const swatch = findElement(tree, testIdEquals('style-strip-icon-color'));
+    expect((swatch?.props as { activeToken?: string }).activeToken).toBe('default');
+  });
+
+  it('does NOT render the Change-icon button for a freehand selection', () => {
+    const tree = callStrip({
+      nodes: [freehandFixture('f1')],
+      onRequestIconReplace: () => {},
+    });
+    // Color swatch is shared, but the change-icon affordance stays icon-only.
+    expect(findElement(tree, testIdEquals('style-strip-icon-color'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
+  });
+
+  it('shares the collapsed ink strip across a mixed icon + freehand selection', () => {
+    const tree = callStrip({ nodes: [iconFixture('n1'), freehandFixture('f1')] });
+    const swatches = findAll(tree, testIdEquals('style-strip-icon-color'));
+    expect(swatches.length).toBe(1);
   });
 });
 
