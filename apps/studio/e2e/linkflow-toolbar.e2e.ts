@@ -131,7 +131,7 @@ test.describe('canvas — linkflow toolbar tile', () => {
     );
   });
 
-  test('tap (near-zero drag) commits at LINKFLOW_DEFAULT_SIZE 240x100', async ({
+  test('tap (near-zero drag) commits at LINKFLOW_DEFAULT_SIZE 240x132', async ({
     page,
     studio,
   }) => {
@@ -194,6 +194,6 @@ test.describe('canvas — linkflow toolbar tile', () => {
     const wrapper = page.locator('.react-flow__node').first();
     const style = await wrapper.getAttribute('style');
     expect(style).toContain('width: 240px');
-    expect(style).toContain('height: 100px');
+    expect(style).toContain('height: 132px');
   });
 });
