@@ -1,9 +1,12 @@
-import type { Node, NodeProps } from '@xyflow/react';
-import { type ReactElement, useEffect, useRef, useState } from 'react';
+import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
+import { type ReactElement, memo, useEffect, useRef, useState } from 'react';
+import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import type { ColorToken, FreehandNodeData } from '../types.ts';
 import { denormalizePoints } from './freehand-geometry.ts';
 import { FREEHAND_STROKE_OPTIONS, strokeOutlineToPath } from './freehand-stroke.ts';
+import { ResizeControls } from './resize-controls.tsx';
+import { type ResizeAlignmentHooks, useResizeGesture } from './use-resize-gesture.ts';
 
 // perfect-freehand is an optional peer dep. Module-singleton dynamic import
 // resolving to `getStroke` or `null` (peer dep absent) — mirrors
@@ -21,7 +24,28 @@ function loadGetStroke(): Promise<GetStroke | null> {
   return getStrokePromise;
 }
 
-export type FreehandNodeType = Node<FreehandNodeData & Record<string, unknown>, 'freehand'>;
+// Mirrors icon-node's IconNodeRuntimeData: the resize callbacks + alignment
+// delegate are injected at runtime by the canvas (buildNode in
+// seeflow-canvas.tsx) — they are not part of the persisted schema, so the
+// runtime type widens the schema-level FreehandNodeData with them.
+export type FreehandNodeRuntimeData = FreehandNodeData & {
+  onResize?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
+  onResizeEnd?: (
+    nodeId: string,
+    dims: { width: number; height: number; x: number; y: number },
+  ) => void;
+  setResizing?: (on: boolean) => void;
+  /** US-005: alignment-guide integration injected by the canvas in edit mode. */
+  resizeAlignment?: ResizeAlignmentHooks;
+} & Record<string, unknown>;
+
+export type FreehandNodeType = Node<FreehandNodeRuntimeData, 'freehand'>;
+
+const MIN_EXTENT = 8;
+const HANDLE_CLASS = 'sf:opacity-0 sf:transition-opacity';
 
 // Matches icon-node.tsx's color resolution: the saturated 'text' edge color for
 // a set token, falling through to `currentColor` for the unset/default case.
@@ -29,9 +53,22 @@ function resolveStrokeColor(token: ColorToken | undefined): string {
   return colorTokenStyle(token, 'text').color ?? 'currentColor';
 }
 
-export function FreehandNode({ data }: NodeProps<FreehandNodeType>): ReactElement {
+function FreehandNodeImpl({
+  id,
+  data,
+  selected,
+  isConnectable,
+}: NodeProps<FreehandNodeType>): ReactElement {
   const width = data.width ?? 100;
   const height = data.height ?? 100;
+
+  const { onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
+    onResize: (dims) => data.onResize?.(id, dims),
+    onResizeEnd: (dims) => data.onResizeEnd?.(id, dims),
+    setResizing: data.setResizing,
+    nodeId: id,
+    alignment: data.resizeAlignment,
+  });
 
   const [getStroke, setGetStroke] = useState<GetStroke | null>(null);
   const mounted = useRef(true);
@@ -70,15 +107,77 @@ export function FreehandNode({ data }: NodeProps<FreehandNodeType>): ReactElemen
   }
 
   return (
-    <svg
-      role="img"
-      aria-label={label}
-      width="100%"
-      height="100%"
-      viewBox={`0 0 ${width} ${height}`}
-      style={{ width, height, overflow: 'visible' }}
+    <div
+      className="sf:group sf:relative sf:h-full sf:w-full"
+      style={{ width, height }}
+      data-testid="freehand-node"
+      data-node-type="freehand"
     >
-      {body}
-    </svg>
+      <ResizeControls
+        visible={!!selected && !!data.onResize}
+        cornerVariant="visible"
+        minWidth={MIN_EXTENT}
+        minHeight={MIN_EXTENT}
+        onResizeStart={onResizeStart}
+        onResize={onResizeEvent}
+        onResizeEnd={onResizeEnd}
+      />
+      <Handle
+        type="target"
+        position={Position.Top}
+        id="t"
+        isConnectable={isConnectable}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
+      />
+      <Handle
+        type="target"
+        position={Position.Left}
+        id="l"
+        isConnectable={isConnectable}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
+      />
+      <svg
+        role="img"
+        aria-label={label}
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${width} ${height}`}
+        preserveAspectRatio="none"
+        style={{ overflow: 'visible' }}
+      >
+        {body}
+      </svg>
+      <Handle
+        type="source"
+        position={Position.Right}
+        id="r"
+        isConnectable={isConnectable}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
+      />
+      <Handle
+        type="source"
+        position={Position.Bottom}
+        id="b"
+        isConnectable={isConnectable}
+        className={cn(HANDLE_CLASS, selected && 'sf:opacity-100!')}
+      />
+    </div>
   );
 }
+
+// Mirrors icon-node.tsx — skip re-renders on xyflow's internal prop ticks; the
+// handles + resize chrome add render cost, so gate on the props that change the
+// painted output.
+function arePropsEqual(
+  prev: NodeProps<FreehandNodeType>,
+  next: NodeProps<FreehandNodeType>,
+): boolean {
+  return (
+    prev.selected === next.selected &&
+    prev.data === next.data &&
+    prev.width === next.width &&
+    prev.height === next.height
+  );
+}
+
+export const FreehandNode = memo(FreehandNodeImpl, arePropsEqual);
