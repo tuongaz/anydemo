@@ -62,6 +62,7 @@ export const formatShortcut = (parts: ShortcutParts, isMac: boolean = IS_MAC): s
 export type CommandId =
   | 'tool.select'
   | 'tool.hand'
+  | 'tool.pen'
   | 'tool.rectangle'
   | 'tool.ellipse'
   | 'tool.text'
@@ -135,6 +136,13 @@ export const COMMANDS: readonly CommandDef[] = [
     description: 'Pan the canvas; node interaction is suspended while armed',
     category: 'Tools',
     shortcut: formatShortcut({ key: 'H' }),
+  },
+  {
+    id: 'tool.pen',
+    label: 'Pen',
+    description: 'Draw freehand ink',
+    category: 'Tools',
+    shortcut: formatShortcut({ key: 'P' }),
   },
   {
     id: 'tool.rectangle',
@@ -543,7 +551,7 @@ export const resolveHistoryChord = (
 // these bindings are intentionally bare-only so they don't collide with Cmd+V
 // (paste), Cmd+D (duplicate), Shift+letter (inputs), etc. Uppercase variants
 // resolve identically (key.toLowerCase normalization).
-export type ToolShortcutResult = 'select' | 'hand' | GeometricNodeType | null;
+export type ToolShortcutResult = 'select' | 'hand' | 'pen' | GeometricNodeType | null;
 
 export const resolveToolShortcut = (e: ModifierEvent): ToolShortcutResult => {
   if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return null;
@@ -552,6 +560,8 @@ export const resolveToolShortcut = (e: ModifierEvent): ToolShortcutResult => {
       return 'select';
     case 'h':
       return 'hand';
+    case 'p':
+      return 'pen';
     case 'r':
       return 'rectangle';
     case 'o':

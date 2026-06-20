@@ -450,6 +450,42 @@ describe('CanvasToolbar', () => {
       expect(called).toBe(false);
     });
 
+    it('clicking Pen from neutral switches to {kind:"pen"}', () => {
+      const received: CanvasMode[] = [];
+      const tree = callToolbar({
+        mode: { kind: 'select' },
+        onModeChange: (next) => {
+          received.push(next);
+        },
+      });
+      const btn = findElement(tree, testIdEquals('toolbar-mode-pen'));
+      if (!btn) throw new Error('Pen mode button not found');
+      (btn.props.onClick as () => void)();
+      expect(received).toEqual([{ kind: 'pen' }]);
+    });
+
+    it('marks Pen aria-pressed when mode.kind === pen', () => {
+      const tree = callToolbar({ mode: { kind: 'pen' } });
+      const pen = findElement(tree, testIdEquals('toolbar-mode-pen'));
+      expect(pen?.props['aria-pressed']).toBe(true);
+      const sel = findElement(tree, testIdEquals('toolbar-mode-select'));
+      expect(sel?.props['aria-pressed']).toBe(false);
+    });
+
+    it('clicking Pen while Pen is armed exits to {kind:"select"}', () => {
+      const received: CanvasMode[] = [];
+      const tree = callToolbar({
+        mode: { kind: 'pen' },
+        onModeChange: (next) => {
+          received.push(next);
+        },
+      });
+      const btn = findElement(tree, testIdEquals('toolbar-mode-pen'));
+      if (!btn) throw new Error('Pen mode button not found');
+      (btn.props.onClick as () => void)();
+      expect(received).toEqual([{ kind: 'select' }]);
+    });
+
     it('clicking Select while a shape is armed exits to {kind:"select"}', () => {
       const received: CanvasMode[] = [];
       const tree = callToolbar({

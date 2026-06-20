@@ -9,6 +9,7 @@ import {
   Hexagon,
   Link2,
   MousePointer2,
+  Pencil,
   Server,
   Shapes,
   Square,
@@ -240,6 +241,34 @@ export function CanvasToolbar({
     );
   };
 
+  // The Pen mode renders explicitly (not via TOOLBAR_MODES) so the radio
+  // array's `{ kind: 'select' | 'hand' }` typing stays intact. Toggle parity
+  // with the other modes: Pen-on-Pen exits to Select, Pen from anything else
+  // arms { kind: 'pen' }.
+  const renderPenButton = () => {
+    const active = mode.kind === 'pen';
+    const tooltip = getCommandTooltip('tool.pen');
+    return (
+      <button
+        type="button"
+        data-testid="toolbar-mode-pen"
+        data-active={active ? 'true' : 'false'}
+        aria-pressed={active}
+        aria-label={tooltip}
+        title={tooltip}
+        onClick={() => onModeChange(active ? { kind: 'select' } : { kind: 'pen' })}
+        className={cn(
+          'sf:inline-flex sf:h-8 sf:w-8 sf:items-center sf:justify-center sf:rounded-md sf:text-muted-foreground sf:transition-colors',
+          active
+            ? 'sf:bg-primary/20 sf:text-primary sf:ring-1 sf:ring-primary/50 sf:shadow-[0_0_0_1px_hsl(var(--primary)/0.5)_inset]'
+            : 'sf:hover:bg-muted sf:hover:text-foreground',
+        )}
+      >
+        <Pencil className="sf:h-4 sf:w-4" />
+      </button>
+    );
+  };
+
   const renderShapeButton = ({ shape, commandId, Icon }: ToolbarShapeEntry) => {
     const active = activeShape === shape;
     const tooltip = getCommandTooltip(commandId);
@@ -273,6 +302,7 @@ export function CanvasToolbar({
       className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-card sf:p-1 sf:shadow-md sf:backdrop-blur"
     >
       {TOOLBAR_MODES.map(renderModeButton)}
+      {renderPenButton()}
       {showShapeTools ? (
         <>
           <div className="sf:my-1 sf:h-px sf:w-6 sf:bg-border" aria-hidden="true" />

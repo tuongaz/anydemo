@@ -405,6 +405,7 @@ describe('COMMANDS registry (US-002)', () => {
   const expectedIds: readonly CommandId[] = [
     'tool.select',
     'tool.hand',
+    'tool.pen',
     'tool.rectangle',
     'tool.ellipse',
     'tool.text',
@@ -487,6 +488,7 @@ describe('resolveToolShortcut (US-003)', () => {
   const tools: ReadonlyArray<{ key: string; tool: NonNullable<ToolShortcutResult> }> = [
     { key: 'v', tool: 'select' },
     { key: 'h', tool: 'hand' },
+    { key: 'p', tool: 'pen' },
     { key: 'r', tool: 'rectangle' },
     { key: 'o', tool: 'ellipse' },
     { key: 't', tool: 'text' },

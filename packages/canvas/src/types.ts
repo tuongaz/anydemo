@@ -295,7 +295,8 @@ export type CanvasMode =
   | { kind: 'select' }
   | { kind: 'hand' }
   | { kind: 'draw'; shape: DrawableNodeType }
-  | { kind: 'draw-icon'; iconName: string };
+  | { kind: 'draw-icon'; iconName: string }
+  | { kind: 'pen' };
 
 export type ConnectorStyle = 'solid' | 'dashed' | 'dotted';
 export type ConnectorDirection = 'forward' | 'backward' | 'both' | 'none';

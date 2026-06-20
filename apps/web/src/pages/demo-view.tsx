@@ -2074,6 +2074,11 @@ export function DemoView({
         setCanvasMode(current.kind === 'hand' ? { kind: 'select' } : { kind: 'hand' });
         return;
       }
+      if (resolved === 'pen') {
+        // P toggles Pen on/off, exiting to Select on second press.
+        setCanvasMode(current.kind === 'pen' ? { kind: 'select' } : { kind: 'pen' });
+        return;
+      }
       // A shape key: toggle into / out of Draw for that shape.
       if (current.kind === 'draw' && current.shape === resolved) {
         setCanvasMode({ kind: 'select' });
