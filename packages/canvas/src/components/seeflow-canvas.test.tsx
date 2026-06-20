@@ -781,6 +781,12 @@ describe('SeeflowCanvas', () => {
       drawStart: 19,
       drawCurrent: 20,
       drawing: 21,
+      // Task 7 (freehand pen): penPointsRef / penDrawingRef / penModeRef are
+      // appended immediately after drawingRef, so they land in fresh slots
+      // 22-24 and shift nothing above. Keep them last here too.
+      penPoints: 22,
+      penDrawing: 23,
+      penMode: 24,
     } as const;
 
     // Bracket access on a sparse array returns `T | undefined`; this asserts
@@ -1178,6 +1184,193 @@ describe('SeeflowCanvas', () => {
       if (!commit) throw new Error('onCreateLinkflowNode was not called');
       expect(commit.pos).toEqual({ x: 200, y: 150 });
       expect(commit.size).toEqual({ width: 240, height: 132 });
+    });
+
+    it('pen mode: pointerdown → move → up commits via onCreateFreehandNode with normalized points + box', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: Array<{
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+        points: [number, number, number][];
+      }> = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'pen' },
+          onCreateFreehandNode: (pos, size, points) => {
+            captured.push({
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+              points: points as [number, number, number][],
+            });
+          },
+        },
+        { refSink: refs },
+      );
+      // penModeRef mirrors the pen canvasMode via useEffect, but the hook shim
+      // no-ops useEffect — so prime it directly (mirrors how the shape tests
+      // prime drawShapeRef). rfInstance must expose screenToFlowPosition;
+      // identity mapping keeps flow == screen for the box math.
+      refAt(refs, REF.penMode).current = true;
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        pressure: 0.5,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(100, 100));
+      // After down: penDrawing flips true, first sample recorded.
+      expect(refAt(refs, REF.penDrawing).current).toBe(true);
+      expect((refAt(refs, REF.penPoints).current as unknown[]).length).toBe(1);
+
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(200, 150));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(300, 400));
+      expect((refAt(refs, REF.penPoints).current as unknown[]).length).toBe(3);
+
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(300, 400));
+      // After up: penDrawing flips false; the path ref is cleared for the next
+      // stroke; pen stays armed (no exitDrawMode → penMode ref unchanged).
+      expect(refAt(refs, REF.penDrawing).current).toBe(false);
+      expect((refAt(refs, REF.penPoints).current as unknown[]).length).toBe(0);
+      expect(refAt(refs, REF.penMode).current).toBe(true);
+
+      expect(captured.length).toBe(1);
+      const commit = captured[0];
+      if (!commit) throw new Error('onCreateFreehandNode was not called');
+      // box over (100,100)..(300,400): top-left (100,100), 200×300.
+      expect(commit.pos).toEqual({ x: 100, y: 100 });
+      expect(commit.size).toEqual({ width: 200, height: 300 });
+      // Normalized to the box: first sample is the top-left corner (0,0); the
+      // last is the bottom-right (1,1). RDP keeps the endpoints. Pressure rides
+      // through unchanged.
+      expect(commit.points.length).toBeGreaterThanOrEqual(2);
+      const firstPt = commit.points[0];
+      const lastPt = commit.points[commit.points.length - 1];
+      if (!firstPt || !lastPt) throw new Error('normalized points missing');
+      expect(firstPt[0]).toBeCloseTo(0, 5);
+      expect(firstPt[1]).toBeCloseTo(0, 5);
+      expect(lastPt[0]).toBeCloseTo(1, 5);
+      expect(lastPt[1]).toBeCloseTo(1, 5);
+      for (const p of commit.points) {
+        expect(p[0]).toBeGreaterThanOrEqual(0);
+        expect(p[0]).toBeLessThanOrEqual(1);
+        expect(p[1]).toBeGreaterThanOrEqual(0);
+        expect(p[1]).toBeLessThanOrEqual(1);
+        expect(p[2]).toBeCloseTo(0.5, 5);
+      }
+    });
+
+    it('pen mode: a tap (single point, no move) does not commit and stays armed', () => {
+      const refs: { current: unknown }[] = [];
+      const captured: unknown[] = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'pen' },
+          onCreateFreehandNode: (...args: unknown[]) => captured.push(args),
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.penMode).current = true;
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const evt = {
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: 100,
+        clientY: 100,
+        pointerId: 1,
+        pressure: 0.5,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      };
+
+      (wrapper.props.onPointerDown as (e: unknown) => void)(evt);
+      (wrapper.props.onPointerUp as (e: unknown) => void)(evt);
+      // < 2 raw points → no commit; pen stays armed (penMode ref untouched).
+      expect(captured.length).toBe(0);
+      expect(refAt(refs, REF.penDrawing).current).toBe(false);
+      expect(refAt(refs, REF.penMode).current).toBe(true);
+    });
+
+    it('pen mode does not trigger the shape-create path', () => {
+      const refs: { current: unknown }[] = [];
+      const shapeCaptured: unknown[] = [];
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'pen' },
+          onCreateShapeNode: (...args: unknown[]) => shapeCaptured.push(args),
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.penMode).current = true;
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      const at = (x: number, y: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        pressure: 0.5,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+
+      (wrapper.props.onPointerDown as (e: unknown) => void)(at(50, 50));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(at(200, 200));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(at(200, 200));
+      // The pen branch handles the gesture entirely; the shape-draw ref stays
+      // null so onCreateShapeNode is never invoked.
+      expect(shapeCaptured.length).toBe(0);
+      expect(refAt(refs, REF.drawing).current).toBe(false);
     });
   });
 

@@ -68,6 +68,13 @@ import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
 import { ComponentNode } from '../nodes/component-node.tsx';
+import {
+  type Point,
+  boundingBox,
+  isAccidentalStroke,
+  normalizePoints,
+  simplifyRDP,
+} from '../nodes/freehand-geometry.ts';
 import { FreehandNode } from '../nodes/freehand-node.tsx';
 import {
   GeometricNode,
@@ -573,6 +580,18 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     iconName: string,
     position: { x: number; y: number },
     dims: { width: number; height: number },
+  ) => void;
+  /**
+   * Commit a new `type:'freehand'` node from the pen tool. `position` is the
+   * stroke's top-left in flow coords; `size` is its flow-space bounding box;
+   * `points` are normalized to that box ([x, y, pressure] with x/y in 0..1).
+   * Wiring this enables freehand capture while `canvasMode.kind === 'pen'`;
+   * absent → strokes are captured + previewed but never committed.
+   */
+  onCreateFreehandNode?: (
+    position: { x: number; y: number },
+    size: { width: number; height: number },
+    points: Point[],
   ) => void;
   /**
    * Commit a new `type:'linkflow'` node from the bottom-toolbar's Link node
@@ -2050,6 +2069,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onConnectorLabelChange,
     onCreateShapeNode,
     onCreateIconNode,
+    onCreateFreehandNode,
     onCreateLinkflowNode,
     onCreateImageFromFile,
     onRetryImageUpload,
@@ -2269,6 +2289,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // True when either draw flow is armed — gates cursor, RF lock-downs,
   // selection, and pan activation identically for both.
   const drawArmed = drawShape !== null || drawIcon !== null;
+  // Pen tool arms freehand stroke capture. Like drawArmed it locks down the RF
+  // interaction props (pan/marquee/select/connect/drag — every `<ReactFlow>`
+  // gate below ORs in `penMode`) and switches the cursor, but unlike the
+  // shape/icon draw flows it records a full path and stays armed across
+  // multiple strokes. The prop-level lock-down is load-bearing: xyflow's
+  // pan/marquee run on NATIVE pane listeners, so the pen handler's
+  // stopPropagation alone can't keep them from firing during a stroke.
+  const penMode = canvasMode.kind === 'pen';
   const handMode = canvasMode.kind === 'hand';
   // Mid-connect (or mid-reconnect) flag drives a wrapper class so handles on
   // every node stay visible until the gesture releases — the source has
@@ -2470,6 +2498,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   const drawStartRef = useRef<{ x: number; y: number } | null>(null);
   const drawCurrentRef = useRef<{ x: number; y: number } | null>(null);
   const drawingRef = useRef(false);
+  // Pen-tool (freehand) capture. `penPointsRef` accumulates raw CLIENT-space
+  // [x, y, pressure] samples for the in-progress stroke; `penDrawingRef` gates
+  // the pointer-move/up handlers. Both are appended AFTER the existing draw
+  // refs so the hook-shim ref-index map (drawShape..drawing) stays stable —
+  // never insert a useRef above drawShapeRef. The live preview re-render is
+  // driven by reusing the existing drawStart/drawCurrent state slots (set in
+  // the pen pointer-down/move branches), so no new useState is introduced.
+  const penPointsRef = useRef<Point[]>([]);
+  const penDrawingRef = useRef(false);
+  const penModeRef = useRef(penMode);
 
   // Mirror drawShape/drawIcon state into refs so handlers see the live value
   // without depending on closure identity (handler refs need to stay stable so
@@ -2480,6 +2518,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   useEffect(() => {
     drawIconRef.current = drawIcon;
   }, [drawIcon]);
+  useEffect(() => {
+    penModeRef.current = penMode;
+  }, [penMode]);
 
   const exitDrawMode = useCallback(() => {
     onCanvasModeChange({ kind: 'select' });
@@ -2490,6 +2531,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     drawStartRef.current = null;
     drawCurrentRef.current = null;
     drawingRef.current = false;
+    // Also tear down any in-progress freehand stroke so an Esc mid-draw (pen
+    // mode also funnels through here) leaves no orphaned path.
+    penDrawingRef.current = false;
+    penPointsRef.current = [];
   }, [onCanvasModeChange]);
 
   // US-006: ESC priority chain. A single window-level keydown listener handles
@@ -2518,8 +2563,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (e.key !== 'Escape') return;
       // 1. Inline label edit — defer to InlineEdit's own handler.
       if (isEditableTarget(document.activeElement)) return;
-      // 2. Drag-create (shape or icon).
-      if (drawShapeRef.current || drawIconRef.current) {
+      // 2. Drag-create (shape or icon) or pen mode. exitDrawMode also tears
+      //    down any in-progress freehand stroke and disarms the pen.
+      if (drawShapeRef.current || drawIconRef.current || penModeRef.current) {
         e.preventDefault();
         exitDrawMode();
         return;
@@ -2623,6 +2669,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    // Pen tool: start a freehand stroke. Like the shape/icon draw flows, we
+    // require the press to land on the pane (not a node) and capture client-
+    // space samples. Reuses the drawStart/drawCurrent state slots purely to
+    // force a re-render so the live preview overlay mounts — the actual path
+    // lives in penPointsRef.
+    if (penModeRef.current) {
+      const target = e.target as HTMLElement | null;
+      if (!target?.classList.contains('react-flow__pane')) return;
+      penDrawingRef.current = true;
+      penPointsRef.current = [[e.clientX, e.clientY, e.pressure || 0.5]];
+      setDrawStart({ x: e.clientX, y: e.clientY });
+      setDrawCurrent({ x: e.clientX, y: e.clientY });
+      try {
+        e.currentTarget.setPointerCapture?.(e.pointerId);
+      } catch {
+        // ignore — gesture still works without explicit capture
+      }
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
     if (!drawShapeRef.current && !drawIconRef.current) return;
     const target = e.target as HTMLElement | null;
     if (!target?.classList.contains('react-flow__pane')) return;
@@ -2645,6 +2712,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   }, []);
 
   const onPointerMove = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    // Pen tool: accumulate the stroke sample and re-render the live preview.
+    if (penDrawingRef.current) {
+      penPointsRef.current.push([e.clientX, e.clientY, e.pressure || 0.5]);
+      setDrawCurrent({ x: e.clientX, y: e.clientY });
+      return;
+    }
     if (!drawingRef.current) return;
     const client = { x: e.clientX, y: e.clientY };
     drawCurrentRef.current = client;
@@ -2653,6 +2726,42 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
 
   const onPointerUp = useCallback(
     (e: PointerEvent<HTMLDivElement>) => {
+      // Pen tool: end the freehand stroke and commit it as a freehand node.
+      // We deliberately do NOT exitDrawMode() here — the pen stays armed so the
+      // user can draw multiple strokes in a row (Esc / toolbar toggle exits).
+      if (penDrawingRef.current) {
+        penDrawingRef.current = false;
+        try {
+          e.currentTarget.releasePointerCapture?.(e.pointerId);
+        } catch {
+          // capture may not have been granted; ignore.
+        }
+        const raw = penPointsRef.current;
+        penPointsRef.current = [];
+        setDrawStart(null);
+        setDrawCurrent(null);
+        const rfInstance = rfInstanceRef.current;
+        // < 2 points (a tap) or no RF instance → nothing to commit; stay armed.
+        if (!rfInstance || raw.length < 2) return;
+        // Project each client sample into flow coords for the committed box.
+        const flowPts: Point[] = raw.map((p) => {
+          const f = rfInstance.screenToFlowPosition({ x: p[0], y: p[1] });
+          return [f.x, f.y, p[2]];
+        });
+        const box = boundingBox(flowPts);
+        // Accidental-click guard uses SCREEN extent — it's a UX threshold the
+        // user perceives in screen px, independent of zoom (mirrors the shape
+        // MIN_DRAW_SIZE rule).
+        const screenBox = boundingBox(raw);
+        if (isAccidentalStroke(screenBox)) return;
+        const normalized = simplifyRDP(normalizePoints(flowPts, box), 0.005);
+        onCreateFreehandNode?.(
+          { x: box.x, y: box.y },
+          { width: box.width, height: box.height },
+          normalized,
+        );
+        return;
+      }
       if (!drawingRef.current) return;
       drawingRef.current = false;
       try {
@@ -2731,7 +2840,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const height = tooSmall ? SHAPE_DEFAULT_SIZE[shape].height : dragFlowHeight;
       onCreateShapeNode?.(shape, flowMin, { width, height });
     },
-    [exitDrawMode, onCreateShapeNode, onCreateIconNode, onCreateLinkflowNode],
+    [exitDrawMode, onCreateShapeNode, onCreateIconNode, onCreateFreehandNode, onCreateLinkflowNode],
   );
   // Block upstream sync while a node is mid-drag or mid-resize. NodeResizer
   // dispatches dimension changes into rfNodes during the gesture; if we then
@@ -4620,13 +4729,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // the same grab/grabbing pair as Hand. Else default arrow — US-010 made
   // primary-mouse drag a marquee gesture, but the default cursor is the
   // design-tool norm for the rubber-band so we don't override it.
-  const wrapperCursor = drawArmed
-    ? 'crosshair'
-    : handMode || spaceHeld
-      ? spaceDragging
-        ? 'grabbing'
-        : 'grab'
-      : undefined;
+  const wrapperCursor =
+    drawArmed || penMode
+      ? 'crosshair'
+      : handMode || spaceHeld
+        ? spaceDragging
+          ? 'grabbing'
+          : 'grab'
+        : undefined;
 
   // US-007: derive the built-in sidebar's target entity from the sole selected
   // node / connector. The panel opens ONLY for a single-entity selection — one
@@ -4700,7 +4810,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           data-can-undo={effectiveCanUndo ? 'true' : 'false'}
           data-can-redo={effectiveCanRedo ? 'true' : 'false'}
           ref={wrapperRef}
-          className="seeflow-canvas-root sf:relative sf:flex sf:h-full sf:w-full"
+          className={cn(
+            'seeflow-canvas-root sf:relative sf:flex sf:h-full sf:w-full',
+            // While a draw/pen gesture is armed, suppress browser touch panning
+            // so a stylus/finger draws instead of scrolling the pane.
+            drawArmed || penMode ? 'sf:touch-none' : '',
+          )}
           style={wrapperCursor ? { cursor: wrapperCursor } : undefined}
           // US-010: capture-phase listener fires before xyflow's pane handlers.
           // Snapshots the additive base + shift state for a pending marquee so
@@ -4720,6 +4835,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             drawingRef.current = false;
             drawStartRef.current = null;
             drawCurrentRef.current = null;
+            // Tear down any in-progress freehand stroke too — without this an
+            // interrupted stroke (touch interruption, OS gesture, pointer loss)
+            // leaves penDrawingRef armed and welds into the next gesture.
+            penDrawingRef.current = false;
+            penPointsRef.current = [];
             setDrawStart(null);
             setDrawCurrent(null);
             setSpaceDragging(false);
@@ -4754,7 +4874,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // gates the actual PATCH dispatch.
                 nodesDraggable={
                   (isEditMode ? !!onNodePositionChange : true) &&
-                  !drawArmed &&
+                  !(drawArmed || penMode) &&
                   !handMode &&
                   flags.enableNodeMove
                 }
@@ -4762,7 +4882,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // and per-node connectable flags are gated; combined with the onConnect
                 // early return this is a triple-gate against stray edge creation.
                 // Hand mode locks connection-drag too — any pane click pans instead.
-                nodesConnectable={isEditMode && !!onCreateConnector && !drawArmed && !handMode}
+                nodesConnectable={
+                  isEditMode && !!onCreateConnector && !(drawArmed || penMode) && !handMode
+                }
                 // US-027: in view mode we disable keyboard-driven deletion entirely
                 // (Backspace/Delete chord). xyflow has no global `edgesDeletable`
                 // flag — the per-edge `deletable` defaults to true and only the
@@ -4839,7 +4961,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // (US-005) and US-014 pins every node above every edge regardless
                 // of selection — no extra node-vs-node elevation needed.
                 elevateNodesOnSelect={false}
-                elementsSelectable={!drawArmed && !handMode && flags.enableSelection}
+                elementsSelectable={!(drawArmed || penMode) && !handMode && flags.enableSelection}
                 // US-018: dragging an unselected node moves it WITHOUT auto-selecting
                 // (and therefore without opening the detail panel). React Flow defaults
                 // this to true; an explicit click (mousedown + mouseup without
@@ -4866,17 +4988,23 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // selectionKeyCode=null suppresses xyflow's modifier-marquee fallback
                 // (default would be 'Shift') since selectionOnDrag already covers
                 // marquee — keeping shift free for additive multi-select via click.
-                selectionOnDrag={!drawArmed && !handMode && flags.enableSelection}
+                selectionOnDrag={!(drawArmed || penMode) && !handMode && flags.enableSelection}
                 // US-027: panning gated on the resolved flag. Draw mode still wins
                 // (toolbar shape gesture owns primary-drag). Hand mode promotes
                 // left-click to pan ([0,1,2]) so the cursor matches the affordance.
                 panOnDrag={
-                  drawArmed ? false : handMode ? [0, 1, 2] : flags.enablePan ? [1, 2] : false
+                  drawArmed || penMode
+                    ? false
+                    : handMode
+                      ? [0, 1, 2]
+                      : flags.enablePan
+                        ? [1, 2]
+                        : false
                 }
                 selectionMode={SelectionMode.Partial}
                 selectionKeyCode={null}
-                multiSelectionKeyCode={drawArmed ? null : ['Meta', 'Shift']}
-                panActivationKeyCode={drawArmed ? null : 'Space'}
+                multiSelectionKeyCode={drawArmed || penMode ? null : ['Meta', 'Shift']}
+                panActivationKeyCode={drawArmed || penMode ? null : 'Space'}
                 // US-010: lift the marquee end to a single onSelectionChange call so
                 // the parent's `selectedNodeIds` / `selectedConnectorIds` props don't
                 // churn per frame. The onNodesChange / onEdgesChange handlers above
@@ -5196,6 +5324,44 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   })()}
                 </div>
               ) : null}
+              {/* US-Freehand: live pen-stroke preview. While penMode capture is
+                  active and the path has >= 2 samples, draw the in-progress
+                  stroke as a simple <polyline> through the raw client-space
+                  points (offset into wrapper-local coords, mirroring the ghost).
+                  NOTE: the preview is a polyline, but the COMMITTED node renders
+                  via perfect-freehand (variable-width ink) — the committed node
+                  is the source of truth. The slight preview/commit fidelity gap
+                  (no pressure taper on the preview) is acceptable for v1 and
+                  avoids wiring the optional peer dep into the overlay. The
+                  drawStart/drawCurrent state gate the re-render; the actual path
+                  lives in penPointsRef. */}
+              {penMode && drawStart && drawCurrent && penPointsRef.current.length >= 2
+                ? (() => {
+                    const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+                    const offsetX = wrapperRect?.left ?? 0;
+                    const offsetY = wrapperRect?.top ?? 0;
+                    const pts = penPointsRef.current
+                      .map(([x, y]) => `${x - offsetX},${y - offsetY}`)
+                      .join(' ');
+                    return (
+                      <svg
+                        data-testid="canvas-freehand-preview"
+                        aria-hidden
+                        className="sf:pointer-events-none sf:absolute sf:inset-0 sf:z-10 sf:h-full sf:w-full"
+                      >
+                        <title>Freehand stroke preview</title>
+                        <polyline
+                          points={pts}
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
+                    );
+                  })()
+                : null}
               {flags.enableContextMenu && contextEnabled ? (
                 <ContextMenu
                   onOpenChange={(open) => {
