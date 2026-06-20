@@ -130,7 +130,10 @@ function rectangleFixture(id: string): FlowNode {
   } as FlowNode;
 }
 
-function freehandFixture(id: string, color?: string): FlowNode {
+function freehandFixture(
+  id: string,
+  opts: { color?: string; strokeWidth?: number } = {},
+): FlowNode {
   return {
     id,
     type: 'freehand',
@@ -140,7 +143,8 @@ function freehandFixture(id: string, color?: string): FlowNode {
         [0, 0, 0.5],
         [1, 1, 0.5],
       ],
-      ...(color ? { color } : {}),
+      ...(opts.color ? { color: opts.color } : {}),
+      ...(opts.strokeWidth !== undefined ? { strokeWidth: opts.strokeWidth } : {}),
     },
   } as FlowNode;
 }
@@ -297,7 +301,7 @@ describe('StyleStrip — Change-icon button (US-022)', () => {
 
 describe('StyleStrip — freehand color picker (Task 9)', () => {
   it('renders the color swatch when a type:"freehand" node is selected', () => {
-    const tree = callStrip({ nodes: [freehandFixture('f1', 'blue')] });
+    const tree = callStrip({ nodes: [freehandFixture('f1', { color: 'blue' })] });
     const swatch = findElement(tree, testIdEquals('style-strip-icon-color'));
     expect(swatch).not.toBeNull();
     expect((swatch?.props as { activeToken?: string }).activeToken).toBe('blue');
@@ -339,6 +343,108 @@ describe('StyleStrip — freehand color picker (Task 9)', () => {
     const tree = callStrip({ nodes: [iconFixture('n1'), freehandFixture('f1')] });
     const swatches = findAll(tree, testIdEquals('style-strip-icon-color'));
     expect(swatches.length).toBe(1);
+  });
+});
+
+describe('StyleStrip — freehand stroke-width slider (Task 4)', () => {
+  function findWidthSlider(tree: unknown): ReactElementLike {
+    const section = findElement(tree, testIdEquals('style-strip-freehand-width'));
+    if (!section) throw new Error('freehand-width section missing');
+    const slider = findElement(section, (el) => {
+      const p = el.props as { testId?: string };
+      return p.testId === 'style-tab-freehand-width-slider';
+    });
+    if (!slider) throw new Error('freehand-width slider missing');
+    return slider;
+  }
+
+  it('shows a stroke-width slider for a pure-freehand selection and keeps the color swatch but hides change-icon', () => {
+    const tree = callStrip({
+      nodes: [freehandFixture('f1', { strokeWidth: 1 })],
+      onRequestIconReplace: () => {},
+    });
+    expect(findElement(tree, testIdEquals('style-strip-freehand-width'))).not.toBeNull();
+    // The color swatch stays for the ink strip…
+    expect(findElement(tree, testIdEquals('style-strip-icon-color'))).not.toBeNull();
+    // …but the Change-icon button does not appear for freehand-only.
+    expect(findElement(tree, testIdEquals('style-strip-change-icon'))).toBeNull();
+  });
+
+  it('does NOT show the stroke-width slider for a pure-icon selection', () => {
+    const tree = callStrip({ nodes: [iconFixture('n1')] });
+    expect(findElement(tree, testIdEquals('style-strip-freehand-width'))).toBeNull();
+  });
+
+  it('uses the 0.5–4 range with 0.5 step', () => {
+    const tree = callStrip({ nodes: [freehandFixture('f1', { strokeWidth: 1 })] });
+    const slider = findWidthSlider(tree);
+    const p = slider.props as { min: number; max: number; step: number };
+    expect(p.min).toBe(0.5);
+    expect(p.max).toBe(4);
+    expect(p.step).toBe(0.5);
+  });
+
+  it('seeds the slider from data.strokeWidth', () => {
+    const tree = callStrip({ nodes: [freehandFixture('f1', { strokeWidth: 2.5 })] });
+    const slider = findWidthSlider(tree);
+    expect((slider.props as { value?: number }).value).toBe(2.5);
+  });
+
+  it('commits strokeWidth via onStyleNode when the slider commits', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [freehandFixture('f1', { strokeWidth: 1 })], onStyleNode });
+    const slider = findWidthSlider(tree);
+    (slider.props as { onCommit: (n: number) => void }).onCommit(2);
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('f1', { strokeWidth: 2 });
+  });
+
+  it('previews strokeWidth via onStyleNodePreview during the drag', () => {
+    const onStyleNodePreview = mock(() => {});
+    const tree = callStrip({
+      nodes: [freehandFixture('f1', { strokeWidth: 1 })],
+      onStyleNode: () => {},
+      onStyleNodePreview,
+    });
+    const slider = findWidthSlider(tree);
+    (slider.props as { onPreview?: (n: number) => void }).onPreview?.(3);
+    expect(onStyleNodePreview).toHaveBeenCalledTimes(1);
+    expect(onStyleNodePreview).toHaveBeenCalledWith('f1', { strokeWidth: 3 });
+  });
+
+  it('marks the slider indeterminate when two freehand nodes have differing widths', () => {
+    const tree = callStrip({
+      nodes: [freehandFixture('f1', { strokeWidth: 1 }), freehandFixture('f2', { strokeWidth: 3 })],
+    });
+    const slider = findWidthSlider(tree);
+    expect((slider.props as { indeterminate?: boolean }).indeterminate).toBe(true);
+  });
+
+  it('is not indeterminate when two freehand nodes share the same width', () => {
+    const tree = callStrip({
+      nodes: [freehandFixture('f1', { strokeWidth: 2 }), freehandFixture('f2', { strokeWidth: 2 })],
+    });
+    const slider = findWidthSlider(tree);
+    expect((slider.props as { indeterminate?: boolean }).indeterminate).toBe(false);
+  });
+
+  it('is not indeterminate for a single freehand selection', () => {
+    const tree = callStrip({ nodes: [freehandFixture('f1', { strokeWidth: 1 })] });
+    const slider = findWidthSlider(tree);
+    expect((slider.props as { indeterminate?: boolean }).indeterminate).toBe(false);
+  });
+
+  it('only fans out to freehand nodes in a mixed icon + freehand selection', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({
+      nodes: [iconFixture('n1'), freehandFixture('f1'), freehandFixture('f2')],
+      onStyleNode,
+    });
+    const slider = findWidthSlider(tree);
+    (slider.props as { onCommit: (n: number) => void }).onCommit(1.5);
+    expect(onStyleNode).toHaveBeenCalledTimes(2);
+    expect(onStyleNode).toHaveBeenNthCalledWith(1, 'f1', { strokeWidth: 1.5 });
+    expect(onStyleNode).toHaveBeenNthCalledWith(2, 'f2', { strokeWidth: 1.5 });
   });
 });
 

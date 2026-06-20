@@ -111,6 +111,9 @@ const NODE_FONT_SIZE_DEFAULT = 22;
 const CONNECTOR_FONT_SIZE_DEFAULT = 11;
 const DEFAULT_BORDER_SIZE = 3;
 const DEFAULT_STROKE_WIDTH = 2;
+// Freehand ink default stroke width (data.strokeWidth) — matches the pen
+// tool's seed so the slider readout is meaningful before the first drag.
+const FREEHAND_STROKE_WIDTH_DEFAULT = 1;
 // US-005: opt-in default for the Corners slider when a node has no
 // `cornerRadius` set yet — picked to feel like a soft rounded-rect rather
 // than the harsher 0px the schema would imply.
@@ -455,6 +458,27 @@ export function StyleStrip({
     const onChangeIconClick = () => {
       if (firstIconNode && onRequestIconReplace) onRequestIconReplace(firstIconNode.id);
     };
+    // Freehand ink exposes a stroke-width slider (data.strokeWidth, 0.5–4) that
+    // icons don't — so it only renders when the selection contains a freehand
+    // node. The pick fans out to every freehand node in the selection (icons in
+    // a mixed ink selection have no stroke-width control and are skipped).
+    const freehandNodes = nodes.filter((n) => n.type === 'freehand');
+    const hasFreehand = freehandNodes.length > 0;
+    const freehandWidth = freehandNodes[0]?.data.strokeWidth ?? FREEHAND_STROKE_WIDTH_DEFAULT;
+    // US-008-style indeterminate: a multi-freehand selection with divergent
+    // stroke widths (treating unset as the default) shows the "Mixed"
+    // placeholder until the user picks a value. Mirrors the shadow/corner
+    // indeterminate computation above.
+    const freehandWidthIndeterminate =
+      freehandNodes.length > 1 &&
+      new Set(freehandNodes.map((n) => n.data.strokeWidth ?? FREEHAND_STROKE_WIDTH_DEFAULT)).size >
+        1;
+    const applyFreehandWidth = (n: number) => {
+      for (const node of freehandNodes) onStyleNode(node.id, { strokeWidth: n });
+    };
+    const previewFreehandWidth = (n: number) => {
+      for (const node of freehandNodes) onStyleNodePreview?.(node.id, { strokeWidth: n });
+    };
     return (
       <TooltipProvider delayDuration={300}>
         <div
@@ -472,6 +496,28 @@ export function StyleStrip({
             allowNone={false}
             onSelect={applyIconColor}
           />
+          {hasFreehand ? (
+            <PopoverButton
+              testId="style-strip-freehand-width"
+              tooltip="Stroke width"
+              ariaLabel="stroke width"
+              renderIcon={() => (
+                <span className="sf:font-mono sf:text-[10px] sf:tabular-nums">{freehandWidth}</span>
+              )}
+            >
+              <SliderControl
+                value={freehandWidth}
+                defaultValue={FREEHAND_STROKE_WIDTH_DEFAULT}
+                min={0.5}
+                max={4}
+                step={0.5}
+                indeterminate={freehandWidthIndeterminate}
+                onPreview={previewFreehandWidth}
+                onCommit={applyFreehandWidth}
+                testId="style-tab-freehand-width-slider"
+              />
+            </PopoverButton>
+          ) : null}
           {showChangeIcon ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -1214,6 +1260,7 @@ function SliderControl({
   defaultValue,
   min,
   max,
+  step = 1,
   suffix,
   indeterminate,
   onPreview,
@@ -1224,6 +1271,8 @@ function SliderControl({
   defaultValue: number;
   min: number;
   max: number;
+  /** Slider granularity. Defaults to 1 (integer widths); freehand ink uses 0.5. */
+  step?: number;
   suffix?: string;
   indeterminate?: boolean;
   onPreview?: (n: number) => void;
@@ -1246,7 +1295,7 @@ function SliderControl({
       <Slider
         min={min}
         max={max}
-        step={1}
+        step={step}
         value={[local]}
         onValueChange={([v]) => {
           const next = v ?? min;
