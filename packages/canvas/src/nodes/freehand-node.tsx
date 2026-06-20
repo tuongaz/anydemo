@@ -61,6 +61,13 @@ function FreehandNodeImpl({
 }: NodeProps<FreehandNodeType>): ReactElement {
   const width = data.width ?? 100;
   const height = data.height ?? 100;
+  // Mirrors icon-node.tsx: a sized node (persisted dims) lets xyflow size the
+  // wrapper live during a resize drag — `sf:h-full sf:w-full` makes the inner
+  // svg track that growth and stretch the ink. Hardcoding the inline px for a
+  // sized node would override the classes AND pin the ink to its pre-drag size
+  // (only updating on resize-stop). An unsized node falls back to the fixed
+  // default px so the wrapper isn't zero-height before any dims exist.
+  const sized = data.width !== undefined || data.height !== undefined;
 
   const { onResizeStart, onResizeEvent, onResizeEnd } = useResizeGesture({
     onResize: (dims) => data.onResize?.(id, dims),
@@ -108,8 +115,8 @@ function FreehandNodeImpl({
 
   return (
     <div
-      className="sf:group sf:relative sf:h-full sf:w-full"
-      style={{ width, height }}
+      className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
+      style={sized ? undefined : { width, height }}
       data-testid="freehand-node"
       data-node-type="freehand"
     >

@@ -291,6 +291,46 @@ describe('FreehandNode', () => {
     }
   });
 
+  it('wrapper omits fixed width/height inline style when sized (live-resize: h-full/w-full tracks the drag)', () => {
+    // A sized node (persisted data.width/height) must let xyflow drive the
+    // wrapper size during a resize drag — a hardcoded inline width/height would
+    // override the h-full/w-full classes and pin the ink to its pre-drag size
+    // (updating only on resize-stop).
+    const tree = callFreehandNode({
+      points: [
+        [0, 0, 0.5],
+        [1, 1, 0.5],
+      ],
+      width: 120,
+      height: 60,
+    });
+    if (!isElement(tree)) throw new Error('FreehandNode did not return a React element');
+    const style = (tree.props.style ?? {}) as { width?: number; height?: number };
+    expect(style.width).toBeUndefined();
+    expect(style.height).toBeUndefined();
+    const className = String(tree.props.className ?? '');
+    expect(className).toContain('h-full');
+    expect(className).toContain('w-full');
+  });
+
+  it('wrapper sets fixed default width/height when unsized (no persisted dims)', () => {
+    // Without persisted dims the wrapper would be zero-height, so it falls back
+    // to the fixed default px and does NOT take h-full/w-full.
+    const tree = callFreehandNode({
+      points: [
+        [0, 0, 0.5],
+        [1, 1, 0.5],
+      ],
+    });
+    if (!isElement(tree)) throw new Error('FreehandNode did not return a React element');
+    const style = (tree.props.style ?? {}) as { width?: number; height?: number };
+    expect(style.width).toBe(100);
+    expect(style.height).toBe(100);
+    const className = String(tree.props.className ?? '');
+    expect(className).not.toContain('h-full');
+    expect(className).not.toContain('w-full');
+  });
+
   it('fills the wrapper with a non-preserving viewBox so resize stretches the ink', () => {
     const tree = callFreehandNode({
       points: [
