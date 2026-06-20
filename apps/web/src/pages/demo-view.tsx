@@ -1637,11 +1637,19 @@ export function DemoView({
         serverConnectors: demoConnectors ?? [],
         connectorOverrides: connectorPending.overrides,
       });
-      if (nodes.length === 0) return;
+      if (nodes.length === 0) return null;
       // Deep clone via JSON so a later server-side mutation can't bleed into
       // the clipboard payload (refs would alias the live data otherwise).
-      clipboardRef.current = JSON.parse(JSON.stringify({ nodes, connectors }));
+      const payload = JSON.parse(JSON.stringify({ nodes, connectors })) as {
+        nodes: FlowNode[];
+        connectors: Connector[];
+      };
+      clipboardRef.current = payload;
       setHasClipboard(true);
+      // Return the override-merged payload so the OS-clipboard copy handler
+      // writes the SAME bytes as the in-memory mirror (a just-created node that
+      // only exists as an override must round-trip cross-tab too).
+      return payload;
     },
     [demoNodes, demoConnectors, nodePending.overrides, connectorPending.overrides],
   );
@@ -1796,16 +1804,14 @@ export function DemoView({
 
     const onCopy = (e: ClipboardEvent) => {
       if (isEditableActive() || selectedIds.length === 0 || !e.clipboardData) return;
-      const sel = new Set(selectedIds);
-      const nodes = (demoNodes ?? []).filter((n) => sel.has(n.id));
-      const connectors = (demoConnectors ?? []).filter(
-        (c) => sel.has(c.source) && sel.has(c.target),
-      );
-      if (nodes.length === 0) return;
+      // onCopyNodes is the single source: it collects the override-merged
+      // payload (so unconfirmed nodes survive), mirrors it into clipboardRef for
+      // the same-tab Cmd+D fast path, and returns it. We write that exact
+      // payload to the OS clipboard so cross-tab paste sees identical bytes.
+      const payload = onCopyNodes(selectedIds);
+      if (!payload) return;
       e.preventDefault();
-      e.clipboardData.setData('text/plain', encodeClipboard({ nodes, connectors }));
-      // Same-tab mirror so paste works even if the OS clipboard is unreadable.
-      onCopyNodes(selectedIds);
+      e.clipboardData.setData('text/plain', encodeClipboard(payload));
     };
 
     const onPaste = (e: ClipboardEvent) => {
@@ -1835,16 +1841,7 @@ export function DemoView({
       window.removeEventListener('copy', onCopy);
       window.removeEventListener('paste', onPaste);
     };
-  }, [
-    flowId,
-    adapter,
-    selectedIds,
-    demoNodes,
-    demoConnectors,
-    onCopyNodes,
-    onPasteNodes,
-    canvasRef,
-  ]);
+  }, [flowId, adapter, selectedIds, onCopyNodes, onPasteNodes, canvasRef]);
 
   // US-024: arrow-key nudge. Bare arrows shift every selected node by 1px on
   // the matched axis; Shift+arrow uses 10px. Single-node nudge routes through
