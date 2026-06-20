@@ -6,6 +6,7 @@ import {
   isAccidentalStroke,
   normalizePoints,
   simplifyRDP,
+  snapToStraightLine,
 } from './freehand-geometry.ts';
 
 describe('boundingBox', () => {
@@ -93,6 +94,45 @@ describe('simplifyRDP', () => {
     }).not.toThrow();
     expect(simplified[0]).toEqual([0, 0, 0.5]);
     expect(simplified[simplified.length - 1]).toEqual([0, 0, 0.5]);
+  });
+});
+
+describe('snapToStraightLine', () => {
+  test('snaps a near-horizontal segment to exactly horizontal', () => {
+    const [x, y] = snapToStraightLine([0, 0, 0.5], [100, 8, 0.5]);
+    expect(x).toBeCloseTo(100);
+    expect(y).toBeCloseTo(0);
+  });
+
+  test('snaps a near-vertical segment to exactly vertical', () => {
+    const [x, y] = snapToStraightLine([0, 0, 0.5], [6, 100, 0.5]);
+    expect(x).toBeCloseTo(0);
+    expect(y).toBeCloseTo(100);
+  });
+
+  test('snaps a ~45deg segment onto the diagonal (equal x/y)', () => {
+    const [x, y] = snapToStraightLine([0, 0, 0.5], [100, 90, 0.5]);
+    expect(x).toBeCloseTo(y, 5);
+    expect(x).toBeGreaterThan(0);
+  });
+
+  test('preserves the projected length along the snapped ray', () => {
+    // pure horizontal input: projected length == dx
+    const [x] = snapToStraightLine([10, 10, 0.5], [110, 10, 0.5]);
+    expect(x).toBeCloseTo(110);
+  });
+
+  test('returns the start point for a zero-length segment', () => {
+    const [x, y] = snapToStraightLine([5, 5, 0.5], [5, 5, 0.5]);
+    expect(x).toBeCloseTo(5);
+    expect(y).toBeCloseTo(5);
+  });
+
+  test('snaps a near-horizontal segment in the negative direction', () => {
+    // Locks the atan2 wrap: a leftward drag must stay leftward, not flip to +x.
+    const [x, y] = snapToStraightLine([0, 0, 0.5], [-100, 5, 0.5]);
+    expect(x).toBeCloseTo(-100);
+    expect(y).toBeCloseTo(0);
   });
 });
 
