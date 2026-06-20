@@ -1,4 +1,4 @@
-import { flowPath, matchProjectFlow } from '@/lib/router';
+import { flowPath, matchProjectFlow, stripBase, withBase } from '@/lib/router';
 import { useSyncExternalStore } from 'react';
 
 /**
@@ -97,14 +97,16 @@ const getSnapshot = (): readonly FlowStackEntry[] => currentStack;
 export const useFlowStack = (): readonly FlowStackEntry[] =>
   useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
+// `url` is always base-RELATIVE (from `flowPath()` / `'/'`); `withBase` puts the
+// served base (`''` standalone, `/app` cloud) back on before touching history.
 const pushHistoryState = (depth: number, url: string): void => {
-  window.history.pushState({ stackDepth: depth }, '', url);
+  window.history.pushState({ stackDepth: depth }, '', withBase(url));
   window.dispatchEvent(new Event(NAV_EVENT));
 };
 
 const replaceHistoryDepth = (depth: number, url: string): void => {
   const prev = (window.history.state ?? null) as HistoryStackState | null;
-  window.history.replaceState({ ...(prev ?? {}), stackDepth: depth }, '', url);
+  window.history.replaceState({ ...(prev ?? {}), stackDepth: depth }, '', withBase(url));
 };
 
 export const pushLink = (target: NavigateFlowTarget): void => {
@@ -121,7 +123,9 @@ export const popBack = (): void => {
 export const reset = (target: NavigateFlowTarget | null): void => {
   const next = computeResetStack(target);
   const url = target ? flowPath(target.project, target.flow) : '/';
-  if (window.location.pathname === url) {
+  // Compare in base-relative space: `url` is base-relative, the live pathname
+  // carries the served base.
+  if (stripBase(window.location.pathname) === url) {
     replaceHistoryDepth(next.length, url);
   } else {
     pushHistoryState(next.length, url);
@@ -140,9 +144,12 @@ export const reset = (target: NavigateFlowTarget | null): void => {
  */
 export const ensureFlowNavigation = (): void => {
   if (popstateInstalled) return;
-  currentStack = initialStackFromPath(window.location.pathname);
+  // Seed/match in base-relative space; the matchers don't know about the base.
+  currentStack = initialStackFromPath(stripBase(window.location.pathname));
   const prev = (window.history.state ?? null) as HistoryStackState | null;
   if (typeof prev?.stackDepth !== 'number') {
+    // Keep the full (base-carrying) pathname here — we're only stamping
+    // stackDepth onto the entry the browser is already on, not navigating.
     window.history.replaceState(
       { ...(prev ?? {}), stackDepth: currentStack.length },
       '',
@@ -151,7 +158,7 @@ export const ensureFlowNavigation = (): void => {
   }
   window.addEventListener('popstate', () => {
     const state = (window.history.state ?? null) as HistoryStackState | null;
-    const pathMatch = matchProjectFlow(window.location.pathname);
+    const pathMatch = matchProjectFlow(stripBase(window.location.pathname));
     const next = computePopState(currentStack, state?.stackDepth, pathMatch);
     if (next !== null) {
       if (currentStack !== next) {

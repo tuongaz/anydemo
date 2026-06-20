@@ -19,6 +19,12 @@ export default defineConfig(({ command }) => {
     : [];
 
   return {
+    // Base public path. Defaults to '/' for the standalone studio; the cloud
+    // build sets VITE_BASE=/app/ so absolute `/assets/...` URLs and the SPA's
+    // custom history router resolve under cloud.seeflow.dev/app. Must keep the
+    // trailing slash — Vite requires it and `import.meta.env.BASE_URL` echoes
+    // it verbatim (router.ts strips the trailing slash itself).
+    base: process.env.VITE_BASE ?? '/',
     plugins: [react()],
     define: {
       __APP_VERSION__: JSON.stringify(studioPkg.version),

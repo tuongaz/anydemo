@@ -2,6 +2,49 @@ import { useSyncExternalStore } from 'react';
 
 const NAV_EVENT = 'seeflow:navigate';
 
+/**
+ * Public base path the SPA is served under, with the trailing slash trimmed:
+ * `''` for the standalone studio (Vite base `/`) and `/app` for the cloud
+ * build (`VITE_BASE=/app/`). Vite always defines `import.meta.env.BASE_URL`
+ * (defaulting to `/`); the `?? '/'` guards non-Vite contexts (e.g. bun:test).
+ *
+ * All matchers (`matchProjectFlow`, `matchProjectAlone`, `flowPath`) operate in
+ * base-RELATIVE space. `stripBase` peels the base off `window.location.pathname`
+ * before matching; `withBase` re-attaches it before `pushState`/`replaceState`.
+ */
+export const BASE = (import.meta.env.BASE_URL ?? '/').replace(/\/$/, '');
+
+/**
+ * Strip the leading base segment from an absolute pathname, returning a
+ * base-relative path (always starts with `/`). Pure + base-injectable so it's
+ * unit-testable without mutating `import.meta.env.BASE_URL`.
+ *
+ * - `stripBase('/app/projects/p', '/app')` → `/projects/p`
+ * - `stripBase('/app', '/app')` → `/` (the base root)
+ * - `stripBase('/projects/p', '')` → `/projects/p` (no-op when base is empty)
+ * - A path that doesn't start with the base is returned unchanged (defensive).
+ */
+export const stripBase = (pathname: string, base: string = BASE): string => {
+  if (!base) return pathname;
+  if (pathname === base) return '/';
+  if (pathname.startsWith(`${base}/`)) return pathname.slice(base.length);
+  return pathname;
+};
+
+/**
+ * Prepend the base to a base-relative path. Inverse of `stripBase`. Pure +
+ * base-injectable for testing.
+ *
+ * - `withBase('/projects/p', '/app')` → `/app/projects/p`
+ * - `withBase('/', '/app')` → `/app`
+ * - `withBase('/projects/p', '')` → `/projects/p` (no-op when base is empty)
+ */
+export const withBase = (path: string, base: string = BASE): string => {
+  if (!base) return path;
+  if (path === '/') return base;
+  return `${base}${path}`;
+};
+
 const subscribe = (listener: () => void) => {
   window.addEventListener('popstate', listener);
   window.addEventListener(NAV_EVENT, listener);
@@ -11,13 +54,13 @@ const subscribe = (listener: () => void) => {
   };
 };
 
-const getSnapshot = () => window.location.pathname;
+const getSnapshot = () => stripBase(window.location.pathname);
 
 export const usePathname = (): string => useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
 export const navigate = (to: string) => {
-  if (to === window.location.pathname) return;
-  window.history.pushState({}, '', to);
+  if (to === stripBase(window.location.pathname)) return;
+  window.history.pushState({}, '', withBase(to));
   window.dispatchEvent(new Event(NAV_EVENT));
 };
 
