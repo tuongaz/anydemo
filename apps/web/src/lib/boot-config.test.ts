@@ -26,4 +26,11 @@ describe('readBootConfig', () => {
     };
     expect(readBootConfig(w as unknown as Window & typeof globalThis)).toBeNull();
   });
+  it('returns null when called with no arguments (SSR / no window)', () => {
+    expect(readBootConfig(undefined)).toBeNull();
+  });
+  it('returns null when __SEEFLOW_BOOT__ is not an object', () => {
+    const w = { __SEEFLOW_BOOT__: 'nope' };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)).toBeNull();
+  });
 });

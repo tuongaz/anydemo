@@ -15,10 +15,12 @@ export interface BootConfig {
 export function readBootConfig(
   w: (Window & typeof globalThis) | undefined = typeof window !== 'undefined' ? window : undefined,
 ): BootConfig | null {
-  const raw = (w as unknown as { __SEEFLOW_BOOT__?: Partial<BootConfig> } | undefined)
-    ?.__SEEFLOW_BOOT__;
-  if (!raw) return null;
-  const { base, projectSlug, flowId, mode } = raw;
-  if (!base || !projectSlug || !flowId || (mode !== 'edit' && mode !== 'view')) return null;
+  const boot = (w as unknown as Record<string, unknown> | undefined)?.__SEEFLOW_BOOT__;
+  if (!boot || typeof boot !== 'object') return null;
+  const { base, projectSlug, flowId, mode } = boot as Record<string, unknown>;
+  if (typeof base !== 'string' || typeof projectSlug !== 'string' || typeof flowId !== 'string') {
+    return null;
+  }
+  if (mode !== 'edit' && mode !== 'view') return null;
   return { base, projectSlug, flowId, mode };
 }
