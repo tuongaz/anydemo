@@ -1039,6 +1039,25 @@ export type SeeflowCanvasProps =
 // still produces a usable node rather than a 0×0 ghost.
 const MIN_DRAW_SIZE = 40;
 
+// Constrain a drag-create box to a perfect square (1:1) while preserving the
+// drag direction: anchor at `start`, extend toward `current` with the side =
+// max(|dx|, |dy|). Used by the Shift-to-constrain draw gesture so a rectangle
+// draws a square and an ellipse draws a perfect circle. Operates in whatever
+// coordinate space the caller passes (screen px at the draw call sites) so the
+// ghost preview and the committed node square identically.
+function squareDragBox(
+  start: { x: number; y: number },
+  current: { x: number; y: number },
+): { x: number; y: number } {
+  const dx = current.x - start.x;
+  const dy = current.y - start.y;
+  const side = Math.max(Math.abs(dx), Math.abs(dy));
+  return {
+    x: start.x + (dx < 0 ? -side : side),
+    y: start.y + (dy < 0 ? -side : side),
+  };
+}
+
 // Pen Shift-to-straighten grace window (ms). Releasing the mouse button often
 // jerks the pointer and can lift Shift a hair before the button — the final
 // pointer event then carries `shiftKey: false`, which would otherwise commit a
@@ -2548,6 +2567,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // lifting a hair before the button) doesn't drop the straight line. Reset to 0
   // at stroke start so a previous stroke's Shift never bleeds into the next one.
   const penShiftHeldAtRef = useRef(0);
+  // Shape/icon drag-create: tracks whether Shift was held on the most recent
+  // draw pointer event, so the gesture constrains to a perfect square (1:1
+  // bounding box) — a perfect circle for ellipse, a square for rectangle, etc.
+  // Refs (not state) so they never add a useStateOverrides slot, and declared
+  // AFTER the pen refs so the hook-shim ref-index map (drawShape..penMode)
+  // stays stable. Mirrors the pen-tool straighten pattern incl. the grace clock
+  // so release-time Shift jitter doesn't drop the constraint.
+  const drawShiftRef = useRef(false);
+  const drawShiftHeldAtRef = useRef(0);
 
   // Mirror drawShape/drawIcon state into refs so handlers see the live value
   // without depending on closure identity (handler refs need to stay stable so
@@ -2577,6 +2605,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     penPointsRef.current = [];
     penShiftRef.current = false;
     penShiftHeldAtRef.current = 0;
+    drawShiftRef.current = false;
+    drawShiftHeldAtRef.current = 0;
   }, [onCanvasModeChange]);
 
   // US-006: ESC priority chain. A single window-level keydown listener handles
@@ -2742,6 +2772,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     drawingRef.current = true;
     drawStartRef.current = client;
     drawCurrentRef.current = client;
+    drawShiftRef.current = e.shiftKey;
+    // Reset the grace clock so a previous gesture's Shift never bleeds in.
+    drawShiftHeldAtRef.current = e.shiftKey ? Date.now() : 0;
     setDrawStart(client);
     setDrawCurrent(client);
     // Capture the pointer so move/up land here even if the cursor leaves
@@ -2770,6 +2803,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     if (!drawingRef.current) return;
     const client = { x: e.clientX, y: e.clientY };
     drawCurrentRef.current = client;
+    drawShiftRef.current = e.shiftKey;
+    // Stamp the grace clock whenever Shift is held so a brief lift/jitter at
+    // release stays inside the constrain window (PEN_SHIFT_GRACE_MS).
+    if (e.shiftKey) drawShiftHeldAtRef.current = Date.now();
     setDrawCurrent(client);
   }, []);
 
@@ -2858,12 +2895,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // (too small, missing references). The PRD spec: "After commit (or ESC),
       // draw mode exits automatically and the cursor returns to default."
       exitDrawMode();
+      // Shift constrains the drag to a perfect square (→ perfect circle for
+      // ellipse, square for rectangle, etc). Mirror the pen straighten gate:
+      // honor Shift held on the last pointer event OR within the grace window
+      // so release-time jitter doesn't drop the constraint. Geometric shapes +
+      // icons constrain; linkflow cards keep their free aspect.
+      const constrain =
+        drawShiftRef.current || Date.now() - drawShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
+      drawShiftRef.current = false;
+      drawShiftHeldAtRef.current = 0;
       if (!start || !current || !rfInstance) return;
       if (!shape && !iconName) return;
-      const minX = Math.min(start.x, current.x);
-      const minY = Math.min(start.y, current.y);
-      const maxX = Math.max(start.x, current.x);
-      const maxY = Math.max(start.y, current.y);
+      // Square the drag box in SCREEN px (zoom-independent, matches the ghost)
+      // around the start anchor, preserving drag direction. Done before the
+      // screenToFlowPosition projection so the committed node paints exactly
+      // where the ghost previewed it.
+      const squared =
+        constrain && shape !== 'linkflow' ? squareDragBox(start, current) : current;
+      const minX = Math.min(start.x, squared.x);
+      const minY = Math.min(start.y, squared.y);
+      const maxX = Math.max(start.x, squared.x);
+      const maxY = Math.max(start.y, squared.y);
       const dragScreenWidth = maxX - minX;
       const dragScreenHeight = maxY - minY;
       // US-010: convert both corners through screenToFlowPosition so the
@@ -4514,14 +4566,22 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const wrapperRect = wrapperRef.current?.getBoundingClientRect();
     const offsetX = wrapperRect?.left ?? 0;
     const offsetY = wrapperRect?.top ?? 0;
-    const minX = Math.min(drawStart.x, drawCurrent.x);
-    const minY = Math.min(drawStart.y, drawCurrent.y);
-    const w = Math.abs(drawCurrent.x - drawStart.x);
-    const h = Math.abs(drawCurrent.y - drawStart.y);
+    // Mirror the commit-path Shift constraint so the ghost previews exactly the
+    // squared box the gesture will commit (geometric shapes + icons; linkflow
+    // keeps its free aspect). The refs are re-read on every drawCurrent change
+    // (set in onPointerMove just before setDrawCurrent), so this stays in sync.
+    const constrain =
+      drawShiftRef.current || Date.now() - drawShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
+    const end =
+      constrain && drawShape !== 'linkflow' ? squareDragBox(drawStart, drawCurrent) : drawCurrent;
+    const minX = Math.min(drawStart.x, end.x);
+    const minY = Math.min(drawStart.y, end.y);
+    const w = Math.abs(end.x - drawStart.x);
+    const h = Math.abs(end.y - drawStart.y);
     // Coords are stored in client space; subtract the wrapper offset to paint
     // the ghost via absolute positioning inside the wrapper.
     return { left: minX - offsetX, top: minY - offsetY, width: w, height: h };
-  }, [drawStart, drawCurrent]);
+  }, [drawStart, drawCurrent, drawShape]);
 
   // US-009: WYSIWYG ghost — mirror the committed shape's chrome via the same
   // helpers `ShapeNode` uses so background/border/radius/tilt match exactly.

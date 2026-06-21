@@ -20,10 +20,59 @@ export interface ResizeAlignmentHooks {
 }
 
 /** xyflow's resize handlers carry the underlying DOM event under `sourceEvent`. */
-function modifierFrom(event: unknown): { metaKey?: boolean; ctrlKey?: boolean } {
-  const source = (event as { sourceEvent?: { metaKey?: boolean; ctrlKey?: boolean } } | undefined)
-    ?.sourceEvent;
-  return { metaKey: source?.metaKey, ctrlKey: source?.ctrlKey };
+function modifierFrom(event: unknown): {
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  shiftKey?: boolean;
+} {
+  const source = (
+    event as
+      | { sourceEvent?: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean } }
+      | undefined
+  )?.sourceEvent;
+  return { metaKey: source?.metaKey, ctrlKey: source?.ctrlKey, shiftKey: source?.shiftKey };
+}
+
+/**
+ * Constrain a resize to the node's start aspect ratio (Shift-held). Keeps the
+ * corner OPPOSITE the moving edge(s) fixed and scales the locked dimension off
+ * whichever axis the user dragged more (the larger scale factor), so a corner
+ * drag tracks the cursor while preserving proportion. Edge-only drags scale the
+ * perpendicular dimension outward from the anchored (un-moved) edge.
+ *
+ * Computed in code (NOT via xyflow's `keepAspectRatio` prop) because flipping
+ * that prop mid-gesture re-runs NodeResizeControl's effect, which calls
+ * `resizer.update()` and zeros the d3-drag start values — see the top-of-file
+ * note. Doing the math here leaves xyflow's gesture baseline untouched.
+ */
+function applyAspectLock(
+  start: ResizeParams,
+  raw: { x: number; y: number; width: number; height: number },
+  edges: ResizeEdges,
+): { x: number; y: number; width: number; height: number } {
+  if (start.width <= 0 || start.height <= 0) return raw;
+  const ratio = start.width / start.height;
+  const scaleW = raw.width / start.width;
+  const scaleH = raw.height / start.height;
+  // Drive the locked dimension off the axis the user scaled more, so the
+  // constrained box follows the dominant drag direction.
+  let width: number;
+  let height: number;
+  if (Math.abs(scaleW) >= Math.abs(scaleH)) {
+    width = raw.width;
+    height = width / ratio;
+  } else {
+    height = raw.height;
+    width = height * ratio;
+  }
+  // Anchor the corner opposite the moving edge(s): a left-handle drag keeps the
+  // right edge fixed, a top-handle drag keeps the bottom edge fixed; edge-only
+  // and right/bottom drags keep the start origin.
+  const right = start.x + start.width;
+  const bottom = start.y + start.height;
+  const x = edges.left ? right - width : start.x;
+  const y = edges.top ? bottom - height : start.y;
+  return { x, y, width, height };
 }
 
 /**
@@ -180,6 +229,14 @@ export function useResizeGesture(args: {
     const align = alignmentRef.current;
     const id = nodeIdRef.current;
     const start = startRef.current;
+    // Shift → lock to the start aspect ratio. Takes precedence over alignment
+    // snapping (mirrors how Cmd/Ctrl bypasses snap) so a proportion-locked
+    // drag stays exactly proportional.
+    if (modifierFrom(event).shiftKey && start) {
+      dims = applyAspectLock(start, dims, deriveActiveEdges(start, params));
+      onResizeRef.current?.(dims);
+      return;
+    }
     if (align && id && start) {
       // Derive moving edges from start vs current once movement begins, then
       // freeze the gesture's reference snapshot via beginResize.
@@ -228,6 +285,17 @@ export function useResizeGesture(args: {
     // guide. applyResizeSnap MUST run before endResize (which clears the
     // resize refs + cancels the pending guide commit).
     let dims = { x: params.x, y: params.y, width: params.width, height: params.height };
+    // Shift → lock to the start aspect ratio on release so the persisted dims
+    // match the proportion-locked preview. Wins over alignment snap, same as
+    // the per-tick path above.
+    if (modifierFrom(event).shiftKey && start) {
+      dims = applyAspectLock(start, dims, deriveActiveEdges(start, params));
+      align?.endResize();
+      onResizeRef.current?.(dims);
+      userOnResizeEndRef.current?.(dims);
+      onResizeFinalRef.current?.(dims, start);
+      return;
+    }
     if (align && id && begun) {
       const { snappedRect } = align.applyResizeSnap(
         { id, x: params.x, y: params.y, w: params.width, h: params.height },

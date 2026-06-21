@@ -79,7 +79,9 @@ function node(id: string, x: number, y: number, w: number, h: number): Node {
 }
 
 /** Fake xyflow resize drag event carrying the modifier keys under sourceEvent. */
-function resizeEvent(mods: { metaKey?: boolean; ctrlKey?: boolean } = {}): unknown {
+function resizeEvent(
+  mods: { metaKey?: boolean; ctrlKey?: boolean; shiftKey?: boolean } = {},
+): unknown {
   return { sourceEvent: mods };
 }
 
@@ -230,5 +232,61 @@ describe('useResizeGesture — alignment integration', () => {
 
     expect(resizeDispatches.length).toBe(0);
     expect(resizeEndDispatches.length).toBe(0);
+  });
+});
+
+describe('useResizeGesture — Shift aspect-lock', () => {
+  // Start 200×100 (ratio 2:1). A bottom-right corner drag that grows width more
+  // than height should lock height to width/ratio, anchored at the top-left.
+  it('locks the aspect ratio on a corner drag, anchoring the opposite corner', () => {
+    const { handlers, resizeDispatches } = setup(scene());
+    handlers.onResizeStart(resizeEvent() as never, { x: 0, y: 0, width: 200, height: 100 });
+    // Drag bottom-right to 260×150 raw; Shift held. Height scale (1.5) beats
+    // width scale (1.3), so height drives: width = 150*2 = 300. Both moving
+    // edges are right+bottom → anchored at the top-left (0,0).
+    handlers.onResizeEvent(
+      resizeEvent({ shiftKey: true }) as never,
+      { x: 0, y: 0, width: 260, height: 150, direction: [1, 1] } as never,
+    );
+    expect(resizeDispatches.length).toBe(1);
+    const dims = resizeDispatches[0];
+    if (!dims) throw new Error('expected a resize dispatch');
+    expect(dims.x).toBe(0);
+    expect(dims.y).toBe(0);
+    expect(dims.width).toBeCloseTo(300, 6);
+    expect(dims.height).toBeCloseTo(150, 6);
+    expect(dims.width / dims.height).toBeCloseTo(2, 6);
+  });
+
+  it('keeps the bottom-right fixed on a top-left handle drag', () => {
+    const { handlers, resizeDispatches } = setup(scene());
+    handlers.onResizeStart(resizeEvent() as never, { x: 0, y: 0, width: 200, height: 100 });
+    // Top-left handle: origin moves to (40,40), shrinking to 160×60. Active
+    // edges left+top → anchor bottom-right (200,100). Shift keeps ratio 2:1.
+    handlers.onResizeEvent(
+      resizeEvent({ shiftKey: true }) as never,
+      { x: 40, y: 40, width: 160, height: 60, direction: [-1, -1] } as never,
+    );
+    const dims = resizeDispatches[0];
+    if (!dims) throw new Error('expected a resize dispatch');
+    expect(dims.width / dims.height).toBeCloseTo(2, 6);
+    // Anchored bottom-right: x+width === 200, y+height === 100.
+    expect(dims.x + dims.width).toBeCloseTo(200, 6);
+    expect(dims.y + dims.height).toBeCloseTo(100, 6);
+  });
+
+  it('aspect-lock wins over alignment snap when Shift is held', () => {
+    // Right edge drag to 158 would normally snap to B's left (160). With Shift,
+    // the snap is bypassed and the ratio is locked instead.
+    const { handlers, resizeDispatches } = setup(scene());
+    handlers.onResizeStart(resizeEvent() as never, { x: 0, y: 0, width: 150, height: 100 });
+    handlers.onResizeEvent(
+      resizeEvent({ shiftKey: true }) as never,
+      { x: 0, y: 0, width: 158, height: 100, direction: [1, 0] } as never,
+    );
+    const dims = resizeDispatches[0];
+    if (!dims) throw new Error('expected a resize dispatch');
+    expect(dims.width).not.toBe(160); // not snapped to neighbour
+    expect(dims.width / dims.height).toBeCloseTo(150 / 100, 6);
   });
 });
