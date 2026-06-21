@@ -73,6 +73,8 @@ export interface NodePatch {
   strokeWidth?: number;
   /** type:'icon'/type:'image'-only: accessible alt text. Lands at data.alt. */
   alt?: string;
+  /** type:'image'-only: caption shown below the image. Lands at data.caption. */
+  caption?: string;
   /**
    * Kebab-case Lucide icon name. Lands at data.icon. Decorative on every
    * type except type:'icon', where the icon IS the visual and the field is

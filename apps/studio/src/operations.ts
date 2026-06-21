@@ -129,6 +129,10 @@ export const NodePatchBodySchema = z
     strokeWidth: z.number().min(0.5).max(4).nullable().optional(),
     // type:'icon'/type:'image'-only: accessible alt text. Lands at data.alt.
     alt: z.string().optional(),
+    // type:'image'-only: caption shown below the image. Lands at data.caption.
+    // Empty string is the clear signal — mergeNodeUpdates strips the key from
+    // disk (mirrors description / detail).
+    caption: z.string().optional(),
     // kebab-case Lucide icon name. Lands at data.icon. The post-merge reparse
     // enforces the schema's `.min(1)` non-empty rule for nodes that require
     // icon (type:'icon'), and gates which variants allow it. Explicit `null`
@@ -189,6 +193,7 @@ const NODE_DATA_PATCH_KEYS = [
   'color',
   'strokeWidth',
   'alt',
+  'caption',
   'icon',
   'description',
   'detail',

@@ -557,6 +557,8 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
   onNodeNameChange?: (nodeId: string, name: string) => void;
   /** Persist a new node description (PATCH /nodes/:id { description }). */
   onNodeDescriptionChange?: (nodeId: string, description: string) => void;
+  /** Persist a new image-node caption (PATCH /nodes/:id { data.caption }). */
+  onNodeCaptionChange?: (nodeId: string, caption: string) => void;
   /** Persist a new connector label (PATCH /connectors/:id { label }). */
   onConnectorLabelChange?: (connId: string, label: string) => void;
   /**
@@ -2115,6 +2117,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onMultiResize,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onNodeCaptionChange,
     onConnectorLabelChange,
     onCreateShapeNode,
     onCreateIconNode,
@@ -3331,6 +3334,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             }
             return undefined;
           })(),
+          onCaptionChange: (() => {
+            // Image nodes render an optional caption below the image; wire the
+            // canvas-side inline edit so a dblclick on the image lands a caption
+            // edit. Same edit-mode gate as the other inline-edit callbacks.
+            if (!isEditMode) return undefined;
+            if (merged.type === 'image') return onNodeCaptionChange;
+            return undefined;
+          })(),
           onIconChange: (() => {
             // Same edit-mode + node-type gate as the inline-edit callbacks.
             // type:'rectangle', type:'component', and type:'linkflow' render the
@@ -3424,6 +3435,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     nodeOverrides,
     onNodeNameChange,
     onNodeDescriptionChange,
+    onNodeCaptionChange,
     onIconChange,
     onRetryImageUpload,
     pendingEditNodeId,

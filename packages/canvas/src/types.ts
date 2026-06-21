@@ -167,6 +167,8 @@ export const CANVAS_NODE_DATA_FIELDS = {
 export interface ImageNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
   path: string;
   alt?: string;
+  /** Optional caption rendered below the image; edited via double-click. */
+  caption?: string;
   borderWidth?: number;
 }
 

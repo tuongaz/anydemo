@@ -1,5 +1,12 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
-import { type CSSProperties, memo, useEffect, useState } from 'react';
+import {
+  type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
+  memo,
+  useEffect,
+  useState,
+} from 'react';
+import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import { fileUrl } from '../lib/file-url.ts';
@@ -48,6 +55,12 @@ export type ImageNodeRuntimeData = ImageNodeData & {
    * builder. Absent → the placeholder still renders, but clicking is inert.
    */
   onRetryUpload?: (nodeId: string) => void;
+  /**
+   * Persist a new caption for this image node. Injected by the canvas in edit
+   * mode (gated like onDescriptionChange); absent → the caption is read-only
+   * and the double-click-to-edit path is suppressed.
+   */
+  onCaptionChange?: (nodeId: string, value: string) => void;
   /**
    * US-008 (canvas extraction): transient upload-state flags. Mirrors the
    * apps/web `ImageNodeData` extension — set on optimistic placement, cleared
@@ -115,6 +128,26 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
   // Resolving = a resolver is wired, we have a URL to resolve, and no src yet.
   const resolving = !!resolver && !!directUrl && !resolvedSrc;
 
+  // Optional caption rendered below the image. Double-clicking the image opens
+  // the inline editor (edit mode only — gated on the injected callback, like
+  // the rectangle's description). The caption row only takes space when there
+  // IS a caption or the user is editing, so existing captionless images render
+  // byte-identically to before.
+  const [captionEditing, setCaptionEditing] = useState(false);
+  const captionEditable = !!data.onCaptionChange;
+  const caption = data.caption ?? '';
+  const showCaptionRow = captionEditing || caption.length > 0;
+  const handleWrapperDoubleClick = captionEditable
+    ? (e: ReactMouseEvent<HTMLDivElement>) => {
+        if (captionEditing) return;
+        const target = e.target as HTMLElement | null;
+        if (target?.closest('.react-flow__handle')) return;
+        if (target?.closest('.react-flow__resize-control')) return;
+        e.stopPropagation();
+        setCaptionEditing(true);
+      }
+    : undefined;
+
   // US-010: selection outline moved to CSS (see play-node.tsx note).
   // US-014: render the optional image border from `borderColor` / `borderWidth`
   // / `borderStyle`. Each field is independently optional; only the keys whose
@@ -150,10 +183,14 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
 
   return (
     <div
-      className={cn('sf:group sf:relative', sized ? 'sf:h-full sf:w-full' : '')}
+      className={cn(
+        'sf:group sf:relative sf:flex sf:flex-col',
+        sized ? 'sf:h-full sf:w-full' : '',
+      )}
       style={outerStyle}
       data-testid="image-node"
       data-node-type="image"
+      onDoubleClick={handleWrapperDoubleClick}
     >
       <ResizeControls
         visible={!!selected && !!data.onResize}
@@ -180,7 +217,13 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
       />
       <div
         data-testid="image-node-chrome"
-        className="sf:h-full sf:w-full sf:overflow-hidden"
+        className={cn(
+          'sf:w-full sf:overflow-hidden',
+          // Fill the remaining space above the caption row. When no caption is
+          // shown this is the only flex child, so it fills the node exactly as
+          // before (h-full equivalent under flex-col).
+          showCaptionRow ? 'sf:min-h-0 sf:flex-1' : 'sf:h-full',
+        )}
         style={chromeStyle}
       >
         {data._uploading || resolving ? (
@@ -223,6 +266,28 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
           />
         )}
       </div>
+      {showCaptionRow ? (
+        <div
+          data-testid="image-node-caption"
+          className="sf:w-full sf:shrink-0 sf:px-1 sf:pt-1 sf:text-center"
+        >
+          {captionEditing && captionEditable ? (
+            <InlineEdit
+              initialValue={caption}
+              field="image-caption"
+              commitMode="blur-only"
+              onCommit={(v) => data.onCaptionChange?.(id, v)}
+              onExit={() => setCaptionEditing(false)}
+              className="sf:w-full sf:text-center sf:text-xs sf:text-muted-foreground"
+              placeholder="Caption"
+            />
+          ) : (
+            <div className="sf:w-full sf:truncate sf:text-xs sf:text-muted-foreground">
+              {caption}
+            </div>
+          )}
+        </div>
+      ) : null}
       <Handle
         type="source"
         position={Position.Right}

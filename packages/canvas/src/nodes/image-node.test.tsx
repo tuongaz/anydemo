@@ -412,3 +412,53 @@ describe('ImageNode overflow placement (selection-handle clipping regression)', 
     expect(chromeClass).toContain('sf:overflow-hidden');
   });
 });
+
+// Caption: an optional title rendered below the image, edited by double-click
+// (edit mode only — gated on the injected onCaptionChange callback).
+describe('ImageNode caption', () => {
+  function findCaption(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node-caption';
+    });
+  }
+  function findInlineEditField(tree: unknown): ReactElementLike | null {
+    return findElement(tree, (el) => {
+      const p = el.props as { field?: string };
+      return p.field === 'image-caption';
+    });
+  }
+
+  it('renders no caption row when there is no caption', () => {
+    expect(findCaption(callImageNode())).toBeNull();
+  });
+
+  it('renders the caption text below the image when set', () => {
+    const tree = callImageNode({ caption: 'Architecture overview' });
+    const caption = findCaption(tree);
+    expect(caption).not.toBeNull();
+    expect(JSON.stringify(caption?.props.children)).toContain('Architecture overview');
+  });
+
+  it('wires the outer double-click handler only when onCaptionChange is provided', () => {
+    const withCb = findElement(callImageNode({ onCaptionChange: () => {} }), (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node';
+    });
+    const withoutCb = findElement(callImageNode(), (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'image-node';
+    });
+    expect((withCb?.props as { onDoubleClick?: unknown }).onDoubleClick).toBeDefined();
+    expect((withoutCb?.props as { onDoubleClick?: unknown }).onDoubleClick).toBeUndefined();
+  });
+
+  it('shows the static caption (not the editor) when not in an editing session', () => {
+    // The synchronous hook shim keeps captionEditing at its initial false, so a
+    // caption with a callback still renders read-only until a real dblclick
+    // flips state in the live component.
+    const tree = callImageNode({ caption: 'Caption A', onCaptionChange: () => {} });
+    expect(findCaption(tree)).not.toBeNull();
+    expect(findInlineEditField(tree)).toBeNull();
+  });
+});

@@ -1077,6 +1077,19 @@ export function DemoView({
     [flowId, adapter, setNodeOverride],
   );
 
+  const onNodeCaptionChange = useCallback(
+    (nodeId: string, next: string) => {
+      if (!flowId || !adapter) return;
+      setNodeOverride(nodeId, { data: { caption: next } } as Partial<FlowNode>);
+      setEditError(null);
+      adapter.updateNode(nodeId, { caption: next }).catch((err) => {
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode caption failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride],
+  );
+
   const onNodeDetailChange = useCallback(
     (nodeId: string, next: string) => {
       if (!flowId || !adapter) return;
@@ -2786,6 +2799,7 @@ export function DemoView({
           onMultiResize={onMultiResize}
           onNodeNameChange={onNodeNameChange}
           onNodeDescriptionChange={onNodeDescriptionChange}
+          onNodeCaptionChange={onNodeCaptionChange}
           onConnectorLabelChange={onConnectorLabelChange}
           onCreateShapeNode={onCreateShapeNode}
           onCreateIconNode={flowId ? onCreateIconNode : undefined}

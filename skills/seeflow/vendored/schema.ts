@@ -291,6 +291,7 @@ const ResolvedImageNodeData = z.object({
     message: 'path must be a relative path under the project root (no absolute / traversal)',
   }),
   alt: z.string().optional(),
+  caption: z.string().optional(),
   borderWidth: z.number().min(0).max(8).optional(),
 });
 
@@ -597,6 +598,10 @@ const FlowImageNodeData = z
       .string()
       .optional()
       .describe('Accessibility alt text. Set on every non-decorative image.'),
+    caption: z
+      .string()
+      .optional()
+      .describe('Optional caption shown below the image. Edited by double-clicking the image.'),
   })
   .strict();
 
