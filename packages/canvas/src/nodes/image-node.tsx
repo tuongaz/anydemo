@@ -183,10 +183,7 @@ function ImageNodeImpl({ id, data, selected, isConnectable }: NodeProps<ImageNod
 
   return (
     <div
-      className={cn(
-        'sf:group sf:relative sf:flex sf:flex-col',
-        sized ? 'sf:h-full sf:w-full' : '',
-      )}
+      className={cn('sf:group sf:relative sf:flex sf:flex-col', sized ? 'sf:h-full sf:w-full' : '')}
       style={outerStyle}
       data-testid="image-node"
       data-node-type="image"

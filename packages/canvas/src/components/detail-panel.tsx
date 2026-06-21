@@ -318,10 +318,7 @@ export function DetailPanel({
               ) : null}
 
               {inspectableNode.type === 'image' && onReplaceImage ? (
-                <ImageReplaceSection
-                  nodeId={inspectableNode.id}
-                  onReplaceImage={onReplaceImage}
-                />
+                <ImageReplaceSection nodeId={inspectableNode.id} onReplaceImage={onReplaceImage} />
               ) : null}
             </div>
           </div>

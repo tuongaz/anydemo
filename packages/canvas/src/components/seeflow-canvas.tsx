@@ -2922,8 +2922,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // around the start anchor, preserving drag direction. Done before the
       // screenToFlowPosition projection so the committed node paints exactly
       // where the ghost previewed it.
-      const squared =
-        constrain && shape !== 'linkflow' ? squareDragBox(start, current) : current;
+      const squared = constrain && shape !== 'linkflow' ? squareDragBox(start, current) : current;
       const minX = Math.min(start.x, squared.x);
       const minY = Math.min(start.y, squared.y);
       const maxX = Math.max(start.x, squared.x);
@@ -3905,10 +3904,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (onReplaceImage) {
         const targetEl = e.target as HTMLElement | null;
         const nodeEl = targetEl?.closest('.react-flow__node') ?? null;
-        const overImageId =
-          nodeEl && nodeEl.querySelector('[data-node-type="image"]')
-            ? nodeEl.getAttribute('data-id')
-            : null;
+        const overImageId = nodeEl?.querySelector('[data-node-type="image"]')
+          ? nodeEl.getAttribute('data-id')
+          : null;
         if (overImageId) {
           const file = extractImageFile(e.dataTransfer);
           if (file) {
