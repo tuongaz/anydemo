@@ -1246,6 +1246,7 @@ const nodeElNearPoint = (
   if (!wrapper) return null;
   let nearest: Element | null = null;
   let nearestDist = RECONNECT_BUFFER_PX;
+  let nearestArea = Number.POSITIVE_INFINITY;
   const nodes = wrapper.querySelectorAll('.react-flow__node');
   for (const node of nodes) {
     const rect = node.getBoundingClientRect();
@@ -1253,9 +1254,19 @@ const nodeElNearPoint = (
     const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
     const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
     const dist = Math.hypot(dx, dy);
-    if (dist <= nearestDist) {
+    if (dist > nearestDist) continue;
+    const area = rect.width * rect.height;
+    // Canvas grouping M8: on a (near-)distance tie in the buffer zone prefer the
+    // smaller-area node so a member wins over its enclosing group, keeping this
+    // commit-side fallback consistent with the preview's snap pick (the in-bbox
+    // case is already handled by `nodeElAtPoint`'s z-order above). A
+    // farther-but-smaller node can't steal — the area branch is tie-gated.
+    const strictlyNearer = nearest === null || dist < nearestDist - 1e-6;
+    const tieSmaller = Math.abs(dist - nearestDist) <= 1e-6 && area < nearestArea;
+    if (strictlyNearer || tieSmaller) {
       nearest = node;
       nearestDist = dist;
+      nearestArea = area;
     }
   }
   return nearest;
@@ -1395,6 +1406,75 @@ export function classifyHandleDropFailure(
 ): 'fall-through' | 'no-flash-no-fall-through' {
   if (!toHandle || isValid !== false) return 'no-flash-no-fall-through';
   return 'fall-through';
+}
+
+/** Minimal node shape the snap-target scan needs (matches xyflow InternalNode). */
+interface SnapCandidate {
+  id: string;
+  internals: { positionAbsolute: { x: number; y: number } };
+  measured: { width?: number; height?: number };
+  width?: number;
+  height?: number;
+}
+
+/**
+ * Choose the nearest node to snap a connection-PREVIEW's moving endpoint to,
+ * given the cursor in flow units. Returns the node whose bbox is closest to the
+ * cursor within `bufferFlow`, or null when none is in range.
+ *
+ * Canvas grouping M8 (step 3 — preview parity): a member node sits ABOVE its
+ * enclosing group (member zIndex 0, group zIndex -1) and the group's bbox
+ * CONTAINS the member's. When the cursor is inside both, both bboxes have
+ * distance 0. The COMMIT body-drop resolves this via `elementsFromPoint`, which
+ * returns the topmost element → the member. So this preview scan must break a
+ * distance tie by **smaller bbox area** (the innermost / on-top node) so the
+ * previewed snap target matches what will commit. Without it the preview could
+ * snap to the group border while the drop lands on the member — the exact
+ * "preview must mirror the committed connector" regression the design guards
+ * against. A non-tie (cursor over the group's padding band but outside every
+ * member) still picks the group outright, which is the "connect to the group as
+ * a whole" path (design §3 decision #4).
+ *
+ * `excludeId` skips the gesture's fixed/source node (a self-loop the commit
+ * rejects). Pure — extracted so the tie-break is unit-testable without mounting
+ * the connection-line component (whose `useStore` chain can't be shimmed; see
+ * design §11 L3.3).
+ */
+export function pickNearestSnapTarget(
+  candidates: Iterable<SnapCandidate>,
+  cursor: { x: number; y: number },
+  bufferFlow: number,
+  excludeId: string | null,
+): SnapCandidate | null {
+  let best: SnapCandidate | null = null;
+  let bestDist = bufferFlow;
+  let bestArea = Number.POSITIVE_INFINITY;
+  for (const node of candidates) {
+    if (excludeId && node.id === excludeId) continue;
+    const w = node.measured.width ?? node.width ?? 0;
+    const h = node.measured.height ?? node.height ?? 0;
+    if (w === 0 || h === 0) continue;
+    const x = node.internals.positionAbsolute.x;
+    const y = node.internals.positionAbsolute.y;
+    const dx = Math.max(x - cursor.x, 0, cursor.x - (x + w));
+    const dy = Math.max(y - cursor.y, 0, cursor.y - (y + h));
+    const dist = Math.hypot(dx, dy);
+    if (dist > bestDist) continue;
+    const area = w * h;
+    // Strictly-nearer always wins; on a (near-)distance tie prefer the smaller
+    // area — the innermost node, matching the commit's z-order pick. The
+    // area-tie branch is gated on `dist` being within float-epsilon of the
+    // current best so a FARTHER-but-smaller node can never steal from a nearer
+    // larger one.
+    const strictlyNearer = best === null || dist < bestDist - 1e-6;
+    const tieSmaller = Math.abs(dist - bestDist) <= 1e-6 && area < bestArea;
+    if (strictlyNearer || tieSmaller) {
+      best = node;
+      bestDist = dist;
+      bestArea = area;
+    }
+  }
+  return best;
 }
 
 const mergeNodeOverride = (node: FlowNode, override: Partial<FlowNode> | undefined): FlowNode => {
@@ -1762,25 +1842,25 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
         if (candidate) bestNode = candidate;
       }
       // Path (b): bbox-buffer scan, only when xyflow didn't already pin a
-      // target via handle proximity.
+      // target via handle proximity. `pickNearestSnapTarget` picks the nearest
+      // node within the buffer, breaking a distance tie by smaller bbox area so
+      // a member wins over its enclosing group — matching the commit's
+      // elementsFromPoint z-order pick (canvas grouping M8: preview mirrors
+      // commit). The scan still excludes the fixed/source node; the moving end's
+      // own node stays a valid target (own-node re-pin). We feed it both the
+      // explicit `excludeNodeId` and the fixed node id below.
       if (!bestNode) {
-        let bestDist = bufferFlow;
+        const candidates: SnapCandidate[] = [];
         for (const node of nodeMap.values()) {
-          if (excludeNodeId && node.id === excludeNodeId) continue;
           if (fixedNode && node.id === fixedNode.id) continue;
-          const w = node.measured.width ?? node.width ?? 0;
-          const h = node.measured.height ?? node.height ?? 0;
-          if (w === 0 || h === 0) continue;
-          const x = node.internals.positionAbsolute.x;
-          const y = node.internals.positionAbsolute.y;
-          const dx = Math.max(x - toX, 0, toX - (x + w));
-          const dy = Math.max(y - toY, 0, toY - (y + h));
-          const dist = Math.hypot(dx, dy);
-          if (dist <= bestDist) {
-            bestDist = dist;
-            bestNode = node;
-          }
+          candidates.push(node);
         }
+        bestNode = pickNearestSnapTarget(
+          candidates,
+          { x: toX, y: toY },
+          bufferFlow,
+          excludeNodeId,
+        ) as typeof bestNode;
       }
       // (The moving end's OWN-node re-pin is now handled by the scan above —
       // its node is no longer excluded. We deliberately do NOT snap onto the

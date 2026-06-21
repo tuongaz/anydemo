@@ -112,8 +112,76 @@ covered by existing connector tooling.
   re-anchor on group move/resize; previews mirror commits.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Did `floating-edge-geometry` need changes for the large box, or just tests?
-- Any preview-vs-commit mismatch for group endpoints? How fixed?
-- Edge re-anchoring on group move/resize — confirm it uses live group geometry.
-- **➡ Copy into `09-...md`.**
+## Lessons-learned handoff (FILLED IN — M8 done)
+
+**M8 was ~90% VERIFICATION, ~10% one targeted fix.** The entire
+connect/preview/commit/geometry stack is **type-agnostic**: a group is a
+`.react-flow__node` with `data-id`, a measured box, and `positionAbsolute`, so
+every path treats it like any other node. The only node-type gate anywhere in
+the connector machinery is the `text`-shape rejection in `isValidConnection`
+(`seeflow-canvas.tsx`), which groups pass. **No schema change** (endpoints were
+already legal). Steps below note VERIFIED vs CHANGED.
+
+- **Step 1 — handles: VERIFIED (no change), tests strengthened.** `group-node.tsx`
+  already renders the four handles (target `t`/`l`, source `r`/`b`) M1 added on
+  the OUTER container border via xyflow's `Position` enum. **The 52px title band
+  does NOT collide with the `Position.Top` handle**: xyflow anchors handles to
+  the node's border (via xyflow CSS), while the band is purely INNER flex layout
+  BELOW that border. The Top handle sits on the box's top edge; the band sits
+  under it; members sit under the band. Added `group-node.test.tsx` asserts the
+  full type+Position contract (t/l=target, r/b=source) and `isConnectable`
+  forwarding (so view/mini gate it off).
+- **Step 2 — floating geometry: VERIFIED (no production change), large-box tests
+  ADDED.** `getNodeIntersection` is size-agnostic; `editable-edge.tsx` already
+  feeds it the group's live box (`internals.positionAbsolute` +
+  `measured.width/height ?? width/height`). The largest pre-existing test box was
+  400×120, so M8 added a `group-sized (large) box anchoring` block and a
+  `connector to a group … re-anchors on move/resize` block to
+  `floating-edge-geometry.test.ts` (group box 600×400). They pin: anchor lands on
+  the GROUP border (never a member), the anchor stays on the center-ray (so it
+  can't snap to an inner member), and it re-resolves when the group box is
+  translated (M5 move) or resized (M5 scale). **Re-anchoring uses live group
+  geometry** because `useInternalNode(target)` subscribes the edge to the group
+  node's position/dim changes — the same channel M5 writes through.
+- **Step 3 — preview parity: ONE REAL FIX.** The genuine group-specific hazard:
+  the connection-line **preview** path (b) scans every node for the nearest bbox
+  with a `dist <= best` **last-wins** tie-break, while the **commit** body-drop
+  uses `elementsFromPoint` (z-order). A member sits ABOVE its group (member z=0,
+  group z=-1) and the group's bbox CONTAINS the member's, so when the cursor is
+  inside both, BOTH have bbox distance 0 — and the old last-wins rule let
+  iteration order decide, so the preview could snap to the group border while the
+  drop landed on the member (a preview-vs-commit jump → violates the
+  `project_connection_preview_mirrors_commit` memory). **Fix:** extracted a pure,
+  exported `pickNearestSnapTarget(candidates, cursor, bufferFlow, excludeId)`
+  with a **smaller-bbox-area-wins tie-break** (the innermost/on-top node = the
+  member), gated so a farther-but-smaller node can never steal from a nearer
+  larger one. Wired it into the preview path (b) AND mirrored the same area
+  tie-break into the commit-side `nodeElNearPoint` buffer-scan fallback so the two
+  agree even in the buffer zone (the in-bbox case was already correct via
+  `elementsFromPoint`). The fixed-end float, raw-cursor projection, and
+  reconnect-doesn't-exclude-own-node behavior were ALREADY correct and untouched.
+- **Step 4 — child in isolation: VERIFIED (no change).** A child is an ordinary
+  node → always a legal endpoint. M6's isolation makes the entered group's fill
+  `pointer-events:none`, so a drop inside the group lands on the member underneath
+  (members are top-level DOM siblings above the z=-1 group). When NOT entered, the
+  group fill captures the drop → targets the group. No connector code is
+  group-aware; this falls out of the existing hit-test + z model.
+- **Step 5 — head shapes: VERIFIED (no change), source-fence tests ADDED.**
+  `ConnectorHeadGlyph` draws at the resolved endpoint coords (`tX/tY`, `sX/sY`)
+  inside the edge's own `<g>` for ANY node type — no group branch. Added
+  `editable-edge.test.ts` fences that the glyph is drawn at those coords and that
+  neither `editable-edge.tsx` nor `head-glyph.tsx` emits an SVG `<marker>` (the
+  `project_xyflow_custom_edge_markers` contract: markers don't survive RF's
+  edge-svg re-render).
+
+**Answers to the seed questions:**
+- *Did floating-edge-geometry need changes for the large box?* **No — tests only.**
+  The math is size-independent; the change was adding large-box coverage.
+- *Any preview-vs-commit mismatch for group endpoints? How fixed?* **Yes — the
+  containing-group vs contained-member distance tie. Fixed via
+  `pickNearestSnapTarget`'s smaller-area tie-break, mirrored on the commit side.**
+- *Edge re-anchoring on group move/resize uses live geometry?* **Yes —
+  `useInternalNode` subscribes the edge to the group's live position/dims; a
+  move/resize test exercises it.**
+
+- **➡ Copied into `09-integration-hardening.md` "Lessons carried forward".**

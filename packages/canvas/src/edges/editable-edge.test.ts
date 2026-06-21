@@ -149,6 +149,46 @@ describe('endpoint dots render for any selected connector (selectedMarker)', () 
   });
 });
 
+// Canvas grouping M8 (step 5): a connector whose endpoint is a GROUP renders its
+// custom head glyph correctly. There is NO group-specific code path — the glyph
+// is drawn by EditableEdge at the resolved floating endpoint (`tX/tY`, `sX/sY`)
+// for ANY node type, inside the edge's own <g> rather than via an SVG <marker>
+// (React Flow strips foreign marker defs from its edge svg — see
+// project_xyflow_custom_edge_markers). These source fences keep that contract so
+// a group-endpoint head can't silently regress to a (non-painting) marker.
+describe('M8: custom head glyphs draw in the edge group (group endpoints included)', () => {
+  it('EditableEdge renders <ConnectorHeadGlyph> at the resolved endpoints, not via <marker>', () => {
+    const src = readFileSync(editableEdgePath, 'utf-8');
+    // The head/tail glyphs are React-owned SVG drawn inside the edge <g>.
+    expect(src).toMatch(/<ConnectorHeadGlyph/);
+    // The custom-glyph branches paint at the floating endpoint coords (tX/tY for
+    // the head, sX/sY for the tail) — the SAME coords resolveEdgeEndpoints
+    // computes against the endpoint node's box, so a large group box anchors the
+    // glyph on the group's border.
+    const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(codeOnly).toMatch(
+      /headEndShape[\s\S]*?ConnectorHeadGlyph[\s\S]*?x=\{tX\}[\s\S]*?y=\{tY\}/,
+    );
+    expect(codeOnly).toMatch(
+      /headStartShape[\s\S]*?ConnectorHeadGlyph[\s\S]*?x=\{sX\}[\s\S]*?y=\{sY\}/,
+    );
+    // The custom heads must NOT be emitted as SVG <marker> defs (those don't
+    // survive React Flow's edge-svg re-render).
+    expect(codeOnly).not.toMatch(/<marker\b/);
+  });
+
+  it('the head glyph element itself is an SVG <g> carrying the shape, color-able from the edge stroke', () => {
+    const src = readFileSync(join(repoRoot, 'packages/canvas/src/edges/head-glyph.tsx'), 'utf-8');
+    // The glyph is a plain SVG <g> (React element) — not a <marker> — so it
+    // paints inside whatever <g> EditableEdge mounts it in.
+    expect(src).toMatch(/data-testid="connector-head-glyph"/);
+    // Strip comments first — the docstring legitimately explains "Why not SVG
+    // <marker>s", so only the CODE must be marker-free.
+    const codeOnly = src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    expect(codeOnly).not.toMatch(/<marker\b/);
+  });
+});
+
 describe('shouldFireEdgeHandoff', () => {
   it('fires on rising edge into success', () => {
     expect(shouldFireEdgeHandoff(undefined, 'success')).toBe(true);

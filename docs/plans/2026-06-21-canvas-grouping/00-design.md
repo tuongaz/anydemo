@@ -750,6 +750,35 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   handle/edge anchor lands in the title band; M5 proportional resize is unaffected
   (scales the frozen baseline, not the band constant). `computeGroupBox` tests
   reference the CONSTANT symbol, so they tracked the change automatically.
+- **L8.1 (M8) Connectors to/from a group needed NO new connector code — the whole
+  stack is type-agnostic.** A group is a `.react-flow__node` with `data-id`, a
+  measured box, and `positionAbsolute`, so `getNodeIntersection`/floating
+  geometry, the body-drop hit-test (`nodeElAtPoint` → `.react-flow__node` +
+  `data-id`), the pin projection (`getInternalNode`), the preview snap loop
+  (`nodeMap.values()`), and the head glyph all treat it like any node. The ONLY
+  node-type gate in the connector machinery is `isValidConnection`'s `text`-shape
+  rejection (groups pass). **No schema change** — endpoints were already legal.
+  `editable-edge.tsx` re-anchors a group-endpoint edge on group move/resize FOR
+  FREE because `useInternalNode(target)` subscribes the edge to the group's live
+  position/dims (the channel M5 writes through). **Contract for M9:** do NOT add
+  group branches to clipboard/delete/export/reorder connector handling — a need
+  for connector-vs-group logic is the L0.3 leak signal.
+- **L8.2 (M8, the one real fix) Preview snap-target needs a SMALLER-AREA tie-break
+  so a member wins over its enclosing group.** The connection-line PREVIEW scans
+  every node for the nearest bbox; the COMMIT body-drop uses `elementsFromPoint`
+  (z-order). A member sits ABOVE its group (member z=0, group z=-1) and the
+  group's bbox CONTAINS the member's, so when the cursor is inside both, BOTH have
+  bbox distance 0. The old `dist <= best` last-wins rule let iteration order
+  decide → preview could snap to the group border while the drop landed on the
+  member (preview-vs-commit jump). Fix: pure exported
+  `pickNearestSnapTarget(candidates, cursor, bufferFlow, excludeId)` in
+  `seeflow-canvas.tsx` with an area tie-break (innermost/on-top wins), gated so a
+  farther-but-smaller node can't steal from a nearer larger one; wired into the
+  preview path (b) AND mirrored into the commit-side `nodeElNearPoint` buffer
+  scan. **Contract for M9:** the bring-to-front/back z-clamp (step 8) MUST keep
+  `group z < member z`, or both this tie-break AND the hit-test invert (a member
+  could fall behind its group and become un-targetable). Keep preview == commit
+  (`project_connection_preview_mirrors_commit`).
 
 ---
 

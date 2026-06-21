@@ -23,6 +23,7 @@ import {
   computeUnmovedLockPin,
   eventTargetIsOtherNode,
   handleClipboardShortcut,
+  pickNearestSnapTarget,
   resolveAutoFitView,
   resolveFlags,
 } from './seeflow-canvas.tsx';
@@ -678,6 +679,79 @@ describe('SeeflowCanvas', () => {
           side: 'left',
           t: 0.5,
         });
+      });
+    });
+
+    // Canvas grouping M8 (step 3 — preview parity for group endpoints). The
+    // connection-line PREVIEW scans every node for the nearest bbox to the
+    // cursor; the COMMIT body-drop hit-tests `elementsFromPoint` (z-order). A
+    // member node sits ABOVE its containing group (member z=0, group z=-1), and
+    // the group's bbox CONTAINS the member's. When the cursor is inside both,
+    // both have bbox distance 0 — so the preview must break the tie the SAME way
+    // the commit does: pick the innermost (smallest-area) node = the member, not
+    // the enclosing group. Otherwise the preview snaps to the group border while
+    // the commit lands on the member ("preview must mirror commit" memory).
+    describe('pickNearestSnapTarget (group/member preview tie-break, M8)', () => {
+      // grp-1: 600×400 group box at (1000, 1000). node-a: a 160×60 member fully
+      // inside it at (1100, 1100). node-c: a loose node far away at (3000, 3000).
+      const group = {
+        id: 'grp-1',
+        internals: { positionAbsolute: { x: 1000, y: 1000 } },
+        measured: { width: 600, height: 400 },
+      };
+      const member = {
+        id: 'node-a',
+        internals: { positionAbsolute: { x: 1100, y: 1100 } },
+        measured: { width: 160, height: 60 },
+      };
+      const far = {
+        id: 'node-c',
+        internals: { positionAbsolute: { x: 3000, y: 3000 } },
+        measured: { width: 100, height: 60 },
+      };
+
+      it('cursor inside a member (and its group) picks the MEMBER (smallest area wins the tie)', () => {
+        // Cursor at the member center — distance 0 to BOTH the member and the
+        // enclosing group. The innermost (member) must win, mirroring the
+        // commit-side elementsFromPoint z-order pick.
+        const best = pickNearestSnapTarget([group, member], { x: 1180, y: 1130 }, 15, null);
+        expect(best?.id).toBe('node-a');
+      });
+
+      it('is order-independent (group authored AFTER the member still loses the tie)', () => {
+        // The old `dist <= best` last-wins rule made the result depend on
+        // iteration order. Area tie-break is deterministic regardless of order.
+        const best = pickNearestSnapTarget([member, group], { x: 1180, y: 1130 }, 15, null);
+        expect(best?.id).toBe('node-a');
+      });
+
+      it('cursor over the group padding band (not over any member) picks the GROUP', () => {
+        // Inside the group box but OUTSIDE the member → only the group has
+        // distance 0, so it wins outright. This is the "connect to the group as
+        // a whole" path (design §3 #4).
+        const best = pickNearestSnapTarget([group, member], { x: 1050, y: 1380 }, 15, null);
+        expect(best?.id).toBe('grp-1');
+      });
+
+      it('honors the exclude id (never snaps to the fixed/source node)', () => {
+        // With the member excluded, the next-nearest inside the cursor is the
+        // group. Mirrors the preview excluding the drag-origin node.
+        const best = pickNearestSnapTarget([group, member], { x: 1180, y: 1130 }, 15, 'node-a');
+        expect(best?.id).toBe('grp-1');
+      });
+
+      it('returns null when no node is within the buffer', () => {
+        // Cursor far from every node bbox (> buffer) → no snap target, so the
+        // preview floats free (and the commit no-ops on an empty-space drop).
+        expect(
+          pickNearestSnapTarget([group, member, far], { x: 9000, y: 9000 }, 15, null),
+        ).toBeNull();
+      });
+
+      it('snaps to a node within the buffer when the cursor is just outside its bbox', () => {
+        // 10px to the left of the loose node (buffer 15) → still snaps to it.
+        const best = pickNearestSnapTarget([far], { x: 2990, y: 3030 }, 15, null);
+        expect(best?.id).toBe('node-c');
       });
     });
 

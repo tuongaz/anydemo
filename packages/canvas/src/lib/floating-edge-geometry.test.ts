@@ -92,6 +92,55 @@ describe('getNodeIntersection', () => {
     const wide = { x: 0, y: 0, w: 200, h: 50 };
     expect(getNodeIntersection(wide, { x: 200, y: 200 }).side).toBe('bottom');
   });
+
+  // Canvas grouping M8 (step 2): a connector to/from a GROUP must anchor to the
+  // group's (large) perimeter, not a member's. The geometry is size-agnostic —
+  // these tests pin it for a realistic large group box so a regression that
+  // anchored to a member-sized box (e.g. 160×60) instead of the group box would
+  // fail here. Group box: 600×400 at (1000, 1000), center (1300, 1200).
+  describe('group-sized (large) box anchoring (M8)', () => {
+    const groupBox = { x: 1000, y: 1000, w: 600, h: 400 };
+
+    it('anchors a connector from an outside node on the RIGHT to the group right edge', () => {
+      // Outside node center far to the right and vertically centered → exits the
+      // group's right edge at its vertical midpoint, NOT a member's edge.
+      const out = getNodeIntersection(groupBox, { x: 5000, y: 1200 });
+      expect(out.side).toBe('right');
+      expect(out.x).toBeCloseTo(1600); // x + w
+      expect(out.y).toBeCloseTo(1200); // center y
+    });
+
+    it('anchors a connector from an outside node ABOVE to the group top edge (title band)', () => {
+      // A Position.Top anchor lands on the title band's top border (design §11
+      // L7.4: the band is INSIDE the box; the anchor sits on the box's top edge).
+      const out = getNodeIntersection(groupBox, { x: 1300, y: -2000 });
+      expect(out.side).toBe('top');
+      expect(out.x).toBeCloseTo(1300); // center x
+      expect(out.y).toBeCloseTo(1000); // y (top edge)
+    });
+
+    it('the anchor lies ON the large perimeter for arbitrary outside directions', () => {
+      const center = { x: 1300, y: 1200 };
+      const samples = [
+        { x: 4000, y: 2500 },
+        { x: -1000, y: 1100 },
+        { x: 1350, y: -800 },
+        { x: 1250, y: 6000 },
+      ];
+      for (const s of samples) {
+        const out = getNodeIntersection(groupBox, s);
+        const onVertical =
+          Math.abs(out.x - groupBox.x) < 1e-6 || Math.abs(out.x - (groupBox.x + groupBox.w)) < 1e-6;
+        const onHorizontal =
+          Math.abs(out.y - groupBox.y) < 1e-6 || Math.abs(out.y - (groupBox.y + groupBox.h)) < 1e-6;
+        expect(onVertical || onHorizontal).toBe(true);
+        // And the anchor stays on the ray from the group center toward the target
+        // (same direction → cross-product ~0), i.e. it never snaps to a member.
+        const cross = (out.x - center.x) * (s.y - center.y) - (out.y - center.y) * (s.x - center.x);
+        expect(Math.abs(cross)).toBeLessThan(1e-6);
+      }
+    });
+  });
 });
 
 describe('resolveEdgeEndpoints', () => {
@@ -284,6 +333,70 @@ describe('resolveEdgeEndpoints', () => {
       );
       expect(out.source).toEqual({ x: 100, y: 30, side: 'right' });
       expect(out.target).toEqual({ x: 300, y: 30, side: 'left' });
+    });
+  });
+
+  // Canvas grouping M8 (step 2 + guardrail "edge re-anchors on group move/
+  // resize"): a connector between a loose node and a GROUP must float against
+  // the group's large box, and the anchor must follow when the group is
+  // translated (M5 move) or resized (M5 resize). resolveEdgeEndpoints is the
+  // exact function editable-edge.tsx calls with the group's live measured box.
+  describe('connector to a group (large box, re-anchors on move/resize) (M8)', () => {
+    // Loose node well to the LEFT of the group.
+    const loose = { x: 0, y: 1180, w: 100, h: 60 };
+    const looseFallback: Endpoint = { x: 100, y: 1210, side: 'right' };
+    const groupFallback: Endpoint = { x: 1000, y: 1200, side: 'left' };
+
+    it('floats both endpoints against the group box (anchor on the group border, not a member)', () => {
+      const group = { x: 1000, y: 1000, w: 600, h: 400 }; // center (1300, 1200)
+      const out = resolveEdgeEndpoints(
+        { box: loose, autoPicked: true, fallback: looseFallback },
+        { box: group, autoPicked: true, fallback: groupFallback },
+      );
+      // Loose center (50, 1210); group center (1300, 1200). The line is almost
+      // horizontal → loose exits its right edge, group's TARGET exits its LEFT
+      // edge at x = 1000 (the group border), never a member inside it.
+      expect(out.source.side).toBe('right');
+      expect(out.source.x).toBeCloseTo(100);
+      expect(out.target.side).toBe('left');
+      expect(out.target.x).toBeCloseTo(1000);
+    });
+
+    it('re-anchors the group endpoint when the group is MOVED (M5 fan-out)', () => {
+      const before = resolveEdgeEndpoints(
+        { box: loose, autoPicked: true, fallback: looseFallback },
+        { box: { x: 1000, y: 1000, w: 600, h: 400 }, autoPicked: true, fallback: groupFallback },
+      );
+      // Move the group +500 right / +200 down. The target anchor must follow to
+      // the moved group's left edge (still the border, recomputed live).
+      const after = resolveEdgeEndpoints(
+        { box: loose, autoPicked: true, fallback: looseFallback },
+        { box: { x: 1500, y: 1200, w: 600, h: 400 }, autoPicked: true, fallback: groupFallback },
+      );
+      expect(before.target.x).toBeCloseTo(1000);
+      expect(after.target.x).toBeCloseTo(1500); // tracks the group's new left edge
+      expect(after.target.side).toBe('left');
+    });
+
+    it('re-anchors the group endpoint when the group is RESIZED (M5 scale)', () => {
+      // Group grows from 600×400 to 1000×800 anchored at the same top-left. Its
+      // left edge x is unchanged but the anchor's y (the side midpoint of the
+      // near-horizontal line) re-resolves against the new height.
+      const small = resolveEdgeEndpoints(
+        { box: loose, autoPicked: true, fallback: looseFallback },
+        { box: { x: 1000, y: 1000, w: 600, h: 400 }, autoPicked: true, fallback: groupFallback },
+      );
+      const large = resolveEdgeEndpoints(
+        { box: loose, autoPicked: true, fallback: looseFallback },
+        { box: { x: 1000, y: 1000, w: 1000, h: 800 }, autoPicked: true, fallback: groupFallback },
+      );
+      expect(small.target.side).toBe('left');
+      expect(large.target.side).toBe('left');
+      expect(large.target.x).toBeCloseTo(1000);
+      // The anchor stays on the (now taller) perimeter — within the new box's y
+      // span [1000, 1800], confirming it recomputed against the resized box.
+      expect(large.target.y).toBeGreaterThanOrEqual(1000);
+      expect(large.target.y).toBeLessThanOrEqual(1800);
     });
   });
 });

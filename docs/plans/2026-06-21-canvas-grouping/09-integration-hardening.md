@@ -10,7 +10,37 @@ floating-edge geometry hugging the group box and previews mirroring commits.
 
 ## Lessons carried forward
 
-- (Fill from M8 handoff.)
+- **From M8 handoff (actionable subset):**
+  - **The connector stack is fully TYPE-AGNOSTIC.** Connect/preview/commit/
+    floating-geometry/head-glyph all treat a group like any node (it's a
+    `.react-flow__node` with `data-id`, measured box, `positionAbsolute`). The
+    ONLY node-type gate in the whole connector path is the `text`-shape rejection
+    in `isValidConnection`. **Do NOT add group branches to connector code in M9** —
+    if a clipboard/delete/export path needs connector-vs-group logic, that's the
+    L0.3 leak signal, stop. Connectors to/from a group persist + round-trip as
+    ordinary connectors (endpoint = the group's id; no schema change).
+  - **Edges re-anchor on group move/resize for FREE** via `useInternalNode`
+    (the edge subscribes to the group node's live position/dims). M9's
+    persistence round-trip + SSE-reload tests should assert a group-endpoint
+    connector renders anchored to the group border after reload AND after an
+    external move — but the mechanism is already there; M9 only needs coverage.
+  - **`pickNearestSnapTarget` (exported, pure) is the snap-target oracle** with a
+    smaller-bbox-area tie-break so a member wins over its enclosing group in the
+    connection PREVIEW (matching the commit's `elementsFromPoint` z-order). The
+    same area tie-break is mirrored in the commit-side `nodeElNearPoint` fallback.
+    If M9 touches the connect hit-test or reorder/z-order, keep these two in
+    lockstep (preview must mirror commit — `project_connection_preview_mirrors_commit`).
+  - **Group hit-testing depends on the z model:** members (z=0) above group
+    (z=-1). A drop on the group's padding band targets the group; on a member
+    targets the member; entered-group fill is `pointer-events:none` so a drop
+    inside lands on the member underneath. M9's bring-to-front/back clamp (step 8)
+    MUST preserve `group z < member z` or this hit-testing (and the preview
+    tie-break) silently inverts — a member could fall behind its group and become
+    un-targetable.
+  - **Custom head glyphs draw in the edge `<g>`, never as SVG `<marker>`s**
+    (`project_xyflow_custom_edge_markers`). A group-endpoint edge renders its head
+    via `ConnectorHeadGlyph` at the resolved floating endpoint; unaffected by M9
+    but don't regress to markers when touching export (PNG/PDF) rendering.
 - **L0.3** v1 was removed mainly because group-awareness leaked into clipboard,
   delete-cascade, edge gating, and node ordering. With `childIds` + absolute
   positions, those touch-points are minimal — but this milestone proves it by

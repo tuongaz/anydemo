@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test';
-import { Handle, type NodeProps } from '@xyflow/react';
+import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
 import { GROUP_NODE_Z_INDEX, GroupNode, type GroupNodeType } from './group-node.tsx';
 import { NodeHeader } from './lib/node-header.tsx';
@@ -189,6 +189,46 @@ describe('GroupNode', () => {
     expect(handles).toHaveLength(4);
     const ids = new Set(handles.map((h) => String((h.props as { id?: string }).id)));
     expect(ids).toEqual(new Set(['t', 'l', 'r', 'b']));
+  });
+
+  // -- M8 connectors: a group is a connector endpoint (design §3 #4, §11 L7.4) --
+  describe('M8: connection handles let a group be a connector endpoint', () => {
+    type HandleProps = { id?: string; type?: string; position?: Position; isConnectable?: boolean };
+    const handlesOf = (tree: ReactElementLike) =>
+      findAll(tree, (el) => el.type === Handle).map((h) => h.props as HandleProps);
+
+    it('places target handles on TOP + LEFT and source handles on RIGHT + BOTTOM (border-anchored)', () => {
+      // The handles are anchored to the OUTER border via xyflow's Position enum
+      // (not the inner flex layout), so the 52px title band — which lives INSIDE
+      // the box (design §11 L7.4) — never collides with the Top handle; the Top
+      // handle sits on the box's top edge, the band sits below it. Mirrors the
+      // rectangle-node handle contract so a group connects exactly like a card.
+      const byId = new Map(
+        handlesOf(callGroupNode({ childIds: [], width: 300, height: 200 })).map((h) => [
+          String(h.id),
+          h,
+        ]),
+      );
+      expect(byId.get('t')).toMatchObject({ type: 'target', position: Position.Top });
+      expect(byId.get('l')).toMatchObject({ type: 'target', position: Position.Left });
+      expect(byId.get('r')).toMatchObject({ type: 'source', position: Position.Right });
+      expect(byId.get('b')).toMatchObject({ type: 'source', position: Position.Bottom });
+    });
+
+    it('forwards isConnectable to every handle (gated off in view/mini)', () => {
+      const on = handlesOf(
+        callGroupNode({ childIds: [], width: 300, height: 200 }, {
+          isConnectable: true,
+        } as Partial<NodeProps>),
+      );
+      expect(on.every((h) => h.isConnectable === true)).toBe(true);
+      const off = handlesOf(
+        callGroupNode({ childIds: [], width: 300, height: 200 }, {
+          isConnectable: false,
+        } as Partial<NodeProps>),
+      );
+      expect(off.every((h) => h.isConnectable === false)).toBe(true);
+    });
   });
 
   it('exports a NEGATIVE zIndex so the group paints behind members and edges', () => {
