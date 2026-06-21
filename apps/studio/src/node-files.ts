@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { writeFileAtomic } from './atomic-write.ts';
 
@@ -92,6 +92,66 @@ export function writeNodeFile(absPath: string, content: string): void {
   writeFileAtomic(absPath, content);
 }
 
+// Tombstone prefix for a soft-deleted node folder. Mirrors the flow-delete
+// `.deleted-<slug>-<ts>` rename pattern in api.ts so a deleted node's files
+// (e.g. a type:'image' upload) survive long enough for an undo to restore them
+// — a hard `rmSync` here was the cause of "delete image, undo, image gone".
+const tombstonePrefix = (nodeId: string): string => `.deleted-${nodeId}-`;
+
+// Tombstones older than this are garbage-collected on the next delete in the
+// same `nodes/` folder. An undo lands within seconds, so a generous window is
+// safe while keeping the folder from accumulating dead snapshots forever.
+const TOMBSTONE_TTL_MS = 24 * 60 * 60 * 1000;
+
+function purgeStaleTombstones(nodesDir: string): void {
+  if (!existsSync(nodesDir)) return;
+  const now = Date.now();
+  for (const name of readdirSync(nodesDir)) {
+    if (!name.startsWith('.deleted-')) continue;
+    const ts = Number(name.slice(name.lastIndexOf('-') + 1));
+    if (!Number.isFinite(ts) || now - ts < TOMBSTONE_TTL_MS) continue;
+    rmSync(join(nodesDir, name), { recursive: true, force: true });
+  }
+}
+
+// Soft-delete a node's folder by renaming it to a sibling tombstone, so the
+// delete is reversible via `restoreNodeDir` (used by the undo of a node delete,
+// which recreates the node with the SAME id). Falls back to a hard delete if
+// the rename fails. Idempotent when the folder is already gone.
 export function removeNodeDir(repoPath: string, flowDir: string, nodeId: string): void {
+  const nodesDir = join(repoPath, flowDir, 'nodes');
+  const src = join(nodesDir, nodeId);
+  if (!existsSync(src)) return;
+  purgeStaleTombstones(nodesDir);
+  const dest = join(nodesDir, `${tombstonePrefix(nodeId)}${Date.now()}`);
+  try {
+    renameSync(src, dest);
+  } catch {
+    rmSync(src, { recursive: true, force: true });
+  }
+}
+
+// Hard-delete a node's folder (no tombstone). Used by rollback paths that need
+// to discard a folder THIS operation just created — there's nothing to undo, so
+// a tombstone would only leave cruft.
+export function purgeNodeDir(repoPath: string, flowDir: string, nodeId: string): void {
   rmSync(join(repoPath, flowDir, 'nodes', nodeId), { recursive: true, force: true });
+}
+
+// Restore a node's folder from its newest tombstone (the inverse of
+// `removeNodeDir`). Returns true if a tombstone was found and renamed back into
+// place. No-op (returns false) when the live folder already exists or no
+// tombstone matches — so a fresh create with a never-deleted id is unaffected.
+export function restoreNodeDir(repoPath: string, flowDir: string, nodeId: string): boolean {
+  const nodesDir = join(repoPath, flowDir, 'nodes');
+  const dest = join(nodesDir, nodeId);
+  if (existsSync(dest) || !existsSync(nodesDir)) return false;
+  const prefix = tombstonePrefix(nodeId);
+  const newest = readdirSync(nodesDir)
+    .filter((name) => name.startsWith(prefix))
+    .sort()
+    .at(-1);
+  if (!newest) return false;
+  renameSync(join(nodesDir, newest), dest);
+  return true;
 }

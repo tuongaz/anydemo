@@ -7,7 +7,9 @@ import {
   nodeFileAbsPath,
   nodeFileRef,
   nodeFileRelPath,
+  purgeNodeDir,
   removeNodeDir,
+  restoreNodeDir,
   writeNodeFile,
 } from './node-files.ts';
 
@@ -94,5 +96,54 @@ describe('writeNodeFile / removeNodeDir', () => {
     expect(readFileSync(nodeFileAbsPath(root, 'flows/retry', 'node-a', 'detail.md'), 'utf8')).toBe(
       'b',
     );
+  });
+});
+
+// The delete→undo data-loss fix: removeNodeDir tombstones the folder (instead
+// of hard-deleting) so restoreNodeDir can bring its files back when the undo of
+// a node delete recreates the node with the same id.
+describe('removeNodeDir / restoreNodeDir reversibility', () => {
+  let root: string;
+  beforeEach(() => {
+    root = mkdtempSync(join(tmpdir(), 'node-files-'));
+  });
+  afterEach(() => {
+    rmSync(root, { recursive: true, force: true });
+  });
+
+  it('restores a soft-deleted node folder with its contents intact', () => {
+    const abs = nodeFileAbsPath(root, '', 'node-x', 'cover.png');
+    writeNodeFile(abs, 'IMG');
+    removeNodeDir(root, '', 'node-x');
+    expect(existsSync(abs)).toBe(false);
+    expect(restoreNodeDir(root, '', 'node-x')).toBe(true);
+    expect(readFileSync(abs, 'utf8')).toBe('IMG');
+  });
+
+  it('restoreNodeDir returns false when there is no tombstone', () => {
+    expect(restoreNodeDir(root, '', 'never-existed')).toBe(false);
+  });
+
+  it('restoreNodeDir is a no-op when the live folder already exists', () => {
+    writeNodeFile(nodeFileAbsPath(root, '', 'node-x', 'a.png'), 'live');
+    expect(restoreNodeDir(root, '', 'node-x')).toBe(false);
+    expect(readFileSync(nodeFileAbsPath(root, '', 'node-x', 'a.png'), 'utf8')).toBe('live');
+  });
+
+  it('restores the newest tombstone after repeated delete/recreate cycles', () => {
+    const abs = nodeFileAbsPath(root, '', 'node-x', 'cover.png');
+    writeNodeFile(abs, 'first');
+    removeNodeDir(root, '', 'node-x');
+    restoreNodeDir(root, '', 'node-x');
+    writeNodeFile(abs, 'second');
+    removeNodeDir(root, '', 'node-x');
+    expect(restoreNodeDir(root, '', 'node-x')).toBe(true);
+    expect(readFileSync(abs, 'utf8')).toBe('second');
+  });
+
+  it('purgeNodeDir hard-deletes without leaving a tombstone to restore', () => {
+    writeNodeFile(nodeFileAbsPath(root, '', 'node-x', 'cover.png'), 'IMG');
+    purgeNodeDir(root, '', 'node-x');
+    expect(restoreNodeDir(root, '', 'node-x')).toBe(false);
   });
 });

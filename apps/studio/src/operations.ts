@@ -20,7 +20,9 @@ import {
   externalizedFieldsForNodeType,
   nodeFileAbsPath,
   nodeFileRef,
+  purgeNodeDir,
   removeNodeDir,
+  restoreNodeDir,
   writeNodeFile,
 } from './node-files.ts';
 import { seeflowHome } from './paths.ts';
@@ -1460,6 +1462,13 @@ export async function addNodeImpl(
     fullPath,
     (flow) => {
       flow.nodes.push(newNode);
+      // Reversible-delete rehydrate: if this id was soft-deleted (its folder
+      // tombstoned by removeNodeDir), restore the folder so undo of a node
+      // delete recovers its files — notably a type:'image' upload that lives
+      // at nodes/<id>/ and is referenced only by data.path. Runs BEFORE the
+      // externalized writes so any detail.md/view.html overlays the restored
+      // folder. No-op for a genuinely new id (no matching tombstone).
+      restoreNodeDir(entry.repoPath, dirname(entry.flowPath), newId);
       for (const ext of externalized) {
         try {
           writeNodeFile(ext.absPath, ext.content);
@@ -1619,9 +1628,10 @@ export async function addFlowBulkImpl(
   // collide-with-existing check ran first inside the mutator, so any folder
   // at `<flowDir>/nodes/<p.id>/` was created by this call — safe to cascade.
   // The idAlreadyExists branch returns before any writeNodeFile, so the rmdir
-  // is a no-op there.
+  // is a no-op there. Hard-purge (not tombstone): these folders were created by
+  // this failed call, so there's nothing to undo — a tombstone would only leak.
   for (const p of preparedNodes) {
-    removeNodeDir(entry.repoPath, flowDir, p.id);
+    purgeNodeDir(entry.repoPath, flowDir, p.id);
   }
   return result;
 }
