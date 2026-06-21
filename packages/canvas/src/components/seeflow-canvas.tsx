@@ -66,6 +66,7 @@ import {
 } from '../lib/floating-edge-geometry.ts';
 import {
   type DraggedGroup,
+  GROUP_BOX_PADDING,
   type GroupMoveUpdate,
   computeGroupMoveUpdates,
   isMemberOfGroup,
@@ -131,6 +132,7 @@ import { InspectorToggle } from './inspector-toggle.tsx';
 import {
   type MultiResizeUpdate,
   type OverlayInputNode,
+  SELECTION_OVERLAY_PADDING,
   SelectionResizeOverlay,
 } from './selection-resize-overlay.tsx';
 import { ShareMenu } from './share-menu.tsx';
@@ -5982,6 +5984,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                   <SelectionResizeOverlay
                     selectedNodes={selectionOverlayNodes}
                     isGroupSelection={isGroupSelection}
+                    // Temp/final marquee PARITY: a loose multi-selection chromes
+                    // `members + SELECTION_OVERLAY_PADDING`. A group selection
+                    // chromes the group BOX, which already carries its own
+                    // GROUP_BOX_PADDING around the members — so the overlay must
+                    // add only the DIFFERENCE (0 when the two constants match) to
+                    // land the marquee the same distance from the members as a
+                    // temp selection. (A deliberately resized "labeled zone" box
+                    // is larger than members+padding; clamping at 0 keeps the
+                    // marquee on the real box bounds there.)
+                    paddingPx={
+                      isGroupSelection
+                        ? Math.max(0, SELECTION_OVERLAY_PADDING - GROUP_BOX_PADDING)
+                        : SELECTION_OVERLAY_PADDING
+                    }
                     onMultiResize={onMultiResize}
                     onGroupAction={onGroupAction}
                   />
