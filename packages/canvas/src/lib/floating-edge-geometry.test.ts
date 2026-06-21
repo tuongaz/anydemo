@@ -7,6 +7,7 @@ import {
   getNodeIntersection,
   projectCursorToPerimeter,
   resolveEdgeEndpoints,
+  snapPinToStraight,
 } from './floating-edge-geometry';
 
 describe('getNodeIntersection', () => {
@@ -469,5 +470,51 @@ describe('endpointToPin (inverse of endpointFromPin)', () => {
     const zeroH = { x: 0, y: 0, w: 100, h: 0 };
     const ep: Endpoint = { x: 0, y: 0, side: 'left' };
     expect(endpointToPin(zeroH, ep)).toEqual({ side: 'left', t: 0 });
+  });
+});
+
+describe('snapPinToStraight', () => {
+  const box = { x: 0, y: 0, w: 100, h: 100 };
+
+  it('snaps a bottom-side pin to vertical alignment when within threshold', () => {
+    // Pin at t=0.5 → moving point (50, 100). Fixed endpoint at x=52 is 2px away
+    // (< 8 threshold) → retarget t so moving.x === 52 → t = 0.52.
+    const snapped = snapPinToStraight(box, { side: 'bottom', t: 0.5 }, { x: 52, y: 200 }, 8);
+    expect(snapped.side).toBe('bottom');
+    expect(snapped.t).toBeCloseTo(0.52, 6);
+    expect(endpointFromPin(box, snapped).x).toBeCloseTo(52, 6);
+  });
+
+  it('snaps a right-side pin to horizontal alignment when within threshold', () => {
+    // Pin at t=0.5 → moving (100, 50). Fixed y=53 → t = 0.53 (horizontal line).
+    const snapped = snapPinToStraight(box, { side: 'right', t: 0.5 }, { x: 200, y: 53 }, 8);
+    expect(snapped.side).toBe('right');
+    expect(snapped.t).toBeCloseTo(0.53, 6);
+    expect(endpointFromPin(box, snapped).y).toBeCloseTo(53, 6);
+  });
+
+  it('returns the pin unchanged when the fixed endpoint is beyond the threshold', () => {
+    const pin: Pin = { side: 'bottom', t: 0.5 };
+    expect(snapPinToStraight(box, pin, { x: 70, y: 200 }, 8)).toEqual(pin);
+  });
+
+  it('never changes the side (only nudges t)', () => {
+    const pin: Pin = { side: 'top', t: 0.4 };
+    const snapped = snapPinToStraight(box, pin, { x: 43, y: -50 }, 8);
+    expect(snapped.side).toBe('top');
+    expect(snapped.t).toBeCloseTo(0.43, 6);
+  });
+
+  it('does not snap when the aligned t would fall outside [0, 1]', () => {
+    // Moving x=2 (t=0.02 on bottom). Fixed x=-3 is within 8px but would need
+    // t=-0.03 (off the side) → leave the pin alone rather than clamp.
+    const pin: Pin = { side: 'bottom', t: 0.02 };
+    expect(snapPinToStraight(box, pin, { x: -3, y: 200 }, 8)).toEqual(pin);
+  });
+
+  it('leaves degenerate (zero-size) boxes untouched', () => {
+    const zeroW = { x: 0, y: 0, w: 0, h: 100 };
+    const pin: Pin = { side: 'bottom', t: 0 };
+    expect(snapPinToStraight(zeroW, pin, { x: 0, y: 200 }, 8)).toEqual(pin);
   });
 });

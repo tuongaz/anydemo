@@ -217,6 +217,50 @@ export const endpointToPin = (rect: FloatingRect, endpoint: Endpoint): Pin => {
 };
 
 /**
+ * Snap a dragged endpoint pin to a perfectly straight (horizontal/vertical)
+ * line with the *fixed* (un-moved) endpoint when it's close enough.
+ *
+ * When the user drags a connector endpoint, the projected pin lands wherever
+ * the cursor maps onto the node perimeter — getting an exactly horizontal or
+ * vertical connector requires pixel-perfect placement. This nudges a
+ * near-straight drag to exactly straight:
+ *
+ * - Top/bottom side (`t` runs along X): if the pin's x is within `threshold`
+ *   of the fixed endpoint's x, retarget `t` so the moving x === fixed.x → a
+ *   vertical connector.
+ * - Left/right side (`t` runs along Y): if the pin's y is within `threshold`
+ *   of the fixed endpoint's y, retarget `t` so the moving y === fixed.y → a
+ *   horizontal connector.
+ *
+ * The snap is only applied when the retargeted `t` stays within [0, 1] (i.e.
+ * the fixed endpoint actually lines up with this side's range) so the pin
+ * stays on the same side the cursor chose. Returns the pin unchanged when no
+ * snap applies. `threshold` is in flow units (callers divide a px constant by
+ * the current zoom so the snap radius is zoom-independent).
+ *
+ * Pure — used by the live drag preview AND both commit paths so what the user
+ * sees while dragging is exactly what persists.
+ */
+export const snapPinToStraight = (
+  box: FloatingRect,
+  pin: Pin,
+  fixed: XY,
+  threshold: number,
+): Pin => {
+  const moving = endpointFromPin(box, pin);
+  if (pin.side === 'top' || pin.side === 'bottom') {
+    if (box.w === 0 || Math.abs(moving.x - fixed.x) > threshold) return pin;
+    const t = (fixed.x - box.x) / box.w;
+    if (t < 0 || t > 1) return pin;
+    return { side: pin.side, t };
+  }
+  if (box.h === 0 || Math.abs(moving.y - fixed.y) > threshold) return pin;
+  const t = (fixed.y - box.y) / box.h;
+  if (t < 0 || t > 1) return pin;
+  return { side: pin.side, t };
+};
+
+/**
  * Resolve a single edge endpoint. Precedence (highest first):
  *
  * 1. `pin` set (US-006) → compute from `(side, t)` against the node's bbox.

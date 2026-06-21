@@ -62,6 +62,7 @@ import {
   endpointToPin,
   getNodeIntersection,
   projectCursorToPerimeter,
+  snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
 import { applyPackSummaries } from '../lib/icon-registry.ts';
 import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
@@ -1150,6 +1151,15 @@ const nodeElAtPoint = (clientX: number, clientY: number): Element | null => {
 const RECONNECT_BUFFER_PX = 15;
 
 /**
+ * Screen-px radius within which a dragged connector endpoint snaps to a
+ * perfectly horizontal/vertical line with the fixed (un-moved) endpoint. Read
+ * via `STRAIGHT_SNAP_PX / zoom` at every projection site so the snap radius is
+ * zoom-independent (like RECONNECT_BUFFER_PX). Applied identically in the live
+ * drag preview and both commit paths so what the user sees is what persists.
+ */
+const STRAIGHT_SNAP_PX = 8;
+
+/**
  * Hit-test for connect/reconnect body drops. Returns the topmost
  * `.react-flow__node` directly under the cursor; if none, falls back to
  * the nearest `.react-flow__node` whose getBoundingClientRect lies within
@@ -1726,18 +1736,15 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
             cursorFlowX !== null && cursorFlowY !== null
               ? { x: cursorFlowX, y: cursorFlowY }
               : { x: toX, y: toY };
-          const projectedPin = projectCursorToPerimeter(targetBox, cursorFlow);
-          const projectedEndpoint = endpointFromPin(targetBox, projectedPin);
-          effectiveToX = projectedEndpoint.x;
-          effectiveToY = projectedEndpoint.y;
-          effectiveToPosition = POSITION_BY_SIDE_LINE[projectedEndpoint.side];
+          const projectedPinRaw = projectCursorToPerimeter(targetBox, cursorFlow);
           // Fixed (source) end of a NEW connection: the committed connector
           // floats the source (line-through-centers toward the target — see
           // resolveEdgeEndpoints / onCreateConnector), but xyflow's `fromX/Y`
           // points at the grabbed handle. Float it the moment a target node is
           // identified so the preview source sits at the SMART face (matching
           // the final), instead of jumping from the handle to that face on
-          // release. Reconnect already anchors its fixed end above.
+          // release. Reconnect already anchors its fixed end above. Compute it
+          // BEFORE the straight-snap below so the moving end can align to it.
           if (!reconnectingEdge && fixedBox) {
             const tCenter = { x: targetBox.x + targetBox.w / 2, y: targetBox.y + targetBox.h / 2 };
             const src = getNodeIntersection(fixedBox, tCenter);
@@ -1746,6 +1753,19 @@ const buildReconnectAwareConnectionLine = (isReconnectingRef: {
             effectiveFromPosition = POSITION_BY_SIDE_LINE[src.side];
             targetIdentified = true;
           }
+          // Near-straight snap: nudge the moving end to a perfectly H/V line
+          // with the fixed endpoint when within STRAIGHT_SNAP_PX. Same helper +
+          // fixed reference both commit paths use, so preview == commit.
+          const projectedPin = snapPinToStraight(
+            targetBox,
+            projectedPinRaw,
+            { x: effectiveFromX, y: effectiveFromY },
+            STRAIGHT_SNAP_PX / zoom,
+          );
+          const projectedEndpoint = endpointFromPin(targetBox, projectedPin);
+          effectiveToX = projectedEndpoint.x;
+          effectiveToY = projectedEndpoint.y;
+          effectiveToPosition = POSITION_BY_SIDE_LINE[projectedEndpoint.side];
         }
       }
     }
@@ -4175,15 +4195,40 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               x: cursor.clientX,
               y: cursor.clientY,
             });
-            targetPin = projectCursorToPerimeter(
-              {
-                x: targetNode.internals.positionAbsolute.x,
-                y: targetNode.internals.positionAbsolute.y,
-                w,
-                h,
-              },
-              flow,
-            );
+            const targetBox = {
+              x: targetNode.internals.positionAbsolute.x,
+              y: targetNode.internals.positionAbsolute.y,
+              w,
+              h,
+            };
+            targetPin = projectCursorToPerimeter(targetBox, flow);
+            // Near-straight snap to match the preview: align the pinned target
+            // to a perfectly H/V line with the floating source endpoint (which
+            // resolveEdgeEndpoints computes as line-through-centers toward this
+            // target) when it's within STRAIGHT_SNAP_PX.
+            const sourceNode = rfInstance.getInternalNode(fromNodeId);
+            const zoom = rfInstance.getViewport().zoom;
+            if (sourceNode && zoom > 0) {
+              const sw = sourceNode.measured.width ?? sourceNode.width ?? 0;
+              const sh = sourceNode.measured.height ?? sourceNode.height ?? 0;
+              if (sw > 0 && sh > 0) {
+                const sourceEndpoint = getNodeIntersection(
+                  {
+                    x: sourceNode.internals.positionAbsolute.x,
+                    y: sourceNode.internals.positionAbsolute.y,
+                    w: sw,
+                    h: sh,
+                  },
+                  { x: targetBox.x + targetBox.w / 2, y: targetBox.y + targetBox.h / 2 },
+                );
+                targetPin = snapPinToStraight(
+                  targetBox,
+                  targetPin,
+                  sourceEndpoint,
+                  STRAIGHT_SNAP_PX / zoom,
+                );
+              }
+            }
           }
         }
       }
@@ -4378,15 +4423,43 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         x: cursor.clientX,
         y: cursor.clientY,
       });
-      const pin = projectCursorToPerimeter(
-        {
-          x: projectNode.internals.positionAbsolute.x,
-          y: projectNode.internals.positionAbsolute.y,
-          w,
-          h,
-        },
-        flow,
-      );
+      const projectBox = {
+        x: projectNode.internals.positionAbsolute.x,
+        y: projectNode.internals.positionAbsolute.y,
+        w,
+        h,
+      };
+      let pin = projectCursorToPerimeter(projectBox, flow);
+      // Near-straight snap (matches the live preview): align the pinned moving
+      // endpoint to a perfectly H/V line with the un-moved (other) endpoint
+      // when within STRAIGHT_SNAP_PX. The snap preserves the pin's side, so it
+      // can only nudge `t` — never flip the face — keeping commit == preview.
+      {
+        const otherNodeId = movingSide === 'source' ? oldEdge.target : oldEdge.source;
+        const otherNode = rfInstance.getInternalNode(otherNodeId);
+        const zoom = rfInstance.getViewport().zoom;
+        if (otherNode && zoom > 0) {
+          const ow = otherNode.measured.width ?? otherNode.width ?? 0;
+          const oh = otherNode.measured.height ?? otherNode.height ?? 0;
+          if (ow > 0 && oh > 0) {
+            const otherBox = {
+              x: otherNode.internals.positionAbsolute.x,
+              y: otherNode.internals.positionAbsolute.y,
+              w: ow,
+              h: oh,
+            };
+            const edgeData = oldEdge.data as EditableEdgeData | undefined;
+            const otherPin = movingSide === 'source' ? edgeData?.targetPin : edgeData?.sourcePin;
+            const otherEndpoint = otherPin
+              ? endpointFromPin(otherBox, otherPin)
+              : getNodeIntersection(otherBox, {
+                  x: projectBox.x + projectBox.w / 2,
+                  y: projectBox.y + projectBox.h / 2,
+                });
+            pin = snapPinToStraight(projectBox, pin, otherEndpoint, STRAIGHT_SNAP_PX / zoom);
+          }
+        }
+      }
       if (action === 'pin-own') {
         // Same-node drop → onPinEndpoint owns optimistic override + PATCH
         // + undo for the single-field pin write. The un-moved endpoint
