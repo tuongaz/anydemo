@@ -132,8 +132,8 @@ describe('endpoint dots render for any selected connector (selectedMarker)', () 
     const rule = src.match(/const\s+showEndpointDots\s*=\s*([^;]+);/);
     expect(rule).not.toBeNull();
     if (!rule) throw new Error('expected showEndpointDots assignment');
-    // Still gated on reconnectable (sole-selected drag handles) AND now also
-    // on selectedMarker (any selected connector, single OR multi).
+    // Gate is an OR: reconnectable (sole-selected drag handles) OR
+    // selectedMarker (any selected connector, single OR multi).
     expect(rule[1]).toMatch(/reconnectable\s*===\s*true/);
     expect(rule[1]).toMatch(/selectedMarker\s*===\s*true/);
   });
