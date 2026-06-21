@@ -4410,3 +4410,213 @@ describe('US-004: alignment guides drag wiring', () => {
     expect(committedB.position.y).toBe(100);
   });
 });
+
+// ===========================================================================
+// Canvas grouping M5 — group MOVE (children fan-out). Drives the full drag
+// gesture through the dispatcher-shim the same way the alignment drag-commit
+// test above does (onNodeDragStart → onNodesChange moves the group → onNodeDrag
+// per-frame → onNodeDragStop commits). The pure fan-out math is covered in
+// group-ops.test.ts (computeGroupMoveUpdates); here we assert the canvas WIRES
+// it: members track the group LIVE during the drag, and drag-stop fans out ONE
+// merged onNodePositionsChange (group + every member, equal deltas) with dedupe.
+// ===========================================================================
+describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
+  // The alignment hook (default-on in edit mode) batches guide commits through
+  // requestAnimationFrame, which bun doesn't provide; onNodesChange runs the
+  // alignment intercept first, so we stub a no-op rAF (same as the US-004 block).
+  let savedRaf: typeof globalThis.requestAnimationFrame;
+  let savedCaf: typeof globalThis.cancelAnimationFrame;
+  beforeEach(() => {
+    savedRaf = globalThis.requestAnimationFrame;
+    savedCaf = globalThis.cancelAnimationFrame;
+    globalThis.requestAnimationFrame = ((_cb: FrameRequestCallback) =>
+      1) as typeof globalThis.requestAnimationFrame;
+    globalThis.cancelAnimationFrame = (() => {}) as typeof globalThis.cancelAnimationFrame;
+  });
+  afterEach(() => {
+    globalThis.requestAnimationFrame = savedRaf;
+    globalThis.cancelAnimationFrame = savedCaf;
+  });
+
+  const makeGroup = (id: string, childIds: string[], pos: { x: number; y: number }): FlowNode => ({
+    id,
+    type: 'group',
+    position: pos,
+    data: { name: 'G', width: 444, height: 132, childIds },
+  });
+  const makeMember = (id: string, pos: { x: number; y: number }): FlowNode => ({
+    id,
+    type: 'rectangle',
+    position: pos,
+    data: { name: id, width: 160, height: 80 },
+  });
+
+  // grouping-demo geometry: grp-1 box at (108,80); members node-a (120,120),
+  // node-b (380,120). Disambiguates equal x/y so a wrong delta is visible.
+  const grp = () => makeGroup('grp-1', ['node-a', 'node-b'], { x: 108, y: 80 });
+  const nodeA = () => makeMember('node-a', { x: 120, y: 120 });
+  const nodeB = () => makeMember('node-b', { x: 380, y: 120 });
+
+  // The rendered node list lives in the `rfNodes` useState slot. Per the
+  // canvas CLAUDE.md useState order it is slot 8 (connecting, dropPopover,
+  // drawStart, drawCurrent, contextMenuPos, contextOnNode, contextNodeType,
+  // contextEndpoint, rfNodes, …). The shim's setState is a no-op, so
+  // `<ReactFlow>.props.nodes` is frozen at the initial render — to observe LIVE
+  // movement we read the LATEST `setRfNodes(next)` value from the setterSink.
+  const RF_NODES_SLOT = 8;
+  type DragHandlers = {
+    onNodeDragStart: (e: unknown, node: Node, nodes: Node[]) => void;
+    onNodeDrag: (e: { metaKey?: boolean; ctrlKey?: boolean }) => void;
+    onNodesChange: (changes: unknown[]) => void;
+    onNodeDragStop: (e: unknown, node: Node, nodes: Node[]) => void;
+    /** Latest rendered node list = the most recent setRfNodes(next) value. */
+    latestRfNodes: () => Node[];
+  };
+  const wireGroupDrag = (props: Record<string, unknown>): DragHandlers => {
+    // Disable alignment guides so the committed/live geometry is the pure group
+    // delta (alignment snap is an orthogonal feature; its interaction with group
+    // move is covered by leaving it ON in the orchestrator browser test). With
+    // guides on, the group's position change would be snapped mid-drag and skew
+    // the asserted delta by the snap offset.
+    const setterSink: CapturedSetterCall[] = [];
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', enableAlignmentGuides: false, ...props },
+      { setterSink },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const initialNodes = rf.props.nodes as Node[];
+    return {
+      onNodeDragStart: rf.props.onNodeDragStart as DragHandlers['onNodeDragStart'],
+      onNodeDrag: rf.props.onNodeDrag as DragHandlers['onNodeDrag'],
+      onNodesChange: rf.props.onNodesChange as DragHandlers['onNodesChange'],
+      onNodeDragStop: rf.props.onNodeDragStop as DragHandlers['onNodeDragStop'],
+      latestRfNodes: () => {
+        const calls = setterSink.filter((c) => c.slot === RF_NODES_SLOT);
+        const last = calls.at(-1);
+        // Each setRfNodes call passes the next array directly (no updater fn).
+        return (last ? (last.next as Node[]) : initialNodes) ?? initialNodes;
+      },
+    };
+  };
+
+  it('LIVE: dragging the group repositions members in the rendered list by the group delta', () => {
+    const h = wireGroupDrag({
+      nodes: [grp(), nodeA(), nodeB()],
+      selectedNodeIds: ['grp-1'],
+    });
+    const groupRf = { id: 'grp-1', position: { x: 108, y: 80 } } as unknown as Node;
+    h.onNodeDragStart(null, groupRf, [groupRf]);
+    // xyflow moves the group node by (+50,-30) → (158,50). The per-frame
+    // position change flows through onNodesChange (updates rfNodesRef).
+    h.onNodesChange([
+      { type: 'position', id: 'grp-1', position: { x: 158, y: 50 }, dragging: true },
+    ]);
+    // onNodeDrag fires per frame → liveGroupDrag fans the delta to members.
+    h.onNodeDrag({ metaKey: false, ctrlKey: false });
+    const rendered = h.latestRfNodes();
+    const a = rendered.find((n) => n.id === 'node-a');
+    const b = rendered.find((n) => n.id === 'node-b');
+    // Members moved by the SAME (+50,-30) delta against their frozen start.
+    expect(a?.position).toEqual({ x: 170, y: 90 });
+    expect(b?.position).toEqual({ x: 430, y: 90 });
+  });
+
+  it('LIVE is additive from the start snapshot: a second frame at a new pos does NOT compound', () => {
+    const h = wireGroupDrag({
+      nodes: [grp(), nodeA(), nodeB()],
+      selectedNodeIds: ['grp-1'],
+    });
+    const groupRf = { id: 'grp-1', position: { x: 108, y: 80 } } as unknown as Node;
+    h.onNodeDragStart(null, groupRf, [groupRf]);
+    // Frame 1: group at (158,80) → delta (+50,0).
+    h.onNodesChange([
+      { type: 'position', id: 'grp-1', position: { x: 158, y: 80 }, dragging: true },
+    ]);
+    h.onNodeDrag({});
+    // Frame 2: group at (208,80) → delta (+100,0) from START, NOT +50 from the
+    // previous frame. If the impl read the previous frame, node-a would land at
+    // 120+50+100 = 270; additive-from-start gives 120+100 = 220.
+    h.onNodesChange([
+      { type: 'position', id: 'grp-1', position: { x: 208, y: 80 }, dragging: true },
+    ]);
+    h.onNodeDrag({});
+    const a = h.latestRfNodes().find((n) => n.id === 'node-a');
+    expect(a?.position).toEqual({ x: 220, y: 120 });
+  });
+
+  it('COMMIT: drag-stop fans ONE onNodePositionsChange with group + every member (equal deltas)', () => {
+    const batches: Array<Array<{ id: string; position: { x: number; y: number } }>> = [];
+    const h = wireGroupDrag({
+      nodes: [grp(), nodeA(), nodeB()],
+      selectedNodeIds: ['grp-1'],
+      onNodePositionsChange: (u: Array<{ id: string; position: { x: number; y: number } }>) =>
+        batches.push(u),
+    });
+    const groupRf = { id: 'grp-1', position: { x: 108, y: 80 } } as unknown as Node;
+    h.onNodeDragStart(null, groupRf, [groupRf]);
+    h.onNodesChange([
+      { type: 'position', id: 'grp-1', position: { x: 158, y: 50 }, dragging: false },
+    ]);
+    // drag-stop: xyflow passes the (raw) group node; the commit reads rfNodesRef.
+    const stopNode = { id: 'grp-1', position: { x: 158, y: 50 } } as unknown as Node;
+    h.onNodeDragStop(null, stopNode, [stopNode]);
+    expect(batches).toHaveLength(1);
+    const batch = batches[0];
+    if (!batch) throw new Error('no batch committed');
+    const byId = Object.fromEntries(batch.map((u) => [u.id, u.position]));
+    // Group + both members, all translated by (+50,-30) from their starts.
+    expect(byId['grp-1']).toEqual({ x: 158, y: 50 });
+    expect(byId['node-a']).toEqual({ x: 170, y: 90 });
+    expect(byId['node-b']).toEqual({ x: 430, y: 90 });
+    expect(batch).toHaveLength(3);
+  });
+
+  it('DEDUPE: a member also independently selected is committed exactly once', () => {
+    const batches: Array<Array<{ id: string; position: { x: number; y: number } }>> = [];
+    const h = wireGroupDrag({
+      nodes: [grp(), nodeA(), nodeB()],
+      // grp-1 AND node-a both selected → both are in xyflow's dragged set.
+      selectedNodeIds: ['grp-1', 'node-a'],
+      onNodePositionsChange: (u: Array<{ id: string; position: { x: number; y: number } }>) =>
+        batches.push(u),
+    });
+    const groupRf = { id: 'grp-1', position: { x: 108, y: 80 } } as unknown as Node;
+    const aRf = { id: 'node-a', position: { x: 120, y: 120 } } as unknown as Node;
+    // Both selected nodes drag together.
+    h.onNodeDragStart(null, groupRf, [groupRf, aRf]);
+    h.onNodesChange([
+      { type: 'position', id: 'grp-1', position: { x: 118, y: 90 }, dragging: false },
+      { type: 'position', id: 'node-a', position: { x: 130, y: 130 }, dragging: false },
+    ]);
+    h.onNodeDragStop(null, groupRf, [groupRf, aRf]);
+    expect(batches).toHaveLength(1);
+    const batch = batches[0];
+    if (!batch) throw new Error('no batch committed');
+    const aEntries = batch.filter((u) => u.id === 'node-a');
+    // node-a appears ONCE (via the direct drag path, not also via the fan-out).
+    expect(aEntries).toHaveLength(1);
+    // node-b (a member NOT independently selected) is fanned out by the group
+    // delta (+10,+10): 380,120 → 390,130.
+    const b = batch.find((u) => u.id === 'node-b');
+    expect(b?.position).toEqual({ x: 390, y: 130 });
+    // Exactly grp-1, node-a, node-b — no duplicate.
+    expect(batch.map((u) => u.id).sort()).toEqual(['grp-1', 'node-a', 'node-b']);
+  });
+
+  it('ordinary (non-group) drag is unaffected: no group snapshot, single-node path', () => {
+    const single: Array<{ id: string; position: { x: number; y: number } }> = [];
+    const h = wireGroupDrag({
+      nodes: [makeMember('m1', { x: 0, y: 0 })],
+      selectedNodeIds: [],
+      onNodePositionChange: (id: string, position: { x: number; y: number }) =>
+        single.push({ id, position }),
+    });
+    const rfN = { id: 'm1', position: { x: 0, y: 0 } } as unknown as Node;
+    h.onNodeDragStart(null, rfN, [rfN]);
+    h.onNodesChange([{ type: 'position', id: 'm1', position: { x: 5, y: 5 }, dragging: false }]);
+    h.onNodeDragStop(null, rfN, [rfN]);
+    // Single non-group node → the per-id onNodePositionChange path (unchanged).
+    expect(single).toEqual([{ id: 'm1', position: { x: 5, y: 5 } }]);
+  });
+});

@@ -671,6 +671,7 @@ export function DemoView({
         width?: number;
         height?: number;
       }[],
+      opts?: { isGroup?: boolean },
     ) => {
       if (!flowId || !adapter || updates.length === 0) return;
       type DimsPatch = {
@@ -713,20 +714,26 @@ export function DemoView({
         .slice()
         .sort()
         .join(',');
+      // M5: a single selected group scales its members + box through this SAME
+      // helper (design §6 contract reused). Label the undo entry `group-resize`
+      // (vs `multi-resize`) and key the coalesce on the gesture kind so a group
+      // resize and a loose-selection resize over the same id set never merge.
+      const label = opts?.isGroup ? 'group-resize' : 'multi-resize';
+      const coalesceKey = opts?.isGroup ? `group:resize:${sortedIds}` : `multi:resize:${sortedIds}`;
       history
         .batch(
-          'multi-resize',
+          label,
           async () => {
             for (const t of targets) {
               await adapter.updateNode(t.id, t.next);
             }
           },
-          { coalesceKey: `multi:resize:${sortedIds}` },
+          { coalesceKey },
         )
         .catch((err) => {
           for (const t of targets) dropNodeOverride(t.id);
           setEditError(err instanceof Error ? err.message : String(err));
-          console.error('updateNode multi-resize batch failed', err);
+          console.error(`updateNode ${label} batch failed`, err);
         });
     },
     [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],

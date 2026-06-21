@@ -408,6 +408,65 @@ describe('TRIPWIRE: frozen baseline does NOT compound (design §6.4, L0.1)', () 
     expect(last?.[0]?.width).toBe(15);
     expect(last?.[1]?.width).toBe(15);
   });
+
+  // M5: group resize is served by the SAME overlay path — for a single selected
+  // group, `selectionOverlayNodes` resolves to the members + the group box and
+  // the corner drag calls the same `computeFrozenResizeUpdates(startNodes, …)`.
+  // So the group-members path inherits the no-compounding guarantee, but pin it
+  // explicitly with a realistic group geometry (box g1 + members a, b) so a
+  // future regression on the group branch is caught here too (design §6.4, the
+  // M5 "extend the tripwire to the group path" deliverable).
+  it('GROUP path: members + box scale once from the frozen set (no runaway on a fast drag)', () => {
+    // grouping-demo geometry: group box encloses node-a (120,120,160×80) and
+    // node-b (380,120,160×80). The box (computeGroupBox) sits at (108,80) and is
+    // 444 wide × 132 tall. The frozen set the overlay scales = members + box.
+    const startNodes: FrozenNode[] = [
+      frozen('node-a', 120, 120, 160, 80),
+      frozen('node-b', 380, 120, 160, 80),
+      frozen('grp-1', 108, 80, 444, 132), // the group box itself
+    ];
+    const startRect = { x: 108, y: 80, width: 444, height: 132 };
+    // Fast SE outward drag sampled at 8 ticks, each computed from the FROZEN
+    // rect; final tick doubles each dimension (888 × 264 → sx = sy = 2).
+    const tickRects = Array.from({ length: 8 }, (_, i) => ({
+      x: 108,
+      y: 80,
+      width: 444 + (i + 1) * (444 / 8),
+      height: 132 + (i + 1) * (132 / 8),
+    }));
+    const finalRect = tickRects[tickRects.length - 1];
+    if (!finalRect) throw new Error('no final rect');
+
+    // SAFE (the overlay's commit): scale the frozen members+box to the final
+    // rect → clean 2x. Members keep their relative spacing; the box doubles.
+    const safe = computeFrozenResizeUpdates(startNodes, startRect, finalRect);
+    const safeA = safe.find((u) => u.id === 'node-a');
+    const safeBox = safe.find((u) => u.id === 'grp-1');
+    expect(safeA?.width).toBeCloseTo(320, 5); // 160 * 2
+    expect(safeBox?.width).toBeCloseTo(888, 5); // 444 * 2
+    // node-b keeps its spacing from node-a: start gap 260 → 520 at 2x.
+    const safeB = safe.find((u) => u.id === 'node-b');
+    if (!safeA || !safeB) throw new Error('missing scaled members');
+    expect(safeB.position.x - safeA.position.x).toBeCloseTo(520, 5);
+
+    // BUGGY (the v1 echo on the group branch): feed the previous tick's output
+    // back each tick → compounding.
+    let liveNodes: FrozenNode[] = startNodes;
+    for (const rect of tickRects) {
+      const out = computeFrozenResizeUpdates(liveNodes, startRect, rect);
+      liveNodes = out.map((u) => ({
+        id: u.id,
+        position: u.position,
+        width: u.width,
+        height: u.height,
+      }));
+    }
+    const buggyA = liveNodes.find((n) => n.id === 'node-a');
+    if (!buggyA?.width || !safeA.width) throw new Error('lost width');
+    // The group branch blows up by well over an order of magnitude when fed the
+    // live echo — exactly the runaway the frozen baseline prevents.
+    expect(buggyA.width).toBeGreaterThan(safeA.width * 10);
+  });
 });
 
 // US-016: rAF-throttle helper. The overlay calls this on every pointermove

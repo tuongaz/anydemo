@@ -231,3 +231,82 @@ export function planGroupShortcutAction(
   if (groupable.length >= 2) return 'group';
   return { none: 'not-groupable' };
 }
+
+// ---------------------------------------------------------------------------
+// M5 — group MOVE fan-out (design §9.1, §12.2)
+// ---------------------------------------------------------------------------
+
+/** A single absolute position update emitted by the group-move fan-out. */
+export interface GroupMoveUpdate {
+  id: string;
+  position: { x: number; y: number };
+}
+
+/**
+ * One dragged group's identity + the translation it underwent. `delta` is the
+ * group's CURRENT position minus its drag-START position — i.e. the gesture's
+ * additive translation. The caller derives it from a frozen drag-start snapshot
+ * (NOT the previous frame), so applying it to each member's frozen start
+ * position is additive and CANNOT compound (design §12.2 — unlike the
+ * multiplicative resize path, there is no `sx·sx·…` trap here).
+ */
+export interface DraggedGroup {
+  groupId: string;
+  delta: { x: number; y: number };
+}
+
+/**
+ * Pure fan-out for a group drag (design §9.1). For every dragged group, emit a
+ * position update for each of its members (frozen start position + the group's
+ * delta) PLUS the group's own new position. Used by BOTH the live per-frame
+ * preview (delta = live − start) and the drag-stop commit (delta = committed −
+ * start) so the two share one math implementation.
+ *
+ * Contract / guards:
+ *   - **Additive, frozen-baseline.** Each member moves by `startPos + delta`
+ *     where `startPos` comes from `startPositions` (the drag-START snapshot).
+ *     The caller MUST pass start positions, never live/previous-frame ones, so
+ *     repeated frames with the same delta land on the same spot (no drift).
+ *   - **Dedupe (design §9.1, M5 step 2).** A member listed in `excludeIds` —
+ *     because it is ALSO independently selected and therefore already moved by
+ *     xyflow's own drag — is skipped so it isn't translated twice. The group's
+ *     own id is likewise emitted at most once even if passed twice.
+ *   - **Shared membership.** If two dragged groups list the same child (not
+ *     possible under the no-double-membership invariant, but defended anyway),
+ *     the first group's update wins and the duplicate is dropped.
+ *   - A member without a `startPositions` entry is skipped (we can't translate
+ *     a position we never snapshotted).
+ *
+ * @param draggedGroups   the groups being dragged, each with its delta
+ * @param childIdsByGroup map groupId → its member ids (from `data.childIds`)
+ * @param startPositions  drag-START absolute position per node id (group + members)
+ * @param excludeIds      ids already moved directly by xyflow (independently
+ *                        selected) — their members/selves are not re-emitted
+ */
+export function computeGroupMoveUpdates(
+  draggedGroups: readonly DraggedGroup[],
+  childIdsByGroup: ReadonlyMap<string, readonly string[]>,
+  startPositions: ReadonlyMap<string, { x: number; y: number }>,
+  excludeIds: ReadonlySet<string> = new Set(),
+): GroupMoveUpdate[] {
+  const updates: GroupMoveUpdate[] = [];
+  const emitted = new Set<string>();
+  const emit = (id: string, delta: { x: number; y: number }) => {
+    if (emitted.has(id)) return; // already moved by an earlier group / direct drag
+    if (excludeIds.has(id)) return; // moved directly by xyflow — don't double-apply
+    const start = startPositions.get(id);
+    if (!start) return; // no frozen baseline → can't translate
+    emitted.add(id);
+    updates.push({ id, position: { x: start.x + delta.x, y: start.y + delta.y } });
+  };
+  for (const { groupId, delta } of draggedGroups) {
+    // The group node itself: xyflow already moved it visually, but the COMMIT
+    // path still needs its final position persisted. The caller decides whether
+    // to add the group to `excludeIds` (live preview: group already moved by
+    // xyflow, exclude it) or not (commit: persist its position too).
+    emit(groupId, delta);
+    const childIds = childIdsByGroup.get(groupId) ?? [];
+    for (const childId of childIds) emit(childId, delta);
+  }
+  return updates;
+}

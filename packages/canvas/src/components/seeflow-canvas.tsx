@@ -65,6 +65,9 @@ import {
   snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
 import {
+  type DraggedGroup,
+  type GroupMoveUpdate,
+  computeGroupMoveUpdates,
   planGroupShortcutAction,
   selectGroupSelection,
   selectGroupableSet,
@@ -557,8 +560,12 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * legacy callers that haven't wired the batch path get a no-op gesture
    * (no per-node fallback because there's no defensible single-node
    * substitute for a multi-node scale).
+   *
+   * M5: the optional second arg flags a GROUP resize (selection is one group →
+   * `updates` are its members + the group box). The host reuses the SAME commit
+   * helper but labels the undo entry `group-resize` vs `multi-resize`.
    */
-  onMultiResize?: (updates: MultiResizeUpdate[]) => void;
+  onMultiResize?: (updates: MultiResizeUpdate[], opts?: { isGroup?: boolean }) => void;
   /**
    * Canvas grouping M4: create a group from a loose multi-selection. Fired by
    * the overlay's ＋ icon, the context-menu "Group" item, and ⌘G. The host
@@ -3080,6 +3087,33 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // index-coupled ref assertions don't drift; refs never affect useState slots.
   const alignmentApiRef = useRef<UseAlignmentGuidesApi | null>(null);
   const lastDragModifierRef = useRef<{ metaKey?: boolean; ctrlKey?: boolean }>({});
+  // Canvas grouping M5 (design §9.1, §12.2): frozen drag-START snapshot for a
+  // group drag. Children have absolute positions, so xyflow won't move them when
+  // the group node is dragged — the canvas fans the group's delta out to its
+  // members both LIVE (per-frame optimistic overrides) and on COMMIT (one
+  // batched move). Captured once in the drag-start handler when the dragged set
+  // contains a group:
+  //   - `groups`: each dragged group's id + its member ids (from data.childIds).
+  //   - `startPositions`: absolute start position of every group AND member, the
+  //     non-negotiable frozen baseline. The per-frame delta is read against THIS
+  //     (group's live position − its start), never the previous frame, so the
+  //     additive fan-out can't drift or compound (unlike the resize bug).
+  //   - `directIds`: ids xyflow itself is dragging (the group + any independently
+  //     selected nodes) — excluded from the LIVE fan-out so a selected member
+  //     isn't translated twice (dedupe, §9.1 step 2).
+  // Null whenever the active drag has no group involved (the common case → zero
+  // overhead on ordinary node drags). Cleared on drag-stop/cancel.
+  const groupDragRef = useRef<{
+    groups: DraggedGroup[];
+    childIdsByGroup: Map<string, readonly string[]>;
+    startPositions: Map<string, { x: number; y: number }>;
+    directIds: Set<string>;
+  } | null>(null);
+  // Latest `nodes` prop mirrored into a ref so the drag handlers (stable
+  // useCallbacks) read the current node list (for `data.childIds`) without
+  // re-allocating every render (same pattern as the other drag refs).
+  const nodesRef = useRef<FlowNode[]>(nodes);
+  nodesRef.current = nodes;
   // View-mode drag override: in view mode, commitDraggedNodes skips the
   // parent dispatch (no adapter PATCH), so a moved node's new position lives
   // only in `rfNodes`. Any sourceNodes rebuild (selection change, SSE tick,
@@ -4972,6 +5006,103 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // undo entry; one Cmd+Z reverts every node back to its pre-drag position.
   // Single-node drags still flow through `onNodePositionChange` to preserve
   // the per-id coalesce key (collapses repeated drags of the same node).
+  // Canvas grouping M5 (design §9.1, §12.2): at drag START, if any dragged node
+  // is a group, freeze the baseline the live + commit fan-out both read. Builds
+  // `groupDragRef` = { groups (id + childIds), startPositions (group + every
+  // member, the FROZEN baseline), directIds (ids xyflow drags itself) }. Reads
+  // start positions from `rfNodesRef` (the live rendered list, override-merged)
+  // so the snapshot reflects exactly what the user sees, and member positions
+  // from the same source so the math stays in one coordinate space. No group in
+  // the drag → ref stays null (zero overhead on ordinary drags).
+  const beginGroupDrag = useCallback((draggedNodes: Node[]) => {
+    const allNodes = nodesRef.current;
+    const draggedGroupNodes = draggedNodes.filter(
+      (n) => allNodes.find((m) => m.id === n.id)?.type === 'group',
+    );
+    if (draggedGroupNodes.length === 0) {
+      groupDragRef.current = null;
+      return;
+    }
+    const posOf = (id: string): { x: number; y: number } | null => {
+      const live = rfNodesRef.current.find((r) => r.id === id);
+      if (live) return { x: live.position.x, y: live.position.y };
+      const base = allNodes.find((m) => m.id === id);
+      return base ? { x: base.position.x, y: base.position.y } : null;
+    };
+    const groups: DraggedGroup[] = [];
+    const childIdsByGroup = new Map<string, readonly string[]>();
+    const startPositions = new Map<string, { x: number; y: number }>();
+    // directIds = every node xyflow is dragging itself (the group(s) + any
+    // independently-selected nodes). Members in this set are moved by xyflow
+    // already, so the live fan-out must skip them (dedupe §9.1 step 2).
+    const directIds = new Set(draggedNodes.map((n) => n.id));
+    for (const g of draggedGroupNodes) {
+      const groupNode = allNodes.find((m) => m.id === g.id);
+      if (!groupNode || groupNode.type !== 'group') continue;
+      const childIds = [...groupNode.data.childIds];
+      childIdsByGroup.set(g.id, childIds);
+      groups.push({ groupId: g.id, delta: { x: 0, y: 0 } });
+      const gStart = posOf(g.id);
+      if (gStart) startPositions.set(g.id, gStart);
+      for (const childId of childIds) {
+        const cStart = posOf(childId);
+        if (cStart) startPositions.set(childId, cStart);
+      }
+    }
+    groupDragRef.current =
+      groups.length > 0 ? { groups, childIdsByGroup, startPositions, directIds } : null;
+  }, []);
+
+  // M5 live per-frame fan-out (design §12.2). Children have ABSOLUTE positions,
+  // so xyflow does NOT move them when the group node is dragged. The
+  // upstream-sync effect (`setRfNodes(sourceNodes)`) is ALSO frozen during a
+  // drag (it early-returns while `draggingRef` is true) so a host optimistic
+  // override would not render mid-gesture either. The reliable channel is the
+  // SAME one xyflow uses for the dragged node: write the members' new positions
+  // straight into the rendered `rfNodes` list. So children track the group live.
+  //
+  // The delta is ADDITIVE against the FROZEN drag-start position (the group's
+  // current rendered position − its start), NEVER the previous frame, so every
+  // frame recomputes member positions from the frozen baseline + current delta
+  // — repeated frames can't drift or compound (unlike the multiplicative resize
+  // bug). The group itself is in `directIds` (xyflow already moves it), so the
+  // fan-out excludes it and repositions only the members. The real persisted
+  // move (PATCH + override + one undo entry) fans out on drag-stop via
+  // `commitDraggedNodes` → `onNodePositionsChange`.
+  const liveGroupDrag = useCallback(() => {
+    const snap = groupDragRef.current;
+    if (!snap) return;
+    const groupsWithDelta: DraggedGroup[] = [];
+    for (const g of snap.groups) {
+      const start = snap.startPositions.get(g.groupId);
+      if (!start) continue;
+      const live = rfNodesRef.current.find((r) => r.id === g.groupId);
+      const cur = live ? live.position : start;
+      groupsWithDelta.push({
+        groupId: g.groupId,
+        delta: { x: cur.x - start.x, y: cur.y - start.y },
+      });
+    }
+    const updates: GroupMoveUpdate[] = computeGroupMoveUpdates(
+      groupsWithDelta,
+      snap.childIdsByGroup,
+      snap.startPositions,
+      snap.directIds,
+    );
+    if (updates.length === 0) return;
+    const byId = new Map(updates.map((u) => [u.id, u.position]));
+    // Apply the member positions to the rendered list. New array + new node
+    // objects for touched members so xyflow's renderer re-reads them; untouched
+    // nodes keep their identity (no needless re-render).
+    const nextRf = rfNodesRef.current.map((n) => {
+      const pos = byId.get(n.id);
+      if (!pos) return n;
+      return { ...n, position: { x: pos.x, y: pos.y } };
+    });
+    rfNodesRef.current = nextRf;
+    setRfNodes(nextRf);
+  }, []);
+
   const commitDraggedNodes = useCallback(
     (draggedNodes: Node[]) => {
       if (draggedNodes.length === 0) return;
@@ -5006,6 +5137,51 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         }
         return;
       }
+      // Canvas grouping M5 (design §9.1): if a group was dragged, fan its
+      // committed translation out to every member so the whole container moves
+      // as one. The COMMIT delta is read from `rfNodesRef` (the rendered list),
+      // NOT the raw drag event — same ~1px snap-drift guard as `committedPositionOf`
+      // (project_xyflow_dragstop_reports_raw_position). The members' updates are
+      // MERGED with the directly-dragged nodes into ONE `onNodePositionsChange`
+      // batch → one `history.batch('move-nodes')` → one undo entry reverts the
+      // group + all members together. Dedupe: `computeGroupMoveUpdates` skips ids
+      // in `directIds` (a member that is ALSO independently selected is moved by
+      // the direct path below, not twice).
+      const snap = groupDragRef.current;
+      if (snap) {
+        const directUpdates = draggedNodes.map((n) => ({
+          id: n.id,
+          position: committedPositionOf(n),
+        }));
+        const directIds = new Set(directUpdates.map((u) => u.id));
+        const groupsWithDelta: DraggedGroup[] = [];
+        for (const g of snap.groups) {
+          const start = snap.startPositions.get(g.groupId);
+          if (!start) continue;
+          const live = rfNodesRef.current.find((r) => r.id === g.groupId);
+          const cur = live ? live.position : start;
+          groupsWithDelta.push({
+            groupId: g.groupId,
+            delta: { x: cur.x - start.x, y: cur.y - start.y },
+          });
+        }
+        // Members only (groups themselves are already in `directUpdates`): pass
+        // the group ids + every directly-moved id as the exclude set so we don't
+        // re-emit a position the direct path already carries.
+        const memberUpdates = computeGroupMoveUpdates(
+          groupsWithDelta,
+          snap.childIdsByGroup,
+          snap.startPositions,
+          directIds,
+        );
+        const merged = [...directUpdates, ...memberUpdates];
+        if (onNodePositionsChange) {
+          onNodePositionsChange(merged);
+        } else if (onNodePositionChange) {
+          for (const u of merged) onNodePositionChange(u.id, u.position);
+        }
+        return;
+      }
       if (draggedNodes.length === 1) {
         const moved = draggedNodes[0];
         if (moved && onNodePositionChange) {
@@ -5033,6 +5209,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     (_e: unknown, _node: Node, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // M5: the group fan-out has been committed — drop the frozen snapshot so a
+      // subsequent ordinary drag doesn't see a stale group baseline.
+      groupDragRef.current = null;
       // US-009: flush any deferred external-change fit now that the drag is
       // complete (mirrors the resize-end flush wired in setResizing).
       flushPendingFit();
@@ -5047,6 +5226,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     (_e: unknown, draggedNodes: Node[]) => {
       draggingRef.current = false;
       commitDraggedNodes(draggedNodes);
+      // M5: drop the frozen group snapshot after the commit (see onNodeDragStopCb).
+      groupDragRef.current = null;
       // US-009: flush any deferred external-change fit (same channel as
       // single-node drag stop above).
       flushPendingFit();
@@ -5083,17 +5264,24 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // no-arg test callers (and any future bare invocation) from throwing.
       lastDragModifierRef.current = { metaKey: e?.metaKey, ctrlKey: e?.ctrlKey };
       alignmentApiRef.current?.beginGesture((draggedNodes ?? []).map((n) => n.id));
+      // M5: freeze the group-drag baseline if a group is in the dragged set.
+      beginGroupDrag(draggedNodes ?? []);
       onNodeDragStart?.();
     },
-    [onNodeDragStart],
+    [onNodeDragStart, beginGroupDrag],
   );
   // US-004: per-frame modifier refresh. xyflow fires onNodeDrag alongside the
   // position changes, so `lastDragModifierRef` is current when onNodesChange
   // calls interceptChanges. A mid-drag Cmd/Ctrl press therefore suppresses the
-  // snap on the very next frame.
-  const handleNodeDrag = useCallback((e: ReactMouseEvent) => {
-    lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
-  }, []);
+  // snap on the very next frame. M5: also fan a dragged group's per-frame delta
+  // out to its members so children track the group LIVE (not just on release).
+  const handleNodeDrag = useCallback(
+    (e: ReactMouseEvent) => {
+      lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+      liveGroupDrag();
+    },
+    [liveGroupDrag],
+  );
   const handleNodeDragStop = useCallback(
     (e: unknown, node: Node, draggedNodes: Node[]) => {
       onNodeDragStopCb(e, node, draggedNodes);
@@ -5108,13 +5296,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       onSelectionDragStartCb();
       lastDragModifierRef.current = { metaKey: e?.metaKey, ctrlKey: e?.ctrlKey };
       alignmentApiRef.current?.beginGesture((draggedNodes ?? []).map((n) => n.id));
+      // M5: a multi-selection drag can include a group — freeze its baseline too.
+      beginGroupDrag(draggedNodes ?? []);
       onNodeDragStart?.();
     },
-    [onSelectionDragStartCb, onNodeDragStart],
+    [onSelectionDragStartCb, onNodeDragStart, beginGroupDrag],
   );
-  const handleSelectionDrag = useCallback((e: ReactMouseEvent) => {
-    lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
-  }, []);
+  const handleSelectionDrag = useCallback(
+    (e: ReactMouseEvent) => {
+      lastDragModifierRef.current = { metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+      liveGroupDrag();
+    },
+    [liveGroupDrag],
+  );
   const handleSelectionDragStop = useCallback(
     (e: unknown, draggedNodes: Node[]) => {
       onSelectionDragStopCb(e, draggedNodes);

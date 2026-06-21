@@ -1,6 +1,6 @@
 # Milestone 5 — Group move + group resize (children fan-out)
 
-**Status:** Not started · **Depends on:** M3, M4 · **Risk:** Medium–High
+**Status:** Done · **Depends on:** M3, M4 · **Risk:** Medium–High
 (reuses M3's frozen-baseline contract — same runaway risk if violated)
 
 ## Previous milestone — summary
@@ -143,8 +143,75 @@ still possible only when not gated; styling (M7); connectors (M8). Nested groups
 - Move + resize each one atomic undo entry; reload-persistence correct.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- How did you capture the move start-snapshot (where + when)? Note the exact ref.
-- Any interaction between group move and the alignment-guide system?
-- Confirm the dedupe (selection ∩ membership) path; note any edge case.
-- **➡ Copy into `06-...md`.**
+## Lessons-learned handoff (FILLED IN — M5 done)
+
+### What was already working vs newly built
+- **Group RESIZE came FREE from M2+M3.** Selecting a single group already sets
+  `isGroupSelection=true` (`seeflow-canvas.tsx selectedGroupId`) and resolves
+  `selectionOverlayNodes` to the group's **members + the group box** (§12.5). The
+  overlay's M3 corner-drag → `onMultiResize` then scales that frozen set via
+  `computeFrozenResizeUpdates` and the host's `onMultiResize` (US-007) commits it
+  as ONE coalesced batch. **No new resize machinery was written.** M5 only (a)
+  threaded an optional `{ isGroup }` flag through `onMultiResize` so the host
+  labels the undo entry `group-resize` vs `multi-resize` (distinct coalesceKey
+  `group:resize:<ids>`), and (b) extended the no-compounding tripwire to a
+  realistic group geometry (members + box) in `selection-resize-overlay.test.tsx`.
+- **Group MOVE was the new work** (children have absolute positions; xyflow only
+  moves the dragged group node).
+
+### How the move start-snapshot is captured (exact ref + when)
+- New ref **`groupDragRef`** in `seeflow-canvas.tsx` (declared right after
+  `lastDragModifierRef`; refs after `penModeRef` don't shift the hook-shim REF
+  index map, so this is safe). Shape: `{ groups: DraggedGroup[], childIdsByGroup:
+  Map<groupId, childIds>, startPositions: Map<id,{x,y}>, directIds: Set<id> }`.
+- Captured in **`beginGroupDrag(draggedNodes)`**, called from BOTH
+  `handleNodeDragStart` and `handleSelectionDragStart`. It runs only if a dragged
+  node is `type:'group'` (else the ref is nulled → zero overhead on ordinary
+  drags). Start positions are read from **`rfNodesRef.current`** (the live
+  rendered, override-merged list), falling back to the `nodes` prop — the FROZEN
+  baseline for both live + commit.
+- The per-frame delta = (group's CURRENT `rfNodesRef` position − its frozen start),
+  **always against the start snapshot, never the previous frame** → additive,
+  cannot drift/compound. Proven by `group-ops.test.ts` "ADDITIVE from the start
+  snapshot" + the canvas "LIVE is additive … does NOT compound" test (frame 2 at a
+  new pos lands at start+delta₂, not prev+delta₂).
+
+### The live-move mechanism (important nuance)
+- §12.2 says "apply the per-frame delta as optimistic overrides." **A host
+  override does NOT render mid-drag** because the upstream sync effect
+  `setRfNodes(sourceNodes)` early-returns while `draggingRef` is true (same freeze
+  that keeps the dragged node from snapping back). So the reliable channel is the
+  SAME one xyflow uses for the dragged node: **`liveGroupDrag` writes the members'
+  new positions straight into the rendered `rfNodes`** (`setRfNodes` + sync
+  `rfNodesRef`). Wired into `handleNodeDrag` / `handleSelectionDrag` (per-frame).
+  The original `onGroupChildrenLiveMove` host-callback idea was dropped as a dead
+  no-op seam (the override wouldn't paint).
+- **Commit** (`commitDraggedNodes`): when `groupDragRef` is set, compute each
+  group's committed delta from `rfNodesRef` (NOT the raw drag event —
+  `project_xyflow_dragstop_reports_raw_position`), fan out members via the shared
+  pure `computeGroupMoveUpdates`, MERGE with the directly-dragged nodes, and emit
+  ONE `onNodePositionsChange` → host `history.batch('move-nodes')` → one undo.
+  `groupDragRef` is cleared in the drag-stop callbacks after the commit.
+
+### Interaction with the alignment-guide system
+- Alignment snap and group move are **orthogonal and compose**: the alignment
+  hook snaps the *group node's* per-frame position change inside `onNodesChange`
+  BEFORE `liveGroupDrag`/`commitDraggedNodes` read it, so members follow the
+  *snapped* group (correct — the whole container snaps as a unit). The unit tests
+  pass `enableAlignmentGuides:false` only to assert the *pure* group delta
+  deterministically; the snap-compose behavior is left to the browser/e2e test.
+- Known minor: members themselves don't generate alignment guides during a group
+  drag (only the group node does). Acceptable for v1; revisit if "members snap to
+  external nodes while group-dragging" is ever requested.
+
+### Dedupe (selection ∩ membership) — confirmed
+- `computeGroupMoveUpdates(..., excludeIds)` skips any member id in the exclude
+  set. LIVE excludes `directIds` (the group + every independently-selected node
+  xyflow already drags). COMMIT excludes the full set of directly-dragged ids, so
+  a member that is ALSO independently selected is committed exactly once (via the
+  direct path). Covered by the canvas "DEDUPE: a member also independently
+  selected is committed exactly once" test. Edge case defended: two dragged groups
+  sharing a child emit it once (first group wins) — impossible under the
+  no-double-membership invariant but guarded anyway.
+
+- **➡ Copied into `06-enter-exit-isolation.md` "Lessons carried forward".**

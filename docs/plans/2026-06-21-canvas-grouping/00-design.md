@@ -636,6 +636,41 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   directly so ambiguous selections no-op with a reason. **M6 (enter/exit) note:**
   reuse `selectedGroupId` (already computed in the canvas) for the dbl-click
   enter target.
+- **L5.1 (M5) Group RESIZE came free from M2+M3 — no new resize machinery.**
+  A single selected group already resolves `selectionOverlayNodes` to members +
+  the group box (§12.5) and the M3 corner-drag → `onMultiResize` scales that
+  frozen set via `computeFrozenResizeUpdates`. M5 added ONLY an optional
+  `{ isGroup }` second arg to `onMultiResize` (overlay → host) so the host labels
+  the undo entry `group-resize` (coalesceKey `group:resize:<ids>`) vs
+  `multi-resize`; the commit path is otherwise identical (one coalesced batch =
+  one undo). The no-compounding tripwire (§6.4) was extended to a realistic group
+  geometry (members + box) — same frozen-baseline guarantee on the group branch.
+- **L5.2 (M5, CRITICAL for any "live during a gesture" feature) A host optimistic
+  override does NOT render mid-gesture.** `setRfNodes(sourceNodes)` early-returns
+  while `draggingRef`/`resizingRef` is true (the same freeze that stops the
+  dragged node snapping back). So group MOVE moves children live by writing the
+  rendered `rfNodes` DIRECTLY (`liveGroupDrag` → `setRfNodes` + sync `rfNodesRef`)
+  — the channel xyflow itself uses — NOT via a host override callback. The
+  originally-planned `onGroupChildrenLiveMove` host seam was dropped as a dead
+  no-op. **Contract for M6+:** anything that must visibly update nodes other than
+  the actively-dragged one, mid-gesture, must go through `rfNodes`, not overrides.
+- **L5.3 (M5) Group-move uses a FROZEN drag-start snapshot read additively.**
+  `groupDragRef` (in `seeflow-canvas.tsx`, declared after `lastDragModifierRef`;
+  refs after `penModeRef` don't shift the hook-shim REF index map) captures, at
+  drag-START, every group + member start position from `rfNodesRef`. Per-frame and
+  commit deltas are `(group's current rfNodesRef pos − its frozen start)` — always
+  vs the START snapshot, never the previous frame → additive, cannot drift or
+  compound (contrast the multiplicative resize trap). Pure fan-out:
+  `computeGroupMoveUpdates(draggedGroups, childIdsByGroup, startPositions,
+  excludeIds)`. Commit MERGES member updates with the directly-dragged nodes into
+  ONE `onNodePositionsChange` → `history.batch('move-nodes')` → one undo; the
+  group's committed position is read from `rfNodesRef`, not the raw drag event
+  (the ~1px snap-drift memory). Dedupe via `excludeIds` (a member also
+  independently selected is moved once, by the direct path).
+- **L5.4 (M5) The group node renderer mounts NO `<ResizeControls>` (verified).**
+  `group-node.tsx` has no `ResizeControls` (M1 step 17 held), so a group has
+  EXACTLY ONE resize path (the overlay) — no dual/conflicting handles, and the
+  L0.2 stable-callback `NodeResizeControl` trap never applies to groups.
 
 ---
 

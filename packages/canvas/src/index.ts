@@ -232,13 +232,20 @@ export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts
 // history.batch to create/ungroup; the canvas uses them for the ⌘G shim.
 export {
   computeGroupBox,
+  computeGroupMoveUpdates,
   GROUP_BOX_PADDING,
   GROUP_TITLE_BAND_PX,
   planGroupShortcutAction,
   selectGroupSelection,
   selectGroupableSet,
 } from './lib/group-ops.ts';
-export type { GroupBoxMember, GroupOpNode, GroupShortcutAction } from './lib/group-ops.ts';
+export type {
+  DraggedGroup,
+  GroupBoxMember,
+  GroupMoveUpdate,
+  GroupOpNode,
+  GroupShortcutAction,
+} from './lib/group-ops.ts';
 
 // ----------------------------------------------------------------------------
 // 5. Adapter

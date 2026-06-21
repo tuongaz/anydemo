@@ -5,6 +5,7 @@ import {
   type GroupBoxMember,
   type GroupOpNode,
   computeGroupBox,
+  computeGroupMoveUpdates,
   planGroupShortcutAction,
   selectGroupSelection,
   selectGroupableSet,
@@ -166,5 +167,117 @@ describe('planGroupShortcutAction — full case matrix (design §5.4 / §8)', ()
   it('dedupes duplicate selection ids before deciding', () => {
     // ['b','b'] is really a single selection → none(single), not group.
     expect(planGroupShortcutAction(nodes, ['b', 'b'])).toEqual({ none: 'single' });
+  });
+});
+
+describe('computeGroupMoveUpdates (M5 group move fan-out, §9.1)', () => {
+  // A standard one-group flow: group g1 at (100,100) with members a (120,120)
+  // and b (380,120).
+  const childIds = new Map<string, readonly string[]>([['g1', ['a', 'b']]]);
+  const starts = new Map<string, { x: number; y: number }>([
+    ['g1', { x: 100, y: 100 }],
+    ['a', { x: 120, y: 120 }],
+    ['b', { x: 380, y: 120 }],
+  ]);
+
+  it('fans the group delta out to every member + the group itself', () => {
+    const updates = computeGroupMoveUpdates(
+      [{ groupId: 'g1', delta: { x: 50, y: -30 } }],
+      childIds,
+      starts,
+    );
+    // Sorted for stable comparison.
+    const byId = Object.fromEntries(updates.map((u) => [u.id, u.position]));
+    expect(byId.g1).toEqual({ x: 150, y: 70 });
+    expect(byId.a).toEqual({ x: 170, y: 90 });
+    expect(byId.b).toEqual({ x: 430, y: 90 });
+    // Every delta is identical → relative layout is preserved.
+    expect(updates).toHaveLength(3);
+  });
+
+  it('is ADDITIVE from the start snapshot: re-running with the same delta is idempotent (no drift)', () => {
+    // §12.2: the delta is read against the drag-START snapshot, never the
+    // previous frame. Two frames carrying the same delta must land on the same
+    // absolute spot — proof the live path cannot drift/compound.
+    const args = [[{ groupId: 'g1', delta: { x: 40, y: 40 } }], childIds, starts] as const;
+    const frame1 = computeGroupMoveUpdates(...args);
+    const frame2 = computeGroupMoveUpdates(...args);
+    expect(frame2).toEqual(frame1);
+    const a2 = frame2.find((u) => u.id === 'a');
+    expect(a2?.position).toEqual({ x: 160, y: 160 });
+  });
+
+  it('excludeIds: a member also independently selected is NOT moved twice (dedupe §9.1 step 2)', () => {
+    // `a` is independently selected, so xyflow already moved it as part of the
+    // drag set — exclude it from the fan-out.
+    const updates = computeGroupMoveUpdates(
+      [{ groupId: 'g1', delta: { x: 10, y: 10 } }],
+      childIds,
+      starts,
+      new Set(['a']),
+    );
+    const ids = updates.map((u) => u.id).sort();
+    expect(ids).toEqual(['b', 'g1']);
+  });
+
+  it('excludeIds covering the group itself omits the group (live-preview shape)', () => {
+    // Live preview excludes the group (xyflow already moves it visually) and
+    // only fans to the members.
+    const updates = computeGroupMoveUpdates(
+      [{ groupId: 'g1', delta: { x: 5, y: 5 } }],
+      childIds,
+      starts,
+      new Set(['g1']),
+    );
+    expect(updates.map((u) => u.id).sort()).toEqual(['a', 'b']);
+  });
+
+  it('skips members with no start-snapshot entry (can not translate an unknown baseline)', () => {
+    const partialStarts = new Map<string, { x: number; y: number }>([
+      ['g1', { x: 0, y: 0 }],
+      ['a', { x: 10, y: 10 }],
+      // 'b' intentionally absent.
+    ]);
+    const updates = computeGroupMoveUpdates(
+      [{ groupId: 'g1', delta: { x: 1, y: 1 } }],
+      childIds,
+      partialStarts,
+    );
+    expect(updates.map((u) => u.id).sort()).toEqual(['a', 'g1']);
+  });
+
+  it('two dragged groups: shared child is emitted once (first group wins)', () => {
+    const twoGroups = new Map<string, readonly string[]>([
+      ['g1', ['a', 'shared']],
+      ['g2', ['shared', 'c']],
+    ]);
+    const s = new Map<string, { x: number; y: number }>([
+      ['g1', { x: 0, y: 0 }],
+      ['g2', { x: 0, y: 0 }],
+      ['a', { x: 1, y: 1 }],
+      ['shared', { x: 2, y: 2 }],
+      ['c', { x: 3, y: 3 }],
+    ]);
+    const updates = computeGroupMoveUpdates(
+      [
+        { groupId: 'g1', delta: { x: 100, y: 0 } },
+        { groupId: 'g2', delta: { x: 0, y: 100 } },
+      ],
+      twoGroups,
+      s,
+    );
+    const shared = updates.filter((u) => u.id === 'shared');
+    expect(shared).toHaveLength(1);
+    // g1 ran first, so `shared` uses g1's delta.
+    expect(shared[0]?.position).toEqual({ x: 102, y: 2 });
+  });
+
+  it('empty group (no childIds) emits only the group position', () => {
+    const updates = computeGroupMoveUpdates(
+      [{ groupId: 'g1', delta: { x: 7, y: 7 } }],
+      new Map([['g1', []]]),
+      new Map([['g1', { x: 0, y: 0 }]]),
+    );
+    expect(updates).toEqual([{ id: 'g1', position: { x: 7, y: 7 } }]);
   });
 });

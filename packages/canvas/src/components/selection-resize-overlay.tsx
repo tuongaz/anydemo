@@ -335,8 +335,14 @@ export interface SelectionResizeOverlayProps {
    * batches it as a single undo entry. Locked/absent sizes pass through
    * unchanged (the pure helper leaves them undefined). When absent the chrome
    * still renders for visual feedback but the gesture dispatches nothing.
+   *
+   * M5: the second arg flags a GROUP resize (the selection is one group, so the
+   * `updates` are the group's members + the group box). The shared host commit
+   * helper reuses the SAME machinery (frozen-baseline scale → coalesced batch →
+   * one undo) but can label the undo entry `group-resize` vs `multi-resize`. The
+   * arg is optional so existing callers/tests stay valid.
    */
-  onMultiResize?: (updates: MultiResizeUpdate[]) => void;
+  onMultiResize?: (updates: MultiResizeUpdate[], opts?: { isGroup?: boolean }) => void;
   /**
    * M4: fired when the user clicks the top-right ＋/⊟ icon. The host (which knows
    * the real selection) binds this to `onCreateGroup(selectedNodeIds)` for a
@@ -547,7 +553,9 @@ export function SelectionResizeOverlay({
     const updates = computeFrozenResizeUpdates(startNodes, startRect, newRect, {
       lockAspectRatio: event.shiftKey,
     });
-    if (updates.length > 0) onMultiResize(updates);
+    // M5: tell the host whether this gesture scaled a GROUP (members + box) so
+    // it can label the undo entry distinctly. Same commit machinery either way.
+    if (updates.length > 0) onMultiResize(updates, { isGroup: isGroupSelection });
   };
 
   const onHandlePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {

@@ -13,7 +13,34 @@ grouped.
 
 ## Lessons carried forward
 
-- (Fill from M5 handoff.)
+- **From M5 handoff (actionable subset):**
+  - **Mid-drag/mid-gesture, `setRfNodes(sourceNodes)` is FROZEN** while
+    `draggingRef`/`resizingRef` is true (early-return in the sync effect). So a
+    host optimistic override does NOT render during a gesture — to move nodes
+    live you must write the rendered `rfNodes` directly (the channel xyflow uses).
+    M6 implication: when isolation flips `draggable`/`selectable` on members,
+    those come from `buildNode`/`sourceNodes`, which only re-render when NOT
+    dragging — fine for a click-to-enter, but don't expect a mid-drag prop flip
+    to take effect until the gesture ends.
+  - **`groupDragRef` is the group-gesture frozen baseline** (`seeflow-canvas.tsx`,
+    declared after `lastDragModifierRef`). Refs added AFTER `penModeRef` do NOT
+    shift the hook-shim REF index map — append there. The drag-START snapshot is
+    read from `rfNodesRef` (live rendered), and the commit reads `rfNodesRef` too
+    (never the raw drag event — the ~1px snap-drift memory).
+  - **Reuse the shared pure helpers, not new machinery.** Group move =
+    `computeGroupMoveUpdates` (additive delta, dedupe via `excludeIds`); group
+    resize = `computeFrozenResizeUpdates` + host `onMultiResize` (now group-aware
+    via the optional `{ isGroup }` arg → `group-resize` undo label). Both commit
+    through ONE batch = one undo.
+  - **`selectedGroupId`** (already computed in the canvas) is the single source
+    for "is one group selected" — reuse it for M6's double-click enter target
+    (design §12.10 already flagged this).
+  - **Dispatcher-shim can drive a full drag** (onNodeDragStart → onNodesChange →
+    onNodeDrag → onNodeDragStop) and you can read live `rfNodes` via the
+    `setterSink` slot-8 (`rfNodes` useState) — but it CANNOT drive a real pointer
+    gesture on the overlay (that calls `useReactFlow`). For M6's
+    `onNodeDoubleClick`/`onPaneClick` enter/exit, assert WIRING via the shim and
+    leave the live pointer flow to the orchestrator browser test.
 - **v1 lesson** "elevating the group above its children made children unreachable
   — the group body swallowed clicks at its z-index." → In isolation, the group
   body must be click-through and children must sit above it.
