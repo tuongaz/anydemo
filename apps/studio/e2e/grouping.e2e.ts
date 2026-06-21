@@ -76,7 +76,7 @@ function buildGroupedFlow(name: string) {
 }
 
 test.describe('canvas — grouping (M9)', () => {
-  test('renders a group box + title behind its members (visual baseline)', async ({
+  test('renders a chrome-less group (marquee-only, no box/title) with its members (visual baseline)', async ({
     page,
     studio,
   }) => {
@@ -95,8 +95,13 @@ test.describe('canvas — grouping (M9)', () => {
     // The group node + both members are present.
     await expect(page.locator('[data-testid="group-node"]')).toHaveCount(1);
     await expect(page.locator('[data-node-type="rectangle"]')).toHaveCount(2);
+    // The group is chrome-less: no header band is rendered (the marquee + corner
+    // handles only appear on selection, via the overlay — not in this static
+    // render). Members render as ordinary cards on top of the invisible group.
+    await expect(page.locator('[data-testid="group-node-header"]')).toHaveCount(0);
 
-    // Visual baseline of the whole canvas (group box behind members + title).
+    // Visual baseline of the whole canvas (an UNSELECTED group is invisible —
+    // just its two members; the group box paints no fill/border/title).
     const root = page.locator('.seeflow-canvas-root');
     await expect(root).toHaveScreenshot('group-rendered.png', { maxDiffPixelRatio: 0.02 });
   });
