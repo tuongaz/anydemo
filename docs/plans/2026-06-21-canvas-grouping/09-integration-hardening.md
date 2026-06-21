@@ -162,11 +162,33 @@ optional enhancement, separate future work).
 - `packages/canvas/CLAUDE.md` + README updated.
 - Final lessons handoff written into `00-design.md` §11.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Which cross-cutting paths needed the most group logic? Did `childIds` stay
-  decoupled, or did awareness leak (the v1 failure)? Be honest — this is the
-  signal for whether the architecture held.
-- Any flaky e2e / baseline issues? Note the fix.
-- Final feature retrospective: what would you change if doing it again?
-- **➡ Write the consolidated lessons into `00-design.md` §11 as the permanent
-  record (the thing v1 never had).**
+## Lessons-learned handoff (DONE)
+- **Which cross-cutting paths needed the most group logic? Did `childIds` stay
+  decoupled?** It stayed fully decoupled — the architecture held. Ranked by group
+  logic needed: **Delete** (most, but still minimal — pure `planGroupAwareDeletion`
+  + threading `childIdsPrunes` first into the existing batch + a groups-first
+  delete order) > **Clipboard** (one id-remap pass `remapGroupChildIds` + one
+  copy-set expander `expandSelectionWithGroupMembers`) > **Export** and
+  **Z-order/reorder** (ZERO production code each — export's whole-viewport
+  snapshot + class-based filter captures groups for free; the static
+  `GROUP_NODE_Z_INDEX` re-pin in `buildNode` makes reorder z-invariant). No
+  subsystem needed more than an id-remap or a `childIds` prune — the guardrail was
+  never tripped. With `parentId`, all four would have needed bespoke logic (the v1
+  failure). Full write-up in `00-design.md` §11 L9.1.
+- **The one real gap found:** double-click ENTER isolation was not mode-gated
+  (would fire in `view` mode). Fixed by gating on `flags.showResizeHandles`
+  (§11 L9.3). The dead `onDeleteSelectionRef` bridge + no-op
+  `childFirstNodeSnapshots` alias the host carried as scaffolding were finally
+  wired (§11 L9.5).
+- **Decision:** NO `flags.enableGrouping` master switch — not cheap, and redundant
+  with `showResizeHandles`/`enableKeyboard`/`enableContextMenu` + prop-presence.
+  Documented as a non-goal (§11 L9.4).
+- **Any flaky e2e / baseline issues?** The e2e spec (`apps/studio/e2e/grouping.e2e.ts`)
+  was ADDED but NOT run (Docker e2e is the orchestrator's call). Its visual
+  baseline (`group-rendered.png`) needs a first chromium-linux generation via
+  `bun run test:it:update-snapshots`; remember the bundle-build gotcha (build
+  web+mcp bundles first or use full `test:it`). No baselines committed by M9.
+- **Final retrospective:** see §11 L9.5 — write the delete-ordering tripwire first
+  next time; mark host TODO-scaffolding with a skipped test so it can't be mistaken
+  for done. The `childIds` model would not change.
+- **➡ Consolidated lessons written into `00-design.md` §11 (L9.1–L9.5).** ✓

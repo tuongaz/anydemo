@@ -61,6 +61,16 @@ describe('viewportExportFilter (US-009)', () => {
     expect(viewportExportFilter(nodeWrapper as unknown as Node)).toBe(true);
     expect(viewportExportFilter(edgePath as unknown as Node)).toBe(true);
   });
+
+  it('INCLUDES a group node wrapper in the export (M9 §9.5 — group box + title captured)', () => {
+    // A group renders as an ordinary sibling .react-flow__node (xyflow adds the
+    // .react-flow__node-group modifier for the `group` type). The whole
+    // .react-flow__viewport subtree is snapshotted, so the group box + its title
+    // header are captured automatically. This guards against anyone later adding
+    // a type-based exclusion that would drop groups from PNG/PDF exports.
+    const groupWrapper = makeEl('div', 'react-flow__node react-flow__node-group');
+    expect(viewportExportFilter(groupWrapper as unknown as Node)).toBe(true);
+  });
 });
 
 describe('resolveCanvasBackground', () => {

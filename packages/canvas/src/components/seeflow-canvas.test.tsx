@@ -4760,6 +4760,22 @@ describe('grouping M6: enter / exit isolation (§5.3)', () => {
     expect(lastActiveSetter(sink)).toBeUndefined();
   });
 
+  it('M9 §9.9: double-clicking a group in VIEW mode does NOT enter isolation (edit-only)', () => {
+    // Enter isolation is an edit-only affordance (it makes members editable).
+    // In view mode `flags.showResizeHandles` is false, so the gate blocks it even
+    // though selection/pan stay on. The group still renders read-only.
+    const sink: CapturedSetterCall[] = [];
+    const tree = callSeeflowCanvas(
+      { mode: 'view', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
+      { setterSink: sink },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const onNodeDoubleClick = rf.props.onNodeDoubleClick as (e: unknown, n: Node) => void;
+    onNodeDoubleClick({}, { id: 'grp-1', type: 'group' } as unknown as Node);
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+
   // ---- EXIT path (b): empty pane ----
   it('EXIT (pane): clicking the empty pane while entered clears activeGroupId', () => {
     const sink: CapturedSetterCall[] = [];

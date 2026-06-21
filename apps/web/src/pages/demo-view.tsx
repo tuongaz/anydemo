@@ -54,10 +54,13 @@ import {
   computeGroupBox,
   createRestAdapter,
   downscaleImageFile,
+  expandSelectionWithGroupMembers,
   getLastUsedStyle,
   getNudgeDelta,
   getZoomChord,
+  planGroupAwareDeletion,
   pushRecent,
+  remapGroupChildIds,
   rememberConnectorStyle,
   rememberNodeStyle,
   resolveClipboardChord,
@@ -961,6 +964,27 @@ export function DemoView({
       if (!flowId || !adapter) return;
       const node = demoNodes?.find((n) => n.id === nodeId);
       if (!node) return;
+      // Canvas grouping M9 (design §9.3, §12.9): if this node is a MEMBER of a
+      // surviving group, deleting it standalone would leave the group's childIds
+      // referencing a gone node — the server's childIds-existence superRefine
+      // rejects that. Route through the batch delete path (`onDeleteSelection`,
+      // via the ref bridge) which prunes the owning group's childIds FIRST. A
+      // GROUP itself, or a loose node, deletes directly below (no prune needed —
+      // a group's childIds die with it; a loose node has no owner).
+      const live = demoNodes ?? [];
+      const ownedBySurvivingGroup = live.some(
+        (n) =>
+          n.type === 'group' &&
+          n.id !== nodeId &&
+          (n.data.childIds as string[] | undefined)?.includes(nodeId),
+      );
+      if (ownedBySurvivingGroup && onDeleteSelectionRef.current) {
+        const cascaded = (demoConnectors ?? [])
+          .filter((c) => c.source === nodeId || c.target === nodeId)
+          .map((c) => c.id);
+        onDeleteSelectionRef.current([nodeId], cascaded);
+        return;
+      }
       // Mirror the wrapper's cascade-restore: capture every connector
       // touching the node up-front so the optimistic-delete revert path
       // (on adapter failure) can also clear their hidden flag. The
@@ -1075,7 +1099,40 @@ export function DemoView({
       ];
       if (allDoomedNodeIds.length > 0) markNodesDeleted(allDoomedNodeIds);
       if (allDoomedConnIds.length > 0) markConnectorsDeleted(allDoomedConnIds);
-      const childFirstNodeSnapshots = nodeSnapshots;
+      // Canvas grouping M9 (design §9.3, §12.9): order doomed GROUP deletes
+      // BEFORE other doomed nodes. A marquee can span a group AND its members;
+      // deleting the group first makes its childIds vanish, so a subsequent
+      // member delete can never leave a surviving group referencing a gone node.
+      // (For a group whose member SURVIVES the marquee, the prune-first writes
+      // below handle it.) Non-group nodes keep their selection order. This is a
+      // stable partition, so the previous no-op `childFirstNodeSnapshots` alias
+      // is now an actual ordering — the comment block below always held, the
+      // sort was just missing.
+      const childFirstNodeSnapshots = [
+        ...nodeSnapshots.filter((n) => n.type === 'group'),
+        ...nodeSnapshots.filter((n) => n.type !== 'group'),
+      ];
+      // Canvas grouping M9 (design §9.3, §12.9): when a deleted node is a MEMBER
+      // of a SURVIVING group, that group's `childIds` must be pruned of the
+      // member BEFORE the member's deleteNode — every server write re-parses the
+      // whole flow and the childIds-existence superRefine rejects any transient
+      // state where a surviving group still references a deleted node. Deleting a
+      // GROUP needs no prune (its childIds die with it; members released loose).
+      // `planGroupAwareDeletion` enumerates the surviving-group prunes; we apply
+      // them first inside the batch so the reverse-order undo (recreate member →
+      // restore childIds) is also valid at each step. NOTE: the group is NOT in
+      // the doomed set here (only its member is), so it is never marked deleted.
+      const deletionPlan = planGroupAwareDeletion(demoNodes ?? [], nodeIds);
+      const childIdsPrunes = deletionPlan.childIdsPrunes.filter(
+        // Defensive: a prune for a group that is ITSELF doomed is moot (the
+        // oracle already drops these, but guard against a stale demoNodes).
+        (p) => !cascadingNodeIdSet.has(p.groupId),
+      );
+      // Optimistically reflect the pruned membership so the overlay / isolation
+      // chrome stop referencing the doomed member within the same React tick.
+      for (const prune of childIdsPrunes) {
+        setNodeOverride(prune.groupId, { data: { childIds: prune.childIds } } as Partial<FlowNode>);
+      }
       // Trim selection so the inspector closes / multi-selection shrinks
       // immediately.
       setSelectedIds((prev) => prev.filter((id) => !cascadingNodeIdSet.has(id)));
@@ -1097,6 +1154,13 @@ export function DemoView({
       // inside `batchCtx`.
       history
         .batch('delete-selection', async () => {
+          // §12.9 ORDER: prune each surviving group's childIds FIRST so no
+          // intermediate flow state references a node that a later deleteNode
+          // removes. (Skipped entirely when no member of a surviving group is
+          // doomed — childIdsPrunes is then empty.)
+          for (const prune of childIdsPrunes) {
+            await adapter.updateNode(prune.groupId, { childIds: prune.childIds });
+          }
           for (const n of childFirstNodeSnapshots) {
             await adapter.deleteNode(n.id);
           }
@@ -1109,6 +1173,9 @@ export function DemoView({
           // actually deleted on disk — the SSE echo will reconcile.)
           if (allDoomedNodeIds.length > 0) unmarkNodesDeleted(allDoomedNodeIds);
           if (allDoomedConnIds.length > 0) unmarkConnectorsDeleted(allDoomedConnIds);
+          // Drop the optimistic childIds prune so the group falls back to server
+          // truth (it still references the member if the prune never persisted).
+          for (const prune of childIdsPrunes) dropNodeOverride(prune.groupId);
           setEditError(err instanceof Error ? err.message : String(err));
           console.error('deleteSelection batch failed', err);
         });
@@ -1123,6 +1190,8 @@ export function DemoView({
       markConnectorsDeleted,
       unmarkNodesDeleted,
       unmarkConnectorsDeleted,
+      setNodeOverride,
+      dropNodeOverride,
     ],
   );
 
@@ -1823,13 +1892,20 @@ export function DemoView({
 
   const onCopyNodes = useCallback(
     (nodeIds: string[]) => {
+      // Canvas grouping M9 (design §9.4): when a GROUP is selected for copy,
+      // pull all its members into the copy set so the pasted group has its own
+      // members (the paste then remaps childIds to those clones). This is the
+      // ONE place copy is group-aware and it only GROWS the id set — exactly
+      // like the clipboard already auto-includes a connector when both its
+      // endpoints are copied. A member copied WITHOUT its group is untouched.
+      const expandedIds = expandSelectionWithGroupMembers(demoNodes ?? [], nodeIds);
       // Source from the LIVE view (server snapshot merged with optimistic
       // overrides) rather than the raw server nodes. A just-created node that
       // only exists as an override — or a node with pending edits the SSE echo
       // hasn't confirmed — would otherwise be absent/stale, so copying it
       // produced an empty clipboard and the follow-up paste silently no-opped.
       const { nodes, connectors } = collectCopyTargets({
-        selectedIds: nodeIds,
+        selectedIds: expandedIds,
         serverNodes: demoNodes ?? [],
         nodeOverrides: nodePending.overrides,
         serverConnectors: demoConnectors ?? [],
@@ -1863,13 +1939,26 @@ export function DemoView({
       // in-memory clipboardRef.
       const payload = explicitPayload ?? clipboardRef.current;
       if (!payload || payload.nodes.length === 0) return;
-      const { newNodes, newConnectors } = buildPastePayload<FlowNode, Connector>({
+      const {
+        newNodes: remappedNodes,
+        newConnectors,
+        idMap,
+      } = buildPastePayload<FlowNode, Connector>({
         nodes: payload.nodes,
         connectors: payload.connectors,
         flowPos,
         nodeIdGen: () => `node-${shortId()}`,
         connectorIdGen: () => `conn-${shortId()}`,
       });
+      // Canvas grouping M9 (design §9.4): rewrite each pasted GROUP's childIds
+      // through the SAME id map buildPastePayload produced — the single id-remap
+      // pass. A member that wasn't copied is dropped from childIds (no dangling
+      // reference the server's childIds-existence superRefine would reject). This
+      // is the whole payoff of childIds over parentId: one map, one field, no
+      // per-node parent rewrites. Cast through the structural RemapChildIdsNode
+      // shape since FlowNode's discriminated union hides `data.childIds` on
+      // non-group variants.
+      const newNodes = remapGroupChildIds(remappedNodes, idMap) as FlowNode[];
 
       // Optimistic overrides — render the pasted entities immediately while
       // the POSTs are in flight. The SSE echo of the rewrite drops the
@@ -1898,7 +1987,17 @@ export function DemoView({
       // automatically, then we drop every override.
       history
         .batch('paste', async () => {
-          for (const n of newNodes) {
+          // M9 (design §12.9 ordering, applied to paste): every createNode
+          // re-validates the WHOLE flow server-side, so a pasted GROUP whose
+          // childIds reference its (also-pasted) members must be created AFTER
+          // those members exist — otherwise the childIds-existence superRefine
+          // rejects the group. Groups never nest in v1, so "non-groups first,
+          // groups last" is a valid create order. (Same rule the delete path
+          // uses in reverse.)
+          const createOrder = [...newNodes].sort(
+            (a, b) => Number(a.type === 'group') - Number(b.type === 'group'),
+          );
+          for (const n of createOrder) {
             await adapter.createNode({
               id: n.id,
               type: n.type,

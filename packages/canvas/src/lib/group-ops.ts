@@ -342,3 +342,179 @@ export function computeGroupMoveUpdates(
   }
   return updates;
 }
+
+// ---------------------------------------------------------------------------
+// M9 — clipboard (copy/paste) childIds remap + copy-set expansion (design §9.4)
+// ---------------------------------------------------------------------------
+
+/**
+ * COPY completeness (design §9.4 / M9 step A.1): expand a copy selection so that
+ * whenever a GROUP is in the set, ALL of its members come along too. Without
+ * this, copying a selected group alone would clipboard a group node whose
+ * `childIds` reference members that were never copied — the paste would then
+ * prune them all (step A.2) and yield an empty group, losing the members.
+ *
+ * This is the ONE place copy is group-aware, and it is deliberately minimal: it
+ * only GROWS the id set (exactly like the clipboard already auto-includes a
+ * connector when both its endpoints are copied). It performs NO childIds
+ * rewrite, NO reparenting — membership stays in the group's `childIds`. A member
+ * selected WITHOUT its group is unaffected (it copies as a loose node; the paste
+ * has no group referencing it, so no dangling ref — step A.2).
+ *
+ * Returns the expanded id list preserving `selectedIds` order, with each added
+ * member appended in `childIds` order after the groups, deduped. Members that
+ * don't resolve to an existing node are skipped (defensive against a stale
+ * `childIds`).
+ */
+export function expandSelectionWithGroupMembers(
+  nodes: readonly GroupOpNode[],
+  selectedIds: readonly string[],
+): string[] {
+  const byId = new Map(nodes.map((n) => [n.id, n]));
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const push = (id: string) => {
+    if (seen.has(id)) return;
+    seen.add(id);
+    out.push(id);
+  };
+  for (const id of selectedIds) push(id);
+  // Append members of every selected group (childIds order, deduped, existing).
+  for (const id of selectedIds) {
+    const node = byId.get(id);
+    if (!isGroup(node)) continue;
+    for (const childId of readChildIds(node)) {
+      if (byId.has(childId)) push(childId);
+    }
+  }
+  return out;
+}
+
+/**
+ * Minimal node shape the clipboard remap mutates: an `id` and the verbatim
+ * `data` carried through the paste spread. We only ever read/rewrite
+ * `data.childIds` on `type:'group'` nodes; every other field is left untouched.
+ */
+export interface RemapChildIdsNode {
+  id: string;
+  type?: string;
+  data?: unknown;
+}
+
+/**
+ * PASTE childIds remap (design §9.4 / M9 step A.2 — THE single id-remap pass).
+ *
+ * After {@link "../../../apps/web/src/lib/clipboard.ts" buildPastePayload} has
+ * rewritten every node id and built the old→new `idMap`, the pasted nodes still
+ * carry their ORIGINAL `data.childIds` (copied verbatim by the `...n` spread).
+ * This pass rewrites each pasted GROUP's `childIds` through that SAME `idMap`:
+ *
+ *   - a child whose old id is in `idMap` → its NEW pasted id,
+ *   - a child whose old id is NOT in `idMap` (a member that wasn't copied) →
+ *     DROPPED (so the pasted group never references a node outside the paste,
+ *     which the server's childIds-existence superRefine would reject).
+ *
+ * This is the whole reason `childIds` (not `parentId`) was chosen: one map, one
+ * field, applied once — no per-node parent rewrites, no array reordering. The
+ * function is pure and returns NEW node objects (a fresh `data` for groups);
+ * non-group nodes pass through by reference.
+ *
+ * @param nodes the freshly-pasted nodes (already id+position rewritten)
+ * @param idMap old-id → new-id, as produced by `buildPastePayload`
+ */
+export function remapGroupChildIds<N extends RemapChildIdsNode>(
+  nodes: readonly N[],
+  idMap: ReadonlyMap<string, string>,
+): N[] {
+  return nodes.map((n) => {
+    if (n.type !== 'group') return n;
+    const oldChildIds = readChildIds(n);
+    const newChildIds: string[] = [];
+    for (const oldId of oldChildIds) {
+      const mapped = idMap.get(oldId);
+      if (mapped !== undefined) newChildIds.push(mapped); // copied member → new id
+      // else: member not in the paste → drop (no dangling childIds)
+    }
+    const prevData = (n.data ?? {}) as Record<string, unknown>;
+    return { ...n, data: { ...prevData, childIds: newChildIds } };
+  });
+}
+
+// ---------------------------------------------------------------------------
+// M9 — delete policy + childIds prune ORDERING (design §9.3, §12.9)
+// ---------------------------------------------------------------------------
+
+/** A group's surviving membership after pruning the deleted members from it. */
+export interface ChildIdsPrune {
+  groupId: string;
+  /** The group's `childIds` with every to-be-deleted member id removed. */
+  childIds: string[];
+}
+
+/**
+ * The ordered plan for a (possibly multi-target) node delete that keeps the
+ * server's childIds-existence invariant valid at EVERY intermediate write
+ * (design §12.9). `history.batch` issues N separate server writes (one undo
+ * entry), and each write re-parses the WHOLE flow — so a transient state where a
+ * surviving group still references a just-deleted member is REJECTED. Hence the
+ * ordering is load-bearing, exactly like v1's unparent-before-delete.
+ */
+export interface GroupAwareDeletionPlan {
+  /**
+   * childIds prunes to apply FIRST, one per surviving group that loses ≥1
+   * member. Applying these before any node delete means the group never
+   * references a deleted child at any point. A group that is ITSELF being
+   * deleted is NOT pruned here (its `childIds` die with it — moot, design §9.3).
+   */
+  childIdsPrunes: ChildIdsPrune[];
+  /**
+   * The node ids to delete, deduped. Order among deletes does NOT matter for the
+   * childIds invariant once the prunes above have run (a deleted member is
+   * already out of every surviving group). Deleting a GROUP releases its members
+   * (they are NOT added here — children survive loose, design §9.3).
+   */
+  deleteIds: string[];
+}
+
+/**
+ * Pure delete oracle (design §9.3 + §12.9). Given the live nodes and the set of
+ * node ids the user asked to delete, produce the ordered {@link
+ * GroupAwareDeletionPlan}:
+ *
+ *   - **Delete a member:** the owning group (if it SURVIVES) gets a childIds
+ *     prune dropping that member; the prune is emitted in `childIdsPrunes` so the
+ *     caller applies it BEFORE the member's `deleteNode`.
+ *   - **Delete a group:** the group id is in `deleteIds`; its members are NOT
+ *     added (released → survive loose). No prune is emitted for a deleted group
+ *     (its childIds die with it).
+ *   - **Marquee spanning a group + some of its members:** the group is deleted,
+ *     so pruning it is moot → no prune for that group (dedupe, §12.9). Members in
+ *     the set are still deleted.
+ *
+ * Deduping: `deleteIds` is the unique input set (a member listed twice, or a
+ * group + member both selected, collapses). A surviving group appears at most
+ * once in `childIdsPrunes`, even if several of its members are deleted at once.
+ *
+ * The plan is intentionally just "prune the one structural field, then delete" —
+ * no group-awareness leaks beyond reading `childIds`. If this ever needed more,
+ * the `childIds` decoupling would be breaking (the v1 signal).
+ */
+export function planGroupAwareDeletion(
+  nodes: readonly GroupOpNode[],
+  toDeleteIds: readonly string[],
+): GroupAwareDeletionPlan {
+  const deleteSet = new Set(toDeleteIds);
+  const deleteIds = [...deleteSet]; // deduped, input order
+
+  // For each SURVIVING group, compute its childIds minus any deleted member.
+  const childIdsPrunes: ChildIdsPrune[] = [];
+  for (const node of nodes) {
+    if (!isGroup(node)) continue;
+    if (deleteSet.has(node.id)) continue; // group itself deleted → prune is moot
+    const childIds = readChildIds(node);
+    const survivors = childIds.filter((id) => !deleteSet.has(id));
+    if (survivors.length === childIds.length) continue; // lost no member → no write
+    childIdsPrunes.push({ groupId: node.id, childIds: [...survivors] });
+  }
+  return { childIdsPrunes, deleteIds };
+}

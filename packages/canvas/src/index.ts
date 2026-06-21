@@ -233,18 +233,24 @@ export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts
 export {
   computeGroupBox,
   computeGroupMoveUpdates,
+  expandSelectionWithGroupMembers,
   GROUP_BOX_PADDING,
   GROUP_TITLE_BAND_PX,
+  planGroupAwareDeletion,
   planGroupShortcutAction,
+  remapGroupChildIds,
   selectGroupSelection,
   selectGroupableSet,
 } from './lib/group-ops.ts';
 export type {
+  ChildIdsPrune,
   DraggedGroup,
+  GroupAwareDeletionPlan,
   GroupBoxMember,
   GroupMoveUpdate,
   GroupOpNode,
   GroupShortcutAction,
+  RemapChildIdsNode,
 } from './lib/group-ops.ts';
 
 // ----------------------------------------------------------------------------

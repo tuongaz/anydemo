@@ -780,6 +780,94 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   could fall behind its group and become un-targetable). Keep preview == commit
   (`project_connection_preview_mirrors_commit`).
 
+- **L9.1 (M9 — THE HEADLINE: `childIds` stayed decoupled; the architecture held.)**
+  This is the milestone where v1's hidden coupling bit, and the design's central
+  bet paid off. Every cross-cutting subsystem was hardened with the MINIMUM
+  group-awareness the guardrail allowed — never more than an id-remap of
+  `childIds` or a `childIds` prune:
+  - **Clipboard** = ONE id-remap pass. `buildPastePayload` already produced the
+    old→new `idMap`; `remapGroupChildIds(newNodes, idMap)` rewrites the pasted
+    group's `childIds` through it (copied member → new id; non-copied member →
+    dropped). Copy needs ONE expander, `expandSelectionWithGroupMembers`, that
+    only GROWS the id set (a group pulls its members in) — structurally identical
+    to the existing "auto-include a connector when both endpoints are copied".
+    NO per-node parent rewrite, NO array reorder. This is the exact thing v1
+    couldn't do because `parentId` lived on every child.
+  - **Delete** = a `childIds` prune issued BEFORE the member delete. The whole
+    fix is `planGroupAwareDeletion` (pure) + threading its `childIdsPrunes`
+    first into the existing `delete-selection` batch, plus a groups-first
+    ordering of the doomed-node deletes. No cascade logic, no reparent-on-delete.
+  - **Export** = ZERO code. The whole `.react-flow__viewport` is snapshotted and
+    the only export filter is class-based (chrome only) — a group is captured for
+    free. (Added a regression test so nobody adds a type-based exclusion.)
+  - **Z-order/reorder** = ZERO code. `GROUP_NODE_Z_INDEX = -1` is re-pinned in
+    `buildNode` every render independent of array position, and reorder is
+    array-only — so a reorder op literally cannot lift a group above its members.
+    (Added a reorder-invariance test.)
+  Net: of the four subsystems the guardrail warned about, two needed NO change
+  and two needed only a `childIds`-shaped touch. If we'd used `parentId`, all
+  four would have needed bespoke group logic — the v1 failure, reproduced.
+
+- **L9.2 (M9 — the §12.9 mutation ORDERING is the one genuinely load-bearing
+  sequencing rule, and it is server-enforced.)** Because the studio re-parses the
+  WHOLE flow on every write and a `superRefine` rejects a group referencing a
+  missing node, deleting a member while its group still lists it is a hard 400
+  ("Flow failed schema validation", with a per-issue "references unknown child"
+  message). So **prune the group's `childIds` FIRST, then delete the member.** The
+  integration tripwire (`apps/studio/integration/grouping.it.ts`) proves BOTH
+  directions: the ordered sequence is accepted; the swapped sequence is rejected
+  (and leaves the flow untouched — writes aren't transactional, but each
+  individually-valid state means a rejection can't happen mid-batch in the normal
+  path). The reverse-order UNDO (recreate member → restore childIds) is valid at
+  each step too, verified in the same test. This is the SAME shape as v1's
+  unparent-before-delete — but it lives in ONE pure oracle + ONE batch, not
+  scattered across the codebase.
+
+- **L9.3 (M9 — a real gap: double-click ENTER was not mode-gated.)** Verification
+  (not a test failure) found `handleNodeDoubleClick` gated only on
+  `node.type==='group'`, so in `view` mode (selection/pan stay on) a group
+  double-click would enter isolation — an edit-only interaction. Fixed by gating
+  on `flags.showResizeHandles` (the one flag true ONLY in edit, and already the
+  group-overlay gate). Lesson: when adding an interaction handler, gate it to the
+  mode it belongs to AT THE HANDLER, not just by which props are wired — a
+  view-mode host still wires selection. Added a view-mode no-enter test.
+
+- **L9.4 (M9 — decision: NO `flags.enableGrouping` master switch.)** The design
+  left it optional "only if cheap". It is NOT cheap (a new flag threaded through
+  `ResolvedCanvasFlags` + 3 presets + `resolveFlags` + 4 gate sites, shifting
+  test expectations) and it is REDUNDANT: grouping already rides on
+  `showResizeHandles` (overlay) + `enableKeyboard` (chords) + `enableContextMenu`
+  (menu) + host prop-presence (`onCreateGroup`/`onUngroup`). A host disables the
+  whole feature by not wiring those callbacks. Documented as a non-goal rather
+  than built — the cheaper, equally-capable path.
+
+- **L9.5 (M9 — final feature retrospective: what would change next time.)** The
+  build went cleanly because the pure-ops/host-composition split (decision #1 +
+  §8) was honored from M1. If doing it again: (a) write the `delete-member`
+  ordering tripwire FIRST (M1), since it's the load-bearing invariant the whole
+  feature leans on and it would have caught the dead `onDeleteSelectionRef`
+  scaffolding earlier; (b) the host had a no-op `childFirstNodeSnapshots` alias +
+  a dead ref bridge left as TODO scaffolding across milestones — leaving "wire
+  this in M9" stubs in the host is fine, but they should be marked with an
+  assertion or a skipped test so they can't be mistaken for done. Nothing about
+  the `childIds` model would change — it is the reason every cross-cutting path
+  reduced to an id-remap or a prune. The single biggest risk (the exponential
+  resize) never recurred because the frozen-baseline + end-only contract made it
+  structurally impossible, not just disciplined-against.
+- **L9.6 (M9 — the §12.9 ordering rule also governs PASTE, not just delete; found
+  via browser test.)** `onPasteNodes` created the pasted nodes in clipboard order
+  and each `createNode` re-validates the WHOLE flow server-side, so a pasted GROUP
+  created BEFORE its (also-pasted) members was rejected by the childIds-existence
+  `superRefine` ("Flow failed schema validation") — the mirror image of the
+  delete-member ordering. Unit/integration tests missed it (they exercised the
+  pure remap, not the host's ordered `createNode` loop); only a live Cmd+D
+  duplicate of a group surfaced it. Fix: in the paste batch, create non-group
+  nodes FIRST, groups LAST (`apps/web/src/pages/demo-view.tsx`). Lesson: ANY
+  multi-write that introduces a group + its members in one batch (create, paste,
+  duplicate, import) must order members-before-group; a future bulk-import path
+  needs the same sort. The browser pass is the only layer that caught this — keep
+  it in the loop for cross-cutting host wiring.
+
 ---
 
 ## 12. Technical challenges & techniques (verified against the codebase)

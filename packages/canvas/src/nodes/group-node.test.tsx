@@ -238,6 +238,19 @@ describe('GroupNode', () => {
     expect(GROUP_NODE_Z_INDEX).toBeLessThan(0);
   });
 
+  it('z-order is REORDER-INVARIANT: a member (z→0) always sits above a group (z<0) (M9 §9.6 step D)', () => {
+    // The bring-to-front / send-to-back context-menu ops are ARRAY reorders
+    // (server-side `/nodes/:id/order`), not zIndex writes. `buildNode` re-pins a
+    // group to GROUP_NODE_Z_INDEX on EVERY render regardless of where the group
+    // lands in the node array, and `elevateNodesOnSelect={false}` keeps it there
+    // even when selected. So whatever a user does with reorder, a member's
+    // effective z (undefined → 0) stays strictly above its group's (< 0): a
+    // member can never fall behind its group, nor a group rise above its
+    // members. This asserts the numeric contract the reorder path relies on.
+    const memberEffectiveZ = 0; // members leave zIndex undefined → xyflow treats as 0
+    expect(GROUP_NODE_Z_INDEX).toBeLessThan(memberEffectiveZ);
+  });
+
   // -- M6 isolation affordance (design §5.3) --------------------------------
   describe('M6: entered (data.active) affordance', () => {
     const findTitlebar = (tree: ReactElementLike) =>

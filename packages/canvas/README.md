@@ -143,6 +143,49 @@ the same fit-view + snapshot + jspdf pipeline for free — no setup required.
 />
 ```
 
+## Grouping
+
+A **group** is a first-class node (`type: 'group'`) that owns membership via
+`data.childIds: string[]`. Member node positions stay **absolute** — the model is
+`childIds`, never xyflow `parentId`, so the rest of the canvas treats members as
+ordinary nodes (no reparenting, no relative coordinates, no array-ordering
+invariant).
+
+The canvas renders groups, draws the multi-select overlay (padded rect + 4
+corner resize handles + a ＋ create / ⊟ ungroup icon), and owns the
+double-click enter/exit **isolation** interaction (edit mode only — a group
+still renders read-only in `view`/`mini`). The actual create / ungroup / move /
+resize / delete / clipboard **mutations are composed by the host** inside a
+`history.batch(...)` using the exported pure ops, so undo/redo and optimistic
+overrides stay in the host's hands:
+
+```ts
+import {
+  computeGroupBox,            // absolute bbox over members (+ padding + title band)
+  selectGroupableSet,         // eligible new-group members (loose, ungrouped, not a group)
+  selectGroupSelection,       // selected group ids
+  planGroupShortcutAction,    // ⌘G / ⌘⇧G oracle → 'group' | 'ungroup' | { none: reason }
+  computeGroupMoveUpdates,    // group-drag fan-out (frozen baseline + delta)
+  isMemberOfGroup,            // isolation membership oracle
+  expandSelectionWithGroupMembers, // copy: pull a group's members into the copy set
+  remapGroupChildIds,         // paste: rewrite a pasted group's childIds via the id map
+  planGroupAwareDeletion,     // delete: prune-before-delete ordering plan
+} from '@seeflow/canvas';
+```
+
+Wire the host callbacks `onCreateGroup(memberIds)` and `onUngroup(groupId)` (edit
+mode) to enable the affordances; grouping has no master flag, so leaving them
+unset disables the feature on that surface.
+
+**Server-side membership integrity (when using the studio adapter):** every write
+re-validates the whole flow, and a `superRefine` rejects a group whose `childIds`
+references a missing node, another group (no nesting), or a node already in
+another group. Therefore deleting a **member** must prune the owning group's
+`childIds` (`updateNode(groupId, { childIds })`) **before** `deleteNode(member)`;
+`planGroupAwareDeletion` produces that ordered plan. Deleting a **group** needs no
+prune — its `childIds` die with it and members survive as loose nodes. Empty
+groups (`childIds: []`) are allowed and persist as labeled zones.
+
 ## MiniMap — outline / high-level box
 
 `<SeeflowCanvas>` renders React Flow's bottom-right `<MiniMap>` as a high-level

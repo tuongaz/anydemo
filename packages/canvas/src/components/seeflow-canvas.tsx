@@ -5482,10 +5482,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // group enters it; double-clicking any other node is a no-op here (its own
   // renderer owns dblclick-to-edit). The title-band's own dblclick-to-rename
   // (wired in M7) will stopPropagation so it never reaches this enter path.
-  const handleNodeDoubleClick = useCallback((_e: ReactMouseEvent, node: Node) => {
-    if (node.type !== 'group') return;
-    setActiveGroupId(node.id);
-  }, []);
+  // M9 (design §9.9): entering isolation is an EDIT-ONLY affordance (it makes
+  // members individually editable). Gate on `flags.showResizeHandles` — the one
+  // flag that is true ONLY in edit mode (and the same gate the group ＋/⊟ overlay
+  // uses) — so a group double-click in view/mini (where selection/pan stay on)
+  // does NOT enter isolation. A group still RENDERS read-only in those modes.
+  const handleNodeDoubleClick = useCallback(
+    (_e: ReactMouseEvent, node: Node) => {
+      if (!flags.showResizeHandles) return; // edit-only
+      if (node.type !== 'group') return;
+      setActiveGroupId(node.id);
+    },
+    [flags.showResizeHandles],
+  );
 
   const handleNodeClickWithGroupGate = useCallback(
     (_e: ReactMouseEvent, node: Node) => {
