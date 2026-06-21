@@ -235,4 +235,49 @@ describe('GroupNode', () => {
       expect(tbStyle.pointerEvents).toBe('auto');
     });
   });
+
+  // -- M7 inline title + icon edit (design §4.1, §7.1) ----------------------
+  describe('M7: inline title + icon edit wiring', () => {
+    const headerOf = (tree: ReactElementLike) => findElement(tree, (type) => type === NodeHeader);
+
+    it('forwards data.onNameChange to NodeHeader (→ dblclick-to-rename active)', () => {
+      const onName = () => {};
+      const tree = callGroupNode({
+        childIds: ['a'],
+        name: 'My group',
+        width: 300,
+        height: 200,
+        onNameChange: onName,
+      });
+      const header = headerOf(tree);
+      if (!header) throw new Error('NodeHeader not found');
+      // The SAME callback identity reaches NodeHeader, which is what activates
+      // its dblclick-to-edit path (and the stopPropagation that keeps the
+      // dblclick from bubbling to the M6 group-enter handler).
+      expect(header.props.onNameChange).toBe(onName);
+    });
+
+    it('title is read-only when no onNameChange is wired (view/mini)', () => {
+      const tree = callGroupNode({ childIds: ['a'], name: 'My group', width: 300, height: 200 });
+      const header = headerOf(tree);
+      if (!header) throw new Error('NodeHeader not found');
+      expect(header.props.onNameChange).toBeUndefined();
+    });
+
+    it('forwards data.onIconChange to NodeHeader (optional title glyph edit)', () => {
+      const onIcon = () => {};
+      const tree = callGroupNode({
+        childIds: ['a'],
+        name: 'My group',
+        icon: 'folder',
+        width: 300,
+        height: 200,
+        onIconChange: onIcon,
+      });
+      const header = headerOf(tree);
+      if (!header) throw new Error('NodeHeader not found');
+      expect(header.props.onIconChange).toBe(onIcon);
+      expect(header.props.icon).toBe('folder');
+    });
+  });
 });

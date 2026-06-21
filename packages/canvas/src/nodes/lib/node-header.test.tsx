@@ -231,6 +231,47 @@ describe('NodeHeader — name editing', () => {
     const header = findByTestId(tree, 'node-header');
     expect(typeof (header?.props as { onDoubleClick?: unknown }).onDoubleClick).toBe('function');
   });
+
+  // Canvas grouping M7 (the crux): the title's dblclick-to-edit handler MUST
+  // stopPropagation so a double-click on the title does NOT bubble to the
+  // ReactFlow `onNodeDoubleClick` group-ENTER handler (M6). xyflow attaches
+  // onNodeDoubleClick as a React onDoubleClick on the node wrapper, so a child
+  // handler that calls stopPropagation prevents the enter path — title=edit,
+  // body=enter (design §7 guardrail).
+  it('dblclick-to-edit stops propagation (so it never reaches the group-enter handler)', () => {
+    const tree = callNodeHeader({ onNameChange: () => {} });
+    const header = findByTestId(tree, 'node-header');
+    const onDoubleClick = (header?.props as { onDoubleClick?: (e: unknown) => void }).onDoubleClick;
+    if (!onDoubleClick) throw new Error('expected onDoubleClick to be wired');
+    let stopped = 0;
+    onDoubleClick({
+      // No handle / resize-control / icon-trigger ancestor → the handler reaches
+      // its stopPropagation + setEditing path (the title body case).
+      target: { closest: () => null },
+      stopPropagation: () => {
+        stopped++;
+      },
+    });
+    expect(stopped).toBe(1);
+  });
+
+  it('dblclick on the icon trigger does NOT stop propagation / enter edit (closest matches)', () => {
+    const tree = callNodeHeader({ onNameChange: () => {} });
+    const header = findByTestId(tree, 'node-header');
+    const onDoubleClick = (header?.props as { onDoubleClick?: (e: unknown) => void }).onDoubleClick;
+    if (!onDoubleClick) throw new Error('expected onDoubleClick to be wired');
+    let stopped = 0;
+    onDoubleClick({
+      // A dblclick whose target is inside the icon trigger is ignored by the
+      // title handler (the trigger owns its own dblclick-stop) — so the title
+      // doesn't hijack it and it neither edits nor stops here.
+      target: { closest: (sel: string) => (sel.includes('icon-trigger') ? {} : null) },
+      stopPropagation: () => {
+        stopped++;
+      },
+    });
+    expect(stopped).toBe(0);
+  });
 });
 
 describe('NodeHeader — icon picker', () => {

@@ -133,6 +133,24 @@ function makeRectangleNode(overrides: Partial<FlowNode> = {}): FlowNode {
   } as FlowNode;
 }
 
+// Canvas grouping M7: a group is a first-class node; the sidebar must expose its
+// title (name), description, detail markdown, and an optional title-icon trigger.
+function makeGroupNode(overrides: Partial<FlowNode> = {}): FlowNode {
+  return {
+    id: 'grp-1',
+    type: 'group',
+    position: { x: 0, y: 0 },
+    data: {
+      childIds: ['a', 'b'],
+      name: 'My Group',
+      description: 'Group description',
+      detail: '## Group detail',
+      ...((overrides as { data?: object }).data ?? {}),
+    },
+    ...overrides,
+  } as FlowNode;
+}
+
 beforeEach(() => {
   memStore.clear();
 });
@@ -358,6 +376,101 @@ describe('DetailPanel', () => {
     const sections = findAll(tree, (el) => el.type === StatusSection);
     expect(sections.length).toBe(1);
     expect((sections[0]?.props as { report?: unknown }).report).toBe(report);
+  });
+});
+
+// Canvas grouping M7 (design §4.1, §7.1): a selected group falls into the
+// populated-node branch and reuses the same Name/Description/Detail editors +
+// title-icon trigger as a rectangle — no new sidebar components, just type
+// gating. These tests pin that a group flows through untouched.
+describe('DetailPanel (group)', () => {
+  it('renders Name / Description / Detail editors for a selected group', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeGroupNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onDescriptionChange: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    // Populated branch (NOT the empty-state).
+    expect(findByTestId(tree, 'detail-panel-empty')).toBeNull();
+    expect(findByTestId(tree, 'detail-panel-name')).not.toBeNull();
+    expect(findByTestId(tree, 'detail-panel-description')).not.toBeNull();
+    expect(findByTestId(tree, 'detail-panel-detail')).not.toBeNull();
+  });
+
+  it('seeds the Name editor from the group title (data.name)', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeGroupNode({ data: { childIds: [], name: 'Payments' } } as Partial<FlowNode>),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+      }),
+    );
+    const name = findByTestId(tree, 'detail-panel-name');
+    expect((name?.props as { value?: string }).value).toBe('Payments');
+  });
+
+  it('forwards the edit callbacks to the right EditableField slots', () => {
+    const onName = () => {};
+    const onDescription = () => {};
+    const onDetail = () => {};
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeGroupNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: onName,
+        onDescriptionChange: onDescription,
+        onDetailChange: onDetail,
+      }),
+    );
+    expect((findByTestId(tree, 'detail-panel-name')?.props as { onSave?: unknown }).onSave).toBe(
+      onName,
+    );
+    expect(
+      (findByTestId(tree, 'detail-panel-description')?.props as { onSave?: unknown }).onSave,
+    ).toBe(onDescription);
+    expect((findByTestId(tree, 'detail-panel-detail')?.props as { onSave?: unknown }).onSave).toBe(
+      onDetail,
+    );
+  });
+
+  it('renders the Detail editor in markdown mode (mermaid/markdown path)', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeGroupNode(),
+        connector: null,
+        onClose: () => {},
+        onDetailChange: () => {},
+      }),
+    );
+    const detail = findByTestId(tree, 'detail-panel-detail');
+    expect((detail?.props as { markdown?: boolean }).markdown).toBe(true);
+  });
+
+  it('exposes the title-icon trigger for a group (supportsIconField includes group)', () => {
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: makeGroupNode(),
+        connector: null,
+        onClose: () => {},
+        onNameChange: () => {},
+        onIconChange: () => {},
+      }),
+    );
+    // TitleIconTrigger renders the add/replace icon button. With no icon set it
+    // shows the dashed "Add icon" placeholder — the trigger element is present.
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(1);
   });
 });
 

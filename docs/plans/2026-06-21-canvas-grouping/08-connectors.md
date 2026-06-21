@@ -11,7 +11,28 @@ persisting normally.
 
 ## Lessons carried forward
 
-- (Fill from M7 handoff.)
+- **From M7 handoff (actionable subset):**
+  - **The group already renders four connection handles** (`group-node.tsx`: ids
+    `t`/`l` target, `r`/`b` source, opacity-0 → `selected` opacity-100 pattern),
+    placed on the OUTER container border. M1 added them; M7 left them intact.
+    **M8 step 1 may already be satisfied** — verify before adding markup. They sit
+    on the group's border, NOT over members (the group box is the larger
+    perimeter), so floating-edge geometry should anchor to the group box.
+  - **The group box top now reserves `GROUP_BOX_PADDING(12) + GROUP_TITLE_BAND_PX(40)`
+    = 52px for the title band** (M7 bumped the band from 28). When M8 computes
+    handle/edge anchor points or perimeter intersections against the group's
+    `width/height`, remember the title occupies the top band — a `Position.Top`
+    handle/edge anchor lands in the title band, not over a member. Pin geometry
+    tests against the actual box dims, not member dims.
+  - **`zIndex:-1` + members-as-top-level-siblings is the hit-testing model.** A
+    connector drag that ENDS on the group's padding band (not a member) targets
+    the group; ended on a member's handle, targets the member. When the group is
+    ENTERED (M6 `data.active`), its fill is `pointer-events:none` so a drag falls
+    through to members underneath — exactly the precondition for connecting an
+    individual child. Do NOT add z-index carve-outs; reuse this model.
+  - **Styling/title/sidebar for connectors already exists** — M8 is render/geometry
+    only; do not fork connector tooling. A connector whose endpoint is a group is
+    a normal connector in the schema (see next bullet).
 - Research confirmed: the schema already allows **any node id** as a connector
   `source`/`target` (no type whitelist; fence test exists). So group-as-endpoint
   is schema-legal with no schema change — the work is **render/geometry only**.

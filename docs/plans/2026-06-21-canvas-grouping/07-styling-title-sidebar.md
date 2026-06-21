@@ -117,8 +117,67 @@ persists via the normal patch path).
   work and persist; title-edit vs enter disambiguated.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Did StyleStrip need a type allow-list edit, or did the group flow through
-  untouched? Note the exact change.
-- Any title-edit vs group-enter dblclick conflict? How disambiguated?
-- **➡ Copy into `08-...md`.**
+## Lessons-learned handoff (FILLED IN — M7 done)
+
+- **L7.1 — StyleStrip needed ZERO changes; the group flows through the default
+  branch untouched.** StyleStrip has no `'group'` type-gate: its only
+  type-specific collapses are `pureIconType`/`pureInkType` (icon+freehand →
+  collapsed color swatch), `pureImageType` (image border editor), and
+  `isTextShape` (text → chromeless). A group is none of those, and `visualNodes`
+  excludes ONLY `type:'icon'`, so a selected group is `firstVisualNode` and the
+  shared Color/Corners/Shadow/Border/Text controls read+write its
+  `data.backgroundColor/borderColor/cornerRadius/shadow/borderSize/fontSize` via
+  `onStyleNode`/`onStyleNodes` (+ the `*Preview` slider variants) for free. The
+  spec's "add `'group'` to the allowed set if needed" → **not needed**. Covered
+  by the new `StyleStrip — group (M7)` describe.
+- **L7.2 — DetailPanel needed ONE additive type-gate edit: `supportsIconField`.**
+  `showNameField` is INCLUSIVE-by-default (`inspectableNode !== null &&
+  !isDescriptionLabelShapeNode`), so a group already showed Name/Description/Detail
+  and the doc claim "add `'group'` to `showNameField`" was **stale** — no change
+  there. The only exclusive gate was `supportsIconField` (was
+  `rectangle | component`); added `'group'` so the sidebar exposes the
+  add/replace title-icon `TitleIconTrigger`. Markdown Detail renders via the
+  existing react-markdown + mermaid path (no code). `sidebarNode` is
+  `nodes.find(id===sole-selected)` — a single selected group already becomes the
+  inspected node with no canvas change.
+- **L7.3 — The inline title was ALREADY wired since M1; only the comments were
+  stale.** `buildNode`'s `onNameChange` IIFE returns `onNodeNameChange` for every
+  edit-mode node EXCEPT `ellipse` — so a group always received it; group-node.tsx
+  has passed `onNameChange={data.onNameChange}` to `NodeHeader` since M1. The M1
+  "title is READ-ONLY" comments were never true for groups in the host. M7's real
+  Step-1 work was: (a) wire `onIconChange` for `type:'group'` in `buildNode` (it
+  was gated to `rectangle|component|linkflow`), and (b) correct the stale
+  read-only comments.
+- **L7.4 — The title-edit-vs-enter disambiguation is FREE from NodeHeader's
+  existing `stopPropagation`.** `NodeHeader.handleDoubleClick` is defined ONLY
+  when `nameEditable` (`!!onNameChange`) and, on a real title dblclick, calls
+  `e.stopPropagation()` before `setEditing(true)` (it early-returns for
+  `.react-flow__handle` / `.react-flow__resize-control` / the icon-trigger). xyflow
+  attaches `onNodeDoubleClick` as a **React `onDoubleClick` on the node wrapper
+  div** (verified in `@xyflow/react` dist `NodeWrapper`), so a child
+  `stopPropagation()` in the React synthetic system prevents the wrapper handler
+  → the M6 group-ENTER (`handleNodeDoubleClick` → `setActiveGroupId`) never fires.
+  Net: **dblclick on the TITLE edits (stops); dblclick on the BODY/padding band
+  bubbles to the wrapper → enters.** Because the group is `zIndex:-1` with members
+  as top-level siblings, "body" really means the group's own padding band, not a
+  member. No new conflict; the M6 "dblclick body enters" test stays green.
+  Tested at three layers (the shim can't drive xyflow's real event delegation —
+  L0.4/L3.3): NodeHeader (`stopPropagation` is called on a title dblclick + NOT
+  on an icon-trigger dblclick), group-node (`onNameChange`/`onIconChange` reach
+  NodeHeader → handler is wired), seeflow-canvas (`onNodeDoubleClick(body)` →
+  enters; existing).
+- **L7.5 — Title-band layout: bumped `GROUP_TITLE_BAND_PX` 28 → 40.** The shared
+  `NodeHeader` is `py-3` (24px) + an 18px `leading-tight` title ≈ 46px tall; the
+  old 28px band + 12px `GROUP_BOX_PADDING` = 40px top reserve was SHORTER than the
+  rendered editable header, so the title bottom could paint under the topmost
+  member. 40px → 52px reserve clears it. The `computeGroupBox` tests reference the
+  CONSTANT (not the literal 28), so they auto-updated; added a guard test that
+  `GROUP_BOX_PADDING + GROUP_TITLE_BAND_PX ≥ ~46`. **M8/M9 note:** newly created
+  groups (M4 `computeGroupBox`) are now slightly taller; M5 proportional resize is
+  unaffected (it scales the frozen baseline, not the band constant).
+- **L7.6 — A11y was already satisfied (M1).** The group container carries
+  `aria-label={name || 'Group'}` and the M1 test "exposes an accessible name from
+  the title" already asserts it. No new a11y code; the icon trigger inherits the
+  existing `TitleIconTrigger` `aria-label`.
+
+- **➡ Copied into `08-connectors.md` "Lessons carried forward".**

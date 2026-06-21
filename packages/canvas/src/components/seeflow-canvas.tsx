@@ -3576,17 +3576,19 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           })(),
           onIconChange: (() => {
             // Same edit-mode + node-type gate as the inline-edit callbacks.
-            // type:'rectangle', type:'component', and type:'linkflow' render the
-            // header icon trigger — every other node type either suppresses the
-            // icon affordance (geometric illustrative shapes don't draw header
-            // chrome; text/sticky/ellipse have no header) or owns the icon
-            // presentation differently (type:'icon', type:'image'). type:'html'
-            // previously carried an icon but its caption affordance was removed.
+            // type:'rectangle', type:'component', type:'linkflow', and (M7)
+            // type:'group' render a header icon trigger next to the title — every
+            // other node type either suppresses the icon affordance (geometric
+            // illustrative shapes don't draw header chrome; text/sticky/ellipse
+            // have no header) or owns the icon presentation differently
+            // (type:'icon', type:'image'). type:'html' previously carried an icon
+            // but its caption affordance was removed.
             if (!isEditMode) return undefined;
             if (
               merged.type !== 'rectangle' &&
               merged.type !== 'component' &&
-              merged.type !== 'linkflow'
+              merged.type !== 'linkflow' &&
+              merged.type !== 'group'
             )
               return undefined;
             return onIconChange;

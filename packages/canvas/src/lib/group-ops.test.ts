@@ -62,6 +62,15 @@ describe('computeGroupBox', () => {
     expect(box.height).toBe(20 + 10 + 10);
   });
 
+  it('reserves enough top band for the rendered title header (M7: no member overlap)', () => {
+    // The GroupNode title uses the shared NodeHeader (`py-3` = 24px + an 18px
+    // `leading-tight` title ≈ 46px). The top reserve above the topmost member is
+    // GROUP_BOX_PADDING + GROUP_TITLE_BAND_PX; it must clear that header so the
+    // editable title never paints under a member. Guards the M7 band sizing.
+    const APPROX_HEADER_PX = 46;
+    expect(GROUP_BOX_PADDING + GROUP_TITLE_BAND_PX).toBeGreaterThanOrEqual(APPROX_HEADER_PX);
+  });
+
   it('treats a member without resolvable dims as a zero-size point (still bounds it)', () => {
     // A member missing width/height (e.g. an unmeasured auto-sized node the
     // caller could not resolve) contributes only its position — it must NOT be

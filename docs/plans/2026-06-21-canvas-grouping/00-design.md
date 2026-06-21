@@ -714,6 +714,42 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   `stopPropagation()` so it doesn't bubble to this enter handler (title=edit,
   body=enter). The title band already has its own wrapper
   (`group-node-titlebar`) for this.
+- **L7.1 (M7) Group styling/title/sidebar came almost entirely FREE — 2 tiny
+  type-gate edits, no new components.** (a) `DetailPanel.supportsIconField` gained
+  `'group'` (was `rectangle|component`) so the sidebar shows the title-icon
+  trigger; (b) `buildNode`'s `onIconChange` IIFE gained `'group'` (was
+  `rectangle|component|linkflow`). **StyleStrip needed ZERO changes** (no
+  `'group'` gate exists; the group is a "visual" node → default Color/Corners/
+  Shadow/Border/Text branch, `visualNodes` excludes only `icon`).
+  `DetailPanel.showNameField` is inclusive-by-default → a group already showed
+  Name/Description/Detail (the plan's "add `'group'` to showNameField" was stale).
+  `sidebarNode = nodes.find(id===sole-selected)` already inspects a single group.
+- **L7.2 (M7) The inline title was ALREADY wired since M1; only comments lied.**
+  `buildNode`'s `onNameChange` returns `onNodeNameChange` for every edit-mode node
+  except `ellipse`, and `group-node.tsx` has forwarded it to `NodeHeader` since
+  M1. The "title is READ-ONLY in M1" comments were never true for groups. Lesson:
+  audit the actual data path, not the comment, before assuming a milestone left
+  something un-wired.
+- **L7.3 (M7) Title-edit-vs-group-enter is solved by NodeHeader's EXISTING
+  `stopPropagation`, no new code.** `NodeHeader.handleDoubleClick` exists only
+  when `nameEditable` and calls `e.stopPropagation()` on a real title dblclick.
+  xyflow attaches `onNodeDoubleClick` as a **React `onDoubleClick` on the node
+  wrapper div** (verified in `@xyflow/react` dist `NodeWrapper`), so the React
+  synthetic `stopPropagation` from the title child prevents the M6 enter handler.
+  **Contract for M8+:** dblclick on the group's own padding band (NOT a member —
+  the group is z=-1 with members as top-level siblings) bubbles to the wrapper →
+  enters; dblclick on the title edits. Test at three layers (the dispatcher-shim
+  can't drive xyflow's real event delegation — L0.4/L3.3): NodeHeader
+  (stopPropagation called), group-node (callbacks reach NodeHeader),
+  seeflow-canvas (`onNodeDoubleClick(body)` enters).
+- **L7.4 (M7) `GROUP_TITLE_BAND_PX` bumped 28 → 40** so the top reserve
+  (`GROUP_BOX_PADDING 12 + 40 = 52px`) clears the rendered editable `NodeHeader`
+  (`py-3` + 18px title ≈ 46px); the old 40px reserve let the title paint under the
+  topmost member. **Contract for M8 (geometry) / M9 (export/persist):** newly
+  created groups (M4 `computeGroupBox`) are slightly taller; a `Position.Top`
+  handle/edge anchor lands in the title band; M5 proportional resize is unaffected
+  (scales the frozen baseline, not the band constant). `computeGroupBox` tests
+  reference the CONSTANT symbol, so they tracked the change automatically.
 
 ---
 

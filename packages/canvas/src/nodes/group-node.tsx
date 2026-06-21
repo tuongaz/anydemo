@@ -7,14 +7,21 @@ import { NodeHeader } from './lib/node-header.tsx';
 
 /**
  * Runtime data attached to a group node by the canvas host. Extends the
- * persisted GroupNodeData with the name-edit callback the canvas injects in
- * later milestones. M1 renders the group READ-ONLY (no `onNameChange` wired),
- * so the title is display-only here; M7 wires inline title editing + styling.
+ * persisted GroupNodeData with the field-edit callbacks the canvas injects via
+ * `buildNode`. M7 wires inline title editing (`onNameChange`) + the optional
+ * title glyph (`onIconChange`); both are present in edit mode and absent in
+ * view/mini (→ the title renders read-only there).
  */
 export type GroupNodeRuntimeData = GroupNodeData & {
-  /** Persist a new title (PATCH /nodes/:id { name }). Wired in M7; absent in M1 → title is read-only. */
+  /**
+   * Persist a new title (PATCH /nodes/:id { name }). Wired in M7 via `buildNode`
+   * (edit mode only). When present, NodeHeader's dblclick-to-edit path is active
+   * AND it `stopPropagation()`s the dblclick so it never bubbles to the
+   * ReactFlow `onNodeDoubleClick` group-ENTER handler (M6) — i.e. dblclick on the
+   * TITLE edits, dblclick on the BODY enters isolation (design §7 guardrail).
+   */
   onNameChange?: (nodeId: string, name: string) => void;
-  /** Change the optional title glyph. Wired in M7. */
+  /** Change the optional title glyph (PATCH /nodes/:id { icon }). Wired in M7 (edit mode only). */
   onIconChange?: (nodeId: string, icon: string | null) => void;
   /**
    * Canvas grouping M6: true when this group is ENTERED (isolation). The host's
@@ -130,13 +137,18 @@ function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNod
         isConnectable={isConnectable}
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
-      {/* Title band — read-only this milestone (no onNameChange/onIconChange
-          wired by the host yet). NodeHeader renders the title + optional icon
-          and inherits the editable-field a11y once M7 wires the callbacks.
-          M6: when the container fill is click-through (active), re-enable
-          pointer-events on JUST the title band so it stays the interactive exit
-          affordance (and the M7 rename target). `display:contents` keeps the
-          wrapper layout-neutral when inactive. */}
+      {/* Title band — sits in the group's top padding band (GROUP_TITLE_BAND_PX,
+          reserved above the topmost member by computeGroupBox) so it never
+          overlaps members, which render as sibling nodes ON TOP of this box (the
+          group sits at zIndex -1). NodeHeader renders the title + optional icon
+          and, with `onNameChange`/`onIconChange` wired by buildNode (M7, edit
+          mode), supports inline title rename + icon edit. NodeHeader's
+          dblclick-to-edit handler `stopPropagation()`s so a dblclick on the title
+          edits and never bubbles to the M6 group-ENTER handler (title=edit,
+          body=enter). M6: when the container fill is click-through (active),
+          re-enable pointer-events on JUST the title band so it stays the
+          interactive exit affordance (and the rename target). `display:contents`
+          keeps the wrapper layout-neutral when inactive. */}
       <div
         style={active ? { pointerEvents: 'auto' } : { display: 'contents' }}
         data-testid="group-node-titlebar"

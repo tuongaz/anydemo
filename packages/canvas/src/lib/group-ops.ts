@@ -63,9 +63,17 @@ export const GROUP_BOX_PADDING = 12;
 /**
  * Extra height (flow units) added ABOVE the members' union rect for the group's
  * title band (the top padding band the GroupNode renders its title into). Keeps
- * the title from overlapping the topmost member. Matches the v1 ~28px label slot.
+ * the title from overlapping the topmost member.
+ *
+ * M7: sized so the band PLUS the top GROUP_BOX_PADDING clears the rendered
+ * NodeHeader. The shared NodeHeader is `py-3` (24px) + an 18px `leading-tight`
+ * title (~22px) ≈ 46px tall; with GROUP_BOX_PADDING (12) the top reserve is
+ * `12 + 40 = 52px ≥ 46px`, so the editable title sits fully inside the band and
+ * never paints under the topmost member (which renders as a sibling ON TOP of
+ * the group box at z = -1). v1 used a more compact ~28px slot for a read-only
+ * label; the editable header here needs the extra room.
  */
-export const GROUP_TITLE_BAND_PX = 28;
+export const GROUP_TITLE_BAND_PX = 40;
 
 /**
  * Absolute bounding box for a group enclosing `children`: the union of every
