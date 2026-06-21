@@ -66,9 +66,23 @@ function hsla(h: number, s: number, l: number, a: number): string {
   return `hsla(${h}, ${s}%, ${l}%, ${a})`;
 }
 
-// Header tint opacity: the accent painted this faint over the card body reads
-// as a subtle title bar that adapts to dark/light mode automatically.
-const HEADER_TINT_ALPHA = 0.14;
+// Header tint opacity: the accent painted this over the tinted card body reads
+// as a clear title bar that adapts to dark/light mode automatically. Kept
+// stronger than the body tint so the header stands out from the node body.
+const HEADER_TINT_ALPHA = 0.24;
+
+// Body tint strength: a very subtle wash of the accent mixed into the card
+// surface so the whole node body picks up the chosen color (not just the
+// border) while staying a restrained, low-chroma surface that adapts to
+// dark/light mode. Expressed as a `color-mix` percentage of the accent.
+const BODY_TINT_PERCENT = 7;
+
+// A subtle accent tint layered over the theme card surface. `color-mix` keeps
+// the result theme-adaptive (the card half is `hsl(var(--card))`) so the body
+// stays dark in dark mode and light in light mode, just nudged toward the hue.
+function bodyTint(accent: Hsl): string {
+  return `color-mix(in srgb, ${hsl(...accent)} ${BODY_TINT_PERCENT}%, ${CARD_SURFACE})`;
+}
 
 type TokenEntry = {
   border: string;
@@ -83,11 +97,12 @@ const PAINTED_ENTRIES = Object.fromEntries(
     const entry: TokenEntry = {
       // Border carries the full accent.
       border,
-      // Body follows the theme surface so it adapts to dark/light mode.
-      background: CARD_SURFACE,
+      // Body is a subtle accent wash over the theme surface so the node body
+      // also reflects the color while still adapting to dark/light mode.
+      background: bodyTint(accent),
       // Connectors + swatch chips paint at the accent (saturated).
       edge: border,
-      // Header bar is a faint translucent accent over the card body.
+      // Header bar is a stronger translucent accent over the tinted body.
       headerBackground: hsla(accent[0], accent[1], accent[2], HEADER_TINT_ALPHA),
     };
     return [token, entry];

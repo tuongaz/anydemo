@@ -75,12 +75,14 @@ describe('COLOR_TOKENS map', () => {
     expect(COLOR_TOKENS.none.headerBackground).toBe('transparent');
   });
 
-  it('paints themed-token bodies at the adaptive card surface (theme-driven)', () => {
+  it('paints themed-token bodies as a subtle accent wash over the adaptive card surface', () => {
     for (const token of THEMED_TOKENS) {
       const entry = COLOR_TOKENS[token];
-      // Body now follows the theme surface so it adapts to dark/light mode —
-      // the accent lives on the border + a translucent header tint, not the body.
-      expect(entry.background).toBe('hsl(var(--card))');
+      // Body is a low-chroma accent tint mixed into the theme surface so the
+      // node body also reflects the chosen color while still adapting to
+      // dark/light mode (the card half keeps it theme-driven).
+      expect(entry.background.startsWith('color-mix(')).toBe(true);
+      expect(entry.background).toContain('hsl(var(--card))');
     }
   });
 
@@ -151,10 +153,11 @@ describe('colorTokenStyle', () => {
     }
   });
 
-  it('themed nodes paint the adaptive card surface + opaque accent border', () => {
+  it('themed nodes paint a subtle accent body wash + opaque accent border', () => {
     for (const token of THEMED_TOKENS) {
       const node = colorTokenStyle(token, 'node');
-      expect(node.backgroundColor).toBe('hsl(var(--card))');
+      expect((node.backgroundColor as string).startsWith('color-mix(')).toBe(true);
+      expect(node.backgroundColor).toContain('hsl(var(--card))');
       expect((node.borderColor as string).startsWith('hsl(')).toBe(true);
       expect(node.borderColor).not.toContain('var(--');
     }
