@@ -282,3 +282,77 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Lockstep-deploy the proprietary cloud (cloud.seeflow.dev) on every release.
+  # cloud.seeflow.dev pins the open-source canvas to a specific @tuongaz/seeflow
+  # version in TWO places — `package.json`/`bun.lock` (the studio backend +
+  # studio SPA) and `SEEFLOW_REF` in seeflow-cloud's deploy-cloud.yml (the canvas
+  # source the cloud SPA is built from). They must move together or the two SPAs
+  # render against different canvas versions (skew). This job bumps both to the
+  # just-published version and pushes to seeflow-cloud's main; pushing
+  # package.json + bun.lock (which seeflow-cloud's deploy-cloud.yml does NOT
+  # path-ignore) auto-triggers that deploy. The push uses a PAT, not the default
+  # GITHUB_TOKEN, because (a) it writes to a different repo and (b) GITHUB_TOKEN
+  # pushes never trigger downstream workflows.
+  deploy-cloud:
+    name: Lockstep-deploy seeflow-cloud
+    runs-on: ubuntu-latest
+    needs: [prepare-release, publish-npm]
+    # Run once the new version is actually live on npm (publish-npm's smoke test
+    # waits for registry propagation), so seeflow-cloud's `bun install` resolves
+    # it. publish-npm already depends on tests + prepare-release.
+    if: always() && needs.publish-npm.result == 'success'
+    steps:
+      # The job-level `if` can't read secrets, so gate here: a missing token
+      # warns + skips (the release still goes green) instead of hard-failing.
+      - name: Gate on CLOUD_DISPATCH_TOKEN
+        id: gate
+        env:
+          TOKEN: ${{ secrets.CLOUD_DISPATCH_TOKEN }}
+        run: |
+          if [ -n "$TOKEN" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::CLOUD_DISPATCH_TOKEN not set — skipping the seeflow-cloud lockstep deploy. Add a PAT with contents+workflow write on tuongaz/seeflow-cloud as the CLOUD_DISPATCH_TOKEN secret to enable it."
+          fi
+
+      - name: Checkout seeflow-cloud
+        if: steps.gate.outputs.ok == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: tuongaz/seeflow-cloud
+          ref: main
+          token: ${{ secrets.CLOUD_DISPATCH_TOKEN }}
+
+      - name: Setup Bun
+        if: steps.gate.outputs.ok == 'true'
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Bump @tuongaz/seeflow + SEEFLOW_REF and push (auto-triggers cloud deploy)
+        if: steps.gate.outputs.ok == 'true'
+        env:
+          REF: ${{ needs.prepare-release.outputs.tag || github.ref_name }}
+        run: |
+          set -euo pipefail
+          tag="${REF#refs/tags/}"   # vX.Y.Z
+          tag="v${tag#v}"           # normalise to a single leading v
+          ver="${tag#v}"            # X.Y.Z
+          echo "Lockstep-deploying seeflow-cloud to ${tag}"
+          # 1. Dependency range -> ^ver (targeted sed preserves file formatting).
+          sed -i -E "s#(\"@tuongaz/seeflow\": \")\^?[0-9]+\.[0-9]+\.[0-9]+(\")#\1^${ver}\2#" package.json
+          # 2. Canvas skew pin -> the published tag.
+          sed -i -E "s#^(  SEEFLOW_REF: ).*#\1${tag}#" .github/workflows/deploy-cloud.yml
+          # 3. Refresh the lockfile to the just-published version.
+          bun install
+          if git diff --quiet; then
+            echo "seeflow-cloud already pinned to ${tag} — nothing to deploy."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json bun.lock .github/workflows/deploy-cloud.yml
+          git commit -m "chore(deploy): bump @tuongaz/seeflow + SEEFLOW_REF to ${tag}"
+          git push origin main
