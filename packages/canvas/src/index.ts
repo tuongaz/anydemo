@@ -235,7 +235,6 @@ export {
   computeGroupMoveUpdates,
   expandSelectionWithGroupMembers,
   GROUP_BOX_PADDING,
-  GROUP_TITLE_BAND_PX,
   planGroupAwareDeletion,
   planGroupShortcutAction,
   remapGroupChildIds,

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import {
   GROUP_BOX_PADDING,
-  GROUP_TITLE_BAND_PX,
   type GroupBoxMember,
   type GroupOpNode,
   computeGroupBox,
@@ -35,15 +34,16 @@ describe('computeGroupBox', () => {
     expect(computeGroupBox([])).toBeNull();
   });
 
-  it('encloses a single member with padding all sides + a title band on top', () => {
+  it('encloses a single member with symmetric padding on all sides (no title band)', () => {
     const box = computeGroupBox([member('a', 100, 100, 80, 60)]);
     expect(box).not.toBeNull();
     if (!box) return;
-    // x/width: padding on left+right. y/height: padding both + title band on top.
+    // The box hugs the member with equal padding all around — no extra top band,
+    // because a group renders no header (chrome-less, Miro-style container).
     expect(box.position.x).toBe(100 - GROUP_BOX_PADDING);
-    expect(box.position.y).toBe(100 - GROUP_BOX_PADDING - GROUP_TITLE_BAND_PX);
+    expect(box.position.y).toBe(100 - GROUP_BOX_PADDING);
     expect(box.width).toBe(80 + GROUP_BOX_PADDING * 2);
-    expect(box.height).toBe(60 + GROUP_BOX_PADDING * 2 + GROUP_TITLE_BAND_PX);
+    expect(box.height).toBe(60 + GROUP_BOX_PADDING * 2);
   });
 
   it('encloses the UNION of multiple members', () => {
@@ -51,27 +51,18 @@ describe('computeGroupBox', () => {
     if (!box) throw new Error('box null');
     // union: (0,0)→(250,200)
     expect(box.position.x).toBe(0 - GROUP_BOX_PADDING);
-    expect(box.position.y).toBe(0 - GROUP_BOX_PADDING - GROUP_TITLE_BAND_PX);
+    expect(box.position.y).toBe(0 - GROUP_BOX_PADDING);
     expect(box.width).toBe(250 + GROUP_BOX_PADDING * 2);
-    expect(box.height).toBe(200 + GROUP_BOX_PADDING * 2 + GROUP_TITLE_BAND_PX);
+    expect(box.height).toBe(200 + GROUP_BOX_PADDING * 2);
   });
 
-  it('honors custom padding + titleBand args', () => {
-    const box = computeGroupBox([member('a', 10, 10, 20, 20)], 5, 10);
+  it('honors a custom padding arg', () => {
+    const box = computeGroupBox([member('a', 10, 10, 20, 20)], 5);
     if (!box) throw new Error('box null');
     expect(box.position.x).toBe(5);
-    expect(box.position.y).toBe(10 - 5 - 10);
+    expect(box.position.y).toBe(5);
     expect(box.width).toBe(20 + 10);
-    expect(box.height).toBe(20 + 10 + 10);
-  });
-
-  it('reserves enough top band for the rendered title header (M7: no member overlap)', () => {
-    // The GroupNode title uses the shared NodeHeader (`py-3` = 24px + an 18px
-    // `leading-tight` title ≈ 46px). The top reserve above the topmost member is
-    // GROUP_BOX_PADDING + GROUP_TITLE_BAND_PX; it must clear that header so the
-    // editable title never paints under a member. Guards the M7 band sizing.
-    const APPROX_HEADER_PX = 46;
-    expect(GROUP_BOX_PADDING + GROUP_TITLE_BAND_PX).toBeGreaterThanOrEqual(APPROX_HEADER_PX);
+    expect(box.height).toBe(20 + 10);
   });
 
   it('treats a member without resolvable dims as a zero-size point (still bounds it)', () => {
@@ -83,7 +74,7 @@ describe('computeGroupBox', () => {
     // union still reaches (300,300) via the point.
     expect(box.position.x).toBe(0 - GROUP_BOX_PADDING);
     expect(box.width).toBe(300 + GROUP_BOX_PADDING * 2);
-    expect(box.height).toBe(300 + GROUP_BOX_PADDING * 2 + GROUP_TITLE_BAND_PX);
+    expect(box.height).toBe(300 + GROUP_BOX_PADDING * 2);
   });
 });
 

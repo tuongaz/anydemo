@@ -128,18 +128,20 @@ export function DetailPanel({
     inspectableNode && 'name' in inspectableNode.data ? (inspectableNode.data.name ?? '') : '';
   const description = inspectableNode?.data.description ?? '';
   const detail = inspectableNode?.data.detail ?? '';
-  const showNameField = inspectableNode !== null && !isDescriptionLabelShapeNode;
+  // A group is chrome-less (no on-canvas title/header), so the sidebar offers no
+  // name/title row for it either — `showNameField` excludes groups, which hides
+  // the entire header row (icon trigger + editable name) below. Identification
+  // falls back to the sr-only `<h2>` (the id) for accessibility.
+  const showNameField =
+    inspectableNode !== null && !isDescriptionLabelShapeNode && inspectableNode.type !== 'group';
   // Icon trigger sits inline with the title (left of the name). It's
-  // meaningful for type:'rectangle', type:'component', and type:'group' — the
-  // renderers that draw a header icon next to the name under the flat schema's
-  // Renderer phasing (other geometric variants parse + persist `icon` but
-  // don't surface it). A group carries an optional title glyph (M7), so the
-  // sidebar exposes the same add/replace-icon trigger.
+  // meaningful for type:'rectangle' and type:'component' — the renderers that
+  // draw a header icon next to the name under the flat schema's Renderer phasing
+  // (other geometric variants parse + persist `icon` but don't surface it).
+  // type:'group' is chrome-less (no header/title), so it carries no icon trigger.
   const supportsIconField =
     inspectableNode !== null &&
-    (inspectableNode.type === 'rectangle' ||
-      inspectableNode.type === 'component' ||
-      inspectableNode.type === 'group');
+    (inspectableNode.type === 'rectangle' || inspectableNode.type === 'component');
   const showIconField = supportsIconField && typeof onIconChange === 'function';
   // currentIcon is decoupled from showIconField so the read-only fallback
   // below can render the same icon the node body shows when the canvas is in

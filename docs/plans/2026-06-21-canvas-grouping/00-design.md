@@ -315,6 +315,21 @@ lives in milestone 3.
 
 ### 7.1 GroupNode renderer (milestone 1)
 
+> **REVISED post-M9 (2026-06-22): the group is CHROME-LESS (Miro-style).** The
+> original M1/M7 design below gave the group a painted box (background/border/
+> corner/shadow) + a `NodeHeader` title band. User feedback: "they don't look
+> correct… simplify, don't support background or header." The renderer now paints
+> **nothing** — it is a transparent hit-area + 4 connection handles. The ONLY
+> selection treatment is the `<SelectionResizeOverlay>` marquee (dashed rect + 4
+> corner handles + ＋/⊟ icon), so a selected group is visually identical to a
+> transient multi-selection. Consequences: `computeGroupBox` drops the title band
+> (symmetric padding only); `index.css` neutralizes xyflow's default
+> `.react-flow__node-group` skin and suppresses the `.selected::after` ring for
+> groups; the entered (isolation) affordance is a faint dashed `outline` (no title
+> band to keep interactive); DetailPanel hides the group name/icon header and the
+> StyleStrip excludes groups. Visual schema fields still parse but are ignored.
+> The rest of §7.1 is retained for history.
+
 A new `packages/canvas/src/nodes/group-node.tsx`:
 - Draws a rounded rectangle sized to `data.width/height`, painted from
   `backgroundColor`/`borderColor`/`borderSize`/`borderStyle`/`cornerRadius`/

@@ -61,26 +61,12 @@ function readChildIds(node: GroupOpNode | undefined): readonly string[] {
 export const GROUP_BOX_PADDING = 12;
 
 /**
- * Extra height (flow units) added ABOVE the members' union rect for the group's
- * title band (the top padding band the GroupNode renders its title into). Keeps
- * the title from overlapping the topmost member.
- *
- * M7: sized so the band PLUS the top GROUP_BOX_PADDING clears the rendered
- * NodeHeader. The shared NodeHeader is `py-3` (24px) + an 18px `leading-tight`
- * title (~22px) ≈ 46px tall; with GROUP_BOX_PADDING (12) the top reserve is
- * `12 + 40 = 52px ≥ 46px`, so the editable title sits fully inside the band and
- * never paints under the topmost member (which renders as a sibling ON TOP of
- * the group box at z = -1). v1 used a more compact ~28px slot for a read-only
- * label; the editable header here needs the extra room.
- */
-export const GROUP_TITLE_BAND_PX = 40;
-
-/**
  * Absolute bounding box for a group enclosing `children`: the union of every
- * member's rect, expanded by `padding` on all sides PLUS an extra `titleBandPx`
- * band on top for the title (design §8). Member dims are CALLER-RESOLVED
- * (`measured ?? data ?? fallback`, design §12.1) and passed in — this fn stays
- * pure.
+ * member's rect, expanded by `padding` on all sides (design §8). The box is
+ * SYMMETRIC — there is no title band, because a group renders no header (it is a
+ * chrome-less, Miro-style container; the marquee comes from the selection
+ * overlay). Member dims are CALLER-RESOLVED (`measured ?? data ?? fallback`,
+ * design §12.1) and passed in — this fn stays pure.
  *
  * Returns `null` for an empty `children` array: an empty group keeps its own
  * last explicit width/height rather than collapsing to a zero box (design
@@ -94,7 +80,6 @@ export const GROUP_TITLE_BAND_PX = 40;
 export function computeGroupBox(
   children: readonly GroupBoxMember[],
   padding: number = GROUP_BOX_PADDING,
-  titleBandPx: number = GROUP_TITLE_BAND_PX,
 ): { position: { x: number; y: number }; width: number; height: number } | null {
   if (children.length === 0) return null;
   let minX = Number.POSITIVE_INFINITY;
@@ -109,13 +94,12 @@ export function computeGroupBox(
     if (c.position.x + w > maxX) maxX = c.position.x + w;
     if (c.position.y + h > maxY) maxY = c.position.y + h;
   }
-  // Expand by padding on all sides; the title band adds extra height on top, so
-  // the group's top-left rises by (padding + titleBandPx) while members keep
-  // their absolute positions inside the box.
+  // Expand by padding on all sides; members keep their absolute positions inside
+  // the box.
   const x = minX - padding;
-  const y = minY - padding - titleBandPx;
+  const y = minY - padding;
   const width = maxX - minX + padding * 2;
-  const height = maxY - minY + padding * 2 + titleBandPx;
+  const height = maxY - minY + padding * 2;
   return { position: { x, y }, width, height };
 }
 

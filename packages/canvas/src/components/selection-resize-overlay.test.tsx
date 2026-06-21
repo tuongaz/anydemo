@@ -418,21 +418,22 @@ describe('TRIPWIRE: frozen baseline does NOT compound (design §6.4, L0.1)', () 
   // M5 "extend the tripwire to the group path" deliverable).
   it('GROUP path: members + box scale once from the frozen set (no runaway on a fast drag)', () => {
     // grouping-demo geometry: group box encloses node-a (120,120,160×80) and
-    // node-b (380,120,160×80). The box (computeGroupBox) sits at (108,80) and is
-    // 444 wide × 132 tall. The frozen set the overlay scales = members + box.
+    // node-b (380,120,160×80). The box (computeGroupBox, symmetric 12px padding,
+    // no title band) sits at (108,108) and is 444 wide × 104 tall. The frozen set
+    // the overlay scales = members + box.
     const startNodes: FrozenNode[] = [
       frozen('node-a', 120, 120, 160, 80),
       frozen('node-b', 380, 120, 160, 80),
-      frozen('grp-1', 108, 80, 444, 132), // the group box itself
+      frozen('grp-1', 108, 108, 444, 104), // the group box itself
     ];
-    const startRect = { x: 108, y: 80, width: 444, height: 132 };
+    const startRect = { x: 108, y: 108, width: 444, height: 104 };
     // Fast SE outward drag sampled at 8 ticks, each computed from the FROZEN
-    // rect; final tick doubles each dimension (888 × 264 → sx = sy = 2).
+    // rect; final tick doubles each dimension (888 × 208 → sx = sy = 2).
     const tickRects = Array.from({ length: 8 }, (_, i) => ({
       x: 108,
-      y: 80,
+      y: 108,
       width: 444 + (i + 1) * (444 / 8),
-      height: 132 + (i + 1) * (132 / 8),
+      height: 104 + (i + 1) * (104 / 8),
     }));
     const finalRect = tickRects[tickRects.length - 1];
     if (!finalRect) throw new Error('no final rect');

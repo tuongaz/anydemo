@@ -463,14 +463,18 @@ layer(base);
   border-color: hsl(var(--muted-foreground)) !important;
   border-style: dashed !important;
 }
+/* A group is chrome-less (no border to recolor), so its connect-target
+ * affordance is an OUTLINE drawn on the wrapper — a dashed ring that hugs the
+ * group's hit-area while a connection is being dragged toward it. */
 .seeflow-canvas-root
   .react-flow.seeflow-connecting
   .react-flow__node-group[data-connect-target="true"] {
-  border-color: hsl(var(--muted-foreground)) !important;
-  border-style: dashed !important;
+  outline: calc(1px / var(--rf-zoom, 1)) dashed hsl(var(--muted-foreground)) !important;
+  outline-offset: 0;
 }
 
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected::after {
+.seeflow-canvas-root[data-mode="edit"]
+  .react-flow__node.selected:not(.react-flow__node-group)::after {
   content: "";
   position: absolute;
   inset: calc(-8px / var(--rf-zoom, 1));
@@ -479,6 +483,12 @@ layer(base);
   pointer-events: none;
   z-index: -1;
 }
+
+/* A selected GROUP shows NO per-node selection ring: a group is chrome-less, and
+ * its selection treatment is the padded dashed marquee + 4 corner handles drawn
+ * by <SelectionResizeOverlay> (identical to a transient multi-selection). The
+ * `:not(.react-flow__node-group)` carve-out above keeps the default node ring off
+ * the group so the two don't double up. */
 
 /* xyflow renders this rect over the bounding box of the multi-selection when
  * `nodesSelectionActive: true` (set after a marquee). Its parent
@@ -495,21 +505,30 @@ layer(base);
   pointer-events: none;
 }
 
-/* Group container z-order (canvas grouping M1): the group node paints BEHIND
- * its members via a negative per-node zIndex (GROUP_NODE_Z_INDEX in
- * group-node.tsx, applied in seeflow-canvas.tsx `buildNode`). xyflow tags the
- * wrapper `.react-flow__node-group` because the node type key is `group`; the
- * `:not(.react-flow__node-group)` carve-outs on the selection-elevation rules
- * above keep that low zIndex stable even when the group is selected (combined
- * with `elevateNodesOnSelect={false}`). The group's own box/title/border is
- * painted by the renderer's inline styles — no wrapper-level chrome here so the
- * two don't fight. Isolation affordances and title-band styling arrive with
- * M6/M7. The M2 selection/group overlay (padded dashed rect + 4 corner handles)
- * is drawn by `<SelectionResizeOverlay>` via a ViewportPortal with INLINE styles
- * (the rect carries its own `pointer-events: none`, mirroring the
- * `.react-flow__nodesselection-rect` neutralization above, so only the handles
- * are interactive) — it is not a DOM node under `.react-flow__node`, so it needs
- * no CSS rule here. */
+/* Group container (canvas grouping). Two things happen here:
+ *
+ * 1. Z-ORDER: the group paints BEHIND its members via a negative per-node zIndex
+ *    (GROUP_NODE_Z_INDEX in group-node.tsx, applied in `buildNode`). xyflow tags
+ *    the wrapper `.react-flow__node-group` because the node type key is `group`;
+ *    the `:not(.react-flow__node-group)` carve-outs on the selection-elevation
+ *    rules above keep that low zIndex stable even when selected (with
+ *    `elevateNodesOnSelect={false}`).
+ *
+ * 2. NEUTRALIZE the xyflow DEFAULT group skin. xyflow's bundled base CSS ships a
+ *    `.react-flow__node-group` rule with a translucent grey fill
+ *    (`rgba(240,240,240,0.25)`) + a 1px border. A seeflow group is CHROME-LESS —
+ *    a transparent hit-area whose only visible treatment is the dashed marquee +
+ *    4 corner handles drawn by `<SelectionResizeOverlay>` (identical to a
+ *    transient multi-selection). Left alone, the xyflow default leaks through the
+ *    now-transparent renderer (the classic xyflow CSS-leak pattern), so we strip
+ *    fill/border/radius here. The renderer's inline `outline` (entered state) and
+ *    the `[data-connect-target]` outline rule above still apply — both use
+ *    `outline`, not `border`, so this reset never fights them. */
+.seeflow-canvas-root .react-flow__node-group {
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
+}
 
 /* US-007 selected-node handle transforms (edit mode only) */
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-top {

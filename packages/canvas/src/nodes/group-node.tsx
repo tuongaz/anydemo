@@ -1,35 +1,29 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, memo } from 'react';
 import { cn } from '../lib/cn.ts';
-import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
 import type { GroupNodeData } from '../types.ts';
-import { NodeHeader } from './lib/node-header.tsx';
 
 /**
- * Runtime data attached to a group node by the canvas host. Extends the
- * persisted GroupNodeData with the field-edit callbacks the canvas injects via
- * `buildNode`. M7 wires inline title editing (`onNameChange`) + the optional
- * title glyph (`onIconChange`); both are present in edit mode and absent in
- * view/mini (→ the title renders read-only there).
+ * Runtime data attached to a group node by the canvas host.
+ *
+ * A group is a deliberately CHROME-LESS container (Miro-style): it paints NO
+ * background, NO border, and NO title header. Its only on-canvas presence is an
+ * invisible hit-area — clicking the group's empty band selects it as a unit (M5
+ * group-move) — plus the four connection handles that make a group a connector
+ * endpoint (M8). The visible selection treatment (a dashed marquee with 4 corner
+ * resize handles) is drawn ENTIRELY by `<SelectionResizeOverlay>` when the group
+ * is selected, so a selected group looks IDENTICAL to a transient multi-select.
+ * There is no per-group styling to derive here — `backgroundColor`/`borderColor`/
+ * `cornerRadius`/`shadow` are intentionally not read.
  */
 export type GroupNodeRuntimeData = GroupNodeData & {
   /**
-   * Persist a new title (PATCH /nodes/:id { name }). Wired in M7 via `buildNode`
-   * (edit mode only). When present, NodeHeader's dblclick-to-edit path is active
-   * AND it `stopPropagation()`s the dblclick so it never bubbles to the
-   * ReactFlow `onNodeDoubleClick` group-ENTER handler (M6) — i.e. dblclick on the
-   * TITLE edits, dblclick on the BODY enters isolation (design §7 guardrail).
-   */
-  onNameChange?: (nodeId: string, name: string) => void;
-  /** Change the optional title glyph (PATCH /nodes/:id { icon }). Wired in M7 (edit mode only). */
-  onIconChange?: (nodeId: string, icon: string | null) => void;
-  /**
    * Canvas grouping M6: true when this group is ENTERED (isolation). The host's
-   * `buildNode` sets it for the single active group. When true the container's
-   * fill becomes click-through (`pointer-events:none`) so members underneath the
-   * chrome — and the empty pane in the padding band — are reachable; only the
-   * title band stays interactive (the exit affordance). Absent/false → the box
-   * captures clicks and selects the group as a unit (M5 group-move).
+   * `buildNode` sets it for the single active group. When true the hit-area
+   * becomes click-through (`pointer-events:none`) so members underneath — and
+   * the empty pane in the band around them — are reachable (→ select a member /
+   * exit), and a faint dashed outline marks the entered bounds. Absent/false →
+   * the area captures clicks and selects the group as a unit.
    */
   active?: boolean;
 } & Record<string, unknown>;
@@ -38,14 +32,6 @@ export type GroupNodeType = Node<GroupNodeRuntimeData, 'group'>;
 
 /** Fallback box size for a group with no persisted width/height. */
 export const GROUP_DEFAULT_SIZE = { width: 320, height: 220 } as const;
-
-/**
- * Default corner radius for the group container when `data.cornerRadius` is
- * unset. A group reads as a soft container rather than a hard-edged card, so it
- * carries a gentler default than the geometric nodes (which fall back to the
- * renderer's CSS radius).
- */
-const GROUP_DEFAULT_CORNER_RADIUS = 12;
 
 /**
  * Z-INDEX CONTRACT (design §9.6, §12.4): a group MUST paint BEHIND its members
@@ -59,68 +45,51 @@ const GROUP_DEFAULT_CORNER_RADIUS = 12;
  * would let DOM order decide and a group authored last would paint ON TOP of
  * its members. `elevateNodesOnSelect={false}` (already set on <ReactFlow>) plus
  * the `.react-flow__node-group` carve-out in index.css keep this value stable
- * even while the group is selected — v1's worst z-index landmine is structurally
- * absent here. Exported so `buildNode` and the M1 z-order test share one source
- * of truth.
+ * even while the group is selected. Exported so `buildNode` and the M1 z-order
+ * test share one source of truth.
  */
 export const GROUP_NODE_Z_INDEX = -1;
 
-function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNodeType>) {
+function GroupNodeImpl({ data, selected, isConnectable }: NodeProps<GroupNodeType>) {
   const title = data.name ?? '';
   const sized = data.width !== undefined || data.height !== undefined;
   // Canvas grouping M6: this group is ENTERED (isolation). Drives the
-  // click-through fill + the "entered" affordance below.
+  // click-through hit-area + the faint "entered" outline below.
   const active = data.active === true;
 
-  // When data.shadow is set, paint `var(--node-shadow-N)` inline and drop the
-  // baseline class so the two don't compose (mirrors rectangle-node).
-  const shadowClass = data.shadow !== undefined ? '' : 'sf:shadow-sm';
-  const cornerRadius =
-    data.cornerRadius !== undefined ? data.cornerRadius : GROUP_DEFAULT_CORNER_RADIUS;
-
   const containerStyle: CSSProperties = {
-    // Border + background derived from the shared color tokens, exactly like
-    // rectangle-node / geometric-node so a group styles identically to a card.
-    borderColor: colorTokenStyle(data.borderColor, 'node').borderColor,
-    backgroundColor:
-      data.backgroundColor !== undefined
-        ? colorTokenStyle(data.backgroundColor, 'node').backgroundColor
-        : NODE_DEFAULT_BG_WHITE,
-    borderWidth: data.borderSize !== undefined ? data.borderSize : undefined,
-    borderStyle: data.borderStyle,
-    borderRadius: cornerRadius,
-    ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
+    // The group draws no chrome — it is a transparent hit-area + connector
+    // anchor. When unsized, fall back to a default box so the wrapper has a
+    // footprint to hit-test and anchor handles against.
     ...(sized ? {} : { width: GROUP_DEFAULT_SIZE.width, height: GROUP_DEFAULT_SIZE.height }),
-    // M6 isolation: the fill becomes CLICK-THROUGH so a click on the padding
-    // band falls to the empty pane (→ exit) and members underneath the chrome
-    // are reachable. The title band re-enables pointer-events on its own wrapper
-    // below (the exit affordance). Members are separate top-level DOM nodes (the
-    // group is z = -1), so they are unaffected by this. No z-index gymnastics.
-    ...(active ? { pointerEvents: 'none' as const } : {}),
-    // "Entered" affordance: a subtle primary-tinted ring drawn with `outline`
-    // (CSS-light — outline doesn't affect layout and needs no extra element or
-    // z-index). The `data-active` attribute below is the stable test hook.
-    ...(active ? { outline: '2px solid hsl(var(--primary) / 0.55)', outlineOffset: '2px' } : {}),
+    // M6 isolation: the hit-area becomes CLICK-THROUGH so a click in the band
+    // around members falls to the empty pane (→ exit) and members underneath
+    // are reachable. A subtle dashed outline marks the entered bounds — drawn
+    // with `outline` (CSS-light: no layout impact, no extra element, no z-index
+    // churn). The `data-active` attribute is the stable test/app hook.
+    ...(active
+      ? {
+          pointerEvents: 'none' as const,
+          outline: '1px dashed hsl(var(--primary) / 0.5)',
+          outlineOffset: '0px',
+        }
+      : {}),
   };
 
   return (
     <div
-      className={cn(
-        'sf:group sf:flex sf:flex-col sf:overflow-hidden sf:border-[3px] sf:transition-shadow',
-        shadowClass,
-        sized ? 'sf:h-full sf:w-full' : '',
-      )}
+      className={cn('sf:box-border', sized ? 'sf:h-full sf:w-full' : '')}
       style={containerStyle}
       data-testid="group-node"
       data-node-type="group"
       // M6: stable hook for tests + the live app to detect isolation entry. Only
       // present (="true") while this group is the active/entered one.
       data-active={active ? 'true' : undefined}
-      // The container's accessible name comes from its title so screen readers
-      // announce the group (mirrors the a11y convention in design §12.11). We
-      // give the box an aria-label but no explicit ARIA role — a plain `role`
-      // on a generic <div> trips biome's useSemanticElements, and the visible
-      // title (NodeHeader) already carries the readable name.
+      // The group's accessible name comes from its (optional) title so screen
+      // readers can still announce it, even though no visible header is drawn.
+      // No explicit ARIA role — a `role` on a generic <div> trips biome's
+      // useSemanticElements and the group carries no interactive semantics of
+      // its own (selection/drag come from the React Flow node wrapper).
       aria-label={title || 'Group'}
     >
       <Handle
@@ -137,39 +106,6 @@ function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNod
         isConnectable={isConnectable}
         className={cn('sf:opacity-0 sf:transition-opacity', selected && 'sf:opacity-100!')}
       />
-      {/* Title band — sits in the group's top padding band (GROUP_TITLE_BAND_PX,
-          reserved above the topmost member by computeGroupBox) so it never
-          overlaps members, which render as sibling nodes ON TOP of this box (the
-          group sits at zIndex -1). NodeHeader renders the title + optional icon
-          and, with `onNameChange`/`onIconChange` wired by buildNode (M7, edit
-          mode), supports inline title rename + icon edit. NodeHeader's
-          dblclick-to-edit handler `stopPropagation()`s so a dblclick on the title
-          edits and never bubbles to the M6 group-ENTER handler (title=edit,
-          body=enter). M6: when the container fill is click-through (active),
-          re-enable pointer-events on JUST the title band so it stays the
-          interactive exit affordance (and the rename target). `display:contents`
-          keeps the wrapper layout-neutral when inactive. */}
-      <div
-        style={active ? { pointerEvents: 'auto' } : { display: 'contents' }}
-        data-testid="group-node-titlebar"
-      >
-        <NodeHeader
-          nodeId={id}
-          name={title}
-          icon={data.icon}
-          selected={selected}
-          fontSize={data.fontSize}
-          backgroundColor={data.backgroundColor}
-          onNameChange={data.onNameChange}
-          onIconChange={data.onIconChange}
-          testId="group-node-header"
-          titleTestId="group-node-title"
-        />
-      </div>
-      {/* The padded gap below the title band IS the group's chrome — members
-          render as ordinary sibling nodes ON TOP of this box (the group sits at
-          a negative zIndex). This milestone draws no body content. */}
-      <div className="sf:min-h-0 sf:flex-1" data-testid="group-node-body" />
       <Handle
         type="source"
         position={Position.Right}

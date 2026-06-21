@@ -384,7 +384,7 @@ describe('DetailPanel', () => {
 // title-icon trigger as a rectangle — no new sidebar components, just type
 // gating. These tests pin that a group flows through untouched.
 describe('DetailPanel (group)', () => {
-  it('renders Name / Description / Detail editors for a selected group', () => {
+  it('is chrome-less: renders Description / Detail editors but NO Name/header row', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
@@ -398,12 +398,14 @@ describe('DetailPanel (group)', () => {
     );
     // Populated branch (NOT the empty-state).
     expect(findByTestId(tree, 'detail-panel-empty')).toBeNull();
-    expect(findByTestId(tree, 'detail-panel-name')).not.toBeNull();
+    // A group has no header → the editable Name row is suppressed.
+    expect(findByTestId(tree, 'detail-panel-name')).toBeNull();
+    // …but the description + detail metadata editors still render.
     expect(findByTestId(tree, 'detail-panel-description')).not.toBeNull();
     expect(findByTestId(tree, 'detail-panel-detail')).not.toBeNull();
   });
 
-  it('seeds the Name editor from the group title (data.name)', () => {
+  it('hides the Name editor even when the group carries a data.name', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
@@ -413,12 +415,13 @@ describe('DetailPanel (group)', () => {
         onNameChange: () => {},
       }),
     );
-    const name = findByTestId(tree, 'detail-panel-name');
-    expect((name?.props as { value?: string }).value).toBe('Payments');
+    // Chrome-less group → no visible Name editor regardless of data.name.
+    expect(findByTestId(tree, 'detail-panel-name')).toBeNull();
+    // The sr-only <h2> still announces the entity for accessibility.
+    expect(findByTestId(tree, 'detail-panel-title')).not.toBeNull();
   });
 
-  it('forwards the edit callbacks to the right EditableField slots', () => {
-    const onName = () => {};
+  it('forwards the description + detail edit callbacks to the right EditableField slots', () => {
     const onDescription = () => {};
     const onDetail = () => {};
     const tree = renderWithHooks(() =>
@@ -427,13 +430,9 @@ describe('DetailPanel (group)', () => {
         node: makeGroupNode(),
         connector: null,
         onClose: () => {},
-        onNameChange: onName,
         onDescriptionChange: onDescription,
         onDetailChange: onDetail,
       }),
-    );
-    expect((findByTestId(tree, 'detail-panel-name')?.props as { onSave?: unknown }).onSave).toBe(
-      onName,
     );
     expect(
       (findByTestId(tree, 'detail-panel-description')?.props as { onSave?: unknown }).onSave,
@@ -457,7 +456,7 @@ describe('DetailPanel (group)', () => {
     expect((detail?.props as { markdown?: boolean }).markdown).toBe(true);
   });
 
-  it('exposes the title-icon trigger for a group (supportsIconField includes group)', () => {
+  it('does NOT render the title-icon trigger for a group (chrome-less, no header glyph)', () => {
     const tree = renderWithHooks(() =>
       DetailPanel({
         flowId: 'd1',
@@ -468,9 +467,7 @@ describe('DetailPanel (group)', () => {
         onIconChange: () => {},
       }),
     );
-    // TitleIconTrigger renders the add/replace icon button. With no icon set it
-    // shows the dashed "Add icon" placeholder — the trigger element is present.
-    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(1);
+    expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 });
 

@@ -2,13 +2,12 @@ import { describe, expect, it } from 'bun:test';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
 import { GROUP_NODE_Z_INDEX, GroupNode, type GroupNodeType } from './group-node.tsx';
-import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 
 // Mirrors freehand-node.test.tsx / icon-node.test.tsx: Bun runs without a DOM,
 // so we shim React's internal dispatcher and call the component as a plain
-// function. Each hook returns a synchronous value; useContext returns the
-// canvas-studio shape NodeHeader reads.
+// function. The simplified GroupNode uses no hooks, but the shim is kept so the
+// harness stays identical to the sibling node tests.
 type Hooks = {
   useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
   useCallback: <T>(fn: T) => T;
@@ -122,7 +121,11 @@ describe('GroupNode', () => {
     expect(tree.props['data-testid']).toBe('group-node');
   });
 
-  it('paints background + border from the color tokens and the persisted corner radius', () => {
+  it('is CHROME-LESS: paints no background, no border, no corner radius', () => {
+    // A group is a transparent hit-area + connector anchor. It MUST NOT derive
+    // any fill/border from the (now-ignored) color tokens — even when the data
+    // carries legacy visual fields, the renderer leaves them off so the only
+    // selection treatment is the overlay marquee.
     const tree = callGroupNode({
       childIds: ['a'],
       width: 300,
@@ -133,12 +136,26 @@ describe('GroupNode', () => {
       cornerRadius: 16,
     });
     const style = (tree.props.style ?? {}) as React.CSSProperties;
-    // slate/blue resolve to non-empty inline colors (not the white default).
-    expect(typeof style.backgroundColor).toBe('string');
-    expect(style.backgroundColor).not.toBe('hsl(var(--card))');
-    expect(typeof style.borderColor).toBe('string');
-    expect(style.borderWidth).toBe(2);
-    expect(style.borderRadius).toBe(16);
+    expect(style.backgroundColor).toBeUndefined();
+    expect(style.borderColor).toBeUndefined();
+    expect(style.borderWidth).toBeUndefined();
+    expect(style.borderStyle).toBeUndefined();
+    expect(style.borderRadius).toBeUndefined();
+    expect(style.boxShadow).toBeUndefined();
+  });
+
+  it('renders NO title header (the group is chrome-less)', () => {
+    // No NodeHeader, no title element, no titlebar — the group never draws a
+    // header band. Identification comes from the aria-label only.
+    const tree = callGroupNode({ childIds: [], name: 'My group', width: 300, height: 200 });
+    const titleEls = findAll(
+      tree,
+      (el) =>
+        el.props['data-testid'] === 'group-node-header' ||
+        el.props['data-testid'] === 'group-node-title' ||
+        el.props['data-testid'] === 'group-node-titlebar',
+    );
+    expect(titleEls).toHaveLength(0);
   });
 
   it('fills the wrapper (h-full/w-full) and omits fixed px when sized', () => {
@@ -158,13 +175,6 @@ describe('GroupNode', () => {
     expect(style.height).toBe(220);
     const className = String(tree.props.className ?? '');
     expect(className).not.toContain('h-full');
-  });
-
-  it('renders the title via NodeHeader using data.name', () => {
-    const tree = callGroupNode({ childIds: [], name: 'My group', width: 300, height: 200 });
-    const header = findElement(tree, (type) => type === NodeHeader);
-    if (!header) throw new Error('NodeHeader not found in GroupNode tree');
-    expect(header.props.name).toBe('My group');
   });
 
   it('exposes an accessible name from the title (aria-label)', () => {
@@ -198,11 +208,9 @@ describe('GroupNode', () => {
       findAll(tree, (el) => el.type === Handle).map((h) => h.props as HandleProps);
 
     it('places target handles on TOP + LEFT and source handles on RIGHT + BOTTOM (border-anchored)', () => {
-      // The handles are anchored to the OUTER border via xyflow's Position enum
-      // (not the inner flex layout), so the 52px title band — which lives INSIDE
-      // the box (design §11 L7.4) — never collides with the Top handle; the Top
-      // handle sits on the box's top edge, the band sits below it. Mirrors the
-      // rectangle-node handle contract so a group connects exactly like a card.
+      // The handles are anchored to the OUTER border via xyflow's Position enum,
+      // so they sit on the box edges. Mirrors the rectangle-node handle contract
+      // so a group connects exactly like a card.
       const byId = new Map(
         handlesOf(callGroupNode({ childIds: [], width: 300, height: 200 })).map((h) => [
           String(h.id),
@@ -244,93 +252,33 @@ describe('GroupNode', () => {
     // group to GROUP_NODE_Z_INDEX on EVERY render regardless of where the group
     // lands in the node array, and `elevateNodesOnSelect={false}` keeps it there
     // even when selected. So whatever a user does with reorder, a member's
-    // effective z (undefined → 0) stays strictly above its group's (< 0): a
-    // member can never fall behind its group, nor a group rise above its
-    // members. This asserts the numeric contract the reorder path relies on.
+    // effective z (undefined → 0) stays strictly above its group's (< 0).
     const memberEffectiveZ = 0; // members leave zIndex undefined → xyflow treats as 0
     expect(GROUP_NODE_Z_INDEX).toBeLessThan(memberEffectiveZ);
   });
 
   // -- M6 isolation affordance (design §5.3) --------------------------------
   describe('M6: entered (data.active) affordance', () => {
-    const findTitlebar = (tree: ReactElementLike) =>
-      findAll(tree, (el) => el.props['data-testid'] === 'group-node-titlebar')[0];
-
-    it('NOT entered: no data-active, fill stays interactive, titlebar is layout-neutral', () => {
+    it('NOT entered: no data-active, hit-area stays interactive, no outline', () => {
       const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200 });
-      // No isolation affordance.
       expect(tree.props['data-active']).toBeUndefined();
       const style = (tree.props.style ?? {}) as React.CSSProperties;
-      // Fill captures clicks (selects the group as a unit, M5 group-move).
+      // The hit-area captures clicks (selects the group as a unit).
       expect(style.pointerEvents).toBeUndefined();
       expect(style.outline).toBeUndefined();
-      // The titlebar wrapper is display:contents (no pointer-events override).
-      const titlebar = findTitlebar(tree);
-      const tbStyle = (titlebar?.props.style ?? {}) as React.CSSProperties;
-      expect(tbStyle.display).toBe('contents');
-      expect(tbStyle.pointerEvents).toBeUndefined();
     });
 
-    it('entered: data-active="true", fill click-through, ring affordance, titlebar re-enabled', () => {
+    it('entered: data-active="true", hit-area click-through, faint dashed outline', () => {
       const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200, active: true });
       // Stable test hook for entry.
       expect(tree.props['data-active']).toBe('true');
       const style = (tree.props.style ?? {}) as React.CSSProperties;
-      // The fill becomes click-through so members underneath + the empty pane in
-      // the padding band are reachable (→ exit). No z-index gymnastics.
+      // The hit-area becomes click-through so members underneath + the empty pane
+      // in the band around them are reachable (→ select member / exit).
       expect(style.pointerEvents).toBe('none');
-      // A subtle ring marks the entered state (drawn with outline, layout-free).
+      // A subtle dashed outline marks the entered bounds (layout-free).
       expect(typeof style.outline).toBe('string');
-      // The title band re-enables pointer-events so it stays the interactive exit
-      // affordance even while the fill is click-through.
-      const titlebar = findTitlebar(tree);
-      const tbStyle = (titlebar?.props.style ?? {}) as React.CSSProperties;
-      expect(tbStyle.pointerEvents).toBe('auto');
-    });
-  });
-
-  // -- M7 inline title + icon edit (design §4.1, §7.1) ----------------------
-  describe('M7: inline title + icon edit wiring', () => {
-    const headerOf = (tree: ReactElementLike) => findElement(tree, (type) => type === NodeHeader);
-
-    it('forwards data.onNameChange to NodeHeader (→ dblclick-to-rename active)', () => {
-      const onName = () => {};
-      const tree = callGroupNode({
-        childIds: ['a'],
-        name: 'My group',
-        width: 300,
-        height: 200,
-        onNameChange: onName,
-      });
-      const header = headerOf(tree);
-      if (!header) throw new Error('NodeHeader not found');
-      // The SAME callback identity reaches NodeHeader, which is what activates
-      // its dblclick-to-edit path (and the stopPropagation that keeps the
-      // dblclick from bubbling to the M6 group-enter handler).
-      expect(header.props.onNameChange).toBe(onName);
-    });
-
-    it('title is read-only when no onNameChange is wired (view/mini)', () => {
-      const tree = callGroupNode({ childIds: ['a'], name: 'My group', width: 300, height: 200 });
-      const header = headerOf(tree);
-      if (!header) throw new Error('NodeHeader not found');
-      expect(header.props.onNameChange).toBeUndefined();
-    });
-
-    it('forwards data.onIconChange to NodeHeader (optional title glyph edit)', () => {
-      const onIcon = () => {};
-      const tree = callGroupNode({
-        childIds: ['a'],
-        name: 'My group',
-        icon: 'folder',
-        width: 300,
-        height: 200,
-        onIconChange: onIcon,
-      });
-      const header = headerOf(tree);
-      if (!header) throw new Error('NodeHeader not found');
-      expect(header.props.onIconChange).toBe(onIcon);
-      expect(header.props.icon).toBe('folder');
+      expect(String(style.outline)).toContain('dashed');
     });
   });
 });

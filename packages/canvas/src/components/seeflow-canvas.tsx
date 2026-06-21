@@ -3553,7 +3553,11 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return inputs;
   }, [nodes, nodeOverrides, selectedNodeIds, selectedGroupId]);
 
-  const selectedNodesForStyleStrip = selectedNodes ?? [];
+  // A group is chrome-less — it has no background/border/corner/shadow to style,
+  // so it is excluded from the StyleStrip's node set. A pure-group selection then
+  // yields no stylable nodes (the StyleStrip hides itself); a mixed selection
+  // styles only the loose nodes. (Don't-support-background, group simplification.)
+  const selectedNodesForStyleStrip = (selectedNodes ?? []).filter((n) => n.type !== 'group');
 
   const sourceNodes = useMemo<Node[]>(() => {
     const buildNode = (merged: FlowNode): Node => {
@@ -3656,19 +3660,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           })(),
           onIconChange: (() => {
             // Same edit-mode + node-type gate as the inline-edit callbacks.
-            // type:'rectangle', type:'component', type:'linkflow', and (M7)
-            // type:'group' render a header icon trigger next to the title — every
-            // other node type either suppresses the icon affordance (geometric
-            // illustrative shapes don't draw header chrome; text/sticky/ellipse
-            // have no header) or owns the icon presentation differently
-            // (type:'icon', type:'image'). type:'html' previously carried an icon
-            // but its caption affordance was removed.
+            // type:'rectangle', type:'component', and type:'linkflow' render a
+            // header icon trigger next to the title — every other node type
+            // either suppresses the icon affordance (geometric illustrative
+            // shapes don't draw header chrome; text/sticky/ellipse have no
+            // header) or owns the icon presentation differently (type:'icon',
+            // type:'image'). type:'group' is chrome-less (no header/title), so it
+            // carries no icon affordance.
             if (!isEditMode) return undefined;
             if (
               merged.type !== 'rectangle' &&
               merged.type !== 'component' &&
-              merged.type !== 'linkflow' &&
-              merged.type !== 'group'
+              merged.type !== 'linkflow'
             )
               return undefined;
             return onIconChange;
