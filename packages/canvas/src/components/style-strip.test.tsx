@@ -1064,6 +1064,68 @@ describe('StyleStrip — connector path merge + head shape', () => {
   });
 });
 
+// Task 2: one font-size control drives BOTH node text and connector labels, so
+// a mixed (node + connector) selection updates everything at once.
+describe('StyleStrip — unified font size (nodes + connectors)', () => {
+  const conn = (over: Partial<Connector> = {}): Connector =>
+    ({ id: 'c1', source: 'a', target: 'b', ...over }) as Connector;
+
+  function findFontSizeSlider(tree: unknown): ReactElementLike {
+    const slider = findElement(tree, testIdEquals('style-tab-font-size-slider'));
+    if (!slider) throw new Error('font-size slider missing');
+    return slider;
+  }
+
+  it('font size commit on a mixed selection updates nodes and connectors', () => {
+    const onStyleNode = mock(() => {});
+    const onStyleConnector = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('n1')],
+      connectors: [conn({ id: 'c1' })],
+      onStyleNode,
+      onStyleConnector,
+    });
+    const slider = findFontSizeSlider(tree);
+    (slider.props as { onCommit: (n: number) => void }).onCommit(40);
+    expect(onStyleNode).toHaveBeenCalledWith('n1', { fontSize: 40 });
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { fontSize: 40 });
+  });
+
+  it('font size preview on a mixed selection previews nodes and connectors', () => {
+    const onStyleNodePreview = mock(() => {});
+    const onStyleConnectorPreview = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('n1')],
+      connectors: [conn({ id: 'c1' })],
+      onStyleNode: () => {},
+      onStyleConnector: () => {},
+      onStyleNodePreview,
+      onStyleConnectorPreview,
+    });
+    const slider = findFontSizeSlider(tree);
+    (slider.props as { onPreview?: (n: number) => void }).onPreview?.(40);
+    expect(onStyleNodePreview).toHaveBeenCalledWith('n1', { fontSize: 40 });
+    expect(onStyleConnectorPreview).toHaveBeenCalledWith('c1', { fontSize: 40 });
+  });
+
+  it('the font-size slider spans 8–64 and is editable up to 200', () => {
+    const tree = callStrip({ nodes: [rectangleFixture('n1')], connectors: [conn()] });
+    const slider = findFontSizeSlider(tree);
+    const p = slider.props as { min: number; max: number; editable?: boolean; inputMax?: number };
+    expect(p.min).toBe(8);
+    expect(p.max).toBe(64);
+    expect(p.editable).toBe(true);
+    expect(p.inputMax).toBe(200);
+  });
+
+  it('a node+connector mix with differing default sizes reads indeterminate', () => {
+    // node default 22, connector default 11 → genuine mix.
+    const tree = callStrip({ nodes: [rectangleFixture('n1')], connectors: [conn()] });
+    const slider = findFontSizeSlider(tree);
+    expect((slider.props as { indeterminate?: boolean }).indeterminate).toBe(true);
+  });
+});
+
 // Task 3: SliderControl's editable number input. The input accepts values above
 // the slider max (up to inputMax) and clamps to [min, inputMax].
 describe('SliderControl — editable number input', () => {

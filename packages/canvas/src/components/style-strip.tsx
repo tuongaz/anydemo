@@ -356,13 +356,6 @@ export function StyleStrip({
       for (const node of nodes) onStyleNodePreview?.(node.id, { fontSize: n });
     }
   };
-  // US-008: detect mixed font sizes across the selection so the slider can
-  // render an indeterminate placeholder until the user picks a value. Treat
-  // unset (undefined) as the default so a node with explicit 22 and one
-  // without are considered equal.
-  const fontSizeIndeterminate =
-    visualNodes.length > 1 &&
-    new Set(visualNodes.map((n) => n.data.fontSize ?? NODE_FONT_SIZE_DEFAULT)).size > 1;
   // Text alignment fan-out. Mirrors the unified color apply path so multi-node
   // selections commit through the atomic batch API when available, falling
   // back to the per-node loop otherwise. Active value defaults to
@@ -379,17 +372,34 @@ export function StyleStrip({
     }
   };
   const textAlignActive: TextAlign = firstVisualNode?.data.textAlign ?? DEFAULT_TEXT_ALIGN;
-  // US-018: per-connector label font size. Fan-out + indeterminate handling
-  // mirror the node fontSize fan-out above.
+  // US-018: per-connector label font size. Fan-out mirrors the node fontSize
+  // fan-out above.
   const applyConnectorFontSize = (n: number) => {
     for (const c of connectors) onStyleConnector(c.id, { fontSize: n });
   };
   const previewConnectorFontSize = (n: number) => {
     for (const c of connectors) onStyleConnectorPreview?.(c.id, { fontSize: n });
   };
-  const connectorFontSizeIndeterminate =
-    connectors.length > 1 &&
-    new Set(connectors.map((c) => c.fontSize ?? CONNECTOR_FONT_SIZE_DEFAULT)).size > 1;
+  // Unified text font-size fan-out: one control drives node text AND connector
+  // labels. Each underlying helper is a no-op when its collection is empty, so
+  // this is correct for nodes-only, connectors-only, and mixed selections.
+  const applyTextFontSize = (n: number) => {
+    applyFontSize(n);
+    applyConnectorFontSize(n);
+  };
+  const previewTextFontSize = (n: number) => {
+    previewFontSize(n);
+    previewConnectorFontSize(n);
+  };
+  // Indeterminate across the WHOLE selection: nodes default to 22, connectors to
+  // 11, so a genuine mix of node+connector text reads "Mixed" — which is honest,
+  // they ARE different sizes until the user picks one.
+  const textFontSizeIndeterminate = (() => {
+    const vals = new Set<number>();
+    for (const n of visualNodes) vals.add(n.data.fontSize ?? NODE_FONT_SIZE_DEFAULT);
+    for (const c of connectors) vals.add(c.fontSize ?? CONNECTOR_FONT_SIZE_DEFAULT);
+    return vals.size > 1;
+  })();
   // US-005: corner-radius apply/preview. Mirrors the borderSize fan-out
   // (per-node loop) so multi-select drags update every selected node and
   // the live preview surfaces optimistic overrides during the drag.
@@ -922,18 +932,18 @@ export function StyleStrip({
                 testId={pureConnector ? 'style-strip-connector-font-size' : 'style-strip-font-size'}
               >
                 <SliderControl
-                  value={pureConnector ? firstConnector?.fontSize : firstVisualNode?.data.fontSize}
+                  value={hasNodes ? firstVisualNode?.data.fontSize : firstConnector?.fontSize}
                   defaultValue={
-                    pureConnector ? CONNECTOR_FONT_SIZE_DEFAULT : NODE_FONT_SIZE_DEFAULT
+                    hasNodes ? NODE_FONT_SIZE_DEFAULT : CONNECTOR_FONT_SIZE_DEFAULT
                   }
-                  min={pureConnector ? 8 : 10}
-                  max={32}
+                  min={8}
+                  max={64}
                   suffix="px"
-                  indeterminate={
-                    pureConnector ? connectorFontSizeIndeterminate : fontSizeIndeterminate
-                  }
-                  onPreview={pureConnector ? previewConnectorFontSize : previewFontSize}
-                  onCommit={pureConnector ? applyConnectorFontSize : applyFontSize}
+                  editable
+                  inputMax={200}
+                  indeterminate={textFontSizeIndeterminate}
+                  onPreview={previewTextFontSize}
+                  onCommit={applyTextFontSize}
                   testId={
                     pureConnector
                       ? 'style-tab-connector-font-size-slider'
