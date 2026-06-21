@@ -184,6 +184,12 @@ describe('buildProjectBundle', () => {
     const entries = unzipSync(zip);
     expect('flows/main/files/assets/img.png' in entries).toBe(true);
     expect(entries['flows/main/files/assets/img.png']).toEqual(pngBytes);
+    // The envelope's data.path is rewritten to the asset's in-bundle location
+    // so the cloud viewer resolves it (the studio-internal path would 404).
+    const envelope = JSON.parse(new TextDecoder().decode(entries['flows/main/flow.json'])) as {
+      nodes: Array<{ data?: { path?: string } }>;
+    };
+    expect(envelope.nodes[0]?.data?.path).toBe('flows/main/files/assets/img.png');
   });
 
   it('deduplicates the same asset path across multiple image nodes', async () => {

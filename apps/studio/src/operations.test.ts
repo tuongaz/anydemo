@@ -299,6 +299,36 @@ describe('addNodeImpl + detail externalization', () => {
     expect(node.data.detail).toBe(nodeFileRef(nodeId, 'detail.md'));
   });
 
+  it('duplicates the image file into the new node folder on paste (no aliasing)', async () => {
+    const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
+    // Seed a source image node folder + file (as an upload would).
+    const srcId = 'node-src0000001';
+    mkdirSync(join(repoPath, 'nodes', srcId), { recursive: true });
+    writeFileSync(join(repoPath, 'nodes', srcId, 'pic.png'), 'PNGBYTES');
+
+    // Paste: a new node id carrying the SOURCE node's data.path.
+    const newId = 'node-dup0000002';
+    const res = await addNodeImpl(deps, flowId, {
+      id: newId,
+      type: 'image',
+      position: { x: 10, y: 10 },
+      data: { path: `nodes/${srcId}/pic.png`, alt: 'pic' },
+    });
+    expect(res.kind).toBe('ok');
+    if (res.kind !== 'ok') return;
+
+    // The file was COPIED into the new node's own folder...
+    const copiedAbs = join(repoPath, 'nodes', newId, 'pic.png');
+    expect(existsSync(copiedAbs)).toBe(true);
+    expect(readFileSync(copiedAbs, 'utf8')).toBe('PNGBYTES');
+    // ...the source file is untouched (no aliasing)...
+    expect(readFileSync(join(repoPath, 'nodes', srcId, 'pic.png'), 'utf8')).toBe('PNGBYTES');
+    // ...and data.path was repointed at the new node's folder.
+    const flow = JSON.parse(readFileSync(flowAbs, 'utf8'));
+    const node = flow.nodes.find((n: { id: string }) => n.id === newId);
+    expect(node.data.path).toBe(`nodes/${newId}/pic.png`);
+  });
+
   it('writes empty detail.md and stores file:// ref when detail is omitted', async () => {
     const { deps, flowId, repoPath, flowAbs } = await setupProjectWithFlow();
     const res = await addNodeImpl(deps, flowId, {

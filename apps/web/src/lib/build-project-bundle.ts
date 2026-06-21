@@ -130,10 +130,24 @@ export async function buildProjectBundle({
     }
     const { flow } = (await detailRes.json()) as FlowDetailResponse;
 
+    // Rewrite each image node's `data.path` to the asset's location WITHIN the
+    // bundle (`flows/<flowSlug>/files/<assetPath>`). The studio's `data.path` is
+    // project-internal (e.g. `flows/<slug>/nodes/<id>/x.png`); leaving it
+    // unchanged made the cloud viewer resolve a path where no bytes exist → the
+    // image 404'd. Bytes are written at the same `files/<assetPath>` location
+    // below, so the rewritten path resolves. The rewritten path still contains
+    // the `nodes/<id>/` segment the schema refine requires.
+    const bundleNodes = flow.nodes.map((node) => {
+      const assetPath = imageAssetPath(node);
+      if (!assetPath) return node;
+      const data = node.data as Record<string, unknown> | undefined;
+      return { ...node, data: { ...data, path: `flows/${flowSlug}/files/${assetPath}` } };
+    });
+
     const envelope: FlowEnvelopeOnDisk = {
       version: FLOW_ENVELOPE_VERSION,
       name: flow.name,
-      nodes: flow.nodes,
+      nodes: bundleNodes,
       connectors: flow.connectors,
     };
     if (flow.description !== undefined) {

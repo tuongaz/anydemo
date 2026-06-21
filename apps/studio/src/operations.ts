@@ -7,8 +7,16 @@
 // Helpers extracted in US-003: node lifecycle (add/delete/move/reorder).
 // Future stories add patch_node + connector helpers alongside these.
 
-import { existsSync, mkdirSync, readFileSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
-import { dirname, isAbsolute, join } from 'node:path';
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  unlinkSync,
+  writeFileSync,
+} from 'node:fs';
+import { basename, dirname, isAbsolute, join } from 'node:path';
 import { type ZodIssue, z } from 'zod';
 import { writeFileAtomic } from './atomic-write.ts';
 import { inlineComponentSpecs } from './component-spec-resolver.ts';
@@ -1436,6 +1444,12 @@ export async function addNodeImpl(
   // data[field] with the file:// ref, and queue a write inside the mutator
   // below — so flow.json only commits when the write succeeded.
   const externalized: Array<{ absPath: string; content: string }> = [];
+  // Image-node duplication: a paste/duplicate carries a `data.path` still
+  // pointing at the SOURCE node's folder. Copying the file into THIS node's
+  // folder (and repointing `data.path`) makes the copy independent — otherwise
+  // both nodes alias one file (and the post-merge `nodes/<id>/` refine rejects
+  // the foreign path outright). Queued here, executed in the mutator.
+  let imageCopy: { srcAbs: string; destAbs: string } | null = null;
   {
     const dataIsRecord =
       newNode.data !== null && typeof newNode.data === 'object' && !Array.isArray(newNode.data);
@@ -1456,6 +1470,24 @@ export async function addNodeImpl(
         content,
       });
     }
+    if (newNode.type === 'image' && typeof data.path === 'string' && data.path.length > 0) {
+      const srcPath = data.path;
+      const segment = `nodes/${newId}/`;
+      const ownsPath = srcPath.startsWith(segment) || srcPath.includes(`/${segment}`);
+      // Only duplicate when the path lives under a DIFFERENT node's folder AND
+      // the source file actually exists. A path already under this node's
+      // folder (genuine new upload / undo-recreate) is left untouched.
+      if (!ownsPath && existsSync(join(entry.repoPath, srcPath))) {
+        const filename = basename(srcPath);
+        const destRel =
+          flowDir === '.' ? `nodes/${newId}/${filename}` : `${flowDir}/nodes/${newId}/${filename}`;
+        imageCopy = {
+          srcAbs: join(entry.repoPath, srcPath),
+          destAbs: join(entry.repoPath, destRel),
+        };
+        data.path = destRel;
+      }
+    }
     newNode.data = data;
   }
 
@@ -1475,6 +1507,14 @@ export async function addNodeImpl(
       // externalized writes so any detail.md/view.html overlays the restored
       // folder. No-op for a genuinely new id (no matching tombstone).
       restoreNodeDir(entry.repoPath, dirname(entry.flowPath), newId);
+      if (imageCopy) {
+        try {
+          mkdirSync(dirname(imageCopy.destAbs), { recursive: true });
+          copyFileSync(imageCopy.srcAbs, imageCopy.destAbs);
+        } catch (err) {
+          return { kind: 'writeFailed', message: err instanceof Error ? err.message : String(err) };
+        }
+      }
       for (const ext of externalized) {
         try {
           writeNodeFile(ext.absPath, ext.content);
