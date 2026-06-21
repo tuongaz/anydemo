@@ -83,13 +83,16 @@ adapter/history contract change):
   binary corruption.
 
 **Fix:**
-- Paste: for each `type:'image'` node, copy the underlying file into the new
-  node's folder and rewrite `data.path` (server-side externalization branch for
-  `path`, or an adapter `copyImage` before `createNode`).
-- Web bundle: rewrite each image node's `data.path` to match the zip location
-  (or write the asset where the unchanged `data.path` resolves) — consistent on
-  both sides.
-- CLI: carry `BundleFile.content` as binary (base64) instead of UTF-8.
+- Paste: `addNodeImpl` copies the underlying file into the new node's folder
+  and rewrites `data.path` when the path belongs to a different node. **Done.**
+- Web bundle: rewrite each image node's `data.path` to its in-bundle location
+  (`flows/<slug>/files/<assetPath>`); bytes already land there. **Done.**
+- CLI (`seeflow export`): carry `BundleFile.content` as binary (base64).
+  **DEFERRED** — the receiver is an external cloud service (`/api/export`, not
+  in this repo). Base64-encoding the field would break text files too unless
+  the cloud `/api/export` handler is updated in lockstep. The user-facing
+  "Export to cloud" path is the web ZIP path (fixed above); the CLI path needs
+  a coordinated cloud-side change, so it's left for that session.
 
 ## 5. Background color tints body + header, not just border
 
