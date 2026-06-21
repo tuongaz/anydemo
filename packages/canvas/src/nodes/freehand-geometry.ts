@@ -73,9 +73,12 @@ export function simplifyRDP(points: Point[], epsilon: number): Point[] {
 
 /**
  * Snap the segment start→end to the nearest of 8 directions (every 45°:
- * horizontal, vertical, and the four diagonals), projecting `end` onto that
- * ray. Used by the pen tool's Shift-to-straighten gesture. Pressure is carried
- * from `end`. A zero-length segment returns `start` unchanged.
+ * horizontal, vertical, and the four diagonals). The endpoint is placed at the
+ * FULL drag distance along the snapped ray (not the shorter perpendicular
+ * projection), so the straightened line reaches as far as the cursor was
+ * dragged — it ends under the release point rather than behind it. Used by the
+ * pen tool's Shift-to-straighten gesture. Pressure is carried from `end`. A
+ * zero-length segment returns `start` unchanged.
  */
 export function snapToStraightLine(start: Point, end: Point): Point {
   const dx = end[0] - start[0];
@@ -85,10 +88,8 @@ export function snapToStraightLine(start: Point, end: Point): Point {
   // Quantise the angle to the nearest 45° step.
   const step = Math.PI / 4;
   const snapped = Math.round(Math.atan2(dy, dx) / step) * step;
-  // Project the raw segment length onto the snapped unit direction so the
-  // straightened stroke keeps roughly the length the user dragged.
-  const proj = dx * Math.cos(snapped) + dy * Math.sin(snapped);
-  return [start[0] + Math.cos(snapped) * proj, start[1] + Math.sin(snapped) * proj, end[2]];
+  // Keep the dragged length, only rotate it onto the snapped axis.
+  return [start[0] + Math.cos(snapped) * len, start[1] + Math.sin(snapped) * len, end[2]];
 }
 
 function perpendicularDistance(p: Point, a: Point, b: Point): number {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import {
   MIN_STROKE_EXTENT,
+  type Point,
   boundingBox,
   denormalizePoints,
   isAccidentalStroke,
@@ -98,16 +99,18 @@ describe('simplifyRDP', () => {
 });
 
 describe('snapToStraightLine', () => {
-  test('snaps a near-horizontal segment to exactly horizontal', () => {
+  test('snaps a near-horizontal segment to exactly horizontal, keeping the dragged length', () => {
     const [x, y] = snapToStraightLine([0, 0, 0.5], [100, 8, 0.5]);
-    expect(x).toBeCloseTo(100);
+    // Endpoint sits on the horizontal axis at the FULL drag distance (not the
+    // shorter projection onto x), so the line reaches as far as the cursor.
     expect(y).toBeCloseTo(0);
+    expect(x).toBeCloseTo(Math.hypot(100, 8));
   });
 
-  test('snaps a near-vertical segment to exactly vertical', () => {
+  test('snaps a near-vertical segment to exactly vertical, keeping the dragged length', () => {
     const [x, y] = snapToStraightLine([0, 0, 0.5], [6, 100, 0.5]);
     expect(x).toBeCloseTo(0);
-    expect(y).toBeCloseTo(100);
+    expect(y).toBeCloseTo(Math.hypot(6, 100));
   });
 
   test('snaps a ~45deg segment onto the diagonal (equal x/y)', () => {
@@ -116,10 +119,15 @@ describe('snapToStraightLine', () => {
     expect(x).toBeGreaterThan(0);
   });
 
-  test('preserves the projected length along the snapped ray', () => {
-    // pure horizontal input: projected length == dx
-    const [x] = snapToStraightLine([10, 10, 0.5], [110, 10, 0.5]);
-    expect(x).toBeCloseTo(110);
+  test('preserves the full dragged length along the snapped ray', () => {
+    // The straightened endpoint is the same distance from the start as the raw
+    // drag — the line ends under the release point, never short of it.
+    const start: Point = [10, 10, 0.5];
+    const end: Point = [110, 70, 0.5];
+    const snapped = snapToStraightLine(start, end);
+    expect(Math.hypot(snapped[0] - start[0], snapped[1] - start[1])).toBeCloseTo(
+      Math.hypot(end[0] - start[0], end[1] - start[1]),
+    );
   });
 
   test('returns the start point for a zero-length segment', () => {
@@ -131,8 +139,9 @@ describe('snapToStraightLine', () => {
   test('snaps a near-horizontal segment in the negative direction', () => {
     // Locks the atan2 wrap: a leftward drag must stay leftward, not flip to +x.
     const [x, y] = snapToStraightLine([0, 0, 0.5], [-100, 5, 0.5]);
-    expect(x).toBeCloseTo(-100);
     expect(y).toBeCloseTo(0);
+    expect(x).toBeCloseTo(-Math.hypot(100, 5));
+    expect(x).toBeLessThan(0);
   });
 });
 
