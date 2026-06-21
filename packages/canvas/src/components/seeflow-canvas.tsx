@@ -68,6 +68,7 @@ import {
   type DraggedGroup,
   type GroupMoveUpdate,
   computeGroupMoveUpdates,
+  isMemberOfGroup,
   planGroupShortcutAction,
   selectGroupSelection,
   selectGroupableSet,
@@ -2676,6 +2677,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   //      the body-drop fallback in onConnectEndCb is skipped, then dispatch a
   //      synthetic mouseup so xyflow's document-level pointer listeners stop
   //      tracking the gesture.
+  //   3a. Drop-on-pane popover — close it (see inline note below).
+  //   3b. Group isolation (M6) — exit the entered group. Ranked ABOVE the
+  //      selection-clear so the first Esc exits isolation and a second Esc clears
+  //      selection (the design §5.3 ranking).
   //   4. Selection — clear node + connector selections.
   //
   // (Marquee cancellation was removed in US-022 — the marquee gesture is no
@@ -2726,6 +2731,16 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (dropPopoverRef.current) {
         e.preventDefault();
         setDropPopover(null);
+        return;
+      }
+      // 3b. Canvas grouping M6 — EXIT isolation (design §5.3 exit path a). Ranked
+      //     ABOVE selection-clear ON PURPOSE: the FIRST Esc exits an entered
+      //     group (members stay selected); a SECOND Esc then falls through to the
+      //     selection-clear below. Read from the ref so this stable listener sees
+      //     the latest value.
+      if (activeGroupIdRef.current !== null) {
+        e.preventDefault();
+        setActiveGroupId(null);
         return;
       }
       // 4. Selection clear.
@@ -4906,8 +4921,66 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // handlePaneClickWithGroupExit). Connector selection never opens it (the
   // DetailPanel's connector prop is wired to null).
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // SLOT 15 — Canvas grouping M6: double-click-to-enter isolation. `activeGroupId`
+  // is the id of the group the user has ENTERED (so its members are individually
+  // addressable and the group body is click-through), or null when not in
+  // isolation. It is RUNTIME-ONLY UI state — never persisted, never patched —
+  // and is dropped the moment its group vanishes (see the cleanup effect below).
+  // Appended at the END of the useState block per the hook-shim rule in
+  // packages/canvas/CLAUDE.md (so no existing `useStateOverrides[N]` shifts);
+  // it is the 15th useState → `useStateOverrides[14]`.
+  const [activeGroupId, setActiveGroupId] = useState<string | null>(null);
+  // Mirror into a ref so the window-level keydown (ESC) listener and the
+  // memoized click handlers read the latest value without re-binding every time
+  // it changes (same pattern as selectedIdSetRef / onSelectionChangeRef). Refs
+  // never occupy a useState slot, so this doesn't affect the index map.
+  const activeGroupIdRef = useRef<string | null>(activeGroupId);
+  activeGroupIdRef.current = activeGroupId;
+  // M6 — EXIT path (d): drop the active group the instant it stops being a
+  // `type:'group'` node in `nodes` (ungrouped, deleted, or swapped out by a
+  // flow:reload / project switch). `activeGroupId` is runtime-only UI state, so a
+  // stale id must never linger — it would leave the canvas in a phantom isolation
+  // with no group to render the affordance. Guard the setState behind the
+  // existence check so the effect is a no-op on every unrelated `nodes` change.
+  useEffect(() => {
+    if (activeGroupId === null) return;
+    const stillAGroup = nodes.some((n) => n.id === activeGroupId && n.type === 'group');
+    if (!stillAGroup) setActiveGroupId(null);
+  }, [activeGroupId, nodes]);
+  // Canvas grouping M6 — the ISOLATION overlay. `buildNode`/`sourceNodes` (the
+  // rebuild-from-props memo) lives high in the body, BEFORE the `activeGroupId`
+  // useState (which the hook-shim rule pins to the END of the state block), so it
+  // cannot read isolation state directly. Instead, overlay the per-group
+  // isolation render props onto the already-built `rfNodes` HERE — after the
+  // state is in scope. This keeps `sourceNodes` isolation-agnostic AND lag-free
+  // (recomputes synchronously on `[rfNodes, activeGroupId]`). When no group is
+  // entered the memo returns `rfNodes` unchanged (identity stable → xyflow sees
+  // no churn). For the active group it:
+  //   - sets `data.active = true` → the renderer makes the fill click-through
+  //     (`pointer-events:none`) + paints the "entered" ring + stamps
+  //     `data-active="true"` (the stable test hook);
+  //   - sets `draggable = false` → group-move is disabled while entered (step 7);
+  //     no drag → no M5 `groupDragRef` snapshot → children never fan out.
+  // Members sit ABOVE the group (group z = -1) and remain individually
+  // selectable + draggable, so nothing else needs to change.
+  const displayNodes = useMemo<Node[]>(() => {
+    if (activeGroupId === null) return rfNodes;
+    let touched = false;
+    const next = rfNodes.map((n) => {
+      if (n.id !== activeGroupId || n.type !== 'group') return n;
+      touched = true;
+      return {
+        ...n,
+        draggable: false,
+        data: { ...n.data, active: true },
+      };
+    });
+    // If the active id isn't in the rendered list (e.g. mid-swap), don't allocate
+    // a new array — keeps xyflow from re-diffing every node for nothing.
+    return touched ? next : rfNodes;
+  }, [rfNodes, activeGroupId]);
   // US-004: alignment-guides gesture hook. CRITICAL — this call sits AFTER the
-  // last component-level `useState` (sidebarOpen, slot 14) so the hook's own
+  // last component-level `useState` (activeGroupId, slot 15) so the hook's own
   // internal `useState` lands in a slot beyond every index the hook-shim tests
   // reference (0–13); the existing `useStateOverrides[N]` assertions stay
   // valid. The returned API is published into `alignmentApiRef` (read by
@@ -5321,14 +5394,43 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     editHandlesRef.current.get(edge.id)?.();
   }, []);
 
+  // Canvas grouping M6 — ENTER isolation (design §5.3, §12.10). `onNodeDoubleClick`
+  // is NOT otherwise wired (only `onEdgeDoubleClick`), and `zoomOnDoubleClick` is
+  // already false, so a group dblclick has no competing handler. Double-clicking a
+  // group enters it; double-clicking any other node is a no-op here (its own
+  // renderer owns dblclick-to-edit). The title-band's own dblclick-to-rename
+  // (wired in M7) will stopPropagation so it never reaches this enter path.
+  const handleNodeDoubleClick = useCallback((_e: ReactMouseEvent, node: Node) => {
+    if (node.type !== 'group') return;
+    setActiveGroupId(node.id);
+  }, []);
+
   const handleNodeClickWithGroupGate = useCallback(
     (_e: ReactMouseEvent, node: Node) => {
+      // M6 — EXIT path (c): a click on a node that is NOT a member of the active
+      // group leaves isolation, then lets the click select that node normally
+      // (xyflow drives selection via onSelectionChange; we only drop the active
+      // group). A click on a member keeps us inside so the member can be selected
+      // / dragged individually. The active group's own chrome is "not a member",
+      // but clicking it while entered shouldn't exit — guard that explicitly.
+      const active = activeGroupIdRef.current;
+      if (
+        active !== null &&
+        node.id !== active &&
+        !isMemberOfGroup(nodesRef.current, active, node.id)
+      ) {
+        setActiveGroupId(null);
+      }
       onNodeClick?.(node.id);
     },
     [onNodeClick],
   );
   const handlePaneClickWithGroupExit = useCallback(
     (e: ReactMouseEvent) => {
+      // M6 — EXIT path (b): clicking the empty pane leaves isolation. Runs
+      // unconditionally (cheap, idempotent when already null) before forwarding
+      // the host's onPaneClick (which the host uses to close the sidebar, etc.).
+      if (activeGroupIdRef.current !== null) setActiveGroupId(null);
       onPaneClick?.();
       void e;
     },
@@ -5480,7 +5582,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 claim its share of the row. */}
             <div className="sf:relative sf:flex-1 sf:min-w-0 sf:h-full">
               <ReactFlow
-                nodes={rfNodes}
+                nodes={displayNodes}
                 edges={rfEdges}
                 onNodesChange={onNodesChange}
                 nodeTypes={nodeTypes}
@@ -5682,6 +5784,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 // per-edge `registerEditHandle` map gives us O(1) dispatch without
                 // forcing edge identity to change when editing state flips.
                 onEdgeDoubleClick={handleEdgeDoubleClick}
+                // Canvas grouping M6: double-click a group to ENTER isolation.
+                // No zoom conflict (zoomOnDoubleClick is false above).
+                onNodeDoubleClick={handleNodeDoubleClick}
                 onPaneClick={handlePaneClickWithGroupExit}
                 onNodeContextMenu={
                   flags.enableContextMenu && contextEnabled

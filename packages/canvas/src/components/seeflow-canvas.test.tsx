@@ -4620,3 +4620,266 @@ describe('grouping M5: group move fans out to members (§9.1, §12.2)', () => {
     expect(single).toEqual([{ id: 'm1', position: { x: 5, y: 5 } }]);
   });
 });
+
+// ---------------------------------------------------------------------------
+// Canvas grouping M6 — double-click ENTER / one documented EXIT set + the
+// isolation render overlay (design §5.3). `activeGroupId` is the 15th useState
+// → setterSink slot 14 (per packages/canvas/CLAUDE.md). The live pointer/keydown
+// gesture itself is covered by the orchestrator browser test; here we assert the
+// WIRING + the state transitions via the dispatcher-shim.
+// ---------------------------------------------------------------------------
+describe('grouping M6: enter / exit isolation (§5.3)', () => {
+  const ACTIVE_GROUP_SLOT = 14;
+  const makeGroup = (id: string, childIds: string[]): FlowNode => ({
+    id,
+    type: 'group',
+    position: { x: 108, y: 80 },
+    data: { name: 'G', width: 444, height: 132, childIds },
+  });
+  const makeMember = (id: string, x: number): FlowNode => ({
+    id,
+    type: 'rectangle',
+    position: { x, y: 120 },
+    data: { name: id, width: 160, height: 80 },
+  });
+  // grouping-demo geometry: grp-1 box at (108,80); members node-a (120,120),
+  // node-b (340,120); a loose 'outsider' that is NOT a member.
+  const grp = () => makeGroup('grp-1', ['node-a', 'node-b']);
+  const nodeA = () => makeMember('node-a', 120);
+  const nodeB = () => makeMember('node-b', 340);
+  const outsider = (): FlowNode => ({
+    id: 'outsider',
+    type: 'rectangle',
+    position: { x: 700, y: 120 },
+    data: { name: 'outsider', width: 120, height: 60 },
+  });
+
+  function reactFlowOf(props: Record<string, unknown>, setterSink: CapturedSetterCall[]) {
+    const tree = callSeeflowCanvas({ mode: 'edit', ...props }, { setterSink });
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    return rf;
+  }
+  const lastActiveSetter = (sink: CapturedSetterCall[]) =>
+    sink.filter((c) => c.slot === ACTIVE_GROUP_SLOT).at(-1);
+
+  // ---- ENTER ----
+  it('onNodeDoubleClick is wired on the ReactFlow root (NOT wired before M6)', () => {
+    const sink: CapturedSetterCall[] = [];
+    const rf = reactFlowOf({ nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] }, sink);
+    expect(typeof rf.props.onNodeDoubleClick).toBe('function');
+  });
+
+  it('double-clicking a GROUP enters isolation: setActiveGroupId(group.id)', () => {
+    const sink: CapturedSetterCall[] = [];
+    const rf = reactFlowOf({ nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] }, sink);
+    const onNodeDoubleClick = rf.props.onNodeDoubleClick as (e: unknown, n: Node) => void;
+    onNodeDoubleClick({}, { id: 'grp-1', type: 'group' } as unknown as Node);
+    expect(lastActiveSetter(sink)?.next).toBe('grp-1');
+  });
+
+  it('double-clicking a NON-group node does NOT enter isolation', () => {
+    const sink: CapturedSetterCall[] = [];
+    const rf = reactFlowOf({ nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] }, sink);
+    const onNodeDoubleClick = rf.props.onNodeDoubleClick as (e: unknown, n: Node) => void;
+    onNodeDoubleClick({}, { id: 'node-a', type: 'rectangle' } as unknown as Node);
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+
+  // ---- EXIT path (b): empty pane ----
+  it('EXIT (pane): clicking the empty pane while entered clears activeGroupId', () => {
+    const sink: CapturedSetterCall[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1'; // entered
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { setterSink: sink, useStateOverrides: overrides },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const onPaneClick = rf.props.onPaneClick as (e: unknown) => void;
+    onPaneClick({});
+    expect(lastActiveSetter(sink)?.next).toBeNull();
+  });
+
+  it('EXIT (pane): clicking the empty pane when NOT entered is a no-op for activeGroupId', () => {
+    const sink: CapturedSetterCall[] = [];
+    const rf = reactFlowOf({ nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] }, sink);
+    const onPaneClick = rf.props.onPaneClick as (e: unknown) => void;
+    onPaneClick({});
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+
+  // ---- EXIT path (c): click a non-member ----
+  it('EXIT (non-member): clicking a node OUTSIDE the active group clears activeGroupId', () => {
+    const sink: CapturedSetterCall[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB(), outsider()], selectedNodeIds: [] },
+      { setterSink: sink, useStateOverrides: overrides },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const onNodeClick = rf.props.onNodeClick as (e: unknown, n: Node) => void;
+    onNodeClick({}, { id: 'outsider', type: 'rectangle' } as unknown as Node);
+    expect(lastActiveSetter(sink)?.next).toBeNull();
+  });
+
+  it('STAYS (member): clicking a MEMBER of the active group does NOT exit', () => {
+    const sink: CapturedSetterCall[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { setterSink: sink, useStateOverrides: overrides },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const onNodeClick = rf.props.onNodeClick as (e: unknown, n: Node) => void;
+    onNodeClick({}, { id: 'node-a', type: 'rectangle' } as unknown as Node);
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+
+  it('STAYS (own chrome): clicking the active group itself does NOT exit', () => {
+    const sink: CapturedSetterCall[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['grp-1'] },
+      { setterSink: sink, useStateOverrides: overrides },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const onNodeClick = rf.props.onNodeClick as (e: unknown, n: Node) => void;
+    onNodeClick({}, { id: 'grp-1', type: 'group' } as unknown as Node);
+    // The group is "not a member" of itself, but clicking it while entered must
+    // NOT exit (the title-bar affordance owns that). So no clear is emitted.
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+
+  // ---- EXIT path (a): Esc ranked BEFORE selection-clear ----
+  it('EXIT (Esc): first Escape clears activeGroupId (ranked before selection-clear)', () => {
+    // The ESC chain registers a window-level keydown listener inside a useEffect.
+    // This shim env has no DOM `window`, so stub one that captures the registered
+    // handler; then drive the captured handler with a synthetic Escape event.
+    // This keeps the test deterministic (no global dispatch fan-out) while still
+    // exercising the REAL handler body (the §5.3 exit ranking).
+    const captured: Array<(e: { key: string; preventDefault: () => void }) => void> = [];
+    const fakeWindow = {
+      addEventListener: (type: string, fn: unknown) => {
+        if (type === 'keydown') captured.push(fn as (typeof captured)[number]);
+      },
+      removeEventListener: () => {},
+    };
+    const savedWindow = (globalThis as { window?: unknown }).window;
+    const savedDocument = (globalThis as { document?: unknown }).document;
+    (globalThis as { window?: unknown }).window = fakeWindow;
+    // The ESC chain reads `document.activeElement` (isEditableTarget guard).
+    // Stub a document with no focused editable element so the chain proceeds.
+    (globalThis as { document?: unknown }).document = { activeElement: null };
+    try {
+      const sink: CapturedSetterCall[] = [];
+      const effects: CapturedEffect[] = [];
+      const overrides: unknown[] = [];
+      overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+      callSeeflowCanvas(
+        { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: ['node-a'] },
+        { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
+      );
+      // Register every keydown listener (the ESC chain among them). The effect
+      // bodies only call addEventListener (now stubbed) / set refs.
+      for (const e of effects) e.cb();
+      let prevented = false;
+      const escEvent = {
+        key: 'Escape',
+        preventDefault: () => {
+          prevented = true;
+        },
+      };
+      for (const fn of captured) fn(escEvent);
+      // The isolation step ran (slot 14 → null) and preventDefault()'d — it
+      // short-circuits BEFORE the selection-clear (a SECOND Esc would clear
+      // selection; that ranking is the browser test's job to confirm).
+      expect(lastActiveSetter(sink)?.next).toBeNull();
+      expect(prevented).toBe(true);
+    } finally {
+      (globalThis as { window?: unknown }).window = savedWindow;
+      (globalThis as { document?: unknown }).document = savedDocument;
+    }
+  });
+
+  // ---- The isolation render overlay (displayNodes) ----
+  it('OVERLAY: the entered group renders data.active=true and draggable=false', () => {
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    const tree = callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { useStateOverrides: overrides },
+    );
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const rendered = rf.props.nodes as Node[];
+    const g = rendered.find((n) => n.id === 'grp-1');
+    expect((g?.data as { active?: boolean }).active).toBe(true);
+    expect(g?.draggable).toBe(false);
+    // Members are untouched: still draggable, no active flag.
+    const a = rendered.find((n) => n.id === 'node-a');
+    expect(a?.draggable).toBeUndefined();
+    expect((a?.data as { active?: boolean }).active).toBeUndefined();
+  });
+
+  it('OVERLAY: with NO group entered every node renders unchanged (no active / no draggable flip)', () => {
+    const tree = callSeeflowCanvas({
+      mode: 'edit',
+      nodes: [grp(), nodeA(), nodeB()],
+      selectedNodeIds: [],
+    });
+    const rf = findElement(tree, (el) => el.type === ReactFlow);
+    if (!rf) throw new Error('ReactFlow element not found');
+    const rendered = rf.props.nodes as Node[];
+    const g = rendered.find((n) => n.id === 'grp-1');
+    // Not entered → no active flag, group keeps default draggability (undefined).
+    expect((g?.data as { active?: boolean }).active).toBeUndefined();
+    expect(g?.draggable).toBeUndefined();
+  });
+
+  // ---- EXIT path (d): the vanished-group cleanup effect ----
+  it('EXIT (vanished): the cleanup effect clears activeGroupId when its group is gone', () => {
+    const sink: CapturedSetterCall[] = [];
+    const effects: CapturedEffect[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    // The group is NOT in `nodes` (ungrouped / deleted / flow swapped).
+    callSeeflowCanvas(
+      { mode: 'edit', nodes: [nodeA(), nodeB()], selectedNodeIds: [] },
+      { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
+    );
+    // Find the cleanup effect by its deps shape: [activeGroupId, nodes].
+    const cleanup = effects.find(
+      (e) => Array.isArray(e.deps) && e.deps.length === 2 && e.deps[0] === 'grp-1',
+    );
+    if (!cleanup)
+      throw new Error('vanished-group cleanup effect (deps [activeGroupId, nodes]) not found');
+    cleanup.cb();
+    expect(lastActiveSetter(sink)?.next).toBeNull();
+  });
+
+  it('NO-EXIT (still present): the cleanup effect leaves activeGroupId when its group exists', () => {
+    const sink: CapturedSetterCall[] = [];
+    const effects: CapturedEffect[] = [];
+    const overrides: unknown[] = [];
+    overrides[ACTIVE_GROUP_SLOT] = 'grp-1';
+    callSeeflowCanvas(
+      { mode: 'edit', nodes: [grp(), nodeA(), nodeB()], selectedNodeIds: [] },
+      { setterSink: sink, useStateOverrides: overrides, effectSink: effects },
+    );
+    const cleanup = effects.find(
+      (e) => Array.isArray(e.deps) && e.deps.length === 2 && e.deps[0] === 'grp-1',
+    );
+    if (!cleanup) throw new Error('vanished-group cleanup effect not found');
+    cleanup.cb();
+    // Group still a `type:'group'` in nodes → no clear.
+    expect(lastActiveSetter(sink)).toBeUndefined();
+  });
+});

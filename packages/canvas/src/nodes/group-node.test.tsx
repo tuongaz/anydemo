@@ -197,4 +197,42 @@ describe('GroupNode', () => {
     // contract M5/M9 build on (design §9.6).
     expect(GROUP_NODE_Z_INDEX).toBeLessThan(0);
   });
+
+  // -- M6 isolation affordance (design §5.3) --------------------------------
+  describe('M6: entered (data.active) affordance', () => {
+    const findTitlebar = (tree: ReactElementLike) =>
+      findAll(tree, (el) => el.props['data-testid'] === 'group-node-titlebar')[0];
+
+    it('NOT entered: no data-active, fill stays interactive, titlebar is layout-neutral', () => {
+      const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200 });
+      // No isolation affordance.
+      expect(tree.props['data-active']).toBeUndefined();
+      const style = (tree.props.style ?? {}) as React.CSSProperties;
+      // Fill captures clicks (selects the group as a unit, M5 group-move).
+      expect(style.pointerEvents).toBeUndefined();
+      expect(style.outline).toBeUndefined();
+      // The titlebar wrapper is display:contents (no pointer-events override).
+      const titlebar = findTitlebar(tree);
+      const tbStyle = (titlebar?.props.style ?? {}) as React.CSSProperties;
+      expect(tbStyle.display).toBe('contents');
+      expect(tbStyle.pointerEvents).toBeUndefined();
+    });
+
+    it('entered: data-active="true", fill click-through, ring affordance, titlebar re-enabled', () => {
+      const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200, active: true });
+      // Stable test hook for entry.
+      expect(tree.props['data-active']).toBe('true');
+      const style = (tree.props.style ?? {}) as React.CSSProperties;
+      // The fill becomes click-through so members underneath + the empty pane in
+      // the padding band are reachable (→ exit). No z-index gymnastics.
+      expect(style.pointerEvents).toBe('none');
+      // A subtle ring marks the entered state (drawn with outline, layout-free).
+      expect(typeof style.outline).toBe('string');
+      // The title band re-enables pointer-events so it stays the interactive exit
+      // affordance even while the fill is click-through.
+      const titlebar = findTitlebar(tree);
+      const tbStyle = (titlebar?.props.style ?? {}) as React.CSSProperties;
+      expect(tbStyle.pointerEvents).toBe('auto');
+    });
+  });
 });

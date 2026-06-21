@@ -146,8 +146,59 @@ precondition), nesting (non-goal).
 - UAT passes.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Did the group-body click-through reliably let you grab children underneath?
-- Any Esc ordering conflict with existing handlers (draw/pen/selection-clear)?
-- Did the dispatcher-shim tests need slot-index updates (L0.5)? Note new order.
-- **➡ Copy into `07-...md`.**
+## Lessons-learned handoff (FILLED IN — M6 done)
+
+- **The slot rule + an early reader = the one real hazard.** `activeGroupId` is
+  the 15th `useState`, appended at the END (→ `useStateOverrides[14]`); **no
+  existing slot shifted**, so the dispatcher-shim tests at slots 2/3 (drawStart/
+  drawCurrent) and slot 13 (sidebarOpen) were untouched and stayed green with
+  zero index edits. BUT `buildNode`/`sourceNodes` (the rebuild-from-props memo)
+  lives ~1300 lines ABOVE the state block and reads node render-props — it
+  **cannot** reference a state declared at the END (TDZ: "used before
+  declaration"). **Resolution that satisfies BOTH constraints:** keep `sourceNodes`
+  isolation-agnostic and apply the per-group isolation props in a SEPARATE
+  `displayNodes = useMemo(() => overlay(rfNodes, activeGroupId), [rfNodes,
+  activeGroupId])` declared AFTER the state, then feed `<ReactFlow nodes={...}>`
+  from `displayNodes`. Lag-free (synchronous memo) and no slot churn. **This is
+  the pattern for ANY future late-state value that must reach the rendered
+  nodes** — do not try to read it inside `buildNode`.
+- **ONE isolation flag, ONE overlay.** Isolation render = exactly two prop flips
+  on the active group, both in `displayNodes`: `data.active = true` (renderer →
+  fill `pointer-events:none` + outline ring + `data-active="true"`) and
+  `draggable = false` (step 7: group-move off while entered — no drag ⇒ no M5
+  `groupDragRef` ⇒ children never fan out, structurally). No z-index carve-outs,
+  no per-story pointer-events hacks — the v1 trap is avoided.
+- **Group-body click-through reliably reaches children — by construction, not by
+  z-index fighting.** Members are top-level DOM siblings (childIds + absolute
+  positions, NOT DOM-nested) sitting ABOVE the group (group z = -1). So
+  `pointer-events:none` on the group container only neutralizes the group's own
+  box; member hit-testing is unaffected. The title band re-enables
+  `pointer-events:auto` on a thin wrapper (`group-node-titlebar`, `display:contents`
+  when inactive so it's layout-neutral) to stay the interactive exit affordance.
+- **Esc ordering: no conflict.** Inserted ONE step `3b` into the existing US-006
+  single-listener ESC chain, BETWEEN the drop-popover close (3a) and the
+  selection-clear (4), reading `activeGroupIdRef.current`. First Esc exits
+  isolation + `preventDefault`s + early-returns (so it does NOT also clear
+  selection); a second Esc falls through to the selection-clear. Draw/pen/connect
+  steps are higher-priority and unaffected. The whole exit set is documented in
+  that one comment block — no scattering (v1 had six).
+- **Exit set wiring detail (host reality):** the live app wires ONLY
+  `onSelectionChange` — `onNodeClick`/`onPaneClick` host callbacks are unwired in
+  `demo-view.tsx`. So the exit handlers must clear `activeGroupId` THEMSELVES
+  (not lean on the host): pane-click handler clears unconditionally; node-click
+  handler clears iff the clicked node is NOT a member of the active group AND is
+  not the active group itself (`isMemberOfGroup` oracle). xyflow's own
+  `onSelectionChange` still selects the clicked node in the same gesture — we
+  never drive selection from these handlers.
+- **Cleanup effect (exit d):** a `useEffect([activeGroupId, nodes])` drops the id
+  the instant it stops being a `type:'group'` node in `nodes` (ungroup / delete /
+  flow swap). Guarded so it's a no-op on unrelated `nodes` ticks.
+- **Dispatcher-shim slot updates needed? NO.** Append-at-END held the line — the
+  count went 14 → 15 (new `activeGroupId` at index 14); every prior index is
+  unchanged. The only doc edit was bumping the count + adding the name in
+  `packages/canvas/CLAUDE.md`. New M6 shim tests assert via `setterSink` slot 14
+  (enter/exit transitions) + `effectSink` (the cleanup effect by its
+  `[activeGroupId, nodes]` deps shape) + `<ReactFlow>.props.nodes` (the overlay).
+  ESC needed a `globalThis.window`/`document` stub in the shim env (no DOM) to
+  fire the real listener body — left the live keydown to the browser test.
+- **➡ Copied into `07-...md`.**

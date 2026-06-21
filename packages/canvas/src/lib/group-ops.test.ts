@@ -6,6 +6,7 @@ import {
   type GroupOpNode,
   computeGroupBox,
   computeGroupMoveUpdates,
+  isMemberOfGroup,
   planGroupShortcutAction,
   selectGroupSelection,
   selectGroupableSet,
@@ -279,5 +280,55 @@ describe('computeGroupMoveUpdates (M5 group move fan-out, §9.1)', () => {
       new Map([['g1', { x: 0, y: 0 }]]),
     );
     expect(updates).toEqual([{ id: 'g1', position: { x: 7, y: 7 } }]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M6 — isolation membership oracle (design §5.3 exit path c)
+// ---------------------------------------------------------------------------
+
+describe('isMemberOfGroup', () => {
+  const nodes: GroupOpNode[] = [
+    group('g1', ['a', 'b']),
+    group('g2', ['c']),
+    loose('a'),
+    loose('b'),
+    loose('c'),
+    loose('d'),
+  ];
+
+  it('true for a node listed in the group childIds', () => {
+    expect(isMemberOfGroup(nodes, 'g1', 'a')).toBe(true);
+    expect(isMemberOfGroup(nodes, 'g1', 'b')).toBe(true);
+  });
+
+  it('false for a loose node not in the group', () => {
+    expect(isMemberOfGroup(nodes, 'g1', 'd')).toBe(false);
+  });
+
+  it('false for a node that belongs to a DIFFERENT group', () => {
+    // `c` is a member of g2, not g1 — clicking it while g1 is active must exit.
+    expect(isMemberOfGroup(nodes, 'g1', 'c')).toBe(false);
+  });
+
+  it('false when the active group id does not resolve to a group node', () => {
+    // The active group vanished (ungrouped/deleted) — nothing is its member.
+    expect(isMemberOfGroup(nodes, 'gone', 'a')).toBe(false);
+  });
+
+  it('false when the active group id points at a non-group node', () => {
+    // Defensive: a loose id passed as the active group has no members.
+    expect(isMemberOfGroup(nodes, 'a', 'b')).toBe(false);
+  });
+
+  it('the group node itself is NOT its own member (so dblclicking it stays inside)', () => {
+    // The group id is never in its own childIds; clicking the group chrome while
+    // active is therefore "not a member" — handled separately (title bar exit),
+    // never auto-exiting via the non-member path.
+    expect(isMemberOfGroup(nodes, 'g1', 'g1')).toBe(false);
+  });
+
+  it('false when activeGroupId is null', () => {
+    expect(isMemberOfGroup(nodes, null, 'a')).toBe(false);
   });
 });

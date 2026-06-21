@@ -671,6 +671,49 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   `group-node.tsx` has no `ResizeControls` (M1 step 17 held), so a group has
   EXACTLY ONE resize path (the overlay) — no dual/conflicting handles, and the
   L0.2 stable-callback `NodeResizeControl` trap never applies to groups.
+- **L6.1 (M6) Isolation state is `activeGroupId` (useState slot 14, appended at
+  END) + `activeGroupIdRef` mirror.** Runtime-only, never persisted. The slot
+  rule held (count 14 → 15; no prior index shifted; ZERO shim-test slot edits).
+  **Contract:** `activeGroupId` is dropped by an effect (`[activeGroupId, nodes]`)
+  the moment its id stops being a `type:'group'` node — M7/M8/M9 can assume a
+  non-null `activeGroupId` always points at a live group on the next render.
+- **L6.2 (M6, the structural gotcha) `buildNode`/`sourceNodes` CANNOT read
+  late-block state (TDZ).** `sourceNodes` is declared ~1300 lines above the state
+  block; referencing a slot-14 `useState` there is "used before declaration".
+  **Pattern (reusable):** keep `sourceNodes` agnostic and overlay the late-state
+  render-props in a SEPARATE `displayNodes = useMemo(() => overlay(rfNodes,
+  activeGroupId), [rfNodes, activeGroupId])` declared AFTER the state; feed
+  `<ReactFlow nodes={displayNodes}>` from it (was `nodes={rfNodes}`). Lag-free,
+  no slot churn. Any future feature whose late state must reach rendered nodes
+  uses this seam, NOT `buildNode`.
+- **L6.3 (M6) ONE isolation model = 2 prop flips on the active group, both in
+  `displayNodes`:** `data.active=true` (renderer: fill `pointer-events:none` +
+  outline ring + `data-active="true"`) and `draggable=false` (group-move off
+  while entered — no drag ⇒ no M5 `groupDragRef` snapshot ⇒ children never fan
+  out, structurally). **No z-index carve-outs** — members are top-level DOM
+  siblings above the group (z = -1), so `pointer-events:none` on the group box
+  never affects member hit-testing. v1's "clickable vs pass-through" duality is
+  solved here without the six ad-hoc paths.
+- **L6.4 (M6) ONE documented exit set, all in fixed locations:** (a) `Esc` =
+  step `3b` inserted in the US-006 ESC chain BETWEEN drop-popover (3a) and
+  selection-clear (4) — first Esc exits (preventDefault + early return), second
+  clears selection; (b) `onPaneClick` handler clears unconditionally; (c)
+  `onNodeClick` handler clears iff the clicked node is NOT a member of the active
+  group and not the group itself (`isMemberOfGroup`); (d) the
+  `[activeGroupId, nodes]` cleanup effect. **Host reality:** `demo-view.tsx`
+  wires only `onSelectionChange` (NOT onNodeClick/onPaneClick), so the canvas's
+  exit handlers must clear `activeGroupId` themselves and let xyflow's
+  `onSelectionChange` do the (re)selection — the handlers never drive selection.
+- **L6.5 (M6) New pure export `isMemberOfGroup(nodes, activeGroupId, nodeId)`** in
+  `group-ops.ts` (null-safe; a group is not its own member; false when the id no
+  longer resolves to a group). The single oracle for the non-member exit path —
+  reuse, don't re-derive from `childIds`.
+- **L6.6 (M6) `onNodeDoubleClick` is now wired on `<ReactFlow>`** (it was NOT
+  before — only `onEdgeDoubleClick`). `zoomOnDoubleClick={false}` already set, no
+  zoom conflict. **M7 contract:** the group title's dblclick-to-rename must
+  `stopPropagation()` so it doesn't bubble to this enter handler (title=edit,
+  body=enter). The title band already has its own wrapper
+  (`group-node-titlebar`) for this.
 
 ---
 
@@ -808,9 +851,11 @@ Verified so the milestones name the correct primitives instead of inventing them
   (`demo-view.tsx:15,246` → `nodePending`) with `pruneAgainst` reconciliation
   against SSE reloads — NOT a bespoke `setNodeOverride`. All milestones that
   "apply optimistic overrides" mean this API.
-- **Double-click:** `onNodeDoubleClick` is **NOT wired** today (only
-  `onEdgeDoubleClick`, `seeflow-canvas.tsx:5307`) — M6 adds it.
-  `zoomOnDoubleClick={false}` (`:5264`) is already set → no zoom conflict.
+- **Double-click:** `onNodeDoubleClick` is **now wired** (M6 added
+  `handleNodeDoubleClick` on `<ReactFlow>`, alongside `onEdgeDoubleClick`) — a
+  group dblclick enters isolation; non-group dblclicks no-op here.
+  `zoomOnDoubleClick={false}` is already set → no zoom conflict. M7's group-title
+  rename must `stopPropagation()` so it doesn't bubble to this enter handler.
 - **History exposure:** `history` is produced by `wrapAdapterWithHistory`
   (`demo-view.tsx:448`) and its `undo/redo/subscribe/markExternalChange` are
   already consumed — group ops need nothing new here.

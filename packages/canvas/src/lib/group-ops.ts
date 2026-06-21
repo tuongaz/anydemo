@@ -185,6 +185,30 @@ export function selectGroupSelection(
 }
 
 /**
+ * M6 isolation oracle (design §5.3 exit path c): is `nodeId` a member of the
+ * group identified by `activeGroupId`? Pure + null-safe so the canvas can decide,
+ * on a node click while a group is entered, whether to STAY inside (the click hit
+ * a member) or EXIT (it hit a non-member). Returns false when:
+ *   - `activeGroupId` is null (not in isolation),
+ *   - the active id no longer resolves to a `type:'group'` node (vanished /
+ *     ungrouped / a loose id passed defensively),
+ *   - `nodeId` is not in that group's `childIds`.
+ * The group's own id is never in its `childIds`, so a group is not its own member
+ * — the title-bar exit affordance, not this oracle, handles a click on the active
+ * group's chrome.
+ */
+export function isMemberOfGroup(
+  nodes: readonly GroupOpNode[],
+  activeGroupId: string | null,
+  nodeId: string,
+): boolean {
+  if (activeGroupId === null) return false;
+  const group = nodes.find((n) => n.id === activeGroupId);
+  if (!isGroup(group)) return false;
+  return readChildIds(group).includes(nodeId);
+}
+
+/**
  * Pure ⌘G / ⌘⇧G oracle (design §5.4, §8). Maps the current selection to the
  * single sensible action, or a reasoned no-op:
  *

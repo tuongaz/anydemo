@@ -9,7 +9,32 @@ moved, and renamed inside a group, with one documented exit set.
 
 ## Lessons carried forward
 
-- (Fill from M6 handoff.)
+- **From M6 handoff (actionable subset):**
+  - **Title-edit vs group-enter dblclick — the M7 disambiguation is REAL and is
+    yours to wire.** M6 enters isolation on `onNodeDoubleClick` when
+    `node.type==='group'` (wired on `<ReactFlow>`). M7 step 1 wires the group
+    title's inline edit via `onNameChange` on `NodeHeader`. A double-click on the
+    title bubbles up to `<ReactFlow>`'s `onNodeDoubleClick` and would ALSO enter
+    isolation. **Fix:** the title's dblclick-to-edit path must `stopPropagation()`
+    on the dblclick so it never reaches the node-level enter handler (the design
+    §7 guardrail "dblclick on title = edit; dblclick on body = enter"). Verify the
+    M6 regression test ("dblclick body still enters") stays green after wiring it.
+  - **`GroupNodeRuntimeData.active` already exists** (M6) — true only for the
+    entered group; when active the renderer makes the fill `pointer-events:none`,
+    paints an outline ring, and re-enables pointer-events on the
+    `group-node-titlebar` wrapper. **M7 styling must not clobber this:** the M7
+    title-band / background work composes ON TOP of the active-state styles. The
+    title band already has a dedicated wrapper (`data-testid="group-node-titlebar"`,
+    `display:contents` when inactive) — reuse it; don't add a competing one.
+  - **Isolation render-props are applied in `displayNodes`, NOT `buildNode`.**
+    `buildNode`/`sourceNodes` sits high in `seeflow-canvas.tsx` and can't read
+    state declared at the END of the block (the slot rule pins `activeGroupId`
+    there → TDZ). M6 added a `displayNodes = useMemo(overlay(rfNodes,
+    activeGroupId))` AFTER the state and feeds `<ReactFlow nodes={displayNodes}>`.
+    If M7 needs any late-state value on the rendered group, follow that pattern.
+  - **`isMemberOfGroup(nodes, activeGroupId, nodeId)`** is a new pure export in
+    `group-ops.ts` (null-safe; a group is not its own member). Reuse it if M7
+    needs member/non-member logic; don't re-derive from `childIds` inline.
 - The group reuses `NodeVisualBaseShape` + `NodeSemanticBaseShape`, so StyleStrip
   and DetailPanel can drive it with minimal changes (research confirmed).
 - StyleStrip excludes `icon`/`freehand` from shared controls; a group is a

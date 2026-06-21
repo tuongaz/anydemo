@@ -16,6 +16,15 @@ export type GroupNodeRuntimeData = GroupNodeData & {
   onNameChange?: (nodeId: string, name: string) => void;
   /** Change the optional title glyph. Wired in M7. */
   onIconChange?: (nodeId: string, icon: string | null) => void;
+  /**
+   * Canvas grouping M6: true when this group is ENTERED (isolation). The host's
+   * `buildNode` sets it for the single active group. When true the container's
+   * fill becomes click-through (`pointer-events:none`) so members underneath the
+   * chrome — and the empty pane in the padding band — are reachable; only the
+   * title band stays interactive (the exit affordance). Absent/false → the box
+   * captures clicks and selects the group as a unit (M5 group-move).
+   */
+  active?: boolean;
 } & Record<string, unknown>;
 
 export type GroupNodeType = Node<GroupNodeRuntimeData, 'group'>;
@@ -52,6 +61,9 @@ export const GROUP_NODE_Z_INDEX = -1;
 function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNodeType>) {
   const title = data.name ?? '';
   const sized = data.width !== undefined || data.height !== undefined;
+  // Canvas grouping M6: this group is ENTERED (isolation). Drives the
+  // click-through fill + the "entered" affordance below.
+  const active = data.active === true;
 
   // When data.shadow is set, paint `var(--node-shadow-N)` inline and drop the
   // baseline class so the two don't compose (mirrors rectangle-node).
@@ -72,6 +84,16 @@ function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNod
     borderRadius: cornerRadius,
     ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(sized ? {} : { width: GROUP_DEFAULT_SIZE.width, height: GROUP_DEFAULT_SIZE.height }),
+    // M6 isolation: the fill becomes CLICK-THROUGH so a click on the padding
+    // band falls to the empty pane (→ exit) and members underneath the chrome
+    // are reachable. The title band re-enables pointer-events on its own wrapper
+    // below (the exit affordance). Members are separate top-level DOM nodes (the
+    // group is z = -1), so they are unaffected by this. No z-index gymnastics.
+    ...(active ? { pointerEvents: 'none' as const } : {}),
+    // "Entered" affordance: a subtle primary-tinted ring drawn with `outline`
+    // (CSS-light — outline doesn't affect layout and needs no extra element or
+    // z-index). The `data-active` attribute below is the stable test hook.
+    ...(active ? { outline: '2px solid hsl(var(--primary) / 0.55)', outlineOffset: '2px' } : {}),
   };
 
   return (
@@ -84,6 +106,9 @@ function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNod
       style={containerStyle}
       data-testid="group-node"
       data-node-type="group"
+      // M6: stable hook for tests + the live app to detect isolation entry. Only
+      // present (="true") while this group is the active/entered one.
+      data-active={active ? 'true' : undefined}
       // The container's accessible name comes from its title so screen readers
       // announce the group (mirrors the a11y convention in design §12.11). We
       // give the box an aria-label but no explicit ARIA role — a plain `role`
@@ -107,19 +132,28 @@ function GroupNodeImpl({ id, data, selected, isConnectable }: NodeProps<GroupNod
       />
       {/* Title band — read-only this milestone (no onNameChange/onIconChange
           wired by the host yet). NodeHeader renders the title + optional icon
-          and inherits the editable-field a11y once M7 wires the callbacks. */}
-      <NodeHeader
-        nodeId={id}
-        name={title}
-        icon={data.icon}
-        selected={selected}
-        fontSize={data.fontSize}
-        backgroundColor={data.backgroundColor}
-        onNameChange={data.onNameChange}
-        onIconChange={data.onIconChange}
-        testId="group-node-header"
-        titleTestId="group-node-title"
-      />
+          and inherits the editable-field a11y once M7 wires the callbacks.
+          M6: when the container fill is click-through (active), re-enable
+          pointer-events on JUST the title band so it stays the interactive exit
+          affordance (and the M7 rename target). `display:contents` keeps the
+          wrapper layout-neutral when inactive. */}
+      <div
+        style={active ? { pointerEvents: 'auto' } : { display: 'contents' }}
+        data-testid="group-node-titlebar"
+      >
+        <NodeHeader
+          nodeId={id}
+          name={title}
+          icon={data.icon}
+          selected={selected}
+          fontSize={data.fontSize}
+          backgroundColor={data.backgroundColor}
+          onNameChange={data.onNameChange}
+          onIconChange={data.onIconChange}
+          testId="group-node-header"
+          titleTestId="group-node-title"
+        />
+      </div>
       {/* The padded gap below the title band IS the group's chrome — members
           render as ordinary sibling nodes ON TOP of this box (the group sits at
           a negative zIndex). This milestone draws no body content. */}
