@@ -114,7 +114,18 @@ export function createApp(options: CreateAppOptions = {}): Hono {
     options.statusRunner ??
     createStatusRunner({ registry, events, spawner: defaultProcessSpawner });
   const iconJobs = options.iconJobs ?? createJobRegistry();
-  const tenantResolver = createTenantResolver({ defaultRegistry: registry, defaultEvents: events });
+  const tenantResolver = createTenantResolver({
+    defaultRegistry: registry,
+    defaultEvents: events,
+    defaultWatcher: watcher,
+    // Each tenant gets a watcher bound to its OWN event bus so a mutation's
+    // flow:reload echo reaches that tenant's SSE subscribers (the route
+    // subscribes on the per-tenant bus). When watching is disabled (tests),
+    // skip the factory so per-tenant contexts stay watcher-less.
+    createWatcher: options.disableWatcher
+      ? undefined
+      : (reg, ev) => createWatcher({ registry: reg, events: ev }),
+  });
   const getTenantId = options.getTenantId;
 
   if (watcher && (options.watchAllOnBoot ?? true)) {
