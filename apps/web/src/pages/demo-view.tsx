@@ -35,6 +35,7 @@ import { resolveLinkflowTarget } from '@/lib/linkflow-resolve';
 import { decidePasteAction } from '@/lib/paste-dispatch';
 import { handlePasteFailure } from '@/lib/paste-failure';
 import { shortId } from '@/lib/short-id';
+import { hasUnconfirmedEdits } from '@/lib/unsaved-edits';
 import {
   type CanvasMode,
   type CommandId,
@@ -474,6 +475,38 @@ export function DemoView({
       pruneConnectorDeletions(demoConnectors);
     }
   }, [demoConnectors, pruneConnectorOverrides, pruneConnectorDeletions]);
+
+  // Warn before a reload/navigation discards optimistic edits the server hasn't
+  // confirmed. The override (or pending-deletion mark) is the ONLY record of an
+  // in-flight — or failed-but-kept — change; a refresh re-reads disk and the
+  // edit is silently lost (the reported "refresh shows stale data" symptom). The
+  // listener attaches ONLY while something is unconfirmed, so a normal refresh
+  // between edits is never interrupted; once the SSE echo prunes the overrides
+  // it detaches again.
+  useEffect(() => {
+    if (
+      !hasUnconfirmedEdits({
+        nodeOverrides: Object.keys(nodePending.overrides).length,
+        connectorOverrides: Object.keys(connectorPending.overrides).length,
+        nodeDeletions: nodeDeletions.ids.size,
+        connectorDeletions: connectorDeletions.ids.size,
+      })
+    ) {
+      return;
+    }
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Legacy browsers require returnValue to be set to trigger the prompt.
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [
+    nodePending.overrides,
+    connectorPending.overrides,
+    nodeDeletions.ids,
+    connectorDeletions.ids,
+  ]);
 
   // Undo-history stale-clear. Keyed on `externalReloadSignal`, which App bumps
   // ONLY on a genuine `flow:reload` (watcher file-change) — never on reconnect
