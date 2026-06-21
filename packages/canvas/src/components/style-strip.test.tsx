@@ -1216,4 +1216,56 @@ describe('SliderControl — editable number input', () => {
     // value array is clamped to max so the thumb never overshoots 64.
     expect((slider.props as { value: number[] }).value[0]).toBeLessThanOrEqual(64);
   });
+
+  it('input previews on type', () => {
+    const onPreview = mock(() => {});
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onPreview,
+      onCommit: () => {},
+    });
+    const input = findInput(tree);
+    (input.props as { onChange: (e: { target: { value: string } }) => void }).onChange({
+      target: { value: '40' },
+    });
+    expect(onPreview).toHaveBeenCalledWith(40);
+  });
+
+  it('Enter commits the clamped value', () => {
+    const onCommit = mock(() => {});
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const input = findInput(tree);
+    const props = input.props as {
+      onChange: (e: { target: { value: string } }) => void;
+      onKeyDown: (e: { key: string; target: { blur(): void } }) => void;
+    };
+    props.onChange({ target: { value: '999' } });
+    props.onKeyDown({ key: 'Enter', target: { blur() {} } });
+    expect(onCommit).toHaveBeenCalledWith(200);
+  });
+
+  it('clearing the input mid-edit neither commits nor previews', () => {
+    const onCommit = mock(() => {});
+    const onPreview = mock(() => {});
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onPreview,
+      onCommit,
+    });
+    const input = findInput(tree);
+    (input.props as { onChange: (e: { target: { value: string } }) => void }).onChange({
+      target: { value: '' },
+    });
+    // Empty is an in-progress edit: no clamp-to-min, no preview, no commit.
+    expect(onPreview).not.toHaveBeenCalled();
+    expect(onCommit).not.toHaveBeenCalled();
+  });
 });

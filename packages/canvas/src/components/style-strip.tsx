@@ -1307,10 +1307,16 @@ export function SliderControl({
   // the `local` state) so blur/Enter commit the freshly typed value even before
   // React flushes the `setLocal` re-render.
   const lastValueRef = useRef<number>(upstream);
+  // Raw editable string for the optional number input. Lets the field render
+  // empty mid-edit (clear-and-retype) without snapping to `min`; the committed
+  // numeric value still flows through `lastValueRef` / `local`. Appended last
+  // per the append-only useState rule for shim-tested components.
+  const [rawInput, setRawInput] = useState<string>(String(upstream));
   useEffect(() => {
     setLocal(upstream);
     setPicked(false);
     lastValueRef.current = upstream;
+    setRawInput(String(upstream));
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
   const clampInput = (n: number) => Math.min(hardMax, Math.max(min, n));
@@ -1344,10 +1350,16 @@ export function SliderControl({
           step={step}
           data-testid={`${testId}-input`}
           aria-label="Font size"
-          value={showPlaceholder ? '' : local}
+          value={showPlaceholder ? '' : rawInput}
           placeholder={showPlaceholder ? 'Mixed' : undefined}
           onChange={(e) => {
-            const raw = Number(e.target.value);
+            const text = e.target.value;
+            setRawInput(text);
+            // Empty (or whitespace) is an in-progress edit: let the field clear
+            // so the user can retype, but don't commit/clamp/preview yet. Blur
+            // or Enter will commit the last valid value.
+            if (text.trim() === '') return;
+            const raw = Number(text);
             if (Number.isNaN(raw)) return;
             const next = clampInput(raw);
             setLocal(next);
