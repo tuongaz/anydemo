@@ -279,18 +279,34 @@ export function createApi(options: ApiOptions): Hono {
   const opsByRegistry = new WeakMap<Registry, Operations>();
   const tenant = (
     c: Context,
-  ): { registry: Registry; events: EventBus | undefined; ops: Operations } => {
-    const ctx = c.get('tenant') as { registry: Registry; events: EventBus } | undefined;
+  ): {
+    registry: Registry;
+    events: EventBus | undefined;
+    ops: Operations;
+    watcher: FlowWatcher | undefined;
+  } => {
+    const ctx = c.get('tenant') as
+      | { registry: Registry; events: EventBus; watcher?: FlowWatcher }
+      | undefined;
     const reg = ctx?.registry ?? defaultRegistry;
     const ev = ctx?.events ?? defaultEvents;
-    if (reg === defaultRegistry) return { registry: reg, events: ev, ops: defaultOps };
+    if (reg === defaultRegistry) return { registry: reg, events: ev, ops: defaultOps, watcher };
+    // Per-tenant ops MUST broadcast through the tenant's own watcher (bound to
+    // `ev`, the bus the SSE route subscribes on). Falling back to the shared
+    // default watcher would broadcast flow:reload on the wrong bus, so a
+    // tenant's optimistic edit never gets its live confirmation echo.
+    const tenantWatcher = ctx?.watcher ?? watcher;
     let o = opsByRegistry.get(reg);
     if (!o) {
       const tid = c.get('tenantId') as string | undefined;
-      o = createOperations({ registry: reg, watcher, home: tid ? seeflowHome(tid) : undefined });
+      o = createOperations({
+        registry: reg,
+        watcher: tenantWatcher,
+        home: tid ? seeflowHome(tid) : undefined,
+      });
       opsByRegistry.set(reg, o);
     }
-    return { registry: reg, events: ev, ops: o };
+    return { registry: reg, events: ev, ops: o, watcher: tenantWatcher };
   };
 
   const iconJobs = options.iconJobs ?? createJobRegistry();
@@ -339,7 +355,7 @@ export function createApi(options: ApiOptions): Hono {
   // per-flow names (vs. /api/flows/register which is the legacy single-flow
   // path that uses the same name for both project and flow).
   api.post('/projects/register', async (c) => {
-    const { events, registry } = tenant(c);
+    const { events, registry, watcher: tenantWatcher } = tenant(c);
     let body: unknown;
     try {
       body = await c.req.json();
@@ -352,7 +368,7 @@ export function createApi(options: ApiOptions): Hono {
     }
     const result = registerProject({ repoPath: parsed.data.repoPath, registry });
     if (result.kind === 'ok') {
-      for (const entry of result.entries) watcher?.watch(entry.id);
+      for (const entry of result.entries) tenantWatcher?.watch(entry.id);
       events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
       return c.json({
         ok: true as const,
@@ -791,7 +807,7 @@ export function createApi(options: ApiOptions): Hono {
   // flows are never the project default — the caller has to use PATCH
   // /projects/:project/flows/:flow (US-016) to flip defaultFlow.
   api.post('/projects/:project/flows', async (c) => {
-    const { events, registry } = tenant(c);
+    const { events, registry, watcher: tenantWatcher } = tenant(c);
     const projectSlug = c.req.param('project');
     const entries = registry.list().filter((e) => e.projectSlug === projectSlug);
     const head = entries[0];
@@ -895,7 +911,7 @@ export function createApi(options: ApiOptions): Hono {
       icon,
       valid: true,
     });
-    watcher?.watch(entry.id);
+    tenantWatcher?.watch(entry.id);
     events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
     return c.json(entry, 201);
@@ -913,7 +929,7 @@ export function createApi(options: ApiOptions): Hono {
   // through the registry + filesystem so two concurrent id renames against
   // the same project cannot interleave to produce a duplicate folder.
   api.patch('/projects/:project/flows/:flow', async (c) => {
-    const { events, registry } = tenant(c);
+    const { events, registry, watcher: tenantWatcher } = tenant(c);
     const projectSlug = c.req.param('project');
     const flowSlug = c.req.param('flow');
     const resolved = resolveProjectFlow(registry, projectSlug, flowSlug);
@@ -1029,7 +1045,7 @@ export function createApi(options: ApiOptions): Hono {
       //    clients re-resolve via the new URL. Watcher is unwatch-then-watch
       //    because the flowPath that the watcher reads is sourced from the
       //    new registry entry.
-      watcher?.unwatch(entry.id);
+      tenantWatcher?.unwatch(entry.id);
       registry.remove(entry.id);
       const newEntry = registry.upsert({
         name: finalName,
@@ -1042,7 +1058,7 @@ export function createApi(options: ApiOptions): Hono {
         icon: finalIcon,
         valid: entry.valid,
       });
-      watcher?.watch(newEntry.id);
+      tenantWatcher?.watch(newEntry.id);
       events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
       return c.json(newEntry);
@@ -1366,7 +1382,7 @@ export function createApi(options: ApiOptions): Hono {
   // snapshot and drop the registry entry. On manifest-write failure the
   // snapshot is renamed back so the externally-observable state is preserved.
   api.delete('/projects/:project/flows/:flow', (c) => {
-    const { events, registry } = tenant(c);
+    const { events, registry, watcher: tenantWatcher } = tenant(c);
     const projectSlug = c.req.param('project');
     const flowSlug = c.req.param('flow');
     const newDefault = c.req.query('newDefault');
@@ -1479,7 +1495,7 @@ export function createApi(options: ApiOptions): Hono {
       }
     }
 
-    watcher?.unwatch(entry.id);
+    tenantWatcher?.unwatch(entry.id);
     registry.remove(entry.id);
     events?.broadcast({ type: 'registry:reload', flowId: '__registry__', payload: {} });
 
@@ -1494,7 +1510,7 @@ export function createApi(options: ApiOptions): Hono {
   // will not be deleted" promise. With `?deleteSource=true` it also
   // rm-rf's the entire repoPath after the registry is cleaned.
   api.delete('/projects/:project', (c) => {
-    const { events, registry } = tenant(c);
+    const { events, registry, watcher: tenantWatcher } = tenant(c);
     const projectSlug = c.req.param('project');
     const deleteSource = c.req.query('deleteSource') === 'true';
 
@@ -1506,7 +1522,7 @@ export function createApi(options: ApiOptions): Hono {
     const repoPath = head.repoPath;
 
     for (const entry of entries) {
-      watcher?.unwatch(entry.id);
+      tenantWatcher?.unwatch(entry.id);
       registry.remove(entry.id);
     }
 
