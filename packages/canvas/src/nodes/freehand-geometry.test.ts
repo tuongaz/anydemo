@@ -99,35 +99,38 @@ describe('simplifyRDP', () => {
 });
 
 describe('snapToStraightLine', () => {
-  test('snaps a near-horizontal segment to exactly horizontal, keeping the dragged length', () => {
+  test('snaps a near-horizontal segment to exactly horizontal, ending UNDER the cursor', () => {
     const [x, y] = snapToStraightLine([0, 0, 0.5], [100, 8, 0.5]);
-    // Endpoint sits on the horizontal axis at the FULL drag distance (not the
-    // shorter projection onto x), so the line reaches as far as the cursor.
+    // The endpoint lands at the cursor's X (the dominant axis) and a level Y —
+    // the line ends directly under the release point, not past it.
+    expect(x).toBeCloseTo(100);
     expect(y).toBeCloseTo(0);
-    expect(x).toBeCloseTo(Math.hypot(100, 8));
   });
 
-  test('snaps a near-vertical segment to exactly vertical, keeping the dragged length', () => {
+  test('snaps a near-vertical segment to exactly vertical, ending BESIDE the cursor', () => {
     const [x, y] = snapToStraightLine([0, 0, 0.5], [6, 100, 0.5]);
+    // Dominant axis is Y → endpoint Y matches the cursor exactly, X levels off.
     expect(x).toBeCloseTo(0);
-    expect(y).toBeCloseTo(Math.hypot(6, 100));
+    expect(y).toBeCloseTo(100);
   });
 
-  test('snaps a ~45deg segment onto the diagonal (equal x/y)', () => {
+  test('snaps a ~45deg segment onto the diagonal (equal x/y), reaching the dominant axis', () => {
+    // dx=100 dominates dy=90 → the line reaches the cursor's X exactly, at 45°.
     const [x, y] = snapToStraightLine([0, 0, 0.5], [100, 90, 0.5]);
+    expect(x).toBeCloseTo(100);
     expect(x).toBeCloseTo(y, 5);
     expect(x).toBeGreaterThan(0);
   });
 
-  test('preserves the full dragged length along the snapped ray', () => {
-    // The straightened endpoint is the same distance from the start as the raw
-    // drag — the line ends under the release point, never short of it.
+  test('a diagonal reaches the cursor exactly on the dominant axis', () => {
+    // The straightened line ends AT the release point along its dominant axis
+    // (here X, since |dx| > |dy|), so it never feels short of the cursor.
     const start: Point = [10, 10, 0.5];
     const end: Point = [110, 70, 0.5];
-    const snapped = snapToStraightLine(start, end);
-    expect(Math.hypot(snapped[0] - start[0], snapped[1] - start[1])).toBeCloseTo(
-      Math.hypot(end[0] - start[0], end[1] - start[1]),
-    );
+    const [x, y] = snapToStraightLine(start, end);
+    expect(x).toBeCloseTo(end[0]); // dominant axis lands on the cursor
+    // Still a true 45° segment: |Δx| === |Δy|.
+    expect(Math.abs(x - start[0])).toBeCloseTo(Math.abs(y - start[1]));
   });
 
   test('returns the start point for a zero-length segment', () => {
@@ -136,11 +139,16 @@ describe('snapToStraightLine', () => {
     expect(y).toBeCloseTo(5);
   });
 
+  test('carries the pressure from the end sample', () => {
+    const snapped = snapToStraightLine([0, 0, 0.2], [100, 4, 0.9]);
+    expect(snapped[2]).toBeCloseTo(0.9);
+  });
+
   test('snaps a near-horizontal segment in the negative direction', () => {
-    // Locks the atan2 wrap: a leftward drag must stay leftward, not flip to +x.
+    // A leftward drag must stay leftward, ending under the cursor's X.
     const [x, y] = snapToStraightLine([0, 0, 0.5], [-100, 5, 0.5]);
     expect(y).toBeCloseTo(0);
-    expect(x).toBeCloseTo(-Math.hypot(100, 5));
+    expect(x).toBeCloseTo(-100);
     expect(x).toBeLessThan(0);
   });
 });

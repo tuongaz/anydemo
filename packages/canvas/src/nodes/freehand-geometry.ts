@@ -71,25 +71,39 @@ export function simplifyRDP(points: Point[], epsilon: number): Point[] {
   return [...left.slice(0, -1), ...right];
 }
 
+// tan(22.5°) — the half-angle of each 45° snap sector. A drag whose minor-axis
+// magnitude is within this fraction of its major axis snaps to that major axis;
+// anything steeper snaps to the diagonal.
+const TAN_22_5 = Math.tan(Math.PI / 8);
+
 /**
  * Snap the segment start→end to the nearest of 8 directions (every 45°:
- * horizontal, vertical, and the four diagonals). The endpoint is placed at the
- * FULL drag distance along the snapped ray (not the shorter perpendicular
- * projection), so the straightened line reaches as far as the cursor was
- * dragged — it ends under the release point rather than behind it. Used by the
- * pen tool's Shift-to-straighten gesture. Pressure is carried from `end`. A
- * zero-length segment returns `start` unchanged.
+ * horizontal, vertical, and the four diagonals) while keeping the endpoint AT
+ * the release point along the line's dominant axis:
+ *
+ *   - horizontal → `[end.x, start.y]` (X tracks the cursor, Y levels off)
+ *   - vertical   → `[start.x, end.y]` (Y tracks the cursor, X levels off)
+ *   - diagonal   → a true 45° segment whose dominant axis reaches the cursor
+ *
+ * This is what makes a Shift-straightened stroke END UNDER the release point
+ * rather than overshooting it (full-length rotation) or stopping short of it
+ * (perpendicular projection). Used by the pen tool's Shift-to-straighten
+ * gesture. Pressure is carried from `end`. A zero-length segment returns
+ * `start` unchanged.
  */
 export function snapToStraightLine(start: Point, end: Point): Point {
   const dx = end[0] - start[0];
   const dy = end[1] - start[1];
-  const len = Math.hypot(dx, dy);
-  if (len === 0) return [start[0], start[1], end[2]];
-  // Quantise the angle to the nearest 45° step.
-  const step = Math.PI / 4;
-  const snapped = Math.round(Math.atan2(dy, dx) / step) * step;
-  // Keep the dragged length, only rotate it onto the snapped axis.
-  return [start[0] + Math.cos(snapped) * len, start[1] + Math.sin(snapped) * len, end[2]];
+  const adx = Math.abs(dx);
+  const ady = Math.abs(dy);
+  if (adx === 0 && ady === 0) return [start[0], start[1], end[2]];
+  // Horizontal sector: the minor (Y) axis is within tan(22.5°) of the major.
+  if (ady <= adx * TAN_22_5) return [end[0], start[1], end[2]];
+  // Vertical sector: the minor (X) axis is within tan(22.5°) of the major.
+  if (adx <= ady * TAN_22_5) return [start[0], end[1], end[2]];
+  // Diagonal sector: a 45° ray whose dominant axis lands on the cursor.
+  const m = Math.max(adx, ady);
+  return [start[0] + Math.sign(dx) * m, start[1] + Math.sign(dy) * m, end[2]];
 }
 
 function perpendicularDistance(p: Point, a: Point, b: Point): number {

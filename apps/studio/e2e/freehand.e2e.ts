@@ -466,4 +466,89 @@ test.describe('canvas — freehand pen tool', () => {
       })
       .toBe(2);
   });
+
+  // Grace window: releasing the mouse often jerks the pointer and can lift Shift
+  // a hair before the button, so the FINAL move + the pointer-up may carry
+  // `shiftKey: false` even though the user drew a straight line. The commit's
+  // grace window (PEN_SHIFT_GRACE_MS) must still straighten it — this spec holds
+  // Shift through the body of the stroke, then drops it on the last jitter move
+  // and the release, and asserts the commit is still a 2-point segment.
+  test('a Shift lift on the final jitter move + release still commits a straight stroke', async ({
+    page,
+    studio,
+  }) => {
+    const source = await gotoFreehandFlow(
+      page,
+      studio.studio,
+      'freehand-shift-grace',
+      buildFreehandFlow('Freehand Shift Grace'),
+    );
+
+    const canvas = page.locator('[data-testid="seeflow-canvas"]');
+    await page.locator('[data-testid="toolbar-mode-pen"]').click();
+    await expect(canvas).toHaveAttribute('data-canvas-mode', 'pen');
+
+    const pane = page.locator('.react-flow__pane').first();
+    const box = await pane.boundingBox();
+    if (!box) throw new Error('react-flow pane has no bounding box');
+
+    const ox = box.x + box.width * 0.55;
+    const oy = box.y + box.height * 0.7;
+    // Curved body (Shift held) then a small jitter move + release with Shift
+    // released — emulating the hand twitch as the button comes up.
+    const body: Array<[number, number]> = [
+      [ox, oy],
+      [ox + 40, oy - 50],
+      [ox + 90, oy - 30],
+      [ox + 140, oy - 60],
+      [ox + 200, oy + 20],
+    ];
+    const jitter: [number, number] = [ox + 203, oy + 23];
+
+    const dispatch = async (
+      type: 'pointerdown' | 'pointermove' | 'pointerup',
+      x: number,
+      y: number,
+      shiftKey: boolean,
+    ) => {
+      await pane.dispatchEvent(type, {
+        bubbles: true,
+        cancelable: true,
+        clientX: x,
+        clientY: y,
+        pointerId: 1,
+        pointerType: 'pen',
+        pressure: 0.5,
+        button: 0,
+        buttons: type === 'pointerup' ? 0 : 1,
+        shiftKey,
+      });
+    };
+
+    const [first, ...rest] = body;
+    if (!first) throw new Error('empty stroke');
+    await dispatch('pointerdown', first[0], first[1], false);
+    for (const [x, y] of rest) {
+      await dispatch('pointermove', x, y, true); // Shift held through the body
+    }
+    // Final jitter move + release WITHOUT Shift (lifted a hair before the button).
+    await dispatch('pointermove', jitter[0], jitter[1], false);
+    await dispatch('pointerup', jitter[0], jitter[1], false);
+
+    await expect(page.locator('.react-flow__node.react-flow__node-freehand')).toHaveCount(2, {
+      timeout: 5_000,
+    });
+
+    // Still straight: the grace window keeps the 2-point commit despite the
+    // Shift lift on the final two events.
+    await expect
+      .poll(async () => {
+        const flowApi = `${studio.studio.baseURL}/api/projects/${source.projectSlug}/flows/${source.flowSlug}`;
+        const res = await page.request.get(flowApi);
+        const detail = (await res.json()) as { flow?: { nodes?: PersistedNode[] } };
+        const fresh = detail.flow?.nodes?.find((n) => n.type === 'freehand' && n.id !== 'ink-1');
+        return fresh?.data?.points?.length ?? 0;
+      })
+      .toBe(2);
+  });
 });

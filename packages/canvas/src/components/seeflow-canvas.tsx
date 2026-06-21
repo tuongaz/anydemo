@@ -1038,6 +1038,15 @@ export type SeeflowCanvasProps =
 // still produces a usable node rather than a 0×0 ghost.
 const MIN_DRAW_SIZE = 40;
 
+// Pen Shift-to-straighten grace window (ms). Releasing the mouse button often
+// jerks the pointer and can lift Shift a hair before the button — the final
+// pointer event then carries `shiftKey: false`, which would otherwise commit a
+// curvy stroke even though the user drew (and saw) a straight line. As long as
+// Shift was held within this window before release, the stroke still
+// straightens. Tuned to absorb release jitter without making a deliberate
+// "release Shift then keep drawing curvy" feel sticky.
+const PEN_SHIFT_GRACE_MS = 200;
+
 // Linkflow uses a tighter "is this a tap?" threshold than geometric shapes
 // because its minimum legible size is already 160×80 — any drag below 4 screen
 // px on either axis is effectively a click, and below that we drop the floor
@@ -2513,6 +2522,12 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // live preview and the commit can straighten the stroke. A ref (not state) so
   // it never adds a useStateOverrides slot.
   const penShiftRef = useRef(false);
+  // Timestamp (ms) of the most recent pen pointer event where Shift was held.
+  // The straighten decision and the live preview both treat Shift as still
+  // engaged for PEN_SHIFT_GRACE_MS after this, so release-time jitter (or Shift
+  // lifting a hair before the button) doesn't drop the straight line. Reset to 0
+  // at stroke start so a previous stroke's Shift never bleeds into the next one.
+  const penShiftHeldAtRef = useRef(0);
 
   // Mirror drawShape/drawIcon state into refs so handlers see the live value
   // without depending on closure identity (handler refs need to stay stable so
@@ -2541,6 +2556,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     penDrawingRef.current = false;
     penPointsRef.current = [];
     penShiftRef.current = false;
+    penShiftHeldAtRef.current = 0;
   }, [onCanvasModeChange]);
 
   // US-006: ESC priority chain. A single window-level keydown listener handles
@@ -2685,6 +2701,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       if (!target?.classList.contains('react-flow__pane')) return;
       penDrawingRef.current = true;
       penPointsRef.current = [[e.clientX, e.clientY, e.pressure || 0.5]];
+      penShiftRef.current = e.shiftKey;
+      // Reset the grace clock so a previous stroke's Shift never bleeds in.
+      penShiftHeldAtRef.current = e.shiftKey ? Date.now() : 0;
       setDrawStart({ x: e.clientX, y: e.clientY });
       setDrawCurrent({ x: e.clientX, y: e.clientY });
       try {
@@ -2721,6 +2740,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // Pen tool: accumulate the stroke sample and re-render the live preview.
     if (penDrawingRef.current) {
       penShiftRef.current = e.shiftKey;
+      // Stamp the grace clock whenever Shift is held so a brief lift/jitter at
+      // release stays inside the straighten window (PEN_SHIFT_GRACE_MS).
+      if (e.shiftKey) penShiftHeldAtRef.current = Date.now();
       penPointsRef.current.push([e.clientX, e.clientY, e.pressure || 0.5]);
       setDrawCurrent({ x: e.clientX, y: e.clientY });
       return;
@@ -2743,22 +2765,30 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         } catch {
           // capture may not have been granted; ignore.
         }
-        const raw = penPointsRef.current;
+        // Append the pointer-up position as the final sample. pointermove stops
+        // firing a frame before release, so without this the stroke ends at the
+        // last MOVE, not where the button actually came up — the straightened
+        // line (and a free curve) would stop short of the release point.
+        const raw: Point[] = [...penPointsRef.current, [e.clientX, e.clientY, e.pressure || 0.5]];
         penPointsRef.current = [];
-        // Read the Shift state from the SAME source the live preview uses
-        // (`penShiftRef`, the last pointermove's shiftKey) — NOT `e.shiftKey` on
-        // the pointer-up event — so "what you see is what commits": if the user
-        // lifts Shift between the final move and release without moving, the
-        // preview already shows the straight line and the commit must match it.
-        // The ref is reset to false only AFTER the straighten decision reads it
-        // below.
-        const straighten = penShiftRef.current;
+        // Straighten when Shift is engaged — read from the pointer-up event, the
+        // last pointermove (`penShiftRef`), OR the grace window. Releasing the
+        // button often jerks the pointer and can lift Shift a hair early, so the
+        // final event may carry `shiftKey: false` even though the user drew (and
+        // saw) a straight line. The grace keeps "what you see is what commits"
+        // across that release jitter. Both refs reset AFTER the decision reads
+        // them (and on the early-return below).
+        const straighten =
+          e.shiftKey ||
+          penShiftRef.current ||
+          Date.now() - penShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
         setDrawStart(null);
         setDrawCurrent(null);
         const rfInstance = rfInstanceRef.current;
         // < 2 points (a tap) or no RF instance → nothing to commit; stay armed.
         if (!rfInstance || raw.length < 2) {
           penShiftRef.current = false;
+          penShiftHeldAtRef.current = 0;
           return;
         }
         // Hold Shift → straighten the stroke to a 2-point segment snapped to the
@@ -2771,6 +2801,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         const samples: Point[] =
           straighten && first && last ? [first, snapToStraightLine(first, last)] : raw;
         penShiftRef.current = false;
+        penShiftHeldAtRef.current = 0;
         // Project each client sample into flow coords for the committed box.
         const flowPts: Point[] = samples.map((p) => {
           const f = rfInstance.screenToFlowPosition({ x: p[0], y: p[1] });
@@ -4869,6 +4900,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             penDrawingRef.current = false;
             penPointsRef.current = [];
             penShiftRef.current = false;
+            penShiftHeldAtRef.current = 0;
             setDrawStart(null);
             setDrawCurrent(null);
             setSpaceDragging(false);
@@ -5370,12 +5402,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     const offsetX = wrapperRect?.left ?? 0;
                     const offsetY = wrapperRect?.top ?? 0;
                     // Hold Shift → preview the straightened 2-point segment so the
-                    // live overlay matches what will commit.
+                    // live overlay matches what will commit. Mirror the commit's
+                    // grace window (PEN_SHIFT_GRACE_MS) so a brief Shift lift at
+                    // release doesn't flash the preview back to a curve.
                     const penPoints = penPointsRef.current;
                     const previewFirst = penPoints[0];
                     const previewLast = penPoints[penPoints.length - 1];
+                    const previewStraighten =
+                      penShiftRef.current ||
+                      Date.now() - penShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
                     const source: Point[] =
-                      penShiftRef.current && previewFirst && previewLast
+                      previewStraighten && previewFirst && previewLast
                         ? [previewFirst, snapToStraightLine(previewFirst, previewLast)]
                         : penPoints;
                     const pts = source.map(([x, y]) => `${x - offsetX},${y - offsetY}`).join(' ');
