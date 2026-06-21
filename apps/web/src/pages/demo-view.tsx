@@ -1438,6 +1438,29 @@ export function DemoView({
     [flowId, adapter, runImageUpload],
   );
 
+  // Replace the image on an existing image node (sidebar picker or drop-on-top).
+  // Upload the new file to the SAME node id (a fresh filename, so the old file
+  // survives for undo), then repoint data.path via an undoable PATCH. The
+  // optimistic override paints the new image immediately; the SSE echo prunes it.
+  const onReplaceImage = useCallback(
+    (nodeId: string, file: File) => {
+      if (!flowId || !adapter) return;
+      setEditError(null);
+      void (async () => {
+        try {
+          const downscaled = await downscaleImageFile(file);
+          const { path } = await adapter.uploadImage(nodeId, downscaled, file.name);
+          setNodeOverride(nodeId, { data: { path, alt: file.name } } as Partial<FlowNode>);
+          await adapter.updateNode(nodeId, { path, alt: file.name });
+        } catch (err) {
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('replace image failed', err);
+        }
+      })();
+    },
+    [flowId, adapter, setNodeOverride],
+  );
+
   const onRetryImageUpload = useCallback(
     (nodeId: string) => {
       const args = imageRetryRef.current.get(nodeId);
@@ -2807,6 +2830,7 @@ export function DemoView({
           onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
           onRetryImageUpload={flowId ? onRetryImageUpload : undefined}
+          onReplaceImage={flowId ? onReplaceImage : undefined}
           onCreateHtmlNode={flowId ? onCreateHtmlNode : undefined}
           iconPickerOpen={iconPicker.open}
           onOpenIconPicker={flowId ? handleOpenIconPickerInsert : undefined}

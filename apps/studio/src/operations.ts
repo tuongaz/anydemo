@@ -135,6 +135,11 @@ export const NodePatchBodySchema = z
     // Empty string is the clear signal — mergeNodeUpdates strips the key from
     // disk (mirrors description / detail).
     caption: z.string().optional(),
+    // type:'image'-only: relative path to the image file. Lands at data.path.
+    // Used by the "replace image" UX (upload a new file to the same node, then
+    // repoint path). The post-merge ResolvedImageNodeData refine enforces it
+    // lives under nodes/<id>/, so a traversal/absolute path is rejected.
+    path: z.string().min(1).optional(),
     // kebab-case Lucide icon name. Lands at data.icon. The post-merge reparse
     // enforces the schema's `.min(1)` non-empty rule for nodes that require
     // icon (type:'icon'), and gates which variants allow it. Explicit `null`
@@ -196,6 +201,7 @@ const NODE_DATA_PATCH_KEYS = [
   'strokeWidth',
   'alt',
   'caption',
+  'path',
   'icon',
   'description',
   'detail',

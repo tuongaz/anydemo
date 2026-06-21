@@ -588,6 +588,66 @@ describe('DetailPanel icon trigger', () => {
     expect(findAll(tree, (el) => el.type === TitleIconTrigger).length).toBe(0);
   });
 
+  // The replace-image picker is a child component (ImageReplaceSection), so the
+  // synchronous shim leaves it as an unexpanded element — match it by type and,
+  // for behaviour, render that element's type fn directly.
+  const imageFixture = {
+    id: 'i1',
+    type: 'image',
+    position: { x: 0, y: 0 },
+    data: { name: 'img', path: 'nodes/i1/pic.png', alt: 'pic' },
+  } as unknown as FlowNode;
+  const findReplaceSection = (tree: unknown) =>
+    findAll(
+      tree,
+      (el) =>
+        typeof el.type === 'function' &&
+        (el.type as { name?: string }).name === 'ImageReplaceSection',
+    );
+
+  it('shows the Replace-image picker only when onReplaceImage is wired for an image node', () => {
+    const withCb = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: imageFixture,
+        connector: null,
+        onClose: () => {},
+        onReplaceImage: () => {},
+      }),
+    );
+    const withoutCb = renderWithHooks(() =>
+      DetailPanel({ flowId: 'd1', node: imageFixture, connector: null, onClose: () => {} }),
+    );
+    expect(findReplaceSection(withCb).length).toBe(1);
+    expect(findReplaceSection(withoutCb).length).toBe(0);
+  });
+
+  it('dispatches onReplaceImage with the picked file', () => {
+    const calls: Array<{ id: string; name: string }> = [];
+    const tree = renderWithHooks(() =>
+      DetailPanel({
+        flowId: 'd1',
+        node: imageFixture,
+        connector: null,
+        onClose: () => {},
+        onReplaceImage: (id, file) => calls.push({ id, name: file.name }),
+      }),
+    );
+    const section = findReplaceSection(tree)[0];
+    if (!section) throw new Error('ImageReplaceSection missing');
+    const rendered = (section.type as (p: unknown) => unknown)(section.props);
+    const input = findAll(rendered, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'detail-panel-image-replace-input';
+    })[0];
+    if (!input) throw new Error('replace-image input missing');
+    const file = { name: 'new.png' } as File;
+    (input.props as { onChange: (e: unknown) => void }).onChange({
+      target: { files: [file], value: '' },
+    });
+    expect(calls).toEqual([{ id: 'i1', name: 'new.png' }]);
+  });
+
   it('icon trigger is hidden for type:"icon" (icon IS the visual, not a header glyph)', () => {
     const iconFixture = {
       id: 'ic1',

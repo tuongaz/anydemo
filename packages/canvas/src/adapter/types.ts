@@ -75,6 +75,8 @@ export interface NodePatch {
   alt?: string;
   /** type:'image'-only: caption shown below the image. Lands at data.caption. */
   caption?: string;
+  /** type:'image'-only: relative path to the image file (replace-image UX). */
+  path?: string;
   /**
    * Kebab-case Lucide icon name. Lands at data.icon. Decorative on every
    * type except type:'icon', where the icon IS the visual and the field is

@@ -61,6 +61,12 @@ export interface DetailPanelProps {
    */
   onIconChange?: (nodeId: string, icon: string | null) => void;
   /**
+   * Replace the image on a type:'image' selection. Renders a "Replace image"
+   * file picker in the panel; the host uploads the chosen file to the same
+   * node and repoints `data.path`. Hidden when undefined (read-only / non-edit).
+   */
+  onReplaceImage?: (nodeId: string, file: File) => void;
+  /**
    * US-007: latest StatusReport for the selected node, when one exists in the
    * hook's `statusByNode` map. Renders the Status section above the editable
    * fields. Undefined → section is hidden so a node with no statusAction looks
@@ -90,6 +96,7 @@ export function DetailPanel({
   onDescriptionChange,
   onDetailChange,
   onIconChange,
+  onReplaceImage,
   statusReport,
   open = true,
   onClose,
@@ -309,6 +316,13 @@ export function DetailPanel({
                   htmlPath="view.html"
                 />
               ) : null}
+
+              {inspectableNode.type === 'image' && onReplaceImage ? (
+                <ImageReplaceSection
+                  nodeId={inspectableNode.id}
+                  onReplaceImage={onReplaceImage}
+                />
+              ) : null}
             </div>
           </div>
         ) : connector ? (
@@ -334,6 +348,39 @@ export function DetailPanel({
         )}
       </div>
     </aside>
+  );
+}
+
+// "Replace image" picker for a selected type:'image' node. A hidden file input
+// behind a styled label button; selecting a file dispatches onReplaceImage so
+// the host uploads it to the same node and repoints data.path (an undoable
+// PATCH). Mirrors the OS-drop accept allowlist.
+function ImageReplaceSection({
+  nodeId,
+  onReplaceImage,
+}: {
+  nodeId: string;
+  onReplaceImage: (nodeId: string, file: File) => void;
+}) {
+  return (
+    <div className="sf:flex sf:flex-col sf:gap-1.5" data-testid="detail-panel-image-replace">
+      <span className="sf:text-xs sf:font-medium sf:text-muted-foreground">Image</span>
+      <label className="sf:inline-flex sf:w-fit sf:cursor-pointer sf:items-center sf:gap-2 sf:rounded-md sf:border sf:border-border sf:bg-card sf:px-3 sf:py-1.5 sf:text-sm sf:text-foreground sf:transition-colors sf:hover:bg-muted">
+        Replace image…
+        <input
+          type="file"
+          accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+          className="sf:hidden"
+          data-testid="detail-panel-image-replace-input"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            // Reset so re-picking the SAME file fires onChange again.
+            e.target.value = '';
+            if (file) onReplaceImage(nodeId, file);
+          }}
+        />
+      </label>
+    </div>
   );
 }
 

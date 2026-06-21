@@ -51,7 +51,7 @@ import {
 import { EditableEdge, type EditableEdgeData } from '../edges/editable-edge.tsx';
 import type { HistoryHandle } from '../history/types.ts';
 import { useCanvasExport } from '../hooks/use-canvas-export.ts';
-import { computeImageDims, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
+import { computeImageDims, extractImageFile, handleCanvasFileDrop } from '../lib/canvas-drop.ts';
 import { CanvasStudioProvider } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
@@ -635,6 +635,14 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * runtime data so the renderer can call it on click.
    */
   onRetryImageUpload?: (nodeId: string) => void;
+  /**
+   * Replace the image on an EXISTING image node. Dispatched when the user
+   * drops a new image directly onto an image node, or picks a file from the
+   * "Replace image" control in the sidebar. The host uploads the file to the
+   * same node id and repoints `data.path` (an undoable PATCH). Absent → the
+   * replace affordances are suppressed.
+   */
+  onReplaceImage?: (nodeId: string, file: File) => void;
   /**
    * US-017: commit a new type:'html' node at the drop position from the
    * toolbar's HTML block tile (HTML5 drag-and-drop). The canvas detects the
@@ -2125,6 +2133,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onCreateLinkflowNode,
     onCreateImageFromFile,
     onRetryImageUpload,
+    onReplaceImage,
     onCreateHtmlNode,
     onCreateConnector,
     onReconnectConnector,
@@ -3890,6 +3899,25 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       }
       // US-027: image drop gated on enableImageDrop.
       if (!onCreateImageFromFile || !flags.enableImageDrop) return;
+      // Replace-on-drop: if the drop landed ON an existing image node, swap that
+      // node's image instead of creating a new one. Hit-test the drop target's
+      // enclosing React Flow node and confirm it renders an image body.
+      if (onReplaceImage) {
+        const targetEl = e.target as HTMLElement | null;
+        const nodeEl = targetEl?.closest('.react-flow__node') ?? null;
+        const overImageId =
+          nodeEl && nodeEl.querySelector('[data-node-type="image"]')
+            ? nodeEl.getAttribute('data-id')
+            : null;
+        if (overImageId) {
+          const file = extractImageFile(e.dataTransfer);
+          if (file) {
+            e.preventDefault();
+            onReplaceImage(overImageId, file);
+            return;
+          }
+        }
+      }
       // Capture clientX/Y synchronously — the synthetic event is recycled by
       // React once the handler returns, so the awaited dims read would see
       // stale coordinates.
@@ -3903,7 +3931,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         dispatch: onCreateImageFromFile,
       });
     },
-    [onCreateImageFromFile, onCreateHtmlNode, flags.enableImageDrop, flags.enableDragDrop],
+    [
+      onCreateImageFromFile,
+      onReplaceImage,
+      onCreateHtmlNode,
+      flags.enableImageDrop,
+      flags.enableDragDrop,
+    ],
   );
 
   const reconnectableEdges = !!onReconnectConnector;
@@ -5791,6 +5825,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                 onDescriptionChange={onDescriptionChange}
                 onDetailChange={onDetailChange}
                 onIconChange={onIconChange}
+                onReplaceImage={isEditMode ? onReplaceImage : undefined}
                 open={sidebarOpen}
                 onClose={() => {
                   // Dismiss the sidebar (X button, Escape) AND clear selection
