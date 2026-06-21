@@ -54,6 +54,8 @@ const NODE_DATA_FLOW_KEYS = new Set([
   'path',
   'alt',
   'html',
+  // type:'group'-only: membership is semantic, so it persists to flow.json.
+  'childIds',
 ]);
 
 const NODE_STYLE_KEYS = new Set([

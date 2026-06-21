@@ -84,6 +84,9 @@ const DEFAULT_DIMENSIONS: Record<FlowNode['type'], { width: number; height: numb
   component: { width: 320, height: 240 },
   linkflow: { width: 240, height: 100 },
   freehand: { width: 100, height: 100 },
+  // Mirrors GROUP_DEFAULT_SIZE in @seeflow/canvas group-node.tsx. Group nodes
+  // are containers; this default only applies when one lacks explicit dims.
+  group: { width: 320, height: 220 },
 };
 
 // Sticky / text variants are floating annotations. They never participate in

@@ -46,6 +46,10 @@ const NULL_CLEARS_NODE_KEY = new Set<string>([
   // back to unset. mergeNodeUpdates treats null on a nullable patch key as
   // the clear signal, so the inverse sends `{ target: null }`.
   'target',
+  // type:'group'-only: undo of a membership write where the pre-edit value was
+  // UNSET must clear `data.childIds` rather than no-op. The on-disk schema's
+  // `.default([])` re-normalizes a cleared group to an empty list on read.
+  'childIds',
 ]);
 
 /**

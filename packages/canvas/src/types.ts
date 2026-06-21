@@ -122,7 +122,8 @@ export type NodeType =
   | 'icon'
   | 'component'
   | 'linkflow'
-  | 'freehand';
+  | 'freehand'
+  | 'group';
 
 /**
  * Set of node types creatable via the canvas toolbar's draw-mode (click /
@@ -284,6 +285,25 @@ export interface LinkflowNodeData extends NodeSemanticBase, NodeVisual, NodeCapa
   target?: LinkflowTarget;
 }
 
+/**
+ * `type:'group'` node data — a first-class container that owns membership via
+ * `childIds`. Member node positions stay ABSOLUTE (no xyflow `parentId`
+ * reparenting), so the rest of the canvas treats members as ordinary nodes;
+ * the group only paints its box/title behind them and fans out move/resize in
+ * later milestones. Reuses the shared semantic + visual base so title,
+ * description/sidebar, and background/border come for free. An empty
+ * `childIds` is a valid "labeled zone" (design §9.11).
+ *
+ * `childIds` is NOT part of `CANVAS_NODE_DATA_FIELDS` (that satisfies-const is
+ * bound to `GeometricNodeData`); the studio↔canvas parity test only checks the
+ * geometric field set, and `childIds` persists to flow.json via its own
+ * `FlowGroupNodeData` on-disk schema.
+ */
+export interface GroupNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  /** Ids of the member nodes (absolute-positioned). At most one group per node; never another group's id (no nesting in v1). */
+  childIds: string[];
+}
+
 interface NodeBase {
   id: string;
   position: { x: number; y: number };
@@ -296,7 +316,8 @@ export type FlowNode =
   | (NodeBase & { type: 'icon'; data: IconNodeData })
   | (NodeBase & { type: 'component'; data: ComponentNodeData })
   | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData })
-  | (NodeBase & { type: 'freehand'; data: FreehandNodeData });
+  | (NodeBase & { type: 'freehand'; data: FreehandNodeData })
+  | (NodeBase & { type: 'group'; data: GroupNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
 // `select` is the neutral default — click/marquee selects, pane-drag pans.

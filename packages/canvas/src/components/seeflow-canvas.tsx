@@ -85,6 +85,7 @@ import {
   shapeChromeClass,
   shapeChromeStyle,
 } from '../nodes/geometric-node.tsx';
+import { GROUP_NODE_Z_INDEX, GroupNode } from '../nodes/group-node.tsx';
 import { HtmlNode } from '../nodes/html-node.tsx';
 import { ICON_DEFAULT_SIZE, IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
@@ -1423,6 +1424,12 @@ const nodeTypes = {
   // are no-ops at this story; US-004 wires the picker, US-007 wires navigation.
   linkflow: LinkflowNode,
   freehand: FreehandNode,
+  // Group container: paints a titled box BEHIND its members (assigned
+  // GROUP_NODE_Z_INDEX in buildNode). Static this milestone — create/ungroup
+  // (M4), overlay resize (M3/M5), enter/exit (M6) build on top. Using the key
+  // `group` also opts the wrapper into xyflow's `.react-flow__node-group` class
+  // (see index.css carve-outs that keep its low zIndex stable on selection).
+  group: GroupNode,
 };
 const edgeTypes = { editableEdge: EditableEdge };
 
@@ -3375,6 +3382,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         },
         selected: selectedNodeIdSet.has(merged.id),
       };
+      // Z-order (design §9.6, §12.4): a group MUST paint BEHIND its members and
+      // behind the connector edges (pinned at zIndex 0 via DEFAULT_EDGE_OPTIONS).
+      // Every other node leaves zIndex undefined (xyflow → 0), so the group
+      // needs an explicit NEGATIVE value or DOM order would let a group authored
+      // last paint over its members. `elevateNodesOnSelect={false}` + the
+      // `.react-flow__node-group` z-index carve-out in index.css keep this stable
+      // even when the group is selected. See GROUP_NODE_Z_INDEX in group-node.tsx.
+      if (merged.type === 'group') node.zIndex = GROUP_NODE_Z_INDEX;
       // Pass explicit width/height to the React Flow node wrapper when set
       // in data. NodeResizer dispatches dimension changes that update these
       // during a gesture; we only persist (and hence sync them back into

@@ -183,6 +183,13 @@ export const NodePatchBodySchema = z
     // unset target back to unlinked. The post-merge ResolvedFlowSchema reparse
     // gates that this is only valid on type:'linkflow'.
     target: LinkflowTargetSchema.nullable().optional(),
+    // type:'group'-only: member node ids. Lands at data.childIds. The
+    // post-merge ResolvedFlowSchema reparse enforces membership integrity
+    // (existence / single-membership / no-nesting). Explicit `null` clears the
+    // field (mergeNodeUpdates strips the key from disk) so an undo that emptied
+    // membership reverts the field, mirroring `target`. The on-disk schema's
+    // `.default([])` re-normalizes a cleared group back to an empty list on read.
+    childIds: z.array(z.string()).nullable().optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -219,6 +226,7 @@ const NODE_DATA_PATCH_KEYS = [
   'stateSource',
   'spec',
   'target',
+  'childIds',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));
@@ -321,6 +329,20 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
     'playAction',
     'statusAction',
     'points',
+  ]),
+  // Group nodes carry the semantic `childIds` membership list (flow.json) plus
+  // the universal semantic keys. Visual keys (background/border/cornerRadius)
+  // are NODE_VISUAL_KEYS routed to style.json, preserved across a retype.
+  group: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'childIds',
   ]),
 };
 

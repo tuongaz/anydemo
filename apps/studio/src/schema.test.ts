@@ -1,7 +1,9 @@
 import { describe, expect, it, test } from 'bun:test';
 import { CANVAS_NODE_DATA_FIELDS } from '@seeflow/canvas/types';
+import { mergeFlowAndStyle, splitFlow } from './merge.ts';
 import {
   FlowFreehandNodeSchema,
+  FlowGroupNodeSchema,
   FlowIdPattern,
   FlowRectangleNodeSchema,
   FlowSchema,
@@ -3142,5 +3144,164 @@ describe('freehand node type', () => {
       },
     });
     expect(res.success).toBe(false);
+  });
+});
+
+describe('group node type', () => {
+  // A minimal resolved flow with two member nodes + a group containing them.
+  const makeResolved = (overrides?: {
+    childIds?: string[];
+    extraNodes?: Array<Record<string, unknown>>;
+  }) => ({
+    version: 2 as const,
+    name: 'Group flow',
+    nodes: [
+      { id: 'n1', type: 'rectangle', position: { x: 0, y: 0 }, data: {} },
+      { id: 'n2', type: 'rectangle', position: { x: 200, y: 0 }, data: {} },
+      ...(overrides?.extraNodes ?? []),
+      {
+        id: 'g1',
+        type: 'group',
+        position: { x: -20, y: -40 },
+        data: {
+          childIds: overrides?.childIds ?? ['n1', 'n2'],
+          name: 'My group',
+          width: 320,
+          height: 200,
+          backgroundColor: 'slate',
+          borderColor: 'blue',
+        },
+      },
+    ],
+    connectors: [],
+  });
+
+  test('NodeTypeSchema accepts "group"', () => {
+    expect(NodeTypeSchema.safeParse('group').success).toBe(true);
+  });
+
+  test('ResolvedFlowSchema parses a valid group referencing existing members', () => {
+    const res = ResolvedFlowSchema.safeParse(makeResolved());
+    if (!res.success) {
+      throw new Error(
+        `expected valid group flow, got: ${JSON.stringify(res.error.issues, null, 2)}`,
+      );
+    }
+    const group = res.data.nodes.find((n) => n.id === 'g1');
+    expect(group?.type).toBe('group');
+    if (group?.type === 'group') {
+      expect(group.data.childIds).toEqual(['n1', 'n2']);
+    }
+  });
+
+  test('childIds defaults to [] when omitted (empty group / labeled zone)', () => {
+    const res = FlowGroupNodeSchema.safeParse({
+      id: 'g1',
+      type: 'group',
+      data: { name: 'Zone' },
+    });
+    if (!res.success) {
+      throw new Error(
+        `expected default childIds, got: ${JSON.stringify(res.error.issues, null, 2)}`,
+      );
+    }
+    expect(res.data.data.childIds).toEqual([]);
+  });
+
+  test('ResolvedFlowSchema rejects a group with a non-existent child id', () => {
+    const res = ResolvedFlowSchema.safeParse(makeResolved({ childIds: ['n1', 'ghost'] }));
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error.issues.some((i) => /unknown child node: ghost/.test(i.message))).toBe(true);
+  });
+
+  test('ResolvedFlowSchema rejects a node that is a member of two groups', () => {
+    const doubled = makeResolved();
+    doubled.nodes.push({
+      id: 'g2',
+      type: 'group',
+      position: { x: 400, y: 0 },
+      data: { childIds: ['n1'], name: 'Other', width: 100, height: 100 },
+    });
+    const res = ResolvedFlowSchema.safeParse(doubled);
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error.issues.some((i) => /no double-membership/.test(i.message))).toBe(true);
+  });
+
+  test('ResolvedFlowSchema rejects a nested group (group id inside childIds)', () => {
+    const nested = makeResolved();
+    // g1 already lists n1/n2; add a g2 that tries to contain g1.
+    nested.nodes.push({
+      id: 'g2',
+      type: 'group',
+      position: { x: 400, y: 0 },
+      data: { childIds: ['g1'], name: 'Outer', width: 500, height: 400 },
+    });
+    const res = ResolvedFlowSchema.safeParse(nested);
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error.issues.some((i) => /no nested groups/.test(i.message))).toBe(true);
+  });
+
+  test('FlowSchema (on-disk) also enforces membership integrity', () => {
+    const res = FlowSchema.safeParse({
+      version: 2,
+      name: 'Group flow',
+      nodes: [
+        { id: 'n1', type: 'rectangle', data: {} },
+        { id: 'g1', type: 'group', data: { childIds: ['n1', 'ghost'] } },
+      ],
+      connectors: [],
+    });
+    expect(res.success).toBe(false);
+    if (res.success) return;
+    expect(res.error.issues.some((i) => /unknown child node: ghost/.test(i.message))).toBe(true);
+  });
+
+  test('FlowGroupNodeSchema rejects unknown data fields (strict)', () => {
+    const res = FlowGroupNodeSchema.safeParse({
+      id: 'g1',
+      type: 'group',
+      data: { childIds: [], bogus: true },
+    });
+    expect(res.success).toBe(false);
+  });
+
+  test('round-trips: childIds → flow.json, position + visuals → style.json', () => {
+    const resolved = makeResolved();
+    const parsed = ResolvedFlowSchema.parse(resolved);
+    const { flow, style } = splitFlow(parsed as unknown as Parameters<typeof splitFlow>[0]);
+
+    // childIds (semantic) lands in flow.json on the group node.
+    const flowGroup = (flow.nodes as Array<Record<string, unknown>>).find((n) => n.id === 'g1');
+    expect((flowGroup?.data as { childIds?: string[] }).childIds).toEqual(['n1', 'n2']);
+    // Visual + name route correctly: name stays in flow.json; width/colors strip
+    // into style.json; childIds must NOT leak into style.json.
+    expect((flowGroup?.data as { name?: string }).name).toBe('My group');
+    expect((flowGroup?.data as Record<string, unknown>).width).toBeUndefined();
+    const styleNodes = (style.nodes ?? {}) as Record<string, Record<string, unknown>>;
+    expect(styleNodes.g1?.width).toBe(320);
+    expect(styleNodes.g1?.backgroundColor).toBe('slate');
+    expect(styleNodes.g1?.position).toEqual({ x: -20, y: -40 });
+    expect('childIds' in (styleNodes.g1 ?? {})).toBe(false);
+
+    // The on-disk flow.json re-parses cleanly, and re-merging reproduces the
+    // resolved group (childIds + visuals back together).
+    const flowReparse = FlowSchema.safeParse(flow);
+    expect(flowReparse.success).toBe(true);
+    const styleReparse = StyleSchema.safeParse(style);
+    expect(styleReparse.success).toBe(true);
+    if (flowReparse.success && styleReparse.success) {
+      const merged = mergeFlowAndStyle(flowReparse.data, styleReparse.data);
+      const mergedGroup = merged.nodes.find((n) => n.id === 'g1');
+      expect(mergedGroup?.type).toBe('group');
+      if (mergedGroup?.type === 'group') {
+        expect(mergedGroup.data.childIds).toEqual(['n1', 'n2']);
+        expect(mergedGroup.data.width).toBe(320);
+        expect(mergedGroup.data.backgroundColor).toBe('slate');
+      }
+      expect(mergedGroup?.position).toEqual({ x: -20, y: -40 });
+    }
   });
 });

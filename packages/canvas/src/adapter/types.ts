@@ -33,7 +33,7 @@ export interface NodeCreateInput {
   id?: string;
   type: NodeKind;
   position: { x: number; y: number };
-  /** Per-type data payload (GeometricNodeData / ImageNodeData / HtmlNodeData / IconNodeData). */
+  /** Per-type data payload (GeometricNodeData / ImageNodeData / HtmlNodeData / IconNodeData / GroupNodeData incl. `childIds`). */
   data: Record<string, unknown>;
 }
 
@@ -94,6 +94,14 @@ export interface NodePatch {
    * the key from disk) so undo of a link/edit reverts to the unlinked state.
    */
   target?: { project: string; flow: string } | null;
+  /**
+   * type:'group'-only: member node ids. Lands at data.childIds. Used by the
+   * create/ungroup/resize batches (M4/M5) to set membership without a second
+   * call. Explicit `null` clears the field (the studio strips the key from
+   * disk); `'childIds'` is in `NULL_CLEARS_NODE_KEY` so an undo that emptied a
+   * group's membership sends `null` rather than a dropped `undefined`.
+   */
+  childIds?: string[] | null;
 }
 
 export type ReorderOp =

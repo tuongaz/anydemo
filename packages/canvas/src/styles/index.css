@@ -495,43 +495,16 @@ layer(base);
   pointer-events: none;
 }
 
-.seeflow-canvas-root .react-flow__node-group {
-  border: 1px dashed hsl(var(--border));
-  background: transparent;
-  border-radius: 4px;
-}
-.seeflow-canvas-root .react-flow__node-group.selected {
-  border-color: transparent;
-}
-.seeflow-canvas-root .react-flow__node-group.selected::after {
-  z-index: 0;
-}
-.seeflow-canvas-root .react-flow__node[data-gated-child="true"] {
-  pointer-events: none;
-}
-.seeflow-canvas-root .react-flow__node-group:has(> [data-testid="group-node"][data-active="true"]) {
-  border: 2px solid hsl(var(--primary));
-  background: hsl(var(--primary) / 0.04);
-}
-.seeflow-canvas-root .react-flow__node-group .react-flow__node-group-label {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  align-items: center;
-  padding: 4px 8px;
-  font-size: 12px;
-  font-weight: 500;
-  color: hsl(var(--muted-foreground));
-  background: transparent;
-  pointer-events: auto;
-  z-index: 2;
-  user-select: none;
-}
-.seeflow-canvas-root .react-flow__node-group .react-flow__node-group-label[data-editing="true"] {
-  user-select: text;
-}
+/* Group container z-order (canvas grouping M1): the group node paints BEHIND
+ * its members via a negative per-node zIndex (GROUP_NODE_Z_INDEX in
+ * group-node.tsx, applied in seeflow-canvas.tsx `buildNode`). xyflow tags the
+ * wrapper `.react-flow__node-group` because the node type key is `group`; the
+ * `:not(.react-flow__node-group)` carve-outs on the selection-elevation rules
+ * above keep that low zIndex stable even when the group is selected (combined
+ * with `elevateNodesOnSelect={false}`). The group's own box/title/border is
+ * painted by the renderer's inline styles — no wrapper-level chrome here so the
+ * two don't fight. Selection chrome, isolation affordances, and the title band
+ * styling arrive with M2/M6/M7. */
 
 /* US-007 selected-node handle transforms (edit mode only) */
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-top {

@@ -130,3 +130,39 @@ export function buildNewImageData(
     ...pick(lastUsed, IMAGE_FIELDS),
   };
 }
+
+/** Default title for a freshly-created group container. */
+export const NEW_GROUP_NAME = 'Group';
+
+export interface GroupDataDefaults {
+  // Index signature so the result satisfies `NodeCreateInput.data`
+  // (`Record<string, unknown>`) without a per-call-site cast.
+  [key: string]: unknown;
+  childIds: string[];
+  name: string;
+  width: number;
+  height: number;
+  borderSize: number;
+}
+
+/**
+ * Build the `data` object for a freshly-created group container (used by the
+ * create-group op in M4). `childIds` are the member node ids (existing nodes),
+ * `dims` is the computed group box. Defaults to a titled container with a thin
+ * border; visual fields route to style.json on write. An empty `childIds` is
+ * allowed (a labeled zone, design §9.11). Unlike the shape/image builders this
+ * takes no `lastUsed` overlay — a group's chrome is its own concern, decided by
+ * the create op / M7 styling, not the last-used shape style.
+ */
+export function buildNewGroupData(
+  childIds: string[],
+  dims: { width: number; height: number },
+): GroupDataDefaults {
+  return {
+    childIds,
+    name: NEW_GROUP_NAME,
+    width: dims.width,
+    height: dims.height,
+    borderSize: NEW_NODE_BORDER_WIDTH,
+  };
+}

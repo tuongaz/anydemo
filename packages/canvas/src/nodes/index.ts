@@ -10,6 +10,8 @@ export {
   shapeChromeStyle,
 } from './geometric-node.tsx';
 export type { GeometricNodeFlowNode, GeometricNodeRuntimeData } from './geometric-node.tsx';
+export { GROUP_DEFAULT_SIZE, GROUP_NODE_Z_INDEX, GroupNode } from './group-node.tsx';
+export type { GroupNodeRuntimeData, GroupNodeType } from './group-node.tsx';
 export { HTML_DEFAULT_SIZE, HtmlNode } from './html-node.tsx';
 export type { HtmlNodeRuntimeData, HtmlNodeType } from './html-node.tsx';
 export { ICON_DEFAULT_SIZE, ICON_FALLBACK_NAME, IconNode } from './icon-node.tsx';

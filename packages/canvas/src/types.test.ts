@@ -5,6 +5,7 @@ import type {
   ComponentSpec,
   ComponentSpecElement,
   FlowNode,
+  GroupNodeData,
   NodeType,
   ScriptAction,
   SetComponentAction,
@@ -103,6 +104,8 @@ describe('US-010: component node types', () => {
           return 'linkflow';
         case 'freehand':
           return 'freehand';
+        case 'group':
+          return 'group';
         default: {
           const _exhaustive: never = n;
           return _exhaustive;
@@ -117,5 +120,49 @@ describe('US-010: component node types', () => {
       data: { spec: { root: 'r', elements: { r: { type: 'Text' } } } },
     };
     expect(describe(componentNode)).toBe('component');
+
+    const groupNode: FlowNode = {
+      id: 'g1',
+      type: 'group',
+      position: { x: 0, y: 0 },
+      data: { childIds: ['c1'] },
+    };
+    expect(describe(groupNode)).toBe('group');
+  });
+});
+
+describe('M1: group node types', () => {
+  test('NodeType union includes "group"', () => {
+    const t: NodeType = 'group';
+    expect(t).toBe('group');
+  });
+
+  test('GroupNodeData carries childIds plus the shared semantic/visual base', () => {
+    const data: GroupNodeData = {
+      childIds: ['a', 'b'],
+      name: 'My group',
+      backgroundColor: 'slate',
+      borderColor: 'blue',
+    };
+    expect(data.childIds).toEqual(['a', 'b']);
+    expect(data.name).toBe('My group');
+  });
+
+  test('an empty group (childIds: []) is a valid labeled zone', () => {
+    const data: GroupNodeData = { childIds: [] };
+    expect(data.childIds).toHaveLength(0);
+  });
+
+  test('FlowNode discriminated union extracts the group variant', () => {
+    const node: FlowNode = {
+      id: 'g1',
+      type: 'group',
+      position: { x: 10, y: 20 },
+      data: { childIds: ['n1', 'n2'], width: 300, height: 200 },
+    };
+    if (node.type !== 'group') throw new Error('unreachable');
+    const data: GroupNodeData = node.data;
+    expect(data.childIds).toEqual(['n1', 'n2']);
+    expect(data.width).toBe(300);
   });
 });

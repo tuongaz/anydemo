@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'bun:test';
 import {
+  NEW_GROUP_NAME,
   NEW_NODE_BORDER_WIDTH,
   NEW_NODE_FONT_SIZE,
+  buildNewGroupData,
   buildNewImageData,
   buildNewShapeData,
 } from './node-defaults.ts';
@@ -211,5 +213,30 @@ describe('buildNewImageData with lastUsed', () => {
     );
     expect(data.borderWidth).toBe(4);
     expect('borderSize' in data).toBe(false);
+  });
+});
+
+describe('buildNewGroupData', () => {
+  it('builds a titled container carrying childIds + dims + default border', () => {
+    const data = buildNewGroupData(['a', 'b'], { width: 320, height: 220 });
+    expect(data.childIds).toEqual(['a', 'b']);
+    expect(data.name).toBe(NEW_GROUP_NAME);
+    expect(data.width).toBe(320);
+    expect(data.height).toBe(220);
+    expect(data.borderSize).toBe(NEW_NODE_BORDER_WIDTH);
+  });
+
+  it('allows an empty member list (labeled zone)', () => {
+    const data = buildNewGroupData([], { width: 200, height: 120 });
+    expect(data.childIds).toEqual([]);
+    expect(data.name).toBe(NEW_GROUP_NAME);
+  });
+
+  it('does not mutate the passed childIds reference into shared state', () => {
+    const ids = ['x'];
+    const a = buildNewGroupData(ids, { width: 100, height: 100 });
+    const b = buildNewGroupData(['y'], { width: 100, height: 100 });
+    expect(a.childIds).toEqual(['x']);
+    expect(b.childIds).toEqual(['y']);
   });
 });

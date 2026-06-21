@@ -100,6 +100,57 @@ const isCleanRelativePath = (s: string): boolean => {
   return !segments.some((seg) => seg === '..');
 };
 
+// Group membership integrity, shared by BOTH the resolved and on-disk flow
+// `superRefine`s (mirrors how the connector-existence check is duplicated across
+// the two unions). Enforces: every id in a group's `childIds` exists; a node
+// belongs to AT MOST ONE group; and a group id never appears in any `childIds`
+// (no nested groups in v1, design §9.7). Operates on the minimal shape both
+// unions share — `{ id, type, data.childIds? }`.
+const addGroupMembershipIssues = (
+  // `data` is typed `unknown` because the resolved/on-disk node unions are
+  // structurally exclusive (most variants have no `childIds`), so a narrow
+  // `{ childIds?: string[] }` arg type would be rejected as "no common
+  // properties". We read `childIds` off the group variant via a local cast.
+  nodes: ReadonlyArray<{ id: string; type: string; data?: unknown }>,
+  ctx: z.RefinementCtx,
+): void => {
+  const nodeIds = new Set(nodes.map((n) => n.id));
+  const groupIds = new Set(nodes.filter((n) => n.type === 'group').map((n) => n.id));
+  const claimedBy = new Map<string, string>();
+  nodes.forEach((node, idx) => {
+    if (node.type !== 'group') return;
+    const childIds = (node.data as { childIds?: string[] } | undefined)?.childIds ?? [];
+    childIds.forEach((childId, childIdx) => {
+      const path = ['nodes', idx, 'data', 'childIds', childIdx];
+      if (!nodeIds.has(childId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message: `Group ${node.id} references unknown child node: ${childId}`,
+        });
+        return;
+      }
+      if (groupIds.has(childId)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message: `Group ${node.id} may not contain another group: ${childId} (no nested groups)`,
+        });
+      }
+      const owner = claimedBy.get(childId);
+      if (owner !== undefined && owner !== node.id) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path,
+          message: `Node ${childId} is already a member of group ${owner} (no double-membership)`,
+        });
+        return;
+      }
+      claimedBy.set(childId, node.id);
+    });
+  });
+};
+
 // Script-based action: the studio spawns `<interpreter> [...args] <scriptPath>`
 // from the project's repoPath. `scriptPath` is a relative path under the
 // project root (typically `nodes/<id>/scripts/<name>` for play/status, or any
@@ -220,6 +271,10 @@ export const NodeTypeSchema = z.enum([
   'component',
   'linkflow',
   'freehand',
+  // A `group` is a first-class container node, NOT a geometric shape — it owns
+  // `data.childIds` (membership) and is deliberately kept out of
+  // GEOMETRIC_NODE_TYPES so it routes through its own GroupNodeData variant.
+  'group',
 ]);
 
 // --- Component node spec/action schemas --------------------------------------
@@ -366,6 +421,20 @@ const ResolvedFreehandNodeData = z.object({
   strokeWidth: z.number().min(0.5).max(4).optional(),
 });
 
+// Group node — a first-class container that owns membership via `childIds`
+// (absolute-positioned member node ids). Reuses the shared semantic + visual
+// base so title/description/sidebar and background/border/cornerRadius come for
+// free; `childIds` is the one structural field. Member referential integrity
+// (every id exists, no double-membership, no nesting) is enforced by the
+// `superRefine` on ResolvedFlowSchema below — NOT here — so the per-node schema
+// stays composable. An empty `childIds` is allowed (a labeled zone, design §9.11).
+const ResolvedGroupNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  childIds: z.array(z.string()).default([]),
+});
+
 const NodeBaseShape = {
   id: z.string().min(1),
   position: PositionSchema,
@@ -410,6 +479,11 @@ const NodeSchema = z.discriminatedUnion('type', [
     ...NodeBaseShape,
     type: z.literal('freehand'),
     data: ResolvedFreehandNodeData,
+  }),
+  z.object({
+    ...NodeBaseShape,
+    type: z.literal('group'),
+    data: ResolvedGroupNodeData,
   }),
 ]);
 
@@ -504,6 +578,9 @@ export const ResolvedFlowSchema = z
         });
       }
     });
+    // type:'group' membership integrity (childIds reference / single-membership
+    // / no-nesting). Shared with the on-disk FlowSchema below.
+    addGroupMembershipIssues(resolved.nodes, ctx);
     // type:'image' upload paths must live under the node's own
     // `nodes/<id>/` folder so delete_node's removeNodeDir cascade is the
     // single source of cleanup. The path is project-root-relative: legacy
@@ -679,6 +756,25 @@ const FlowFreehandNodeData = z
   })
   .strict();
 
+// Group node, on-disk shape. `childIds` is SEMANTIC (membership), so it lives
+// in flow.json — NOT style.json. The visual base fields (width/height/colors)
+// route to style.json via splitFlow, exactly like every other node type, so
+// they are intentionally absent from this strict on-disk data schema. `.strict()`
+// rejects any stray visual key that failed to route. An empty `childIds` is
+// allowed (design §9.11) and `.default([])` normalizes a missing array on read.
+const FlowGroupNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    childIds: z
+      .array(z.string())
+      .default([])
+      .describe(
+        "Ids of the member nodes this group contains. Member node positions stay ABSOLUTE (no reparenting); the group owns membership via this list. A node may belong to at most one group, and a group id may never appear here (no nested groups). An empty list is a valid 'labeled zone'.",
+      ),
+  })
+  .strict();
+
 const FlowNodeBaseShape = {
   id: z.string().min(1),
 };
@@ -755,6 +851,14 @@ export const FlowFreehandNodeSchema = z
   })
   .strict();
 
+export const FlowGroupNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('group'),
+    data: FlowGroupNodeData,
+  })
+  .strict();
+
 const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowRectangleNodeSchema,
   FlowEllipseNodeSchema,
@@ -776,6 +880,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowComponentNodeSchema,
   FlowLinkflowNodeSchema,
   FlowFreehandNodeSchema,
+  FlowGroupNodeSchema,
 ]);
 
 const FlowConnectorBaseShape = {
@@ -822,6 +927,10 @@ export const FlowSchema = z
         });
       }
     });
+    // Mirror the resolved-union membership integrity on the on-disk shape so
+    // the direct-FlowSchema read paths (getFlowGraphImpl, registerFlowImpl)
+    // reject dangling/contradictory group membership too.
+    addGroupMembershipIssues(flow.nodes, ctx);
   });
 
 export type Flow = z.infer<typeof FlowSchema>;

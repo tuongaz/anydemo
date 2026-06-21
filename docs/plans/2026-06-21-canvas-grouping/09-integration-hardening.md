@@ -1,0 +1,142 @@
+# Milestone 9 — Cross-cutting integration & hardening
+
+**Status:** Not started · **Depends on:** M1–M8 · **Risk:** Medium (this is where
+v1's hidden coupling bit — clipboard, delete, ordering, export)
+
+## Previous milestone — summary
+
+M8 made groups (and their children, in isolation) connector endpoints with
+floating-edge geometry hugging the group box and previews mirroring commits.
+
+## Lessons carried forward
+
+- (Fill from M8 handoff.)
+- **L0.3** v1 was removed mainly because group-awareness leaked into clipboard,
+  delete-cascade, edge gating, and node ordering. With `childIds` + absolute
+  positions, those touch-points are minimal — but this milestone proves it by
+  exercising each one. If any subsystem needs deep group logic, reconsider.
+- Remember the e2e bundle-build gotcha (`project_e2e_bundle_build_gotcha`): build
+  web+mcp bundles before e2e, or use full `test:it`.
+- Visual baselines pinned to chromium-linux; regenerate via
+  `test:it:update-snapshots`, commit `*-chromium-linux.png` only.
+
+## Goal
+
+Make grouping robust across every cross-cutting path and lock it with
+integration + e2e + visual tests. (Req #6 "anything else".)
+
+**User-testable outcome:** Copy/paste a group with members; delete a group
+(children released) and a member (pruned from `childIds`); export PNG/PDF with the
+group; reload after each op — all correct and undoable.
+
+## Scope
+
+**In:** clipboard (copy/paste/duplicate) with id-remap of `childIds`; delete
+policies (§9.3); export; persistence round-trip; SSE/live reload; z-order &
+bring-to-front/back interplay; modes/flags; empty/locked/mixed selections; full
+test sweep + baselines + docs.
+
+**Out:** nested groups (explicit non-goal); live per-tick child scaling (§6.3
+optional enhancement, separate future work).
+
+## Implementation steps
+
+### A. Clipboard (`packages/canvas/src/lib/` clipboard path + host)
+1. Copying a selection that includes a group copies the group + all its members.
+   On paste/duplicate, remap ids: new member ids AND rewrite the pasted group's
+   `childIds` to the new member ids (single id-remap pass — no parent rewrites).
+2. Copying members WITHOUT their group → paste as loose nodes (no dangling
+   `childIds`). Copying a group WITHOUT some members → prune missing ids.
+3. Offset paste position applies to group + members uniformly (absolute coords).
+
+### B. Delete policy (§9.3)
+4. Delete a **group** → delete container only; children released (survive loose).
+   Implement as: `deleteNode(groupId)` (children untouched). One undo entry.
+5. Delete a **member** → in one batch, **ORDER MATTERS (design §12.9):**
+   `updateNode(groupId,{childIds minus memberId})` **FIRST**, THEN
+   `deleteNode(memberId)`. Each server write re-validates the whole flow
+   (`operations.ts:680`) and the strict `childIds`-existence `superRefine` rejects
+   any state where the group still references a deleted node. The reverse-order
+   undo (recreate member → restore childIds) is also valid at each step.
+6. Marquee delete spanning a group + members → dedupe; if the group is deleted,
+   its `childIds` pruning is moot; if only members, prune.
+
+### C. Export
+7. Verify `use-canvas-export.ts` PNG/PDF includes the group box + title behind
+   members with correct z-order. Add an export test/baseline.
+
+### D. Z-order & reorder
+8. Bring-to-front/forward/backward/to-back (context menu, `onReorderNode`) must
+   not let a member fall behind its group or a group rise above its members
+   confusingly. Clamp: group zIndex stays below member zIndex (M1 mechanism).
+   Test the interplay.
+
+### E. Persistence / SSE
+9. Round-trip: create/move/resize/style/connect a group → reload → identical.
+10. In-flight `activeGroupId` (M6) dropped if the group vanishes via an external
+    SSE reload (multi-client / live).
+
+### F. Modes / flags / edge cases
+11. Group renders read-only in view/mini; create/ungroup/enter are edit-only.
+12. Optional `flags.enableGrouping` master switch (default ON for edit).
+13. Empty/single/mixed selections → reasoned no-ops (covered M4, re-verify).
+
+### G. Tests + docs
+14. Full sweep: `bun test`, `bun run test:it` (integration + e2e). Add e2e for the
+    end-to-end journey (marquee → resize → group → enter → edit child → exit →
+    connect → ungroup). Add/refresh visual baselines (chromium-linux).
+15. Update `packages/canvas/CLAUDE.md` with the group rules (childIds model,
+    frozen-baseline resize contract, z-order, isolation model). Update
+    `packages/canvas/README.md` public API if anything is exported.
+16. Update the seeflow skill's vendored schema/docs if group is exposed to the
+    LLM authoring path.
+
+## Guardrails
+- If any subsystem (clipboard/delete/export/reorder) needs MORE than id-remap or a
+  childIds prune, that's a signal the `childIds` decoupling is being violated —
+  stop and reconsider rather than spreading group logic.
+- Never write a `childIds` referencing a deleted node (schema rejects it).
+- Build bundles before e2e (gotcha above).
+
+## Tests
+- **Integration:** clipboard round-trip (group+members id-remap); delete-group
+  releases children; delete-member prunes childIds; persistence round-trip for
+  every op; export contains the group.
+- **Integration (§12.9 ordering):** delete-member issues prune BEFORE delete (no
+  intermediate dangling-childIds server rejection); assert the server accepts both
+  writes and the reverse-order undo restores cleanly. A test that swaps the order
+  must fail (tripwire).
+- **E2E:** the full journey + visual baselines for overlay chrome, a rendered
+  group, and a group-with-connector.
+- **Unit:** clipboard id-remap; delete-dedupe; reorder zIndex clamp.
+
+## User Acceptance Test (manual)
+1. Copy a group (with members) → paste → a full duplicate group with its own
+   members appears offset; its members are independent of the originals.
+2. Delete a group → the container vanishes, children remain as loose nodes.
+   Cmd+Z restores the group. Delete a single member → it's gone and the group no
+   longer references it; Cmd+Z restores both.
+3. Export PNG and PDF → the group box + title appear behind members.
+4. Bring a member to front / send group to back → ordering stays sane (members
+   never hidden behind their group).
+5. Reload after each → state persists. Open in a second client (live) → group
+   appears; ungroup in one client → the other updates and any open isolation
+   exits.
+
+## Definition of Done
+- All gates green: `bun run format && bun run lint && bun run typecheck && bun test
+  && bun run test:it`.
+- `make verify-seeflow-schema-sync` passes.
+- Visual baselines committed (chromium-linux only).
+- All UAT steps across M1–M9 pass; the original 6 requirements demonstrably met.
+- `packages/canvas/CLAUDE.md` + README updated.
+- Final lessons handoff written into `00-design.md` §11.
+
+## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
+- Which cross-cutting paths needed the most group logic? Did `childIds` stay
+  decoupled, or did awareness leak (the v1 failure)? Be honest — this is the
+  signal for whether the architecture held.
+- Any flaky e2e / baseline issues? Note the fix.
+- Final feature retrospective: what would you change if doing it again?
+- **➡ Write the consolidated lessons into `00-design.md` §11 as the permanent
+  record (the thing v1 never had).**

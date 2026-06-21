@@ -39,6 +39,7 @@ export type {
   FreehandNodeData,
   GeometricNodeData,
   GeometricNodeType,
+  GroupNodeData,
   HtmlNodeData,
   IconNodeData,
   ImageNodeData,
@@ -208,12 +209,18 @@ export {
 export type { LastUsedStyle } from './lib/last-used-style.ts';
 
 export {
+  buildNewGroupData,
   buildNewImageData,
   buildNewShapeData,
+  NEW_GROUP_NAME,
   NEW_NODE_BORDER_WIDTH,
   NEW_NODE_FONT_SIZE,
 } from './lib/node-defaults.ts';
-export type { ImageDataDefaults, ShapeDataDefaults } from './lib/node-defaults.ts';
+export type {
+  GroupDataDefaults,
+  ImageDataDefaults,
+  ShapeDataDefaults,
+} from './lib/node-defaults.ts';
 
 export { scaleNodesWithinRect } from './lib/scale-nodes.ts';
 export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts';
