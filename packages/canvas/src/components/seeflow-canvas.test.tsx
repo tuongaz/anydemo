@@ -1827,13 +1827,15 @@ describe('SeeflowCanvas', () => {
     });
   });
 
-  describe('US-007: multi-select bounding-box resize overlay', () => {
+  describe('US-007 + grouping M2: multi-select / group overlay wiring', () => {
     // The overlay component itself decides presence via
     // `selectionEligibleForOverlay`; here we test the canvas-side wiring —
     // that the right `selectedNodes` payload reaches the overlay (with
-    // optimistic overrides applied and parent-id preserved) and that
-    // `onMultiResize` is forwarded through. The pointer-driven scaling is
-    // exercised in selection-resize-overlay.test.tsx via the pure helpers.
+    // optimistic overrides applied). Canvas grouping M2 makes the overlay
+    // INERT: `onMultiResize` is intentionally NOT forwarded (resize is M3), and
+    // `isGroupSelection` is threaded for gating/icon state. The pointer-driven
+    // scaling is exercised in selection-resize-overlay.test.tsx via the pure
+    // helpers.
     function makeSizedShape(
       id: string,
       pos: { x: number; y: number },
@@ -1886,11 +1888,11 @@ describe('SeeflowCanvas', () => {
       expect(selected).toEqual([]);
     });
 
-    it('forwards the onMultiResize prop unchanged so resize-stop dispatches to the parent', () => {
-      const dispatched: MultiResizeUpdate[][] = [];
-      const onMultiResize = (updates: MultiResizeUpdate[]) => {
-        dispatched.push(updates);
-      };
+    it('M2 INERT: does NOT forward onMultiResize (functional resize is M3)', () => {
+      // The host prop may be supplied, but the overlay is wired inert this
+      // milestone — the corner handles give visual feedback only. M3 re-wires
+      // `onMultiResize` once the frozen-baseline scale lands.
+      const onMultiResize = (_updates: MultiResizeUpdate[]) => {};
       const { overlay } = findOverlay({
         nodes: [
           makeSizedShape('a', { x: 0, y: 0 }, { width: 50, height: 50 }),
@@ -1900,10 +1902,53 @@ describe('SeeflowCanvas', () => {
         onMultiResize,
       });
       if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
-      const wired = overlay.props.onMultiResize as ((u: MultiResizeUpdate[]) => void) | undefined;
-      expect(typeof wired).toBe('function');
-      wired?.([{ id: 'a', position: { x: 5, y: 5 } }]);
-      expect(dispatched).toEqual([[{ id: 'a', position: { x: 5, y: 5 } }]]);
+      expect(overlay.props.onMultiResize).toBeUndefined();
+    });
+
+    it('threads isGroupSelection=false for a loose multi-selection', () => {
+      const { overlay } = findOverlay({
+        nodes: [
+          makeSizedShape('a', { x: 0, y: 0 }, { width: 50, height: 50 }),
+          makeSizedShape('b', { x: 100, y: 100 }, { width: 50, height: 50 }),
+        ],
+        selectedNodeIds: ['a', 'b'],
+      });
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
+      expect(overlay.props.isGroupSelection).toBe(false);
+    });
+
+    it('single group selection: threads isGroupSelection=true with members + group box, dims resolved (§12.1/§12.5)', () => {
+      const group: FlowNode = {
+        id: 'g1',
+        type: 'group',
+        position: { x: 0, y: 0 },
+        data: { name: 'G', width: 400, height: 300, childIds: ['a', 'b'] },
+      };
+      const { overlay } = findOverlay({
+        nodes: [
+          group,
+          makeSizedShape('a', { x: 10, y: 10 }, { width: 50, height: 50 }),
+          makeSizedShape('b', { x: 100, y: 100 }, { width: 50, height: 50 }),
+        ],
+        selectedNodeIds: ['g1'],
+      });
+      if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
+      expect(overlay.props.isGroupSelection).toBe(true);
+      const selected = overlay.props.selectedNodes as ReadonlyArray<{
+        id: string;
+        type?: string;
+        width?: number;
+        height?: number;
+      }>;
+      // Members (a, b) + the group box (g1) flow through so the rect hugs the
+      // members and M5 can scale them from this set.
+      expect(selected.map((n) => n.id).sort()).toEqual(['a', 'b', 'g1']);
+      const groupEntry = selected.find((n) => n.id === 'g1');
+      expect(groupEntry?.type).toBe('group');
+      // Resolved top-level dims are present (§12.1) — not just data.width.
+      expect(groupEntry?.width).toBe(400);
+      const memberA = selected.find((n) => n.id === 'a');
+      expect(memberA?.width).toBe(50);
     });
 
     it('applies optimistic position + data overrides to the overlay payload', () => {

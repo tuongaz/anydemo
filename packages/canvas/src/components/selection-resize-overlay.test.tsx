@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
+import * as React from 'react';
 import {
+  CORNER_ANCHORS,
   type OverlayInputNode,
+  SELECTION_OVERLAY_PADDING,
+  SelectionResizeOverlay,
   computeNewRectFromAnchorDrag,
   computeSelectionResizeUpdates,
   computeUnionRect,
@@ -18,6 +22,25 @@ const node = (
   id,
   position: { x, y },
   data: { width, height },
+});
+
+/** Node whose size lives on the CALLER-RESOLVED top-level fields (e.g. an
+ * auto-sized html/component member resolved from `measured`), with no
+ * `data.width/height` — design §12.1. */
+const resolvedNode = (
+  id: string,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  type?: string,
+): OverlayInputNode => ({
+  id,
+  position: { x, y },
+  width,
+  height,
+  type,
+  data: {},
 });
 
 describe('computeUnionRect', () => {
@@ -54,18 +77,65 @@ describe('computeUnionRect', () => {
       height: 10,
     });
   });
+
+  it('encloses an auto-sized member via caller-resolved top-level dims (§12.1)', () => {
+    // `a` is a normal sized node; `b` is auto-sized (no data.width/height) but
+    // the host resolved its measured footprint onto the top-level width/height.
+    // The union MUST include `b`, not silently drop it like data-only resolution
+    // would.
+    expect(
+      computeUnionRect([node('a', 10, 10, 30, 30), resolvedNode('b', 50, 60, 20, 40)]),
+    ).toEqual({
+      x: 10,
+      y: 10,
+      width: 60,
+      height: 90,
+    });
+  });
+
+  it('prefers the resolved top-level size over data.width/height when both set', () => {
+    const n: OverlayInputNode = {
+      id: 'a',
+      position: { x: 0, y: 0 },
+      width: 100,
+      height: 100,
+      data: { width: 10, height: 10 },
+    };
+    expect(computeUnionRect([n])).toEqual({ x: 0, y: 0, width: 100, height: 100 });
+  });
 });
 
 describe('selectionEligibleForOverlay', () => {
-  it('returns false when fewer than 2 nodes are selected', () => {
+  it('loose selection: false for 0 or 1 node, true for 2+', () => {
     expect(selectionEligibleForOverlay([])).toBe(false);
     expect(selectionEligibleForOverlay([node('a', 0, 0, 10, 10)])).toBe(false);
-  });
-
-  it('returns true when 2+ nodes are selected', () => {
     expect(selectionEligibleForOverlay([node('a', 0, 0, 10, 10), node('b', 50, 50, 10, 10)])).toBe(
       true,
     );
+  });
+
+  it('group selection: true for a single group (≥1 node), false for empty (§12.5)', () => {
+    // A single selected group passes `isGroupSelection`; even one member node
+    // (members + group box) draws chrome — a 1-member group still gets a rect.
+    expect(selectionEligibleForOverlay([node('a', 0, 0, 10, 10)], true)).toBe(true);
+    expect(
+      selectionEligibleForOverlay([node('a', 0, 0, 10, 10), node('g', 0, 0, 50, 50)], true),
+    ).toBe(true);
+    expect(selectionEligibleForOverlay([], true)).toBe(false);
+  });
+});
+
+describe('SELECTION_OVERLAY_PADDING + CORNER_ANCHORS', () => {
+  it('pins the padding at 12 (req #1, "a bit extra padding")', () => {
+    expect(SELECTION_OVERLAY_PADDING).toBe(12);
+  });
+
+  it('renders corners only — exactly nw/ne/se/sw, no edge anchors', () => {
+    expect([...CORNER_ANCHORS].sort()).toEqual(['ne', 'nw', 'se', 'sw']);
+    expect(CORNER_ANCHORS).not.toContain('n');
+    expect(CORNER_ANCHORS).not.toContain('e');
+    expect(CORNER_ANCHORS).not.toContain('s');
+    expect(CORNER_ANCHORS).not.toContain('w');
   });
 });
 
@@ -236,5 +306,195 @@ describe('scheduleRaf (US-016 live dispatch throttle)', () => {
     expect(ref.current).not.toBeNull();
     flushRaf();
     expect(second).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Component render (canvas grouping M2). Bun runs without a DOM, so we shim
+// React's dispatcher and call SelectionResizeOverlay as a plain function —
+// same approach as group-node.test.tsx. This component additionally calls
+// `useReactFlow()`, which internally reads xyflow's StoreContext + BatchContext
+// and zustand's `useSyncExternalStore`. We feed all three a self-contained stub
+// (no module mocking — that would leak across the full-suite run) sufficient for
+// the hook chain to resolve without throwing. The overlay only invokes
+// `screenToFlowPosition` inside pointer handlers, never during render, so the
+// stub just needs to keep the render path alive.
+// ---------------------------------------------------------------------------
+type Hooks = {
+  useState: <S>(initial: S | (() => S)) => [S, (next: S | ((prev: S) => S)) => void];
+  useRef: <T>(initial: T) => { current: T };
+  useContext: <T>(ctx: unknown) => T;
+  useMemo: <T>(fn: () => T) => T;
+  useCallback: <T>(fn: T) => T;
+  useEffect: () => void;
+  useSyncExternalStore: <T>(subscribe: unknown, getSnapshot: () => T) => T;
+  useDebugValue: () => void;
+};
+
+function renderWithHooks<T>(fn: () => T): T {
+  const internals = (
+    React as unknown as {
+      __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED: {
+        ReactCurrentDispatcher: { current: Hooks | null };
+      };
+    }
+  ).__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED;
+  const prev = internals.ReactCurrentDispatcher.current;
+  // Minimal zustand-store-API + React-Flow-state stub. `getInternalNode` reads
+  // `nodeLookup`; `selector$k` reads `panZoom`; `useStoreApi` reads
+  // getState/setState/subscribe; batch reads nodeQueue/edgeQueue.
+  const storeState = {
+    panZoom: {},
+    nodeLookup: new Map(),
+    domNode: null,
+    transform: [0, 0, 1] as [number, number, number],
+  };
+  const storeStub = {
+    getState: () => storeState,
+    setState: () => {},
+    subscribe: () => () => {},
+    nodeQueue: [],
+    edgeQueue: [],
+  };
+  internals.ReactCurrentDispatcher.current = {
+    useState: <S,>(initial: S | (() => S)) => {
+      const value = typeof initial === 'function' ? (initial as () => S)() : initial;
+      return [value, () => {}];
+    },
+    useRef: <T,>(initial: T) => ({ current: initial }),
+    // Every xyflow context (StoreContext, BatchContext) resolves to the same
+    // merged stub — the hooks only need their respective members present.
+    useContext: <T,>() => storeStub as T,
+    useMemo: <T,>(f: () => T) => f(),
+    useCallback: <T,>(f: T) => f,
+    useEffect: () => {},
+    // zustand's useStoreWithEqualityFn → useSyncExternalStore(subscribe,
+    // () => selector(getState())). Just run the snapshot to get the value.
+    useSyncExternalStore: <V,>(_subscribe: unknown, getSnapshot: () => V) => getSnapshot(),
+    useDebugValue: () => {},
+  };
+  try {
+    return fn();
+  } finally {
+    internals.ReactCurrentDispatcher.current = prev;
+  }
+}
+
+type ReactElementLike = {
+  type: unknown;
+  props: Record<string, unknown> & { children?: unknown };
+};
+
+function isElement(value: unknown): value is ReactElementLike {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    'type' in value &&
+    'props' in (value as { props?: unknown })
+  );
+}
+
+function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): ReactElementLike[] {
+  const out: ReactElementLike[] = [];
+  const visit = (node: unknown) => {
+    // Flatten arrays (e.g. `.map()` output nested as a child) so handles inside
+    // the rect's children array are still visited.
+    if (Array.isArray(node)) {
+      for (const c of node) visit(c);
+      return;
+    }
+    if (!isElement(node)) return;
+    if (predicate(node)) out.push(node);
+    const children = node.props.children;
+    if (children === undefined || children === null) return;
+    visit(children);
+  };
+  visit(tree);
+  return out;
+}
+
+const testId = (el: ReactElementLike): string | undefined =>
+  (el.props as { 'data-testid'?: string })['data-testid'];
+
+describe('SelectionResizeOverlay render (M2 chrome)', () => {
+  const twoLoose: OverlayInputNode[] = [node('a', 0, 0, 100, 100), node('b', 200, 200, 100, 100)];
+
+  it('returns null when the selection is ineligible (1 loose node)', () => {
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({ selectedNodes: [node('a', 0, 0, 100, 100)] }),
+    );
+    expect(tree).toBeNull();
+  });
+
+  it('returns null when no node has a measurable size', () => {
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({ selectedNodes: [node('a', 0, 0), node('b', 10, 10)] }),
+    );
+    expect(tree).toBeNull();
+  });
+
+  it('renders the overlay rect for 2+ loose nodes with pointer-events:none', () => {
+    const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
+    const rect = findAll(tree, (el) => testId(el) === 'selection-overlay')[0];
+    if (!rect) throw new Error('selection-overlay rect not found');
+    const style = (rect.props.style ?? {}) as React.CSSProperties;
+    expect(style.pointerEvents).toBe('none');
+    expect(style.position).toBe('absolute');
+    // zIndex sits above nodes/edges (and above a selected group's negative z).
+    expect(Number(style.zIndex)).toBeGreaterThanOrEqual(1500);
+    // Padded rect: union (0,0)→(300,300) expanded by 12 on each side.
+    expect(style.left).toBe(0 - SELECTION_OVERLAY_PADDING);
+    expect(style.top).toBe(0 - SELECTION_OVERLAY_PADDING);
+    expect(style.width).toBe(300 + SELECTION_OVERLAY_PADDING * 2);
+    expect(style.height).toBe(300 + SELECTION_OVERLAY_PADDING * 2);
+  });
+
+  it('renders exactly 4 corner handles (nw/ne/se/sw), each interactive with a cursor + aria-label', () => {
+    const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
+    const handles = findAll(tree, (el) => /^selection-overlay-handle-/.test(testId(el) ?? ''));
+    expect(handles).toHaveLength(4);
+    const ids = new Set(handles.map((h) => testId(h)));
+    expect(ids).toEqual(
+      new Set([
+        'selection-overlay-handle-nw',
+        'selection-overlay-handle-ne',
+        'selection-overlay-handle-se',
+        'selection-overlay-handle-sw',
+      ]),
+    );
+    for (const h of handles) {
+      const style = (h.props.style ?? {}) as React.CSSProperties;
+      expect(style.pointerEvents).toBe('auto');
+      expect(typeof style.cursor).toBe('string');
+      expect((style.cursor ?? '').length).toBeGreaterThan(0);
+      // Zoom-compensated size: a calc() reading --rf-zoom (constant screen px).
+      expect(String(style.width)).toContain('--rf-zoom');
+      expect(h.props['aria-label']).toBe('Resize selection');
+    }
+  });
+
+  it('renders the empty top-right icon slot placeholder (M4 fills it)', () => {
+    const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
+    const slot = findAll(tree, (el) => testId(el) === 'selection-overlay-icon-slot');
+    expect(slot).toHaveLength(1);
+    // No behavior yet — it must be inert (decorative placeholder).
+    const style = (slot[0]?.props.style ?? {}) as React.CSSProperties;
+    expect(style.pointerEvents).toBe('none');
+    expect(slot[0]?.props['aria-hidden']).toBe('true');
+  });
+
+  it('renders chrome for a SINGLE group selection (members + box, ≥1 node) via isGroupSelection', () => {
+    // Host passes the group MEMBERS + the group box; one member + the box is
+    // enough to draw — a 1-member group still gets chrome (§12.5).
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({
+        selectedNodes: [node('member', 0, 0, 80, 60), node('g1', 0, 0, 120, 100)],
+        isGroupSelection: true,
+      }),
+    );
+    const rect = findAll(tree, (el) => testId(el) === 'selection-overlay');
+    expect(rect).toHaveLength(1);
+    const handles = findAll(tree, (el) => /^selection-overlay-handle-/.test(testId(el) ?? ''));
+    expect(handles).toHaveLength(4);
   });
 });

@@ -12,7 +12,33 @@ baseline structure was prepared.
 
 ## Lessons carried forward
 
-- (Fill from M2 handoff.)
+**From M2's handoff (the chrome M3 makes functional):**
+- **`DragState.startNodes` is ALREADY populated** at pointer-down (a
+  `FrozenNode[]` of `{id,position,width,height}` resolved via the overlay's
+  private `resolveNodeSize`, sitting beside the frozen `oldRect`). M3's job: in
+  `onHandlePointerUp`, compute `scaleNodesWithinRect(dragState.startNodes,
+  dragState.oldRect, newRect, {lockAspectRatio})` and dispatch ONE
+  `onMultiResize(updates)`. **Read `startNodes`, NEVER the live `selectedNodes`**
+  (that's the L0.1 compounding trap — the live set carries optimistic overrides).
+- **The handlers are wired but inert today.** `onHandlePointerMove` only
+  `setPreviewRect(newRect)` (visual feedback); `onHandlePointerUp` only clears
+  the gesture. M2 removed the old per-tick `scheduleRaf`→`onMultiResize` loop and
+  the `liveDispatchRafRef`. M3 ADDS the end-only dispatch back; if you reintroduce
+  a live per-tick path (§6.3 enhancement, NOT first cut), it MUST scale from
+  `startNodes`, not the previous tick's output.
+- **`onMultiResize` is currently NOT passed to the overlay** from
+  `seeflow-canvas.tsx` (M2 made it inert). M3 re-wires it: thread the host's
+  `onMultiResize` prop back into `<SelectionResizeOverlay onMultiResize=…>` and
+  flip the seeflow-canvas test back to asserting it's forwarded (M2 changed that
+  test to assert `undefined`).
+- **Dims are resolved `measured ?? data ?? fallback` (§12.1)** in the overlay
+  payload now — so `startNodes` already includes auto-sized html/component
+  members with correct sizes. The scale will move + size them; remember the
+  freehand caveat (§12.6 — `data.points` not scaled in v1).
+- **DX:** the M3 gate is `bun run --filter @seeflow/canvas build:js` (NOT the
+  full `build`, which `rm -rf dist` and clobbers the dev server's
+  `dist/style.dev.css`). See M2 L2.4.
+
 - **L0.1 (CRITICAL)** The "order-of-magnitude" bug: the live tick path scaled the
   *live, optimistically-overridden* node set (`nodesAtTick = selectedNodes`,
   `selection-resize-overlay.tsx:328`) against a frozen rect → each tick multiplies

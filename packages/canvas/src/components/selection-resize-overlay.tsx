@@ -8,24 +8,42 @@ import {
 import { type Rect, type ScalableNode, scaleNodesWithinRect } from '../lib/scale-nodes.ts';
 
 /**
- * US-007: multi-select bounding-box resize overlay.
+ * US-007 + canvas grouping M2: multi-select / group bounding-box overlay.
  *
- * Rendered when 2+ nodes are selected. Draws a dashed bounding rect around
- * the union of the selection with 8 resize handles (4 corners + 4 edges);
- * dragging a handle scales every selected node — and its size — via the
- * shared `scaleNodesWithinRect` helper (US-002). Shift held during the drag
- * locks the aspect ratio.
+ * Renders a padded dashed bounding rect around the union of the selection with
+ * **4 corner handles** (req #2 asks for corners only; the 4 edge handles v1 had
+ * are dropped). It shows for two situations (design §12.5):
+ *  - a transient multi-selection of 2+ loose nodes, OR
+ *  - exactly one selected `group` (the caller passes the group's MEMBERS plus
+ *    the group box as `selectedNodes` so the rect hugs the right geometry).
  *
- * Locked nodes within the selection pass through unchanged (handled inside
- * the helper, not here). The whole batch dispatches via `onMultiResize` as a
- * single update array so the parent commits one undo entry — Cmd+Z reverts
- * every scaled node together.
+ * M2 ships the chrome INERT — the pointer handlers stay wired and drive a local
+ * `previewRect` so the rect can follow the cursor, but they never call
+ * `onMultiResize` and never mutate real nodes. Functional proportional resize is
+ * M3's job and owns the frozen-baseline + end-only-commit contract (design §6).
+ * The frozen baseline (`startRect` + `startNodes`) is captured at pointer-down
+ * NOW so M3 can drop in `scaleNodesWithinRect` without restructuring state.
  */
 
-/** Minimum shape every node passed to the overlay must satisfy. */
+/**
+ * Minimum shape every node passed to the overlay must satisfy.
+ *
+ * `width`/`height` are the CALLER-RESOLVED dimensions (design §12.1): the host
+ * resolves each via `getInternalNode(id)?.measured ?? data.width/height ??
+ * fallback` so auto-sized html/component nodes (which lack `data.width/height`)
+ * still contribute to the union rect. `data.width/height` remain as a fallback
+ * for callers/tests that pass raw data. `type` lets the overlay/host reason
+ * about a group selection (design §12.5).
+ */
 export interface OverlayInputNode {
   id: string;
   position: { x: number; y: number };
+  /** Caller-resolved width (measured ?? data ?? fallback). Preferred over data.width. */
+  width?: number;
+  /** Caller-resolved height (measured ?? data ?? fallback). Preferred over data.height. */
+  height?: number;
+  /** Node type — present so gating can recognise a single selected group. */
+  type?: string;
   data: { width?: number; height?: number };
 }
 
@@ -37,19 +55,40 @@ export interface MultiResizeUpdate {
   height?: number;
 }
 
-export const SELECTION_OVERLAY_PADDING = 8;
+/**
+ * Padding (flow units) between the selection's union rect and the dashed
+ * overlay rect. Bumped 8 → 12 for canvas grouping M2 (req #1, "a bit extra
+ * padding"). Pinned by a test so the value can't drift silently.
+ */
+export const SELECTION_OVERLAY_PADDING = 12;
 
-/** Eight resize anchors. Diagonal-corner names match the cursor wiring. */
+/** Eight resize anchor names. Cursor + offset maps are keyed by these. */
 type AnchorPos = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
-const ALL_ANCHORS: AnchorPos[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+/**
+ * Canvas grouping M2 renders **corners only** (req #2). The 4 edge anchors
+ * ('n'/'e'/'s'/'w') from v1 are intentionally dropped.
+ */
+export const CORNER_ANCHORS: readonly AnchorPos[] = ['nw', 'ne', 'se', 'sw'];
 
 /**
- * Union bounding rect (flow space) covering all input nodes. Reads each
- * node's position + data.width/height (the canonical persisted size — the
- * top-level React Flow `node.width/height` is only present mid-resize and
- * we resolve sizes from the demo data instead). Returns null when no node
- * has a measurable size — there's no rect to draw and no scale to apply.
+ * Resolve a node's effective size, preferring the caller-resolved top-level
+ * `width`/`height` (measured ?? data ?? fallback per design §12.1) and falling
+ * back to `data.width`/`data.height` for callers/tests that only set `data`.
+ */
+function resolveNodeSize(n: OverlayInputNode): { w: number | undefined; h: number | undefined } {
+  return {
+    w: n.width ?? n.data.width,
+    h: n.height ?? n.data.height,
+  };
+}
+
+/**
+ * Union bounding rect (flow space) covering all input nodes. Resolves each
+ * node's size via {@link resolveNodeSize} — the caller-resolved measured dims
+ * take precedence so auto-sized html/component nodes (which lack
+ * `data.width/height`) still contribute to the rect (design §12.1). Returns
+ * null when no node has a measurable size — there's no rect to draw.
  */
 export function computeUnionRect(nodes: readonly OverlayInputNode[]): Rect | null {
   let minX = Number.POSITIVE_INFINITY;
@@ -58,8 +97,7 @@ export function computeUnionRect(nodes: readonly OverlayInputNode[]): Rect | nul
   let maxY = Number.NEGATIVE_INFINITY;
   let saw = false;
   for (const n of nodes) {
-    const w = n.data.width;
-    const h = n.data.height;
+    const { w, h } = resolveNodeSize(n);
     if (w === undefined || h === undefined) continue;
     saw = true;
     if (n.position.x < minX) minX = n.position.x;
@@ -71,8 +109,21 @@ export function computeUnionRect(nodes: readonly OverlayInputNode[]): Rect | nul
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 }
 
-/** The overlay renders when ≥ 2 nodes are selected. */
-export function selectionEligibleForOverlay(selected: readonly OverlayInputNode[]): boolean {
+/**
+ * The overlay renders when there is something resize-able to chrome (design
+ * §12.5):
+ *  - a transient multi-selection of **2+ loose nodes**, OR
+ *  - a single selected **group** (`isGroupSelection`), where `selected` is the
+ *    group's members + the group box, so a one-member group still gets chrome.
+ *
+ * `isGroupSelection` is threaded from the host (which knows the real selection
+ * and node types) because `OverlayInputNode` is intentionally minimal.
+ */
+export function selectionEligibleForOverlay(
+  selected: readonly OverlayInputNode[],
+  isGroupSelection = false,
+): boolean {
+  if (isGroupSelection) return selected.length >= 1;
   return selected.length >= 2;
 }
 
@@ -157,12 +208,15 @@ export function computeSelectionResizeUpdates(
   newRect: Rect,
   options?: { lockAspectRatio?: boolean },
 ): MultiResizeUpdate[] {
-  const scalable: ScalableNode[] = nodes.map((n) => ({
-    id: n.id,
-    position: { x: n.position.x, y: n.position.y },
-    width: n.data.width,
-    height: n.data.height,
-  }));
+  const scalable: ScalableNode[] = nodes.map((n) => {
+    const { w, h } = resolveNodeSize(n);
+    return {
+      id: n.id,
+      position: { x: n.position.x, y: n.position.y },
+      width: w,
+      height: h,
+    };
+  });
   const scaled = scaleNodesWithinRect(scalable, oldRect, newRect, options);
   const updates: MultiResizeUpdate[] = [];
   for (const out of scaled) {
@@ -201,30 +255,57 @@ const ANCHOR_OFFSET: Record<AnchorPos, { left: string; top: string }> = {
   w: { left: '0%', top: '50%' },
 };
 
+/**
+ * Visual square size (screen px) of each corner handle. The inline style
+ * inverse-scales this by `--rf-zoom` (see `resize-controls.tsx`) so the box
+ * reads the same on-screen size at every zoom level.
+ */
 const HANDLE_BOX_PX = 10;
+
+/**
+ * Frozen snapshot of one node at pointer-down. M2 doesn't read it (the gesture
+ * is inert) but M3's proportional resize needs the FULL node set frozen, not
+ * just `startRect` — freezing only the rect lets the optimistic-override echo
+ * compound the scale (design §6.1, L0.1). Capturing it now means M3 drops in
+ * `scaleNodesWithinRect(startNodes, startRect, newRect)` without restructuring.
+ */
+export interface FrozenNode {
+  id: string;
+  position: { x: number; y: number };
+  width?: number;
+  height?: number;
+}
 
 export interface SelectionResizeOverlayProps {
   /**
-   * Selected nodes the overlay scales. The parent (DemoCanvas) is responsible
-   * for filtering: pass the live multi-selection in. The overlay decides
-   * presence via `selectionEligibleForOverlay`, so callers can wire this
-   * unconditionally.
+   * Selected nodes the overlay chromes. The host (seeflow-canvas) resolves dims
+   * (§12.1) and, for a single group, passes the group's MEMBERS + the group box
+   * (§12.5). The overlay decides presence via `selectionEligibleForOverlay`, so
+   * callers wire this unconditionally.
    */
   selectedNodes: readonly OverlayInputNode[];
   /**
-   * Atomic batch dispatch at resize-stop. The canvas hands the array to the
-   * parent (demo-view), which fans out PATCHes + pushes one undo entry so
-   * Cmd+Z reverts the whole scale. Locked nodes are filtered out before
-   * dispatch (no-op PATCHes would just churn the undo log).
+   * True when the selection is exactly one group (host-determined). Switches
+   * gating to "≥1 node" (a group with members) and is the seam M4 uses to flip
+   * the top-right icon from ＋ (create) to ⊟ (ungroup).
+   */
+  isGroupSelection?: boolean;
+  /**
+   * Atomic batch dispatch at resize-stop. WIRED BUT INERT in M2 — the chrome
+   * does not call this; M3 owns functional resize. Kept on the props so the
+   * host wiring (and the parent's undo-batching) needn't change when M3 lands.
    */
   onMultiResize?: (updates: MultiResizeUpdate[]) => void;
-  /** Padding around the union rect in flow units. Defaults to 8 per the AC. */
+  /** Padding around the union rect in flow units. Defaults to {@link SELECTION_OVERLAY_PADDING} (12). */
   paddingPx?: number;
 }
 
 interface DragState {
   anchor: AnchorPos;
+  /** Frozen union rect at pointer-down. */
   oldRect: Rect;
+  /** Frozen per-node geometry at pointer-down (design §6.2 — M3 scales from this). */
+  startNodes: FrozenNode[];
   startCursor: { x: number; y: number };
   pointerId: number;
 }
@@ -250,14 +331,27 @@ export function scheduleRaf(rafRef: { current: number | null }, fn: () => void):
   });
 }
 
+/** Inverse-zoom expression so a screen-px value reads constant across zoom. */
+function invZoom(px: number): string {
+  return `calc(${px}px / var(--rf-zoom, 1))`;
+}
+
 /**
- * Render-side test seam: when `selectionEligibleForOverlay` returns false the
- * component returns null so the parent canvas can wire the overlay
- * unconditionally and not worry about the gating logic.
+ * Canvas grouping M2: padded dashed selection rect + 4 corner handles.
+ *
+ * Returns null (no chrome) unless {@link selectionEligibleForOverlay} passes:
+ * 2+ loose nodes, OR one selected group (`isGroupSelection`). Rendered inside a
+ * `ViewportPortal` so it tracks pan/zoom with the rest of the canvas.
+ *
+ * INERT in M2: the corner-handle pointer gesture drives a LOCAL `previewRect`
+ * (visual feedback only) and never calls `onMultiResize` / never mutates real
+ * nodes. Functional proportional resize is M3 (design §6). The frozen baseline
+ * (`oldRect` + `startNodes`) is captured at pointer-down now so M3 can wire
+ * `scaleNodesWithinRect` without restructuring this state.
  */
 export function SelectionResizeOverlay({
   selectedNodes,
-  onMultiResize,
+  isGroupSelection = false,
   paddingPx = SELECTION_OVERLAY_PADDING,
 }: SelectionResizeOverlayProps) {
   const reactFlow = useReactFlow();
@@ -266,10 +360,8 @@ export function SelectionResizeOverlay({
   // Track the in-flight modifier state so a Shift release mid-drag flips
   // back to free-resize without waiting for the next pointer-move event.
   const shiftHeldRef = useRef(false);
-  // US-016: pending per-tick dispatch handle; cancelled on every new move.
-  const liveDispatchRafRef = useRef<number | null>(null);
 
-  if (!selectionEligibleForOverlay(selectedNodes)) return null;
+  if (!selectionEligibleForOverlay(selectedNodes, isGroupSelection)) return null;
   const unionRect = computeUnionRect(selectedNodes);
   if (!unionRect) return null;
 
@@ -289,9 +381,23 @@ export function SelectionResizeOverlay({
       y: event.clientY,
     });
     shiftHeldRef.current = event.shiftKey;
+    // Freeze BOTH the union rect AND the per-node geometry (design §6.2). M2
+    // doesn't read `startNodes`, but M3's scale must read the frozen set, never
+    // the live (optimistically-overridden) `selectedNodes` — that's the L0.1
+    // compounding trap. Capturing it here keeps M3 a drop-in.
+    const startNodes: FrozenNode[] = selectedNodes.map((n) => {
+      const { w, h } = resolveNodeSize(n);
+      return {
+        id: n.id,
+        position: { x: n.position.x, y: n.position.y },
+        width: w,
+        height: h,
+      };
+    });
     setDragState({
       anchor,
       oldRect: unionRect,
+      startNodes,
       startCursor: flowStart,
       pointerId: event.pointerId,
     });
@@ -316,48 +422,18 @@ export function SelectionResizeOverlay({
       dy,
       event.shiftKey,
     );
+    // M2 is INERT: update the LOCAL preview rect only (visual feedback) — do NOT
+    // dispatch `onMultiResize` or mutate real nodes. M3 adds the frozen-baseline
+    // scale + end-only commit (design §6); the handlers stay wired so that work
+    // slots in here.
     setPreviewRect(newRect);
-    // US-016: per-tick live dispatch. Children scale continuously as the user
-    // drags, not only at pointer-up. rAF-throttled so we cap at ~60fps even
-    // on a fast trackpad emitting hundreds of pointermove events/sec. Flow-
-    // view's `onMultiResize` coalesces every tick into one undo entry via the
-    // shared coalesceKey, so this loop produces exactly ONE Cmd+Z reversion.
-    if (onMultiResize) {
-      const lockAspect = event.shiftKey;
-      const oldRectAtStart = dragState.oldRect;
-      const nodesAtTick = selectedNodes;
-      scheduleRaf(liveDispatchRafRef, () => {
-        const updates = computeSelectionResizeUpdates(nodesAtTick, oldRectAtStart, newRect, {
-          lockAspectRatio: lockAspect,
-        });
-        if (updates.length > 0) onMultiResize(updates);
-      });
-    }
   };
 
   const onHandlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragState) return;
     if (event.pointerId !== dragState.pointerId) return;
-    const flowCursor = reactFlow.screenToFlowPosition({
-      x: event.clientX,
-      y: event.clientY,
-    });
-    const dx = flowCursor.x - dragState.startCursor.x;
-    const dy = flowCursor.y - dragState.startCursor.y;
-    const newRect = computeNewRectFromAnchorDrag(
-      dragState.oldRect,
-      dragState.anchor,
-      dx,
-      dy,
-      event.shiftKey,
-    );
-    // US-016: cancel any pending per-tick rAF so the final dispatch below is
-    // the last word — otherwise a coalesced rAF could fire after pointer-up
-    // with a stale rect.
-    if (liveDispatchRafRef.current !== null) {
-      cancelAnimationFrame(liveDispatchRafRef.current);
-      liveDispatchRafRef.current = null;
-    }
+    // M2 INERT: just clear the gesture + drop the preview back to the live union
+    // rect. No `onMultiResize` (M3). No real-node mutation.
     setDragState(null);
     setPreviewRect(null);
     shiftHeldRef.current = false;
@@ -367,42 +443,94 @@ export function SelectionResizeOverlay({
       // releasePointerCapture throws when the element no longer has capture
       // (e.g. unmounted between move + up). The cleanup is best-effort.
     }
-    if (!onMultiResize) return;
-    if (
-      newRect.x === dragState.oldRect.x &&
-      newRect.y === dragState.oldRect.y &&
-      newRect.width === dragState.oldRect.width &&
-      newRect.height === dragState.oldRect.height
-    ) {
-      // Zero-movement drag → no-op (don't pollute the undo log).
-      return;
-    }
-    const updates = computeSelectionResizeUpdates(selectedNodes, dragState.oldRect, newRect, {
-      lockAspectRatio: event.shiftKey,
-    });
-    if (updates.length > 0) onMultiResize(updates);
   };
 
   const onHandlePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragState || event.pointerId !== dragState.pointerId) return;
-    if (liveDispatchRafRef.current !== null) {
-      cancelAnimationFrame(liveDispatchRafRef.current);
-      liveDispatchRafRef.current = null;
-    }
     setDragState(null);
     setPreviewRect(null);
     shiftHeldRef.current = false;
   };
 
-  // Visual chrome (dashed bounding rect + 8 corner/edge resize handles) was
-  // removed — marquee selection no longer paints any wrapper around the union
-  // of selected nodes. The component still mounts so its prop wiring (and the
-  // exported pure helpers below) remain available; the rendered output is
-  // empty.
-  void paddedRect;
-  void onHandlePointerDown;
-  void onHandlePointerMove;
-  void onHandlePointerUp;
-  void onHandlePointerCancel;
-  return null;
+  // The rect div lives in FLOW space (ViewportPortal applies the viewport
+  // transform), so its position/size are flow units. Handles + icon must read a
+  // CONSTANT on-screen size, so their box dims / border / offset are
+  // inverse-scaled by `--rf-zoom` (the same compensation resize-controls.tsx
+  // uses) — set on `.seeflow-canvas-root` by seeflow-canvas's viewport effect.
+  const rectStyle: CSSProperties = {
+    position: 'absolute',
+    left: paddedRect.x,
+    top: paddedRect.y,
+    width: paddedRect.width,
+    height: paddedRect.height,
+    border: `${invZoom(1)} dashed hsl(var(--primary) / 0.6)`,
+    // The rect must NEVER steal node clicks — only the handles + (future) icon
+    // are interactive (design §12.8, mirrors `.react-flow__nodesselection-rect`
+    // neutralization). xyflow's selection-drag underneath still moves the group.
+    pointerEvents: 'none',
+    // Above nodes (max node z is the selected 1000) + above a selected group's
+    // negative z; NOT a node so the group's -1 doesn't apply (L1.1).
+    zIndex: 1500,
+    boxSizing: 'border-box',
+  };
+
+  return (
+    <ViewportPortal>
+      <div data-testid="selection-overlay" style={rectStyle}>
+        {CORNER_ANCHORS.map((anchor) => {
+          const offset = ANCHOR_OFFSET[anchor];
+          const handleStyle: CSSProperties = {
+            position: 'absolute',
+            left: offset.left,
+            top: offset.top,
+            width: invZoom(HANDLE_BOX_PX),
+            height: invZoom(HANDLE_BOX_PX),
+            transform: 'translate(-50%, -50%)',
+            background: 'hsl(var(--background))',
+            border: `${invZoom(1)} solid hsl(var(--primary) / 0.6)`,
+            borderRadius: invZoom(2),
+            cursor: ANCHOR_CURSOR[anchor],
+            // Only the handles are interactive — the parent rect is neutralized.
+            pointerEvents: 'auto',
+            touchAction: 'none',
+          };
+          return (
+            <div
+              key={anchor}
+              data-testid={`selection-overlay-handle-${anchor}`}
+              data-anchor={anchor}
+              role="button"
+              // Pointer-driven only; keyboard-driven resize is out of scope this
+              // feature (design §12.11). tabIndex={-1} keeps the handle out of the
+              // tab sequence while still satisfying the focusable-interactive rule.
+              tabIndex={-1}
+              aria-label="Resize selection"
+              style={handleStyle}
+              onPointerDown={onHandlePointerDown(anchor)}
+              onPointerMove={onHandlePointerMove}
+              onPointerUp={onHandlePointerUp}
+              onPointerCancel={onHandlePointerCancel}
+            />
+          );
+        })}
+        {/* Top-right icon SLOT (req #3): empty 32×32 placeholder anchored just
+            outside the rect's NE corner. M4 drops the ＋ create / ⊟ ungroup
+            button in here; no behavior yet. Zoom-compensated so it keeps a
+            constant on-screen size. */}
+        <div
+          data-testid="selection-overlay-icon-slot"
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '100%',
+            top: 0,
+            width: invZoom(32),
+            height: invZoom(32),
+            transform: `translate(${invZoom(4)}, calc(-100% - ${invZoom(4)}))`,
+            pointerEvents: 'none',
+          }}
+        />
+      </div>
+    </ViewportPortal>
+  );
 }

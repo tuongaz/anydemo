@@ -545,6 +545,35 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   with `.react-flow__node-group`, so the dead base rule fought the renderer's
   inline box. Removed in M1. Before adding group CSS in M6/M7, `rg
   "react-flow__node-group"` first.
+- **L2.1 (M2) `OverlayInputNode` contract changed — now carries resolved dims +
+  type.** Added top-level `width?`/`height?` (caller-resolved `measured ?? data
+  ?? fallback`, §12.1) which take precedence over `data.width/height`, plus
+  `type?`. A private `resolveNodeSize(n)` in `selection-resize-overlay.tsx` reads
+  top-level first, `data.*` second. `computeUnionRect` /
+  `computeSelectionResizeUpdates` use it, so M3/M5 callers must feed RESOLVED
+  dims (the host does this in `seeflow-canvas.tsx` `selectionOverlayNodes`, which
+  is the only place with `rfInstance.getInternalNode`). Old `data`-only callers
+  still work.
+- **L2.2 (M2) Overlay gating takes a separate `isGroupSelection` flag.**
+  `selectionEligibleForOverlay(selected, isGroupSelection)` → ≥1 for a group
+  (members + box; a 1-member group still chromes), ≥2 for loose. The host derives
+  `selectedGroupId`/`isGroupSelection` from the real selection + node types and
+  threads it as a prop. For a single group, `selectionOverlayNodes` =
+  `childIds`→member nodes PLUS the group node (so the rect hugs members and M5
+  scales from this set). Do NOT infer group-ness from the array shape.
+- **L2.3 (M2) The overlay is INERT through M2 → M3 re-wires `onMultiResize`.**
+  M2 dropped the per-tick dispatch + `liveDispatchRafRef` and stopped passing
+  `onMultiResize` from `seeflow-canvas.tsx`; the handlers only `setPreviewRect`.
+  `DragState` already freezes BOTH `oldRect` and `startNodes` (per-node geometry
+  snapshot) at pointer-down, ready for M3's frozen-baseline scale. The
+  seeflow-canvas wiring test was flipped to assert `onMultiResize` is `undefined`
+  for M2 — **M3 must flip it back** when it re-wires the dispatch.
+- **L2.4 (M2, DX) `@seeflow/canvas` full `build` does `rm -rf dist`** and deletes
+  the dev server's `dist/style.dev.css` (tailwind `--watch` won't recreate it on
+  deletion → blank page). Milestone gates need only `build:js`; run the full
+  `build` (+ `build:web`) ONLY to refresh the served bundle for a screenshot, and
+  regenerate `style.dev.css` (`bun run --filter @seeflow/canvas build:css:dev`)
+  if a dev server is live.
 
 ---
 

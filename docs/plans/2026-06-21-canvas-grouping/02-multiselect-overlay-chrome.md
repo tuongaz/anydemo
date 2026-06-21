@@ -138,9 +138,81 @@ move/resize (M5).
 - UAT passes; handles visible & inert; padding visibly larger than before.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Did `--rf-zoom` compensation behave at extreme zoom? Note the exact read.
-- Any pointer-events leakage (handles stealing node clicks)?
-- Confirm the frozen-baseline `DragState` structure is ready for M3 (does it need
-  a `startNodes` field added now?).
-- **➡ Copy into `03-...md` "Lessons carried forward".**
+## Lessons-learned handoff (M2 — DONE)
+
+- **`--rf-zoom` compensation — read it the CSS way, not in JS.** The overlay is
+  drawn in flow space via `ViewportPortal`; handle box size / border / corner
+  radius use `calc(<px>px / var(--rf-zoom, 1))` inline (a tiny `invZoom(px)`
+  helper), exactly like `resize-controls.tsx`. `--rf-zoom` is set on
+  `.seeflow-canvas-root` by seeflow-canvas's viewport effect
+  (`onMove`/`onInit`). **Verified live:** handle on-screen size stayed **10×10
+  px across zoom 0.885 → 1.53** (a 1.7× swing). There is NO JS read of the zoom
+  in the overlay — don't add one; the CSS var is the single source. (At the very
+  bottom of the zoom-out range a node can lack `--rf-zoom` until the first
+  viewport event; the `, 1` fallback keeps the handle a sane size meanwhile.)
+- **Pointer-events leakage — none.** The rect div is `pointer-events:none`
+  (mirrors `.react-flow__nodesselection-rect`); only the 4 handles are
+  `pointer-events:auto`. Verified live: rect `pointer-events: none`, handle
+  `pointer-events: auto`, and clicking nodes / empty pane through the overlay
+  region still selects/deselects normally. xyflow's multi-select drag-to-move
+  underneath is unaffected.
+- **Frozen-baseline `DragState` IS ready for M3 — `startNodes` added now.**
+  `DragState` already carries `oldRect` (frozen union rect) **and**
+  `startNodes: FrozenNode[]` (a per-node `{id,position,width,height}` snapshot
+  captured at pointer-down via `resolveNodeSize`). M2 doesn't read `startNodes`
+  (the gesture is inert) but it is populated so M3's `scaleNodesWithinRect(
+  startNodes, oldRect, newRect)` is a drop-in. **M3 MUST scale from `startNodes`,
+  never the live `selectedNodes`** — that's the L0.1 compounding trap. The
+  pointer handlers (`onHandlePointerMove`/`Up`) currently only `setPreviewRect`;
+  M3 adds the end-only `onMultiResize` dispatch in `onHandlePointerUp` reading
+  the frozen pair.
+
+### New lessons (M2)
+
+- **L2.1 — `OverlayInputNode` now carries resolved dims + `type`.** Added
+  top-level `width?`/`height?` (caller-resolved `measured ?? data ?? fallback`,
+  §12.1) preferred over `data.width/height`, plus `type?`. `computeUnionRect` /
+  `computeSelectionResizeUpdates` resolve via a private `resolveNodeSize(n)`
+  (top-level first, `data.*` fallback). Old callers/tests that only set `data`
+  still work. The host (`seeflow-canvas.tsx`) does the measured resolution
+  because only it has `rfInstance.getInternalNode`.
+- **L2.2 — single-group overlay payload = members + the group box.** For a
+  single selected group, `selectionOverlayNodes` resolves `group.data.childIds`
+  to member nodes AND appends the group node, so the rect hugs the right
+  geometry and M5 can scale members from this same set. Gating is threaded as a
+  separate `isGroupSelection` boolean prop (NOT inferred from the array) —
+  `selectionEligibleForOverlay(selected, isGroupSelection)` returns true for ≥1
+  node when it's a group (a 1-member group still gets chrome), ≥2 otherwise.
+- **L2.3 — the overlay can't be unit-rendered with a naïve dispatcher shim.**
+  Unlike the node renderers, it calls `useReactFlow()`, which pulls xyflow's
+  `StoreContext` + `BatchContext` + zustand `useSyncExternalStore`. The
+  component-render test (`selection-resize-overlay.test.tsx`) provides a
+  self-contained merged store stub + a `useSyncExternalStore` that just runs the
+  snapshot. **Do NOT `mock.module('@xyflow/react')`** — Bun module mocks are
+  process-global and would corrupt every other test file's xyflow in the same
+  `bun test` run.
+- **L2.4 (DX gotcha) — `bun run --filter @seeflow/canvas build` runs `rm -rf
+  dist`, deleting `dist/style.dev.css`** that the running dev server serves;
+  tailwind `--watch` does NOT regenerate it on deletion, so the studio renders a
+  blank scriptless-CSS page until you re-run `build:css:dev`. The M2 gate only
+  needs `build:js` (no `rm -rf`). Only run the full `build` (or `build:web`) when
+  you must refresh the **served web bundle** for a browser screenshot — and
+  regenerate `style.dev.css` afterward if a dev server is live.
+- **L2.5 — stable testids exist for the overlay.** `selection-overlay` (rect),
+  `selection-overlay-handle-{nw,ne,se,sw}` (corners), `selection-overlay-icon-slot`
+  (the empty M4 placeholder). Each handle also has `data-anchor` +
+  `aria-label="Resize selection"`. Use these for E2E/visual assertions.
+
+### Decisions
+
+- **A11y:** corner handles are `role="button"` + `tabIndex={-1}` +
+  `aria-label="Resize selection"`. Keyboard-driven resize is explicitly **out of
+  scope** (pointer-only) per design §12.11 — `tabIndex={-1}` keeps them out of
+  the tab order while satisfying Biome's focusable-interactive rule. The icon
+  slot is `aria-hidden` (decorative until M4 fills it).
+- **Edge handles dropped:** `CORNER_ANCHORS = ['nw','ne','se','sw']` is the only
+  rendered set (req #2). The 8-anchor `ANCHOR_OFFSET`/`ANCHOR_CURSOR` maps are
+  kept whole (still keyed by all 8) so M3/M5 can reintroduce edges cheaply if a
+  product call ever wants them; only the render iterates `CORNER_ANCHORS`.
+
+- **➡ Copied into `03-proportional-resize.md` "Lessons carried forward".**

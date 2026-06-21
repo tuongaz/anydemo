@@ -1443,6 +1443,12 @@ const edgeTypes = { editableEdge: EditableEdge };
 // every render and force xyflow's edge merging to recompute.
 const DEFAULT_EDGE_OPTIONS = { zIndex: 0 };
 
+// Canvas grouping M2: last-resort size for the selection/group overlay union
+// rect when a node has neither a measured footprint nor a `data.width/height`
+// (design §12.1). Mirrors the layout fallback (`internalTidy`, 200×120) so a
+// rect always draws rather than collapsing/excluding the node.
+const OVERLAY_FALLBACK_DIM = { width: 200, height: 120 } as const;
+
 // Same identity-stability rationale as DEFAULT_EDGE_OPTIONS: an inline
 // `proOptions={{ hideAttribution: true }}` literal on <ReactFlow> would
 // re-allocate every parent render and feed unnecessary work into xyflow's
@@ -3224,37 +3230,75 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     [selectedConnectorIds],
   );
 
-  // US-007: payload for the multi-select bounding-box resize overlay. Reduces
-  // the canvas's `nodes` prop down to the minimum shape `<SelectionResizeOverlay>`
-  // needs (id + position + parentId + width/height) and applies any optimistic
-  // position/data overrides so the overlay rect tracks the live canvas, not the
-  // server snapshot. The overlay decides presence internally (≥ 2 selected AND
-  // not all sharing a single parent) so we pass through unconditionally —
-  // empty / ineligible selections render nothing.
+  // Canvas grouping M2: is the selection exactly one group? Drives the overlay's
+  // gating (a one-member group still gets chrome) and, later, the ＋/⊟ icon (M4).
+  const selectedGroupId = useMemo<string | null>(() => {
+    if (selectedNodeIds.length !== 1) return null;
+    const only = nodes.find((n) => n.id === selectedNodeIds[0]);
+    return only?.type === 'group' ? only.id : null;
+  }, [nodes, selectedNodeIds]);
+  const isGroupSelection = selectedGroupId !== null;
+
+  // US-007 + grouping M2: payload for the selection/group bounding-box overlay.
+  // Reduces the canvas's `nodes` to the minimum shape `<SelectionResizeOverlay>`
+  // needs and applies optimistic position/data overrides so the rect tracks the
+  // live canvas, not the server snapshot.
+  //
+  // Two selection shapes (design §12.5):
+  //  - loose multi-selection (≥2): the selected nodes themselves.
+  //  - a single group: the group's MEMBERS (resolved from `childIds`) PLUS the
+  //    group box, so the rect hugs the right geometry and M5 can scale members
+  //    from this set.
+  //
+  // Each node's size is resolved measured ?? data ?? fallback (design §12.1) so
+  // auto-sized html/component members (no `data.width/height`) still enclose.
+  // The overlay decides presence internally so we pass through unconditionally.
   const selectionOverlayNodes = useMemo<OverlayInputNode[]>(() => {
-    if (selectedNodeIds.length < 2) return [];
     const overrides = nodeOverrides;
-    const overlayInputs: OverlayInputNode[] = [];
+    const rfInstance = rfInstanceRef.current;
+    const toInput = (base: FlowNode): OverlayInputNode => {
+      const override = overrides?.[base.id];
+      const oData = (override?.data ?? {}) as { width?: number; height?: number };
+      const bData = base.data as { width?: number; height?: number };
+      // measured ?? (optimistic) data ?? data ?? fallback (§12.1). Measured is
+      // the rendered footprint of auto-sized nodes; an explicit data width (e.g.
+      // a live resize override) takes precedence when present.
+      const measured = rfInstance?.getInternalNode(base.id)?.measured;
+      const dataW = oData.width ?? bData.width;
+      const dataH = oData.height ?? bData.height;
+      return {
+        id: base.id,
+        type: base.type,
+        position: override?.position ?? base.position,
+        width: dataW ?? measured?.width ?? OVERLAY_FALLBACK_DIM.width,
+        height: dataH ?? measured?.height ?? OVERLAY_FALLBACK_DIM.height,
+        data: { width: dataW, height: dataH },
+      };
+    };
+
+    // Single group: members (from childIds) + the group box.
+    if (selectedGroupId !== null) {
+      const group = nodes.find((n) => n.id === selectedGroupId);
+      if (!group || group.type !== 'group') return [];
+      const memberIds = new Set(group.data.childIds);
+      const inputs: OverlayInputNode[] = [];
+      for (const n of nodes) {
+        if (memberIds.has(n.id)) inputs.push(toInput(n));
+      }
+      // Include the group box so an empty/sparse group still has a rect to hug.
+      inputs.push(toInput(group));
+      return inputs;
+    }
+
+    // Loose multi-selection.
+    if (selectedNodeIds.length < 2) return [];
+    const inputs: OverlayInputNode[] = [];
     for (const id of selectedNodeIds) {
       const base = nodes.find((n) => n.id === id);
-      if (!base) continue;
-      const override = overrides?.[id];
-      const oData = (override?.data ?? {}) as {
-        width?: number;
-        height?: number;
-      };
-      const bData = base.data as { width?: number; height?: number };
-      overlayInputs.push({
-        id,
-        position: override?.position ?? base.position,
-        data: {
-          width: oData.width ?? bData.width,
-          height: oData.height ?? bData.height,
-        },
-      });
+      if (base) inputs.push(toInput(base));
     }
-    return overlayInputs;
-  }, [nodes, nodeOverrides, selectedNodeIds]);
+    return inputs;
+  }, [nodes, nodeOverrides, selectedNodeIds, selectedGroupId]);
 
   const selectedNodesForStyleStrip = selectedNodes ?? [];
 
@@ -5408,16 +5452,18 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             <Controls> cluster. The Radix-style scoped class lets
             `src/styles/index.css` retheme it under `.seeflow-canvas-root`. */}
                 {flags.showMiniMap ? <MiniMap className="sf-canvas-minimap" /> : null}
-                {/* US-007: multi-select bounding-box resize overlay. Renders only when
-            ≥ 2 selected nodes are NOT all children of the same group; the
-            internal check is in `<SelectionResizeOverlay>`. We pass through
-            unconditionally — empty / ineligible selections render nothing.
-            US-027: gated on flags.showResizeHandles so view-mode embedders
-            skip the overlay machinery entirely. */}
+                {/* US-007 + grouping M2: selection/group bounding-box overlay.
+            Renders chrome for a 2+ loose-node selection OR a single selected
+            group (the internal check is in `<SelectionResizeOverlay>`; we pass
+            through unconditionally — ineligible selections render nothing).
+            INERT this milestone: `onMultiResize` is intentionally NOT wired so
+            the corner handles give visual feedback only — M3 owns functional
+            proportional resize. US-027: gated on flags.showResizeHandles so
+            view-mode embedders skip the overlay machinery entirely. */}
                 {flags.showResizeHandles ? (
                   <SelectionResizeOverlay
                     selectedNodes={selectionOverlayNodes}
-                    onMultiResize={onMultiResize}
+                    isGroupSelection={isGroupSelection}
                   />
                 ) : null}
                 {topLeftSlot ||

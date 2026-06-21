@@ -503,8 +503,13 @@ layer(base);
  * above keep that low zIndex stable even when the group is selected (combined
  * with `elevateNodesOnSelect={false}`). The group's own box/title/border is
  * painted by the renderer's inline styles — no wrapper-level chrome here so the
- * two don't fight. Selection chrome, isolation affordances, and the title band
- * styling arrive with M2/M6/M7. */
+ * two don't fight. Isolation affordances and title-band styling arrive with
+ * M6/M7. The M2 selection/group overlay (padded dashed rect + 4 corner handles)
+ * is drawn by `<SelectionResizeOverlay>` via a ViewportPortal with INLINE styles
+ * (the rect carries its own `pointer-events: none`, mirroring the
+ * `.react-flow__nodesselection-rect` neutralization above, so only the handles
+ * are interactive) — it is not a DOM node under `.react-flow__node`, so it needs
+ * no CSS rule here. */
 
 /* US-007 selected-node handle transforms (edit mode only) */
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-top {
