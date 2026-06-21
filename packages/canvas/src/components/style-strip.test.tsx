@@ -1,7 +1,12 @@
 import { describe, expect, it, mock } from 'bun:test';
 import * as React from 'react';
 import type { Connector, FlowNode } from '../types.ts';
-import { type NodeStylePatch, StyleStrip, type StyleStripProps } from './style-strip.tsx';
+import {
+  type NodeStylePatch,
+  SliderControl,
+  StyleStrip,
+  type StyleStripProps,
+} from './style-strip.tsx';
 
 // Same dispatcher-shim trick used by icon-node.test.tsx and
 // icon-picker-popover.test.tsx — apps/web tests run without a DOM, so we
@@ -1056,5 +1061,97 @@ describe('StyleStrip — connector path merge + head shape', () => {
     expect(disabledFor('both')).toBe(false);
     expect(disabledFor('forward')).toBe(true);
     expect(disabledFor('none')).toBe(true);
+  });
+});
+
+// Task 3: SliderControl's editable number input. The input accepts values above
+// the slider max (up to inputMax) and clamps to [min, inputMax].
+describe('SliderControl — editable number input', () => {
+  function renderSlider(props: {
+    value: number | undefined;
+    min: number;
+    max: number;
+    editable?: boolean;
+    inputMax?: number;
+    onPreview?: (n: number) => void;
+    onCommit: (n: number) => void;
+  }): unknown {
+    return renderWithHooks(() =>
+      (SliderControl as unknown as (p: Record<string, unknown>) => unknown)({
+        defaultValue: props.value ?? props.min,
+        suffix: 'px',
+        testId: 'style-tab-font-size-slider',
+        ...props,
+      }),
+    );
+  }
+
+  function findInput(tree: unknown): ReactElementLike {
+    const input = findElement(tree, testIdEquals('style-tab-font-size-slider-input'));
+    if (!input) throw new Error('font-size input missing');
+    return input;
+  }
+
+  it('renders an editable number input when editable is set', () => {
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit: () => {} });
+    const input = findInput(tree);
+    expect((input.props as { type?: string }).type).toBe('number');
+  });
+
+  it('does NOT render the input when editable is unset (keeps the span readout)', () => {
+    const tree = renderSlider({ value: 22, min: 8, max: 64, onCommit: () => {} });
+    expect(findElement(tree, testIdEquals('style-tab-font-size-slider-input'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-tab-font-size-slider-value'))).not.toBeNull();
+  });
+
+  it('input commits a value above the slider max (clamped to inputMax)', () => {
+    const onCommit = mock(() => {});
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const input = findInput(tree);
+    const props = input.props as {
+      onChange: (e: { target: { value: string } }) => void;
+      onBlur: () => void;
+    };
+    props.onChange({ target: { value: '120' } });
+    props.onBlur();
+    expect(onCommit).toHaveBeenCalledWith(120);
+  });
+
+  it('input clamps above inputMax', () => {
+    const onCommit = mock(() => {});
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const input = findInput(tree);
+    const props = input.props as {
+      onChange: (e: { target: { value: string } }) => void;
+      onBlur: () => void;
+    };
+    props.onChange({ target: { value: '999' } });
+    props.onBlur();
+    expect(onCommit).toHaveBeenCalledWith(200);
+  });
+
+  it('input clamps below min', () => {
+    const onCommit = mock(() => {});
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const input = findInput(tree);
+    const props = input.props as {
+      onChange: (e: { target: { value: string } }) => void;
+      onBlur: () => void;
+    };
+    props.onChange({ target: { value: '3' } });
+    props.onBlur();
+    expect(onCommit).toHaveBeenCalledWith(8);
+  });
+
+  it('slider thumb pins at max even when the typed value exceeds it', () => {
+    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit: () => {} });
+    const input = findInput(tree);
+    (input.props as { onChange: (e: { target: { value: string } }) => void }).onChange({
+      target: { value: '120' },
+    });
+    const slider = findElement(tree, testIdEquals('style-tab-font-size-slider'));
+    if (!slider) throw new Error('slider missing');
+    // value array is clamped to max so the thumb never overshoots 64.
+    expect((slider.props as { value: number[] }).value[0]).toBeLessThanOrEqual(64);
   });
 });

@@ -14,7 +14,7 @@ import {
   Sticker,
   Type,
 } from 'lucide-react';
-import { type CSSProperties, type ReactNode, useEffect, useState } from 'react';
+import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { COLOR_TOKENS } from '../lib/color-tokens.ts';
 import type {
@@ -1255,7 +1255,7 @@ function PopoverButton({
 // selection), the readout shows "Mixed" until the user moves the slider, at
 // which point the slider transitions to determinate and fans out the picked
 // value to every selected node.
-function SliderControl({
+export function SliderControl({
   value,
   defaultValue,
   min,
@@ -1263,6 +1263,8 @@ function SliderControl({
   step = 1,
   suffix,
   indeterminate,
+  editable,
+  inputMax,
   onPreview,
   onCommit,
   testId,
@@ -1275,32 +1277,47 @@ function SliderControl({
   step?: number;
   suffix?: string;
   indeterminate?: boolean;
+  /** Render an editable number input instead of a read-only readout. */
+  editable?: boolean;
+  /** Hard cap for typed input (defaults to `max`). Lets the input exceed the
+   *  slider's max while the thumb pins at `max`. */
+  inputMax?: number;
   onPreview?: (n: number) => void;
   onCommit: (n: number) => void;
   testId: string;
 }) {
+  const hardMax = inputMax ?? max;
   const upstream = value ?? defaultValue;
   const [local, setLocal] = useState<number>(upstream);
   // Tracks whether the user has touched the slider in the current open cycle.
   // Indeterminate mode resets this back to false when the upstream selection
   // changes (different mixed set → re-show the placeholder).
   const [picked, setPicked] = useState<boolean>(false);
+  // Last value the user typed/dragged this cycle. We commit from this ref (not
+  // the `local` state) so blur/Enter commit the freshly typed value even before
+  // React flushes the `setLocal` re-render.
+  const lastValueRef = useRef<number>(upstream);
   useEffect(() => {
     setLocal(upstream);
     setPicked(false);
+    lastValueRef.current = upstream;
   }, [upstream]);
   const showPlaceholder = indeterminate && !picked;
+  const clampInput = (n: number) => Math.min(hardMax, Math.max(min, n));
   return (
     <div className="sf:flex sf:w-48 sf:items-center sf:gap-3">
       <Slider
         min={min}
         max={max}
         step={step}
-        value={[local]}
+        // Pin the thumb at `max` so a typed value above the slider's max (e.g.
+        // 120 with max 64) doesn't push the thumb past the track.
+        value={[Math.min(local, max)]}
         onValueChange={([v]) => {
           const next = v ?? min;
           setLocal(next);
           setPicked(true);
+          lastValueRef.current = next;
           onPreview?.(next);
         }}
         onValueCommit={([v]) => onCommit(v ?? min)}
@@ -1308,19 +1325,50 @@ function SliderControl({
         data-indeterminate={showPlaceholder ? 'true' : undefined}
         className={cn('sf:flex-1', showPlaceholder && 'sf:opacity-60')}
       />
-      <span
-        data-testid={`${testId}-value`}
-        className="sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground"
-      >
-        {showPlaceholder ? (
-          'Mixed'
-        ) : (
-          <>
-            {local}
-            {suffix}
-          </>
-        )}
-      </span>
+      {editable ? (
+        <input
+          type="number"
+          inputMode="numeric"
+          min={min}
+          max={hardMax}
+          step={step}
+          data-testid={`${testId}-input`}
+          aria-label="Font size"
+          value={showPlaceholder ? '' : local}
+          placeholder={showPlaceholder ? 'Mixed' : undefined}
+          onChange={(e) => {
+            const raw = Number(e.target.value);
+            if (Number.isNaN(raw)) return;
+            const next = clampInput(raw);
+            setLocal(next);
+            setPicked(true);
+            lastValueRef.current = next;
+            onPreview?.(next);
+          }}
+          onBlur={() => onCommit(clampInput(lastValueRef.current))}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              onCommit(clampInput(lastValueRef.current));
+              (e.target as HTMLInputElement).blur();
+            }
+          }}
+          className="sf:w-12 sf:shrink-0 sf:rounded sf:border sf:border-input sf:bg-background sf:px-1.5 sf:py-0.5 sf:text-right sf:text-xs sf:tabular-nums"
+        />
+      ) : (
+        <span
+          data-testid={`${testId}-value`}
+          className="sf:w-12 sf:shrink-0 sf:text-right sf:text-xs sf:tabular-nums sf:text-muted-foreground"
+        >
+          {showPlaceholder ? (
+            'Mixed'
+          ) : (
+            <>
+              {local}
+              {suffix}
+            </>
+          )}
+        </span>
+      )}
     </div>
   );
 }
