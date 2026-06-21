@@ -11,7 +11,24 @@ and group renderer + data model (M1) are in place.
 
 ## Lessons carried forward
 
-- (Fill from M3 handoff.)
+- **From M3 (resize):** the multi-resize commit reads the **frozen** `startNodes`
+  (deep copy at pointer-down), never live `selectedNodes` — search
+  `computeFrozenResizeUpdates(startNodes` in `selection-resize-overlay.tsx`. This
+  matters to M4 because the overlay's top-right ＋/⊟ icon you add lives in the
+  SAME component: do not introduce any read of the live selection into the
+  gesture path while wiring the icon.
+- **From M3 (host reuse):** the host already exposes the optimistic-override +
+  `history.batch(name, fn, { coalesceKey })` pattern (`demo-view.tsx`). `onCreate
+  Group` / `onUngroup` follow it exactly — `history.batch('group-create' |
+  'ungroup', …)` with optimistic `setNodeOverride` BEFORE the PATCHes, drop
+  overrides on rejection. No new history plumbing. End-only / single-batch is the
+  norm — one batch ⇒ one undo entry; coalesce is only needed for per-tick bursts.
+- **From M3 (xyflow-store test trap, L0.4):** do NOT try to drive the overlay's
+  pointer/click handlers through the dispatcher-shim by stubbing `useReactFlow`'s
+  store — it re-implements xyflow internals and is brittle. Test the icon's
+  decision logic via the pure `group-ops.ts` oracle (`planGroupShortcutAction`)
+  and assert the icon's `aria-label`/`onClick` wiring at the render layer; leave
+  the live click to the e2e/browser test.
 - **L0.3** Membership is `childIds` + absolute positions → create = add a group
   node listing members; ungroup = delete the group node. **No child reparenting,
   no position conversion, no array-ordering invariant** (the v1 simplification).

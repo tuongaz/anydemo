@@ -144,11 +144,73 @@ PATCHes + single undo via `coalesceKey`); Shift aspect-lock.
 - UAT passes — explicitly verify NO runaway on a fast drag.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Confirm the exact line where `startNodes` is read at commit (guard against a
-  future refactor reintroducing the live set).
-- Did optimistic overrides + SSE echo cause any flicker on commit? Note the
-  coalesce mechanism used.
-- Is end-only UX acceptable, or is live preview needed? Record the decision for
-  the §6.3 enhancement.
-- **➡ Copy into `04-...md` and reinforce L0.1 in `00-design.md` §11.**
+## Lessons-learned handoff (FILLED IN — M3 done)
+
+**What shipped.** The M2 chrome's pointer handlers were re-wired functional.
+Pointer-down already froze `startNodes` (M2 prep); M3 added the end-only commit.
+A new pure helper `computeFrozenResizeUpdates(startNodes, startRect, newRect,
+opts)` (in `selection-resize-overlay.tsx`) does the scale via the untouched
+`scaleNodesWithinRect`. `onHandlePointerUp` recomputes the final rect from the
+**frozen** `oldRect` + cursor delta and dispatches ONE `onMultiResize` from the
+frozen set. The canvas now passes `onMultiResize` to `<SelectionResizeOverlay>`
+(`seeflow-canvas.tsx`). The host handler in `demo-view.tsx` **already existed**
+(US-007) and needed no change — see "Surprises" below.
+
+- **Exact line where `startNodes` is read at commit.**
+  `packages/canvas/src/components/selection-resize-overlay.tsx`:
+  - `const startNodes = dragState.startNodes;` — the read (≈ line 499).
+  - `const updates = computeFrozenResizeUpdates(startNodes, startRect, newRect,
+    { lockAspectRatio: event.shiftKey });` — the use (≈ line 523).
+  `selectedNodes` is **not referenced anywhere in `onHandlePointerUp`**. A guard
+  comment directly above the call names the regression. Line numbers drift —
+  search for `computeFrozenResizeUpdates(startNodes`.
+
+- **Flicker from optimistic overrides + SSE echo on commit?** None observed in
+  the design model, and structurally avoided. End-only commit means there is
+  exactly ONE optimistic write per gesture (no per-tick overrides), so there is
+  no echo to fight mid-drag. On commit the host sets the override to the final
+  dims **before** firing the PATCHes (`demo-view.tsx` `onMultiResize`), so the
+  canvas stays pinned at the committed footprint through the PATCH round-trip;
+  `usePendingOverrides.pruneAgainst` drops each override only once the SSE reload
+  reports matching server state. **Coalesce mechanism:** the host wraps the
+  fan-out in `history.batch('multi-resize', …, { coalesceKey:
+  \`multi:resize:${sortedIds}\` })`. With end-only commit there is ONE batch per
+  gesture, so coalesce is effectively a no-op now (nothing to merge within a
+  gesture) — it's harmless and left in place because M5's group-resize reuses the
+  same handler, and a future live-preview enhancement (§6.3) would re-introduce
+  per-tick dispatch that the key would then coalesce into one undo entry.
+
+- **End-only UX acceptable, or is live preview needed?** **End-only is shipped
+  and is the recorded decision for M3** (design §6.3). During the drag the user
+  sees the dashed bounding rect + corner handles track the cursor 1:1 (local
+  `previewRect`); the member nodes snap to the new sizes on release. This is
+  acceptable for the first cut and is the safe choice (no per-tick real-node
+  mutation ⇒ compounding is structurally impossible). Live per-tick visual
+  scaling of the real nodes is the explicit §6.3 enhancement — defer it; if
+  added, do it via a frozen-baseline preview transform layer (NOT per-tick
+  optimistic overrides) and keep the tripwire green.
+
+- **Surprises / deviations (see also the report).**
+  1. The host `onMultiResize` in `demo-view.tsx` was **already fully implemented**
+     (US-007: optimistic overrides + batched PATCH fan-out + coalesceKey + wired
+     to `<DemoCanvas>`). Step 4 ("implement the host handler") was already
+     satisfied; M3 changed nothing there. The only missing link was the canvas
+     not forwarding `onMultiResize` to the overlay.
+  2. `DragState.oldRect` was **not renamed** to `startRect` (the doc suggested
+     it). It is already documented as "Frozen union rect at pointer-down" and the
+     rename is cosmetic; renaming risked churn across the M2 code with no
+     behavioral gain. Both members of the frozen pair (`oldRect` + `startNodes`)
+     are frozen — the contract holds regardless of the field name.
+  3. A full down→move→up **component gesture test is not feasible** through the
+     dispatcher-shim: the overlay's pointer handlers call
+     `useReactFlow().screenToFlowPosition`, and `useReactFlow` (xyflow 12.10.2)
+     pulls `useStoreApi` + `useViewportHelper` + `useStore` + zustand's
+     `useSyncExternalStore`. Stubbing all of that re-implements xyflow's store
+     contract — exactly the "fight xyflow internals" trap (L0.4). The
+     no-compounding contract is fully covered by the **pure** tripwire
+     (`computeFrozenResizeUpdates`, the exact function the handler calls); the
+     live gesture is verified by the orchestrator's browser test. A render-level
+     test asserts the handles carry the four pointer callbacks (gesture wired).
+
+- **➡ Propagated:** copied the actionable subset into `04-create-ungroup-ops.md`
+  "Lessons carried forward"; reinforced L0.1 in `00-design.md` §11.

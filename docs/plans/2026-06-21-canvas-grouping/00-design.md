@@ -496,7 +496,16 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
 
 - **L0.1** Freezing only `oldRect` is insufficient for multi-node scale — freeze
   the *node set* too, or the optimistic-override echo compounds the scale
-  (order-of-magnitude bug). (`selection-resize-overlay.tsx:328`)
+  (order-of-magnitude bug). **M3 verified this in practice:** the original trap
+  was `nodesAtTick = selectedNodes` fed back each tick; M3's commit reads the
+  frozen `startNodes` and a pure tripwire test (§6.4) demonstrated the BUGGY
+  live-set path blows up ~33× (committed width 670 vs the correct 20) on a
+  10-tick fast drag while the frozen path stays at 2×. The fix lives at
+  `selection-resize-overlay.tsx` →
+  `computeFrozenResizeUpdates(startNodes, …)` in `onHandlePointerUp` (search the
+  symbol; line numbers drift). Belt-and-braces: M3 also ships **end-only commit**
+  (no per-tick real-node mutation), so there is no mid-drag override to echo —
+  compounding is structurally impossible, not merely avoided by discipline.
 - **L0.2** Non-stable xyflow resize callbacks zero the d3 `startValues` mid-drag
   → the *other* exponential bug. Keep callbacks `useCallback([])`-stable.
   (`use-resize-gesture.ts:115-129`)
@@ -574,6 +583,29 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   `build` (+ `build:web`) ONLY to refresh the served bundle for a screenshot, and
   regenerate `style.dev.css` (`bun run --filter @seeflow/canvas build:css:dev`)
   if a dev server is live.
+- **L3.1 (M3) The resize commit reads the FROZEN `startNodes`, end-only.**
+  `onHandlePointerUp` (`selection-resize-overlay.tsx`) recomputes the final rect
+  from the frozen `oldRect` + cursor delta and dispatches ONE
+  `onMultiResize(computeFrozenResizeUpdates(startNodes, oldRect, newRect, …))`.
+  `selectedNodes` is never read in the gesture. `computeFrozenResizeUpdates` is a
+  thin wrapper over the untouched `scaleNodesWithinRect`. The zero-movement
+  no-op guard is preserved. **Do not** reintroduce a per-tick `onMultiResize`
+  dispatch without the §6.3 frozen-baseline preview design + a green tripwire.
+- **L3.2 (M3) The host `onMultiResize` (US-007) was already complete** in
+  `demo-view.tsx` (optimistic `setNodeOverride` fan-out → `history.batch(
+  'multi-resize', …, { coalesceKey })` → PATCH fan-out, wired to `<DemoCanvas>`).
+  The ONLY missing link was `seeflow-canvas.tsx` not forwarding `onMultiResize`
+  to `<SelectionResizeOverlay>` (M2 made it inert). M5's group-resize-children
+  can reuse this same host handler unchanged. With end-only commit the coalesce
+  window collapses one gesture to one batch ⇒ one undo entry already.
+- **L3.3 (M3, testing) The overlay's pointer gesture can't be unit-driven via the
+  dispatcher-shim.** `onHandlePointerUp` calls `useReactFlow().screenToFlow
+  Position`, and `useReactFlow` (xyflow 12.10.2) chains `useStoreApi` +
+  `useViewportHelper` + `useStore` + zustand `useSyncExternalStore`; stubbing it
+  reimplements xyflow's store (the L0.4 trap). Cover the no-compounding contract
+  with the **pure** `computeFrozenResizeUpdates` tripwire (the exact function the
+  handler calls) + a render-level assertion that the handles wire the four
+  pointer callbacks; leave the live gesture to the browser/e2e test.
 
 ---
 

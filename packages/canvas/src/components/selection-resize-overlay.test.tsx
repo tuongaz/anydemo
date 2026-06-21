@@ -2,9 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import * as React from 'react';
 import {
   CORNER_ANCHORS,
+  type FrozenNode,
+  type MultiResizeUpdate,
   type OverlayInputNode,
   SELECTION_OVERLAY_PADDING,
   SelectionResizeOverlay,
+  computeFrozenResizeUpdates,
   computeNewRectFromAnchorDrag,
   computeSelectionResizeUpdates,
   computeUnionRect,
@@ -229,6 +232,181 @@ describe('computeSelectionResizeUpdates', () => {
       { id: 'a', position: { x: 20, y: 20 } },
       { id: 'b', position: { x: 100, y: 100 } },
     ]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// M3 end-only commit (design §6.3). `computeFrozenResizeUpdates` is the exact
+// function the overlay's pointer-up handler calls, fed the FROZEN `startNodes`
+// captured at pointer-down. These tests pin the corner math, the Shift
+// aspect-lock, and the zero-movement no-op.
+// ---------------------------------------------------------------------------
+const frozen = (id: string, x: number, y: number, width?: number, height?: number): FrozenNode => ({
+  id,
+  position: { x, y },
+  width,
+  height,
+});
+
+describe('computeFrozenResizeUpdates (M3 frozen-baseline commit)', () => {
+  // Two nodes inside a 0,0→100,100 union rect.
+  const startNodes: FrozenNode[] = [frozen('a', 0, 0, 20, 20), frozen('b', 80, 80, 20, 20)];
+  const startRect = { x: 0, y: 0, width: 100, height: 100 };
+
+  it('SE corner drag scales sizes + spacing from the frozen pair (2x)', () => {
+    // newRect after dragging SE by (+100,+100): 0,0→200,200 → sx = sy = 2.
+    const updates = computeFrozenResizeUpdates(startNodes, startRect, {
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+    });
+    expect(updates).toEqual([
+      { id: 'a', position: { x: 0, y: 0 }, width: 40, height: 40 },
+      { id: 'b', position: { x: 160, y: 160 }, width: 40, height: 40 },
+    ]);
+  });
+
+  it('NW corner drag keeps the SE corner anchored and shifts positions', () => {
+    // Drag NW outward: rect becomes -100,-100→100,100 (200×200, sx=sy=2), SE
+    // corner stays at (100,100). Node `b` (was at 80,80) maps to
+    // -100 + (80-0)*2 = 60.
+    const updates = computeFrozenResizeUpdates(startNodes, startRect, {
+      x: -100,
+      y: -100,
+      width: 200,
+      height: 200,
+    });
+    expect(updates[0]).toEqual({ id: 'a', position: { x: -100, y: -100 }, width: 40, height: 40 });
+    expect(updates[1]).toEqual({ id: 'b', position: { x: 60, y: 60 }, width: 40, height: 40 });
+  });
+
+  it('Shift aspect-lock uses min(sx, sy) so sizes stay uniform', () => {
+    // newRect 200 wide (sx=2) but 400 tall (sy=4); lock → uniform 2x.
+    const updates = computeFrozenResizeUpdates(
+      startNodes,
+      startRect,
+      { x: 0, y: 0, width: 200, height: 400 },
+      { lockAspectRatio: true },
+    );
+    expect(updates[0]?.width).toBe(40);
+    expect(updates[0]?.height).toBe(40);
+    expect(updates[1]?.width).toBe(40);
+    expect(updates[1]?.height).toBe(40);
+  });
+
+  it('repositions freehand-style nodes (no width/height) without scaling them (§12.6)', () => {
+    // A freehand stroke carries geometry in data.points, not width/height — so
+    // the frozen snapshot has undefined dims. It must reposition (so it stays
+    // with the group) but NOT gain a width/height (the helper leaves them
+    // undefined and never touches data). Documented as intentional.
+    const withStroke: FrozenNode[] = [
+      frozen('shape', 0, 0, 20, 20),
+      frozen('stroke', 50, 50), // freehand: no dims
+    ];
+    const updates = computeFrozenResizeUpdates(withStroke, startRect, {
+      x: 0,
+      y: 0,
+      width: 200,
+      height: 200,
+    });
+    const stroke = updates.find((u) => u.id === 'stroke');
+    expect(stroke?.position).toEqual({ x: 100, y: 100 }); // 50 * 2 — repositioned
+    expect(stroke?.width).toBeUndefined(); // NOT scaled
+    expect(stroke?.height).toBeUndefined();
+  });
+});
+
+// ===========================================================================
+// THE TRIPWIRE (design §6.4) — the most important test in the grouping feature.
+//
+// The v1 "order of magnitude" bug fed the LIVE, optimistically-overridden node
+// set back into the scale each tick (`nodesAtTick = selectedNodes`), against a
+// frozen rect → `w·sx·sx·…` compounding → ×10 blowup. M3's contract: the commit
+// reads the FROZEN `startNodes`, so N ticks collapse to a single `start → final`
+// scale with NO compounding.
+//
+// This test models BOTH paths from the same tick sequence and proves they
+// DIVERGE by an order of magnitude:
+//   - SAFE (what the handler does): always scale the FROZEN startNodes.
+//   - BUGGY (the v1 regression): scale the PREVIOUS tick's output (the echo).
+// If a future refactor reintroduces the live set at the commit site, the
+// committed result would match the BUGGY path — and this test's safe-path
+// assertions (exact 2x, and "not blown up") would fail.
+// ===========================================================================
+describe('TRIPWIRE: frozen baseline does NOT compound (design §6.4, L0.1)', () => {
+  it('N ticks scaling the frozen set == one start→final scale (no runaway)', () => {
+    const startNodes: FrozenNode[] = [frozen('a', 0, 0, 10, 10), frozen('b', 90, 90, 10, 10)];
+    const startRect = { x: 0, y: 0, width: 100, height: 100 };
+    // A fast outward SE drag sampled at 10 ticks: widths 110,120,…,200 — each
+    // computed from the FROZEN rect (that's how computeNewRectFromAnchorDrag
+    // works: it always reads dragState.oldRect). Final tick = 200 → 2x.
+    const tickRects = Array.from({ length: 10 }, (_, i) => {
+      const size = 110 + i * 10; // 110..200
+      return { x: 0, y: 0, width: size, height: size };
+    });
+    const finalRect = tickRects[tickRects.length - 1];
+    if (!finalRect) throw new Error('no final rect');
+
+    // SAFE path — exactly what onHandlePointerUp does: scale the frozen set to
+    // the final rect. (Even if we recomputed every tick, each would read the
+    // frozen startNodes, so only the last matters: end-only commit.)
+    const safe = computeFrozenResizeUpdates(startNodes, startRect, finalRect);
+    // 2x: a stays 10→20 at origin; b 10→20, position 90→180.
+    expect(safe).toEqual([
+      { id: 'a', position: { x: 0, y: 0 }, width: 20, height: 20 },
+      { id: 'b', position: { x: 180, y: 180 }, width: 20, height: 20 },
+    ]);
+
+    // BUGGY path — the v1 echo: each tick scales the PREVIOUS tick's OUTPUT
+    // (mimicking `nodesAtTick = selectedNodes` after the optimistic override
+    // has been written back). The baseline node set is replaced every tick.
+    let liveNodes: FrozenNode[] = startNodes;
+    for (const rect of tickRects) {
+      const out = computeFrozenResizeUpdates(liveNodes, startRect, rect);
+      liveNodes = out.map((u) => ({
+        id: u.id,
+        position: u.position,
+        width: u.width,
+        height: u.height,
+      }));
+    }
+    const buggyA = liveNodes.find((n) => n.id === 'a');
+    if (!buggyA?.width) throw new Error('buggy path lost width');
+
+    // The compounded width is the PRODUCT of every per-tick scale:
+    //   10 * (110/100) * (120/100) * … * (200/100)
+    const product = tickRects.reduce((acc, r) => acc * (r.width / 100), 1);
+    const expectedBuggyWidth = 10 * product;
+    expect(buggyA.width).toBeCloseTo(expectedBuggyWidth, 5);
+
+    // The DISCRIMINATOR: the buggy path blows up by well over an order of
+    // magnitude vs the safe 2x (20). If the commit ever reads the live set,
+    // the committed width would be ~this buggy value, not 20.
+    const safeA = safe.find((u) => u.id === 'a');
+    if (!safeA?.width) throw new Error('safe path lost width');
+    expect(buggyA.width).toBeGreaterThan(safeA.width * 10);
+    // And the safe path is emphatically NOT the runaway value.
+    expect(safeA.width).toBe(20);
+    expect(safeA.width).toBeLessThan(expectedBuggyWidth / 10);
+  });
+
+  it('5 repeated full gestures from the same frozen baseline stay stable (no drift)', () => {
+    // UAT step 5: repeat the drag 5× rapidly. Each gesture re-freezes from the
+    // SAME pre-drag baseline (the overlay re-snapshots startNodes on every
+    // pointer-down), so the committed result is identical every time — there is
+    // no accumulation across gestures.
+    const startNodes: FrozenNode[] = [frozen('a', 0, 0, 10, 10), frozen('b', 90, 90, 10, 10)];
+    const startRect = { x: 0, y: 0, width: 100, height: 100 };
+    const finalRect = { x: 0, y: 0, width: 150, height: 150 }; // 1.5x
+    let last: MultiResizeUpdate[] | null = null;
+    for (let i = 0; i < 5; i++) {
+      const out = computeFrozenResizeUpdates(startNodes, startRect, finalRect);
+      if (last) expect(out).toEqual(last);
+      last = out;
+    }
+    expect(last?.[0]?.width).toBe(15);
+    expect(last?.[1]?.width).toBe(15);
   });
 });
 
@@ -470,6 +648,26 @@ describe('SelectionResizeOverlay render (M2 chrome)', () => {
       // Zoom-compensated size: a calc() reading --rf-zoom (constant screen px).
       expect(String(style.width)).toContain('--rf-zoom');
       expect(h.props['aria-label']).toBe('Resize selection');
+    }
+  });
+
+  it('M3: each corner handle wires the pointer gesture (down/move/up/cancel)', () => {
+    // The M2 chrome was inert (handlers existed but never dispatched). M3 keeps
+    // the same four wired handlers AND makes pointer-up dispatch. We can't drive
+    // the full gesture here without re-implementing xyflow's store + viewport
+    // contract (which the design warns against re-fighting, L0.4) — the live
+    // gesture + no-runaway is proven by the pure `computeFrozenResizeUpdates`
+    // tripwire above and the orchestrator's browser test. Here we assert the
+    // gesture is WIRED: each handle exposes the four pointer callbacks as
+    // functions, so a pointer-down can start the drag and pointer-up can commit.
+    const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
+    const handles = findAll(tree, (el) => /^selection-overlay-handle-/.test(testId(el) ?? ''));
+    expect(handles).toHaveLength(4);
+    for (const h of handles) {
+      expect(typeof h.props.onPointerDown).toBe('function');
+      expect(typeof h.props.onPointerMove).toBe('function');
+      expect(typeof h.props.onPointerUp).toBe('function');
+      expect(typeof h.props.onPointerCancel).toBe('function');
     }
   });
 

@@ -17,12 +17,14 @@ import { type Rect, type ScalableNode, scaleNodesWithinRect } from '../lib/scale
  *  - exactly one selected `group` (the caller passes the group's MEMBERS plus
  *    the group box as `selectedNodes` so the rect hugs the right geometry).
  *
- * M2 ships the chrome INERT — the pointer handlers stay wired and drive a local
- * `previewRect` so the rect can follow the cursor, but they never call
- * `onMultiResize` and never mutate real nodes. Functional proportional resize is
- * M3's job and owns the frozen-baseline + end-only-commit contract (design §6).
- * The frozen baseline (`startRect` + `startNodes`) is captured at pointer-down
- * NOW so M3 can drop in `scaleNodesWithinRect` without restructuring state.
+ * M3 wires functional proportional resize on top of the M2 chrome. The pointer
+ * handlers freeze a baseline (`startRect` + `startNodes`) at pointer-down, drive
+ * a local `previewRect` during the drag (visual only — no real-node mutation),
+ * and on pointer-up dispatch ONE batched `onMultiResize` computed from the
+ * FROZEN pair via `scaleNodesWithinRect` (end-only commit, design §6.3). The
+ * frozen baseline is the non-negotiable guard against the v1 order-of-magnitude
+ * bug (design §6.1 / L0.1): the scale must read `startNodes`, never the live
+ * (optimistically-overridden) `selectedNodes`.
  */
 
 /**
@@ -276,6 +278,39 @@ export interface FrozenNode {
   height?: number;
 }
 
+/**
+ * M3 end-only commit (design §6.3): scale the FROZEN `startNodes` from
+ * `startRect` → `newRect` and return the per-node PATCH fields.
+ *
+ * THIS IS THE NON-COMPOUNDING PATH. `startNodes` is the deep copy captured at
+ * pointer-down (design §6.2); the caller MUST pass that frozen set, NEVER the
+ * live `selectedNodes` (which carries the optimistic-override echo). Feeding the
+ * live set back each tick is exactly the v1 "order of magnitude" bug
+ * (`w·sx·sx·…`, design §6.1 / L0.1) — see the no-compounding tripwire test.
+ *
+ * A `FrozenNode` is structurally a `ScalableNode`, so the pure
+ * `scaleNodesWithinRect` helper (untouched, design §6 rule 6) does the math.
+ * Nodes without width/height (e.g. freehand strokes — geometry lives in
+ * `data.points`, design §12.6) reposition but do NOT internally scale: the
+ * helper leaves their size undefined and `data` is never part of the update.
+ */
+export function computeFrozenResizeUpdates(
+  startNodes: readonly FrozenNode[],
+  startRect: Rect,
+  newRect: Rect,
+  options?: { lockAspectRatio?: boolean },
+): MultiResizeUpdate[] {
+  const scaled = scaleNodesWithinRect(startNodes, startRect, newRect, options);
+  const updates: MultiResizeUpdate[] = [];
+  for (const out of scaled) {
+    const u: MultiResizeUpdate = { id: out.id, position: out.position };
+    if (out.width !== undefined) u.width = out.width;
+    if (out.height !== undefined) u.height = out.height;
+    updates.push(u);
+  }
+  return updates;
+}
+
 export interface SelectionResizeOverlayProps {
   /**
    * Selected nodes the overlay chromes. The host (seeflow-canvas) resolves dims
@@ -291,9 +326,12 @@ export interface SelectionResizeOverlayProps {
    */
   isGroupSelection?: boolean;
   /**
-   * Atomic batch dispatch at resize-stop. WIRED BUT INERT in M2 — the chrome
-   * does not call this; M3 owns functional resize. Kept on the props so the
-   * host wiring (and the parent's undo-batching) needn't change when M3 lands.
+   * Atomic batch dispatch at resize-stop (M3). Called ONCE on pointer-up with
+   * the per-node position+size updates computed from the FROZEN baseline
+   * (`startNodes` + `startRect`, design §6.3) — end-only commit, so the host
+   * batches it as a single undo entry. Locked/absent sizes pass through
+   * unchanged (the pure helper leaves them undefined). When absent the chrome
+   * still renders for visual feedback but the gesture dispatches nothing.
    */
   onMultiResize?: (updates: MultiResizeUpdate[]) => void;
   /** Padding around the union rect in flow units. Defaults to {@link SELECTION_OVERLAY_PADDING} (12). */
@@ -337,21 +375,24 @@ function invZoom(px: number): string {
 }
 
 /**
- * Canvas grouping M2: padded dashed selection rect + 4 corner handles.
+ * Canvas grouping M2/M3: padded dashed selection rect + 4 corner handles that
+ * proportionally resize the selection.
  *
  * Returns null (no chrome) unless {@link selectionEligibleForOverlay} passes:
  * 2+ loose nodes, OR one selected group (`isGroupSelection`). Rendered inside a
  * `ViewportPortal` so it tracks pan/zoom with the rest of the canvas.
  *
- * INERT in M2: the corner-handle pointer gesture drives a LOCAL `previewRect`
- * (visual feedback only) and never calls `onMultiResize` / never mutates real
- * nodes. Functional proportional resize is M3 (design §6). The frozen baseline
- * (`oldRect` + `startNodes`) is captured at pointer-down now so M3 can wire
- * `scaleNodesWithinRect` without restructuring this state.
+ * M3 resize contract (design §6): pointer-down freezes the baseline (`oldRect`
+ * + `startNodes`, a deep copy); pointer-move drives a LOCAL `previewRect` only
+ * (no real-node mutation); pointer-up dispatches ONE `onMultiResize` computed
+ * from the FROZEN pair (end-only commit → one undo entry). The scale reads
+ * `startNodes`, NEVER the live `selectedNodes` — that is the guard against the
+ * v1 order-of-magnitude bug (L0.1).
  */
 export function SelectionResizeOverlay({
   selectedNodes,
   isGroupSelection = false,
+  onMultiResize,
   paddingPx = SELECTION_OVERLAY_PADDING,
 }: SelectionResizeOverlayProps) {
   const reactFlow = useReactFlow();
@@ -422,18 +463,40 @@ export function SelectionResizeOverlay({
       dy,
       event.shiftKey,
     );
-    // M2 is INERT: update the LOCAL preview rect only (visual feedback) — do NOT
-    // dispatch `onMultiResize` or mutate real nodes. M3 adds the frozen-baseline
-    // scale + end-only commit (design §6); the handlers stay wired so that work
-    // slots in here.
+    // END-ONLY commit (design §6.3): update the LOCAL preview rect only — do NOT
+    // dispatch `onMultiResize` or mutate real nodes per tick. The real commit
+    // fires once from the frozen baseline in onHandlePointerUp. Keeping the drag
+    // preview-only is also what makes compounding structurally impossible: no
+    // optimistic override is written mid-gesture, so there is no echo to scale.
     setPreviewRect(newRect);
   };
 
   const onHandlePointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (!dragState) return;
     if (event.pointerId !== dragState.pointerId) return;
-    // M2 INERT: just clear the gesture + drop the preview back to the live union
-    // rect. No `onMultiResize` (M3). No real-node mutation.
+    // M3 END-ONLY COMMIT (design §6.3). Recompute the final rect from the FROZEN
+    // start rect + the cursor delta, then dispatch ONE batched `onMultiResize`
+    // computed from the FROZEN `startNodes` — never the live `selectedNodes`.
+    // Reading the frozen pair is the entire fix for the v1 order-of-magnitude
+    // bug (design §6.1 / L0.1): the live set carries the optimistic-override
+    // echo, so scaling it would compound (`w·sx·sx·…`). See the no-compounding
+    // tripwire test.
+    const flowCursor = reactFlow.screenToFlowPosition({
+      x: event.clientX,
+      y: event.clientY,
+    });
+    const dx = flowCursor.x - dragState.startCursor.x;
+    const dy = flowCursor.y - dragState.startCursor.y;
+    const newRect = computeNewRectFromAnchorDrag(
+      dragState.oldRect,
+      dragState.anchor,
+      dx,
+      dy,
+      event.shiftKey,
+    );
+    // Snapshot the frozen pair before we clear `dragState` below.
+    const startRect = dragState.oldRect;
+    const startNodes = dragState.startNodes;
     setDragState(null);
     setPreviewRect(null);
     shiftHeldRef.current = false;
@@ -443,6 +506,24 @@ export function SelectionResizeOverlay({
       // releasePointerCapture throws when the element no longer has capture
       // (e.g. unmounted between move + up). The cleanup is best-effort.
     }
+    if (!onMultiResize) return;
+    if (
+      newRect.x === startRect.x &&
+      newRect.y === startRect.y &&
+      newRect.width === startRect.width &&
+      newRect.height === startRect.height
+    ) {
+      // Zero-movement drag (e.g. a click on a handle without dragging) → no-op
+      // so we don't pollute the undo log with an identity resize.
+      return;
+    }
+    // NOTE: `startNodes` (the frozen deep copy), NOT `selectedNodes`. A future
+    // refactor MUST keep this — reintroducing the live set here is the exact
+    // regression the tripwire test guards against.
+    const updates = computeFrozenResizeUpdates(startNodes, startRect, newRect, {
+      lockAspectRatio: event.shiftKey,
+    });
+    if (updates.length > 0) onMultiResize(updates);
   };
 
   const onHandlePointerCancel = (event: ReactPointerEvent<HTMLDivElement>) => {

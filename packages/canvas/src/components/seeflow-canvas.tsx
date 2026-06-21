@@ -5452,18 +5452,20 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             <Controls> cluster. The Radix-style scoped class lets
             `src/styles/index.css` retheme it under `.seeflow-canvas-root`. */}
                 {flags.showMiniMap ? <MiniMap className="sf-canvas-minimap" /> : null}
-                {/* US-007 + grouping M2: selection/group bounding-box overlay.
+                {/* US-007 + grouping M2/M3: selection/group bounding-box overlay.
             Renders chrome for a 2+ loose-node selection OR a single selected
             group (the internal check is in `<SelectionResizeOverlay>`; we pass
             through unconditionally — ineligible selections render nothing).
-            INERT this milestone: `onMultiResize` is intentionally NOT wired so
-            the corner handles give visual feedback only — M3 owns functional
-            proportional resize. US-027: gated on flags.showResizeHandles so
-            view-mode embedders skip the overlay machinery entirely. */}
+            M3 wires `onMultiResize`: dragging a corner proportionally scales the
+            selection from a frozen baseline and commits ONCE on pointer-up as a
+            single batched undo entry (design §6). US-027: gated on
+            flags.showResizeHandles so view-mode embedders skip the overlay
+            machinery entirely. */}
                 {flags.showResizeHandles ? (
                   <SelectionResizeOverlay
                     selectedNodes={selectionOverlayNodes}
                     isGroupSelection={isGroupSelection}
+                    onMultiResize={onMultiResize}
                   />
                 ) : null}
                 {topLeftSlot ||

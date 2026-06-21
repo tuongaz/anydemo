@@ -1827,15 +1827,14 @@ describe('SeeflowCanvas', () => {
     });
   });
 
-  describe('US-007 + grouping M2: multi-select / group overlay wiring', () => {
+  describe('US-007 + grouping M2/M3: multi-select / group overlay wiring', () => {
     // The overlay component itself decides presence via
     // `selectionEligibleForOverlay`; here we test the canvas-side wiring —
     // that the right `selectedNodes` payload reaches the overlay (with
-    // optimistic overrides applied). Canvas grouping M2 makes the overlay
-    // INERT: `onMultiResize` is intentionally NOT forwarded (resize is M3), and
-    // `isGroupSelection` is threaded for gating/icon state. The pointer-driven
-    // scaling is exercised in selection-resize-overlay.test.tsx via the pure
-    // helpers.
+    // optimistic overrides applied), `isGroupSelection` is threaded for
+    // gating/icon state, and (M3) `onMultiResize` is forwarded so the corner
+    // handles commit a proportional resize. The pointer-driven scaling itself
+    // is exercised in selection-resize-overlay.test.tsx via the pure helpers.
     function makeSizedShape(
       id: string,
       pos: { x: number; y: number },
@@ -1888,10 +1887,11 @@ describe('SeeflowCanvas', () => {
       expect(selected).toEqual([]);
     });
 
-    it('M2 INERT: does NOT forward onMultiResize (functional resize is M3)', () => {
-      // The host prop may be supplied, but the overlay is wired inert this
-      // milestone — the corner handles give visual feedback only. M3 re-wires
-      // `onMultiResize` once the frozen-baseline scale lands.
+    it('M3: forwards onMultiResize so a corner drag commits a proportional resize', () => {
+      // M3 wires the host's batched resize handler through to the overlay. The
+      // overlay calls it ONCE on pointer-up from the frozen baseline (design
+      // §6.3); here we just assert the wiring — the same function reference the
+      // host supplied reaches the overlay's `onMultiResize` prop.
       const onMultiResize = (_updates: MultiResizeUpdate[]) => {};
       const { overlay } = findOverlay({
         nodes: [
@@ -1902,7 +1902,7 @@ describe('SeeflowCanvas', () => {
         onMultiResize,
       });
       if (!overlay) throw new Error('SelectionResizeOverlay not in SeeflowCanvas tree');
-      expect(overlay.props.onMultiResize).toBeUndefined();
+      expect(overlay.props.onMultiResize).toBe(onMultiResize);
     });
 
     it('threads isGroupSelection=false for a loose multi-selection', () => {
