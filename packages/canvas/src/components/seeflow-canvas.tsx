@@ -3975,6 +3975,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // this prop is wired).
           onLabelChange: isEditMode ? onConnectorLabelChange : undefined,
           reconnectable: enableReconnect,
+          // Selection feedback for ANY selected connector (single OR multi).
+          // Drives the non-interactive endpoint dots in EditableEdge; unlike
+          // `reconnectable` it is not gated to the sole-selected connector.
+          selectedMarker: isSelected,
           // US-018: stable callback (useCallback with empty deps) so the
           // memoized edge cache key doesn't churn.
           registerEditHandle,

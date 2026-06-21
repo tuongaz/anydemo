@@ -152,6 +152,13 @@ export type EditableEdgeData = {
    * reconnect drag.
    */
   reconnectable?: boolean;
+  /**
+   * Selection feedback for ANY selected connector (single OR multi). Drives the
+   * non-interactive endpoint dots; unlike `reconnectable` it is not gated to the
+   * sole-selected connector, so a multi-selection has no native anchors and the
+   * dots are pure `pointer-events: none` selection feedback.
+   */
+  selectedMarker?: boolean;
 } & Record<string, unknown>;
 
 export type EditableEdgeType = Edge<EditableEdgeData, 'editableEdge'>;
@@ -375,12 +382,14 @@ export function EditableEdge({
     });
   }, [id, registerEditHandle, editable, setEditingConnectorId]);
 
-  // US-024: only render the visible endpoint dots when this edge is
-  // reconnectable (sole-selected). The dots are purely visual — `pointer-
-  // events: none` lets clicks pass through to React Flow's native
-  // EdgeUpdateAnchors that sit at the same position and drive the
-  // free-floating reconnect drag.
-  const showEndpointDots = data?.reconnectable === true;
+  // US-024 + selection markers: render the visible endpoint dots when this edge
+  // is reconnectable (sole-selected, dots align over the draggable native
+  // EdgeUpdateAnchors) OR when it's part of a multi-selection (selectedMarker) —
+  // in the latter case there are no native anchors, so the dots are pure
+  // pointer-events:none selection feedback. Either way the dots are purely
+  // visual; `pointer-events: none` lets clicks pass through to React Flow's
+  // native EdgeUpdateAnchors that sit at the same position.
+  const showEndpointDots = data?.reconnectable === true || data?.selectedMarker === true;
   const sourcePinned = data?.sourcePin !== undefined;
   const targetPinned = data?.targetPin !== undefined;
 

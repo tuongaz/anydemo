@@ -120,6 +120,35 @@ describe('endpoint dot is visual-only — native React Flow reconnect drives dra
   });
 });
 
+// Selection-marker dots: the visible endpoint dots must render for EVERY
+// selected connector, not just the sole-selected (reconnectable) one. A
+// multi-selection has no native EdgeUpdateAnchors, so the dots are pure
+// pointer-events:none selection feedback. The gate is widened from
+// `reconnectable` alone to `reconnectable || selectedMarker`, and the canvas
+// sets `selectedMarker: isSelected` on every decorated edge.
+describe('endpoint dots render for any selected connector (selectedMarker)', () => {
+  it('showEndpointDots gate also honours data.selectedMarker', () => {
+    const src = readFileSync(editableEdgePath, 'utf-8');
+    const rule = src.match(/const\s+showEndpointDots\s*=\s*([^;]+);/);
+    expect(rule).not.toBeNull();
+    if (!rule) throw new Error('expected showEndpointDots assignment');
+    // Still gated on reconnectable (sole-selected drag handles) AND now also
+    // on selectedMarker (any selected connector, single OR multi).
+    expect(rule[1]).toMatch(/reconnectable\s*===\s*true/);
+    expect(rule[1]).toMatch(/selectedMarker\s*===\s*true/);
+  });
+
+  it('EditableEdgeData declares the selectedMarker flag', () => {
+    const src = readFileSync(editableEdgePath, 'utf-8');
+    expect(src).toMatch(/selectedMarker\?\s*:\s*boolean/);
+  });
+
+  it('seeflow-canvas decorate sets selectedMarker from isSelected', () => {
+    const src = readFileSync(seeflowCanvasPath, 'utf-8');
+    expect(src).toMatch(/selectedMarker:\s*isSelected/);
+  });
+});
+
 describe('shouldFireEdgeHandoff', () => {
   it('fires on rising edge into success', () => {
     expect(shouldFireEdgeHandoff(undefined, 'success')).toBe(true);
