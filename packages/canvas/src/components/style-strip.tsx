@@ -933,9 +933,7 @@ export function StyleStrip({
               >
                 <SliderControl
                   value={hasNodes ? firstVisualNode?.data.fontSize : firstConnector?.fontSize}
-                  defaultValue={
-                    hasNodes ? NODE_FONT_SIZE_DEFAULT : CONNECTOR_FONT_SIZE_DEFAULT
-                  }
+                  defaultValue={hasNodes ? NODE_FONT_SIZE_DEFAULT : CONNECTOR_FONT_SIZE_DEFAULT}
                   min={8}
                   max={64}
                   suffix="px"

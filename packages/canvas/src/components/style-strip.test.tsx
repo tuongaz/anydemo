@@ -1155,7 +1155,14 @@ describe('SliderControl — editable number input', () => {
   }
 
   it('renders an editable number input when editable is set', () => {
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit: () => {} });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit: () => {},
+    });
     const input = findInput(tree);
     expect((input.props as { type?: string }).type).toBe('number');
   });
@@ -1168,7 +1175,14 @@ describe('SliderControl — editable number input', () => {
 
   it('input commits a value above the slider max (clamped to inputMax)', () => {
     const onCommit = mock(() => {});
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit,
+    });
     const input = findInput(tree);
     const props = input.props as {
       onChange: (e: { target: { value: string } }) => void;
@@ -1181,7 +1195,14 @@ describe('SliderControl — editable number input', () => {
 
   it('input clamps above inputMax', () => {
     const onCommit = mock(() => {});
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit,
+    });
     const input = findInput(tree);
     const props = input.props as {
       onChange: (e: { target: { value: string } }) => void;
@@ -1194,7 +1215,14 @@ describe('SliderControl — editable number input', () => {
 
   it('input clamps below min', () => {
     const onCommit = mock(() => {});
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit,
+    });
     const input = findInput(tree);
     const props = input.props as {
       onChange: (e: { target: { value: string } }) => void;
@@ -1206,7 +1234,14 @@ describe('SliderControl — editable number input', () => {
   });
 
   it('slider thumb pins at max even when the typed value exceeds it', () => {
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit: () => {} });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit: () => {},
+    });
     const input = findInput(tree);
     (input.props as { onChange: (e: { target: { value: string } }) => void }).onChange({
       target: { value: '120' },
@@ -1237,7 +1272,14 @@ describe('SliderControl — editable number input', () => {
 
   it('Enter commits the clamped value', () => {
     const onCommit = mock(() => {});
-    const tree = renderSlider({ value: 22, min: 8, max: 64, editable: true, inputMax: 200, onCommit });
+    const tree = renderSlider({
+      value: 22,
+      min: 8,
+      max: 64,
+      editable: true,
+      inputMax: 200,
+      onCommit,
+    });
     const input = findInput(tree);
     const props = input.props as {
       onChange: (e: { target: { value: string } }) => void;
