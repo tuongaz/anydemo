@@ -64,8 +64,13 @@ import {
   projectCursorToPerimeter,
   snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
+import {
+  planGroupShortcutAction,
+  selectGroupSelection,
+  selectGroupableSet,
+} from '../lib/group-ops.ts';
 import { applyPackSummaries } from '../lib/icon-registry.ts';
-import { resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
+import { resolveGroupChord, resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
 import { ComponentNode } from '../nodes/component-node.tsx';
@@ -554,6 +559,21 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
    * substitute for a multi-node scale).
    */
   onMultiResize?: (updates: MultiResizeUpdate[]) => void;
+  /**
+   * Canvas grouping M4: create a group from a loose multi-selection. Fired by
+   * the overlay's ＋ icon, the context-menu "Group" item, and ⌘G. The host
+   * filters the ids via `selectGroupableSet`, computes the box, and commits ONE
+   * `history.batch('group-create', …)` with a single `createNode` carrying the
+   * final `childIds` (design §12.7). Absent → the create affordances are hidden.
+   */
+  onCreateGroup?: (nodeIds: string[]) => void;
+  /**
+   * Canvas grouping M4: dissolve a group. Fired by the overlay's ⊟ icon, the
+   * context-menu "Ungroup" item, and ⌘⇧G. The host commits ONE
+   * `history.batch('ungroup', () => adapter.deleteNode(groupId))`; children are
+   * untouched (absolute positions) and reselected. Absent → ungroup hidden.
+   */
+  onUngroup?: (groupId: string) => void;
   /** Persist a new node name (PATCH /nodes/:id { name }). */
   onNodeNameChange?: (nodeId: string, name: string) => void;
   /** Persist a new node description (PATCH /nodes/:id { description }). */
@@ -2136,6 +2156,8 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onHtmlNodeFitToContent,
     onComponentNodeFitToContent,
     onMultiResize,
+    onCreateGroup,
+    onUngroup,
     onNodeNameChange,
     onNodeDescriptionChange,
     onNodeCaptionChange,
@@ -2765,6 +2787,52 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return () => window.removeEventListener('keydown', onKey);
   }, [selectedNodeIds, hasClipboard, onCopySelection, onPasteSelection, flags.enableKeyboard]);
 
+  // Canvas grouping M4: ⌘G / ⌘⇧G keyboard chords. Mirrors the clipboard shim —
+  // a pure resolver (`resolveGroupChord`) gates the chord, then the pure oracle
+  // (`planGroupShortcutAction`) maps the live selection to create / ungroup / a
+  // reasoned no-op. Gated on `flags.enableKeyboard` (off in view/mini). The
+  // chord deliberately ignores ⌘D (Duplicate, design §5.4). A no-op result
+  // still preventDefault()s only when we acted, so ⌘G over a non-groupable
+  // selection falls through harmlessly.
+  useEffect(() => {
+    if (!flags.enableKeyboard) return;
+    const onKey = (e: KeyboardEvent) => {
+      const chord = resolveGroupChord(e, {
+        isEditableActive: isEditableTarget(document.activeElement),
+      });
+      if (!chord) return;
+      // Nothing to do if neither host callback is wired.
+      if (!onCreateGroup && !onUngroup) return;
+      const action = planGroupShortcutAction(nodes, selectedNodeIds);
+      if (typeof action !== 'string') return; // reasoned no-op (empty/single/mixed/…)
+      // The pressed chord must match the resolved action so ⌘G never ungroups
+      // and ⌘⇧G never creates — if they disagree (e.g. ⌘⇧G over a loose
+      // selection), do nothing rather than surprise the user.
+      if (action !== chord) return;
+      if (action === 'group') {
+        if (!onCreateGroup) return;
+        const ids = selectGroupableSet(nodes, selectedNodeIds);
+        if (ids.length < 2) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onCreateGroup(ids);
+        return;
+      }
+      // action === 'ungroup'
+      if (!onUngroup) return;
+      const groupIds = selectGroupSelection(nodes, selectedNodeIds);
+      if (groupIds.length === 0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      // Common case is a single group; ungroup each selected group (each its
+      // own atomic undo entry — multi-group ungroup is rare and not part of the
+      // single-undo contract for one group).
+      for (const gid of groupIds) onUngroup(gid);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [nodes, selectedNodeIds, onCreateGroup, onUngroup, flags.enableKeyboard]);
+
   const onPointerDown = useCallback((e: PointerEvent<HTMLDivElement>) => {
     // Pen tool: start a freehand stroke. Like the shape/icon draw flows, we
     // require the press to land on the pane (not a node) and capture client-
@@ -3095,7 +3163,13 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // every node. The menu items read `contextNodeIdRef` so callbacks dispatch
   // to the right node even if state hasn't re-rendered yet.
   const contextEnabled =
-    !!onReorderNode || !!onDeleteNode || !!onCopyNode || !!onPasteAt || !!onUnpinEndpoint;
+    !!onReorderNode ||
+    !!onDeleteNode ||
+    !!onCopyNode ||
+    !!onPasteAt ||
+    !!onUnpinEndpoint ||
+    !!onCreateGroup ||
+    !!onUngroup;
   const [contextMenuPos, setContextMenuPos] = useState<{ x: number; y: number } | null>(null);
   // Whether the most recent right-click landed on a node (true) vs. the empty
   // pane (false). Used to gate per-node items (Copy / reorder / Delete) which
@@ -3211,6 +3285,24 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onPasteAt(flowPos);
   }, [contextMenuPos, onPasteAt]);
 
+  // Canvas grouping M4: context-menu "Group" — create a group from the current
+  // loose multi-selection (the same `selectGroupableSet` filter the keyboard +
+  // host paths use). Reads the live selection, not the right-clicked node.
+  const handleGroupPick = useCallback(() => {
+    if (!onCreateGroup) return;
+    const ids = selectGroupableSet(nodes, selectedNodeIds);
+    if (ids.length < 2) return;
+    onCreateGroup(ids);
+  }, [onCreateGroup, nodes, selectedNodeIds]);
+
+  // Canvas grouping M4: context-menu "Ungroup" — dissolve the right-clicked
+  // group. Reads `contextNodeIdRef` (the right-clicked node) like Copy/Delete.
+  const handleUngroupPick = useCallback(() => {
+    const id = contextNodeIdRef.current;
+    if (!id || !onUngroup) return;
+    onUngroup(id);
+  }, [onUngroup]);
+
   // Show ⌘ on macOS, Ctrl elsewhere. Read once per render (cheap) — Radix
   // re-mounts the menu on every open so the value is captured at the right
   // moment. navigator may be undefined in non-browser contexts (SSR), but
@@ -3220,6 +3312,17 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
   const copyShortcut = isMac ? '⌘C' : 'Ctrl+C';
   const pasteShortcut = isMac ? '⌘V' : 'Ctrl+V';
+  const groupShortcut = isMac ? '⌘G' : 'Ctrl+G';
+  const ungroupShortcut = isMac ? '⌘⇧G' : 'Ctrl+Shift+G';
+  // Canvas grouping M4: does the live selection support "Group"? Drives the
+  // context-menu item's visibility so it appears precisely when ⌘G would create
+  // a group (≥2 loose, groupable). Independent of which right-click path opened
+  // the menu (single-node vs marquee), so a right-click on one of several
+  // selected loose nodes still offers Group.
+  const contextCanGroup = useMemo(
+    () => !!onCreateGroup && planGroupShortcutAction(nodes, selectedNodeIds) === 'group',
+    [onCreateGroup, nodes, selectedNodeIds],
+  );
 
   // Set lookups for the controlled selection. React Flow's internal selection
   // is mirrored back via onSelectionChange so the parent's arrays remain the
@@ -3238,6 +3341,27 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return only?.type === 'group' ? only.id : null;
   }, [nodes, selectedNodeIds]);
   const isGroupSelection = selectedGroupId !== null;
+
+  // Canvas grouping M4: the bound action for the overlay's ＋/⊟ icon + the
+  // context-menu items. Dispatches CREATE for a loose multi-selection or UNGROUP
+  // for a single selected group, threading the host callbacks. `null` when the
+  // current selection has no group action available OR the host didn't wire the
+  // matching callback — the overlay then hides the icon (no dead affordance).
+  // The keyboard path does NOT use this (it runs `planGroupShortcutAction`
+  // directly so ambiguous selections no-op with a reason, not silently).
+  const onGroupAction = useMemo<(() => void) | undefined>(() => {
+    if (selectedGroupId !== null) {
+      if (!onUngroup) return undefined;
+      const gid = selectedGroupId;
+      return () => onUngroup(gid);
+    }
+    if (selectedNodeIds.length >= 2) {
+      if (!onCreateGroup) return undefined;
+      const ids = [...selectedNodeIds];
+      return () => onCreateGroup(ids);
+    }
+    return undefined;
+  }, [selectedGroupId, selectedNodeIds, onCreateGroup, onUngroup]);
 
   // US-007 + grouping M2: payload for the selection/group bounding-box overlay.
   // Reduces the canvas's `nodes` to the minimum shape `<SelectionResizeOverlay>`
@@ -5466,6 +5590,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                     selectedNodes={selectionOverlayNodes}
                     isGroupSelection={isGroupSelection}
                     onMultiResize={onMultiResize}
+                    onGroupAction={onGroupAction}
                   />
                 ) : null}
                 {topLeftSlot ||
@@ -5712,6 +5837,32 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                       >
                         Unpin
                       </ContextMenuItem>
+                    ) : null}
+                    {/* Canvas grouping M4: Group (≥2 loose selected) / Ungroup
+                        (right-clicked a group). Mirrors the Copy/Delete item
+                        pattern with a shortcut hint. */}
+                    {contextCanGroup ? (
+                      <ContextMenuItem
+                        data-testid="node-context-menu-group"
+                        onSelect={handleGroupPick}
+                      >
+                        Group
+                        <ContextMenuShortcut>{groupShortcut}</ContextMenuShortcut>
+                      </ContextMenuItem>
+                    ) : null}
+                    {contextOnNode && contextNodeType === 'group' && onUngroup ? (
+                      <ContextMenuItem
+                        data-testid="node-context-menu-ungroup"
+                        onSelect={handleUngroupPick}
+                      >
+                        Ungroup
+                        <ContextMenuShortcut>{ungroupShortcut}</ContextMenuShortcut>
+                      </ContextMenuItem>
+                    ) : null}
+                    {(contextCanGroup ||
+                      (contextOnNode && contextNodeType === 'group' && onUngroup)) &&
+                    (onCopyNode || onPasteAt || onReorderNode || onDeleteNode) ? (
+                      <ContextMenuSeparator />
                     ) : null}
                     {contextOnNode && onCopyNode ? (
                       <ContextMenuItem

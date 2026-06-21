@@ -182,6 +182,7 @@ export {
   getZoomChord,
   IS_MAC,
   resolveClipboardChord,
+  resolveGroupChord,
   resolveHistoryChord,
   resolveToolShortcut,
 } from './lib/keyboard-shortcuts.ts';
@@ -192,6 +193,7 @@ export type {
   CommandContext,
   CommandDef,
   CommandId,
+  GroupChord,
   HistoryChord,
   ModifierEvent,
   NudgeDelta,
@@ -224,6 +226,19 @@ export type {
 
 export { scaleNodesWithinRect } from './lib/scale-nodes.ts';
 export type { Rect, ScalableNode, ScaleNodesOptions } from './lib/scale-nodes.ts';
+
+// Canvas grouping M4: pure group lifecycle ops (create/ungroup selection oracle
+// + group-box geometry). The host (apps/web) composes these inside a
+// history.batch to create/ungroup; the canvas uses them for the ⌘G shim.
+export {
+  computeGroupBox,
+  GROUP_BOX_PADDING,
+  GROUP_TITLE_BAND_PX,
+  planGroupShortcutAction,
+  selectGroupSelection,
+  selectGroupableSet,
+} from './lib/group-ops.ts';
+export type { GroupBoxMember, GroupOpNode, GroupShortcutAction } from './lib/group-ops.ts';
 
 // ----------------------------------------------------------------------------
 // 5. Adapter

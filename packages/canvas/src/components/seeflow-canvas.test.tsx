@@ -1981,6 +1981,130 @@ describe('SeeflowCanvas', () => {
     });
   });
 
+  describe('grouping M4: create/ungroup wiring (overlay icon, context menu, keyboard)', () => {
+    function makeSizedShape(
+      id: string,
+      pos: { x: number; y: number },
+      dims: { width: number; height: number },
+    ): FlowNode {
+      return {
+        id,
+        type: 'rectangle',
+        position: pos,
+        data: { name: id, width: dims.width, height: dims.height },
+      };
+    }
+    const twoLoose: FlowNode[] = [
+      makeSizedShape('a', { x: 0, y: 0 }, { width: 50, height: 50 }),
+      makeSizedShape('b', { x: 100, y: 100 }, { width: 50, height: 50 }),
+    ];
+    const groupNode: FlowNode = {
+      id: 'g1',
+      type: 'group',
+      position: { x: 0, y: 0 },
+      data: { name: 'G', width: 400, height: 300, childIds: ['a', 'b'] },
+    };
+    function overlayFor(props: LegacyOverrides) {
+      const tree = callSeeflowCanvas(props);
+      return findElement(tree, (el) => el.type === SelectionResizeOverlay);
+    }
+
+    it('binds onGroupAction to onCreateGroup(selectedIds) for a 2+ loose selection', () => {
+      const createCalls: string[][] = [];
+      const overlay = overlayFor({
+        nodes: twoLoose,
+        selectedNodeIds: ['a', 'b'],
+        onCreateGroup: (ids) => {
+          createCalls.push(ids);
+        },
+      });
+      if (!overlay) throw new Error('overlay not found');
+      const action = overlay.props.onGroupAction as (() => void) | undefined;
+      expect(typeof action).toBe('function');
+      action?.();
+      expect(createCalls).toEqual([['a', 'b']]);
+    });
+
+    it('binds onGroupAction to onUngroup(groupId) for a single group selection', () => {
+      const ungroupCalls: string[] = [];
+      const overlay = overlayFor({
+        nodes: [groupNode, ...twoLoose],
+        selectedNodeIds: ['g1'],
+        onUngroup: (id) => {
+          ungroupCalls.push(id);
+        },
+      });
+      if (!overlay) throw new Error('overlay not found');
+      expect(overlay.props.isGroupSelection).toBe(true);
+      const action = overlay.props.onGroupAction as (() => void) | undefined;
+      action?.();
+      expect(ungroupCalls).toEqual(['g1']);
+    });
+
+    it('onGroupAction is undefined when the matching host callback is absent', () => {
+      // Loose 2-selection but no onCreateGroup wired → no dead affordance.
+      const overlay = overlayFor({ nodes: twoLoose, selectedNodeIds: ['a', 'b'] });
+      if (!overlay) throw new Error('overlay not found');
+      expect(overlay.props.onGroupAction).toBeUndefined();
+    });
+
+    it('context menu shows the "Group" item for a 2+ loose selection when onCreateGroup is wired', () => {
+      const tree = callSeeflowCanvas({
+        nodes: twoLoose,
+        selectedNodeIds: ['a', 'b'],
+        onCreateGroup: () => {},
+      });
+      const item = findElement(
+        tree,
+        (el) =>
+          (el.props as { 'data-testid'?: string })['data-testid'] === 'node-context-menu-group',
+      );
+      expect(item).not.toBeNull();
+    });
+
+    it('context menu hides "Group" for a single selection (planGroupShortcutAction → none)', () => {
+      const tree = callSeeflowCanvas({
+        nodes: twoLoose,
+        selectedNodeIds: ['a'],
+        onCreateGroup: () => {},
+      });
+      const item = findElement(
+        tree,
+        (el) =>
+          (el.props as { 'data-testid'?: string })['data-testid'] === 'node-context-menu-group',
+      );
+      expect(item).toBeNull();
+    });
+
+    it('context menu shows "Ungroup" when a group node was right-clicked (contextNodeType=group)', () => {
+      // useStateOverrides slots: 4=contextMenuPos, 5=contextOnNode, 6=contextNodeType.
+      const tree = callSeeflowCanvas(
+        {
+          nodes: [groupNode, ...twoLoose],
+          selectedNodeIds: ['g1'],
+          onUngroup: () => {},
+        },
+        {
+          useStateOverrides: [
+            undefined, // 0 connecting
+            undefined, // 1 dropPopover
+            undefined, // 2 drawStart
+            undefined, // 3 drawCurrent
+            { x: 10, y: 10 }, // 4 contextMenuPos
+            true, // 5 contextOnNode
+            'group', // 6 contextNodeType
+          ],
+        },
+      );
+      const item = findElement(
+        tree,
+        (el) =>
+          (el.props as { 'data-testid'?: string })['data-testid'] === 'node-context-menu-ungroup',
+      );
+      expect(item).not.toBeNull();
+    });
+  });
+
   // US-022: Cmd/Ctrl + C / Cmd/Ctrl + V shortcut wiring exercised via the
   // exported `handleClipboardShortcut` helper (mirrors the US-017 pattern).
   // The actual listener in SeeflowCanvas is a thin useEffect that forwards into

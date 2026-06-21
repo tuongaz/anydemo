@@ -1,6 +1,6 @@
 # Milestone 4 — Create group / ungroup (ops + icon + context-menu + keyboard)
 
-**Status:** Not started · **Depends on:** M1, M2, M3 · **Risk:** Medium
+**Status:** Done (pending review) · **Depends on:** M1, M2, M3 · **Risk:** Medium
 
 ## Previous milestone — summary
 
@@ -145,9 +145,62 @@ keyboard chords + command registry; the `history.batch` orchestration in the hos
 - Children never shift on create/ungroup.
 - Lessons handoff filled in.
 
-## Lessons-learned handoff (FILL THIS IN BEFORE MARKING DONE)
-- Did `computeGroupBox` use measured dims reliably (vs `data.width/height`)? Note
-  the source used (`rfInstance.getInternalNode(id).measured` fallback chain).
-- Any optimistic-insert flicker before the SSE reload? How resolved?
-- Confirm z-order of a freshly-created group is behind members.
-- **➡ Copy into `05-...md`.**
+## Lessons-learned handoff (M4 — DONE)
+
+- **`computeGroupBox` dim resolution (§12.1):** the fn is PURE and takes resolved
+  dims in. The host (`onCreateGroup` in `demo-view.tsx`) resolves each member as
+  `override.data.width ?? base.data.width ?? rfInstanceRef.current.getInternalNode(id)?.measured?.width ?? GROUP_FALLBACK_DIM.width`
+  (same chain for height) — i.e. an in-flight resize override wins, then the
+  persisted data size, then the rendered/measured footprint (catches auto-sized
+  html/component members that have no `data.width`), then a sane fallback so the
+  box never collapses around an unmeasured node. `computeGroupBox` also treats a
+  member with no resolvable dims as a zero-size *point* (bounds its position)
+  rather than dropping it — a unit test pins this.
+
+- **Optimistic-insert flicker:** none observed by construction. The new group is
+  inserted via the SAME `usePendingOverrides` mechanism every other create uses;
+  the canvas renders override-only nodes through the `fromOverrides` branch of
+  `sourceNodes` (id not yet in server `nodes`), and `pruneAgainst` drops the
+  override when the SSE echo arrives with the same client-allocated id. Because
+  the create payload carries the FINAL `childIds` + box geometry in ONE
+  `createNode` (§12.7 — no second PATCH), there is no intermediate "group with no
+  members / wrong size" frame to flicker through.
+
+- **Z-order confirmed:** a freshly-created group renders BEHIND its members with
+  ZERO extra work in M4. `buildNode` (seeflow-canvas.tsx) assigns
+  `node.zIndex = GROUP_NODE_Z_INDEX` (= -1) for `type:'group'` on BOTH the
+  server-built and the override-built paths, and `elevateNodesOnSelect={false}`
+  (design §12.4) keeps it stable even while selected. The create op writes no
+  zIndex itself — it relies on M1's renderer contract. Verified by the M1 z-order
+  test; nothing in M4 disturbs it.
+
+- **Surprises / deviations (see report for full reasoning):**
+  1. **Most plumbing already existed.** `buildNewGroupData` (with `NEW_GROUP_NAME`),
+     `NodePatch.childIds`, `NodeCreateInput.id?`, the `GROUP_NODE_Z_INDEX` wiring,
+     and the M2 `selectedGroupId`/`isGroupSelection`/`selectionOverlayNodes` were
+     all already in place. M4's net-new code is `group-ops.ts`, the overlay icon
+     button, `resolveGroupChord`, the two host callbacks, and the menu/keydown
+     shims.
+  2. **`onGroupAction` seam (not raw ids to the overlay).** The overlay stays
+     id-agnostic: the canvas binds a single `onGroupAction` (create vs ungroup
+     chosen from `selectedGroupId`/`selectedNodeIds`) and the button only toggles
+     its ＋/⊟ glyph + `aria-label` + `data-action` by `isGroupSelection`. Cleaner
+     than passing the selection into the overlay and re-deriving the action there.
+  3. **`GroupOpNode.data` is typed `unknown`, not `{ childIds? }`.** TypeScript's
+     "weak type" detection rejects a concrete `FlowNode`'s `GeometricNodeData`
+     against an all-optional `{ childIds? }` target ("no properties in common"),
+     which would force an `as unknown as` cast at every call site. Typing `data`
+     as `unknown` + a defensive `readChildIds()` lets a real `FlowNode[]` pass
+     with no cast. **Carry this to M5/M6** if they add more `group-ops` fns.
+  4. **The inline-vs-subcomponent test gotcha (icon button).** The overlay's
+     dispatcher-shim test walks the JSX element tree WITHOUT executing child
+     component functions, so the ＋/⊟ button had to be **inlined** into the
+     overlay's returned JSX (not extracted into a `<SelectionGroupActionButton>`
+     sub-component) for its `data-testid` to be discoverable by `findAll`. Same
+     rule for any future overlay affordance that needs a render-level test.
+  5. **Multi-group ungroup** (a selection of 2+ groups, via ⌘⇧G) ungroups each
+     group as its OWN `history.batch` (one undo entry each). The "exactly one
+     atomic undo" contract is for the single-group case (the UAT / primary path);
+     multi-group is rare and intentionally N-undos.
+
+- **➡ Copied actionable subset into `05-group-move-and-resize.md`.**

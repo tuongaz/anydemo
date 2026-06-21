@@ -49,7 +49,9 @@ import {
   SeeflowCanvas,
   type SeeflowCanvasHandle,
   applyNudge,
+  buildNewGroupData,
   buildNewShapeData,
+  computeGroupBox,
   createRestAdapter,
   downscaleImageFile,
   getLastUsedStyle,
@@ -60,6 +62,7 @@ import {
   rememberNodeStyle,
   resolveClipboardChord,
   resolveToolShortcut,
+  selectGroupableSet,
   wrapAdapterWithHistory,
 } from '@seeflow/canvas';
 import type { ReactFlowInstance } from '@xyflow/react';
@@ -78,6 +81,12 @@ const isEditableElement = (el: Element | null): boolean => {
 
 /** True when the currently-focused element is an input/textarea/contentEditable. */
 const isEditableActive = (): boolean => isEditableElement(document.activeElement);
+
+// Canvas grouping M4: last-ditch member dimension when neither an optimistic
+// override, persisted `data.width/height`, nor a measured footprint is available
+// (e.g. a freshly-created member whose size hasn't settled). Keeps the group box
+// from collapsing around an unmeasured node (design §12.1).
+const GROUP_FALLBACK_DIM = { width: 160, height: 80 } as const;
 
 /**
  * Apply a z-order reorder op to a list of node ids. Mirrors the server's
@@ -723,6 +732,81 @@ export function DemoView({
     [flowId, adapter, history, demoNodes, setNodeOverride, dropNodeOverride],
   );
 
+  // Canvas grouping M4: create a group from a loose multi-selection. Filters via
+  // `selectGroupableSet` (existing, loose, not already grouped), computes the box
+  // from the LIVE displayed member geometry (override-merged position + measured
+  // ?? data ?? fallback dims, design §12.1), pre-generates the group id (so the
+  // single `createNode` carries the final `childIds`, design §12.7), and commits
+  // ONE `history.batch('group-create', …)`. No child PATCHes — member positions
+  // stay absolute. The group's z-index is set by the canvas's buildNode for
+  // type:'group' (GROUP_NODE_Z_INDEX), so nothing extra is needed here to render
+  // it behind members. The new group becomes the selection.
+  const onCreateGroup = useCallback(
+    (nodeIds: string[]) => {
+      if (!flowId || !adapter) return;
+      const live = demoNodes ?? [];
+      const ids = selectGroupableSet(live, nodeIds);
+      if (ids.length < 2) return; // reasoned no-op (mixed/already-grouped/<2)
+      const overrides = nodePending.overrides;
+      const rf = rfInstanceRef.current;
+      // Resolve each member's LIVE position + size for the bbox.
+      const members = ids
+        .map((id) => {
+          const base = live.find((n) => n.id === id);
+          if (!base) return null;
+          const ov = overrides[id];
+          const position = ov?.position ?? base.position;
+          const bData = base.data as { width?: number; height?: number };
+          const oData = (ov?.data ?? {}) as { width?: number; height?: number };
+          const measured = rf?.getInternalNode(id)?.measured;
+          const width = oData.width ?? bData.width ?? measured?.width ?? GROUP_FALLBACK_DIM.width;
+          const height =
+            oData.height ?? bData.height ?? measured?.height ?? GROUP_FALLBACK_DIM.height;
+          return { id, position, width, height };
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null);
+      if (members.length < 2) return;
+      const box = computeGroupBox(members);
+      if (!box) return;
+
+      const groupId = `node-${shortId()}`;
+      const data = buildNewGroupData(ids, { width: box.width, height: box.height });
+      const payload = {
+        id: groupId,
+        type: 'group' as const,
+        position: box.position,
+        data,
+      };
+      // Optimistic insert via the existing usePendingOverrides mechanism so the
+      // group renders before the SSE echo; `pruneAgainst` drops the override once
+      // server state matches (same id round-trips).
+      const optimistic = {
+        id: groupId,
+        type: 'group',
+        position: box.position,
+        data,
+      } as unknown as FlowNode;
+      setNodeOverride(groupId, optimistic as Partial<FlowNode>);
+      // Select the new group so the overlay flips to ⊟ + the sidebar targets it.
+      setSelectedIds([groupId]);
+      setSelectedConnectorIds([]);
+      setEditError(null);
+      // ONE batch → one undo entry. A single createNode carrying final childIds
+      // (no second PATCH, design §12.7). Undo deletes the group; children, never
+      // touched, stay exactly put.
+      history
+        .batch('group-create', async () => {
+          await adapter.createNode(payload);
+        })
+        .catch((err) => {
+          dropNodeOverride(groupId);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('createNode (group) failed', err);
+        });
+    },
+    [flowId, adapter, history, demoNodes, nodePending.overrides, setNodeOverride, dropNodeOverride],
+  );
+
   const { setOverride: setConnectorOverride, dropOverride: dropConnectorOverride } =
     connectorPending;
 
@@ -832,6 +916,38 @@ export function DemoView({
   } = nodeDeletions;
   const { markMany: markConnectorsDeleted, unmarkMany: unmarkConnectorsDeleted } =
     connectorDeletions;
+
+  // Canvas grouping M4: ungroup — delete the group container only. Children are
+  // untouched (absolute positions, no reparent) and become the new selection.
+  // ONE `history.batch('ungroup', …)` → one undo entry; undo recreates the group
+  // with its `childIds` intact (the wrapped adapter snapshots the deleted node).
+  // Placed after the deletions destructure so `markNodeDeleted`/`unmarkNodeDeleted`
+  // are in scope for the dep array (TDZ-safe).
+  const onUngroup = useCallback(
+    (groupId: string) => {
+      if (!flowId || !adapter) return;
+      const live = demoNodes ?? [];
+      const group = live.find((n) => n.id === groupId);
+      if (!group || group.type !== 'group') return;
+      const memberIds = [...group.data.childIds];
+      // Optimistically hide the group while the DELETE is in flight.
+      markNodeDeleted(groupId);
+      // Reselect the (still-present) members so the user keeps a handle on them.
+      setSelectedIds(memberIds);
+      setSelectedConnectorIds([]);
+      setEditError(null);
+      history
+        .batch('ungroup', async () => {
+          await adapter.deleteNode(groupId);
+        })
+        .catch((err) => {
+          unmarkNodeDeleted(groupId);
+          setEditError(err instanceof Error ? err.message : String(err));
+          console.error('deleteNode (ungroup) failed', err);
+        });
+    },
+    [flowId, adapter, history, demoNodes, markNodeDeleted, unmarkNodeDeleted],
+  );
 
   const onDeleteNode = useCallback(
     (nodeId: string) => {
@@ -2820,6 +2936,8 @@ export function DemoView({
           onHtmlNodeFitToContent={onHtmlNodeFitToContent}
           onComponentNodeFitToContent={onHtmlNodeFitToContent}
           onMultiResize={onMultiResize}
+          onCreateGroup={flowId ? onCreateGroup : undefined}
+          onUngroup={flowId ? onUngroup : undefined}
           onNodeNameChange={onNodeNameChange}
           onNodeDescriptionChange={onNodeDescriptionChange}
           onNodeCaptionChange={onNodeCaptionChange}

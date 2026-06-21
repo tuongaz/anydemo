@@ -671,14 +671,60 @@ describe('SelectionResizeOverlay render (M2 chrome)', () => {
     }
   });
 
-  it('renders the empty top-right icon slot placeholder (M4 fills it)', () => {
+  it('icon slot is present but inert when no onGroupAction is wired', () => {
     const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
     const slot = findAll(tree, (el) => testId(el) === 'selection-overlay-icon-slot');
     expect(slot).toHaveLength(1);
-    // No behavior yet — it must be inert (decorative placeholder).
+    // No action wired → inert slot, and no button mounted.
     const style = (slot[0]?.props.style ?? {}) as React.CSSProperties;
     expect(style.pointerEvents).toBe('none');
-    expect(slot[0]?.props['aria-hidden']).toBe('true');
+    const btn = findAll(tree, (el) => testId(el) === 'selection-overlay-group-action');
+    expect(btn).toHaveLength(0);
+  });
+
+  it('M4: renders the ＋ Create group button (data-action=create, aria-label) for a loose selection', () => {
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({ selectedNodes: twoLoose, onGroupAction: () => {} }),
+    );
+    const slot = findAll(tree, (el) => testId(el) === 'selection-overlay-icon-slot');
+    // Slot becomes interactive when an action is wired.
+    expect((slot[0]?.props.style as React.CSSProperties).pointerEvents).toBe('auto');
+    const btn = findAll(tree, (el) => testId(el) === 'selection-overlay-group-action')[0];
+    if (!btn) throw new Error('group-action button not found');
+    expect(btn.props['data-action']).toBe('create');
+    expect(btn.props['aria-label']).toBe('Create group');
+    expect(typeof btn.props.onClick).toBe('function');
+  });
+
+  it('M4: the icon/label TOGGLES ＋↔⊟ to Ungroup for a single group selection', () => {
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({
+        selectedNodes: [node('member', 0, 0, 80, 60), node('g1', 0, 0, 120, 100)],
+        isGroupSelection: true,
+        onGroupAction: () => {},
+      }),
+    );
+    const btn = findAll(tree, (el) => testId(el) === 'selection-overlay-group-action')[0];
+    if (!btn) throw new Error('group-action button not found');
+    expect(btn.props['data-action']).toBe('ungroup');
+    expect(btn.props['aria-label']).toBe('Ungroup');
+  });
+
+  it('M4: clicking the button invokes onGroupAction once', () => {
+    let calls = 0;
+    const tree = renderWithHooks(() =>
+      SelectionResizeOverlay({
+        selectedNodes: twoLoose,
+        onGroupAction: () => {
+          calls += 1;
+        },
+      }),
+    );
+    const btn = findAll(tree, (el) => testId(el) === 'selection-overlay-group-action')[0];
+    const onClick = btn?.props.onClick as ((e: unknown) => void) | undefined;
+    if (!onClick) throw new Error('onClick missing');
+    onClick({ stopPropagation: () => {} });
+    expect(calls).toBe(1);
   });
 
   it('renders chrome for a SINGLE group selection (members + box, ≥1 node) via isGroupSelection', () => {

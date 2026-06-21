@@ -1,4 +1,5 @@
 import { ViewportPortal, useReactFlow } from '@xyflow/react';
+import { Group as GroupIcon, Ungroup as UngroupIcon } from 'lucide-react';
 import {
   type CSSProperties,
   type PointerEvent as ReactPointerEvent,
@@ -6,6 +7,8 @@ import {
   useState,
 } from 'react';
 import { type Rect, type ScalableNode, scaleNodesWithinRect } from '../lib/scale-nodes.ts';
+import { Button } from '../ui/button.tsx';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip.tsx';
 
 /**
  * US-007 + canvas grouping M2: multi-select / group bounding-box overlay.
@@ -334,9 +337,29 @@ export interface SelectionResizeOverlayProps {
    * still renders for visual feedback but the gesture dispatches nothing.
    */
   onMultiResize?: (updates: MultiResizeUpdate[]) => void;
+  /**
+   * M4: fired when the user clicks the top-right ＋/⊟ icon. The host (which knows
+   * the real selection) binds this to `onCreateGroup(selectedNodeIds)` for a
+   * loose multi-selection or `onUngroup(groupId)` for a single group — the
+   * overlay stays agnostic about ids and only toggles the icon/label by
+   * `isGroupSelection`. When absent the icon is not rendered (no affordance for
+   * read-only callers).
+   */
+  onGroupAction?: () => void;
   /** Padding around the union rect in flow units. Defaults to {@link SELECTION_OVERLAY_PADDING} (12). */
   paddingPx?: number;
 }
+
+/**
+ * Display shortcut for the create / ungroup action, shown in the icon's tooltip.
+ * Mirrors the seeflow-canvas context-menu's inline ⌘/Ctrl detection (the
+ * keyboard-shortcuts `formatShortcut` is overkill for two fixed chords here).
+ */
+const GROUP_IS_MAC =
+  typeof navigator !== 'undefined' &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform || navigator.userAgent || '');
+export const CREATE_GROUP_SHORTCUT = GROUP_IS_MAC ? '⌘G' : 'Ctrl+G';
+export const UNGROUP_SHORTCUT = GROUP_IS_MAC ? '⌘⇧G' : 'Ctrl+Shift+G';
 
 interface DragState {
   anchor: AnchorPos;
@@ -393,6 +416,7 @@ export function SelectionResizeOverlay({
   selectedNodes,
   isGroupSelection = false,
   onMultiResize,
+  onGroupAction,
   paddingPx = SELECTION_OVERLAY_PADDING,
 }: SelectionResizeOverlayProps) {
   const reactFlow = useReactFlow();
@@ -594,13 +618,13 @@ export function SelectionResizeOverlay({
             />
           );
         })}
-        {/* Top-right icon SLOT (req #3): empty 32×32 placeholder anchored just
-            outside the rect's NE corner. M4 drops the ＋ create / ⊟ ungroup
-            button in here; no behavior yet. Zoom-compensated so it keeps a
-            constant on-screen size. */}
+        {/* Top-right icon (req #3) anchored just outside the rect's NE corner.
+            32×32 zoom-compensated ghost button: ＋ "Create group" for a loose
+            multi-selection, ⊟ "Ungroup" for a single selected group. The slot
+            stays present (constant testid) for layout/test stability; the button
+            mounts only when the host wired `onGroupAction`. */}
         <div
           data-testid="selection-overlay-icon-slot"
-          aria-hidden="true"
           style={{
             position: 'absolute',
             left: '100%',
@@ -608,9 +632,59 @@ export function SelectionResizeOverlay({
             width: invZoom(32),
             height: invZoom(32),
             transform: `translate(${invZoom(4)}, calc(-100% - ${invZoom(4)}))`,
-            pointerEvents: 'none',
+            // Only interactive when an action is wired; the rect itself stays
+            // non-interactive so it never steals node clicks (design §12.8).
+            pointerEvents: onGroupAction ? 'auto' : 'none',
           }}
-        />
+        >
+          {/* ＋ create / ⊟ ungroup button — INLINED (not a sub-component) so the
+              `data-testid` lands directly in the overlay's element tree (the
+              dispatcher-shim test walks JSX without executing child components).
+              A 32×32 ghost Button + Tooltip mirroring `inspector-toggle.tsx`,
+              filling the zoom-compensated slot (h-/w-full) so it reads a
+              constant on-screen size. The aria-label toggles ＋↔⊟ with
+              `isGroupSelection`; the glyph is `aria-hidden` (design §12.11);
+              `data-action` reflects the mode for browser tests. */}
+          {onGroupAction ? (
+            <TooltipProvider delayDuration={300}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    data-testid="selection-overlay-group-action"
+                    data-action={isGroupSelection ? 'ungroup' : 'create'}
+                    aria-label={isGroupSelection ? 'Ungroup' : 'Create group'}
+                    onClick={(e) => {
+                      // Don't let the click bubble into the pane (which would
+                      // clear the selection before the host reads it).
+                      e.stopPropagation();
+                      onGroupAction();
+                    }}
+                    onPointerDown={(e) => {
+                      // Keep the press off the pane/handles so it can't start a
+                      // marquee or a resize gesture.
+                      e.stopPropagation();
+                    }}
+                    className="sf:h-full sf:w-full sf:border sf:border-border sf:bg-background sf:shadow-sm"
+                  >
+                    {isGroupSelection ? (
+                      <UngroupIcon className="sf:h-4 sf:w-4" aria-hidden="true" />
+                    ) : (
+                      <GroupIcon className="sf:h-4 sf:w-4" aria-hidden="true" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {isGroupSelection
+                    ? `Ungroup (${UNGROUP_SHORTCUT})`
+                    : `Create group (${CREATE_GROUP_SHORTCUT})`}
+                </TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
+          ) : null}
+        </div>
       </div>
     </ViewportPortal>
   );

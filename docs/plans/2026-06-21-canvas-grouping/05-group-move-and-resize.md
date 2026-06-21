@@ -11,7 +11,32 @@ with absolute child positions; ungroup leaves children put.
 
 ## Lessons carried forward
 
-- (Fill from M4 handoff.)
+- **From M4 handoff (actionable subset):**
+  - **Reuse, don't rebuild.** M4 found nearly all the data-model + host plumbing
+    already present (`buildNewGroupData`, `NodePatch.childIds`, `createNode`/
+    `deleteNode`, `GROUP_NODE_Z_INDEX` in `buildNode`, the M2 overlay member set
+    `selectionOverlayNodes` resolved to members + group box). For M5: the group's
+    member set + resolved dims for resize already flow into the overlay via
+    `selectionOverlayNodes` (design §12.5) — start from that, and reuse the M3
+    host commit helper (`onMultiResize`) rather than inventing a new one (M5 step
+    5 explicitly wants this shared).
+  - **Pure ops layer (`group-ops.ts`) exists** with `computeGroupBox` (resolved
+    dims in, pure out), `selectGroupableSet`, `selectGroupSelection`,
+    `planGroupShortcutAction`. Add M5's group-move fan-out + resize helpers here
+    (pure) and unit-test them; the host stays a thin dispatcher.
+  - **`GroupOpNode.data` is typed `unknown`** (NOT `{ childIds? }`) to dodge TS
+    "weak type" rejection of a concrete `FlowNode`. If M5 adds more `group-ops`
+    fns that read node fields, keep `data: unknown` + defensive accessors so a
+    real `FlowNode[]` passes without an `as unknown as` cast.
+  - **xyflow-store test trap (L0.4):** the dispatcher-shim CANNOT drive a real
+    pointer/keydown gesture (handlers call `useReactFlow`). Cover M5's move/resize
+    math with PURE unit tests (extend the no-compounding tripwire to the group
+    path, design §6.4) and assert WIRING via the static render; leave the live
+    gesture to the orchestrator browser test.
+  - **Member dim resolution for the box** is `override.data ?? data ?? measured ??
+    fallback` (the `getInternalNode(id)?.measured` chain). Reuse the exact same
+    chain for the M5 resize baseline so the scaled footprint matches what the box
+    enclosed at create.
 - **L0.1 (CRITICAL, again)** Resize children using a FROZEN baseline (group box
   + child geometry at pointer-down) and END-ONLY commit. Same trap as M3 — do
   NOT read live child sizes per tick.

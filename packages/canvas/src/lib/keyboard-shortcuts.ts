@@ -85,6 +85,8 @@ export type CommandId =
   | 'edit.duplicate'
   | 'edit.delete'
   | 'edit.selectAll'
+  | 'edit.group'
+  | 'edit.ungroup'
   | 'view.fit'
   | 'view.zoomIn'
   | 'view.zoomOut'
@@ -292,6 +294,26 @@ export const COMMANDS: readonly CommandDef[] = [
     label: 'Select all',
     category: 'Edit',
     shortcut: formatShortcut({ meta: true, key: 'A' }),
+  },
+  // Canvas grouping M4: ⌘G groups a 2+ loose selection; ⌘⇧G ungroups the
+  // selected group(s). The keydown shim runs the pure `planGroupShortcutAction`
+  // oracle to no-op gracefully on ambiguous selections (single/mixed). Cmd+D is
+  // Duplicate — deliberately NOT reused (design §5.4).
+  {
+    id: 'edit.group',
+    label: 'Group',
+    description: 'Group the selected nodes into a container',
+    category: 'Edit',
+    shortcut: formatShortcut({ meta: true, key: 'G' }),
+    enabled: (ctx) => ctx.hasSelection,
+  },
+  {
+    id: 'edit.ungroup',
+    label: 'Ungroup',
+    description: 'Dissolve the selected group; its members stay put',
+    category: 'Edit',
+    shortcut: formatShortcut({ meta: true, shift: true, key: 'G' }),
+    enabled: (ctx) => ctx.hasSelection,
   },
   {
     id: 'view.fit',
@@ -515,6 +537,37 @@ export const resolveClipboardChord = ({
   // 'v'
   if (!hasClipboard) return { type: 'noop' };
   return { type: 'paste' };
+};
+
+// Canvas grouping M4: ⌘G / ⌘⇧G chord resolver. Pure (event → action) so the
+// keydown shim in seeflow-canvas.tsx stays a thin dispatcher and the chord rules
+// are unit-tested in isolation.
+//
+//   - Cmd/Ctrl+G        → 'group'    (the shim then runs planGroupShortcutAction
+//                                      against the selection; a no-op result is
+//                                      swallowed there)
+//   - Cmd/Ctrl+Shift+G  → 'ungroup'
+//
+// Modifier gating mirrors `resolveClipboardChord` / `resolveHistoryChord`:
+// requires Cmd OR Ctrl, rejects Alt (so it can't shadow a browser/OS Cmd+Alt+G),
+// and defers to the browser when an editable surface is active so the chord never
+// hijacks typing inside InlineEdit / inputs / textareas / contentEditable.
+//
+// NOTE: 'group' vs 'ungroup' here is purely which CHORD was pressed; whether the
+// current selection actually supports that action is decided downstream by the
+// pure oracle. We keep this resolver selection-agnostic so it stays trivially
+// testable.
+export type GroupChord = 'group' | 'ungroup' | null;
+
+export const resolveGroupChord = (
+  e: ModifierEvent,
+  opts: { isEditableActive: boolean },
+): GroupChord => {
+  if (opts.isEditableActive) return null;
+  if (!(e.metaKey || e.ctrlKey)) return null;
+  if (e.altKey) return null;
+  if (e.key.toLowerCase() !== 'g') return null;
+  return e.shiftKey ? 'ungroup' : 'group';
 };
 
 export type HistoryChord = 'undo' | 'redo' | null;

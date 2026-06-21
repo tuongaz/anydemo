@@ -9,6 +9,7 @@ import {
   getNudgeDelta,
   getZoomChord,
   resolveClipboardChord,
+  resolveGroupChord,
   resolveHistoryChord,
   resolveToolShortcut,
 } from './keyboard-shortcuts';
@@ -428,6 +429,8 @@ describe('COMMANDS registry (US-002)', () => {
     'edit.duplicate',
     'edit.delete',
     'edit.selectAll',
+    'edit.group',
+    'edit.ungroup',
     'view.fit',
     'view.zoomIn',
     'view.zoomOut',
@@ -586,6 +589,63 @@ describe('resolveHistoryChord', () => {
   it('isEditableActive: true with Cmd+Z → null (defer to browser)', () => {
     expect(
       resolveHistoryChord(ev({ key: 'z', metaKey: true }), { isEditableActive: true }),
+    ).toBeNull();
+  });
+});
+
+describe('resolveGroupChord (canvas grouping M4)', () => {
+  // ⌘G → 'group', ⌘⇧G → 'ungroup'. Same gating as the other chord resolvers:
+  // Cmd/Ctrl required, Alt rejected, editable-surface aware. The chord is
+  // selection-agnostic — whether the action is valid is decided downstream by
+  // planGroupShortcutAction.
+  it('Cmd+G (mac) → group', () => {
+    expect(resolveGroupChord(ev({ key: 'g', metaKey: true }), { isEditableActive: false })).toBe(
+      'group',
+    );
+  });
+
+  it('Ctrl+G (non-mac) → group', () => {
+    expect(resolveGroupChord(ev({ key: 'g', ctrlKey: true }), { isEditableActive: false })).toBe(
+      'group',
+    );
+  });
+
+  it('Cmd+Shift+G → ungroup', () => {
+    expect(
+      resolveGroupChord(ev({ key: 'g', metaKey: true, shiftKey: true }), {
+        isEditableActive: false,
+      }),
+    ).toBe('ungroup');
+  });
+
+  it('uppercase G (Shift normalizes key casing) → still resolves', () => {
+    // Some layouts report 'G' for Shift+g; toLowerCase keeps the match alive.
+    expect(
+      resolveGroupChord(ev({ key: 'G', metaKey: true, shiftKey: true }), {
+        isEditableActive: false,
+      }),
+    ).toBe('ungroup');
+  });
+
+  it('Cmd+Alt+G → null (Alt rejected)', () => {
+    expect(
+      resolveGroupChord(ev({ key: 'g', metaKey: true, altKey: true }), { isEditableActive: false }),
+    ).toBeNull();
+  });
+
+  it('bare G → null (no modifier; reserved for a future tool key, never bare)', () => {
+    expect(resolveGroupChord(ev({ key: 'g' }), { isEditableActive: false })).toBeNull();
+  });
+
+  it('Cmd+D → null (Duplicate is a different chord; we never reuse it)', () => {
+    expect(
+      resolveGroupChord(ev({ key: 'd', metaKey: true }), { isEditableActive: false }),
+    ).toBeNull();
+  });
+
+  it('isEditableActive: true with Cmd+G → null (defer to browser/typing)', () => {
+    expect(
+      resolveGroupChord(ev({ key: 'g', metaKey: true }), { isEditableActive: true }),
     ).toBeNull();
   });
 });

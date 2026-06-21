@@ -606,6 +606,36 @@ render. (If a future product call wants auto-cleanup, it's a separate opt-in.)
   with the **pure** `computeFrozenResizeUpdates` tripwire (the exact function the
   handler calls) + a render-level assertion that the handles wire the four
   pointer callbacks; leave the live gesture to the browser/e2e test.
+- **L4.1 (M4) Create carries final `childIds` in ONE `createNode` (§12.7).** The
+  host pre-generates the group id (`node-<uuid>`) so the single create payload
+  has `data.childIds` of the (already-existing) members + the computed box — no
+  second `updateNode`, no parent-before-child ordering. Both create and ungroup
+  are exactly ONE `history.batch` → one undo entry. Ungroup is
+  `deleteNode(groupId)` only; children (absolute positions) are untouched and
+  reselected. **Contract for M5/M9:** member geometry is the source of truth;
+  never write child positions on create/ungroup.
+- **L4.2 (M4) `group-ops.ts` `GroupOpNode.data` is typed `unknown`, not
+  `{ childIds? }`.** TS "weak type" detection rejects a concrete `FlowNode`'s
+  `GeometricNodeData` against an all-optional target ("no properties in common"),
+  forcing an `as unknown as GroupOpNode[]` cast at every call site. Typing `data:
+  unknown` + a defensive `readChildIds()` lets a real `FlowNode[]` pass with no
+  cast. Mirror this for any later `group-ops` fn that reads node fields. (Same
+  family as L1.3's `unknown` data in the schema `superRefine`.)
+- **L4.3 (M4) The overlay ＋/⊟ button must be INLINED in the overlay JSX, not a
+  sub-component.** The dispatcher-shim render test (`findAll`) walks the element
+  tree WITHOUT executing child component functions, so a `<SelectionGroupAction
+  Button>` wrapper would hide the button's `data-testid` from the test. Inlining
+  the `<Button>`/`<Tooltip>` keeps `selection-overlay-group-action` discoverable.
+  Applies to every future overlay affordance needing a render-level test.
+- **L4.4 (M4) The overlay stays id-agnostic via a single `onGroupAction` seam.**
+  The canvas binds `onGroupAction` to either `onCreateGroup(selectedNodeIds)` or
+  `onUngroup(groupId)` (chosen from `selectedGroupId`), returning `undefined`
+  when no action applies or the host callback is unwired (→ no dead button). The
+  button only flips its glyph/`aria-label`/`data-action` by `isGroupSelection`.
+  The keyboard path does NOT use this seam — it runs `planGroupShortcutAction`
+  directly so ambiguous selections no-op with a reason. **M6 (enter/exit) note:**
+  reuse `selectedGroupId` (already computed in the canvas) for the dbl-click
+  enter target.
 
 ---
 
