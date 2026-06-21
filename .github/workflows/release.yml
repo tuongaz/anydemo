@@ -305,16 +305,16 @@ jobs:
     steps:
       # The job-level `if` can't read secrets, so gate here: a missing token
       # warns + skips (the release still goes green) instead of hard-failing.
-      - name: Gate on CLOUD_DISPATCH_TOKEN
+      - name: Gate on VIEWER_DISPATCH_TOKEN
         id: gate
         env:
-          TOKEN: ${{ secrets.CLOUD_DISPATCH_TOKEN }}
+          TOKEN: ${{ secrets.VIEWER_DISPATCH_TOKEN }}
         run: |
           if [ -n "$TOKEN" ]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::CLOUD_DISPATCH_TOKEN not set — skipping the seeflow-cloud lockstep deploy. Add a PAT with contents+workflow write on tuongaz/seeflow-cloud as the CLOUD_DISPATCH_TOKEN secret to enable it."
+            echo "::warning::VIEWER_DISPATCH_TOKEN not set — skipping the seeflow-cloud lockstep deploy. Add a PAT with contents+workflow write on tuongaz/seeflow-cloud as the VIEWER_DISPATCH_TOKEN secret to enable it."
           fi
 
       - name: Checkout seeflow-cloud
@@ -323,7 +323,7 @@ jobs:
         with:
           repository: tuongaz/seeflow-cloud
           ref: main
-          token: ${{ secrets.CLOUD_DISPATCH_TOKEN }}
+          token: ${{ secrets.VIEWER_DISPATCH_TOKEN }}
 
       - name: Setup Bun
         if: steps.gate.outputs.ok == 'true'
