@@ -490,19 +490,24 @@ layer(base);
  * `:not(.react-flow__node-group)` carve-out above keeps the default node ring off
  * the group so the two don't double up. */
 
-/* xyflow renders this rect over the bounding box of the multi-selection when
- * `nodesSelectionActive: true` (set after a marquee). Its parent
- * `.react-flow__nodesselection` is z-index 3 — above the viewport's z-index 2
- * — so the rect sits on top of every selected node regardless of per-node
- * z-index. xyflow's defaults (`cursor: grab`, `pointer-events: all`) would
- * leak a pan-hand cursor through and steal clicks meant for nodes underneath;
- * we drop pointer-events here. Multi-node drag still works because each
- * selected node owns its own drag handler that moves the whole selection. */
+/* xyflow renders this rect over the bounding box of a multi-selection (a "temp
+ * group") when `nodesSelectionActive: true` (set after a marquee). Its parent
+ * `.react-flow__nodesselection` is z-index 3 — above the viewport's z-index 2 —
+ * so the rect sits on top of every selected node. xyflow wires this rect through
+ * `useDrag`, so dragging it ANYWHERE inside the box (including the empty space
+ * between members) moves the WHOLE selection — the Miro-style "drag the group to
+ * move it" affordance — and its drag stops propagation so a click on it never
+ * reaches the pane (the selection is NOT cleared). seeflow keeps it draggable
+ * but strips the fill/border (the visible marquee is `<SelectionResizeOverlay>`)
+ * and swaps xyflow's `cursor: grab` (reads as "pan") for `cursor: move` (reads as
+ * "drag the selection"). The wired `onSelectionDrag*` handlers commit the move +
+ * fan group members live, so this is the single switch that makes a temp group
+ * draggable from its empty interior. */
 .seeflow-canvas-root .react-flow__nodesselection-rect {
   background: transparent;
   border: none;
-  cursor: default;
-  pointer-events: none;
+  cursor: move;
+  pointer-events: all;
 }
 
 /* Group container (canvas grouping). Two things happen here:
