@@ -268,6 +268,31 @@ const ANCHOR_OFFSET: Record<AnchorPos, { left: string; top: string }> = {
 const HANDLE_BOX_PX = 10;
 
 /**
+ * Z-index for the dashed marquee rect. It sits BELOW a selected group
+ * (`GROUP_NODE_Z_INDEX = -1`, see `group-node.tsx`) so the group's four
+ * connection-handle circles — which are trapped inside the group's own `-1`
+ * stacking context and CANNOT be lifted (the group must always paint below its
+ * members, a load-bearing invariant) — render ON TOP of the marquee. That makes
+ * a selected group match a normal node, whose handles sit above its `.selected`
+ * dashed ring. The marquee still lives inside `.react-flow__viewport` (z-index 2)
+ * so it stays above the canvas background, and it only ever occupies the empty
+ * padding ring around the selection (it never overlaps a member), so painting it
+ * low never hides it behind a node. The INTERACTIVE chrome (corner resize handles
+ * + ＋/⊟ icon) uses {@link OVERLAY_CHROME_Z_INDEX} so it stays grabbable above
+ * everything — the two levels coexist because the overlay container is z-auto
+ * (establishes no stacking context of its own).
+ */
+export const MARQUEE_Z_INDEX = -2;
+
+/**
+ * Z-index for the interactive overlay chrome (4 corner resize handles + the
+ * ＋/⊟ group-action icon). Above every node (the max selected-node z is 1000) so
+ * the handles are always grabbable. Kept distinct from {@link MARQUEE_Z_INDEX}
+ * so the marquee can drop below a selected group while the handles stay on top.
+ */
+export const OVERLAY_CHROME_Z_INDEX = 1500;
+
+/**
  * Frozen snapshot of one node at pointer-down. M2 doesn't read it (the gesture
  * is inert) but M3's proportional resize needs the FULL node set frozen, not
  * just `startRect` — freezing only the rect lets the optimistic-override echo
@@ -570,26 +595,45 @@ export function SelectionResizeOverlay({
   // CONSTANT on-screen size, so their box dims / border / offset are
   // inverse-scaled by `--rf-zoom` (the same compensation resize-controls.tsx
   // uses) — set on `.seeflow-canvas-root` by seeflow-canvas's viewport effect.
-  const rectStyle: CSSProperties = {
+  // The overlay container is a pure positioning box with NO stacking context of
+  // its own (z-index left auto). That is load-bearing: it lets the dashed marquee
+  // (low z, below a selected group) and the interactive chrome (high z, above
+  // every node) sit at DIFFERENT levels of the VIEWPORT's stacking context. A
+  // z-index here would trap BOTH children at that single level — the resize
+  // handles could no longer rise above the group, OR the marquee could no longer
+  // drop below it. No border lives here anymore; it moved to the marquee child.
+  const containerStyle: CSSProperties = {
     position: 'absolute',
     left: paddedRect.x,
     top: paddedRect.y,
     width: paddedRect.width,
     height: paddedRect.height,
-    border: `${invZoom(1)} dashed hsl(var(--primary) / 0.6)`,
-    // The rect must NEVER steal node clicks — only the handles + (future) icon
-    // are interactive (design §12.8, mirrors `.react-flow__nodesselection-rect`
-    // neutralization). xyflow's selection-drag underneath still moves the group.
+    // Never steal node clicks — only the handles + icon are interactive
+    // (design §12.8). xyflow's selection-drag underneath still moves the group.
     pointerEvents: 'none',
-    // Above nodes (max node z is the selected 1000) + above a selected group's
-    // negative z; NOT a node so the group's -1 doesn't apply (L1.1).
-    zIndex: 1500,
+    boxSizing: 'border-box',
+  };
+
+  // The visible dashed marquee. Drawn as its OWN child (not on the container) so
+  // it can take MARQUEE_Z_INDEX (below a selected group's -1) while the corner
+  // handles take OVERLAY_CHROME_Z_INDEX (above everything). The net effect: a
+  // selected group's connection circles paint ON TOP of the marquee, matching a
+  // normal node's handles-over-ring layering (see MARQUEE_Z_INDEX).
+  const marqueeStyle: CSSProperties = {
+    position: 'absolute',
+    inset: 0,
+    border: `${invZoom(1)} dashed hsl(var(--primary) / 0.6)`,
+    pointerEvents: 'none',
+    zIndex: MARQUEE_Z_INDEX,
     boxSizing: 'border-box',
   };
 
   return (
     <ViewportPortal>
-      <div data-testid="selection-overlay" style={rectStyle}>
+      <div data-testid="selection-overlay" style={containerStyle}>
+        {/* Visible dashed marquee — its own low-z child so a selected group's
+            connection circles paint on top of it (matches a normal node). */}
+        <div data-testid="selection-overlay-marquee" style={marqueeStyle} />
         {CORNER_ANCHORS.map((anchor) => {
           const offset = ANCHOR_OFFSET[anchor];
           const handleStyle: CSSProperties = {
@@ -606,6 +650,10 @@ export function SelectionResizeOverlay({
             // Only the handles are interactive — the parent rect is neutralized.
             pointerEvents: 'auto',
             touchAction: 'none',
+            // Above every node (and the marquee) so the handle is always
+            // grabbable; the container is z-auto so this level applies in the
+            // viewport's stacking context (see OVERLAY_CHROME_Z_INDEX).
+            zIndex: OVERLAY_CHROME_Z_INDEX,
           };
           return (
             <div
@@ -643,6 +691,8 @@ export function SelectionResizeOverlay({
             // Only interactive when an action is wired; the rect itself stays
             // non-interactive so it never steals node clicks (design §12.8).
             pointerEvents: onGroupAction ? 'auto' : 'none',
+            // Above every node + the marquee, alongside the resize handles.
+            zIndex: OVERLAY_CHROME_Z_INDEX,
           }}
         >
           {/* ＋ create / ⊟ ungroup button — INLINED (not a sub-component) so the

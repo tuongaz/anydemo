@@ -3,7 +3,9 @@ import * as React from 'react';
 import {
   CORNER_ANCHORS,
   type FrozenNode,
+  MARQUEE_Z_INDEX,
   type MultiResizeUpdate,
+  OVERLAY_CHROME_Z_INDEX,
   type OverlayInputNode,
   SELECTION_OVERLAY_PADDING,
   SelectionResizeOverlay,
@@ -678,13 +680,30 @@ describe('SelectionResizeOverlay render (M2 chrome)', () => {
     const style = (rect.props.style ?? {}) as React.CSSProperties;
     expect(style.pointerEvents).toBe('none');
     expect(style.position).toBe('absolute');
-    // zIndex sits above nodes/edges (and above a selected group's negative z).
-    expect(Number(style.zIndex)).toBeGreaterThanOrEqual(1500);
+    // The container is a pure positioning box: NO z-index of its own (z-auto, so
+    // it establishes no stacking context) — that's what lets the marquee drop
+    // below a selected group while the handles stay above it.
+    expect(style.zIndex).toBeUndefined();
     // Padded rect: union (0,0)→(300,300) expanded by 12 on each side.
     expect(style.left).toBe(0 - SELECTION_OVERLAY_PADDING);
     expect(style.top).toBe(0 - SELECTION_OVERLAY_PADDING);
     expect(style.width).toBe(300 + SELECTION_OVERLAY_PADDING * 2);
     expect(style.height).toBe(300 + SELECTION_OVERLAY_PADDING * 2);
+  });
+
+  it('draws the dashed marquee as a low-z child so a selected group’s circles paint on top', () => {
+    const tree = renderWithHooks(() => SelectionResizeOverlay({ selectedNodes: twoLoose }));
+    const marquee = findAll(tree, (el) => testId(el) === 'selection-overlay-marquee')[0];
+    if (!marquee) throw new Error('selection-overlay-marquee not found');
+    const style = (marquee.props.style ?? {}) as React.CSSProperties;
+    // Purely visual — never steals clicks.
+    expect(style.pointerEvents).toBe('none');
+    // Below a selected group (GROUP_NODE_Z_INDEX = -1) so the group's connection
+    // handles (trapped in the group's -1 context) render on top of the marquee.
+    expect(Number(style.zIndex)).toBe(MARQUEE_Z_INDEX);
+    expect(MARQUEE_Z_INDEX).toBeLessThan(-1);
+    // The dashed border lives here now, not on the container.
+    expect(String(style.border)).toContain('dashed');
   });
 
   it('renders exactly 4 corner handles (nw/ne/se/sw), each interactive with a cursor + aria-label', () => {
@@ -707,6 +726,9 @@ describe('SelectionResizeOverlay render (M2 chrome)', () => {
       expect((style.cursor ?? '').length).toBeGreaterThan(0);
       // Zoom-compensated size: a calc() reading --rf-zoom (constant screen px).
       expect(String(style.width)).toContain('--rf-zoom');
+      // Above every node + the marquee so the handle is always grabbable.
+      expect(Number(style.zIndex)).toBe(OVERLAY_CHROME_Z_INDEX);
+      expect(OVERLAY_CHROME_Z_INDEX).toBeGreaterThanOrEqual(1500);
       expect(h.props['aria-label']).toBe('Resize selection');
     }
   });
