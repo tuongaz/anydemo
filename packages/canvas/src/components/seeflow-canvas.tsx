@@ -5066,6 +5066,31 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     // a new array — keeps xyflow from re-diffing every node for nothing.
     return touched ? next : rfNodes;
   }, [rfNodes, activeGroupId]);
+
+  // Live-track the selection/group marquee DURING a drag. `selectionOverlayNodes`
+  // reads positions from `nodes` + `nodeOverrides` (the committed snapshot), but
+  // both are FROZEN mid-drag — only `rfNodes` carries the live per-frame position
+  // (xyflow moves the dragged node there; `liveGroupDrag` fans group members into
+  // it). So without this swap the overlay box stays at the pre-drag spot and only
+  // jumps to the new position on mouse-release. Re-derive each overlay node's
+  // position from the live `rfNodes` (keyed by id) so the marquee hugs the group/
+  // selection in real time, matching Miro. `rfNodes` changes every drag frame →
+  // this memo recomputes → the overlay re-renders in lockstep. Sizes are NOT
+  // remapped (a move never changes them; a corner-resize is previewed locally in
+  // the overlay and doesn't touch rfNodes). Identity is preserved when nothing
+  // moved so non-drag renders stay churn-free.
+  const liveSelectionOverlayNodes = useMemo<OverlayInputNode[]>(() => {
+    if (selectionOverlayNodes.length === 0) return selectionOverlayNodes;
+    const liveById = new Map(rfNodes.map((n) => [n.id, n.position]));
+    let changed = false;
+    const mapped = selectionOverlayNodes.map((n) => {
+      const live = liveById.get(n.id);
+      if (!live || (live.x === n.position.x && live.y === n.position.y)) return n;
+      changed = true;
+      return { ...n, position: { x: live.x, y: live.y } };
+    });
+    return changed ? mapped : selectionOverlayNodes;
+  }, [selectionOverlayNodes, rfNodes]);
   // US-004: alignment-guides gesture hook. CRITICAL — this call sits AFTER the
   // last component-level `useState` (activeGroupId, slot 15) so the hook's own
   // internal `useState` lands in a slot beyond every index the hook-shim tests
@@ -5982,7 +6007,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
             machinery entirely. */}
                 {flags.showResizeHandles ? (
                   <SelectionResizeOverlay
-                    selectedNodes={selectionOverlayNodes}
+                    selectedNodes={liveSelectionOverlayNodes}
                     isGroupSelection={isGroupSelection}
                     // Temp/final marquee PARITY: a loose multi-selection chromes
                     // `members + SELECTION_OVERLAY_PADDING`. A group selection
