@@ -533,6 +533,14 @@ layer(base);
   background-color: transparent;
   border: none;
   border-radius: 0;
+  /* Neutralize xyflow's near-black selected/focus box-shadow ring (its
+     .selectable.selected rule, specificity 0,3,0) so a SELECTED chrome-less group
+     shows ONLY the dashed marquee from <SelectionResizeOverlay>. !important is
+     load-bearing: the 0,2,0 reset cannot out-specify xyflow's rule and CSS load
+     order across consumers is not guaranteed. Without it a selected group shows a
+     solid black border in the light theme. No braces in this comment: a unit test
+     extracts this rule body by its first closing brace. */
+  box-shadow: none !important;
 }
 
 /* US-007 selected-node handle transforms (edit mode only) */
