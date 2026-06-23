@@ -57,8 +57,14 @@ function readChildIds(node: GroupOpNode | undefined): readonly string[] {
   return [];
 }
 
-/** Padding (flow units) added on every side of the members' union rect. */
-export const GROUP_BOX_PADDING = 12;
+/**
+ * Padding (flow units) added on every side of the members' union rect when a
+ * group box is computed. Comfortable breathing room so members aren't cramped
+ * against the box edge / selection marquee (12 read as "too close"). The
+ * selection marquee + connection dots track the box edge, so this value only
+ * affects the gap between the members and the box — not the dot centering.
+ */
+export const GROUP_BOX_PADDING = 24;
 
 /**
  * Absolute bounding box for a group enclosing `children`: the union of every
