@@ -563,28 +563,28 @@ layer(base);
   transform: translate(50%, -50%) translate(calc(8px / var(--rf-zoom, 1)), 0);
 }
 
-/* A SELECTED group's connection dots must straddle the MARQUEE — the dashed
-   rect <SelectionResizeOverlay> draws at SELECTION_OVERLAY_PADDING flow units
-   outside the group box — so the dashed line bisects each circle, matching a
-   normal selected node (whose dot sits on its `.selected` ring). The dots are
-   anchored at the group-box edge, which is INSIDE the marquee, so each is
-   pushed OUTWARD. The push is in FLOW units (no `/ var(--rf-zoom)` division, so
-   it scales with the viewport and tracks the flow-unit marquee at every zoom),
-   and its magnitude is empirically calibrated against the rendered handle
-   geometry so the circle's CENTER lands on the marquee line — the
-   group-selected-light visual baseline is the source of truth (12 flow units of
-   padding render the dot centered at ≈6.5px of transform). */
+/* A SELECTED group's connection dots must straddle the overlay MARQUEE so the
+   dashed line bisects each circle, like a normal node's dot sits on its
+   `.selected` ring. The ORIGINAL bug was the normal-node OUTWARD push (above)
+   leaking onto groups (no `:not` carve-out), shoving the dots OUTSIDE the
+   marquee. With groups now carved out of that push, a handle's NATURAL centered
+   position already lands EXACTLY on the marquee (verified offset 0 on all four
+   sides via the group-selected-light baseline) — so the group rule is just the
+   centering, with NO extra offset. `!important` is load-bearing: xyflow sets the
+   handle's centering transform INLINE (it would otherwise win over this rule),
+   so `!important` lets ours apply — and is the seam if a future offset is ever
+   needed. Do NOT add an outward px push here; that reintroduces the bug. */
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-top {
-  transform: translate(-50%, -50%) translate(0, -6.5px);
+  transform: translate(-50%, -50%) !important;
 }
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-bottom {
-  transform: translate(-50%, 50%) translate(0, 6.5px);
+  transform: translate(-50%, 50%) !important;
 }
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-left {
-  transform: translate(-50%, -50%) translate(-6.5px, 0);
+  transform: translate(-50%, -50%) !important;
 }
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-right {
-  transform: translate(50%, -50%) translate(6.5px, 0);
+  transform: translate(50%, -50%) !important;
 }
 
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.left {
