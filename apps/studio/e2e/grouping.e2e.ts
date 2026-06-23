@@ -2,6 +2,7 @@ import {
   expect,
   projectFlowPath,
   registerFlow,
+  setStudioTheme,
   test,
   waitForCanvasSettled,
 } from './support/studio-fixture.ts';
@@ -76,7 +77,7 @@ function buildGroupedFlow(name: string) {
 }
 
 test.describe('canvas — grouping (M9)', () => {
-  test('renders a chrome-less group (marquee-only, no box/title) with its members (visual baseline)', async ({
+  test('renders a group (stylable border, no fill/title) with its members (visual baseline)', async ({
     page,
     studio,
   }) => {
@@ -95,15 +96,72 @@ test.describe('canvas — grouping (M9)', () => {
     // The group node + both members are present.
     await expect(page.locator('[data-testid="group-node"]')).toHaveCount(1);
     await expect(page.locator('[data-node-type="rectangle"]')).toHaveCount(2);
-    // The group is chrome-less: no header band is rendered (the marquee + corner
-    // handles only appear on selection, via the overlay — not in this static
-    // render). Members render as ordinary cards on top of the invisible group.
+    // The group has no header band (no fill/title — just a stylable border); the
+    // marquee + corner handles only appear on selection, via the overlay — not in
+    // this static render. Members render as ordinary cards on top of the group.
     await expect(page.locator('[data-testid="group-node-header"]')).toHaveCount(0);
 
-    // Visual baseline of the whole canvas (an UNSELECTED group is invisible —
-    // just its two members; the group box paints no fill/border/title).
+    // Visual baseline of the whole canvas: an UNSELECTED group shows its (default
+    // gray) border around the two members — no fill, no title.
     const root = page.locator('.seeflow-canvas-root');
     await expect(root).toHaveScreenshot('group-rendered.png', { maxDiffPixelRatio: 0.02 });
+  });
+
+  test('a SELECTED group shows ONLY the marquee — no xyflow box-shadow ring (light theme)', async ({
+    page,
+    studio,
+  }) => {
+    // Regression: a chrome-less group must show ONLY the dashed marquee (drawn by
+    // <SelectionResizeOverlay>) when selected. xyflow's bundled base CSS applies
+    // `box-shadow: 0 0 0 0.5px #1a192b` (near-black) to
+    // `.react-flow__node-group.selectable.selected` — a higher-specificity (0,3,0)
+    // rule than the seeflow reset — which rendered as a SOLID BLACK BORDER around a
+    // selected group in the LIGHT theme (the dark pane merely hid it in dark theme).
+    // The index.css reset now neutralizes it with `box-shadow: none !important`.
+    // Light theme is set explicitly because that's where the leak is visible.
+    await setStudioTheme(page, 'light');
+    const source = await registerFlow(
+      studio.studio,
+      'grouping-selected-no-ring',
+      buildGroupedFlow('Grouping Selected No Ring'),
+      { name: 'Grouping Selected No Ring' },
+    );
+    await page.goto(
+      `${studio.studio.baseURL}${projectFlowPath(source.projectSlug, source.flowSlug)}`,
+    );
+    await page.locator('[data-canvas-ready="true"]').waitFor({ state: 'attached' });
+    await waitForCanvasSettled(page);
+
+    // Select the group (its empty interior band — between the two members — is the
+    // group's own hit-area, so a center click selects the group as a unit).
+    await page.locator('[data-testid="group-node"]').click();
+    await page.locator('.react-flow__node-group.selected').waitFor({
+      state: 'attached',
+      timeout: 5_000,
+    });
+
+    // The selected group WRAPPER must compute no box-shadow ring — only the marquee
+    // (a separate overlay element) is the visible selection treatment.
+    const boxShadow = await page.evaluate(
+      `(() => {
+        const el = document.querySelector('.react-flow__node-group.selected');
+        if (!el) return 'MISSING';
+        return window.getComputedStyle(el).boxShadow;
+      })()`,
+    );
+    expect(boxShadow).toBe('none');
+
+    // Visual baseline (light theme) of the SELECTED group: the only chrome is the
+    // dashed marquee + 4 corner handles + the overlay ＋/⊟ action — NO solid black
+    // border from ANY source (box-shadow / border / outline). A pixel baseline
+    // catches the leak even if it returns via a mechanism the computed-style probe
+    // above doesn't cover. Wait for the overlay so the marquee has painted.
+    await page
+      .locator('[data-testid="selection-overlay-group-action"]')
+      .first()
+      .waitFor({ state: 'visible', timeout: 5_000 });
+    const root = page.locator('.seeflow-canvas-root');
+    await expect(root).toHaveScreenshot('group-selected-light.png', { maxDiffPixelRatio: 0.02 });
   });
 
   test('full journey: select → group → enter → ungroup', async ({ page, studio }) => {

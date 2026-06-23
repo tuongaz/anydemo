@@ -1,5 +1,6 @@
 import { describe, expect, it, mock } from 'bun:test';
 import * as React from 'react';
+import { GROUP_DEFAULT_BORDER_COLOR } from '../nodes/group-node.tsx';
 import type { Connector, FlowNode } from '../types.ts';
 import {
   type NodeStylePatch,
@@ -135,9 +136,8 @@ function rectangleFixture(id: string): FlowNode {
   } as FlowNode;
 }
 
-// Canvas grouping M7: a group carries the standard visual fields, so it must
-// flow through the shared default branch (Color/Corners/Shadow/Border/Text) with
-// zero StyleStrip changes — it is NOT excluded like icon/freehand.
+// Canvas grouping: a group's only stylable surface is its border, so a pure
+// group selection collapses to the dedicated border editor (color + width).
 function groupFixture(
   id: string,
   data: {
@@ -1148,90 +1148,83 @@ describe('StyleStrip — unified font size (nodes + connectors)', () => {
   });
 });
 
-// Canvas grouping M7: a selected group carries the standard visual fields, so it
-// flows through the shared default branch with ZERO StyleStrip changes — it must
-// expose Color/Corners/Shadow/Border/Text and apply via onStyleNode, and it must
-// NOT be excluded into the icon/freehand/image branches.
-describe('StyleStrip — group (M7)', () => {
-  function findDefaultBranchSlider(tree: unknown, sectionTestId: string): ReactElementLike {
-    const section = findElement(tree, testIdEquals(sectionTestId));
-    if (!section) throw new Error(`section ${sectionTestId} missing`);
-    const slider = findElement(section, (el) => {
-      const p = el.props as { testId?: string };
-      return typeof p.testId === 'string' && p.testId.endsWith('-slider');
-    });
-    if (!slider) throw new Error(`slider inside ${sectionTestId} missing`);
-    return slider;
-  }
-
-  it('flows into the shared default branch (Color/Corners/Shadow/Border/Text)', () => {
+// Canvas grouping: a SELECTED group is a chrome-less container whose only
+// stylable surface is its BORDER. A pure group selection collapses the strip to
+// a focused border editor (color + width) — NOT the full Color/Corners/Shadow/
+// Border/Text branch, and NOT the ink/image collapses.
+describe('StyleStrip — group border editor', () => {
+  it('collapses to the group border editor (color + width only)', () => {
     const tree = callStrip({ nodes: [groupFixture('grp-1')] });
-    expect(findElement(tree, testIdEquals('style-strip-color'))).not.toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).not.toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-shadow'))).not.toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-border'))).not.toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-text'))).not.toBeNull();
-    // NOT collapsed into the chromeless ink / image branches.
+    expect(findElement(tree, testIdEquals('style-strip-group-border-color'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-group-border-width'))).not.toBeNull();
+    // NOT the full default branch (no fill / corners / shadow / text on a group).
+    expect(findElement(tree, testIdEquals('style-strip-color'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-corner-radius'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-shadow'))).toBeNull();
+    expect(findElement(tree, testIdEquals('style-strip-text'))).toBeNull();
+    // NOT collapsed into the ink / image branches either.
     expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-image-border-color-button'))).toBeNull();
   });
 
-  it('seeds the Color trigger from the group background (data.backgroundColor)', () => {
-    const tree = callStrip({ nodes: [groupFixture('grp-1', { backgroundColor: 'slate' })] });
-    const grid = findElement(tree, testIdEquals('style-strip-color'));
-    expect((grid?.props as { activeToken?: string }).activeToken).toBe('slate');
+  it('offers a "no color" option in the border-color swatch (allowNone)', () => {
+    const tree = callStrip({ nodes: [groupFixture('grp-1')] });
+    const sw = findElement(tree, testIdEquals('style-strip-group-border-color'));
+    expect((sw?.props as { allowNone?: boolean }).allowNone).toBe(true);
   });
 
-  it('Color pick applies borderColor + backgroundColor to the group via onStyleNode', () => {
+  it("border-color 'none' pick applies { borderColor: 'none' } to the group", () => {
     const onStyleNode = mock(() => {});
     const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
-    const grid = findElement(tree, testIdEquals('style-strip-color'));
-    if (!grid) throw new Error('color grid missing');
-    (grid.props as { onSelect: (t: string) => void }).onSelect('red');
+    const sw = findElement(tree, testIdEquals('style-strip-group-border-color'));
+    if (!sw) throw new Error('group border-color swatch missing');
+    (sw.props as { onSelect: (t: string) => void }).onSelect('none');
+    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { borderColor: 'none' });
+  });
+
+  it('seeds the border-color trigger from data.borderColor', () => {
+    const tree = callStrip({ nodes: [groupFixture('grp-1', { borderColor: 'teal' })] });
+    const sw = findElement(tree, testIdEquals('style-strip-group-border-color'));
+    expect((sw?.props as { activeToken?: string }).activeToken).toBe('teal');
+  });
+
+  it('defaults the border-color trigger to gray when unset', () => {
+    const tree = callStrip({ nodes: [groupFixture('grp-1')] });
+    const sw = findElement(tree, testIdEquals('style-strip-group-border-color'));
+    expect((sw?.props as { activeToken?: string }).activeToken).toBe(GROUP_DEFAULT_BORDER_COLOR);
+  });
+
+  it('border-color pick applies { borderColor } to the group via onStyleNode', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
+    const sw = findElement(tree, testIdEquals('style-strip-group-border-color'));
+    if (!sw) throw new Error('group border-color swatch missing');
+    (sw.props as { onSelect: (t: string) => void }).onSelect('red');
     expect(onStyleNode).toHaveBeenCalledTimes(1);
-    expect(onStyleNode).toHaveBeenCalledWith('grp-1', {
-      borderColor: 'red',
-      backgroundColor: 'red',
+    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { borderColor: 'red' });
+  });
+
+  it('border-width slider commits { borderSize } to the group via onStyleNode', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
+    const section = findElement(tree, testIdEquals('style-strip-group-border-width'));
+    if (!section) throw new Error('group border-width control missing');
+    const slider = findElement(section, (el) => {
+      const p = el.props as { testId?: string };
+      return p.testId === 'style-tab-group-border-width-slider';
     });
+    if (!slider) throw new Error('group border-width slider missing');
+    (slider.props as { onCommit: (n: number) => void }).onCommit(4);
+    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { borderSize: 4 });
   });
 
-  it('Corners slider commits onStyleNode with { cornerRadius } for the group', () => {
-    const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
-    const slider = findDefaultBranchSlider(tree, 'style-strip-corner-radius');
-    (slider.props as { onCommit: (n: number) => void }).onCommit(16);
-    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { cornerRadius: 16 });
-  });
-
-  it('Shadow slider commits onStyleNode with { shadow } for the group', () => {
-    const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
-    const slider = findDefaultBranchSlider(tree, 'style-strip-shadow');
-    (slider.props as { onCommit: (n: number) => void }).onCommit(3);
-    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { shadow: 3 });
-  });
-
-  it('Border-size slider commits onStyleNode with { borderSize } for the group', () => {
-    const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
-    const slider = findDefaultBranchSlider(tree, 'style-strip-border-size');
-    (slider.props as { onCommit: (n: number) => void }).onCommit(2);
-    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { borderSize: 2 });
-  });
-
-  it('Font-size slider commits onStyleNode with { fontSize } for the group', () => {
-    const onStyleNode = mock(() => {});
-    const tree = callStrip({ nodes: [groupFixture('grp-1')], onStyleNode });
-    const slider = findDefaultBranchSlider(tree, 'style-strip-font-size');
-    (slider.props as { onCommit: (n: number) => void }).onCommit(28);
-    // Single-node selection routes through the per-node onStyleNode path.
-    expect(onStyleNode).toHaveBeenCalledWith('grp-1', { fontSize: 28 });
-  });
-
-  it('a group + a loose rectangle stay in the shared branch (group not excluded)', () => {
+  it('a group + a loose rectangle falls to the shared branch (NOT the group editor)', () => {
+    // A mixed selection is not a pure group, so the strip shows the default
+    // branch for the loose node(s); the group-only border editor does not appear.
+    // (In the live canvas the host filters the group out of mixed selections.)
     const tree = callStrip({ nodes: [groupFixture('grp-1'), rectangleFixture('s1')] });
+    expect(findElement(tree, testIdEquals('style-strip-group-border-color'))).toBeNull();
     expect(findElement(tree, testIdEquals('style-strip-color'))).not.toBeNull();
-    expect(findElement(tree, testIdEquals('style-strip-icon-color'))).toBeNull();
   });
 });
 

@@ -1,7 +1,14 @@
 import { describe, expect, it } from 'bun:test';
 import { Handle, type NodeProps, Position } from '@xyflow/react';
 import * as React from 'react';
-import { GROUP_NODE_Z_INDEX, GroupNode, type GroupNodeType } from './group-node.tsx';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
+import {
+  GROUP_DEFAULT_BORDER_COLOR,
+  GROUP_DEFAULT_BORDER_SIZE,
+  GROUP_NODE_Z_INDEX,
+  GroupNode,
+  type GroupNodeType,
+} from './group-node.tsx';
 import { ResizeControls } from './resize-controls.tsx';
 
 // Mirrors freehand-node.test.tsx / icon-node.test.tsx: Bun runs without a DOM,
@@ -121,27 +128,64 @@ describe('GroupNode', () => {
     expect(tree.props['data-testid']).toBe('group-node');
   });
 
-  it('is CHROME-LESS: paints no background, no border, no corner radius', () => {
-    // A group is a transparent hit-area + connector anchor. It MUST NOT derive
-    // any fill/border from the (now-ignored) color tokens — even when the data
-    // carries legacy visual fields, the renderer leaves them off so the only
-    // selection treatment is the overlay marquee.
+  it('renders a stylable border (default thin gray) but no fill / corners / shadow', () => {
+    // A group is now a VISIBLE container: it paints a border (default gray, thin)
+    // so an unselected group is perceivable. It still derives NO fill / corner
+    // radius / shadow from the (ignored) visual tokens.
+    const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200 });
+    const style = (tree.props.style ?? {}) as React.CSSProperties;
+    expect(style.borderWidth).toBe(GROUP_DEFAULT_BORDER_SIZE);
+    expect(style.borderStyle).toBe('solid');
+    expect(style.borderColor).toBe(colorTokenStyle(GROUP_DEFAULT_BORDER_COLOR, 'node').borderColor);
+    // No fill / corner / shadow (chrome-less container, just a border).
+    expect(style.backgroundColor).toBeUndefined();
+    expect(style.borderRadius).toBeUndefined();
+    expect(style.boxShadow).toBeUndefined();
+  });
+
+  it('honors explicit border color / width / style; still ignores fill + corner', () => {
     const tree = callGroupNode({
       childIds: ['a'],
       width: 300,
       height: 200,
       backgroundColor: 'slate',
       borderColor: 'blue',
-      borderSize: 2,
+      borderSize: 3,
+      borderStyle: 'dashed',
       cornerRadius: 16,
     });
     const style = (tree.props.style ?? {}) as React.CSSProperties;
+    expect(style.borderWidth).toBe(3);
+    expect(style.borderStyle).toBe('dashed');
+    expect(style.borderColor).toBe(colorTokenStyle('blue', 'node').borderColor);
+    // Fill + corner remain unread — a group is a bordered container, not a card.
     expect(style.backgroundColor).toBeUndefined();
-    expect(style.borderColor).toBeUndefined();
+    expect(style.borderRadius).toBeUndefined();
+  });
+
+  it('borderSize 0 removes the border entirely', () => {
+    const tree = callGroupNode({ childIds: ['a'], width: 300, height: 200, borderSize: 0 });
+    const style = (tree.props.style ?? {}) as React.CSSProperties;
     expect(style.borderWidth).toBeUndefined();
     expect(style.borderStyle).toBeUndefined();
-    expect(style.borderRadius).toBeUndefined();
-    expect(style.boxShadow).toBeUndefined();
+    expect(style.borderColor).toBeUndefined();
+  });
+
+  it("border color 'none' removes the border (no neutral-gray fallback)", () => {
+    // The StyleStrip's "no color" swatch sets borderColor:'none'. Unlike a normal
+    // node (whose 'none' keeps a neutral-gray outline), a group's 'none' paints
+    // NO border at all.
+    const tree = callGroupNode({
+      childIds: ['a'],
+      width: 300,
+      height: 200,
+      borderColor: 'none',
+      borderSize: 4,
+    });
+    const style = (tree.props.style ?? {}) as React.CSSProperties;
+    expect(style.borderWidth).toBeUndefined();
+    expect(style.borderStyle).toBeUndefined();
+    expect(style.borderColor).toBeUndefined();
   });
 
   it('renders NO title header (the group is chrome-less)', () => {

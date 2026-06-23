@@ -521,40 +521,70 @@ layer(base);
  *
  * 2. NEUTRALIZE the xyflow DEFAULT group skin. xyflow's bundled base CSS ships a
  *    `.react-flow__node-group` rule with a translucent grey fill
- *    (`rgba(240,240,240,0.25)`) + a 1px border. A seeflow group is CHROME-LESS —
- *    a transparent hit-area whose only visible treatment is the dashed marquee +
- *    4 corner handles drawn by `<SelectionResizeOverlay>` (identical to a
- *    transient multi-selection). Left alone, the xyflow default leaks through the
- *    now-transparent renderer (the classic xyflow CSS-leak pattern), so we strip
- *    fill/border/radius here. The renderer's inline `outline` (entered state) and
- *    the `[data-connect-target]` outline rule above still apply — both use
- *    `outline`, not `border`, so this reset never fights them. */
+ *    (`rgba(240,240,240,0.25)`) + a 1px border, PLUS a near-black selected/focus
+ *    ring (`.react-flow__node-group.selectable.selected{box-shadow:0 0 0 0.5px
+ *    #1a192b}`). A seeflow group is CHROME-LESS — a transparent hit-area whose only
+ *    visible treatment is the dashed marquee + 4 corner handles drawn by
+ *    `<SelectionResizeOverlay>` (identical to a transient multi-selection). Left
+ *    alone, those xyflow defaults leak through the now-transparent renderer (the
+ *    classic xyflow CSS-leak pattern), so we strip fill/border/radius AND the
+ *    box-shadow here. The box-shadow needs `!important`: xyflow scopes its ring to
+ *    `.selectable.selected` (specificity 0,3,0), which out-ranks this 0,2,0 reset,
+ *    and CSS load order across consumers isn't guaranteed. Without it a SELECTED
+ *    group shows a solid black border in the light theme (`#1a192b` is merely
+ *    invisible against the dark pane in dark theme). The renderer's inline `outline`
+ *    (entered state) and the `[data-connect-target]` outline rule above still apply
+ *    — both use `outline`, not `border`/`box-shadow`, so this reset never fights
+ *    them. */
 .seeflow-canvas-root .react-flow__node-group {
   background-color: transparent;
   border: none;
   border-radius: 0;
-  /* Neutralize xyflow's near-black selected/focus box-shadow ring (its
-     .selectable.selected rule, specificity 0,3,0) so a SELECTED chrome-less group
-     shows ONLY the dashed marquee from <SelectionResizeOverlay>. !important is
-     load-bearing: the 0,2,0 reset cannot out-specify xyflow's rule and CSS load
-     order across consumers is not guaranteed. Without it a selected group shows a
-     solid black border in the light theme. No braces in this comment: a unit test
-     extracts this rule body by its first closing brace. */
   box-shadow: none !important;
 }
 
-/* US-007 selected-node handle transforms (edit mode only) */
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-top {
+/* US-007 selected-node handle transforms (edit mode only). A normal node's
+   dashed `.selected::after` ring sits 8 SCREEN px outside the node edge (inset
+   calc(-8px / zoom)), so each connect dot is pushed OUT by the SAME 8 screen px
+   to straddle that ring (the ring line bisects the circle). Groups are EXCLUDED
+   here (`:not(.react-flow__node-group)`) and handled separately below — their
+   selection ring is the overlay marquee, which lives at a different offset and
+   in FLOW units, so the same push would leave the dots floating inside it. */
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-top {
   transform: translate(-50%, -50%) translate(0, calc(-8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-bottom {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-bottom {
   transform: translate(-50%, 50%) translate(0, calc(8px / var(--rf-zoom, 1)));
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-left {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-left {
   transform: translate(-50%, -50%) translate(calc(-8px / var(--rf-zoom, 1)), 0);
 }
-.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__handle-right {
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected:not(.react-flow__node-group) .react-flow__handle-right {
   transform: translate(50%, -50%) translate(calc(8px / var(--rf-zoom, 1)), 0);
+}
+
+/* A SELECTED group's connection dots must straddle the MARQUEE — the dashed
+   rect <SelectionResizeOverlay> draws at SELECTION_OVERLAY_PADDING flow units
+   outside the group box — so the dashed line bisects each circle, matching a
+   normal selected node (whose dot sits on its `.selected` ring). The dots are
+   anchored at the group-box edge, which is INSIDE the marquee, so each is
+   pushed OUTWARD. The push is in FLOW units (no `/ var(--rf-zoom)` division, so
+   it scales with the viewport and tracks the flow-unit marquee at every zoom),
+   and its magnitude is empirically calibrated against the rendered handle
+   geometry so the circle's CENTER lands on the marquee line — the
+   group-selected-light visual baseline is the source of truth (12 flow units of
+   padding render the dot centered at ≈6.5px of transform). */
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-top {
+  transform: translate(-50%, -50%) translate(0, -6.5px);
+}
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-bottom {
+  transform: translate(-50%, 50%) translate(0, 6.5px);
+}
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-left {
+  transform: translate(-50%, -50%) translate(-6.5px, 0);
+}
+.seeflow-canvas-root[data-mode="edit"] .react-flow__node-group.selected .react-flow__handle-right {
+  transform: translate(50%, -50%) translate(6.5px, 0);
 }
 
 .seeflow-canvas-root[data-mode="edit"] .react-flow__node.selected .react-flow__resize-control.handle.top.left {

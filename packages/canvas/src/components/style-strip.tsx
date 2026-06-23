@@ -17,6 +17,7 @@ import {
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { COLOR_TOKENS } from '../lib/color-tokens.ts';
+import { GROUP_DEFAULT_BORDER_COLOR, GROUP_DEFAULT_BORDER_SIZE } from '../nodes/group-node.tsx';
 import type {
   ColorToken,
   Connector,
@@ -263,6 +264,10 @@ export function StyleStrip({
   // Multi-image selections fan out across every selected node so the user can
   // restyle a batch of screenshots in one pass.
   const pureImageType = pureNode && nodes.every((n) => n.type === 'image');
+  // Canvas grouping: a pure group selection collapses to a focused border
+  // editor (color + width). A group is a chrome-less container — it has no
+  // fill / corners / shadow / text to style, only its stylable border.
+  const pureGroupType = pureNode && nodes.every((n) => n.type === 'group');
   // Text-type simplification only applies to pure-node selections of a single
   // type:'text' node. Mixed selections (text + connector) still need the
   // shared border controls visible, so the guard is gated on `pureNode`.
@@ -700,6 +705,66 @@ export function StyleStrip({
               onPreview={previewImageBorderWidth}
               onCommit={applyImageBorderWidth}
               testId="style-tab-image-border-width-slider"
+            />
+          </PopoverButton>
+        </div>
+      </TooltipProvider>
+    );
+  }
+
+  if (pureGroupType) {
+    // Group border editor: color + width. The group renderer reads
+    // borderColor/borderSize/borderStyle. `allowNone` is TRUE so the swatch
+    // offers a "no color" option; the group renderer treats `'none'` as NO
+    // border (it does NOT fall back to the neutral-gray outline a normal node's
+    // `'none'` paints). Dragging width to 0 removes the border too.
+    const firstGroup = nodes[0] as Extract<FlowNode, { type: 'group' }> | undefined;
+    const groupBorderColor: ColorToken = firstGroup?.data.borderColor ?? GROUP_DEFAULT_BORDER_COLOR;
+    const applyGroupBorderColor = (token: ColorToken) => {
+      for (const n of nodes) onStyleNode(n.id, { borderColor: token });
+    };
+    const applyGroupBorderSize = (n: number) => {
+      for (const node of nodes) onStyleNode(node.id, { borderSize: n });
+    };
+    const previewGroupBorderSize = (n: number) => {
+      for (const node of nodes) onStyleNodePreview?.(node.id, { borderSize: n });
+    };
+    return (
+      <TooltipProvider delayDuration={300}>
+        <div
+          data-testid="canvas-style-strip"
+          className="sf:pointer-events-auto sf:flex sf:flex-col sf:items-center sf:gap-1 sf:rounded-lg sf:border sf:border-border sf:bg-background/95 sf:p-1 sf:shadow-md sf:backdrop-blur"
+        >
+          <SwatchButton
+            testId="style-strip-group-border-color"
+            tooltip="Border color"
+            ariaLabel="group border color"
+            activeToken={groupBorderColor}
+            previewKind="border"
+            tokenTestIdPrefix="style-tab-group-border-color"
+            innerTestId="style-tab-group-border-color-trigger"
+            allowNone={true}
+            onSelect={applyGroupBorderColor}
+          />
+          <PopoverButton
+            testId="style-strip-group-border-width"
+            tooltip="Border width"
+            ariaLabel="group border width"
+            renderIcon={() => (
+              <span className="sf:font-mono sf:text-[10px] sf:tabular-nums">
+                {firstGroup?.data.borderSize ?? GROUP_DEFAULT_BORDER_SIZE}
+              </span>
+            )}
+          >
+            <SliderControl
+              value={firstGroup?.data.borderSize}
+              defaultValue={GROUP_DEFAULT_BORDER_SIZE}
+              min={0}
+              max={8}
+              suffix="px"
+              onPreview={previewGroupBorderSize}
+              onCommit={applyGroupBorderSize}
+              testId="style-tab-group-border-width-slider"
             />
           </PopoverButton>
         </div>

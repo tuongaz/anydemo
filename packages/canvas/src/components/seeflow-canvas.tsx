@@ -3555,11 +3555,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     return inputs;
   }, [nodes, nodeOverrides, selectedNodeIds, selectedGroupId]);
 
-  // A group is chrome-less — it has no background/border/corner/shadow to style,
-  // so it is excluded from the StyleStrip's node set. A pure-group selection then
-  // yields no stylable nodes (the StyleStrip hides itself); a mixed selection
-  // styles only the loose nodes. (Don't-support-background, group simplification.)
-  const selectedNodesForStyleStrip = (selectedNodes ?? []).filter((n) => n.type !== 'group');
+  // A group's ONLY stylable surface is its border (no background/corner/shadow/
+  // text). A pure single-group selection routes straight through so the
+  // StyleStrip's group branch shows the border color + width editor; in any
+  // OTHER (multi / mixed) selection the group is filtered out so the strip
+  // styles only the loose nodes (a group's border is edited when it's selected
+  // on its own). Uses the existing isGroupSelection signal.
+  const selectedNodesForStyleStrip = isGroupSelection
+    ? (selectedNodes ?? [])
+    : (selectedNodes ?? []).filter((n) => n.type !== 'group');
 
   const sourceNodes = useMemo<Node[]>(() => {
     const buildNode = (merged: FlowNode): Node => {

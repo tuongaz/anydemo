@@ -94,7 +94,7 @@ export function NodeHeader({
     <div
       data-testid={testId}
       className={cn(
-        'sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:px-3 sf:py-3',
+        'sf:flex sf:shrink-0 sf:items-center sf:gap-2 sf:px-1.5 sf:py-1.5',
         headerColored ? '' : 'sf:bg-muted',
       )}
       style={headerBackgroundStyle}

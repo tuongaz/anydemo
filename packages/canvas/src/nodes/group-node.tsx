@@ -1,20 +1,23 @@
 import { Handle, type Node, type NodeProps, Position } from '@xyflow/react';
 import { type CSSProperties, memo } from 'react';
 import { cn } from '../lib/cn.ts';
-import type { GroupNodeData } from '../types.ts';
+import { colorTokenStyle } from '../lib/color-tokens.ts';
+import type { ColorToken, GroupNodeData } from '../types.ts';
 
 /**
  * Runtime data attached to a group node by the canvas host.
  *
- * A group is a deliberately CHROME-LESS container (Miro-style): it paints NO
- * background, NO border, and NO title header. Its only on-canvas presence is an
- * invisible hit-area — clicking the group's empty band selects it as a unit (M5
- * group-move) — plus the four connection handles that make a group a connector
- * endpoint (M8). The visible selection treatment (a dashed marquee with 4 corner
- * resize handles) is drawn ENTIRELY by `<SelectionResizeOverlay>` when the group
- * is selected, so a selected group looks IDENTICAL to a transient multi-select.
- * There is no per-group styling to derive here — `backgroundColor`/`borderColor`/
- * `cornerRadius`/`shadow` are intentionally not read.
+ * A group is a near-CHROME-LESS container (Miro-style): it paints NO background
+ * and NO title header. It DOES paint a thin, user-stylable BORDER (default gray)
+ * so an unselected group reads as a visible container instead of vanishing —
+ * width + color are editable via the StyleStrip and `borderSize: 0` removes it
+ * (`backgroundColor`/`cornerRadius`/`shadow` are still intentionally not read).
+ * Beyond the border its on-canvas presence is a hit-area — clicking the group's
+ * empty band selects it as a unit (M5 group-move) — plus the four connection
+ * handles that make a group a connector endpoint (M8). The selection treatment
+ * (a padded dashed marquee with 4 corner resize handles) is drawn ENTIRELY by
+ * `<SelectionResizeOverlay>` when the group is selected, so a selected group's
+ * selection chrome looks IDENTICAL to a transient multi-select.
  */
 export type GroupNodeRuntimeData = GroupNodeData & {
   /**
@@ -32,6 +35,19 @@ export type GroupNodeType = Node<GroupNodeRuntimeData, 'group'>;
 
 /** Fallback box size for a group with no persisted width/height. */
 export const GROUP_DEFAULT_SIZE = { width: 320, height: 220 } as const;
+
+/**
+ * Default border for a group when `data.borderSize` is unset: a thin, clearly
+ * visible neutral-gray outline so an UNSELECTED group reads as a container
+ * (fully chrome-less left it invisible). Both are user-overridable via the
+ * StyleStrip — `borderSize: 0` removes the border entirely. The color is the
+ * `'gray'` palette token (a mid-gray accent) rather than the near-invisible
+ * theme `--border`, so the "default gray" actually shows on a white canvas.
+ * Exported so the StyleStrip's group branch seeds its sliders from the same
+ * source of truth.
+ */
+export const GROUP_DEFAULT_BORDER_SIZE = 1;
+export const GROUP_DEFAULT_BORDER_COLOR: ColorToken = 'gray';
 
 /**
  * Z-INDEX CONTRACT (design §9.6, §12.4): a group MUST paint BEHIND its members
@@ -57,10 +73,31 @@ function GroupNodeImpl({ data, selected, isConnectable }: NodeProps<GroupNodeTyp
   // click-through hit-area + the faint "entered" outline below.
   const active = data.active === true;
 
+  // Group border (user-stylable via the StyleStrip). Defaults to a thin gray
+  // outline so an unselected group is a visible container; `borderSize: 0`
+  // removes it. Drawn on THIS inner div (not the `.react-flow__node-group`
+  // wrapper, which index.css force-resets to `border:none`), with `box-border`
+  // so the stroke sits inside the group's footprint and stays flush with the
+  // member band. `backgroundColor`/`cornerRadius`/`shadow` remain unread.
+  const borderSize = data.borderSize ?? GROUP_DEFAULT_BORDER_SIZE;
+  const borderColorToken = data.borderColor ?? GROUP_DEFAULT_BORDER_COLOR;
+  // `'none'` is the explicit "no border color" pick from the StyleStrip swatch —
+  // it removes the border entirely (NOT the neutral-gray outline colorTokenStyle
+  // hands a normal node's `'none'`). A width of 0 removes it too.
+  const showBorder = borderSize > 0 && borderColorToken !== 'none';
+  const groupBorder: CSSProperties = showBorder
+    ? {
+        borderWidth: borderSize,
+        borderStyle: data.borderStyle ?? 'solid',
+        borderColor: colorTokenStyle(borderColorToken, 'node').borderColor,
+      }
+    : {};
+
   const containerStyle: CSSProperties = {
-    // The group draws no chrome — it is a transparent hit-area + connector
+    // The group draws no fill/header — it is a (bordered) hit-area + connector
     // anchor. When unsized, fall back to a default box so the wrapper has a
     // footprint to hit-test and anchor handles against.
+    ...groupBorder,
     ...(sized ? {} : { width: GROUP_DEFAULT_SIZE.width, height: GROUP_DEFAULT_SIZE.height }),
     // M6 isolation: the hit-area becomes CLICK-THROUGH so a click in the band
     // around members falls to the empty pane (→ exit) and members underneath
