@@ -64,7 +64,7 @@ function readChildIds(node: GroupOpNode | undefined): readonly string[] {
  * selection marquee + connection dots track the box edge, so this value only
  * affects the gap between the members and the box — not the dot centering.
  */
-export const GROUP_BOX_PADDING = 28;
+export const GROUP_BOX_PADDING = 24;
 
 /**
  * Absolute bounding box for a group enclosing `children`: the union of every

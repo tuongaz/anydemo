@@ -542,11 +542,14 @@ layer(base);
   border-radius: 0;
   box-shadow: none !important;
   /* Inset the group's inner div (which paints the stylable border) from the box
-     edge by this padding, so the solid border sits a gap INSIDE the selection
-     marquee (which hugs the box edge) instead of overlapping it. The members keep
-     GROUP_BOX_PADDING minus this value of content breathing room. No braces in
-     this comment: a unit test extracts this rule body by its first closing brace. */
-  padding: 12px;
+     edge so the solid border sits a gap INSIDE the selection marquee (which hugs
+     the box edge) instead of overlapping it. The inset is the SAME 8-screen-px
+     offset a normal node's selection ring sits off its body (the .selected::after
+     ring + handle push both use calc(8px / var(--rf-zoom))), so a group's
+     border-to-marquee gap matches a normal node's body-to-ring gap at every zoom.
+     Members keep GROUP_BOX_PADDING of content breathing room minus this inset. No
+     braces in this comment: a unit test extracts this rule body by its first brace. */
+  padding: calc(8px / var(--rf-zoom, 1));
 }
 
 /* US-007 selected-node handle transforms (edit mode only). A normal node's

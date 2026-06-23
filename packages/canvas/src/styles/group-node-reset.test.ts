@@ -41,9 +41,10 @@ describe('.react-flow__node-group reset (chrome-less group)', () => {
     expect(block).toMatch(/border-radius:\s*0/);
     // The wrapper padding insets the inner div (which paints the stylable border)
     // from the box edge, so the solid border sits a GAP inside the selection
-    // marquee (which hugs the box edge) instead of overlapping it. Must be a
-    // positive px value (overriding xyflow's default 10px with an intentional one).
-    expect(block).toMatch(/padding:\s*[1-9]\d*px/);
+    // marquee instead of overlapping it. The gap is the SAME 8-screen-px offset a
+    // normal node's ring sits off its body — `calc(8px / var(--rf-zoom))` — so the
+    // group's border-to-marquee gap matches a normal node's body-to-ring gap.
+    expect(block).toMatch(/padding:\s*calc\(8px\s*\/\s*var\(--rf-zoom/);
   });
 
   it('neutralizes the xyflow selected/focus box-shadow ring with !important (no solid black border)', () => {
