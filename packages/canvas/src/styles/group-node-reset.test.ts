@@ -35,10 +35,14 @@ describe('.react-flow__node-group reset (chrome-less group)', () => {
     return css.slice(open + 1, close);
   })();
 
-  it('strips the xyflow default fill + border + corner radius', () => {
+  it('strips the xyflow default fill + border + corner radius + padding', () => {
     expect(block).toMatch(/background-color:\s*transparent/);
     expect(block).toMatch(/border:\s*none/);
     expect(block).toMatch(/border-radius:\s*0/);
+    // xyflow ships `.react-flow__node-group { padding: 10px }`; left unset it
+    // insets the inner div (which paints the stylable border) so the border
+    // crowds the members. Zeroing it sits the border flush with the box edge.
+    expect(block).toMatch(/padding:\s*0/);
   });
 
   it('neutralizes the xyflow selected/focus box-shadow ring with !important (no solid black border)', () => {

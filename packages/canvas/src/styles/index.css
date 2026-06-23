@@ -541,6 +541,13 @@ layer(base);
   border: none;
   border-radius: 0;
   box-shadow: none !important;
+  /* xyflow ships a default 10px padding on the group node; left unset it insets
+     the group's inner div (which paints the stylable border) 10px IN from the box
+     edge, so the border crowds the members. Zero it so the border sits flush with
+     the box edge (members keep the full GROUP_BOX_PADDING of breathing room).
+     Members are absolute-positioned, so this never affects their layout. No braces
+     in this comment: a unit test extracts this rule body by its first closing brace. */
+  padding: 0;
 }
 
 /* US-007 selected-node handle transforms (edit mode only). A normal node's
