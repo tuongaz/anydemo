@@ -35,14 +35,15 @@ describe('.react-flow__node-group reset (chrome-less group)', () => {
     return css.slice(open + 1, close);
   })();
 
-  it('strips the xyflow default fill + border + corner radius + padding', () => {
+  it('strips the xyflow default fill + border + corner radius, and pads to inset the border', () => {
     expect(block).toMatch(/background-color:\s*transparent/);
     expect(block).toMatch(/border:\s*none/);
     expect(block).toMatch(/border-radius:\s*0/);
-    // xyflow ships `.react-flow__node-group { padding: 10px }`; left unset it
-    // insets the inner div (which paints the stylable border) so the border
-    // crowds the members. Zeroing it sits the border flush with the box edge.
-    expect(block).toMatch(/padding:\s*0/);
+    // The wrapper padding insets the inner div (which paints the stylable border)
+    // from the box edge, so the solid border sits a GAP inside the selection
+    // marquee (which hugs the box edge) instead of overlapping it. Must be a
+    // positive px value (overriding xyflow's default 10px with an intentional one).
+    expect(block).toMatch(/padding:\s*[1-9]\d*px/);
   });
 
   it('neutralizes the xyflow selected/focus box-shadow ring with !important (no solid black border)', () => {
