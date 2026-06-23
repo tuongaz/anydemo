@@ -986,6 +986,142 @@ describe('SeeflowCanvas', () => {
       expect(commit.size).toEqual({ width: 200, height: 150 });
     });
 
+    // Drives the gesture handlers with a shape + Shift held and asserts the
+    // committed bounding box has the shape's PERFECT aspect ratio. Identity
+    // screenToFlowPosition keeps the math obvious.
+    const driveShiftDraw = (
+      shape: string,
+      from: { x: number; y: number },
+      to: { x: number; y: number },
+    ): { width: number; height: number } => {
+      const refs: { current: unknown }[] = [];
+      let size: { width: number; height: number } | null = null;
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: shape as 'rectangle' },
+          onCreateShapeNode: (_s, _p, sz) => {
+            size = sz as { width: number; height: number };
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = shape;
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      // shiftKey held throughout so the gesture aspect-locks.
+      const ev = (clientX: number, clientY: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX,
+        clientY,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        shiftKey: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+      (wrapper.props.onPointerDown as (e: unknown) => void)(ev(from.x, from.y));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(ev(to.x, to.y));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(ev(to.x, to.y));
+      if (!size) throw new Error('onCreateShapeNode was not called');
+      return size;
+    };
+
+    it('Shift locks rectangle to a perfect square (1:1)', () => {
+      // Drag 240×80; Shift should square it to 240×240.
+      const size = driveShiftDraw('rectangle', { x: 100, y: 100 }, { x: 340, y: 180 });
+      expect(size).toEqual({ width: 240, height: 240 });
+    });
+
+    it('Shift locks ellipse to a perfect circle (1:1)', () => {
+      const size = driveShiftDraw('ellipse', { x: 100, y: 100 }, { x: 160, y: 300 });
+      // Tall drag → square grows to the height (200).
+      expect(size).toEqual({ width: 200, height: 200 });
+    });
+
+    it('Shift locks triangle to the equilateral aspect (height = width·√3/2)', () => {
+      const size = driveShiftDraw('triangle', { x: 100, y: 100 }, { x: 340, y: 100 });
+      expect(size.width).toBe(240);
+      expect(size.height).toBeCloseTo(240 * (Math.sqrt(3) / 2), 6);
+      expect(size.height / size.width).toBeCloseTo(Math.sqrt(3) / 2, 10);
+    });
+
+    it('Shift locks hexagon to the regular flat-top aspect (height = width·√3/2)', () => {
+      const size = driveShiftDraw('hexagon', { x: 100, y: 100 }, { x: 340, y: 100 });
+      expect(size.width).toBe(240);
+      expect(size.height / size.width).toBeCloseTo(Math.sqrt(3) / 2, 10);
+    });
+
+    it('discards a fast release flick so the shape commits at the last deliberate position', () => {
+      const refs: { current: unknown }[] = [];
+      let captured: {
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      } | null = null;
+      const tree = callSeeflowCanvas(
+        {
+          canvasMode: { kind: 'draw', shape: 'rectangle' },
+          onCreateShapeNode: (_s, pos, size) => {
+            captured = {
+              pos: pos as { x: number; y: number },
+              size: size as { width: number; height: number },
+            };
+          },
+        },
+        { refSink: refs },
+      );
+      refAt(refs, REF.drawShape).current = 'rectangle';
+      refAt(refs, REF.rfInstance).current = {
+        screenToFlowPosition: ({ x, y }: { x: number; y: number }) => ({ x, y }),
+      };
+      const wrapper = findElement(
+        tree,
+        (el) =>
+          isElement(el) &&
+          (el.props as { 'data-testid'?: unknown })['data-testid'] === 'seeflow-canvas',
+      );
+      if (!wrapper) throw new Error('wrapper div not found');
+      const paneTarget = { classList: { contains: (c: string) => c === 'react-flow__pane' } };
+      const noop = () => {};
+      // timeStamp drives the settle clock: a deliberate move to (300,300) at
+      // t=100, then the pointer is yanked to (900,900) by release at t=116
+      // (≈53 px/ms ≫ the flick threshold). The flick must be discarded.
+      const ev = (clientX: number, clientY: number, timeStamp: number) => ({
+        target: paneTarget,
+        currentTarget: { setPointerCapture: noop, releasePointerCapture: noop },
+        clientX,
+        clientY,
+        timeStamp,
+        pointerId: 1,
+        button: 0,
+        isPrimary: true,
+        preventDefault: noop,
+        stopPropagation: noop,
+      });
+      (wrapper.props.onPointerDown as (e: unknown) => void)(ev(100, 100, 0));
+      (wrapper.props.onPointerMove as (e: unknown) => void)(ev(300, 300, 100));
+      (wrapper.props.onPointerUp as (e: unknown) => void)(ev(900, 900, 116));
+      if (!captured) throw new Error('onCreateShapeNode was not called');
+      const commit = captured as {
+        pos: { x: number; y: number };
+        size: { width: number; height: number };
+      };
+      // Committed at the deliberate (300,300), NOT the (900,900) release flick.
+      expect(commit.pos).toEqual({ x: 100, y: 100 });
+      expect(commit.size).toEqual({ width: 200, height: 200 });
+    });
+
     it('single-click (no drag past MIN_DRAW_SIZE=40px) commits a default-sized shape', () => {
       const refs: { current: unknown }[] = [];
       const captured: Array<{
