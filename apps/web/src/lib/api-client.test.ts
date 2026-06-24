@@ -45,9 +45,19 @@ beforeEach(() => {
   installMockFetch();
 });
 
+const setBoot = (boot: Record<string, unknown> | undefined): void => {
+  if (boot === undefined) {
+    // biome-ignore lint/performance/noDelete: must remove the global, not set "undefined".
+    delete (globalThis as { window?: unknown }).window;
+    return;
+  }
+  (globalThis as { window?: unknown }).window = { __SEEFLOW_BOOT__: boot };
+};
+
 afterEach(() => {
   globalThis.fetch = realFetch;
   setAuthProvider(NullAuthProvider);
+  setBoot(undefined);
 });
 
 describe('apiFetch', () => {
@@ -128,5 +138,29 @@ describe('apiFetch', () => {
     const res = await apiFetch('/api/flows', { method: 'PATCH' });
     expect(res.status).toBe(400);
     expect(m.calls()).toBe(1);
+  });
+
+  it('tags requests with X-Seeflow-Project-Id when the boot carries a projectId', async () => {
+    setBoot({ base: '/p/abc', projectSlug: 'main', projectId: 'cloud-uuid-1', mode: 'edit' });
+    setAuthProvider({ ...NullAuthProvider, getToken: async () => 'tok' } as AuthProvider);
+    await apiFetch('/api/projects/main/flows/main/nodes', { method: 'POST' });
+    expect(headerOf(lastInit, 'x-seeflow-project-id')).toBe('cloud-uuid-1');
+    expect(headerOf(lastInit, 'authorization')).toBe('Bearer tok');
+  });
+
+  it('omits the project header when the boot has no projectId', async () => {
+    setBoot({ base: '/app', projectSlug: 'main', mode: 'edit' });
+    setAuthProvider({ ...NullAuthProvider, getToken: async () => 'tok' } as AuthProvider);
+    await apiFetch('/api/projects/main/flows/main/nodes', { method: 'POST' });
+    expect(headerOf(lastInit, 'x-seeflow-project-id')).toBeNull();
+    expect(headerOf(lastInit, 'authorization')).toBe('Bearer tok');
+  });
+
+  it('sends the project header even with no token (gating is independent)', async () => {
+    setBoot({ base: '/p/abc', projectSlug: 'main', projectId: 'cloud-uuid-2', mode: 'edit' });
+    // NullAuthProvider → no token; the project header must still be attached.
+    await apiFetch('/api/projects/main/flows/main');
+    expect(headerOf(lastInit, 'x-seeflow-project-id')).toBe('cloud-uuid-2');
+    expect(headerOf(lastInit, 'authorization')).toBeNull();
   });
 });

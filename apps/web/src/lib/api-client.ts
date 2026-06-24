@@ -1,4 +1,5 @@
 import { getAuthProvider } from './auth/provider.ts';
+import { readBootConfig } from './boot-config.ts';
 
 /**
  * Verbs that are safe to replay. seeflow PATCH bodies are value-idempotent
@@ -40,14 +41,19 @@ const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
 export async function apiFetch(input: string, init: RequestInit = {}): Promise<Response> {
   const method = (init.method ?? 'GET').toUpperCase();
   const canRetry = IDEMPOTENT_METHODS.has(method);
+  // The cloud injects a project id into the studio boot for owner/shared
+  // projects; tag every studio API call with it so the cloud's shared-edit
+  // middleware can resolve a shared editor's `/api/projects/*` writes to the
+  // OWNER's tree. Absent in local/standalone studio → no header at all.
+  const sharedProjectId = readBootConfig()?.projectId;
 
   for (let attempt = 0; ; attempt++) {
     const provider = getAuthProvider();
     const token = await provider.getToken();
 
-    // Only touch headers when there is a token — keeps the no-auth path
-    // identical to a plain fetch (and keeps header-asserting tests green).
-    const finalInit = token ? { ...init, headers: withBearer(init.headers, token) } : init;
+    // Only touch headers when there's something to add — keeps the no-auth /
+    // no-cloud path identical to a plain fetch (and header-asserting tests green).
+    const finalInit = withCloudHeaders(init, token, sharedProjectId);
 
     let res: Response | undefined;
     let networkError: unknown;
@@ -80,8 +86,21 @@ export async function apiFetch(input: string, init: RequestInit = {}): Promise<R
   }
 }
 
-const withBearer = (headers: HeadersInit | undefined, token: string): Headers => {
-  const merged = new Headers(headers);
-  merged.set('Authorization', `Bearer ${token}`);
-  return merged;
+/**
+ * Attach the cloud auth + routing headers, preserving a byte-identical
+ * passthrough when there's nothing to add (local no-auth mode → tests asserting
+ * referential `init` stay green). `X-Seeflow-Project-Id` is the cloud project id
+ * the studio was booted with; the cloud's shared-edit middleware uses it to
+ * resolve a shared editor's `/api/projects/*` calls to the OWNER's tree.
+ */
+const withCloudHeaders = (
+  init: RequestInit,
+  token: string | null,
+  sharedProjectId: string | undefined,
+): RequestInit => {
+  if (!token && !sharedProjectId) return init;
+  const headers = new Headers(init.headers);
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  if (sharedProjectId) headers.set('X-Seeflow-Project-Id', sharedProjectId);
+  return { ...init, headers };
 };
