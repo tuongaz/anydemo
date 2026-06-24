@@ -23,6 +23,12 @@ export interface HeaderShareCallbacks {
   onDownloadPdf: () => Promise<unknown> | unknown;
   onDownloadPng: () => Promise<unknown> | unknown;
   onExportToCloud: () => void;
+  /**
+   * Open the host's "share with people" dialog. Set only when the host supports
+   * member grants (cloud mode with a known project id); omitting it hides the
+   * ShareMenu item.
+   */
+  onShareWithMembers?: () => void;
 }
 
 export interface HeaderProps {
@@ -114,6 +120,7 @@ export function Header({
             // Export-to-cloud targets the seeflow.dev viewer — hide it in the
             // cloud app (omitting the callback hides the menu item).
             onExportToCloud={isCloud ? undefined : share.onExportToCloud}
+            onShareWithMembers={share.onShareWithMembers}
           />
         ) : null}
         <DropdownMenu>

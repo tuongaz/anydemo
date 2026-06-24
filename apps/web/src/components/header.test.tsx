@@ -152,6 +152,34 @@ describe('Header', () => {
       expect(share.props.onDownloadPng).toBe(onDownloadPng);
       expect(share.props.onExportToCloud).toBe(onExportToCloud);
     });
+
+    it('forwards onShareWithMembers to ShareMenu when the host provides it', () => {
+      const onShareWithMembers = () => {};
+      const tree = renderHeader({
+        share: {
+          onDownloadPdf: () => {},
+          onDownloadPng: () => {},
+          onExportToCloud: () => {},
+          onShareWithMembers,
+        },
+      });
+      const share = findShareMenu(tree);
+      if (!share) throw new Error('expected ShareMenu in the tree');
+      expect(share.props.onShareWithMembers).toBe(onShareWithMembers);
+    });
+
+    it('leaves ShareMenu onShareWithMembers undefined when the host omits it', () => {
+      const tree = renderHeader({
+        share: {
+          onDownloadPdf: () => {},
+          onDownloadPng: () => {},
+          onExportToCloud: () => {},
+        },
+      });
+      const share = findShareMenu(tree);
+      if (!share) throw new Error('expected ShareMenu in the tree');
+      expect(share.props.onShareWithMembers).toBeUndefined();
+    });
   });
 
   describe('back button (US-007)', () => {

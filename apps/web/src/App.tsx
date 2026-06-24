@@ -1,5 +1,6 @@
 import { ExportDialog } from '@/components/export-dialog';
 import { Header, type HeaderShareCallbacks } from '@/components/header';
+import { MembersShareDialog } from '@/components/members-share-dialog';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
@@ -11,6 +12,8 @@ import { useProjectFlows } from '@/hooks/use-project-flows';
 import { useProjects } from '@/hooks/use-projects';
 import { useRegistryEvents } from '@/hooks/use-registry-events';
 import type { CreateProjectResult } from '@/lib/api';
+import { useAppConfig } from '@/lib/auth/app-config';
+import { readBootConfig } from '@/lib/boot-config';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
@@ -158,7 +161,15 @@ export function App() {
   // DemoStackEntry alongside the rest of the per-entry data wiring.
   const canvasRef = useRef<SeeflowCanvasHandle>(null);
   const [exportDialogOpen, setExportDialogOpen] = useState(false);
+  const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
+
+  // "Share with people" is a host (cloud) feature: it needs the internal cloud
+  // project id, injected via the studio boot config. Absent in local studio →
+  // the ShareMenu item stays hidden.
+  const { isCloud } = useAppConfig();
+  const cloudProjectId = useMemo(() => readBootConfig()?.projectId ?? null, []);
+  const canShareMembers = isCloud && cloudProjectId !== null;
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;
@@ -166,8 +177,9 @@ export function App() {
       onDownloadPdf: () => canvasRef.current?.exportPdf(),
       onDownloadPng: () => canvasRef.current?.exportPng(),
       onExportToCloud: () => setExportDialogOpen(true),
+      onShareWithMembers: canShareMembers ? () => setMembersDialogOpen(true) : undefined,
     };
-  }, [flowId]);
+  }, [flowId, canShareMembers]);
 
   if (demos === null) {
     return (
@@ -209,6 +221,13 @@ export function App() {
             onCapturePreview={() =>
               canvasRef.current?.capturePreview() ?? Promise.resolve(undefined)
             }
+          />
+        ) : null}
+        {canShareMembers && cloudProjectId ? (
+          <MembersShareDialog
+            open={membersDialogOpen}
+            onOpenChange={setMembersDialogOpen}
+            projectId={cloudProjectId}
           />
         ) : null}
       </div>
