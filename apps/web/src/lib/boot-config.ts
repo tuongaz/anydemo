@@ -9,6 +9,13 @@ export interface BootConfig {
   projectId?: string;
   flowId?: string;
   mode: 'edit' | 'view';
+  /**
+   * Whether the booted user may (re)share the project. Host-owned (cloud sets it
+   * true only for the project OWNER); the studio uses it solely to gate its
+   * host "share with people" affordance, so a shared editor gets the full editor
+   * but no Share button. Absent in local/standalone studio → no share surface.
+   */
+  canShare?: boolean;
 }
 
 /**
@@ -23,7 +30,7 @@ export function readBootConfig(
 ): BootConfig | null {
   const boot = (w as unknown as Record<string, unknown> | undefined)?.__SEEFLOW_BOOT__;
   if (!boot || typeof boot !== 'object') return null;
-  const { base, projectSlug, projectId, flowId, mode } = boot as Record<string, unknown>;
+  const { base, projectSlug, projectId, flowId, mode, canShare } = boot as Record<string, unknown>;
   if (typeof base !== 'string' || typeof projectSlug !== 'string') return null;
   // flowId + projectId are optional: absent flowId means "no concrete default
   // flow" (the studio resolves the project's default/last flow); absent
@@ -31,6 +38,9 @@ export function readBootConfig(
   // be strings.
   if (flowId !== undefined && typeof flowId !== 'string') return null;
   if (projectId !== undefined && typeof projectId !== 'string') return null;
+  // canShare is an optional host capability flag; when present it must be a
+  // boolean (absent → no share surface).
+  if (canShare !== undefined && typeof canShare !== 'boolean') return null;
   if (mode !== 'edit' && mode !== 'view') return null;
-  return { base, projectSlug, projectId, flowId, mode };
+  return { base, projectSlug, projectId, flowId, mode, canShare };
 }

@@ -166,10 +166,15 @@ export function App() {
 
   // "Share with people" is a host (cloud) feature: it needs the internal cloud
   // project id, injected via the studio boot config. Absent in local studio →
-  // the ShareMenu item stays hidden.
+  // the ShareMenu item stays hidden. It is also OWNER-ONLY: a shared `editor`
+  // gets the full editor (projectId is injected so its API calls carry the
+  // X-Seeflow-Project-Id header) but boot.canShare is false, so they never see
+  // the Share button — only the owner can (re)share. The cloud grants API
+  // enforces owner-only server-side too (defense in depth).
   const { isCloud } = useAppConfig();
   const cloudProjectId = useMemo(() => readBootConfig()?.projectId ?? null, []);
-  const canShareMembers = isCloud && cloudProjectId !== null;
+  const canShare = useMemo(() => readBootConfig()?.canShare === true, []);
+  const canShareMembers = isCloud && cloudProjectId !== null && canShare;
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {
     if (!flowId) return undefined;

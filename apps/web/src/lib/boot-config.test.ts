@@ -45,6 +45,43 @@ describe('readBootConfig', () => {
       mode: 'edit',
     });
   });
+  it('parses canShare (owner-only host capability) when the host injects it', () => {
+    const w = {
+      __SEEFLOW_BOOT__: {
+        base: '/p/abc',
+        projectSlug: 'meally',
+        projectId: 'uuid-123',
+        mode: 'edit',
+        canShare: true,
+      },
+    };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)).toEqual({
+      base: '/p/abc',
+      projectSlug: 'meally',
+      projectId: 'uuid-123',
+      flowId: undefined,
+      mode: 'edit',
+      canShare: true,
+    });
+  });
+  it('parses canShare:false (shared editor → no share surface)', () => {
+    const w = {
+      __SEEFLOW_BOOT__: {
+        base: '/p/abc',
+        projectSlug: 'meally',
+        projectId: 'uuid-123',
+        mode: 'edit',
+        canShare: false,
+      },
+    };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)?.canShare).toBe(false);
+  });
+  it('returns null when canShare is present but not a boolean', () => {
+    const w = {
+      __SEEFLOW_BOOT__: { base: '/p/abc', projectSlug: 'm', mode: 'edit', canShare: 'yes' },
+    };
+    expect(readBootConfig(w as unknown as Window & typeof globalThis)).toBeNull();
+  });
   it('returns null when projectId is present but not a string', () => {
     const w = {
       __SEEFLOW_BOOT__: { base: '/p/abc', projectSlug: 'm', projectId: 7, mode: 'edit' },
