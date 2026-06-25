@@ -1,4 +1,5 @@
 import { getAuthProvider } from './auth/provider.ts';
+import { readBootConfig } from './boot-config.ts';
 
 /**
  * Fetch-based Server-Sent Events client.
@@ -55,6 +56,13 @@ export function apiEventStream(path: string): SseStream {
       const token = await getAuthProvider().getToken();
       const headers = new Headers({ accept: 'text/event-stream' });
       if (token) headers.set('Authorization', `Bearer ${token}`);
+      // Cloud shared-editing: tag the live stream with the booted cloud project
+      // id (same seam as apiFetch) so the cloud resolves a shared editor's
+      // /api/events to the OWNER's tenant bus — without it the editor only sees
+      // their own tenant and misses the owner's live edits (owner→editor sync).
+      // Absent in local/standalone studio → no header, behaviour unchanged.
+      const sharedProjectId = readBootConfig()?.projectId;
+      if (sharedProjectId) headers.set('X-Seeflow-Project-Id', sharedProjectId);
 
       const res = await fetch(path, { headers, signal: controller.signal });
       if (!res.ok || !res.body) {
