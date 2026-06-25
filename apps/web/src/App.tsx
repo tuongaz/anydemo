@@ -15,6 +15,7 @@ import { useRegistryEvents } from '@/hooks/use-registry-events';
 import type { CreateProjectResult } from '@/lib/api';
 import { useAppConfig } from '@/lib/auth/app-config';
 import { readBootConfig } from '@/lib/boot-config';
+import { fetchAccessibleProjects } from '@/lib/cloud-members-api';
 import { pickInitialFlow, readLastFlow, writeLastFlow } from '@/lib/last-flow';
 import { pickInitialDemo, readLastProjectId, writeLastProjectId } from '@/lib/last-project';
 import { matchProjectAlone, splitFlowSlug, usePathname } from '@/lib/router';
@@ -136,23 +137,35 @@ export function App() {
   // every navigation to '/' would make "home" unreachable: an explicit go-home
   // (the SeeFlow logo, or the cloud avatar menu's "My projects") lands on '/',
   // and the effect would immediately bounce back to the last-opened flow.
+  // config.mode === 'cloud'. Gates cloud-only behaviour below (last-project
+  // recall is disabled in cloud; the share affordance is resolved differently).
+  const { isCloud } = useAppConfig();
+
   const autoResumedRef = useRef(false);
   useEffect(() => {
     if (demos === null) return;
     if (autoResumedRef.current) return;
     autoResumedRef.current = true;
+    // Cloud is multi-account on a single origin: `seeflow:last-project` is shared
+    // localStorage, so a value left by a previous session/account must NOT
+    // auto-load — after logging into a different account you may have no access
+    // to it. Local studio (single user, no auth) keeps the recall.
+    if (isCloud) return;
     if (pathname !== '/') return;
     const target = pickInitialDemo(demos, readLastProjectId());
     if (target) {
       const split = splitFlowSlug(target.slug);
       if (split) resetFlow(split);
     }
-  }, [pathname, demos]);
+  }, [pathname, demos, isCloud]);
 
-  // US-001: persist whichever project is currently open so we can reopen it next visit.
+  // US-001: persist whichever project is currently open so we can reopen it next
+  // visit — local studio only (see above: in cloud the key would bleed across
+  // accounts on a shared origin, so we neither store nor recall it).
   useEffect(() => {
+    if (isCloud) return;
     if (currentSummary) writeLastProjectId(currentSummary.id);
-  }, [currentSummary]);
+  }, [currentSummary, isCloud]);
 
   // US-026: persist last-opened flow per project, keyed by project slug so
   // each project remembers its own last-visited flow independently.
@@ -182,16 +195,43 @@ export function App() {
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const flowId = currentSummary?.id ?? null;
 
-  // "Share with people" is a host (cloud) feature: it needs the internal cloud
-  // project id, injected via the studio boot config. Absent in local studio →
-  // the ShareMenu item stays hidden. It is also OWNER-ONLY: a shared `editor`
-  // gets the full editor (projectId is injected so its API calls carry the
-  // X-Seeflow-Project-Id header) but boot.canShare is false, so they never see
-  // the Share button — only the owner can (re)share. The cloud grants API
-  // enforces owner-only server-side too (defense in depth).
-  const { isCloud } = useAppConfig();
-  const cloudProjectId = useMemo(() => readBootConfig()?.projectId ?? null, []);
-  const canShare = useMemo(() => readBootConfig()?.canShare === true, []);
+  // "Share with people" is a host (cloud) feature: it needs the open project's
+  // internal cloud project id + an OWNER flag (only the owner may (re)share; the
+  // cloud grants API enforces this server-side too — defense in depth). There are
+  // two ways the studio learns them:
+  //   1. Boot config (the single-project /p/<id> shell) injects projectId +
+  //      canShare directly — the fast path. A shared `editor` gets the full editor
+  //      but canShare:false, so no Share button.
+  //   2. The multi-project /app studio has NO boot config (e.g. right after
+  //      creating a project). There we resolve the OPEN project (by slug) against
+  //      the cloud DB's accessible-projects list — owner ⇒ canShare. This is why a
+  //      freshly-created project is now shareable. Local studio: isCloud is false,
+  //      the fetch never runs, and the item stays hidden.
+  const boot = useMemo(() => readBootConfig(), []);
+  const [dbShare, setDbShare] = useState<{ projectId: string; canShare: boolean } | null>(null);
+  useEffect(() => {
+    if (!isCloud || boot || !topProject) {
+      setDbShare(null);
+      return;
+    }
+    let cancelled = false;
+    fetchAccessibleProjects()
+      .then((projects) => {
+        if (cancelled) return;
+        const row = projects.find((p) => p.slug === topProject);
+        setDbShare(row ? { projectId: row.projectId, canShare: row.access === 'owner' } : null);
+      })
+      .catch(() => {
+        // Best-effort: a failed lookup just hides Share (never crashes the editor).
+        if (!cancelled) setDbShare(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isCloud, boot, topProject]);
+
+  const cloudProjectId = boot?.projectId ?? dbShare?.projectId ?? null;
+  const canShare = boot ? boot.canShare === true : dbShare?.canShare === true;
   const canShareMembers = isCloud && cloudProjectId !== null && canShare;
 
   const share = useMemo<HeaderShareCallbacks | undefined>(() => {

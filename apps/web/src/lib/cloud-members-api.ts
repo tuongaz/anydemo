@@ -37,3 +37,32 @@ export async function removeGrant(projectId: string, email: string): Promise<voi
   });
   if (!res.ok) throw new Error(`Failed to remove access (${res.status})`);
 }
+
+export type Access = 'owner' | Role;
+
+export interface AccessibleProject {
+  /** Internal cloud project id the grants API keys on. */
+  projectId: string;
+  /** Unified public id (`/p/<publicId>`). */
+  publicId: string;
+  /** Studio project slug — matches the studio registry slug for owned projects. */
+  slug: string;
+  title: string;
+  /** 'owner' when the viewer owns it, else the granted role. */
+  access: Access;
+}
+
+/**
+ * The projects the signed-in user can access in cloud — owned AND shared-with-me —
+ * read from the cloud DB (GET /api/dashboard/projects). The studio uses this to
+ * resolve the currently-open project's internal projectId + owner-ness when the
+ * host injects NO boot config (the multi-project /app studio), so "Share with
+ * people" works there too — not only on the single-project /p/<id> shell. 404s in
+ * pure local mode; callers gate on isCloud.
+ */
+export async function fetchAccessibleProjects(): Promise<AccessibleProject[]> {
+  const res = await apiFetch('/api/dashboard/projects');
+  if (!res.ok) throw new Error(`Failed to load projects (${res.status})`);
+  const body = (await res.json()) as { projects: AccessibleProject[] };
+  return body.projects ?? [];
+}
