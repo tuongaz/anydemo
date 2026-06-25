@@ -4,6 +4,7 @@ import { MembersShareDialog } from '@/components/members-share-dialog';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
+  navigateToFlow,
   popBack,
   reset as resetFlow,
   useFlowStack,
@@ -92,7 +93,12 @@ export function App() {
       // defaultFlow — `result.slug` is flow-qualified (`<proj>/<flow>`), so
       // passing it as `project` produced a malformed
       // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown demo" page.
-      resetFlow({ project: result.projectSlug, flow: result.defaultFlow });
+      // `navigateToFlow` (not `resetFlow`) so that under a single-project boot
+      // shell (cloud `/p/<id>`) the brand-new project — which is NOT the booted
+      // one — full-loads into the multi-project studio instead of silently
+      // staying on the booted project (the "create does nothing + /api/flows
+      // refetch storm" bug).
+      navigateToFlow({ project: result.projectSlug, flow: result.defaultFlow });
     },
     [refreshFlows, refreshProjects],
   );

@@ -164,6 +164,35 @@ export const reset = (target: NavigateFlowTarget | null): void => {
 };
 
 /**
+ * Navigate to a (project, flow), correctly crossing the single-project boot
+ * boundary.
+ *
+ * In a host single-project boot shell (cloud serves the studio under
+ * `/p/<id>` with `window.__SEEFLOW_BOOT__`), the project is FIXED to
+ * `boot.projectSlug`: `flowPath` drops the `/projects/<slug>` segment, so an
+ * in-SPA `reset` to a DIFFERENT project silently stays on the booted one. That
+ * is the "create/switch project does nothing" bug — the new/switched project
+ * never opens, and the studio then refetches `/api/flows` looking for a slug it
+ * can never reach in this shell. Escape the single-project boot with a
+ * full-page load into the host's MULTI-project studio (`BUILD_BASE`, e.g.
+ * `/app`), where the project IS part of the URL and every project resolves.
+ *
+ * No boot, or the same project as boot → a plain in-SPA `reset` (unchanged for
+ * the standalone studio and the cloud `/app` multi-project shell, where every
+ * project is already addressable).
+ */
+export const navigateToFlow = (target: NavigateFlowTarget): void => {
+  const boot = readBootConfig();
+  if (boot && target.project !== boot.projectSlug) {
+    // `flowPath(…, null)` forces the multi-project grammar (`/projects/<p>/flows/<f>`);
+    // `withBase(…, BUILD_BASE)` puts the build-time base (`/app`) back on.
+    window.location.assign(withBase(flowPath(target.project, target.flow, null), BUILD_BASE));
+    return;
+  }
+  reset(target);
+};
+
+/**
  * Idempotent install — call once from App.tsx mount. Seeds the stack from the
  * current URL, stamps `stackDepth` onto the initial history entry, and wires
  * the popstate handler so browser back/forward + the linkflow header back

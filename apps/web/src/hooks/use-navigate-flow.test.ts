@@ -9,6 +9,7 @@ import {
   computeResetStack,
   ensureFlowNavigation,
   initialStackFromPath,
+  navigateToFlow,
   popBack,
   pushLink,
   reset,
@@ -30,7 +31,8 @@ interface FakeWindow {
     replaceState: (state: unknown, _title: string, url: string) => void;
     back: () => void;
   };
-  location: { pathname: string; search: string; hash: string };
+  location: { pathname: string; search: string; hash: string; assign: (url: string) => void };
+  assigns: string[];
   events: string[];
   pushStack: FakeHistoryEntry[];
   replaceStack: FakeHistoryEntry[];
@@ -49,12 +51,20 @@ const makeFakeWindow = (
 ): FakeWindow => {
   const w: FakeWindow = {
     events: [],
+    assigns: [],
     pushStack: [],
     replaceStack: [],
     backCalls: 0,
     listeners: {},
     __SEEFLOW_BOOT__: initial.boot,
-    location: { pathname: initial.pathname, search: '', hash: '' },
+    location: {
+      pathname: initial.pathname,
+      search: '',
+      hash: '',
+      assign(url: string) {
+        w.assigns.push(url);
+      },
+    },
     history: {
       state: initial.state ?? null,
       pushState(state, _title, url) {
@@ -119,6 +129,42 @@ describe('toFlowStackEntry', () => {
       flow: 'bar',
       slug: 'foo/bar',
     });
+  });
+});
+
+describe('navigateToFlow (boot-aware cross-project escape)', () => {
+  const boot = { base: '/p/abc', projectSlug: 'meally', flowId: 'main', mode: 'edit' as const };
+
+  it('full-loads into the multi-project studio when boot project differs', () => {
+    // Regression: under a single-project boot shell, creating/switching to a
+    // DIFFERENT project must escape the boot via a full page load, not an
+    // in-SPA reset that the boot router pins back to the booted project.
+    const w = makeFakeWindow({ pathname: '/flows/main', boot });
+    installWindow(w);
+    navigateToFlow({ project: 'other-project', flow: 'main' });
+    // BUILD_BASE is '' under bun:test (no VITE_BASE), so the multi-project
+    // grammar URL is base-relative; in cloud it carries the '/app' prefix.
+    expect(w.assigns).toEqual(['/projects/other-project/flows/main']);
+    // It must NOT do an in-SPA history mutation for a cross-boot navigation.
+    expect(w.pushStack).toEqual([]);
+    expect(w.replaceStack).toEqual([]);
+  });
+
+  it('does an in-SPA reset when the target IS the booted project', () => {
+    const w = makeFakeWindow({ pathname: '/flows/main', boot });
+    installWindow(w);
+    navigateToFlow({ project: 'meally', flow: 'retry' });
+    expect(w.assigns).toEqual([]); // no full page load
+    // boot grammar drops the project segment → /flows/retry, in-SPA.
+    expect([...w.pushStack, ...w.replaceStack].map((e) => e.url)).toContain('/p/abc/flows/retry');
+  });
+
+  it('does an in-SPA reset when there is no boot (standalone / multi-project)', () => {
+    const w = makeFakeWindow({ pathname: '/projects/a/flows/main' });
+    installWindow(w);
+    navigateToFlow({ project: 'b', flow: 'main' });
+    expect(w.assigns).toEqual([]);
+    expect([...w.pushStack, ...w.replaceStack].map((e) => e.url)).toContain('/projects/b/flows/main');
   });
 });
 

@@ -1,5 +1,5 @@
 import { CreateProjectDialog } from '@/components/create-project-dialog';
-import { reset as resetFlow } from '@/hooks/use-navigate-flow';
+import { navigateToFlow } from '@/hooks/use-navigate-flow';
 import type { CreateProjectResult, ProjectSummary } from '@/lib/api';
 import { useAppConfig } from '@/lib/auth/app-config';
 import { readLastFlow } from '@/lib/last-flow';
@@ -75,7 +75,11 @@ export function ProjectSwitcher({
     // the manifest's defaultFlow when no preference has been recorded yet.
     const lastFlow = readLastFlow(project.projectSlug);
     const targetFlow = lastFlow ?? project.defaultFlow;
-    resetFlow({ project: project.projectSlug, flow: targetFlow });
+    // `navigateToFlow` so switching to ANOTHER project works under a
+    // single-project boot shell (cloud `/p/<id>`): it full-loads into the
+    // multi-project studio when the target isn't the booted project, instead of
+    // an in-SPA reset that the boot router would pin back to the booted project.
+    navigateToFlow({ project: project.projectSlug, flow: targetFlow });
   };
 
   const handleCreated = (result: CreateProjectResult) => {
