@@ -76,10 +76,22 @@ export function App() {
   // "Unknown demo" page resolves without the user having to reload the tab.
   // Demos is `null` while loading; only react once it's been resolved at
   // least once and is missing the slug.
+  //
+  // HARD CAP: refetch AT MOST ONCE per missing slug. The original effect
+  // refetched on every `demos` change while `currentSummary` was undefined — so
+  // a slug the registry can NEVER return (a stale/unreachable URL, or a host
+  // shell that can't address it) spun `GET /api/flows` forever (the "infinite
+  // /api/flows" report). One refetch still catches the just-created-not-yet-
+  // echoed race; if the slug still isn't there, fall through to the Unknown-demo
+  // page instead of hammering the server. (Registry SSE reloads refresh
+  // separately, so an externally-registered slug still resolves live.)
+  const healAttemptedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!topSlug) return;
     if (demos === null) return;
     if (currentSummary) return;
+    if (healAttemptedRef.current.has(topSlug)) return;
+    healAttemptedRef.current.add(topSlug);
     refreshFlows();
   }, [topSlug, demos, currentSummary, refreshFlows]);
 
