@@ -4,6 +4,7 @@ import { MembersShareDialog } from '@/components/members-share-dialog';
 import { useDemos } from '@/hooks/use-demos';
 import {
   ensureFlowNavigation,
+  navigateToFlow,
   popBack,
   reset as resetFlow,
   useFlowStack,
@@ -75,10 +76,22 @@ export function App() {
   // "Unknown demo" page resolves without the user having to reload the tab.
   // Demos is `null` while loading; only react once it's been resolved at
   // least once and is missing the slug.
+  //
+  // HARD CAP: refetch AT MOST ONCE per missing slug. The original effect
+  // refetched on every `demos` change while `currentSummary` was undefined — so
+  // a slug the registry can NEVER return (a stale/unreachable URL, or a host
+  // shell that can't address it) spun `GET /api/flows` forever (the "infinite
+  // /api/flows" report). One refetch still catches the just-created-not-yet-
+  // echoed race; if the slug still isn't there, fall through to the Unknown-demo
+  // page instead of hammering the server. (Registry SSE reloads refresh
+  // separately, so an externally-registered slug still resolves live.)
+  const healAttemptedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (!topSlug) return;
     if (demos === null) return;
     if (currentSummary) return;
+    if (healAttemptedRef.current.has(topSlug)) return;
+    healAttemptedRef.current.add(topSlug);
     refreshFlows();
   }, [topSlug, demos, currentSummary, refreshFlows]);
 
@@ -92,7 +105,12 @@ export function App() {
       // defaultFlow — `result.slug` is flow-qualified (`<proj>/<flow>`), so
       // passing it as `project` produced a malformed
       // `/projects/<proj>%2F<flow>/flows/main` URL and the "Unknown demo" page.
-      resetFlow({ project: result.projectSlug, flow: result.defaultFlow });
+      // `navigateToFlow` (not `resetFlow`) so that under a single-project boot
+      // shell (cloud `/p/<id>`) the brand-new project — which is NOT the booted
+      // one — full-loads into the multi-project studio instead of silently
+      // staying on the booted project (the "create does nothing + /api/flows
+      // refetch storm" bug).
+      navigateToFlow({ project: result.projectSlug, flow: result.defaultFlow });
     },
     [refreshFlows, refreshProjects],
   );
