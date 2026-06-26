@@ -164,7 +164,9 @@ describe('navigateToFlow (boot-aware cross-project escape)', () => {
     installWindow(w);
     navigateToFlow({ project: 'b', flow: 'main' });
     expect(w.assigns).toEqual([]);
-    expect([...w.pushStack, ...w.replaceStack].map((e) => e.url)).toContain('/projects/b/flows/main');
+    expect([...w.pushStack, ...w.replaceStack].map((e) => e.url)).toContain(
+      '/projects/b/flows/main',
+    );
   });
 });
 
