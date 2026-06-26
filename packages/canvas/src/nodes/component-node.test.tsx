@@ -144,6 +144,15 @@ function findRuntime(tree: unknown): ReactElementLike | null {
   return findElement(tree, (el) => el.type === ComponentRuntime);
 }
 
+function getBodyStyle(tree: unknown): Record<string, unknown> {
+  const body = findElement(tree, (el) => {
+    const p = el.props as { 'data-testid'?: string };
+    return p['data-testid'] === 'component-node-body';
+  });
+  if (!body) throw new Error('component-node-body missing');
+  return ((body.props as { style?: CSSProperties }).style ?? {}) as Record<string, unknown>;
+}
+
 describe('ComponentNode container', () => {
   it('renders with data-node-type="component"', () => {
     const tree = callComponentNode();
@@ -287,6 +296,46 @@ describe('ComponentNode wrapper style', () => {
     );
     const userClass = ((userBody?.props as { className?: string }).className ?? '').split(/\s+/);
     expect(userClass).not.toContain('seeflow-themed-scrollbar');
+  });
+});
+
+describe('ComponentNode component font scaling', () => {
+  const SCALE_VAR = '--sf-component-font-scale';
+
+  it('defaults each component to 30% larger text (scale 1.3) when fontSize is unset', () => {
+    const style = getBodyStyle(callComponentNode());
+    expect(style[SCALE_VAR]).toBe(1.3);
+  });
+
+  it('scales the components off the node font-size control (default 22 → 30% bigger)', () => {
+    // 44 / 22 * 1.3 = 2.6
+    expect(getBodyStyle(callComponentNode({ fontSize: 44 }))[SCALE_VAR]).toBe(2.6);
+    // 11 / 22 * 1.3 = 0.65
+    expect(getBodyStyle(callComponentNode({ fontSize: 11 }))[SCALE_VAR]).toBe(0.65);
+  });
+
+  it('treats fontSize at the control default (22) as the same 30% baseline as unset', () => {
+    expect(getBodyStyle(callComponentNode({ fontSize: 22 }))[SCALE_VAR]).toBe(1.3);
+  });
+
+  it('drives the Tailwind text tokens off the scale var so every sf:text-* class scales', () => {
+    const style = getBodyStyle(callComponentNode());
+    expect(style['--sf-text-xs']).toBe('calc(0.75rem * var(--sf-component-font-scale))');
+    expect(style['--sf-text-sm']).toBe('calc(0.875rem * var(--sf-component-font-scale))');
+    expect(style['--sf-text-base']).toBe('calc(1rem * var(--sf-component-font-scale))');
+    expect(style['--sf-text-2xl']).toBe('calc(1.5rem * var(--sf-component-font-scale))');
+  });
+
+  it('keeps the auto-size measuring caps alongside the font vars', () => {
+    const style = getBodyStyle(callComponentNode());
+    expect(style.maxWidth).toBe(800);
+    expect(style.maxHeight).toBe(600);
+    expect(style.overflow).toBe('auto');
+  });
+
+  it('applies the font vars to the user-sized body too', () => {
+    const style = getBodyStyle(callComponentNode({ autoSize: false, width: 480, height: 320 }));
+    expect(style[SCALE_VAR]).toBe(1.3);
   });
 });
 

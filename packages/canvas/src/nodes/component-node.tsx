@@ -42,6 +42,14 @@ export type ComponentNodeType = Node<ComponentNodeRuntimeData, 'component'>;
 
 export const COMPONENT_DEFAULT_SIZE = { width: 320, height: 240 } as const;
 
+// Component text scales with the node's font-size control. The control's
+// default position is 22 (NODE_FONT_SIZE_DEFAULT in the StyleStrip); at that
+// value — and whenever data.fontSize is unset — each rendered component shows
+// 30% larger than its natural Tailwind size. Larger/smaller fontSize scales
+// the whole subtree proportionally.
+const COMPONENT_FONT_SIZE_BASE = 22;
+const COMPONENT_DEFAULT_FONT_SCALE = 1.3;
+
 const MIN_W = 80;
 const MIN_H = 40;
 
@@ -80,6 +88,29 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
   };
 
+  // The rendered components style their text with rem-based `sf:text-*`
+  // utilities, which resolve `var(--sf-text-*)` and so ignore the chrome's
+  // inherited font-size. Override those tokens on the body — scaled by the
+  // node's font-size control — so the one control sizes every component's text.
+  // rem-based (not em) so nested elements never compound the scale.
+  const fontScale =
+    Math.round(
+      ((data.fontSize ?? COMPONENT_FONT_SIZE_BASE) / COMPONENT_FONT_SIZE_BASE) *
+        COMPONENT_DEFAULT_FONT_SCALE *
+        1000,
+    ) / 1000;
+  // CSSProperties dropped its index signature (see @types/react note); cast to
+  // attach the CSS custom properties that drive the component text scale.
+  const bodyFontStyle = {
+    '--sf-component-font-scale': fontScale,
+    '--sf-text-xs': 'calc(0.75rem * var(--sf-component-font-scale))',
+    '--sf-text-sm': 'calc(0.875rem * var(--sf-component-font-scale))',
+    '--sf-text-base': 'calc(1rem * var(--sf-component-font-scale))',
+    '--sf-text-lg': 'calc(1.125rem * var(--sf-component-font-scale))',
+    '--sf-text-xl': 'calc(1.25rem * var(--sf-component-font-scale))',
+    '--sf-text-2xl': 'calc(1.5rem * var(--sf-component-font-scale))',
+  } as CSSProperties;
+
   const outerStyle: CSSProperties = userSized
     ? {
         width: data.width ?? COMPONENT_DEFAULT_SIZE.width,
@@ -99,6 +130,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     <div
       data-testid="component-node-body"
       className="sf:min-h-0 sf:w-full sf:flex-1 sf:overflow-auto"
+      style={bodyFontStyle}
     >
       <ComponentRuntime
         spec={data.spec}
@@ -113,7 +145,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
       ref={measureRef}
       data-testid="component-node-body"
       className="sf:inline-block"
-      style={{ maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
+      style={{ ...bodyFontStyle, maxWidth: 800, maxHeight: 600, overflow: 'auto' }}
     >
       <ComponentRuntime
         spec={data.spec}
