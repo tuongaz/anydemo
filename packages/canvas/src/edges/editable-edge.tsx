@@ -12,13 +12,13 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
-import { resolveFontStack } from '../lib/font-stacks.ts';
 import {
   type Endpoint,
   type Pin,
   type Side,
   resolveEdgeEndpoints,
 } from '../lib/floating-edge-geometry.ts';
+import { resolveFontStack } from '../lib/font-stacks.ts';
 import { deriveVisualStatus } from '../nodes/lib/visual-status.ts';
 import type {
   ConnectorHeadShape,

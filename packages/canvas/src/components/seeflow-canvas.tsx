@@ -55,6 +55,7 @@ import { computeImageDims, extractImageFile, handleCanvasFileDrop } from '../lib
 import { CanvasStudioProvider } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
+import { connectBufferPx } from '../lib/connect-buffer.ts';
 import { STYLE_BY_NAME, connectorToEdge } from '../lib/connector-to-edge.ts';
 import {
   type DrawSample,
@@ -70,14 +71,6 @@ import {
   projectCursorToPerimeter,
   snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
-import { connectBufferPx } from '../lib/connect-buffer.ts';
-import {
-  LINE_DEFAULT_LENGTH,
-  LINE_MIN_BOX,
-  boxFromEndpoints,
-  normalizePointsToBox,
-} from '../lib/line-geometry.ts';
-import { snapSegmentToStraight } from '../lib/snap-segment.ts';
 import {
   type DraggedGroup,
   GROUP_BOX_PADDING,
@@ -91,7 +84,14 @@ import {
 import { applyPackSummaries } from '../lib/icon-registry.ts';
 import { resolveGroupChord, resolveHistoryChord } from '../lib/keyboard-shortcuts.ts';
 import { DEFAULT_STORAGE_PREFIX, getLastUsedStyle } from '../lib/last-used-style.ts';
+import {
+  LINE_DEFAULT_LENGTH,
+  LINE_MIN_BOX,
+  boxFromEndpoints,
+  normalizePointsToBox,
+} from '../lib/line-geometry.ts';
 import { NEW_NODE_BORDER_WIDTH } from '../lib/node-defaults.ts';
+import { snapSegmentToStraight } from '../lib/snap-segment.ts';
 import { ComponentNode } from '../nodes/component-node.tsx';
 import {
   type Point,
@@ -102,7 +102,6 @@ import {
   snapToStraightLine,
 } from '../nodes/freehand-geometry.ts';
 import { FreehandNode } from '../nodes/freehand-node.tsx';
-import { LineNode } from '../nodes/line-node.tsx';
 import {
   GeometricNode,
   SHAPE_DEFAULT_SIZE,
@@ -114,6 +113,7 @@ import { GROUP_NODE_Z_INDEX, GroupNode } from '../nodes/group-node.tsx';
 import { HtmlNode } from '../nodes/html-node.tsx';
 import { ICON_DEFAULT_SIZE, IconNode } from '../nodes/icon-node.tsx';
 import { ImageNode } from '../nodes/image-node.tsx';
+import { LineNode } from '../nodes/line-node.tsx';
 import { LINKFLOW_DEFAULT_SIZE, LINKFLOW_MIN_SIZE, LinkflowNode } from '../nodes/linkflow-node.tsx';
 import { RectangleNode } from '../nodes/rectangle-node.tsx';
 import { ILLUSTRATIVE_SHAPE_RENDERERS } from '../nodes/shapes/registry.ts';

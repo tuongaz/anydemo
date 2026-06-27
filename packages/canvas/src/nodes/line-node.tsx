@@ -1,7 +1,7 @@
 import type { Node, NodeProps } from '@xyflow/react';
 import {
-  type PointerEvent as ReactPointerEvent,
   type ReactElement,
+  type PointerEvent as ReactPointerEvent,
   memo,
   useRef,
   useState,

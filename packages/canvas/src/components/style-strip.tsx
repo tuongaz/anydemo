@@ -1054,7 +1054,7 @@ export function StyleStrip({
               <PopoverSection label="Font" testId="style-strip-font-family">
                 <div
                   className="sf:flex sf:flex-col sf:gap-0.5"
-                  role="radiogroup"
+                  role="menu"
                   aria-label="Font family"
                 >
                   {FONT_FAMILY_OPTIONS.map((opt) => {
@@ -1064,7 +1064,7 @@ export function StyleStrip({
                       <button
                         key={opt.token}
                         type="button"
-                        role="radio"
+                        role="menuitemradio"
                         aria-checked={active}
                         data-testid={`style-tab-font-family-${opt.token}`}
                         onClick={() => applyTextFontFamily(opt.token)}
