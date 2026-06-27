@@ -5,6 +5,7 @@ import type {
   ConnectorPath,
   ConnectorStyle,
   EdgePin,
+  FontFamilyToken,
 } from '../types.ts';
 import { colorTokenStyle } from './color-tokens.ts';
 
@@ -41,6 +42,8 @@ export interface DerivedEdge {
     targetPin?: EdgePin;
     /** US-018: per-connector label font size in px (undefined → 11px). */
     fontSize?: number;
+    /** Curated font-family token for the label; resolves via FONT_STACKS. */
+    fontFamily?: FontFamilyToken;
     // Custom (non-arrow) glyph for EditableEdge to draw at the target (head)
     // end. Absent for the default arrow (which uses native markers) so the
     // edge stays marker-driven.
@@ -179,6 +182,7 @@ export const connectorToEdge = (
       sourcePin: connector.sourcePin,
       targetPin: connector.targetPin,
       fontSize: connector.fontSize,
+      fontFamily: connector.fontFamily,
       ...(anyCustomHead
         ? {
             ...(endIsCustom ? { headShape: endShape as Exclude<ConnectorHeadShape, 'arrow'> } : {}),

@@ -17,6 +17,7 @@ import {
 import { type CSSProperties, type ReactNode, useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { COLOR_TOKENS } from '../lib/color-tokens.ts';
+import { FONT_FAMILY_OPTIONS, FONT_STACKS } from '../lib/font-stacks.ts';
 import { GROUP_DEFAULT_BORDER_COLOR, GROUP_DEFAULT_BORDER_SIZE } from '../nodes/group-node.tsx';
 import type {
   ColorToken,
@@ -26,6 +27,7 @@ import type {
   ConnectorPath,
   ConnectorStyle,
   FlowNode,
+  FontFamilyToken,
 } from '../types.ts';
 import { IconToggleGroup, type IconToggleOption } from '../ui/icon-toggle-group.tsx';
 import {
@@ -50,6 +52,8 @@ export interface NodeStylePatch {
   borderWidth?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
+  /** Curated font-family token; resolves to a CSS stack at render via FONT_STACKS. */
+  fontFamily?: FontFamilyToken;
   /** Horizontal alignment for the node's text content. Defaults to `'center'`
    * at render time when unset. */
   textAlign?: 'left' | 'center' | 'right';
@@ -76,6 +80,8 @@ export interface ConnectorStylePatch {
   tailShape?: ConnectorHeadShape;
   /** US-018: per-connector label font size (mirrors NodeStylePatch.fontSize). */
   fontSize?: number;
+  /** Curated font-family token for the connector label (mirrors NodeStylePatch.fontFamily). */
+  fontFamily?: FontFamilyToken;
 }
 
 export interface StyleStripProps {
@@ -396,6 +402,33 @@ export function StyleStrip({
     previewFontSize(n);
     previewConnectorFontSize(n);
   };
+  // Font-family fan-out. Mirrors the unified font-size path so one picker drives
+  // node text AND connector labels; commits through the atomic batch API for
+  // multi-node selections, per-node / per-connector loop otherwise.
+  const applyNodeFontFamily = (token: FontFamilyToken) => {
+    if (nodes.length > 1 && onStyleNodes) {
+      onStyleNodes(
+        nodes.map((node) => node.id),
+        { fontFamily: token },
+      );
+    } else {
+      for (const node of nodes) onStyleNode(node.id, { fontFamily: token });
+    }
+  };
+  const applyTextFontFamily = (token: FontFamilyToken) => {
+    applyNodeFontFamily(token);
+    for (const c of connectors) onStyleConnector(c.id, { fontFamily: token });
+  };
+  // Active token: first visual node's, else first connector's, else 'sans'.
+  // Indeterminate when the selection mixes tokens (reads "Mixed").
+  const textFontFamilyActive: FontFamilyToken =
+    firstVisualNode?.data.fontFamily ?? firstConnector?.fontFamily ?? 'sans';
+  const textFontFamilyIndeterminate = (() => {
+    const vals = new Set<FontFamilyToken>();
+    for (const n of visualNodes) vals.add(n.data.fontFamily ?? 'sans');
+    for (const c of connectors) vals.add(c.fontFamily ?? 'sans');
+    return vals.size > 1;
+  })();
   // Indeterminate across the WHOLE selection: nodes default to 22, connectors to
   // 11, so a genuine mix of node+connector text reads "Mixed" — which is honest,
   // they ARE different sizes until the user picks one.
@@ -1013,6 +1046,36 @@ export function StyleStrip({
                       : 'style-tab-font-size-slider'
                   }
                 />
+              </PopoverSection>
+              <PopoverSection label="Font" testId="style-strip-font-family">
+                <div
+                  className="sf:flex sf:flex-col sf:gap-0.5"
+                  role="radiogroup"
+                  aria-label="Font family"
+                >
+                  {FONT_FAMILY_OPTIONS.map((opt) => {
+                    const active =
+                      !textFontFamilyIndeterminate && opt.token === textFontFamilyActive;
+                    return (
+                      <button
+                        key={opt.token}
+                        type="button"
+                        role="radio"
+                        aria-checked={active}
+                        data-testid={`style-tab-font-family-${opt.token}`}
+                        onClick={() => applyTextFontFamily(opt.token)}
+                        className={cn(
+                          'sf:flex sf:items-center sf:justify-between sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm sf:transition-colors sf:hover:bg-accent',
+                          active && 'sf:bg-accent sf:font-medium',
+                        )}
+                        style={{ fontFamily: FONT_STACKS[opt.token] }}
+                      >
+                        <span>{opt.label}</span>
+                        {active ? <Check className="sf:h-3.5 sf:w-3.5 sf:shrink-0" /> : null}
+                      </button>
+                    );
+                  })}
+                </div>
               </PopoverSection>
               {hasNodes ? (
                 <PopoverSection label="Align" testId="style-strip-text-align">

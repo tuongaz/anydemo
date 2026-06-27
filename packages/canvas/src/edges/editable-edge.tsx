@@ -12,6 +12,7 @@ import {
 import { useEffect, useRef, useState } from 'react';
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
+import { resolveFontStack } from '../lib/font-stacks.ts';
 import {
   type Endpoint,
   type Pin,
@@ -23,6 +24,7 @@ import type {
   ConnectorHeadShape,
   ConnectorPath,
   EdgePin,
+  FontFamilyToken,
   NodeStatus,
   StatusReport,
 } from '../types.ts';
@@ -118,6 +120,8 @@ export type EditableEdgeData = {
   headEnd?: boolean;
   /** US-018: per-connector label font size in px (undefined → 11px default). */
   fontSize?: number;
+  /** Curated font-family token for the label; resolves to a CSS stack via FONT_STACKS. */
+  fontFamily?: FontFamilyToken;
   /**
    * US-018: register a stable handle that enters inline label edit mode.
    * demo-canvas calls the registered `enter()` from its onEdgeDoubleClick
@@ -367,7 +371,14 @@ export function EditableEdge({
   const labelText = typeof label === 'string' ? label : '';
   const editable = !!onLabelChange;
   const fontSize = data?.fontSize;
-  const fontSizeStyle = typeof fontSize === 'number' ? { fontSize: `${fontSize}px` } : undefined;
+  const labelFontStack = resolveFontStack(data?.fontFamily);
+  const fontSizeStyle =
+    typeof fontSize === 'number' || labelFontStack
+      ? {
+          ...(typeof fontSize === 'number' ? { fontSize: `${fontSize}px` } : {}),
+          ...(labelFontStack ? { fontFamily: labelFontStack } : {}),
+        }
+      : undefined;
 
   // US-018: register an external entry point to enter edit mode. Inlined (not a
   // reference to enterEdit) so the closure's deps stay stable and the handle

@@ -9,6 +9,7 @@ import {
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import { resolveFontStack } from '../lib/font-stacks.ts';
 import type {
   ColorToken,
   GeometricNodeType as GeometricKind,
@@ -275,9 +276,14 @@ function GeometricNodeImpl({
   // `--muted-foreground` and washes out in dark mode. Text shapes carry their
   // own color via `borderColor` (textColorStyle), so they opt out here.
   const bodyTextColorStyle = isText ? {} : colorTokenStyle(data.backgroundColor, 'node-body-text');
+  // Resolve the curated font token once; unset → undefined → CSS property
+  // omitted so the node inherits the canvas default font.
+  const fontStack = resolveFontStack(data.fontFamily);
+  const fontFamilyStyle: CSSProperties = fontStack ? { fontFamily: fontStack } : {};
   const colorStyle: CSSProperties = {
     ...shapeChromeStyle(shape, data),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    ...fontFamilyStyle,
   };
   // Text-shape only: the toolbar's Align toggle persists explicit picks via
   // `data.textAlign`; the fresh-text default is `'center'` since a chromeless
@@ -289,6 +295,7 @@ function GeometricNodeImpl({
     data.textAlign ?? (isText ? 'center' : undefined);
   const labelFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    ...fontFamilyStyle,
     ...textColorStyle,
     ...bodyTextColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),
@@ -411,6 +418,7 @@ function GeometricNodeImpl({
   const hasDescription = description !== '';
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    ...fontFamilyStyle,
     ...textColorStyle,
     ...bodyTextColorStyle,
     ...(resolvedTextAlign !== undefined ? { textAlign: resolvedTextAlign } : {}),

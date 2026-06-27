@@ -1413,3 +1413,51 @@ describe('SliderControl — editable number input', () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 });
+
+describe('StyleStrip — font-family picker (fonts)', () => {
+  it('clicking a font option dispatches onStyleNode with { fontFamily }', () => {
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({ nodes: [rectangleFixture('n1')], onStyleNode });
+    const btn = findElement(tree, testIdEquals('style-tab-font-family-serif'));
+    expect(btn).not.toBeNull();
+    (btn?.props.onClick as () => void)();
+    expect(onStyleNode).toHaveBeenCalledTimes(1);
+    expect(onStyleNode).toHaveBeenCalledWith('n1', { fontFamily: 'serif' });
+  });
+
+  it('multi-node selection commits a single batched onStyleNodes call', () => {
+    const onStyleNodes = mock(() => {});
+    const onStyleNode = mock(() => {});
+    const tree = callStrip({
+      nodes: [rectangleFixture('n1'), rectangleFixture('n2')],
+      onStyleNode,
+      onStyleNodes,
+    });
+    const btn = findElement(tree, testIdEquals('style-tab-font-family-mono'));
+    (btn?.props.onClick as () => void)();
+    expect(onStyleNodes).toHaveBeenCalledTimes(1);
+    expect(onStyleNodes).toHaveBeenCalledWith(['n1', 'n2'], { fontFamily: 'mono' });
+  });
+
+  it('connector-label selection dispatches onStyleConnector with { fontFamily }', () => {
+    const onStyleConnector = mock(() => {});
+    const cn: Connector = { id: 'c1', source: 'a', target: 'b' } as Connector;
+    const tree = callStrip({ nodes: [], connectors: [cn], onStyleConnector });
+    const btn = findElement(tree, testIdEquals('style-tab-font-family-handwritten'));
+    expect(btn).not.toBeNull();
+    (btn?.props.onClick as () => void)();
+    expect(onStyleConnector).toHaveBeenCalledTimes(1);
+    expect(onStyleConnector).toHaveBeenCalledWith('c1', { fontFamily: 'handwritten' });
+  });
+
+  it('marks the active token and exactly one option as checked', () => {
+    const tree = callStrip({
+      nodes: [{ ...rectangleFixture('n1'), data: { name: 's', fontFamily: 'mono' } } as FlowNode],
+    });
+    const active = findAll(tree, (el) => el.props['aria-checked'] === true);
+    expect(active.length).toBe(1);
+    expect((active[0]?.props as { 'data-testid'?: string })['data-testid']).toBe(
+      'style-tab-font-family-mono',
+    );
+  });
+});
