@@ -194,6 +194,13 @@ export const NodePatchBodySchema = z
     // membership reverts the field, mirroring `target`. The on-disk schema's
     // `.default([])` re-normalizes a cleared group back to an empty list on read.
     childIds: z.array(z.string()).nullable().optional(),
+    // type:'line'-only: the two endpoint [x, y] pairs, normalized to the node
+    // box. Lands at data.points. Used by the line endpoint-drag editor; the
+    // post-merge ResolvedFlowSchema reparse enforces the exactly-two-points rule.
+    points: z
+      .array(z.tuple([z.number(), z.number()]))
+      .length(2)
+      .optional(),
   })
   .strict();
 export type NodePatchBody = z.infer<typeof NodePatchBodySchema>;
@@ -232,6 +239,7 @@ const NODE_DATA_PATCH_KEYS = [
   'spec',
   'target',
   'childIds',
+  'points',
 ] as const satisfies ReadonlyArray<keyof NodePatchBody>;
 
 const EXTERNALIZED_FIELD_NAMES = new Set<string>(EXTERNALIZED_NODE_FIELDS.map((e) => e.field));

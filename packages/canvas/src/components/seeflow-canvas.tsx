@@ -656,6 +656,21 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     points: [[number, number], [number, number]],
   ) => void;
   /**
+   * Persist a line node's reshaped endpoints (from the endpoint-drag editor).
+   * The canvas recomputes the bounding box, normalized points, and top-left
+   * position from the dragged endpoints; the host commits via the adapter
+   * (optimistic override + one undo entry). Wiring this enables the line
+   * endpoint handles in edit mode; absent → a selected line shows no handles.
+   */
+  onUpdateLineEndpoints?: (
+    nodeId: string,
+    update: {
+      position: { x: number; y: number };
+      size: { width: number; height: number };
+      points: [[number, number], [number, number]];
+    },
+  ) => void;
+  /**
    * Commit a new `type:'linkflow'` node from the bottom-toolbar's Link node
    * tile. The parent owns id allocation, optimistic override, and the
    * createNode persistence; the canvas hands the final flow-space position
@@ -2284,6 +2299,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onCreateFreehandNode,
     onCreateLinkflowNode,
     onCreateLineNode,
+    onUpdateLineEndpoints,
     onCreateImageFromFile,
     onRetryImageUpload,
     onReplaceImage,
@@ -3648,6 +3664,32 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     ? (selectedNodes ?? [])
     : (selectedNodes ?? []).filter((n) => n.type !== 'group');
 
+  // Line endpoint-edit delegates injected into every line node's data (edit
+  // mode only). `lineGetZoom` lets the renderer convert its pointer's screen
+  // delta to flow units; `lineEndpointCommit` takes the dragged endpoints (in
+  // the node's current box-local flow coords), looks up the node's live
+  // position, recomputes the bounding box / normalized points / top-left, and
+  // hands the result to the host for persistence.
+  const lineGetZoom = useCallback(() => rfInstanceRef.current?.getViewport().zoom ?? 1, []);
+  const lineEndpointCommit = useCallback(
+    (nodeId: string, localPoints: [[number, number], [number, number]]) => {
+      if (!onUpdateLineEndpoints) return;
+      const node = rfNodesRef.current.find((n) => n.id === nodeId);
+      if (!node) return;
+      const pos = node.position;
+      const a = { x: pos.x + localPoints[0][0], y: pos.y + localPoints[0][1] };
+      const b = { x: pos.x + localPoints[1][0], y: pos.y + localPoints[1][1] };
+      const box = boxFromEndpoints(a, b, LINE_MIN_BOX);
+      const points = normalizePointsToBox(a, b, box);
+      onUpdateLineEndpoints(nodeId, {
+        position: { x: box.x, y: box.y },
+        size: { width: box.width, height: box.height },
+        points,
+      });
+    },
+    [onUpdateLineEndpoints],
+  );
+
   const sourceNodes = useMemo<Node[]>(() => {
     const buildNode = (merged: FlowNode): Node => {
       // View-mode local drag override: see viewModePositionsRef declaration.
@@ -3700,6 +3742,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           // resize gesture stays byte-identical to legacy there. The renderer
           // forwards it to useResizeGesture as `alignment`.
           resizeAlignment: flags.enableAlignmentGuides ? resizeAlignment : undefined,
+          // type:'line'-only: endpoint-drag editor delegates. Gated on edit mode
+          // + host prop so view/mini lines stay non-editable. Stable refs keep
+          // the line node memo intact.
+          getLineZoom: merged.type === 'line' && isEditMode ? lineGetZoom : undefined,
+          onLineEndpointDragEnd:
+            merged.type === 'line' && isEditMode && onUpdateLineEndpoints
+              ? lineEndpointCommit
+              : undefined,
           // type:'html' + type:'component': routed through to the renderer's
           // fit-to-content button. Gated on type so other node variants don't
           // pick up an unused callback in their runtime data.
@@ -3845,6 +3895,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onComponentNodeFitToContent,
     setResizing,
     resizeAlignment,
+    lineGetZoom,
+    lineEndpointCommit,
+    onUpdateLineEndpoints,
     flags.enableAlignmentGuides,
     nodeOverrides,
     onNodeNameChange,

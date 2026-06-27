@@ -1555,6 +1555,39 @@ export function DemoView({
     [flowId, adapter, setNodeOverride, dropNodeOverride],
   );
 
+  // Persist a line node's reshaped endpoints from the endpoint-drag editor.
+  // Mirrors onNodeResizeEnd: re-assert the optimistic override at the final
+  // geometry, then PATCH (the wrapped adapter pushes one undo entry).
+  const onUpdateLineEndpoints = useCallback(
+    (
+      nodeId: string,
+      update: {
+        position: { x: number; y: number };
+        size: { width: number; height: number };
+        points: [[number, number], [number, number]];
+      },
+    ) => {
+      if (!flowId || !adapter) return;
+      const next = {
+        position: update.position,
+        width: update.size.width,
+        height: update.size.height,
+        points: update.points,
+      };
+      setNodeOverride(nodeId, {
+        position: update.position,
+        data: { width: update.size.width, height: update.size.height, points: update.points },
+      } as Partial<FlowNode>);
+      setEditError(null);
+      adapter.updateNode(nodeId, next).catch((err) => {
+        dropNodeOverride(nodeId);
+        setEditError(err instanceof Error ? err.message : String(err));
+        console.error('updateNode (line endpoints) failed', err);
+      });
+    },
+    [flowId, adapter, setNodeOverride, dropNodeOverride],
+  );
+
   // Commit a new type:'html' node at the drop position from the toolbar's HTML
   // block tile. Mirrors `onCreateShapeNode`: client-side id, optimistic override
   // so the node appears before the SSE echo arrives, single undo entry pushed
@@ -3113,6 +3146,7 @@ export function DemoView({
           onCreateFreehandNode={flowId ? onCreateFreehandNode : undefined}
           onCreateLinkflowNode={flowId ? onCreateLinkflowNode : undefined}
           onCreateLineNode={flowId ? onCreateLineNode : undefined}
+          onUpdateLineEndpoints={flowId ? onUpdateLineEndpoints : undefined}
           onCreateImageFromFile={flowId ? onCreateImageFromFile : undefined}
           onRetryImageUpload={flowId ? onRetryImageUpload : undefined}
           onReplaceImage={flowId ? onReplaceImage : undefined}

@@ -60,6 +60,8 @@ export interface NodePatch {
   shadow?: number;
   width?: number;
   height?: number;
+  /** type:'line'-only: the two endpoint [x, y] pairs, normalized to the node box. Lands at data.points. */
+  points?: [[number, number], [number, number]];
   /**
    * type:'html'-only: when true, the renderer measures content and React Flow
    * sizes the wrapper around it. The studio adapter strips width/height when

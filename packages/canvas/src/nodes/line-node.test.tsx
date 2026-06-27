@@ -54,6 +54,11 @@ function isElement(value: unknown): value is ReactElementLike {
 function findAll(tree: unknown, predicate: (el: ReactElementLike) => boolean): ReactElementLike[] {
   const out: ReactElementLike[] = [];
   const visit = (node: unknown) => {
+    // Flatten nested arrays (e.g. a `.map()` result nested in a children array).
+    if (Array.isArray(node)) {
+      for (const c of node) visit(c);
+      return;
+    }
     if (!isElement(node)) return;
     if (predicate(node)) out.push(node);
     const children = node.props.children;
@@ -130,5 +135,33 @@ describe('LineNode', () => {
     const tree = callLineNode({ ...DIAGONAL, name: 'Divider' });
     const svgs = findAll(tree, (el) => el.type === 'svg');
     expect(svgs[0]?.props['aria-label']).toBe('Divider');
+  });
+});
+
+describe('LineNode — endpoint handles', () => {
+  const EDITABLE = { ...DIAGONAL, onLineEndpointDragEnd: () => {}, getLineZoom: () => 1 };
+
+  it('renders two endpoint handles when selected and editable', () => {
+    const tree = callLineNode(EDITABLE, { selected: true });
+    const handles = findAll(tree, (el) => el.type === 'circle');
+    expect(handles.length).toBe(2);
+    expect(handles[0]?.props['data-testid']).toBe('line-endpoint-0');
+    expect(handles[1]?.props['data-testid']).toBe('line-endpoint-1');
+  });
+
+  it('renders no handles when not selected', () => {
+    const tree = callLineNode(EDITABLE, { selected: false });
+    expect(findAll(tree, (el) => el.type === 'circle').length).toBe(0);
+  });
+
+  it('renders no handles in view mode (no edit delegate)', () => {
+    const tree = callLineNode(DIAGONAL, { selected: true });
+    expect(findAll(tree, (el) => el.type === 'circle').length).toBe(0);
+  });
+
+  it('wires a pointer-down handler on each handle', () => {
+    const tree = callLineNode(EDITABLE, { selected: true });
+    const handles = findAll(tree, (el) => el.type === 'circle');
+    for (const h of handles) expect(typeof h.props.onPointerDown).toBe('function');
   });
 });
