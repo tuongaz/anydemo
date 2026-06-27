@@ -12,6 +12,7 @@ import {
   Pencil,
   Server,
   Shapes,
+  Slash,
   Square,
   Sticker,
   StickyNote,
@@ -131,6 +132,10 @@ const SECONDARY_PRIMARY_SHAPES: ToolbarShapeEntry[] = [
   { shape: 'sticky', label: 'Sticky note', commandId: 'tool.sticky', Icon: StickyNote },
   { shape: 'text', label: 'Text', commandId: 'tool.text', Icon: Type },
   { shape: 'linkflow', label: 'Link node', commandId: 'tool.linkflow', Icon: Link2 },
+  // Decorative straight line. Like linkflow it's a non-geometric drawable: the
+  // draw-commit projects the press + release points to two endpoints (snapping
+  // a near-straight segment to H/V) and commits a `type:'line'` node.
+  { shape: 'line', label: 'Line', commandId: 'tool.line', Icon: Slash },
 ];
 
 // Illustrative shapes live behind a single "Shape" toolbar trigger that

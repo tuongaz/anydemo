@@ -246,6 +246,10 @@ export function StyleStrip({
     (n): n is Exclude<FlowNode, { type: 'icon' }> => n.type !== 'icon',
   );
   const firstVisualNode = visualNodes[0];
+  // A decorative line carries no text, so the Text popover (size / font / align)
+  // is suppressed for a pure-line selection — its stroke colour / width / style
+  // are driven by the shared border controls instead.
+  const pureLineType = pureNode && nodes.every((n) => n.type === 'line');
   // US-014: when every selected node is type:'icon' the strip collapses to
   // a single icon-color swatch (icons have no border/background/font/corner
   // to control). Mixed selections (icon + other) hide the icon picker and
@@ -1017,7 +1021,7 @@ export function StyleStrip({
           </PopoverButton>
         ) : null}
 
-        {hasNodes || pureConnector ? (
+        {(hasNodes && !pureLineType) || pureConnector ? (
           <PopoverButton
             testId="style-strip-text"
             tooltip="Text"

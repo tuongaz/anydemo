@@ -142,7 +142,7 @@ export type NodeType =
  * `image`/`html`/`icon`/`component` are NOT drawable — they each need an
  * upload, picker, or dedicated authoring flow.
  */
-export type DrawableNodeType = GeometricNodeType | 'linkflow';
+export type DrawableNodeType = GeometricNodeType | 'linkflow' | 'line';
 
 /** Geometric nodes share the same data schema; type drives the SVG variant. */
 export interface GeometricNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {}

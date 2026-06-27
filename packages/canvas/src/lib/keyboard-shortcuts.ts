@@ -78,6 +78,7 @@ export type CommandId =
   | 'tool.parallelogram'
   | 'tool.document'
   | 'tool.linkflow'
+  | 'tool.line'
   | 'edit.undo'
   | 'edit.redo'
   | 'edit.copy'
@@ -245,6 +246,14 @@ export const COMMANDS: readonly CommandDef[] = [
     id: 'tool.linkflow',
     label: 'Link node',
     description: 'Add a link node and pick a target flow',
+    category: 'Tools',
+  },
+  // Line lives in the secondary primary group; like linkflow it doesn't claim
+  // a bare single-letter shortcut (the pool is exhausted).
+  {
+    id: 'tool.line',
+    label: 'Line',
+    description: 'Draw a straight line',
     category: 'Tools',
   },
   {

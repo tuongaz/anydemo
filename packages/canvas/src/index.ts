@@ -213,14 +213,17 @@ export type { LastUsedStyle } from './lib/last-used-style.ts';
 export {
   buildNewGroupData,
   buildNewImageData,
+  buildNewLineData,
   buildNewShapeData,
   NEW_GROUP_NAME,
+  NEW_LINE_STROKE_WIDTH,
   NEW_NODE_BORDER_WIDTH,
   NEW_NODE_FONT_SIZE,
 } from './lib/node-defaults.ts';
 export type {
   GroupDataDefaults,
   ImageDataDefaults,
+  LineDataDefaults,
   ShapeDataDefaults,
 } from './lib/node-defaults.ts';
 

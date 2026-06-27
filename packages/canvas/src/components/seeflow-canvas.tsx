@@ -71,6 +71,13 @@ import {
   snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
 import {
+  LINE_DEFAULT_LENGTH,
+  LINE_MIN_BOX,
+  boxFromEndpoints,
+  normalizePointsToBox,
+} from '../lib/line-geometry.ts';
+import { snapSegmentToStraight } from '../lib/snap-segment.ts';
+import {
   type DraggedGroup,
   GROUP_BOX_PADDING,
   type GroupMoveUpdate,
@@ -94,6 +101,7 @@ import {
   snapToStraightLine,
 } from '../nodes/freehand-geometry.ts';
 import { FreehandNode } from '../nodes/freehand-node.tsx';
+import { LineNode } from '../nodes/line-node.tsx';
 import {
   GeometricNode,
   SHAPE_DEFAULT_SIZE,
@@ -633,6 +641,18 @@ interface SeeflowCanvasBaseProps extends CanvasFeatureOverrides {
     position: { x: number; y: number },
     size: { width: number; height: number },
     points: Point[],
+  ) => void;
+  /**
+   * Commit a new `type:'line'` node from the toolbar's Line tile. `position` is
+   * the line's bounding-box top-left in flow coords; `size` is the flow-space
+   * box; `points` are the two endpoints normalized to that box ([x, y] with
+   * x/y in 0..1). Wiring this enables the Line tile; absent → the tile commits
+   * nothing on pointer-up.
+   */
+  onCreateLineNode?: (
+    position: { x: number; y: number },
+    size: { width: number; height: number },
+    points: [[number, number], [number, number]],
   ) => void;
   /**
    * Commit a new `type:'linkflow'` node from the bottom-toolbar's Link node
@@ -1534,6 +1554,7 @@ const nodeTypes = {
   // are no-ops at this story; US-004 wires the picker, US-007 wires navigation.
   linkflow: LinkflowNode,
   freehand: FreehandNode,
+  line: LineNode,
   // Group container: paints a titled box BEHIND its members (assigned
   // GROUP_NODE_Z_INDEX in buildNode). Static this milestone — create/ungroup
   // (M4), overlay resize (M3/M5), enter/exit (M6) build on top. Using the key
@@ -2256,6 +2277,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onCreateIconNode,
     onCreateFreehandNode,
     onCreateLinkflowNode,
+    onCreateLineNode,
     onCreateImageFromFile,
     onRetryImageUpload,
     onReplaceImage,
@@ -3130,7 +3152,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       // Done before the screenToFlowPosition projection so the committed node
       // paints exactly where the ghost previewed it.
       const squared =
-        constrain && shape !== 'linkflow'
+        constrain && shape !== 'linkflow' && shape !== 'line'
           ? perfectDragBox(start, release, perfectShapeAspect(shape))
           : release;
       const minX = Math.min(start.x, squared.x);
@@ -3171,6 +3193,29 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
         onCreateLinkflowNode?.(flowMin, { width, height });
         return;
       }
+      // Line commit: a decorative line is defined by its two directional
+      // endpoints (NOT a sorted bbox), so we project the raw press + release
+      // points to flow space, snap a near-straight segment to exactly H/V, and
+      // store the endpoints normalized to their bounding box. A near-zero drag
+      // (tap) falls back to a default-length horizontal line so a single click
+      // still produces a usable line.
+      if (shape === 'line') {
+        const aFlow = rfInstance.screenToFlowPosition(start);
+        const isTap = dragScreenWidth < MIN_DRAW_SIZE && dragScreenHeight < MIN_DRAW_SIZE;
+        const bRaw = isTap
+          ? { x: aFlow.x + LINE_DEFAULT_LENGTH, y: aFlow.y }
+          : rfInstance.screenToFlowPosition(release);
+        const lineZoom = rfInstance.getViewport().zoom;
+        const bFlow = snapSegmentToStraight(aFlow, bRaw, STRAIGHT_SNAP_PX / lineZoom);
+        const box = boxFromEndpoints(aFlow, bFlow, LINE_MIN_BOX);
+        const points = normalizePointsToBox(aFlow, bFlow, box);
+        onCreateLineNode?.(
+          { x: box.x, y: box.y },
+          { width: box.width, height: box.height },
+          points,
+        );
+        return;
+      }
       // Icon commit: same MIN_DRAW_SIZE "intentional drag" threshold as
       // geometric shapes, but the floor is ICON_DEFAULT_SIZE so a near-zero
       // tap still produces a usable node at the picker's expected size.
@@ -3192,7 +3237,14 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
       const height = tooSmall ? SHAPE_DEFAULT_SIZE[shape].height : dragFlowHeight;
       onCreateShapeNode?.(shape, flowMin, { width, height });
     },
-    [exitDrawMode, onCreateShapeNode, onCreateIconNode, onCreateFreehandNode, onCreateLinkflowNode],
+    [
+      exitDrawMode,
+      onCreateShapeNode,
+      onCreateIconNode,
+      onCreateFreehandNode,
+      onCreateLinkflowNode,
+      onCreateLineNode,
+    ],
   );
   // Block upstream sync while a node is mid-drag or mid-resize. NodeResizer
   // dispatches dimension changes into rfNodes during the gesture; if we then
@@ -4969,7 +5021,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     const constrain =
       drawShiftRef.current || Date.now() - drawShiftHeldAtRef.current <= PEN_SHIFT_GRACE_MS;
     const end =
-      constrain && drawShape !== 'linkflow'
+      constrain && drawShape !== 'linkflow' && drawShape !== 'line'
         ? perfectDragBox(drawStart, drawCurrent, perfectShapeAspect(drawShape))
         : drawCurrent;
     const minX = Math.min(drawStart.x, end.x);
@@ -4999,9 +5051,15 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
   // than the geometric shape-chrome helpers — its committed visual matches the
   // unlinked state from `linkflow-node.tsx`, not any geometric primitive.
   const isLinkflowGhost = drawShape === 'linkflow';
-  const ghostShapeClass = drawShape && !isLinkflowGhost ? shapeChromeClass(drawShape) : '';
+  // A line ghost is a thin segment, not a filled box — it paints its own preview
+  // below and opts out of the geometric shape-chrome helpers (like linkflow).
+  const isLineGhost = drawShape === 'line';
+  const isNonGeometricGhost = isLinkflowGhost || isLineGhost;
+  const ghostShapeClass = drawShape && !isNonGeometricGhost ? shapeChromeClass(drawShape) : '';
   const ghostShapeStyle =
-    drawShape && !isLinkflowGhost ? shapeChromeStyle(drawShape, ghostLastUsedNodeStyle) : undefined;
+    drawShape && !isNonGeometricGhost
+      ? shapeChromeStyle(drawShape, ghostLastUsedNodeStyle)
+      : undefined;
   const ghostTextOutline = drawShape === 'text';
 
   // Space-held pan mode (US-019). React Flow's panActivationKeyCode='Space'
@@ -6199,9 +6257,9 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
               `ILLUSTRATIVE_SHAPE_RENDERERS` so adding a new illustrative shape
               only touches the registry. Linkflow is handled above. */}
                   {(() => {
-                    if (isLinkflowGhost) return null;
-                    // `isLinkflowGhost === false` narrows `drawShape` to the
-                    // geometric union below; no redundant linkflow guard needed.
+                    if (isNonGeometricGhost) return null;
+                    // Excluding linkflow + line narrows `drawShape` to the
+                    // geometric union below; no redundant guard needed.
                     const GhostRenderer = drawShape
                       ? ILLUSTRATIVE_SHAPE_RENDERERS[drawShape]
                       : undefined;
@@ -6265,6 +6323,35 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                           strokeWidth={2}
                           strokeLinecap="round"
                           strokeLinejoin="round"
+                        />
+                      </svg>
+                    );
+                  })()
+                : null}
+              {/* Line tool: live preview of the segment being drawn. Mirrors the
+                  commit's straight-snap (in client px here, STRAIGHT_SNAP_PX) so
+                  the preview lands exactly where mouse-up commits. */}
+              {drawShape === 'line' && drawStart && drawCurrent
+                ? (() => {
+                    const wrapperRect = wrapperRef.current?.getBoundingClientRect();
+                    const ox = wrapperRect?.left ?? 0;
+                    const oy = wrapperRect?.top ?? 0;
+                    const snapped = snapSegmentToStraight(drawStart, drawCurrent, STRAIGHT_SNAP_PX);
+                    return (
+                      <svg
+                        data-testid="canvas-line-preview"
+                        aria-hidden
+                        className="sf:pointer-events-none sf:absolute sf:inset-0 sf:z-10 sf:h-full sf:w-full"
+                      >
+                        <title>Line preview</title>
+                        <line
+                          x1={drawStart.x - ox}
+                          y1={drawStart.y - oy}
+                          x2={snapped.x - ox}
+                          y2={snapped.y - oy}
+                          stroke="currentColor"
+                          strokeWidth={2}
+                          strokeLinecap="round"
                         />
                       </svg>
                     );
@@ -6460,7 +6547,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
                         // compose with the linkflow's pick-a-target step. The
                         // toolbar tile remains the path for creating linkflow
                         // nodes.
-                        if (shape === 'linkflow') return null;
+                        if (shape === 'linkflow' || shape === 'line') return null;
                         return (
                           <button
                             key={shape}

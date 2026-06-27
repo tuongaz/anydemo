@@ -131,6 +131,39 @@ export function buildNewImageData(
   };
 }
 
+/** Default stroke width (flow units) for a freshly-created line node. */
+export const NEW_LINE_STROKE_WIDTH = 2;
+
+const LINE_FIELDS = ['borderColor', 'borderSize', 'borderStyle'] as const;
+
+export interface LineDataDefaults {
+  // Index signature so the result satisfies the create-node `data`
+  // (`Record<string, unknown>`) without a per-call-site cast.
+  [key: string]: unknown;
+  points: [[number, number], [number, number]];
+  width: number;
+  height: number;
+  borderSize: number;
+}
+
+/** Build the `data` object for a freshly-created decorative line node. `points`
+ * are the two endpoints already normalized to `dims`. Optional `lastUsed`
+ * overlays the user's most recent stroke colour/width/style on top of the
+ * factory default (a thin line). The line carries no text, so no fontSize. */
+export function buildNewLineData(
+  points: [[number, number], [number, number]],
+  dims: { width: number; height: number },
+  lastUsed?: Partial<NodeStylePatch>,
+): LineDataDefaults {
+  return {
+    points,
+    width: dims.width,
+    height: dims.height,
+    borderSize: NEW_LINE_STROKE_WIDTH,
+    ...pick(lastUsed, LINE_FIELDS),
+  };
+}
+
 /** Default title for a freshly-created group container. */
 export const NEW_GROUP_NAME = 'Group';
 
