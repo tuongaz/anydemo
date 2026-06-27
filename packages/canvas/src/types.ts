@@ -26,6 +26,13 @@ export type ColorToken =
   | 'fuchsia'
   | 'pink';
 
+/**
+ * Curated, cross-platform font-family tokens. Each resolves to a concrete CSS
+ * font stack via FONT_STACKS in `./lib/font-stacks.ts`; storing the token (not
+ * a raw stack) keeps saved flows portable and lets the stacks be tuned later.
+ */
+export type FontFamilyToken = 'sans' | 'system' | 'serif' | 'mono' | 'rounded' | 'handwritten';
+
 export interface NodeVisual {
   width?: number;
   height?: number;
@@ -34,6 +41,8 @@ export interface NodeVisual {
   borderSize?: number;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
   fontSize?: number;
+  /** Curated font-family token; resolves to a CSS stack via FONT_STACKS. Unset → inherits the canvas default. */
+  fontFamily?: FontFamilyToken;
   /**
    * Horizontal alignment for the node's text content. Defaults to `'center'`
    * at render time when unset (most node labels read better centered); the
@@ -123,6 +132,7 @@ export type NodeType =
   | 'component'
   | 'linkflow'
   | 'freehand'
+  | 'line'
   | 'group';
 
 /**
@@ -155,6 +165,7 @@ export const CANVAS_NODE_DATA_FIELDS = {
   borderSize: true,
   borderStyle: true,
   fontSize: true,
+  fontFamily: true,
   textAlign: true,
   cornerRadius: true,
   shadow: true,
@@ -186,6 +197,19 @@ export interface FreehandNodeData extends NodeSemanticBase, NodeVisual, NodeCapa
   points: [number, number, number][];
   color?: ColorToken;
   strokeWidth?: number;
+}
+
+/**
+ * `type:'line'` node data — a decorative straight line segment. Mirrors the
+ * freehand model but carries EXACTLY two endpoints (no pressure), normalized to
+ * the node box (x/y in 0..1). Reuses NodeVisual stroke fields: `borderColor`
+ * (stroke colour), `borderSize` (stroke width), `borderStyle`
+ * (solid/dashed/dotted). NOT connectable — endpoints are edited via the two
+ * endpoint handles, never through the connection system.
+ */
+export interface LineNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
+  /** Exactly two endpoints [[x, y], [x, y]], normalized to the node box (0..1). */
+  points: [[number, number], [number, number]];
 }
 
 export interface HtmlNodeData extends NodeSemanticBase, NodeVisual, NodeCapabilities {
@@ -317,6 +341,7 @@ export type FlowNode =
   | (NodeBase & { type: 'component'; data: ComponentNodeData })
   | (NodeBase & { type: 'linkflow'; data: LinkflowNodeData })
   | (NodeBase & { type: 'freehand'; data: FreehandNodeData })
+  | (NodeBase & { type: 'line'; data: LineNodeData })
   | (NodeBase & { type: 'group'; data: GroupNodeData });
 
 // Canvas interaction mode. Mutually exclusive: the toolbar is a radio group.
@@ -368,6 +393,8 @@ export interface ConnectorBase {
   /** Glyph at the source (tail) end. Absent ⇒ falls back to `headShape`. */
   tailShape?: ConnectorHeadShape;
   fontSize?: number;
+  /** Curated font-family token for the connector label; resolves via FONT_STACKS. */
+  fontFamily?: FontFamilyToken;
 }
 
 export interface Connector extends ConnectorBase {

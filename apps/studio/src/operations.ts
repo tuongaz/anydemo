@@ -120,6 +120,10 @@ export const NodePatchBodySchema = z
     borderWidth: z.number().min(0).max(8).nullable().optional(),
     borderStyle: z.enum(['solid', 'dashed', 'dotted']).nullable().optional(),
     fontSize: z.number().positive().nullable().optional(),
+    fontFamily: z
+      .enum(['sans', 'system', 'serif', 'mono', 'rounded', 'handwritten'])
+      .nullable()
+      .optional(),
     textAlign: z.enum(['left', 'center', 'right']).nullable().optional(),
     cornerRadius: z.number().min(0).nullable().optional(),
     shadow: z.number().int().min(0).max(5).nullable().optional(),
@@ -206,6 +210,7 @@ const NODE_DATA_PATCH_KEYS = [
   'borderWidth',
   'borderStyle',
   'fontSize',
+  'fontFamily',
   'textAlign',
   'cornerRadius',
   'shadow',
@@ -330,6 +335,19 @@ const SEMANTIC_KEYS_BY_TYPE: Record<z.infer<typeof NodeTypeSchema>, ReadonlySet<
     'statusAction',
     'points',
   ]),
+  // Line nodes carry the two normalized endpoint `points` in flow.json data;
+  // stroke colour/width/style are visual keys routed to style.json.
+  line: new Set([
+    'name',
+    'description',
+    'detail',
+    'icon',
+    'stateSource',
+    'handlerModule',
+    'playAction',
+    'statusAction',
+    'points',
+  ]),
   // Group nodes carry the semantic `childIds` membership list (flow.json) plus
   // the universal semantic keys. Visual keys (background/border/cornerRadius)
   // are NODE_VISUAL_KEYS routed to style.json, preserved across a retype.
@@ -357,6 +375,7 @@ const NODE_VISUAL_KEYS = new Set([
   'borderSize',
   'borderStyle',
   'fontSize',
+  'fontFamily',
   'textAlign',
   'cornerRadius',
   'shadow',

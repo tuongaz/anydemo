@@ -48,6 +48,10 @@ const NodeVisualBaseShape = {
   borderSize: z.number().min(0).optional(),
   borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
   fontSize: z.number().positive().optional(),
+  // Curated font-family token; resolves to a concrete CSS stack in the canvas
+  // (FONT_STACKS). Stored as a token so saved flows stay portable. Omitted →
+  // inherits the canvas default font.
+  fontFamily: z.enum(['sans', 'system', 'serif', 'mono', 'rounded', 'handwritten']).optional(),
   // Horizontal alignment for the node's text content. Defaults to 'center'
   // at render time when omitted; explicit picks from the toolbar's Align
   // toggle persist here.
@@ -271,6 +275,7 @@ export const NodeTypeSchema = z.enum([
   'component',
   'linkflow',
   'freehand',
+  'line',
   // A `group` is a first-class container node, NOT a geometric shape — it owns
   // `data.childIds` (membership) and is deliberately kept out of
   // GEOMETRIC_NODE_TYPES so it routes through its own GroupNodeData variant.
@@ -421,6 +426,17 @@ const ResolvedFreehandNodeData = z.object({
   strokeWidth: z.number().min(0.5).max(4).optional(),
 });
 
+// Decorative straight line. `points` are EXACTLY two endpoints [x, y]
+// normalized to the node's local box (0..1) so resize scales the rendered
+// segment. Stroke colour/width/style come from the shared visual base
+// (borderColor / borderSize / borderStyle) — no dedicated fields.
+const ResolvedLineNodeData = z.object({
+  ...NodeSemanticBaseShape,
+  ...NodeVisualBaseShape,
+  ...NodeCapabilitiesShape,
+  points: z.array(z.tuple([z.number(), z.number()])).length(2),
+});
+
 // Group node — a first-class container that owns membership via `childIds`
 // (absolute-positioned member node ids). Reuses the shared semantic + visual
 // base so title/description/sidebar and background/border/cornerRadius come for
@@ -482,6 +498,11 @@ const NodeSchema = z.discriminatedUnion('type', [
   }),
   z.object({
     ...NodeBaseShape,
+    type: z.literal('line'),
+    data: ResolvedLineNodeData,
+  }),
+  z.object({
+    ...NodeBaseShape,
     type: z.literal('group'),
     data: ResolvedGroupNodeData,
   }),
@@ -517,6 +538,7 @@ const ConnectorVisualBaseShape = {
   headShape: ConnectorHeadShapeSchema.optional(),
   tailShape: ConnectorHeadShapeSchema.optional(),
   fontSize: z.number().positive().optional(),
+  fontFamily: z.enum(['sans', 'system', 'serif', 'mono', 'rounded', 'handwritten']).optional(),
 };
 
 // Handle ids — every node type uses the same four-handle layout:
@@ -756,6 +778,22 @@ const FlowFreehandNodeData = z
   })
   .strict();
 
+// On-disk line data. `points` are EXACTLY two endpoints normalized to the node
+// box; the box (position/width/height) plus stroke colour/width/style live in
+// style.json, never here.
+const FlowLineNodeData = z
+  .object({
+    ...NodeSemanticBaseShape,
+    ...NodeCapabilitiesShape,
+    points: z
+      .array(z.tuple([z.number(), z.number()]))
+      .length(2)
+      .describe(
+        'Decorative line endpoints as [x, y], normalized to the node box (0..1). Exactly two points. Authored by the line tool, not by hand.',
+      ),
+  })
+  .strict();
+
 // Group node, on-disk shape. `childIds` is SEMANTIC (membership), so it lives
 // in flow.json — NOT style.json. The visual base fields (width/height/colors)
 // route to style.json via splitFlow, exactly like every other node type, so
@@ -851,6 +889,14 @@ export const FlowFreehandNodeSchema = z
   })
   .strict();
 
+export const FlowLineNodeSchema = z
+  .object({
+    ...FlowNodeBaseShape,
+    type: z.literal('line'),
+    data: FlowLineNodeData,
+  })
+  .strict();
+
 export const FlowGroupNodeSchema = z
   .object({
     ...FlowNodeBaseShape,
@@ -880,6 +926,7 @@ const FlowNodeSchema = z.discriminatedUnion('type', [
   FlowComponentNodeSchema,
   FlowLinkflowNodeSchema,
   FlowFreehandNodeSchema,
+  FlowLineNodeSchema,
   FlowGroupNodeSchema,
 ]);
 
@@ -967,6 +1014,7 @@ const NodeStyleSchema = z
     borderSize: z.number().min(0).optional(),
     borderStyle: z.enum(['solid', 'dashed', 'dotted']).optional(),
     fontSize: z.number().positive().optional(),
+    fontFamily: z.enum(['sans', 'system', 'serif', 'mono', 'rounded', 'handwritten']).optional(),
     textAlign: z.enum(['left', 'center', 'right']).optional(),
     cornerRadius: z.number().min(0).optional(),
     shadow: z.number().int().min(0).max(5).optional(),
@@ -996,6 +1044,7 @@ const ConnectorStyleEntrySchema = z
     headShape: ConnectorHeadShapeSchema.optional(),
     tailShape: ConnectorHeadShapeSchema.optional(),
     fontSize: z.number().positive().optional(),
+    fontFamily: z.enum(['sans', 'system', 'serif', 'mono', 'rounded', 'handwritten']).optional(),
   })
   .strict();
 

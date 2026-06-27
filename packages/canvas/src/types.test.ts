@@ -104,6 +104,8 @@ describe('US-010: component node types', () => {
           return 'linkflow';
         case 'freehand':
           return 'freehand';
+        case 'line':
+          return 'line';
         case 'group':
           return 'group';
         default: {

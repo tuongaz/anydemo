@@ -66,6 +66,7 @@ const NODE_STYLE_KEYS = new Set([
   'borderSize',
   'borderStyle',
   'fontSize',
+  'fontFamily',
   'textAlign',
   'cornerRadius',
   'shadow',
@@ -101,6 +102,7 @@ const CONNECTOR_STYLE_KEYS = new Set([
   'headShape',
   'tailShape',
   'fontSize',
+  'fontFamily',
 ]);
 
 /**
