@@ -70,6 +70,7 @@ import {
   projectCursorToPerimeter,
   snapPinToStraight,
 } from '../lib/floating-edge-geometry.ts';
+import { connectBufferPx } from '../lib/connect-buffer.ts';
 import {
   LINE_DEFAULT_LENGTH,
   LINE_MIN_BOX,
@@ -1267,7 +1268,7 @@ const nodeElNearPoint = (
   if (direct) return direct;
   if (!wrapper) return null;
   let nearest: Element | null = null;
-  let nearestDist = RECONNECT_BUFFER_PX;
+  let nearestDist = Number.POSITIVE_INFINITY;
   let nearestArea = Number.POSITIVE_INFINITY;
   const nodes = wrapper.querySelectorAll('.react-flow__node');
   for (const node of nodes) {
@@ -1276,7 +1277,12 @@ const nodeElNearPoint = (
     const dx = Math.max(rect.left - clientX, 0, clientX - rect.right);
     const dy = Math.max(rect.top - clientY, 0, clientY - rect.bottom);
     const dist = Math.hypot(dx, dy);
-    if (dist > nearestDist) continue;
+    // Node-size-aware near-miss zone: bigger nodes catch from a little farther,
+    // tiny nodes keep the base (CONNECT_BUFFER_BASE_PX === RECONNECT_BUFFER_PX),
+    // all capped below xyflow's connectionRadius. Drives BOTH the live
+    // candidate highlight and the body-drop commit, so what glows is what
+    // connects.
+    if (dist > connectBufferPx(rect, RECONNECT_BUFFER_PX)) continue;
     const area = rect.width * rect.height;
     // Canvas grouping M8: on a (near-)distance tie in the buffer zone prefer the
     // smaller-area node so a member wins over its enclosing group, keeping this

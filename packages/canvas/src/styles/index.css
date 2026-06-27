@@ -460,8 +460,18 @@ layer(base);
   .react-flow.seeflow-connecting
   .react-flow__node[data-connect-target="true"]
   > div {
-  border-color: hsl(var(--muted-foreground)) !important;
+  border-color: hsl(var(--primary)) !important;
   border-style: dashed !important;
+}
+/* A clear "in range — release to connect" glow on the candidate node, using the
+ * brand accent so it reads as a deliberate highlight (not just a recolour). The
+ * shadow scales with zoom like the rest of the node (it lives inside the scaled
+ * viewport), so no /var(--rf-zoom) countering is needed here. */
+.seeflow-canvas-root
+  .react-flow.seeflow-connecting
+  .react-flow__node[data-connect-target="true"] {
+  box-shadow: 0 0 0 2px hsl(var(--primary) / 0.55), 0 0 12px 2px hsl(var(--primary) / 0.3);
+  border-radius: 6px;
 }
 /* A group is chrome-less (no border to recolor), so its connect-target
  * affordance is an OUTLINE drawn on the wrapper — a dashed ring that hugs the
@@ -469,7 +479,7 @@ layer(base);
 .seeflow-canvas-root
   .react-flow.seeflow-connecting
   .react-flow__node-group[data-connect-target="true"] {
-  outline: calc(1px / var(--rf-zoom, 1)) dashed hsl(var(--muted-foreground)) !important;
+  outline: calc(1px / var(--rf-zoom, 1)) dashed hsl(var(--primary)) !important;
   outline-offset: 0;
 }
 
