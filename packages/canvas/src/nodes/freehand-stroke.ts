@@ -6,6 +6,14 @@ export const FREEHAND_STROKE_OPTIONS = {
   smoothing: 0.5,
   streamline: 0.5,
   simulatePressure: true,
+  // The canvas only ever renders COMMITTED (complete) strokes through getStroke
+  // — the in-progress gesture is a separate live <polyline> preview. `last: true`
+  // tells perfect-freehand the stroke is finished so its outline extends all the
+  // way to the final input point. Without it, the streamline low-pass filter lags
+  // the endpoint as if more samples were coming, leaving the ink short of the
+  // release point — most visibly on a Shift-straight line (2 points → ends near
+  // the midpoint) and on quick flicks (few samples → exaggerated lag).
+  last: true,
 };
 
 // Convert perfect-freehand's outline polygon (array of [x, y]) into a closed
