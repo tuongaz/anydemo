@@ -5,6 +5,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   Check,
+  ChevronDown,
   Circle,
   Diamond,
   Layers,
@@ -29,6 +30,13 @@ import type {
   FlowNode,
   FontFamilyToken,
 } from '../types.ts';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from '../ui/dropdown-menu.tsx';
 import { IconToggleGroup, type IconToggleOption } from '../ui/icon-toggle-group.tsx';
 import {
   HeadManyIcon,
@@ -1052,34 +1060,53 @@ export function StyleStrip({
                 />
               </PopoverSection>
               <PopoverSection label="Font" testId="style-strip-font-family">
-                <div
-                  className="sf:flex sf:flex-col sf:gap-0.5"
-                  role="menu"
-                  aria-label="Font family"
-                >
-                  {FONT_FAMILY_OPTIONS.map((opt) => {
-                    const active =
-                      !textFontFamilyIndeterminate && opt.token === textFontFamilyActive;
-                    return (
-                      <button
-                        key={opt.token}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={active}
-                        data-testid={`style-tab-font-family-${opt.token}`}
-                        onClick={() => applyTextFontFamily(opt.token)}
-                        className={cn(
-                          'sf:flex sf:items-center sf:justify-between sf:rounded-md sf:px-2 sf:py-1.5 sf:text-sm sf:transition-colors sf:hover:bg-accent',
-                          active && 'sf:bg-accent sf:font-medium',
-                        )}
-                        style={{ fontFamily: FONT_STACKS[opt.token] }}
+                {/* modal=false: this menu is nested inside the Text popover; a
+                    modal menu would scroll-lock + steal dismissal and collapse
+                    the parent popover on open/close. */}
+                <DropdownMenu modal={false}>
+                  <DropdownMenuTrigger asChild>
+                    <button
+                      type="button"
+                      data-testid="style-tab-font-family-trigger"
+                      aria-label="Font family"
+                      className={cn(
+                        'sf:flex sf:w-full sf:items-center sf:justify-between sf:gap-2 sf:rounded-md sf:border sf:border-input sf:bg-transparent sf:px-2 sf:py-1.5 sf:text-sm sf:transition-colors sf:hover:bg-accent',
+                        'sf:focus-visible:outline-hidden sf:focus-visible:ring-2 sf:focus-visible:ring-ring',
+                      )}
+                    >
+                      <span
+                        className="sf:truncate"
+                        style={{ fontFamily: FONT_STACKS[textFontFamilyActive] }}
                       >
-                        <span>{opt.label}</span>
-                        {active ? <Check className="sf:h-3.5 sf:w-3.5 sf:shrink-0" /> : null}
-                      </button>
-                    );
-                  })}
-                </div>
+                        {textFontFamilyIndeterminate
+                          ? 'Mixed'
+                          : (FONT_FAMILY_OPTIONS.find((o) => o.token === textFontFamilyActive)
+                              ?.label ?? textFontFamilyActive)}
+                      </span>
+                      <ChevronDown className="sf:h-3.5 sf:w-3.5 sf:shrink-0 sf:opacity-60" />
+                    </button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="start"
+                    className="sf:w-[var(--radix-dropdown-menu-trigger-width)]"
+                  >
+                    <DropdownMenuRadioGroup
+                      value={textFontFamilyIndeterminate ? '' : textFontFamilyActive}
+                      onValueChange={(v) => applyTextFontFamily(v as FontFamilyToken)}
+                    >
+                      {FONT_FAMILY_OPTIONS.map((opt) => (
+                        <DropdownMenuRadioItem
+                          key={opt.token}
+                          value={opt.token}
+                          data-testid={`style-tab-font-family-${opt.token}`}
+                          style={{ fontFamily: FONT_STACKS[opt.token] }}
+                        >
+                          {opt.label}
+                        </DropdownMenuRadioItem>
+                      ))}
+                    </DropdownMenuRadioGroup>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </PopoverSection>
               {hasNodes ? (
                 <PopoverSection label="Align" testId="style-strip-text-align">

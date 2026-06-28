@@ -1415,12 +1415,26 @@ describe('SliderControl — editable number input', () => {
 });
 
 describe('StyleStrip — font-family picker (fonts)', () => {
-  it('clicking a font option dispatches onStyleNode with { fontFamily }', () => {
+  // The picker is a dropdown: selecting a font fires the radio group's
+  // onValueChange (not a per-button onClick). Find the group by its handler
+  // inside the font-family section, then drive it like a real selection.
+  function findFontRadioGroup(tree: unknown): ReactElementLike {
+    const section = findElement(tree as ReactElementLike, testIdEquals('style-strip-font-family'));
+    const group = findElement(
+      section ?? (tree as ReactElementLike),
+      (el) => typeof (el.props as { onValueChange?: unknown }).onValueChange === 'function',
+    );
+    if (!group) throw new Error('font-family radio group missing');
+    return group;
+  }
+
+  it('selecting a font option dispatches onStyleNode with { fontFamily }', () => {
     const onStyleNode = mock(() => {});
     const tree = callStrip({ nodes: [rectangleFixture('n1')], onStyleNode });
-    const btn = findElement(tree, testIdEquals('style-tab-font-family-serif'));
-    expect(btn).not.toBeNull();
-    (btn?.props.onClick as () => void)();
+    // The option still carries a stable test id (rendered in its own font).
+    expect(findElement(tree, testIdEquals('style-tab-font-family-serif'))).not.toBeNull();
+    const group = findFontRadioGroup(tree);
+    (group.props as { onValueChange: (v: string) => void }).onValueChange('serif');
     expect(onStyleNode).toHaveBeenCalledTimes(1);
     expect(onStyleNode).toHaveBeenCalledWith('n1', { fontFamily: 'serif' });
   });
@@ -1433,8 +1447,8 @@ describe('StyleStrip — font-family picker (fonts)', () => {
       onStyleNode,
       onStyleNodes,
     });
-    const btn = findElement(tree, testIdEquals('style-tab-font-family-mono'));
-    (btn?.props.onClick as () => void)();
+    const group = findFontRadioGroup(tree);
+    (group.props as { onValueChange: (v: string) => void }).onValueChange('mono');
     expect(onStyleNodes).toHaveBeenCalledTimes(1);
     expect(onStyleNodes).toHaveBeenCalledWith(['n1', 'n2'], { fontFamily: 'mono' });
   });
@@ -1443,21 +1457,31 @@ describe('StyleStrip — font-family picker (fonts)', () => {
     const onStyleConnector = mock(() => {});
     const cn: Connector = { id: 'c1', source: 'a', target: 'b' } as Connector;
     const tree = callStrip({ nodes: [], connectors: [cn], onStyleConnector });
-    const btn = findElement(tree, testIdEquals('style-tab-font-family-handwritten'));
-    expect(btn).not.toBeNull();
-    (btn?.props.onClick as () => void)();
+    const group = findFontRadioGroup(tree);
+    (group.props as { onValueChange: (v: string) => void }).onValueChange('handwritten');
     expect(onStyleConnector).toHaveBeenCalledTimes(1);
     expect(onStyleConnector).toHaveBeenCalledWith('c1', { fontFamily: 'handwritten' });
   });
 
-  it('marks the active token and exactly one option as checked', () => {
+  it('binds the radio group value to the active token', () => {
     const tree = callStrip({
       nodes: [{ ...rectangleFixture('n1'), data: { name: 's', fontFamily: 'mono' } } as FlowNode],
     });
-    const active = findAll(tree, (el) => el.props['aria-checked'] === true);
-    expect(active.length).toBe(1);
-    expect((active[0]?.props as { 'data-testid'?: string })['data-testid']).toBe(
-      'style-tab-font-family-mono',
-    );
+    const group = findFontRadioGroup(tree);
+    expect((group.props as { value?: string }).value).toBe('mono');
+  });
+
+  it('shows the trigger label in the active font, "Mixed" when the selection is mixed', () => {
+    const mixed = callStrip({
+      nodes: [
+        { ...rectangleFixture('n1'), data: { name: 'a', fontFamily: 'mono' } } as FlowNode,
+        { ...rectangleFixture('n2'), data: { name: 'b', fontFamily: 'serif' } } as FlowNode,
+      ],
+    });
+    const trigger = findElement(mixed, testIdEquals('style-tab-font-family-trigger'));
+    expect(trigger).not.toBeNull();
+    const group = findFontRadioGroup(mixed);
+    // Mixed selection => no bound value (nothing checked in the menu).
+    expect((group.props as { value?: string }).value).toBe('');
   });
 });
