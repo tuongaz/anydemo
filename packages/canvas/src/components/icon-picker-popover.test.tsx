@@ -467,3 +467,95 @@ describe('IconPickerBody tabs (US-016)', () => {
     expect(browse).toBeNull();
   });
 });
+
+describe('IconPickerBody emoji tab', () => {
+  // Picker-tab-only fixture; mirrors the generated catalog's shape. `keywords`
+  // carries text ("happy") that never appears in the slug, so search must match
+  // the haystack, not the id.
+  const EMOJI_FIXTURE = [
+    { id: 'twemoji:grinning-face', label: 'grinning face', keywords: 'grinning face happy smile' },
+    { id: 'twemoji:red-heart', label: 'red heart', keywords: 'red heart love' },
+    { id: 'twemoji:dog-face', label: 'dog face', keywords: 'dog face pet puppy' },
+  ];
+
+  it('shows the Emoji tab in the bar by default', () => {
+    const tree = callBody();
+    expect(findElement(tree, testIdEquals('icon-picker-tab-emoji'))).not.toBeNull();
+  });
+
+  it('clicking the Emoji tab requests the emoji tab', () => {
+    const onActiveTabChange = mock(() => {});
+    const tree = callBody({ onActiveTabChange });
+    const tab = findElement(tree, testIdEquals('icon-picker-tab-emoji'));
+    if (!tab) throw new Error('emoji tab not found');
+    (tab.props.onClick as () => void)();
+    expect(onActiveTabChange).toHaveBeenCalledWith('emoji');
+  });
+
+  it('shows a loading state until the catalog resolves', () => {
+    // emojiCatalog defaults to null (lazy import not yet resolved).
+    const tree = callBody({ activeTab: 'emoji' });
+    expect(findElement(tree, testIdEquals('icon-picker-emoji-loading'))).not.toBeNull();
+    expect(findElement(tree, testIdEquals('icon-picker-all'))).toBeNull();
+  });
+
+  it('renders the catalog as iconify:twemoji tiles once loaded', () => {
+    const tree = callBody({ activeTab: 'emoji', emojiCatalog: EMOJI_FIXTURE });
+    const names = findAll(tree, isTileButton).map(
+      (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+    );
+    expect(names).toContain('iconify:twemoji:grinning-face');
+    expect(names).toContain('iconify:twemoji:red-heart');
+    // Every emoji tile carries the iconify:twemoji prefix — no bare slugs leak.
+    for (const n of names) expect(n?.startsWith('iconify:twemoji:')).toBe(true);
+  });
+
+  it('clicking an emoji tile picks the full iconify:twemoji id', () => {
+    const onPick = mock(() => {});
+    const tree = callBody({ activeTab: 'emoji', emojiCatalog: EMOJI_FIXTURE, onPick });
+    const tile = findElement(
+      tree,
+      (el) =>
+        el.type === 'button' &&
+        (el.props as { 'data-icon-name'?: string })['data-icon-name'] ===
+          'iconify:twemoji:grinning-face',
+    );
+    if (!tile) throw new Error('grinning-face tile not found');
+    (tile.props.onClick as () => void)();
+    expect(onPick).toHaveBeenCalledWith('iconify:twemoji:grinning-face');
+  });
+
+  it('searches the keyword haystack, not the slug', () => {
+    // "happy" only appears in keywords; it must still surface grinning-face.
+    const tree = callBody({ activeTab: 'emoji', emojiCatalog: EMOJI_FIXTURE, query: 'happy' });
+    const names = findAll(tree, isTileButton).map(
+      (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+    );
+    expect(names).toEqual(['iconify:twemoji:grinning-face']);
+  });
+
+  it('uses the emoji search placeholder on the Emoji tab', () => {
+    const tree = callBody({ activeTab: 'emoji', emojiCatalog: EMOJI_FIXTURE });
+    const input = findElement(tree, testIdEquals('icon-picker-search'));
+    expect((input?.props as { placeholder?: string }).placeholder).toBe('Search emojis…');
+  });
+
+  it('shows only emoji recents on the Emoji tab', () => {
+    const tree = callBody({
+      activeTab: 'emoji',
+      emojiCatalog: EMOJI_FIXTURE,
+      recents: ['shopping-cart', 'iconify:twemoji:red-heart', 'aws:lambda', 'iconify:logos:aws'],
+    });
+    const recents = findElement(tree, testIdEquals('icon-picker-recents'));
+    expect(recents).not.toBeNull();
+    const names = findAll(recents, (el) => el.type === 'button').map(
+      (t) => (t.props as { 'data-icon-name'?: string })['data-icon-name'],
+    );
+    expect(names).toEqual(['iconify:twemoji:red-heart']);
+  });
+
+  it('does not show the No-icon tile on the Emoji tab', () => {
+    const tree = callBody({ activeTab: 'emoji', emojiCatalog: EMOJI_FIXTURE, clearable: true });
+    expect(findElement(tree, testIdEquals('icon-picker-tile-none'))).toBeNull();
+  });
+});
