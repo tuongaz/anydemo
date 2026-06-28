@@ -26,6 +26,7 @@
     "build:css:dev": "tailwindcss -i src/styles/index.css -o dist/style.dev.css",
     "build:css:watch": "bun run build:css:dev && tailwindcss -i src/styles/index.css -o dist/style.dev.css --watch",
     "build:js": "tsup",
+    "gen:emoji": "bun run scripts/gen-emoji-catalog.ts",
     "typecheck": "tsc --noEmit"
   },
   "files": ["dist", "README.md"],
@@ -78,6 +79,7 @@
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@iconify-json/twemoji": "^1",
     "@iconify/react": "^5",
     "@tailwindcss/cli": "^4.3.0",
     "@tailwindcss/postcss": "^4.3.0",
@@ -85,6 +87,7 @@
     "@types/react": "^18.3.12",
     "@types/react-dom": "^18.3.0",
     "autoprefixer": "^10.4.20",
+    "emojibase-data": "^16",
     "happy-dom": "^20.9.0",
     "mermaid": "^11.4.1",
     "perfect-freehand": "^1.2.3",
