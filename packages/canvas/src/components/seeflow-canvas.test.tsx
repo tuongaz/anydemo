@@ -2969,6 +2969,26 @@ describe('SeeflowCanvas', () => {
       expect(data.flowSlug).toBeUndefined();
       expect(data.apiBaseUrl).toBeUndefined();
     });
+
+    it('sets data.enableFullscreen = true for component nodes in edit + view modes', () => {
+      for (const mode of ['edit', 'view'] as const) {
+        const tree = callSeeflowCanvas({ mode, nodes: [makeComponentNode('c1')] });
+        const data = findRfNode(tree, 'c1')?.data as { enableFullscreen?: boolean };
+        expect(data.enableFullscreen).toBe(true);
+      }
+    });
+
+    it('sets data.enableFullscreen = false for component nodes in mini mode', () => {
+      const tree = callSeeflowCanvas({ mode: 'mini', nodes: [makeComponentNode('c1')] });
+      const data = findRfNode(tree, 'c1')?.data as { enableFullscreen?: boolean };
+      expect(data.enableFullscreen).toBe(false);
+    });
+
+    it('omits enableFullscreen on non-component nodes (gated by type)', () => {
+      const tree = callSeeflowCanvas({ nodes: [makeShapeNode('a')] });
+      const data = findRfNode(tree, 'a')?.data as { enableFullscreen?: boolean };
+      expect(data.enableFullscreen).toBeUndefined();
+    });
   });
 
   describe('US-017: HTML block drop wiring', () => {

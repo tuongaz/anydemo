@@ -388,6 +388,99 @@ describe('ComponentNode fit-to-content button', () => {
   });
 });
 
+describe('ComponentNode zoom (fullscreen) button', () => {
+  const userSizedData = { autoSize: false, width: 480, height: 320 };
+
+  function findZoomButton(tree: unknown) {
+    return findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-zoom';
+    });
+  }
+
+  // The Dialog wrapper is the element carrying both `open` (boolean) and
+  // `onOpenChange` (function) — independent of the ui/dialog import.
+  function findZoomDialog(tree: unknown) {
+    return findElement(tree, (el) => {
+      const p = el.props as { open?: unknown; onOpenChange?: unknown };
+      return typeof p.open === 'boolean' && typeof p.onOpenChange === 'function';
+    });
+  }
+
+  it('is hidden when data.enableFullscreen is unset', () => {
+    expect(findZoomButton(callComponentNode())).toBeNull();
+  });
+
+  it('is hidden when data.enableFullscreen is false (mini mode)', () => {
+    expect(findZoomButton(callComponentNode({ enableFullscreen: false }))).toBeNull();
+  });
+
+  it('is visible when data.enableFullscreen is true, regardless of selection/autoSize', () => {
+    const tree = callComponentNode({ enableFullscreen: true });
+    const btn = findZoomButton(tree);
+    expect(btn).not.toBeNull();
+    const p = btn?.props as { 'aria-label'?: string; title?: string };
+    expect(p['aria-label']).toBe('View fullscreen');
+    expect(p.title).toBe('View fullscreen');
+  });
+
+  it('takes the top-right corner (right:4) when the Fit button is absent', () => {
+    const tree = callComponentNode({ enableFullscreen: true });
+    const style = (findZoomButton(tree)?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.right).toBe(4);
+  });
+
+  it('offsets left of the Fit button (right:28) when both are visible', () => {
+    const tree = callComponentNode(
+      { ...userSizedData, enableFullscreen: true, onFitToContent: () => {} },
+      { selected: true } as Partial<NodeProps>,
+    );
+    const style = (findZoomButton(tree)?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.right).toBe(28);
+  });
+
+  it('opens the modal: onClick stops propagation (and the Dialog defaults closed)', () => {
+    const tree = callComponentNode({ enableFullscreen: true });
+    const dialog = findZoomDialog(tree);
+    expect(dialog).not.toBeNull();
+    // The hook-shim useState returns its initial value → the modal is closed.
+    expect((dialog?.props as { open?: boolean }).open).toBe(false);
+    const stop = mock(() => {});
+    (
+      findZoomButton(tree)?.props as { onClick?: (e: { stopPropagation: () => void }) => void }
+    ).onClick?.({ stopPropagation: stop });
+    expect(stop).toHaveBeenCalledTimes(1);
+  });
+
+  it('renders the live runtime inside the modal body with the same spec + nodeId', () => {
+    const tree = callComponentNode({
+      enableFullscreen: true,
+      projectSlug: 'demo-9',
+      flowSlug: 'main',
+      apiBaseUrl: '/x',
+    });
+    const body = findElement(tree, (el) => {
+      const p = el.props as { 'data-testid'?: string };
+      return p['data-testid'] === 'component-node-zoom-body';
+    });
+    expect(body).not.toBeNull();
+    const runtime = findElement(body, (el) => el.type === ComponentRuntime);
+    expect(runtime).not.toBeNull();
+    const rp = runtime?.props as {
+      spec?: ComponentSpec;
+      nodeId?: string;
+      projectSlug?: string;
+      flowSlug?: string;
+      apiBaseUrl?: string;
+    };
+    expect(rp.spec).toBe(TRIVIAL_SPEC);
+    expect(rp.nodeId).toBe('c1');
+    expect(rp.projectSlug).toBe('demo-9');
+    expect(rp.flowSlug).toBe('main');
+    expect(rp.apiBaseUrl).toBe('/x');
+  });
+});
+
 // Header now lives in the shared `<NodeHeader>` component (see
 // `./lib/node-header.tsx`). The hook-shim walker can't see inside its render
 // body, so these tests assert the ComponentNode → NodeHeader contract:

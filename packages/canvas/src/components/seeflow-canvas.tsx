@@ -3722,6 +3722,10 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
           projectSlug: merged.type === 'component' ? projectId : undefined,
           flowSlug: merged.type === 'component' ? flowSlug : undefined,
           apiBaseUrl: merged.type === 'component' ? apiBaseUrl : undefined,
+          // type:'component'-only: hover "View fullscreen" affordance. On for
+          // edit + view (where a person is looking at the canvas), off for mini
+          // thumbnails (every input/chrome path is disabled by design there).
+          enableFullscreen: merged.type === 'component' ? mode !== 'mini' : undefined,
           // US-008: type:'image' placeholder uses this callback when the user
           // clicks the 'Upload failed (click to retry)' state. Injected here so
           // every image node picks it up uniformly; non-image types ignore it.
@@ -3907,6 +3911,7 @@ function SeeflowCanvasImpl(props: SeeflowCanvasProps, ref: ForwardedRef<SeeflowC
     onRetryImageUpload,
     pendingEditNodeId,
     isEditMode,
+    mode,
   ]);
 
   // React Flow needs internal node state + onNodesChange to render drag

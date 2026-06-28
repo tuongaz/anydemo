@@ -1,10 +1,11 @@
 import { Handle, type Node, type NodeProps, Position, useUpdateNodeInternals } from '@xyflow/react';
-import { Maximize2 } from 'lucide-react';
-import { type CSSProperties, type RefObject, memo, useEffect, useRef } from 'react';
+import { Expand, Maximize2 } from 'lucide-react';
+import { type CSSProperties, type RefObject, memo, useEffect, useRef, useState } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
 import { debouncedResizeObserver } from '../lib/debounced-resize-observer.ts';
 import type { ComponentNodeData } from '../types.ts';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../ui/dialog.tsx';
 import { ComponentRuntime } from './component-runtime.tsx';
 import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
@@ -37,6 +38,13 @@ export type ComponentNodeRuntimeData = ComponentNodeData & {
   onNameChange?: (nodeId: string, name: string) => void;
   /** When wired (alongside selected + icon), the header icon becomes a picker trigger. */
   onIconChange?: (nodeId: string, name: string | null) => void;
+  /**
+   * Runtime-only flag (NOT persisted to flow.json): when true, a hover-revealed
+   * "View fullscreen" button is shown that opens the component in a large modal.
+   * The canvas injects this in buildNode as `mode !== 'mini'`, so it's on for
+   * edit + view and off for mini thumbnails.
+   */
+  enableFullscreen?: boolean;
 } & Record<string, unknown>;
 export type ComponentNodeType = Node<ComponentNodeRuntimeData, 'component'>;
 
@@ -63,6 +71,8 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
     nodeId: id,
     alignment: data.resizeAlignment,
   });
+  // US: hover "View fullscreen" opens the same live runtime in a large modal.
+  const [zoomOpen, setZoomOpen] = useState(false);
   // autoSize defaults to true so freshly created component nodes shrink-wrap
   // to their rendered spec — mirrors HtmlNodeData.autoSize. `isResizing`
   // temporarily forces user-sized layout so the drag has dimensions to grab
@@ -70,6 +80,11 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
   // from disk.
   const autoSize = data.autoSize ?? true;
   const userSized = isResizing || !autoSize;
+  // The "Fit to content" affordance only applies to a selected, user-sized
+  // node in edit mode (onFitToContent wired). Hoisted so the Zoom button can
+  // offset itself when both controls share the top-right corner.
+  const showFitButton =
+    selected && !autoSize && !isResizing && typeof data.onFitToContent === 'function';
 
   // Chrome lives on the inner wrapper so its `overflow:hidden` clips body
   // content to the rounded corners without clipping connector handles + resize
@@ -179,7 +194,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
         onResize={onResizeEvent}
         onResizeEnd={onResizeEnd}
       />
-      {selected && !autoSize && !isResizing && typeof data.onFitToContent === 'function' ? (
+      {showFitButton ? (
         <button
           type="button"
           data-testid="component-node-fit-to-content"
@@ -194,6 +209,47 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
           <Maximize2 size={12} aria-hidden />
         </button>
       ) : null}
+      {data.enableFullscreen ? (
+        <button
+          type="button"
+          data-testid="component-node-zoom"
+          title="View fullscreen"
+          aria-label="View fullscreen"
+          // Shares the top-right cluster with the Fit button: when both show,
+          // Zoom sits to the LEFT of Fit (right:28) so they never overlap; when
+          // Fit is hidden, Zoom takes the corner (right:4).
+          style={{ right: showFitButton ? 28 : 4 }}
+          className="sf:absolute sf:top-1 sf:z-10 sf:flex sf:h-5 sf:w-5 sf:cursor-pointer sf:items-center sf:justify-center sf:rounded sf:bg-background/80 sf:text-muted-foreground sf:opacity-0 sf:transition-opacity sf:hover:text-foreground sf:group-hover:opacity-100 sf:focus:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            setZoomOpen(true);
+          }}
+        >
+          <Expand size={12} aria-hidden />
+        </button>
+      ) : null}
+      <Dialog open={zoomOpen} onOpenChange={setZoomOpen}>
+        <DialogContent className="sf:flex sf:h-[85vh] sf:max-h-[85vh] sf:w-[90vw] sf:max-w-[90vw] sf:flex-col sf:gap-0 sf:p-0">
+          <DialogHeader className="sf:border-border sf:border-b sf:p-3 sf:text-left">
+            <DialogTitle>{data.name || 'Component'}</DialogTitle>
+          </DialogHeader>
+          {/* Live runtime, same wiring as the node body. Mounts its own
+              instance, so it starts at the spec's default state. */}
+          <div
+            data-testid="component-node-zoom-body"
+            className="sf:min-h-0 sf:flex-1 sf:overflow-auto sf:p-4"
+            style={bodyFontStyle}
+          >
+            <ComponentRuntime
+              spec={data.spec}
+              nodeId={id}
+              projectSlug={data.projectSlug}
+              flowSlug={data.flowSlug}
+              apiBaseUrl={data.apiBaseUrl}
+            />
+          </div>
+        </DialogContent>
+      </Dialog>
       <Handle
         type="target"
         position={Position.Top}
