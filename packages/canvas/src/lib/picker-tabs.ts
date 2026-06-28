@@ -24,10 +24,7 @@ export function isEmojiTab(tab: PickerTab): tab is typeof EMOJI_TAB {
  * against each entry's precomputed `keywords` haystack rather than the slug —
  * "happy" finds `twemoji:grinning-face`. Returns `[]` until the catalog loads.
  */
-export function filterEmoji(
-  catalog: readonly EmojiCatalogEntry[] | null,
-  query: string,
-): string[] {
+export function filterEmoji(catalog: readonly EmojiCatalogEntry[] | null, query: string): string[] {
   if (!catalog) return [];
   const q = query.trim().toLowerCase();
   if (q === '') return catalog.map((e) => e.id);

@@ -56,7 +56,11 @@ function buildKeywords(e: CompactEmoji): string {
   return [...words].join(' ');
 }
 
-const t = twemoji as { prefix: string; icons: Record<string, unknown>; aliases?: Record<string, unknown> };
+const t = twemoji as {
+  prefix: string;
+  icons: Record<string, unknown>;
+  aliases?: Record<string, unknown>;
+};
 const validSlugs = new Set<string>([...Object.keys(t.icons), ...Object.keys(t.aliases ?? {})]);
 
 const entries: EmojiCatalogEntry[] = [];

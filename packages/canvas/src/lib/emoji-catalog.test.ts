@@ -24,10 +24,12 @@ describe('EMOJI_CATALOG', () => {
   });
 
   it('round-trips through the iconify vendor id encoding', () => {
-    const { id } = EMOJI_CATALOG[0]!;
-    const fullId = formatIconId({ vendor: 'iconify', name: id });
-    expect(fullId).toBe(`iconify:${id}`);
-    expect(parseIconId(fullId)).toEqual({ vendor: 'iconify', name: id });
+    const first = EMOJI_CATALOG[0];
+    expect(first).toBeDefined();
+    if (!first) return;
+    const fullId = formatIconId({ vendor: 'iconify', name: first.id });
+    expect(fullId).toBe(`iconify:${first.id}`);
+    expect(parseIconId(fullId)).toEqual({ vendor: 'iconify', name: first.id });
   });
 
   it('excludes skin-tone modifier variants', () => {

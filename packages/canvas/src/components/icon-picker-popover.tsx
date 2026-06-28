@@ -18,9 +18,17 @@ import type {
 } from '../adapter/types.ts';
 import { CanvasStudioContext } from '../lib/canvas-studio-context.tsx';
 import { cn } from '../lib/cn.ts';
+import type { EmojiCatalogEntry } from '../lib/emoji-catalog-types.ts';
 import { type IconVendor, formatIconId, parseIconId } from '../lib/icon-id.ts';
 import { getRecents } from '../lib/icon-recents.ts';
 import { ICON_NAMES_BY_VENDOR, ICON_REGISTRY, applyPackSummaries } from '../lib/icon-registry.ts';
+import {
+  EMOJI_TAB,
+  type PickerTab,
+  filterEmoji,
+  isEmojiTab,
+  tabRenderVendor,
+} from '../lib/picker-tabs.ts';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover.tsx';
 import { BrowsePacksPanel } from './browse-packs-panel.tsx';
 import { IconRenderer } from './icon-renderer.tsx';
@@ -34,18 +42,32 @@ const ROW_HEIGHT = 32;
 const LIST_HEIGHT = 256;
 const OVERSCAN = 2;
 
-// Tab bar entries — matches the IconVendor union but ordered for the picker UI
-// (bundled first, vendor packs middle, iconify last). `lucide` and `iconify`
-// are always enabled; `aws`/`azure` flip to a disabled+Install state
-// when the corresponding entry in ICON_NAMES_BY_VENDOR is empty.
-const TAB_DEFS: ReadonlyArray<{ id: IconVendor; label: string }> = [
+// Tab bar entries — mostly 1:1 with the IconVendor union, ordered for the
+// picker UI (bundled first, vendor packs middle, iconify, then emoji). `lucide`,
+// `iconify` and `emoji` are always enabled; `aws`/`azure` flip to a
+// disabled+Install state when the corresponding entry in ICON_NAMES_BY_VENDOR is
+// empty. `emoji` is a picker-only tab (see picker-tabs.ts) whose tiles store
+// ordinary `iconify:twemoji:<slug>` ids.
+const TAB_DEFS: ReadonlyArray<{ id: PickerTab; label: string }> = [
   { id: 'lucide', label: 'Bundled' },
   { id: 'aws', label: 'AWS' },
   { id: 'azure', label: 'Azure' },
   { id: 'iconify', label: 'Logos' },
+  { id: EMOJI_TAB, label: 'Emoji' },
 ];
 
 const PACK_VENDORS: ReadonlyArray<IconVendor> = ['aws', 'azure'];
+
+// The emoji catalog (~1900 entries) is lazy-loaded on first Emoji-tab open so it
+// stays out of the canvas's main bundle. Module-singleton promise mirrors the
+// `loadIconify` pattern in icon-renderer.tsx — imported at most once per session.
+let emojiCatalogPromise: Promise<EmojiCatalogEntry[]> | null = null;
+function loadEmojiCatalog(): Promise<EmojiCatalogEntry[]> {
+  if (!emojiCatalogPromise) {
+    emojiCatalogPromise = import('../lib/emoji-catalog.ts').then((m) => m.EMOJI_CATALOG);
+  }
+  return emojiCatalogPromise;
+}
 
 export function filterIcons(names: readonly string[], query: string): string[] {
   const q = query.trim().toLowerCase();
@@ -111,6 +133,7 @@ interface JobState {
 //   5. jobState          — install progress { vendor, event, acceptTerms } | null (US-017)
 //   6. packs             — local PackSummary[] for the Browse panel (US-017)
 //   7. busyVendor        — vendor with install/remove in flight (US-017)
+//   8. emojiCatalog      — lazy-loaded Twemoji catalog | null until first Emoji-tab open
 export function IconPickerPopover({
   open,
   onOpenChange,
@@ -121,12 +144,15 @@ export function IconPickerPopover({
   iconsAdapter,
 }: IconPickerPopoverProps) {
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTab] = useState<IconVendor>('lucide');
+  const [activeTab, setActiveTab] = useState<PickerTab>('lucide');
   const [view, setView] = useState<'picker' | 'browse'>('picker');
   const [modalState, setModalState] = useState<ModalState | null>(null);
   const [jobState, setJobState] = useState<JobState | null>(null);
   const [packs, setPacks] = useState<ReadonlyArray<PackSummary>>([]);
   const [busyVendor, setBusyVendor] = useState<IconPackVendor | null>(null);
+  // Slot 8 (append-only): lazy-loaded emoji catalog. Stays cached across
+  // open/close so reopening the Emoji tab doesn't re-import. See loadEmojiCatalog.
+  const [emojiCatalog, setEmojiCatalog] = useState<EmojiCatalogEntry[] | null>(null);
   const { studioBaseUrl } = useContext(CanvasStudioContext);
   // Recents are read at open time so a same-session push elsewhere becomes
   // visible the next time the picker opens. We deliberately do NOT subscribe
@@ -146,6 +172,19 @@ export function IconPickerPopover({
       setView('picker');
     }
   }, [open]);
+
+  // Lazy-load the emoji catalog the first time the Emoji tab is shown. Keeps the
+  // ~1900-entry list out of the main bundle; cached module-wide thereafter.
+  useEffect(() => {
+    if (activeTab !== EMOJI_TAB || emojiCatalog !== null) return;
+    let active = true;
+    void loadEmojiCatalog().then((c) => {
+      if (active) setEmojiCatalog(c);
+    });
+    return () => {
+      active = false;
+    };
+  }, [activeTab, emojiCatalog]);
 
   // Refresh pack summaries whenever the user enters the Browse view (or the
   // adapter swaps under us). Silent on adapter failures.
@@ -312,6 +351,7 @@ export function IconPickerPopover({
               onBrowsePacks={browseHandler}
               showBrowseTab={iconsAdapter !== undefined}
               studioBaseUrl={studioBaseUrl}
+              emojiCatalog={emojiCatalog}
             />
           )}
         </PopoverContent>
@@ -357,10 +397,10 @@ export interface IconPickerBodyProps {
   onPick: (name: string | null) => void;
   // See IconPickerPopoverProps.clearable. Defaults to `true`.
   clearable?: boolean;
-  // Active vendor tab. Defaults to 'lucide' when omitted (back-compat for
-  // tests that exercise the bundled-only path).
-  activeTab?: IconVendor;
-  onActiveTabChange?: (tab: IconVendor) => void;
+  // Active tab. Defaults to 'lucide' when omitted (back-compat for tests that
+  // exercise the bundled-only path). `'emoji'` is a picker-only tab.
+  activeTab?: PickerTab;
+  onActiveTabChange?: (tab: PickerTab) => void;
   // Browse Packs CTA passthrough — see IconPickerPopoverProps.
   onBrowsePacks?: () => void;
   /**
@@ -373,6 +413,9 @@ export interface IconPickerBodyProps {
   // Threaded by IconPickerPopover from CanvasStudioContext. Tests can omit
   // (default '') because vendor tiles only need it for the SVG URL.
   studioBaseUrl?: string;
+  // Lazy-loaded emoji catalog, threaded from IconPickerPopover. `null` until the
+  // Emoji tab has been opened at least once; tests may pass a fixture directly.
+  emojiCatalog?: EmojiCatalogEntry[] | null;
 }
 
 // Body is exported so unit tests can render it without standing up the Radix
@@ -389,17 +432,33 @@ export function IconPickerBody({
   onBrowsePacks,
   showBrowseTab = false,
   studioBaseUrl = '',
+  emojiCatalog = null,
 }: IconPickerBodyProps) {
-  const vendorNames = ICON_NAMES_BY_VENDOR[activeTab];
+  const emoji = isEmojiTab(activeTab);
+  // Vendor used to build/render this tab's tile ids — emoji tiles render as
+  // iconify (`iconify:twemoji:<slug>`).
+  const renderVendor = tabRenderVendor(activeTab);
+  // Per-vendor name list (empty for the emoji tab, which sources from the
+  // lazy-loaded catalog). `isEmojiTab` narrows `activeTab` to `IconVendor` here.
+  const vendorNames = isEmojiTab(activeTab) ? [] : ICON_NAMES_BY_VENDOR[activeTab];
   const isPackVendor = (PACK_VENDORS as readonly string[]).includes(activeTab);
   const packInstalled = !isPackVendor || vendorNames.length > 0;
 
-  const filtered = useMemo(() => filterIcons(vendorNames, query), [vendorNames, query]);
-  const showRecents = activeTab === 'lucide' && query.trim() === '' && recents.length > 0;
+  const filtered = useMemo(
+    () => (emoji ? filterEmoji(emojiCatalog, query) : filterIcons(vendorNames, query)),
+    [emoji, emojiCatalog, vendorNames, query],
+  );
+
+  // Recents: the Bundled tab shows all recents; the Emoji tab shows only emoji
+  // recents (`pushRecent` records any picked id already). Other tabs show none.
+  const emojiRecents = useMemo(() => recents.filter(isEmojiId), [recents]);
+  const recentsToShow = emoji ? emojiRecents : recents;
+  const showRecents =
+    query.trim() === '' && recentsToShow.length > 0 && (activeTab === 'lucide' || emoji);
   // The synthetic "No icon" tile sits above the virtualized grid and only
   // appears when (a) the picker is in a clearable context (editing an icon
   // field, not inserting a new node), (b) the user hasn't started searching,
-  // AND (c) the active tab is `lucide` — vendor tabs never expose it (the
+  // AND (c) the active tab is `lucide` — vendor/emoji tabs never expose it (the
   // grid is the only authoritative source there).
   const showNoIconTile = clearable && query.trim() === '' && activeTab === 'lucide';
 
@@ -424,11 +483,12 @@ export function IconPickerBody({
         role="tablist"
         aria-label="Icon source"
       >
-        {TAB_DEFS.filter(
-          (tab) =>
-            !(PACK_VENDORS as readonly string[]).includes(tab.id) ||
-            ICON_NAMES_BY_VENDOR[tab.id].length > 0,
-        ).map((tab) =>
+        {TAB_DEFS.filter((tab) => {
+          // Non-pack tabs (lucide / iconify / emoji) are always shown; pack tabs
+          // appear only once installed.
+          if (!(PACK_VENDORS as readonly string[]).includes(tab.id)) return true;
+          return ICON_NAMES_BY_VENDOR[tab.id as IconVendor].length > 0;
+        }).map((tab) =>
           renderTabButton({
             tab,
             active: tab.id === activeTab,
@@ -457,8 +517,8 @@ export function IconPickerBody({
         <input
           type="text"
           value={query}
-          placeholder="Search icons…"
-          aria-label="Search icons"
+          placeholder={emoji ? 'Search emojis…' : 'Search icons…'}
+          aria-label={emoji ? 'Search emojis' : 'Search icons'}
           data-testid="icon-picker-search"
           className={cn(
             'sf:flex sf:h-8 sf:w-full sf:rounded-md sf:border sf:border-input sf:bg-background sf:px-3 sf:text-sm',
@@ -478,7 +538,7 @@ export function IconPickerBody({
             className="sf:grid sf:gap-1"
             style={{ gridTemplateColumns: `repeat(${COLS}, minmax(0, 1fr))` }}
           >
-            {recents.map((id) => {
+            {recentsToShow.map((id) => {
               const parsed = parseIconId(id);
               if (!parsed) return null;
               return renderVendorTile({
@@ -494,7 +554,7 @@ export function IconPickerBody({
 
       <div className="sf:p-2">
         <div className="sf:mb-1 sf:px-1 sf:text-[11px] sf:font-medium sf:uppercase sf:tracking-wide sf:text-muted-foreground">
-          All icons
+          {emoji ? 'All emojis' : 'All icons'}
         </div>
         {showNoIconTile ? (
           <div
@@ -506,13 +566,21 @@ export function IconPickerBody({
         ) : null}
         {!packInstalled ? (
           renderInstallPrompt(activeTab, onBrowsePacks)
+        ) : emoji && emojiCatalog === null ? (
+          <div
+            className="sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground"
+            style={{ height: LIST_HEIGHT }}
+            data-testid="icon-picker-emoji-loading"
+          >
+            Loading emojis…
+          </div>
         ) : filtered.length === 0 ? (
           <div
             className="sf:flex sf:items-center sf:justify-center sf:text-xs sf:text-muted-foreground"
             style={{ height: LIST_HEIGHT }}
             data-testid="icon-picker-empty"
           >
-            No icons match.
+            {emoji ? 'No emojis match.' : 'No icons match.'}
           </div>
         ) : (
           <div
@@ -536,7 +604,7 @@ export function IconPickerBody({
                 >
                   {visible.map((name) =>
                     renderVendorTile({
-                      vendor: activeTab,
+                      vendor: renderVendor,
                       name,
                       studioBaseUrl,
                       onPick,
@@ -553,7 +621,7 @@ export function IconPickerBody({
 }
 
 interface TabButtonArgs {
-  tab: { id: IconVendor; label: string };
+  tab: { id: PickerTab; label: string };
   active: boolean;
   onSelect: () => void;
 }
@@ -587,7 +655,7 @@ function renderTabButton({ tab, active, onSelect }: TabButtonArgs): ReactNode {
 }
 
 function renderInstallPrompt(
-  vendor: IconVendor,
+  vendor: PickerTab,
   onBrowsePacks: (() => void) | undefined,
 ): ReactNode {
   return (
@@ -628,6 +696,13 @@ interface VendorTileArgs {
 function toFullIconId(vendor: IconVendor, name: string): string {
   if (vendor === 'lucide') return name;
   return formatIconId({ vendor, name });
+}
+
+// True for a stored Twemoji emoji id (`iconify:twemoji:<slug>`). Used to scope
+// the Recents row to emojis on the Emoji tab.
+function isEmojiId(id: string): boolean {
+  const parsed = parseIconId(id);
+  return parsed?.vendor === 'iconify' && parsed.name.startsWith('twemoji:');
 }
 
 function renderVendorTile({ vendor, name, studioBaseUrl, onPick }: VendorTileArgs): ReactNode {
