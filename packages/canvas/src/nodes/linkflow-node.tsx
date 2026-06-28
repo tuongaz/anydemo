@@ -3,6 +3,7 @@ import { AlertTriangle, Link2, Pencil } from 'lucide-react';
 import { type CSSProperties, cloneElement, memo, useEffect, useRef } from 'react';
 import { cn } from '../lib/cn.ts';
 import { colorTokenStyle } from '../lib/color-tokens.ts';
+import { resolveFontStack } from '../lib/font-stacks.ts';
 import type { LinkflowNodeData } from '../types.ts';
 import { NodeHeader } from './lib/node-header.tsx';
 import { ResizeControls } from './resize-controls.tsx';
@@ -109,6 +110,7 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     data.onOpenPicker('link');
   }, [data._autoOpenPickerOnMount, data.onOpenPicker]);
 
+  const fontStack = resolveFontStack(data.fontFamily);
   const baseChrome: CSSProperties = {
     ...(data.backgroundColor !== undefined
       ? { backgroundColor: colorTokenStyle(data.backgroundColor, 'node').backgroundColor }
@@ -121,6 +123,9 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
     ...(data.cornerRadius !== undefined ? { borderRadius: data.cornerRadius } : {}),
     ...(data.shadow !== undefined ? { boxShadow: `var(--node-shadow-${data.shadow})` } : {}),
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    // Curated font token → CSS stack; set on the container so the body text
+    // inherits it. The header sets its own (same stack) via the fontFamily prop.
+    ...(fontStack ? { fontFamily: fontStack } : {}),
   };
 
   const containerStyle: CSSProperties = {
@@ -184,6 +189,7 @@ function LinkflowNodeImpl({ id, data, selected, isConnectable }: NodeProps<Linkf
       icon={data.icon}
       selected={selected}
       fontSize={data.fontSize}
+      fontFamily={data.fontFamily}
       backgroundColor={data.backgroundColor}
       onNameChange={data.onNameChange}
       onIconChange={data.onIconChange}

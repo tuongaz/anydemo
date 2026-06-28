@@ -10,7 +10,8 @@ import { InlineEdit } from '../../components/inline-edit.tsx';
 import { useCanvasStudio } from '../../lib/canvas-studio-context.tsx';
 import { cn } from '../../lib/cn.ts';
 import { colorTokenStyle } from '../../lib/color-tokens.ts';
-import type { ColorToken } from '../../types.ts';
+import { resolveFontStack } from '../../lib/font-stacks.ts';
+import type { ColorToken, FontFamilyToken } from '../../types.ts';
 
 export interface NodeHeaderProps {
   nodeId: string;
@@ -19,6 +20,8 @@ export interface NodeHeaderProps {
   icon?: string | null;
   selected?: boolean;
   fontSize?: number;
+  /** Curated font-family token; resolved to a CSS stack via FONT_STACKS. */
+  fontFamily?: FontFamilyToken;
   /**
    * Node body color. When set to a painted token (anything other than
    * `'default'` / `'none'` / undefined), the header paints itself at the
@@ -43,6 +46,7 @@ export function NodeHeader({
   icon,
   selected,
   fontSize,
+  fontFamily,
   backgroundColor,
   onNameChange,
   onIconChange,
@@ -73,8 +77,12 @@ export function NodeHeader({
     ? colorTokenStyle(backgroundColor, 'node-header-text')
     : undefined;
 
+  // Resolve the curated font token once; unset → undefined → property omitted
+  // so the title inherits the canvas default font.
+  const fontStack = resolveFontStack(fontFamily);
   const labelFontStyle: CSSProperties = {
     ...(fontSize !== undefined ? { fontSize: `${fontSize}px` } : {}),
+    ...(fontStack ? { fontFamily: fontStack } : {}),
     ...adaptedTextStyle,
   };
 

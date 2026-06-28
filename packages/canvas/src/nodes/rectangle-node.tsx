@@ -3,6 +3,7 @@ import { type CSSProperties, type MouseEvent as ReactMouseEvent, memo, useState 
 import { InlineEdit } from '../components/inline-edit.tsx';
 import { cn } from '../lib/cn.ts';
 import { NODE_DEFAULT_BG_WHITE, colorTokenStyle } from '../lib/color-tokens.ts';
+import { resolveFontStack } from '../lib/font-stacks.ts';
 import type { GeometricNodeData, NodeStatus, StatusReport } from '../types.ts';
 import { NodeHeader } from './lib/node-header.tsx';
 import { PlayButton } from './lib/play-button.tsx';
@@ -75,8 +76,12 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
   const [descEditing, setDescEditing] = useState(false);
   const descEditable = !!data.onDescriptionChange;
   const sized = data.width !== undefined || data.height !== undefined;
+  // Resolve the curated font token once; unset → undefined → property omitted
+  // so the node inherits the canvas default font (mirrors geometric-node).
+  const fontStack = resolveFontStack(data.fontFamily);
   const descriptionFontStyle: CSSProperties = {
     ...(data.fontSize !== undefined ? { fontSize: `${data.fontSize}px` } : {}),
+    ...(fontStack ? { fontFamily: fontStack } : {}),
     // A themed/white fill is a light pastel island in every canvas mode, so the
     // description needs fixed dark text — otherwise the `text-muted-foreground`
     // class renders light in dark mode and washes out on the pastel body.
@@ -165,6 +170,7 @@ function RectangleNodeImpl({ id, data, selected, isConnectable }: NodeProps<Rect
           icon={data.icon}
           selected={selected}
           fontSize={data.fontSize}
+          fontFamily={data.fontFamily}
           backgroundColor={data.backgroundColor}
           onNameChange={data.onNameChange}
           onIconChange={data.onIconChange}

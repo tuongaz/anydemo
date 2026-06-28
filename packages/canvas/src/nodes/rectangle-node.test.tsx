@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'bun:test';
 import type { NodeProps } from '@xyflow/react';
 import * as React from 'react';
+import { FONT_STACKS } from '../lib/font-stacks.ts';
 import { RectangleNode, type RectangleNodeType } from './rectangle-node.tsx';
 import { StatusBadge } from './status-badge.tsx';
 
@@ -294,5 +295,41 @@ describe('RectangleNode textAlign fan-out', () => {
     const desc = findDescButton(tree);
     const style = (desc.props as { style?: Record<string, string> }).style ?? {};
     expect(style.textAlign).toBe('center');
+  });
+});
+
+// The Font picker writes data.fontFamily; the rectangle has its OWN renderer
+// (NOT geometric-node), so the curated stack must reach BOTH the name (via
+// NodeHeader's fontFamily prop) and the description body (via the inline
+// descriptionFontStyle). This was the missed-renderer bug: only geometric-node
+// and connector labels honored the font before.
+describe('RectangleNode fontFamily fan-out', () => {
+  function findDescButton(tree: unknown): ReactElementLike {
+    const buttons = findAll(tree, (el) => {
+      if (el.type !== 'button') return false;
+      const cls = (el.props as { className?: string }).className ?? '';
+      return cls.includes('sf:text-muted-foreground');
+    });
+    if (!buttons[0]) throw new Error('description button missing');
+    return buttons[0];
+  }
+
+  it('threads data.fontFamily into NodeHeader (name honors the font)', () => {
+    const tree = callRectangleNode({ name: 'svc', fontFamily: 'mono' });
+    const header = findByComponentName(tree, 'NodeHeader')[0];
+    if (!header) throw new Error('NodeHeader missing');
+    expect((header.props as { fontFamily?: string }).fontFamily).toBe('mono');
+  });
+
+  it('applies the resolved font stack to the description button inline style', () => {
+    const tree = callRectangleNode({ name: 's', description: 'body', fontFamily: 'serif' });
+    const style = (findDescButton(tree).props as { style?: Record<string, string> }).style ?? {};
+    expect(style.fontFamily).toBe(FONT_STACKS.serif);
+  });
+
+  it('omits fontFamily on the description button when data.fontFamily is unset', () => {
+    const tree = callRectangleNode({ name: 's', description: 'body' });
+    const style = (findDescButton(tree).props as { style?: Record<string, string> }).style ?? {};
+    expect(style.fontFamily).toBeUndefined();
   });
 });

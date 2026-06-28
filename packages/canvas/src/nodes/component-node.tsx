@@ -223,6 +223,7 @@ function ComponentNodeImpl({ id, data, selected, isConnectable }: NodeProps<Comp
             icon={data.icon}
             selected={selected}
             fontSize={data.fontSize}
+            fontFamily={data.fontFamily}
             backgroundColor={data.backgroundColor}
             onNameChange={data.onNameChange}
             onIconChange={data.onIconChange}

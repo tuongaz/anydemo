@@ -5,6 +5,7 @@ import { IconPickerPopover } from '../../components/icon-picker-popover.tsx';
 import { IconRenderer } from '../../components/icon-renderer.tsx';
 import { InlineEdit } from '../../components/inline-edit.tsx';
 import { colorTokenStyle } from '../../lib/color-tokens.ts';
+import { FONT_STACKS } from '../../lib/font-stacks.ts';
 import { NodeHeader, type NodeHeaderProps } from './node-header.tsx';
 
 // Hook-shim renderer pattern from image-node.test.tsx, with useStateOverrides
@@ -353,6 +354,20 @@ describe('NodeHeader — title styling', () => {
     const title = findByTestId(tree, 'node-title');
     const style = (title?.props as { style?: CSSProperties }).style ?? {};
     expect(style.fontSize).toBeUndefined();
+  });
+
+  it('applies the resolved font stack as an inline style on the title when fontFamily is set', () => {
+    const tree = callNodeHeader({ fontFamily: 'mono' });
+    const title = findByTestId(tree, 'node-title');
+    const style = (title?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.fontFamily).toBe(FONT_STACKS.mono);
+  });
+
+  it('emits no fontFamily key when fontFamily is undefined (inherits canvas default)', () => {
+    const tree = callNodeHeader();
+    const title = findByTestId(tree, 'node-title');
+    const style = (title?.props as { style?: CSSProperties }).style ?? {};
+    expect(style.fontFamily).toBeUndefined();
   });
 });
 
