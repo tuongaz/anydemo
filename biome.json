@@ -13,7 +13,8 @@
       "apps/web/dist/**",
       "apps/studio/dist/**",
       "apps/studio/public/runtime/**",
-      "packages/canvas/src/styles/index.css"
+      "packages/canvas/src/styles/index.css",
+      "packages/canvas/src/lib/emoji-catalog.ts"
     ]
   },
   "organizeImports": {
