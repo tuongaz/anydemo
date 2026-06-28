@@ -369,6 +369,32 @@ describe('CanvasToolbar', () => {
     });
   });
 
+  describe('Line toolbar tile', () => {
+    it('registers a Line entry in TOOLBAR_SHAPES with the line command id', () => {
+      const entry = TOOLBAR_SHAPES.find((s) => s.shape === 'line');
+      expect(entry).toBeDefined();
+      expect(entry?.label).toBe('Line');
+      expect(entry?.commandId).toBe('tool.line');
+      expect(entry?.Icon).toBeDefined();
+    });
+
+    it('orders Line immediately after Ellipse (Circle) in TOOLBAR_SHAPES', () => {
+      const shapes = TOOLBAR_SHAPES.map((s) => s.shape);
+      const ellipseIdx = shapes.indexOf('ellipse');
+      const lineIdx = shapes.indexOf('line');
+      expect(ellipseIdx).toBeGreaterThanOrEqual(0);
+      expect(lineIdx).toBe(ellipseIdx + 1);
+    });
+
+    it('renders the line tile inline (top primary group, not the Shape picker)', () => {
+      const tree = callToolbar();
+      const inline = findElement(tree, testIdEquals('toolbar-shape-line'));
+      const inPicker = findElement(tree, testIdEquals('shape-picker-line'));
+      expect(inline).not.toBeNull();
+      expect(inPicker).toBeNull();
+    });
+  });
+
   describe('Select + Hand mode tiles', () => {
     it('registers both modes in TOOLBAR_MODES', () => {
       expect(TOOLBAR_MODES.map((m) => m.kind)).toEqual(['select', 'hand']);
